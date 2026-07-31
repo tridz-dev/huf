@@ -23,7 +23,8 @@ frappe_mock.log_error = MagicMock()
 frappe_mock.throw = MagicMock(side_effect=Exception("Permission denied"))
 frappe_mock._ = lambda x: x
 frappe_mock.whitelist = MagicMock(return_value=lambda fn: fn)
-sys.modules["frappe"] = frappe_mock
+if "frappe" not in sys.modules:
+    sys.modules["frappe"] = frappe_mock
 
 from huf.ai.mcp_connection_resolver import (
     _canonical_resource,

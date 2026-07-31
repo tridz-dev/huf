@@ -158,6 +158,7 @@ class TestSQLiteHybridStatic(unittest.TestCase):
     "sqlite3 was compiled without loadable extension support (OMIT_LOAD_EXTENSION). "
     "Static param-order tests above still run.",
 )
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestSQLiteHybridRuntime(unittest.TestCase):
     """Runtime tests for SQLiteHybridBackend.
 

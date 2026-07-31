@@ -2,91 +2,13 @@ import path from 'path';
 import react from '@vitejs/plugin-react';
 import proxyOptions from './proxyOptions';
 import { defineConfig } from 'vite';
-import { VitePWA } from 'vite-plugin-pwa';
+
 
 export default defineConfig({
   base: '/assets/huf/frontend/',
   plugins: [
     react(),
-    VitePWA({
-      injectRegister: false,
-      // Frappe's www renderer only serves known text extensions raw
-      // (frappe.utils.jinja.guess_is_path); .webmanifest is not one of them,
-      // so the manifest is emitted as manifest.json instead.
-      manifestFilename: 'manifest.json',
-      manifest: {
-        name: 'Huf',
-        short_name: 'Huf',
-        description: 'Build and run smart AI agents with tools, chat, and automation.',
-        start_url: '/huf/',
-        scope: '/huf/',
-        display: 'standalone',
-        background_color: '#ffffff',
-        theme_color: '#111827',
-        icons: [
-          {
-            src: '/assets/huf/frontend/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: '/assets/huf/frontend/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: '/assets/huf/frontend/icons/maskable-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ],
-      },
-      workbox: {
-        // Inline the workbox runtime into sw.js: Frappe route rules return
-        // to_route verbatim (no placeholder interpolation), so an external
-        // /huf/workbox-<hash>.js file cannot be routed and 404s.
-        inlineWorkboxRuntime: true,
-        navigateFallback: null,
-        // Without these, a new deploy installs as a "waiting" service worker
-        // that never takes over the already-open tab — the page keeps running
-        // the OLD JS bundle (stale routes/components) until every tab is
-        // closed and reopened. skipWaiting + clientsClaim make a new worker
-        // activate and take control immediately; paired with the
-        // controllerchange listener in src/pwa/registerSW.ts, the app
-        // reloads itself once to pick up the new bundle instead of requiring
-        // the user to manually refresh (often twice).
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2,ttf}'],
-        modifyURLPrefix: {
-          '': '/assets/huf/frontend/',
-        },
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkOnly',
-            options: {
-              cacheName: 'huf-api-network-only',
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/huf/stream/'),
-            handler: 'NetworkOnly',
-            options: {
-              cacheName: 'huf-stream-network-only',
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/assets/huf/frontend/'),
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'huf-frontend-assets',
-            },
-          },
-        ],
-      },
-    }),
+    // VitePWA removed to prevent aggressive caching
   ],
   resolve: {
     alias: {

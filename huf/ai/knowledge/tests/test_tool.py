@@ -1,6 +1,6 @@
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 from unittest.mock import patch, MagicMock
 from huf.ai.knowledge.tool import (
     create_knowledge_search_tool,
@@ -9,21 +9,25 @@ from huf.ai.knowledge.tool import (
     handle_get_knowledge_sources
 )
 
-class TestKnowledgeTool(FrappeTestCase):
+class TestKnowledgeTool(IntegrationTestCase):
     def setUp(self):
         # Create dependencies
-        if not frappe.db.exists("AI Provider", "Test Provider"):
+        # Provider name becomes the LiteLLM model routing prefix and must be a
+        # single word (see AI Provider.validate_provider_name) — "Test Provider"
+        # throws ValidationError on insert.
+        if not frappe.db.exists("AI Provider", "TestProvider"):
             frappe.get_doc({
                 "doctype": "AI Provider",
-                "provider_name": "Test Provider",
+                "provider_name": "TestProvider",
+                "provider_brand": "openai",
                 "api_key": "dummy-key"
             }).insert(ignore_permissions=True)
-            
+
         if not frappe.db.exists("AI Model", "gpt-4"):
             frappe.get_doc({
                 "doctype": "AI Model",
                 "model_name": "gpt-4",
-                "provider": "Test Provider"
+                "provider": "TestProvider"
             }).insert(ignore_permissions=True)
             
         self.source_1 = "Test Source Mandatory"
@@ -59,7 +63,7 @@ class TestKnowledgeTool(FrappeTestCase):
         doc = frappe.get_doc({
             "doctype": "Agent",
             "agent_name": self.agent_name,
-            "provider": "Test Provider",
+            "provider": "TestProvider",
             "model": "gpt-4",
             "instructions": "You are a test agent.",
             "agent_knowledge": [

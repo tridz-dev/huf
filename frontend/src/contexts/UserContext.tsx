@@ -67,13 +67,49 @@ export function UserProvider({ children }: UserProviderProps) {
     }
   };
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  /**
+   * A single blip on this endpoint (cold worker, cache clear, brief network
+   * hiccup) must not be treated the same as an actual logged-out session —
+   * that was forcing a hard redirect to /login on a still-valid cookie.
+   * Retry a couple of times before concluding the user is really signed out.
+   */
+  const RETRY_DELAYS_MS = [400, 1200];
+
+  const getLoggedInUserWithRetry = async (): Promise<string | null> => {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+      try {
+        return await auth.getLoggedInUser();
+      } catch (error) {
+        lastError = error;
+        if (attempt < RETRY_DELAYS_MS.length) {
+          await sleep(RETRY_DELAYS_MS[attempt]);
+        }
+      }
+    }
+    throw lastError;
+  };
+
+  const redirectToLogin = () => {
+    // Preserve where the user was headed so login can bounce them back.
+    const currentPath = window.location.pathname + window.location.search;
+    const redirectTo = encodeURIComponent(currentPath || HOME_URL);
+    window.location.href = `${LOGIN_URL}${redirectTo}#login`;
+  };
+
   const checkAuth = async () => {
     try {
       setIsLoading(true);
+      // Fast path: server-rendered boot data or the standard Frappe
+      // 'user_id' cookie, no network round-trip. Falls back to the API
+      // (with retries — see getLoggedInUserWithRetry) only when neither is
+      // available, e.g. on a fresh tab load before boot data is present.
       let loggedUserId = getSessionUserId();
       if (!loggedUserId) {
         try {
-          const apiUser = await auth.getLoggedInUser();
+          const apiUser = await getLoggedInUserWithRetry();
           if (apiUser && apiUser !== 'Guest') {
             loggedUserId = apiUser;
           }
@@ -87,18 +123,12 @@ export function UserProvider({ children }: UserProviderProps) {
         setUser(userDetails);
       } else {
         setUser(null);
-        // Redirect to login with return URL
-        const currentPath = window.location.pathname + window.location.search;
-        const redirectTo = encodeURIComponent(currentPath || HOME_URL);
-        window.location.href = `${LOGIN_URL}${redirectTo}#login`;
+        redirectToLogin();
       }
     } catch (error) {
       console.error('Error checking authentication:', error);
       setUser(null);
-      // Redirect to login on error
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectTo = encodeURIComponent(currentPath || HOME_URL);
-      window.location.href = `${LOGIN_URL}${redirectTo}#login`;
+      redirectToLogin();
     } finally {
       setIsLoading(false);
     }

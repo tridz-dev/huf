@@ -38,6 +38,7 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"is_system",
 		"last_run",
 		"total_run",
+		"allow_chat",
 	),
 	"behavior": (
 		"allow_chat",
@@ -72,6 +73,10 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"memory_policy",
 		"enable_memory_search_tool",
 		"enable_memory_write_tool",
+		"reasoning_mode",
+		"reasoning_effort",
+		"reasoning_budget_tokens",
+		"reasoning_summary",
 		"agent_color",
 		"show_tool_execution_details",
 		"image_generation_model",

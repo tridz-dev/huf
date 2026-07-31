@@ -58,6 +58,11 @@ export const agentFormSchema = z.object({
   enable_memory_search_tool: z.boolean().optional(),
   enable_memory_write_tool: z.boolean().optional(),
 
+  reasoning_mode: z.enum(['Auto', 'Off', 'On']).default('Auto').optional(),
+  reasoning_effort: z.enum(['Auto', 'Low', 'Medium', 'High']).default('Auto').optional(),
+  reasoning_budget_tokens: z.number().optional(),
+  reasoning_summary: z.enum(['None', 'Concise', 'Detailed']).default('None').optional(),
+
   agent_color: z
     .string()
     .optional()

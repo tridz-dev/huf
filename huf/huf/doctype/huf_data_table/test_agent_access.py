@@ -33,7 +33,9 @@ class TestTableAgentAccess(IntegrationTestCase):
 	DOCTYPE_NAME = f"HF {TABLE_NAME}"
 	EMPTY_TABLE_NAME = "Test Agent Access Empty"
 	EMPTY_DOCTYPE_NAME = f"HF {EMPTY_TABLE_NAME}"
-	PROVIDER = "Test Agent Access Provider"
+	# Provider name becomes the LiteLLM model routing prefix and must be a
+	# single word (see AI Provider.validate_provider_name).
+	PROVIDER = "TestAgentAccessProvider"
 	MODEL = "test-agent-access-model"
 	AGENT = "Test Agent Access Agent"
 	AGENT2 = "Test Agent Access Agent Two"

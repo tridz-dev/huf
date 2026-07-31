@@ -1773,14 +1773,21 @@ def _execute_agent_run(
 
         agent_message = conv_manager.add_message(conversation, "agent", final_output, resolved_provider, resolved_model, agent_name, run_doc.name)
 
-        frappe.db.set_value("Agent Run", run_doc.name, {
+        r_res = context.get("reasoning_resolution") if context else None
+        r_snap = json.dumps(r_res.to_dict()) if r_res else None
+
+        run_update = {
             "status": "Success",
             "response": final_output,
             "prompt": prompt,
             "model": resolved_model,
             "provider": resolved_provider,
             "end_time": now_datetime()
-        }, update_modified=True)
+        }
+        if r_snap:
+            run_update["reasoning_snapshot"] = r_snap
+
+        frappe.db.set_value("Agent Run", run_doc.name, run_update, update_modified=True)
         try:
             frappe.enqueue(
                 "huf.ai.memory_tools.extract_memory_from_run",
@@ -2623,6 +2630,9 @@ async def run_agent_stream(
                     full_response = chunk.get("full_response", full_response)
                     yield chunk
 
+                elif chunk_type == "reasoning":
+                    yield chunk
+
                 elif chunk_type == "tool_call":
                     # Log tool call
                     tool_call = chunk.get("tool_call", {})
@@ -2838,7 +2848,10 @@ async def run_agent_stream(
                         conversation, "agent", full_response, resolved_provider, resolved_model, agent_name, run_doc.name
                     )
 
-                    frappe.db.set_value("Agent Run", run_doc.name, {
+                    r_res_stream = context.get("reasoning_resolution") if context else None
+                    r_snap_stream = json.dumps(r_res_stream.to_dict()) if r_res_stream else None
+
+                    stream_run_update = {
                         "status": "Success",
                         "response": full_response,
                         "prompt": prompt,
@@ -2864,7 +2877,11 @@ async def run_agent_stream(
                         "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
                         "cost_calculation_status": "calculated" if cost is not None else "unavailable",
                         "end_time": now_datetime()
-                    }, update_modified=True)
+                    }
+                    if r_snap_stream:
+                        stream_run_update["reasoning_snapshot"] = r_snap_stream
+
+                    frappe.db.set_value("Agent Run", run_doc.name, stream_run_update, update_modified=True)
                     safe_commit()
 
                     # Handle Sub-Agent Success Lifecycle Hook

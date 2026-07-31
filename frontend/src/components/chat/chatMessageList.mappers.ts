@@ -517,6 +517,12 @@ export function mergeConversationItemsIntoMessages(
       sttModel: item.sttModel,
       status: item.status,
       injected_memories: item.injectedMemories,
+      // Reasoning/thinking text is streamed client-side only (not persisted
+      // server-side), so it must be carried over from the prior local
+      // message the same way tools are, or it vanishes the moment the
+      // conversation is re-synced from the server after the run completes.
+      reasoning: tempMessage?.reasoning,
+      reasoningStreaming: tempMessage?.reasoningStreaming,
       versions: [
         {
           id: item.id,

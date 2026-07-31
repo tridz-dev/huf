@@ -12,13 +12,50 @@ from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
 
+def _resolve_workspace_link_type():
+	"""Pick a link_type whose target actually resolves for link_to="Huf".
+
+	Frappe validates Desktop Icon.link_to against the doctype named by
+	link_type. "Workspace Sidebar" does not always carry a "Huf" record at
+	after_app_install time (on a fresh site it does not exist yet), which made
+	frappe raise LinkValidationError and abort the whole install. Fall back to
+	"Workspace", which the fixture sync has already created by this point.
+	"""
+	for link_type in ("Workspace Sidebar", "Workspace"):
+		if not frappe.db.table_exists(f"tab{link_type}"):
+			continue
+		if frappe.db.exists(link_type, "Huf"):
+			return link_type
+	return None
+
+
 def setup_desktop_icon_as_workspace(app_name):
 	"""
 	Replace the External App desktop icon with a Workspace Sidebar icon.
 	Runs after Frappe creates desktop icons, so we fix the Huf icon to use Workspace Sidebar.
 	Only applies on Frappe version 16 and above.
+
+	This is cosmetic: any failure here is logged and swallowed rather than
+	aborting `bench install-app huf`.
 	"""
 	if not is_frappe_16() or app_name != "huf":
+		return
+
+	try:
+		_setup_desktop_icon_as_workspace()
+	except Exception:
+		frappe.db.rollback()
+		logger.warning("huf: skipped desktop icon setup", exc_info=True)
+		frappe.log_error(
+			title="Huf: desktop icon setup skipped",
+			message=frappe.get_traceback(with_context=True),
+		)
+
+
+def _setup_desktop_icon_as_workspace():
+	link_type = _resolve_workspace_link_type()
+	if not link_type:
+		logger.warning("huf: no resolvable workspace link target; skipping desktop icon")
 		return
 
 	# Delete the App icon (External type) - we want Workspace Sidebar instead
@@ -38,7 +75,7 @@ def setup_desktop_icon_as_workspace(app_name):
 	)
 	if workspace_icon:
 		doc = frappe.get_doc("Desktop Icon", workspace_icon)
-		doc.link_type = "Workspace Sidebar"
+		doc.link_type = link_type
 		doc.link_to = "Huf"
 		doc.hidden = 0
 		doc.parent_icon = None
@@ -52,7 +89,7 @@ def setup_desktop_icon_as_workspace(app_name):
 			icon = frappe.new_doc("Desktop Icon")
 			icon.label = "Huf"
 			icon.icon_type = "Link"
-			icon.link_type = "Workspace Sidebar"
+			icon.link_type = link_type
 			icon.link_to = "Huf"
 			icon.icon = workspace.get("icon") or "header"
 			icon.standard = 1

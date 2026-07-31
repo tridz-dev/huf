@@ -2,10 +2,10 @@
 # See license.txt
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestAgentSummaryPrompt(FrappeTestCase):
+class TestAgentSummaryPrompt(IntegrationTestCase):
 	def test_prompt_group_set_for_new_lineage(self):
 		prompt = frappe.get_doc({
 			"doctype": "Agent Summary Prompt",

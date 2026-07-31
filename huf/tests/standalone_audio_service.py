@@ -8,7 +8,7 @@ public audio API (huf.ai.audio_api).
 These tests mock frappe (and LiteLLM) so the pure logic can be exercised
 without a full Frappe bench and without hitting real providers:
 
-    python -m unittest huf.tests.test_audio_service
+    python -m unittest huf.tests.standalone_audio_service
 """
 
 import base64
@@ -18,6 +18,21 @@ import types
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+# NOTE: this file is deliberately NOT named test_*.py.
+#
+# Everything below replaces real modules in sys.modules ("frappe.utils.*",
+# "litellm", "huf.ai.providers.litellm") at import time. Test discovery imports
+# every matching module into a single interpreter, so those replacements leak
+# process-wide and break discovery for the whole app:
+#
+#   ImportError: cannot import name 'ProviderUnavailableError' from
+#   'huf.ai.providers.litellm' (unknown location)
+#
+# The standalone_ prefix keeps `bench run-tests` from discovering it. Run it
+# explicitly instead:
+#
+#   python -m unittest huf.tests.standalone_audio_service
 
 
 class ThrowError(Exception):
@@ -53,9 +68,10 @@ frappe_file_manager.save_file = MagicMock()
 frappe_utils.file_manager = frappe_file_manager
 frappe_mock.utils = frappe_utils
 
-sys.modules["frappe"] = frappe_mock
-sys.modules["frappe.utils"] = frappe_utils
-sys.modules["frappe.utils.file_manager"] = frappe_file_manager
+if "frappe" not in sys.modules:
+    sys.modules["frappe"] = frappe_mock
+    sys.modules["frappe.utils"] = frappe_utils
+    sys.modules["frappe.utils.file_manager"] = frappe_file_manager
 
 # Mock litellm so no real provider is ever called.
 litellm_mock = types.ModuleType("litellm")
