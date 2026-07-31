@@ -1599,6 +1599,36 @@ export function AgentFormPage() {
             .map((field) => [field, agentData[field as keyof AgentUpdatePayload]]),
         ) as Partial<AgentDoc>;
 
+        const messages: string[] = [];
+
+        // The Enabled/Disabled toggle sits outside any tab's own fields and
+        // the backend only ever accepts it as part of the "general" section
+        // (huf/ai/agent_config_api.py's AGENT_SECTIONS) - so saving from any
+        // other tab must persist it via its own general-section call instead
+        // of silently dropping it, which is what happened before this fix
+        // (see Tracks/safwan-erooth.AuthDebug/FINDINGS.md, "Bug D").
+        if (disabledChanged && section !== 'general') {
+          const generalRevision = sectionRevisions.general;
+          if (!generalRevision) {
+            toast.error('This section is not ready to save. Reload the agent and try again.');
+            return;
+          }
+          const disabledResult = await updateAgentSection(
+            id,
+            'general',
+            { disabled: agentData.disabled },
+            generalRevision,
+          );
+          setSectionRevisions((current) =>
+            Object.fromEntries(
+              Object.keys(current).map((key) => [key, disabledResult.modified]),
+            ) as Partial<Record<AgentConfigSection, string>>,
+          );
+          setInitialDisabled(values.disabled);
+          form.resetField('disabled', { defaultValue: values.disabled });
+          messages.push(values.disabled ? 'Agent disabled' : 'Agent enabled');
+        }
+
         const result = await updateAgentSection(id, section, sectionPayload, expectedModified);
         const savedAgentId = result.name;
         setSectionRevisions((current) =>
@@ -1626,7 +1656,8 @@ export function AgentFormPage() {
         if (savedAgentId !== id) {
           navigate(`/agents/${encodeURIComponent(savedAgentId)}`, { replace: true });
         }
-        toast.success(`${tabConfig[section].label} saved`);
+        messages.push(`${tabConfig[section].label} saved`);
+        toast.success(messages.join(' · '));
         return;
       }
 
