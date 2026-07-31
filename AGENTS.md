@@ -1781,7 +1781,179 @@ Each registered tool must include:
 -   **Dependency Management**: Ensures app dependencies are properly loaded
 -   **Version Compatibility**: Supports tool versioning and compatibility checks
 
-## MCP Client Integration
+
+---
+
+## Additional DocTypes (Not Previously Documented)
+
+The following DocTypes were added in recent development but are not yet covered in the main architecture section above.
+
+### Execution & Sandboxing
+
+#### 41. Execution Profile
+Defines a sandboxed execution environment for agent tool calls. Controls filesystem access, network policies, approved modules, and approval workflows.
+- **Key Fields:** `profile_name`, `is_builtin`, `disabled`, `approval_mode`, `filesystem_policy`, `network_policy`, `allowed_modules`
+- **Purpose:** Provides secure, sandboxed execution for agent tools with configurable permission levels
+
+#### 42. Execution Profile Permission
+Links execution profiles to specific agents or users, controlling who can use which execution sandbox.
+- **Key Fields:** `execution_profile`, `apply_to`, `agent`, `user`
+- **Purpose:** Granular access control for execution environments
+
+#### 43. Agent Execution Approval
+Tracks pending approval requests for agent tool executions that require human review.
+- **Key Fields:** `agent_tool_call`, `execution_kind`, `requested_capability`, `status`, `expires_on`, `approver_role`, `approver_users`
+- **Purpose:** Human-in-the-loop approval for sensitive operations
+
+### Skills System
+
+#### 44. Skill
+Represents a reusable skill package that can be attached to agents. Skills bundle prompts, tools, knowledge, and MCP server configurations.
+- **Key Fields:** `skill_name`, `title`, `skill_category`, `description`, `status`, `source_type`, `skill_prompts`, `skill_tools`, `skill_knowledge`, `skill_mcp_servers`
+- **Purpose:** Modular, composable capability units for agents
+
+#### 45. Skill Category
+Organizes skills into hierarchical categories for discoverability.
+- **Key Fields:** `category_name`, `description`, `icon`, `color`, `parent_category`
+- **Purpose:** Skill organization and browsing
+
+#### 46. Skill Prompt
+Links prompt templates to skills. Provides contextual prompts that agents use when a skill is active.
+- **Key Fields:** `skill`, `prompt`, `priority`, `context`
+- **Purpose:** Skill-specific prompt injection
+
+#### 47. Skill Tool
+Links agent tools to skills, making those tools available when the skill is loaded.
+- **Key Fields:** `skill`, `tool`, `required`, `description`
+- **Purpose:** Tool bundling per skill
+
+#### 48. Skill Knowledge
+Links knowledge sources to skills for RAG-augmented responses.
+- **Key Fields:** `skill`, `knowledge_source`, `priority`, `retrieval_count`
+- **Purpose:** Knowledge association with skills
+
+#### 49. Skill MCP Server
+Links MCP servers to skills, extending agent capabilities via MCP.
+- **Key Fields:** `skill`, `mcp_server`, `tool_namespace`
+- **Purpose:** MCP server bundling per skill
+
+#### 50. Skill Import Log
+Tracks imports of skills from external sources (GitHub, marketplace, etc.).
+- **Key Fields:** `skill`, `source_url`, `import_status`, `error_log`, `version`
+- **Purpose:** Audit trail for skill imports
+
+#### 51. Agent Skill
+Links skills to agents with configuration (auto-load, priority).
+- **Key Fields:** `skill`, `mode` (auto/manual), `auto_load`, `priority`, `description`
+- **Purpose:** Agent-to-skill binding
+
+### Memory System
+
+#### 52. Memory Policy
+Defines retention, scope, and access rules for agent memory records.
+- **Key Fields:** `policy_name`, `description`, `enabled`, `agent`, `scope_type`, `scope_key`, `retention_days`, `max_records`
+- **Purpose:** Govern how agents store and retrieve memories
+
+#### 53. Memory Record
+Individual memory entries stored by agents (facts, preferences, decisions).
+- **Key Fields:** `title`, `record_type`, `status`, `scope_type`, `scope_key`, `visibility`, `content`, `embedding`, `source_run`
+- **Purpose:** Persistent agent memory across conversations
+
+### Gateway System
+
+#### 54. Gateway
+Configures external platform integrations (Telegram, WhatsApp, Slack, Discord, etc.).
+- **Key Fields:** `gateway_name`, `provider`, `is_enabled`, `integration_settings`, `execution_user`, `description`, `direct_policy`
+- **Purpose:** Multi-platform bot deployment
+
+#### 55. Gateway Access Entry
+Defines access control rules for gateway users (who can talk to which agent via which gateway).
+- **Key Fields:** `gateway`, `agent`, `access_type`, `allowed_users`, `blocked_users`, `rate_limit`
+- **Purpose:** Per-gateway access control
+
+#### 56. Gateway Binding
+Links a gateway to a specific agent, defining the default agent for that gateway.
+- **Key Fields:** `gateway`, `agent`, `is_default`, `context_override`, `welcome_message`
+- **Purpose:** Gateway-to-agent routing
+
+#### 57. Gateway Event
+Logs events from gateways (messages received, errors, status changes).
+- **Key Fields:** `gateway`, `event_type`, `payload`, `status`, `processed_at`, `error_message`
+- **Purpose:** Observability and debugging for gateways
+
+### MCP (Model Context Protocol)
+
+#### 58. MCP Server
+Configures external MCP servers that agents can connect to for additional tools.
+- **Key Fields:** `server_name`, `description`, `enabled`, `tool_namespace`, `timeout_seconds`, `transport_type`, `server_url`, `auth_type`, `auth_credentials`
+- **Purpose:** MCP server registration
+
+#### 59. MCP Server Header
+HTTP headers for MCP server connections (for SSE/HTTP transports).
+- **Key Fields:** `mcp_server`, `header_key`, `header_value`
+- **Purpose:** Custom headers for MCP connections
+
+#### 60. MCP Server Tool
+Registered tools discovered from an MCP server.
+- **Key Fields:** `mcp_server`, `tool_name`, `description`, `schema`, `enabled`
+- **Purpose:** Tool inventory from MCP servers
+
+#### 61. Agent MCP Server
+Links MCP servers to agents.
+- **Key Fields:** `agent`, `mcp_server`, `tool_namespace`, `enabled`
+- **Purpose:** Agent-specific MCP server binding
+
+### Networking & SSH
+
+#### 62. Network Access Policy
+Defines network access rules for sandboxed execution (allowed hosts, ports, protocols).
+- **Key Fields:** `policy_name`, `rules` (child table)
+- **Purpose:** Network egress control
+
+#### 63. Network Access Policy Rule
+Individual rules within a network access policy.
+- **Key Fields:** `parent` (network_access_policy), `rule_type`, `host_pattern`, `port_range`, `protocol`, `action`
+- **Purpose:** Granular network rules
+
+#### 64. SSH Connection
+Configures SSH connections for remote execution capabilities.
+- **Key Fields:** `display_name`, `enabled`, `host`, `port`, `username`, `auth_method`, `password`, `private_key`, `passphrase`
+- **Purpose:** Remote server access for agent tools
+
+#### 65. Agent SSH Connection
+Links SSH connections to agents.
+- **Key Fields:** `agent`, `ssh_connection`, `enabled`, `default_directory`
+- **Purpose:** Agent-specific SSH binding
+
+### Analytics & App Framework
+
+#### 66. Agent Run Analytics Rollup
+Aggregated analytics data for agent runs (token usage, costs, success rates) bucketed by time.
+- **Key Fields:** `bucket_start`, `granularity`, `dimension_key`, `agent`, `provider`, `model`, `run_kind`, `run_count`, `success_count`, `failed_count`, `total_tokens`, `total_cost`
+- **Purpose:** Operational analytics and monitoring
+
+#### 67. Huf App
+Defines mini-applications within HUF that provide custom UI routes and functionality.
+- **Key Fields:** `app_id`, `title`, `description`, `route`, `icon`, `category`, `sort_order`, `version`
+- **Purpose:** Extensible app framework for custom HUF UIs
+
+### Provider Settings
+
+#### 68. OpenAI Settings
+Global OpenAI provider configuration (API base, organization, default models).
+- **Key Fields:** `api_base`, `organization_id`, `default_model`, `embedding_model`, `max_tokens`
+
+#### 69. Groq Settings
+Global Groq provider configuration.
+- **Key Fields:** `api_base`, `api_key`, `default_model`, `max_tokens`
+
+#### 70. ElevenLabs Settings
+Text-to-speech configuration via ElevenLabs.
+- **Key Fields:** `api_key`, `voice_id`, `model_id`, `stability`, `similarity_boost`
+
+---
+
+
 
 HUF supports the Model Context Protocol (MCP) for connecting to external tool providers. This allows agents to use tools from external MCP servers like Gmail, GitHub, Slack, databases, and more.
 
@@ -2196,6 +2368,94 @@ HUF integrates prompt caching to save token costs on supported models:
 - **Model Check**: Checks model support by checking the LiteLLM pricing metadata for the field `cache_read_input_token_cost`.
 - **Toggle**: Users can toggle `enable_prompt_caching` in `Agent` settings to automatically apply prompt caching block headers on supported providers (Anthropic, Deepseek, OpenAI, Bedrock).
 
+### 8. Skills System
+
+The **Skills System** provides a modular, composable way to extend agent capabilities. A Skill is a bundle of:
+- **Prompts** — contextual instructions injected into agent conversations
+- **Tools** — Agent Tool Functions made available when the skill is active
+- **Knowledge** — Knowledge Sources for RAG-augmented responses
+- **MCP Servers** — External MCP servers providing additional tools
+
+**Key behaviors:**
+- Skills can be loaded automatically (`auto_load`) or manually triggered
+- Multiple skills can be active on a single agent with priority ordering
+- Skills support import from GitHub/marketplace via Skill Import Log
+- The `AgentSkill` DocType links skills to agents with mode configuration
+
+**Implementation:** `huf/ai/skills/loader.py` handles skill loading and prompt/tool injection.
+
+### 9. Memory System
+
+The **Memory System** provides persistent, vectorized memory for agents across conversations.
+
+**Key components:**
+- **Memory Policy** — Defines what gets remembered, for how long, and who can access it
+- **Memory Record** — Individual memory entries with embeddings for semantic search
+- **Scope** — Memories can be scoped per-agent, per-user, per-conversation, or global
+- **Visibility** — Public (shared), private (agent-only), or user-specific
+
+**Usage:** Agents automatically query relevant memories before responding. Memories are created via tool calls or explicit agent actions.
+
+**Implementation:** `huf/ai/memory_tools.py`, `huf/ai/memory/`
+
+### 10. Gateway System
+
+The **Gateway System** enables agents to operate across multiple messaging platforms.
+
+**Supported providers:** Telegram, WhatsApp, Slack, Discord, Email, and generic webhooks.
+
+**Key components:**
+- **Gateway** — Platform configuration (bot tokens, webhooks, settings)
+- **Gateway Binding** — Maps a gateway to a default agent
+- **Gateway Access Entry** — Controls which users can interact with which agents
+- **Gateway Event** — Event log for debugging and observability
+
+**Features:**
+- Per-gateway rate limiting
+- User allowlists/blocklists
+- Context overrides per gateway
+- Welcome messages
+- Direct policy execution
+
+**Implementation:** `huf/ai/gateway/`
+
+### 11. Execution Sandboxing
+
+The **Execution Sandbox** provides secure, isolated environments for agent tool execution.
+
+**Key components:**
+- **Execution Profile** — Defines sandbox policies (filesystem, network, modules)
+- **Execution Profile Permission** — Controls who can use which profile
+- **Agent Execution Approval** — Human-in-the-loop for sensitive operations
+
+**Sandbox types:**
+- **Unrestricted** — Full system access (dangerous)
+- **Restricted** — Limited filesystem, no network
+- **Networked** — Limited filesystem, controlled network egress
+- **Docker** — Containerized execution
+- **SSH** — Remote execution on configured servers
+
+**Approval modes:**
+- `none` — No approval needed
+- `auto` — Auto-approve based on policy
+- `manual` — Human approval required
+
+**Implementation:** `huf/ai/execution/`
+
+### 12. App Seeding Framework
+
+The **App Seeding Framework** allows HUF to bootstrap new Frappe apps with AI-generated code.
+
+**Key features:**
+- Generates DocType definitions from natural language descriptions
+- Creates Python controllers, JavaScript files, and test scaffolding
+- Supports iterative refinement
+- Integrates with the Flow Engine for app generation workflows
+
+**Implementation:** `huf/ai/app_seeding/`
+
+---
+
 ## Known Incomplete Features / TODO
 
 The Gateways feature (channel inbound adapters) is merged into `develop` but is not yet
@@ -2215,3 +2475,103 @@ The frontend project enforces strict TypeScript rules. Unused variables, unresol
 
 ### User-Facing Copy
 All labels, placeholders, empty states, and error messages shown to end users must read as plain product copy, not implementation detail. Never leak internal mechanics into UI text — e.g. write "Search records..." not "Search API records...", "Filter..." not "Filter columns locally...". If unsure whether a string is user-facing, write it assuming the reader has never heard of Frappe, DocTypes, REST, or SSE.
+
+### Adding New DocTypes
+When creating or modifying DocTypes, always:
+1. Update the corresponding `.json` schema
+2. Update the server-side `.py` controller if business logic is needed
+3. Update the client-side `.js` for UI behavior
+4. Run `bench migrate` to apply schema changes
+5. Update this AGENTS.md with the new DocType documentation
+
+### Adding New Tools
+1. Define the tool in `Agent Tool Function` DocType
+2. Implement the tool logic in `huf/ai/tools/` or as a custom function
+3. Register the tool in the appropriate tool registry
+4. Add tests in `huf/tests/`
+5. Update AGENTS.md Standard Tools section
+
+### Adding New Skills
+1. Create a `Skill` document
+2. Add `Skill Prompts`, `Skill Tools`, `Skill Knowledge`, and `Skill MCP Servers` as needed
+3. Link the skill to agents via `Agent Skill`
+4. Test with a real agent conversation
+
+### Security Checklist
+- [ ] Never commit API keys (use Password field type)
+- [ ] Validate all inputs in custom tool functions
+- [ ] Use Execution Profiles with restricted sandbox for untrusted tools
+- [ ] Set approval_mode to `manual` for destructive operations
+- [ ] Review network access policies regularly
+- [ ] Audit gateway access entries for unauthorized users
+
+---
+
+## Integration Tools (Expanded)
+
+In addition to the standard tools documented above, HUF provides these integration tools:
+
+### Google Services
+- **Google Places Search** — Search for places, get details, photos
+- **Google Maps Directions** — Route planning
+- **Google Travel Hotels** — Hotel search and booking
+
+### Web & Search
+- **SERP API** — Search engine results
+- **Web Fetch** — Fetch and parse web pages
+- **RSS Feed Reader** — Subscribe to and read RSS feeds
+
+### CRM & ERP
+- **ERPNext Integration** — Direct ERPNext DocType CRUD
+- **CRM Tools** — Lead, contact, opportunity management
+- **Sales Pipeline** — Deal stage management
+
+### Communication
+- **Email Send** — SMTP email sending
+- **Email Read** — IMAP/POP3 inbox access
+- **Slack Post** — Slack message posting
+- **Telegram Send** — Telegram bot messaging
+
+### Data & Analytics
+- **SQL Query** — Direct database queries (with profile restrictions)
+- **CSV Import/Export** — Data exchange
+- **Chart Generation** — Visual data representation
+
+### System & DevOps
+- **SSH Command** — Remote server command execution
+- **Docker Run** — Container execution
+- **File Operations** — Read/write files within sandbox
+- **Python Execution** — Sandboxed Python code execution
+
+---
+
+## Frontend Architecture (Expanded)
+
+### Skills UI
+- **Skill Manager** — Browse, import, and configure skills
+- **Skill Editor** — Create and edit skill definitions
+- **Skill Assignment** — Link skills to agents
+
+### Memory UI
+- **Memory Browser** — Search and manage agent memories
+- **Memory Inspector** — View memory content, source, and embedding
+
+### Gateway UI
+- **Gateway Manager** — Configure platform integrations
+- **Access Control** — Manage user permissions per gateway
+- **Event Log** — Monitor gateway activity
+
+### Execution Profiles UI
+- **Profile Editor** — Define sandbox policies
+- **Permission Matrix** — Visual access control
+
+### AI Elements (Chat V2)
+- **Artifacts** — Rich content blocks (code, tables, charts, images)
+- **Reasoning Display** — Show model reasoning chains
+- **Tool Call Visualization** — Animated tool execution indicators
+- **Streaming Markdown** — Real-time markdown rendering with syntax highlighting
+
+---
+
+*AGENTS.md last updated: 2026-08-01*
+*Total DocTypes documented: 70+*
