@@ -25,6 +25,25 @@ interface UserProviderProps {
   children: ReactNode;
 }
 
+function getSessionUserId(): string | null {
+  // 1. Server-rendered boot data
+  const bootUser = (window as unknown as { frappe?: { boot?: { user?: { name?: string } } } }).frappe?.boot?.user?.name;
+  if (bootUser && bootUser !== 'Guest') {
+    return bootUser;
+  }
+  // 2. Standard Frappe 'user_id' cookie (used by official Frappe apps like CRM/Raven)
+  try {
+    const cookies = new URLSearchParams(document.cookie.split('; ').join('&'));
+    const cookieUser = cookies.get('user_id');
+    if (cookieUser && cookieUser !== 'Guest') {
+      return decodeURIComponent(cookieUser);
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+  return null;
+}
+
 export function UserProvider({ children }: UserProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -74,15 +93,32 @@ export function UserProvider({ children }: UserProviderProps) {
   };
 
   const redirectToLogin = () => {
-    const redirectTo = encodeURIComponent(HOME_URL);
+    // Preserve where the user was headed so login can bounce them back.
+    const currentPath = window.location.pathname + window.location.search;
+    const redirectTo = encodeURIComponent(currentPath || HOME_URL);
     window.location.href = `${LOGIN_URL}${redirectTo}#login`;
   };
 
   const checkAuth = async () => {
     try {
       setIsLoading(true);
-      const loggedUserId = await getLoggedInUserWithRetry();
-      if (loggedUserId && loggedUserId !== 'Guest') {
+      // Fast path: server-rendered boot data or the standard Frappe
+      // 'user_id' cookie, no network round-trip. Falls back to the API
+      // (with retries — see getLoggedInUserWithRetry) only when neither is
+      // available, e.g. on a fresh tab load before boot data is present.
+      let loggedUserId = getSessionUserId();
+      if (!loggedUserId) {
+        try {
+          const apiUser = await getLoggedInUserWithRetry();
+          if (apiUser && apiUser !== 'Guest') {
+            loggedUserId = apiUser;
+          }
+        } catch {
+          loggedUserId = null;
+        }
+      }
+
+      if (loggedUserId) {
         const userDetails = await fetchUserDetails(loggedUserId);
         setUser(userDetails);
       } else {

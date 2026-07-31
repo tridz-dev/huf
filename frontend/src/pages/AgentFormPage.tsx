@@ -158,15 +158,11 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     allow_file_upload: agent.allow_file_upload === 1,
     enable_ocr: agent.enable_ocr === 1,
     max_upload_size_mb:
-      agent.max_upload_size_mb !== undefined && agent.max_upload_size_mb !== null
-        ? agent.max_upload_size_mb
-        : undefined,
+      agent.max_upload_size_mb ? agent.max_upload_size_mb : 25,
     allow_code_execution: agent.allow_code_execution === 1,
     execution_profile: agent.execution_profile || undefined,
     execution_shared_dir_limit_mb:
-      agent.execution_shared_dir_limit_mb !== undefined && agent.execution_shared_dir_limit_mb !== null
-        ? agent.execution_shared_dir_limit_mb
-        : undefined,
+      agent.execution_shared_dir_limit_mb ? agent.execution_shared_dir_limit_mb : undefined,
     allow_ssh: agent.allow_ssh === 1,
     ssh_connections: (agent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
   };
