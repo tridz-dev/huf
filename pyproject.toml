@@ -44,6 +44,7 @@ dependencies = [
     "serpapi",
     "youtube-transcript-api",
     "paramiko>=3.4.0",
+    "rapidocr-pdf",
 ]
 
 [build-system]

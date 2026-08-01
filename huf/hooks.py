@@ -218,6 +218,9 @@ doc_events = {
     "Communication": {
         "after_insert": "huf.ai.gateway_adapters.email.on_communication_inserted",
     },
+    "File": {
+        "after_insert": "huf.ai.handlers.media.process_file_upload",
+    },
 }
 
 # Scheduled Tasks

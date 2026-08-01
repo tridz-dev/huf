@@ -916,3 +916,18 @@ async def handle_transcribe_audio(
         # Hard transcription failure: retain Error Log for admin attention.
         frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
         return {"success": False, "error": str(e)}
+
+def process_file_upload(doc, method):
+    """
+    Background hook for automatically extracting text from uploaded files.
+    Enqueues OCR processing so the `huf_ocr_text` custom field is populated
+    asynchronously without blocking the upload.
+    """
+    from huf.ai.ocr_engine import extract_document_sync
+    frappe.enqueue(
+        extract_document_sync,
+        file_id=doc.name,
+        force_refresh=False,
+        queue="default",
+        timeout=300
+    )

@@ -505,6 +505,36 @@ def _build_agent_message_content(file_name: str, extracted_text: str, strategy: 
     )
 
 
+def _read_file_cache(file_doc, content_hash: str) -> ExtractionResult | None:
+    if file_doc.get("huf_ocr_file_hash") == content_hash and file_doc.get("huf_ocr_text"):
+        return ExtractionResult(
+            success=True,
+            text=file_doc.huf_ocr_text,
+            strategy=file_doc.get("huf_ocr_strategy", "cached"),
+            model=file_doc.get("huf_ocr_model", ""),
+            file_id=file_doc.name,
+            file_name=file_doc.file_name,
+            file_hash=content_hash,
+            metadata={"cached": True}
+        )
+    return None
+
+
+def _write_file_cache(file_doc, result: ExtractionResult):
+    if not result.success or not result.text:
+        return
+    try:
+        file_doc.db_set("huf_ocr_text", result.text, update_modified=False)
+        file_doc.db_set("huf_ocr_file_hash", result.file_hash, update_modified=False)
+        file_doc.db_set("huf_ocr_strategy", result.strategy, update_modified=False)
+        file_doc.db_set("huf_ocr_model", result.model, update_modified=False)
+        file_doc.db_set("huf_ocr_at", frappe.utils.now(), update_modified=False)
+    except Exception as e:
+        _log_error(f"Error writing to OCR cache on File {file_doc.name}: {e}")
+
+
+
+
 async def extract_document(
     agent_doc,
     file_id: str | None = None,
@@ -515,16 +545,25 @@ async def extract_document(
     create_message: bool = True,
     conversation_id: str | None = None,
     agent_run_id: str | None = None,
+    force_local: bool = False,
+    force_refresh: bool = False,
 ) -> ExtractionResult:
     """
     Extract text from any document/image.
 
     This is the main entry point used by handle_ocr_document in sdk_tools.py.
     """
-    provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
-    api_key = provider_doc.get_password("api_key")
-    if not api_key:
-        return ExtractionResult(success=False, error="API key not configured for provider")
+    api_key = None
+    provider_name = ""
+    if agent_doc:
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+        provider_name = (provider_doc.provider_name or "").lower()
+        if not api_key:
+            return ExtractionResult(success=False, error="API key not configured for provider")
+    else:
+        # If called without an agent context (e.g. background job), force local extraction
+        force_local = True
 
     # Resolve file
     try:
@@ -591,8 +630,20 @@ async def extract_document(
     file_name = file_doc.file_name or os.path.basename(file_path)
     content_hash = _file_hash(file_path)
 
-    provider_name = (provider_doc.provider_name or "").lower()
-    strategy = _determine_strategy(mime_type, ext, provider_name)
+    if not force_refresh:
+        cached_result = _read_file_cache(file_doc, content_hash)
+        if cached_result:
+            return cached_result
+
+    if force_local:
+        if _is_pdf(mime_type, ext):
+            strategy = "local_ocr"
+        elif _has_local_extractor(mime_type, ext) or mime_type.startswith("text/"):
+            strategy = "local"
+        else:
+            strategy = "local_ocr"
+    else:
+        strategy = _determine_strategy(mime_type, ext, provider_name)
 
     # Resolve model
     ocr_model = model
@@ -619,9 +670,32 @@ async def extract_document(
     if strategy == "local":
         result = _extract_local(file_path, mime_type)
 
-    # Strategy: local PDF extraction
+    # Strategy: local PDF extraction (standard text)
     elif strategy == "local_pdf":
         result = _extract_local(file_path, "application/pdf")
+
+    # Strategy: local OCR (RapidOCR for PDFs/Images)
+    elif strategy == "local_ocr":
+        from huf.ai.local_ocr import extract_pdf_with_rapidocr
+        # Use RapidOCR for PDFs (and images if RapidOCR handles them, else fallback to standard local)
+        extracted_text = extract_pdf_with_rapidocr(file_path)
+        if extracted_text:
+            result = ExtractionResult(
+                success=True,
+                text=extracted_text,
+                pages=[{"index": 0, "text": extracted_text}],
+                strategy="local_ocr",
+                model="rapidocr-pdf",
+                file_name=file_name,
+            )
+        else:
+            result = ExtractionResult(
+                success=False,
+                error="Local OCR returned empty text or failed.",
+                strategy="local_ocr",
+                model="rapidocr-pdf",
+                file_name=file_name,
+            )
 
     # Strategy: OCR endpoint
     elif strategy == "ocr":
@@ -645,13 +719,29 @@ async def extract_document(
         )
 
     # Fallback chain for PDFs: if the primary strategy (vision or OCR endpoint)
-    # failed, fall back to local PDF text extraction via pypdf.
-    if not result.success and _is_pdf(mime_type, ext) and strategy != "local_pdf":
+    # failed, fall back to local OCR extraction (RapidOCR) or local PDF extraction (text only).
+    if not result.success and _is_pdf(mime_type, ext) and strategy not in ("local_ocr", "local_pdf"):
         _log_error(
-            f"Primary extraction failed for PDF '{file_name}' ({strategy}); falling back to local PDF extraction.",
+            f"Primary extraction failed for PDF '{file_name}' ({strategy}); falling back to local extraction.",
             "OCR Fallback",
         )
-        result = _extract_local(file_path, "application/pdf")
+        try:
+            import rapidocr_pdf
+            from huf.ai.local_ocr import extract_pdf_with_rapidocr
+            extracted_text = extract_pdf_with_rapidocr(file_path)
+            if extracted_text:
+                result = ExtractionResult(
+                    success=True,
+                    text=extracted_text,
+                    pages=[{"index": 0, "text": extracted_text}],
+                    strategy="local_ocr",
+                    model="rapidocr-pdf",
+                    file_name=file_name,
+                )
+            else:
+                result = _extract_local(file_path, "application/pdf")
+        except ImportError:
+            result = _extract_local(file_path, "application/pdf")
 
     # Fallback chain for unknown / failed non-PDFs that are small enough to be images
     if not result.success and not _is_pdf(mime_type, ext) and file_size <= _MAX_BASE64_FILE_SIZE:
@@ -668,6 +758,7 @@ async def extract_document(
         result.file_id = file_doc.name
         result.file_name = file_name
         result.file_hash = content_hash
+        _write_file_cache(file_doc, result)
 
     if not result or not result.success:
         return result or ExtractionResult(
@@ -757,3 +848,59 @@ async def extract_document(
             _log_error(f"Error creating Agent Message for OCR: {e}", "OCR Message Creation")
 
     return result
+
+
+def extract_document_sync(
+    agent_doc=None,
+    file_id: str | None = None,
+    file_url: str | None = None,
+    pages: str | None = None,
+    include_images: bool = False,
+    model: str | None = None,
+    create_message: bool = True,
+    conversation_id: str | None = None,
+    agent_run_id: str | None = None,
+    force_local: bool = False,
+    force_refresh: bool = False,
+) -> ExtractionResult:
+    """
+    Synchronous wrapper around extract_document() for use in hooks,
+    scheduled tasks, REST endpoints, and non-async Frappe code.
+    """
+    import asyncio
+    
+    # Try to get the current event loop, if any
+    try:
+        loop = asyncio.get_running_loop()
+        is_running = True
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        is_running = False
+
+    coro = extract_document(
+        agent_doc=agent_doc,
+        file_id=file_id,
+        file_url=file_url,
+        pages=pages,
+        include_images=include_images,
+        model=model,
+        create_message=create_message,
+        conversation_id=conversation_id,
+        agent_run_id=agent_run_id,
+        force_local=force_local,
+        force_refresh=force_refresh,
+    )
+
+    if is_running:
+        # If we're somehow already in a running loop but this was called synchronously,
+        # we have a nested event loop problem. This is a fallback that might not work 
+        # perfectly in all environments but is better than failing outright.
+        import nest_asyncio
+        nest_asyncio.apply(loop)
+        return loop.run_until_complete(coro)
+    else:
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
