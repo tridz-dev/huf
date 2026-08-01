@@ -81,7 +81,7 @@ class AgentStreamRenderer(BaseRenderer):
 		
 		# Optional Overrides
 		provider = frappe.form_dict.get("provider")
-		model = frappe.form_dict.get("model")
+		model = frappe.form_dict.get("model") or frappe.form_dict.get("model_override")
 		prompt_template = frappe.form_dict.get("prompt_template")
 		prompt_version = frappe.form_dict.get("prompt_version")
 		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
@@ -93,7 +93,7 @@ class AgentStreamRenderer(BaseRenderer):
 					body = frappe.request.get_json(force=True) or {}
 					prompt = body.get("prompt") or body.get("message", "")
 					if not provider: provider = body.get("provider")
-					if not model: model = body.get("model")
+					if not model: model = body.get("model") or body.get("model_override")
 					if not prompt_template: prompt_template = body.get("prompt_template")
 					if not prompt_version: prompt_version = body.get("prompt_version")
 					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
@@ -121,8 +121,7 @@ class AgentStreamRenderer(BaseRenderer):
 			if not provider:
 				provider = agent_doc.provider
 			if not model:
-				model_doc = frappe.get_doc("AI Model", agent_doc.model)
-				model = model_doc.model_name
+				model = agent_doc.model
 		except frappe.DoesNotExistError:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}

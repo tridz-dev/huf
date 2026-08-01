@@ -37,11 +37,73 @@ class _LazyLogger:
 logger = _LazyLogger()
 
 
+def _resolve_effective_model(agent_doc, model=None, provider=None):
+    """Resolve the effective provider and model for an agent run.
+
+    Args:
+        agent_doc: The Agent document.
+        model: Optional AI Model link name to override the agent's default model.
+        provider: Optional provider link name. If omitted and model is provided,
+            the provider is resolved from the AI Model doc.
+
+    Returns:
+        Tuple of (provider_link, model_link, model_name).
+
+    Raises:
+        frappe.ValidationError: if the override model or its provider is missing/invalid.
+    """
+    effective_model = model if model else agent_doc.model
+    if not effective_model:
+        frappe.throw(_("Agent model is not configured"))
+
+    if model and model != agent_doc.model:
+        model_doc = frappe.get_doc("AI Model", model)
+        if not model_doc.provider:
+            frappe.throw(
+                _("AI Model '{0}' has no provider configured.").format(model),
+                frappe.ValidationError,
+            )
+        effective_provider = provider if provider else model_doc.provider
+        # If caller passed a provider that does not match the override model,
+        # trust the model's own provider so the right API key/base URL is used.
+        if provider and provider != model_doc.provider:
+            frappe.logger("huf").warning(
+                f"Provider mismatch for model override: requested {provider}, "
+                f"model {model} belongs to {model_doc.provider}. Using {model_doc.provider}."
+            )
+            effective_provider = model_doc.provider
+    else:
+        effective_provider = provider if provider else agent_doc.provider
+
+    if not effective_provider:
+        frappe.throw(_("Provider is not configured"))
+
+    model_name = frappe.db.get_value("AI Model", effective_model, "model_name")
+    if not model_name:
+        frappe.throw(
+            _("AI Model '{0}' has no model name configured.").format(effective_model),
+            frappe.ValidationError,
+        )
+
+    return effective_provider, effective_model, model_name
+
+
 class AgentManager:
     """Manages the creation and execution of agents."""
-    def __init__(self, agent_name, file_handler=None):
+    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None):
         self.agent_doc = frappe.get_doc("Agent", agent_name)
-        self.settings = frappe.get_doc("AI Provider", self.agent_doc.provider)
+        (
+            self.effective_provider,
+            self.effective_model,
+            self.effective_model_name,
+        ) = _resolve_effective_model(
+            self.agent_doc,
+            model=model_override,
+            provider=provider_override,
+        )
+        self.settings = frappe.get_doc("AI Provider", self.effective_provider)
+        self.provider_override = provider_override
+        self.model_override = model_override
         # self.file_handler = file_handler
         self.tools = []
         self._setup_client()
@@ -274,7 +336,7 @@ class AgentManager:
         conversation, used to narrow "Relevant Only" memory injection.
         """
 
-        if not self.agent_doc.model:
+        if not self.effective_model:
             frappe.throw(_("Agent model is not configured"))
 
         from huf.ai.prompt_resolver import resolve_prompt
@@ -388,7 +450,7 @@ class AgentManager:
             top_p=self.agent_doc.top_p
         )
 
-        model = self.provider.get_model(self.agent_doc.model)
+        model = self.provider.get_model(self.effective_model)
 
         agent = Agent(
             name=self.agent_doc.agent_name,
@@ -887,8 +949,11 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
-    resolved_provider = provider if provider else agent_doc.provider
-    resolved_model = model if model else agent_doc.model
+    resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
+        agent_doc,
+        model=model,
+        provider=provider,
+    )
 
     if frappe.session.user == "Guest" and not agent_doc.allow_guest:
         frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
@@ -1262,8 +1327,11 @@ def _execute_agent_run(
     or user message.
     """
     agent_doc = frappe.get_doc("Agent", agent_name)
-    resolved_provider = provider if provider else agent_doc.provider
-    resolved_model = model if model else agent_doc.model
+    resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
+        agent_doc,
+        model=model,
+        provider=provider,
+    )
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -1322,7 +1390,11 @@ def _execute_agent_run(
         _update_agent_run_stats(agent_name)
         transaction_checkpoint(reason="agent_streaming_progress")
 
-        manager = AgentManager(agent_name)
+        manager = AgentManager(
+            agent_name,
+            provider_override=resolved_provider,
+            model_override=resolved_model,
+        )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.prompt_mode = "Template"
@@ -1450,10 +1522,10 @@ def _execute_agent_run(
 
         from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
         segment_tokens = compute_segment_tokens(
-            agent_doc, agent, resolved_model, resolved_provider, history, knowledge_context, prompt
+            agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history
         )
 
         context = {
@@ -1467,7 +1539,7 @@ def _execute_agent_run(
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
         }
-        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
+        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
         result = _run_async_safely(run)
 
         new_items = getattr(result, "new_items", []) or []
@@ -1702,7 +1774,7 @@ def _execute_agent_run(
                 if not cost:
                     from huf.ai.cost_calculator import calculate_cost
 
-                    pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+                    pricing_model = _normalize_model_name(resolved_model_name, resolved_provider)
 
                     mock_response = {
                         "usage": {
@@ -1719,7 +1791,7 @@ def _execute_agent_run(
                         mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
 
                     cost, _source = calculate_cost(
-                        model_name=resolved_model,
+                        model_name=resolved_model_name,
                         input_tokens=input_tokens,
                         output_tokens=output_tokens,
                         cached_tokens=cached_tokens,
@@ -1727,7 +1799,7 @@ def _execute_agent_run(
                     )
             except (ImportError, AttributeError, TypeError, ValueError, KeyError, RuntimeError) as e:
                 frappe.logger("huf").warning(
-                    f"Cost calculation failed for {resolved_model} in sync: {e}"
+                    f"Cost calculation failed for {resolved_model_name} in sync: {e}"
                 )
                 cost = 0.0
 
@@ -2450,10 +2522,14 @@ async def run_agent_stream(
                 if exact_match:
                     resolved_prompt_template = exact_match
 
-        resolved_provider = provider if provider else agent_doc.provider
-        resolved_model = model if model else agent_doc.model
+        resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
+            agent_doc,
+            model=model,
+            provider=provider,
+        )
 
-        # Legacy: Lock to current model
+        # Persist the effective model override on the conversation so subsequent
+        # turns in the same chat continue using it unless explicitly changed again.
         frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -2499,7 +2575,11 @@ async def run_agent_stream(
         },update_modified=False)
         safe_commit()
 
-        manager = AgentManager(agent_name)
+        manager = AgentManager(
+            agent_name,
+            provider_override=resolved_provider,
+            model_override=resolved_model,
+        )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.update({
@@ -2610,10 +2690,10 @@ async def run_agent_stream(
 
         from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
         segment_tokens = compute_segment_tokens(
-            agent_doc, agent, resolved_model, resolved_provider, history, knowledge_context, prompt
+            agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history
         )
 
         context["conversation_history"] = history
@@ -2621,7 +2701,7 @@ async def run_agent_stream(
         # Stream from provider
         full_response = ""
         try:
-            stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model, context)
+            stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
             async for chunk in stream:
                 chunk_type = chunk.get("type")
@@ -2685,7 +2765,7 @@ async def run_agent_stream(
                         error_msg = _(
                             "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
                         )
-                        frappe.log_error(f"Empty provider response for agent '{agent_name}' (model '{resolved_model}')", "Huf Provider")
+                        frappe.log_error(f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')", "Huf Provider")
                         frappe.db.set_value("Agent Run", run_doc.name, {
                             "status": "Failed",
                             "error_message": error_msg,
@@ -2781,7 +2861,7 @@ async def run_agent_stream(
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
-                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+                            pricing_model = _normalize_model_name(resolved_model_name, resolved_provider)
 
                             msgs_for_count = history + [{"role": "user", "content": prompt}]
                             input_tokens = token_counter(model=pricing_model, messages=msgs_for_count)
@@ -2798,7 +2878,7 @@ async def run_agent_stream(
                         if not cost:
                             from huf.ai.cost_calculator import calculate_cost
 
-                            pricing_model = _normalize_model_name(resolved_model, resolved_provider)
+                            pricing_model = _normalize_model_name(resolved_model_name, resolved_provider)
 
                             mock_response = {
                                 "usage": {
@@ -2813,7 +2893,7 @@ async def run_agent_stream(
                                 mock_response["usage"]["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
 
                             cost, _source = calculate_cost(
-                                model_name=resolved_model,
+                                model_name=resolved_model_name,
                                 input_tokens=input_tokens,
                                 output_tokens=output_tokens,
                                 cached_tokens=cached_tokens,
@@ -2822,7 +2902,7 @@ async def run_agent_stream(
 
                     except (ImportError, AttributeError, TypeError, ValueError, KeyError, RuntimeError) as e:
                         frappe.logger("huf").warning(
-                            f"Cost calculation failed for {resolved_model}: {e}"
+                            f"Cost calculation failed for {resolved_model_name}: {e}"
                         )
                         cost = 0.0
 

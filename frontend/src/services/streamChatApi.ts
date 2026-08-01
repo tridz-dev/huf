@@ -82,6 +82,7 @@ export interface StreamAgentParams {
   conversationId?: string;
   skipUserMessage?: boolean;
   files?: StreamAgentFile[];
+  modelOverride?: string;
 }
 
 /**
@@ -90,7 +91,7 @@ export interface StreamAgentParams {
 export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
-  const { agentName, message, conversationId, skipUserMessage, files } = params;
+  const { agentName, message, conversationId, skipUserMessage, files, modelOverride } = params;
   const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
@@ -107,6 +108,9 @@ export async function* streamAgentResponse(
   }
   if (files?.length) {
     body.files = files;
+  }
+  if (modelOverride) {
+    body.model_override = modelOverride;
   }
 
   const res = await fetch(url, {
@@ -182,6 +186,7 @@ export async function sendMessage(
     conversationId?: string;
     skipUserMessage?: boolean;
     files?: StreamAgentFile[];
+    modelOverride?: string;
   },
   options: SendMessageOptions
 ): Promise<ChatResult> {
@@ -197,6 +202,7 @@ export async function sendMessage(
       conversationId: params.conversationId,
       skipUserMessage: streamSkip,
       files: streamFiles,
+      modelOverride: params.modelOverride,
     })) {
       if (chunk.type === 'delta' && onDelta && chunk.full_response !== undefined) {
         onDelta(chunk.full_response);
@@ -271,6 +277,7 @@ export async function sendMessage(
       message: params.message,
       skip_user_message: streamSkip,
       files: streamFiles,
+      modelOverride: params.modelOverride,
     }) as Promise<SendMessageResponse>;
   }
 
@@ -279,5 +286,6 @@ export async function sendMessage(
     message: params.message,
     skip_user_message: streamSkip,
     files: streamFiles,
+    modelOverride: params.modelOverride,
   }) as Promise<NewConversationResponse>;
 }

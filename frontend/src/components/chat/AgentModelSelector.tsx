@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { CheckIcon, ChevronDown, Plus } from 'lucide-react';
 import {
   ModelSelector,
@@ -13,8 +13,7 @@ import {
 } from '@/components/ai-elements/model-selector';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
-import { getAgentModels, type AgentModelItem } from '@/services/agentApi';
+import { getAIModels, type AIModelItem } from '@/services/agentApi';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { isKnownBrand } from '@/utils/providerBrands';
 
@@ -38,52 +37,45 @@ export function AgentModelSelector({
   currentModel,
 }: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
-  const isInitialAutoSelectRef = useRef(true);
+  const [aiModels, setAiModels] = useState<AIModelItem[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
 
-  const {
-    items: agentModels,
-    initialLoading: modelsLoading,
-    search: modelSearch,
-    setSearch: setModelSearch,
-  } = useInfiniteScroll<
-    { page?: number; limit?: number; start?: number; search?: string },
-    AgentModelItem
-  >({
-    fetchFn: async (params) => {
-      const response = await getAgentModels({
-        page: params.page,
-        limit: params.limit,
-        start: params.start,
-        search: params.search,
-      });
-      return {
-        data: response.items,
-        hasMore: response.hasMore,
-        total: response.total,
-      };
-    },
-    initialParams: {},
-    pageSize: 20,
-    debounceMs: 300,
-    autoLoad: true,
-    autoLoadMore: false,
-  });
-
+  // Load the model catalog as soon as the selector mounts so the pill can
+  // display the selected override even when the popover is closed.
   useEffect(() => {
-    if (agentModels.length > 0 && !value && isInitialAutoSelectRef.current) {
-      isInitialAutoSelectRef.current = false;
-    } else if (agentModels.length > 0 && value) {
-      isInitialAutoSelectRef.current = false;
-    }
-  }, [agentModels, value]);
+    let cancelled = false;
+    setModelsLoading(true);
+    getAIModels()
+      .then((models) => {
+        if (!cancelled) setAiModels(models);
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
       setModelSearch('');
     }
-  }, [open, setModelSearch]);
+  }, [open]);
 
-  const groupedModels = agentModels.reduce(
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return aiModels;
+    return aiModels.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.modelName.toLowerCase().includes(q) ||
+        m.providerBrandLabel.toLowerCase().includes(q)
+    );
+  }, [aiModels, modelSearch]);
+
+  const groupedModels = filteredModels.reduce(
     (acc, model) => {
       const groupLabel = model.providerBrandLabel || 'Other';
       if (!acc[groupLabel]) {
@@ -92,16 +84,16 @@ export function AgentModelSelector({
       acc[groupLabel].push(model);
       return acc;
     },
-    {} as Record<string, AgentModelItem[]>
+    {} as Record<string, AIModelItem[]>
   );
 
   const selectedModel = useMemo(
-    () => agentModels.find((m) => m.id === value),
-    [agentModels, value]
+    () => aiModels.find((m) => m.id === value),
+    [aiModels, value]
   );
 
-  const triggerLabel = currentLabel ?? selectedModel?.name ?? 'Select Agent';
-  const triggerModel = currentModel ?? selectedModel?.model;
+  const triggerLabel = currentLabel ?? selectedModel?.name ?? 'Select Model';
+  const triggerModel = selectedModel?.modelName ?? currentModel;
 
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
@@ -112,6 +104,7 @@ export function AgentModelSelector({
             size="sm"
             variant="ghost"
             disabled={disabled}
+            data-testid="agent-model-selector-trigger"
             className={cn(
               'h-auto gap-1.5 rounded-md border px-2 py-1 text-xs font-normal text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900',
               disabled && 'disabled:opacity-100'
@@ -120,12 +113,6 @@ export function AgentModelSelector({
             <span className="relative flex size-5 shrink-0 items-center justify-center">
               {selectedModel && isKnownBrand(selectedModel.providerBrand) ? (
                 <ProviderBrandIcon brand={selectedModel.providerBrand} size="sm" />
-              ) : selectedModel?.agent_color ? (
-                <span
-                  className="size-3.5 rounded-full border border-border"
-                  style={{ backgroundColor: selectedModel.agent_color }}
-                  aria-hidden
-                />
               ) : (
                 <span className="size-3.5 shrink-0" aria-hidden />
               )}
@@ -148,7 +135,7 @@ export function AgentModelSelector({
             )}
           >
             <Plus className={showLabel ? 'w-4 h-4' : 'w-5 h-5'} />
-            {showLabel && <span>Select Agent</span>}
+            {showLabel && <span>Select Model</span>}
           </Button>
         )}
       </ModelSelectorTrigger>
@@ -164,7 +151,7 @@ export function AgentModelSelector({
             <div className="p-4 text-center text-sm text-muted-foreground">
               Loading models...
             </div>
-          ) : agentModels.length === 0 ? (
+          ) : filteredModels.length === 0 ? (
             <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
           ) : (
             Object.entries(groupedModels).map(([groupLabel, models]) => (
@@ -173,6 +160,7 @@ export function AgentModelSelector({
                   <ModelSelectorItem
                     key={model.id}
                     className="gap-3 px-3 py-2.5"
+                    data-testid="agent-model-item"
                     onSelect={() => {
                       onValueChange(model.id);
                       setOpen(false);
@@ -182,28 +170,15 @@ export function AgentModelSelector({
                     <div className="relative flex size-8 shrink-0 items-center justify-center">
                       {isKnownBrand(model.providerBrand) ? (
                         <ProviderBrandIcon brand={model.providerBrand} size="sm" />
-                      ) : model.agent_color ? (
-                        <span
-                          className="size-4 rounded-full border border-border"
-                          style={{ backgroundColor: model.agent_color }}
-                          aria-hidden
-                        />
                       ) : (
                         <span className="size-4 shrink-0" aria-hidden />
                       )}
-                      {model.agent_color && isKnownBrand(model.providerBrand) ? (
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border border-background ring-1 ring-border"
-                          style={{ backgroundColor: model.agent_color }}
-                          aria-hidden
-                        />
-                      ) : null}
                     </div>
 
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <ModelSelectorName>{model.name}</ModelSelectorName>
-                      {model.model ? (
-                        <span className="text-xs text-muted-foreground truncate">{model.model}</span>
+                      {model.modelName ? (
+                        <span className="text-xs text-muted-foreground truncate">{model.modelName}</span>
                       ) : null}
                     </div>
 

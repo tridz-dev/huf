@@ -102,6 +102,68 @@ const AGENT_LIST_FIELDS = [
 ];
 
 /**
+ * Fetch all active AI Models with their provider details for the inline
+ * model switcher in chat. Only models whose provider exists are returned.
+ */
+export interface AIModelItem {
+  id: string;
+  name: string;
+  provider: string;
+  providerBrand: string;
+  providerBrandLabel: string;
+  modelName: string;
+  modalities?: string[];
+}
+
+export async function getAIModels(): Promise<AIModelItem[]> {
+  try {
+    const [models, providers] = await Promise.all([
+      db.getDocList(doctype['AI Model'], {
+        fields: ['name', 'model_name', 'provider', 'modalities'],
+        limit: 1000,
+        orderBy: { field: 'modified', order: 'desc' },
+      }),
+      db.getDocList(doctype['AI Provider'], {
+        fields: ['name', 'provider_brand'],
+        limit: 1000,
+      }),
+    ]);
+
+    const providerBrandMap = new Map(
+      (providers as Array<{ name: string; provider_brand?: string }>).map((p) => [
+        p.name,
+        p.provider_brand || 'other',
+      ])
+    );
+
+    return (models as Array<{
+      name: string;
+      model_name?: string;
+      provider?: string;
+      modalities?: string;
+    }>)
+      .filter((m) => m.provider && providerBrandMap.has(m.provider))
+      .map((m) => {
+        const brand = providerBrandMap.get(m.provider!) || 'other';
+        return {
+          id: m.name,
+          name: m.model_name || m.name,
+          provider: m.provider!,
+          providerBrand: brand,
+          providerBrandLabel: getBrandLabel(brand),
+          modelName: m.model_name || m.name,
+          modalities: m.modalities
+            ? m.modalities.split(',').map((x) => x.trim()).filter(Boolean)
+            : undefined,
+        };
+      });
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching AI models');
+    return [];
+  }
+}
+
+/**
  * Fields needed for model selector (agents as models)
  */
 const AGENT_MODEL_FIELDS = [
@@ -712,7 +774,10 @@ export interface AgentModelItem {
   name: string;
   providerBrand: string;
   providerBrandLabel: string;
+  provider?: string;
   model?: string;
+  modelName?: string;
+  modalities?: string[];
   agent_color?: string | null;
   description?: string | null;
 }
