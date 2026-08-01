@@ -11,7 +11,7 @@ export const integrationFormSchema = z.object({
   service: z.string().min(1, 'Service is required'),
   is_active: z.boolean(),
   is_default: z.boolean(),
-  credentialValues: z.record(z.string(), z.string()),
+  credentialValues: z.record(z.string(), z.string().optional()),
   recipients: z.array(recipientRowSchema),
   telegram_agent: z.string().optional(),
   telegram_auto_setup_webhook: z.boolean(),
