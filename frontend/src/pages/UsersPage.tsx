@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserPlus, ChevronDown } from 'lucide-react';
+import { UserPlus, ChevronDown, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   getUsers,
@@ -15,7 +15,7 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { PageLayout, FilterBar } from '@/components/dashboard';
+import { PageLayout, FilterBar, EmptyState } from '@/components/dashboard';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -269,9 +269,14 @@ export default function UsersPage() {
       {loading ? (
         <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-sm font-body text-steel-soft py-12 text-center">No users found.</div>
+        <EmptyState
+          icon={Users}
+          title="No users"
+          description="Invite a user to give them access to Huf."
+          action={{ label: 'Invite user', onClick: () => setShowInvite(true) }}
+        />
       ) : (
-        <div className="overflow-x-auto rounded-none border">
+        <div className="overflow-x-auto border border-line bg-panel">
           <Table className="w-full min-w-[32rem] table-fixed text-sm">
             <TableHeader className="bg-paper-deep/50">
               <TableRow>

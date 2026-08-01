@@ -13,6 +13,7 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { LinkFieldInput } from './LinkFieldInput';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 export interface LayoutSection {
@@ -49,7 +50,7 @@ export function initFormData(
 ): Record<string, unknown> {
 	const data: Record<string, unknown> = {};
 	for (const field of fields) {
-		if (field.fieldtype === 'Section Break' || field.fieldtype === 'Column Break') continue;
+		if (LAYOUT_FIELD_TYPES.includes(field.fieldtype)) continue;
 		if (record) {
 			data[field.fieldname] = record[field.fieldname] ?? field.default ?? '';
 		} else {

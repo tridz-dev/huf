@@ -14,6 +14,7 @@ import {
 	getTableRecords,
 	deleteDataTable,
 } from '@/services/dataTableApi';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef, DataTableSchema } from '@/types/dataTable.types';
 
 export interface DataTableViewPageProps {
@@ -172,8 +173,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 	}
 
 	const dataFields = schema.fields.filter(
-		(f: DataTableFieldDef) =>
-			f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+		(f: DataTableFieldDef) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 	);
 	const recordCount = records.length;
 

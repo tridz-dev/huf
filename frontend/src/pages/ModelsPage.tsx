@@ -1,7 +1,5 @@
 import { Cpu, Settings, Loader2, DollarSign } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   getModels,
@@ -307,6 +305,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
 
   return (
     <PageLayout
+      title="Models"
       subtitle="Manage AI models and their capabilities"
       filters={
         <FilterBar
@@ -327,57 +326,41 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No models found.</p>
-          </div>
+          <EmptyState
+            icon={Cpu}
+            title="No models"
+            description="Add a model to use with your AI providers."
+            action={{ label: 'Add model', onClick: handleAddModel }}
+          />
         }
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);
+          const modalities = parseModalityBadges(model.modalities);
 
           return (
-            <Card key={model.name} className="h-full flex flex-col">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-none bg-primary/10 flex items-center justify-center">
-                      <Cpu className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{model.model_name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {resolveProviderName(model.provider, providerMap)}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  {parseModalityBadges(model.modalities).map((modality) => (
-                    <Badge key={modality} variant="secondary" className="text-xs">
-                      {modality}
-                    </Badge>
-                  ))}
-                </div>
-                {model.use_custom_pricing === 1 && (
-                  <div className="flex items-center gap-1.5 text-xs text-steel-soft">
-                    <DollarSign className="w-3 h-3" />
-                    <span>{pricingSummary || 'Custom pricing'}</span>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 gap-2"
-                  onClick={() => handleConfigure(model)}
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure
-                </Button>
-              </CardFooter>
-            </Card>
+            <ItemCard
+              key={model.name}
+              title={model.model_name}
+              description={resolveProviderName(model.provider, providerMap)}
+              icon={Cpu}
+              metadata={[
+                { label: 'Provider', value: resolveProviderName(model.provider, providerMap), icon: undefined },
+                ...(pricingSummary ? [{ label: 'Pricing', value: pricingSummary, icon: DollarSign }] : []),
+              ]}
+              badges={modalities.map((modality) => ({
+                label: modality,
+                variant: 'secondary' as const,
+              }))}
+              actions={[
+                {
+                  icon: Settings,
+                  label: 'Configure',
+                  onClick: () => handleConfigure(model),
+                  variant: 'ghost',
+                },
+              ]}
+              onClick={() => handleConfigure(model)}
+            />
           );
         }}
         keyExtractor={(model) => model.name}

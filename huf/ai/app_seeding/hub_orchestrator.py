@@ -28,8 +28,10 @@ SEED_FILE = "hub-orchestrator.json"
 # Ordered chat-model preferences; the first one present in AI Model for the
 # chosen provider wins. Falls back to the provider's first non-specialized model.
 PREFERRED_MODELS = [
-    "gpt-4o-mini",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
+    "gpt-4o-mini",
     "claude-haiku-4.5",
     "claude-sonnet-4.5",
     "openai/gpt-4o-mini",
@@ -41,6 +43,8 @@ PREFERRED_MODELS = [
 DEPRECATED_MODELS = {
     "gemini-2.5-flash",
     "google/gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "google/gemini-2.5-flash-lite-preview-06-17",
 }
 
 # Model names matching these are not chat models; never auto-select them.
