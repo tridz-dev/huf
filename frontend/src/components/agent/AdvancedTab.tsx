@@ -66,7 +66,13 @@ interface AdvancedTabProps {
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
-	return (model.modalities || '').trim() === required;
+	const items = new Set(
+		(model.modalities || '')
+			.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean),
+	);
+	return items.has(required);
 }
 
 function approvalModeDescription(mode?: string): string {
