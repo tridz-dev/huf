@@ -25,6 +25,7 @@ import { SidebarTrigger } from '../ui/sidebar';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
 import ConversationMenu from './ConversationMenu';
+import { ForkConversationDialog } from './ForkConversationDialog';
 import {
   type ConversationTitleUpdatedDetail,
   useConversationTitleSwitchFallback,
@@ -68,6 +69,12 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
   const [selectedConversationTitle, setSelectedConversationTitle] = useState<string | null>(null);
   const [selectedAutonamingEnabled, setSelectedAutonamingEnabled] = useState(false);
 
+  // Fork dialog state
+  const [forkDialogOpen, setForkDialogOpen] = useState(false);
+  const [forkDialogConversationId, setForkDialogConversationId] = useState<string | null>(null);
+  const [forkDialogTitle, setForkDialogTitle] = useState<string>('');
+  const [forkDialogAgentName, setForkDialogAgentName] = useState<string>('');
+
   // Ref map to store refs for each conversation title
   const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
   
@@ -82,6 +89,23 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
       titleRef.activateInput();
     }
   }, []);
+
+  // Callback to handle fork action
+  const handleFork = useCallback((conversationId: string, title: string, agentName: string) => {
+    setForkDialogConversationId(conversationId);
+    setForkDialogTitle(title || 'Untitled Chat');
+    setForkDialogAgentName(agentName);
+    setForkDialogOpen(true);
+  }, []);
+
+  const handleForked = useCallback((newConversationId: string, agentName: string) => {
+    navigate(`/chat/${newConversationId}`);
+    window.dispatchEvent(
+      new CustomEvent('huf:conversation-created', {
+        detail: { conversationId: newConversationId, agentName },
+      })
+    );
+  }, [navigate]);
 
   // Fetch agents with counts on mount
   useEffect(() => {
@@ -353,6 +377,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                   selectedChatId={selectedChatId}
                   isOpen={openAgents.includes(agent.name)}
                   onRename={handleRename}
+                  onFork={handleFork}
                   titleRefs={titleRefs}
                   animatingConversationId={animatingConversationId}
                   onAddItemReady={(addItem: (item: ChatListItem) => void) => {
@@ -369,6 +394,7 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
             selectedChatId={selectedChatId}
             isActive={activeTab === 'recents'}
             onRename={handleRename}
+            onFork={handleFork}
             titleRefs={titleRefs}
             animatingConversationId={animatingConversationId}
             onAddItemReady={(addItem) => {
@@ -378,6 +404,14 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
         </TabsContent>
         </Tabs>
       </div>
+      <ForkConversationDialog
+        conversationId={forkDialogConversationId || ''}
+        conversationTitle={forkDialogTitle}
+        agentName={forkDialogAgentName}
+        open={forkDialogOpen}
+        onOpenChange={setForkDialogOpen}
+        onForked={handleForked}
+      />
     </div>
   );
 }
@@ -388,6 +422,7 @@ function AgentConversationItem({
   selectedChatId,
   isOpen,
   onRename,
+  onFork,
   titleRefs,
   animatingConversationId,
   onAddItemReady,
@@ -396,6 +431,7 @@ function AgentConversationItem({
   selectedChatId: string | null;
   isOpen: boolean;
   onRename: (conversationId: string) => void;
+  onFork: (conversationId: string, title: string, agentName: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
   animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
@@ -489,7 +525,11 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
+                <ConversationMenu
+                  key={chat.id}
+                  onRename={() => onRename(chat.id)}
+                  onFork={() => onFork(chat.id, chat.title, agent.name)}
+                >
                   <Link
                     to={`/chat/${chat.id}`}
                     onClick={(e) => {
@@ -557,6 +597,7 @@ function RecentsConversationList({
   selectedChatId,
   isActive,
   onRename,
+  onFork,
   titleRefs,
   animatingConversationId,
   onAddItemReady,
@@ -564,6 +605,7 @@ function RecentsConversationList({
   selectedChatId: string | null;
   isActive: boolean;
   onRename: (conversationId: string) => void;
+  onFork: (conversationId: string, title: string, agentName: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
   animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
@@ -681,7 +723,11 @@ function RecentsConversationList({
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
+                        <ConversationMenu
+                          key={chat.id}
+                          onRename={() => onRename(chat.id)}
+                          onFork={() => onFork(chat.id, chat.title, chat.agent)}
+                        >
                           <Link
                             to={`/chat/${chat.id}`}
                             onClick={(e) => {
