@@ -626,6 +626,35 @@ export async function updateConversationTitle(conversationId:string,title:string
   }
 }
 
+export type ForkMode = 'full_history' | 'summary' | 'last_output';
+
+export interface ForkConversationParams {
+  conversationId: string;
+  mode: ForkMode;
+  title?: string;
+}
+
+export interface ForkConversationResponse {
+  success: boolean;
+  conversation_id: string;
+  title: string;
+}
+
+export async function forkConversation(
+  params: ForkConversationParams
+): Promise<ForkConversationResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.fork_conversation', {
+      conversation_id: params.conversationId,
+      mode: params.mode,
+      title: params.title,
+    });
+    return (result?.message ?? result) as ForkConversationResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error forking conversation');
+  }
+}
+
 export interface AgentRunFeedbackDoc {
   name: string;
   agent: string;

@@ -1,11 +1,12 @@
-import { PencilIcon } from "lucide-react";
+import { PencilIcon, GitBranchIcon } from "lucide-react";
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu";
 
 type ConversationMenuProps ={
     children:React.ReactNode
     onRename?: () => void
+    onFork?: () => void
 }
-export default function ConversationMenu({children, onRename}:ConversationMenuProps){
+export default function ConversationMenu({children, onRename, onFork}:ConversationMenuProps){
     function handleRename(e: Event){
         // Don't prevent default - let the menu close naturally
         // Only stop propagation to prevent Link navigation
@@ -14,6 +15,11 @@ export default function ConversationMenu({children, onRename}:ConversationMenuPr
         // The menu will close automatically, and we'll focus the input after it closes
         // Call onRename after menu closes (Radix closes menu synchronously on onSelect)
         onRename?.();
+    }
+
+    function handleFork(e: Event){
+        e.stopPropagation();
+        onFork?.();
     }
 
     return (
@@ -27,6 +33,10 @@ export default function ConversationMenu({children, onRename}:ConversationMenuPr
                 e.preventDefault();
             }}>
             <ContextMenuGroup>
+                <ContextMenuItem onSelect={handleFork}>
+                    <GitBranchIcon className="w-4 h-4 mr-2"/>
+                    Fork
+                </ContextMenuItem>
                 <ContextMenuItem onSelect={handleRename}>
                     <PencilIcon className="w-4 h-4 mr-2"/>
                     Rename
