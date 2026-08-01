@@ -1,15 +1,28 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
 
+MODEL_MODALITY_OPTIONS = {
+	"Text",
+	"Image",
+	"Text-to-Speech",
+	"Transcription",
+	"Embeddings",
+	"Vision",
+	"OCR",
+}
 
 
 class AIModel(Document):
 	def validate(self):
-		"""Validate that both input and output prices are set when custom pricing is enabled."""
+		"""Validate modalities and that both input and output prices are set when custom pricing is enabled."""
+		self._validate_modalities()
+
 		if not self.get("use_custom_pricing"):
 			return
 
@@ -25,6 +38,24 @@ class AIModel(Document):
 			frappe.throw(
 				_("Custom pricing is enabled. Please also set 'Input Cost per 1M Tokens'.")
 			)
+
+	def _validate_modalities(self):
+		"""Normalize and validate the comma-separated modalities value."""
+		modalities = self.get("modalities") or ""
+		if not modalities:
+			return
+
+		items = [m.strip() for m in modalities.split(",") if m and m.strip()]
+		invalid = [m for m in items if m not in MODEL_MODALITY_OPTIONS]
+		if invalid:
+			frappe.throw(
+				_(
+					"Invalid modality value(s): {0}. Allowed values are: {1}."
+				).format(", ".join(invalid), ", ".join(sorted(MODEL_MODALITY_OPTIONS)))
+			)
+
+		# Store as a normalized comma-separated string (no spaces so FIND_IN_SET matches cleanly)
+		self.modalities = ",".join(items)
 
 	def on_update(self):
 		"""Invalidate Redis pricing cache so the next request picks up fresh data."""
@@ -45,19 +76,29 @@ def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
 	- modality (str): one of the configured modality options
 	- provider (optional): AI Provider name (DocType link) to further restrict
 	"""
-	modality = (filters or {}).get("modality")
-	provider = (filters or {}).get("provider")
+	if isinstance(filters, str):
+		filters = json.loads(filters) if filters else {}
+
+	filters = filters or {}
+	modality = filters.get("modality")
+	provider = filters.get("provider")
 
 	if not modality:
 		frappe.throw(_("Missing required filter: modality"))
 
-	if modality not in {"Text", "Image", "Text-to-Speech", "Transcription", "Embeddings"}:
+	if modality not in MODEL_MODALITY_OPTIONS:
 		frappe.throw(_("Invalid modality: {0}").format(modality))
 
 	conditions = ["(model_name LIKE %(txt)s OR name LIKE %(txt)s)"]
-	params = {"txt": f"%{txt}%", "modality": modality, "start": start, "page_len": page_len}
+	params = {
+		"txt": f"%{txt or ''}%",
+		"modality": modality,
+		"start": int(start or 0),
+		"page_len": int(page_len or 20),
+	}
 
-	conditions.append("IFNULL(modalities, '') = %(modality)s")
+	# Modalities are stored as a comma-separated list; use FIND_IN_SET for multi-select matching.
+	conditions.append("FIND_IN_SET(%(modality)s, IFNULL(modalities, '')) > 0")
 
 	if provider:
 		conditions.append("provider = %(provider)s")

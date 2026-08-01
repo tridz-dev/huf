@@ -35,6 +35,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIModel, AIProvider } from '../types/agent.types';
 import { LinkFieldControl } from '../components/ui/link-field-control';
+import { MultiSelectCombobox } from '../components/ui/multi-select-combobox';
 import { linkRoutes } from '../lib/link-routes';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
@@ -45,7 +46,7 @@ interface ModelsPageProps {
 interface ModelFormData {
   model_name: string;
   provider: string;
-  modalities: string;
+  modalities: string[];
   use_custom_pricing: boolean;
   input_cost_per_1m_tokens: string;
   output_cost_per_1m_tokens: string;
@@ -55,7 +56,7 @@ interface ModelFormData {
 const emptyFormData: ModelFormData = {
   model_name: '',
   provider: '',
-  modalities: '',
+  modalities: [],
   use_custom_pricing: false,
   input_cost_per_1m_tokens: '',
   output_cost_per_1m_tokens: '',
@@ -186,7 +187,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       setFormData({
         model_name: details.model_name || '',
         provider: details.provider || '',
-        modalities: details.modalities || '',
+        modalities: details.modalities
+          ? details.modalities.split(',').map((m) => m.trim()).filter(Boolean)
+          : [],
         use_custom_pricing: details.use_custom_pricing === 1,
         input_cost_per_1m_tokens:
           details.input_cost_per_1m_tokens != null ? String(details.input_cost_per_1m_tokens) : '',
@@ -247,7 +250,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     const payload: Record<string, unknown> = {
       model_name: formData.model_name.trim(),
       provider: formData.provider,
-      modalities: formData.modalities,
+      modalities: formData.modalities.join(','),
       use_custom_pricing: formData.use_custom_pricing ? 1 : 0,
     };
 
@@ -436,23 +439,15 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="modalities">Modality</Label>
-                <Select
-                  value={formData.modalities}
-                  onValueChange={(value) => setFormData({ ...formData, modalities: value })}
-                >
-                  <SelectTrigger id="modalities">
-                    <SelectValue placeholder="Select a modality" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modalityOptions.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSelectCombobox
+                  options={modalityOptions.map((opt) => ({ value: opt, label: opt }))}
+                  values={formData.modalities}
+                  onValuesChange={(values) => setFormData({ ...formData, modalities: values })}
+                  placeholder="Select modalities"
+                  searchPlaceholder="Search modalities..."
+                />
                 <p className="text-xs text-steel-soft">
-                  Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).
+                  Select one or more supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).
                 </p>
               </div>
 
