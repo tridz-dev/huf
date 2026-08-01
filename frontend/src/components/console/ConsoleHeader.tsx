@@ -23,10 +23,10 @@ export function ConsoleHeader({
 }: ConsoleHeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-panel px-4">
-      <div className="flex h-full items-center gap-6">
-        <h1 className="text-xl font-semibold">Console</h1>
+      <div className="flex h-full items-end gap-6">
+        <h1 className="text-xl font-semibold leading-none">Console</h1>
         <Tabs value={mode} onValueChange={(value) => onModeChange(value as ConsoleMode)}>
-          <TabsList className="h-8">
+          <TabsList className="bg-transparent border-transparent -mb-px">
             <TabsTrigger value="playground" className="text-xs uppercase tracking-wide">
               Playground
             </TabsTrigger>
