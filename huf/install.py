@@ -257,6 +257,8 @@ def create_demo_ai_models():
     deprecated_models = (
         "gemini-2.5-flash",
         "google/gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "google/gemini-2.5-flash-lite-preview-06-17",
     )
 
     for model_name in deprecated_models:
@@ -286,7 +288,6 @@ def create_demo_ai_models():
         {"doctype": "AI Model", "model_name": "gemini-3.1-flash-lite", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-3-flash-preview", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-2.5-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash-lite", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemma-3-27b-it", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemma-3-9b-it", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "nano-banana-pro", "provider": "Google"},
