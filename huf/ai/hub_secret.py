@@ -15,6 +15,7 @@ from huf.ai.tools.builder import _require_builder_capability, _require_doc_permi
 
 
 _REQUEST_PREFIX = "huf:hub-secret-request:"
+_REQUEST_LOCK_PREFIX = "huf:hub-secret-request-lock:"
 _REQUEST_TTL_SECONDS = 10 * 60
 _MAX_SECRET_LENGTH = 16_384
 _TARGET_TYPES = {"provider_api_key", "integration_credential"}
@@ -73,6 +74,10 @@ def _parse_target(target) -> dict:
 
 def _request_key(request_id: str) -> str:
 	return f"{_REQUEST_PREFIX}{request_id}"
+
+
+def _request_lock_key(request_id: str) -> str:
+	return f"{_REQUEST_LOCK_PREFIX}{request_id}"
 
 
 def _target_label(target: dict) -> str:
@@ -155,13 +160,19 @@ def submit_hub_secret(request_id: str, secret: str, conversation_id=None) -> dic
 	if len(secret) > _MAX_SECRET_LENGTH:
 		frappe.throw(_("The secret is too long."))
 
-	target = record["target"]
-	if target["type"] == "provider_api_key":
-		_save_provider_key(target, secret)
-	else:
-		_save_integration_credential(target, secret)
-	# Consume only after the encrypted field has been written, so a transient
-	# save failure leaves the short-lived request retryable.
-	frappe.cache().delete_value(_request_key(request_id))
+	cache = frappe.cache()
+	if not cache.set(_request_lock_key(request_id), 1, ex=60, nx=True):
+		frappe.throw(_("This secret request is already being submitted."))
+	try:
+		target = record["target"]
+		if target["type"] == "provider_api_key":
+			_save_provider_key(target, secret)
+		else:
+			_save_integration_credential(target, secret)
+		# Consume only after the encrypted field has been written, so a transient
+		# save failure leaves the short-lived request retryable.
+		cache.delete_value(_request_key(request_id))
+	finally:
+		cache.delete(_request_lock_key(request_id))
 
 	return {"configured": True, "target": target, "target_label": _target_label(target)}
