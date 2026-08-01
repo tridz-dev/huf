@@ -16,6 +16,7 @@ import {
 	createTableRecord,
 } from '@/services/dataTableApi';
 import type { DataTableSchema, DataTableFieldDef } from '@/types/dataTable.types';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import { buildFormLayout, FieldInput, initFormData } from '@/components/data-table/DataRecordFormLayout';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
@@ -201,7 +202,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 	}
 
 	const dataFields: DataTableFieldDef[] = schema.fields.filter(
-		(field) => field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break'
+		(field) => !LAYOUT_FIELD_TYPES.includes(field.fieldtype)
 	);
 	const sections = buildFormLayout(schema.fields);
 	const tabGroups = sections.reduce<{ label?: string; sections: typeof sections }[]>((groups, section) => {

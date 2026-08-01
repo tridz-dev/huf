@@ -8,6 +8,7 @@ import { TableBuilderCanvas } from '@/components/data-table/TableBuilderCanvas';
 import { FieldConfigPanel } from '@/components/data-table/FieldConfigPanel';
 import { TableSettingsPanel } from '@/components/data-table/TableSettingsPanel';
 import { createDataTable, updateDataTable, getTableSchema } from '@/services/dataTableApi';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/types/dataTable.types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -192,7 +193,7 @@ export function DataTableBuilderPage() {
 
 	const handleAddField = useCallback(
 		(type: DataTableFieldType) => {
-			const isLayout = type === 'Section Break' || type === 'Column Break';
+			const isLayout = LAYOUT_FIELD_TYPES.includes(type);
 			// Frappe does not permit `in_list_view` on Attach/Attach Image fields.
 			const supportsListView = type !== 'Attach' && type !== 'Attach Image';
 			const baseName = isLayout
@@ -207,9 +208,9 @@ export function DataTableBuilderPage() {
 			const newField: DataTableFieldDef = {
 				fieldname,
 				fieldtype: type,
-				label: isLayout ? '' : '',
+				label: '',
 				...(isLayout || !supportsListView ? {} : { in_list_view: state.fields.filter(
-					(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+					(f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 				).length < 4 ? 1 : 0 as 0 | 1 }),
 			};
 
@@ -225,7 +226,7 @@ export function DataTableBuilderPage() {
 		}
 
 		const dataFields = state.fields.filter(
-			(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+			(f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 		);
 		if (dataFields.length === 0) {
 			toast.error('Add at least one data field');

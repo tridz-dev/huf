@@ -2,6 +2,7 @@ import { GripVertical, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 interface FieldCardProps {
@@ -25,7 +26,7 @@ export function FieldCard({
 	onDragOver,
 	onDrop,
 }: FieldCardProps) {
-	const isLayout = field.fieldtype === 'Section Break' || field.fieldtype === 'Column Break';
+	const isLayout = LAYOUT_FIELD_TYPES.includes(field.fieldtype);
 
 	if (isLayout) {
 		return (
@@ -44,7 +45,14 @@ export function FieldCard({
 			>
 				<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
 				<div className="flex items-center gap-2 flex-1 min-w-0">
-					{field.fieldtype === 'Section Break' ? (
+					{field.fieldtype === 'Tab Break' ? (
+						<>
+							<span className="text-xs text-steel">▭</span>
+							<span className="text-sm text-steel">
+								{field.label || 'Tab Break'}
+							</span>
+						</>
+					) : field.fieldtype === 'Section Break' ? (
 						<>
 							<span className="text-xs text-steel">---</span>
 							<span className="text-sm text-steel">
