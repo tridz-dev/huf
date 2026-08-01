@@ -4,6 +4,20 @@ import type { ToolUIPart } from 'ai';
 import { mapToolStatusToState } from './utils';
 import type { MessageType } from './types';
 
+// Reasoning text is streamed client-side only and is NOT persisted on the server.
+// When ChatMessageList remounts (e.g. after new-conversation navigation), prev=[],
+// so the normal key-based lookup loses the reasoning. This cache bridges the gap:
+// ChatInput writes here when streaming ends; the mapper reads it as a fallback.
+const _reasoningCache = new Map<string, string>();
+export function cacheReasoning(messageId: string, reasoning: string): void {
+  _reasoningCache.set(messageId, reasoning);
+}
+function consumeReasoningCache(messageId: string): string | undefined {
+  const r = _reasoningCache.get(messageId);
+  if (r !== undefined) _reasoningCache.delete(messageId);
+  return r;
+}
+
 /** Normalize socket event - backend may send `status`/`result` instead of `tool_status`/`tool_result` */
 function normalizeToolCallEvent(raw: Record<string, unknown>): ToolCallEvent {
   const tool_status =
@@ -521,7 +535,7 @@ export function mergeConversationItemsIntoMessages(
       // server-side), so it must be carried over from the prior local
       // message the same way tools are, or it vanishes the moment the
       // conversation is re-synced from the server after the run completes.
-      reasoning: tempMessage?.reasoning,
+      reasoning: tempMessage?.reasoning ?? consumeReasoningCache(item.id),
       reasoningStreaming: tempMessage?.reasoningStreaming,
       versions: [
         {
