@@ -200,7 +200,7 @@ def _fork_full_history(source, target, cm: ConversationManager) -> None:
     )
 
     for idx, msg_ref in enumerate(messages, start=1):
-        source_msg = frappe.get_doc("Agent Message", msg_ref.name)
+        source_msg = frappe.get_doc("Agent Message", msg_ref["name"])
         _copy_message(source_msg, target, cm, idx)
 
     _update_total_messages(target, len(messages))
@@ -221,7 +221,7 @@ def _fork_last_output(source, target, cm: ConversationManager) -> None:
         _update_total_messages(target, 0)
         return
 
-    source_msg = frappe.get_doc("Agent Message", messages[0].name)
+    source_msg = frappe.get_doc("Agent Message", messages[0]["name"])
     _copy_message(source_msg, target, cm, 1)
     _update_total_messages(target, 1)
 

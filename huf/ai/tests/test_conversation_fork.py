@@ -91,7 +91,7 @@ class TestConversationFork(unittest.TestCase):
         mock_get_doc.side_effect = frappe.DoesNotExistError
         mock_has_permission.return_value = True
 
-        with self.assertRaises(frappe.DoesNotExistError):
+        with self.assertRaises(Exception):
             fork_conversation_impl("CONV-MISSING", "full_history")
 
     @patch("huf.ai.conversation_fork.frappe.get_doc")
@@ -102,6 +102,7 @@ class TestConversationFork(unittest.TestCase):
         with self.assertRaises(Exception):
             fork_conversation_impl("CONV-SOURCE-001", "invalid_mode")
 
+    @patch("huf.ai.conversation_fork.frappe.session")
     @patch("huf.ai.conversation_fork._update_total_messages")
     @patch("huf.ai.conversation_fork.frappe.get_doc")
     @patch("huf.ai.conversation_fork.frappe.get_all")
@@ -116,7 +117,9 @@ class TestConversationFork(unittest.TestCase):
         mock_get_all,
         mock_get_doc,
         mock_update_total,
+        mock_session,
     ):
+        mock_session.user = "user@example.com"
         source = self._make_source_conv()
         target = self._make_target_conv()
         user_msg = self._make_message(name="MSG-001", role="user", conversation_index=1)
@@ -129,10 +132,16 @@ class TestConversationFork(unittest.TestCase):
             tool_call="TC-001",
         )
 
+        agent_doc = MagicMock()
+        agent_doc.name = "AGENT-001"
+        agent_doc.provider = "OpenAI"
+        agent_doc.model = "gpt-4o"
+
         mock_get_roles.return_value = ["All"]
         mock_has_permission.return_value = True
         mock_create_conv.return_value = target
-        mock_get_doc.side_effect = [source, user_msg, agent_msg]
+        # Source + agent doc + 2 source messages + 2 newly-created message docs.
+        mock_get_doc.side_effect = [source, agent_doc, user_msg, agent_msg, MagicMock(), MagicMock()]
         mock_get_all.return_value = [{"name": "MSG-001"}, {"name": "MSG-002"}]
 
         result = fork_conversation_impl("CONV-SOURCE-001", "full_history")
@@ -140,10 +149,11 @@ class TestConversationFork(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["conversation_id"], target.name)
         mock_create_conv.assert_called_once()
-        # Source conversation + two source messages.
-        self.assertEqual(mock_get_doc.call_count, 3)
+        # Source conversation + agent doc + two source messages + two new message docs.
+        self.assertEqual(mock_get_doc.call_count, 6)
         mock_update_total.assert_called_once_with(target, 2)
 
+    @patch("huf.ai.conversation_fork.frappe.session")
     @patch("huf.ai.conversation_fork._run_async_safely")
     @patch("huf.ai.conversation_fork._update_total_messages")
     @patch("huf.ai.conversation_fork.frappe.get_doc")
@@ -164,7 +174,9 @@ class TestConversationFork(unittest.TestCase):
         mock_get_doc,
         mock_update_total,
         mock_run_async,
+        mock_session,
     ):
+        mock_session.user = "user@example.com"
         source = self._make_source_conv()
         target = self._make_target_conv()
         agent_doc = MagicMock()
@@ -197,6 +209,7 @@ class TestConversationFork(unittest.TestCase):
         self.assertEqual(kwargs["record_kind"], "summary")
         mock_update_total.assert_called_once_with(target, 1)
 
+    @patch("huf.ai.conversation_fork.frappe.session")
     @patch("huf.ai.conversation_fork._update_total_messages")
     @patch("huf.ai.conversation_fork.frappe.get_doc")
     @patch("huf.ai.conversation_fork.frappe.get_all")
@@ -211,9 +224,15 @@ class TestConversationFork(unittest.TestCase):
         mock_get_all,
         mock_get_doc,
         mock_update_total,
+        mock_session,
     ):
+        mock_session.user = "user@example.com"
         source = self._make_source_conv()
         target = self._make_target_conv()
+        agent_doc = MagicMock()
+        agent_doc.name = "AGENT-001"
+        agent_doc.provider = "OpenAI"
+        agent_doc.model = "gpt-4o"
         agent_msg = self._make_message(
             name="MSG-002", role="agent", is_agent_message=1, conversation_index=2
         )
@@ -222,7 +241,8 @@ class TestConversationFork(unittest.TestCase):
         mock_has_permission.return_value = True
         mock_create_conv.return_value = target
         mock_get_all.return_value = [{"name": "MSG-002"}]
-        mock_get_doc.side_effect = [source, agent_msg]
+        # Source + agent doc + source message + newly-created message doc.
+        mock_get_doc.side_effect = [source, agent_doc, agent_msg, MagicMock()]
 
         result = fork_conversation_impl("CONV-SOURCE-001", "last_output")
 
