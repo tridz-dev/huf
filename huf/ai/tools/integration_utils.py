@@ -1,7 +1,7 @@
 # Copyright (c) 2026, Huf and contributors
 # For license information, please see license.txt
 
-"""Generic integration utilities: attach service tools to Agents and Flows."""
+"""Generic integration utilities: attach service tools to Agents."""
 
 import json
 from typing import Optional
