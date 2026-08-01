@@ -33,7 +33,7 @@ class TestHubSecret(IntegrationTestCase):
 			patch("frappe.db.exists", return_value=True),
 			patch("frappe.get_doc", side_effect=[settings, service]),
 			patch("frappe.cache", return_value=cache),
-			patch.object(frappe.session, "user", "test@example.com"),
+			patch.dict(frappe.session, {"user": "test@example.com"}),
 		):
 			result = hub_secret.create_secret_request(
 				{
@@ -63,7 +63,7 @@ class TestHubSecret(IntegrationTestCase):
 			patch("frappe.has_permission", return_value=True),
 			patch("frappe.get_doc", return_value=provider),
 			patch("frappe.cache", return_value=cache),
-			patch.object(frappe.session, "user", "test@example.com"),
+			patch.dict(frappe.session, {"user": "test@example.com"}),
 		):
 			result = hub_secret.submit_hub_secret("opaque-request", "provider-secret", "conv-1")
 
