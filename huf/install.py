@@ -119,7 +119,10 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
-	setup_desktop_icon_as_workspace("huf")
+	try:
+		setup_desktop_icon_as_workspace("huf")
+	except frappe.LinkValidationError:
+		pass
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
