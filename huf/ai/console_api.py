@@ -52,7 +52,6 @@ def _get_console_model_config() -> tuple[str | None, str | None]:
 
 	providers = frappe.get_all(
 		"AI Provider",
-		filters={"disabled": ("!=", 1)},
 		fields=["name", "provider_brand"],
 		order_by="modified desc",
 	)
@@ -65,7 +64,7 @@ def _get_console_model_config() -> tuple[str | None, str | None]:
 			if doc.get_password("api_key"):
 				model = frappe.db.get_value(
 					"AI Model",
-					{"provider": provider_name, "disabled": ("!=", 1)},
+					{"provider": provider_name},
 					"name",
 					order_by="modified desc",
 				)
