@@ -132,8 +132,8 @@ const operateNavItems = [
 		badge: "Experimental",
 	},
 	{
-		title: "Console",
-		url: "/console",
+		title: "Playground",
+		url: "/playground",
 		icon: Terminal,
 		capability: "agent.use",
 	},

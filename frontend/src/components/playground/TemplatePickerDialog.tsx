@@ -1,25 +1,30 @@
-import { useState, useEffect } from 'react';
-import { Search, BookOpen } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Loader2, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2 } from 'lucide-react';
 import { getAgentPrompts, type AgentPromptDoc } from '@/services/agentPromptApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { toast } from 'sonner';
 
-interface ConsoleTemplatePickerProps {
+interface TemplatePickerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onLoadTemplate: (prompt: AgentPromptDoc) => void;
 }
 
-export function ConsoleTemplatePicker({ onLoadTemplate }: ConsoleTemplatePickerProps) {
-  const [open, setOpen] = useState(false);
+export function TemplatePickerDialog({
+  open,
+  onOpenChange,
+  onLoadTemplate,
+}: TemplatePickerDialogProps) {
   const [prompts, setPrompts] = useState<AgentPromptDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -27,6 +32,7 @@ export function ConsoleTemplatePicker({ onLoadTemplate }: ConsoleTemplatePickerP
   useEffect(() => {
     if (!open) return;
     setLoading(true);
+    setSearch('');
     let cancelled = false;
     getAgentPrompts({ status: 'active', limit: 100 })
       .then((response) => {
@@ -56,31 +62,27 @@ export function ConsoleTemplatePicker({ onLoadTemplate }: ConsoleTemplatePickerP
 
   const handleSelect = (prompt: AgentPromptDoc) => {
     onLoadTemplate(prompt);
-    setOpen(false);
+    onOpenChange(false);
     toast.success(`Loaded template: ${prompt.title}`);
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="outline" className="gap-1.5">
-          <BookOpen className="h-4 w-4" />
-          Templates
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
-        <div className="border-b border-line p-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-steel" />
-            <Input
-              placeholder="Search templates..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Load template</DialogTitle>
+          <DialogDescription>Load an active Agent Prompt template into the bench.</DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-steel" />
+          <Input
+            placeholder="Search templates..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
-        <ScrollArea className="h-72">
+        <ScrollArea className="h-72 rounded border border-line">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-steel-soft" />
@@ -115,7 +117,7 @@ export function ConsoleTemplatePicker({ onLoadTemplate }: ConsoleTemplatePickerP
             </div>
           )}
         </ScrollArea>
-      </PopoverContent>
-    </Popover>
+      </DialogContent>
+    </Dialog>
   );
 }

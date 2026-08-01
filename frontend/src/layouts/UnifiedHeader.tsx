@@ -30,7 +30,8 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/integrations')) return 'Integrations';
     if (path.startsWith('/gateways')) return 'Gateways';
     if (path.startsWith('/settings')) return 'Settings';
-    if (path.startsWith('/console')) return 'Console';
+    if (path.startsWith('/playground')) return 'Playground';
+    if (path.startsWith('/console')) return 'Playground';
     if (path.startsWith('/help')) return 'Help';
     if (path.startsWith('/chat')) return 'Chat';
     if (path.startsWith('/executions')) return 'Executions';
