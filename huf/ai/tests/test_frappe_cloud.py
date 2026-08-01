@@ -1,4 +1,5 @@
 import json
+import unittest
 from unittest.mock import MagicMock, patch
 
 from huf.ai.tools.frappe_cloud import (
@@ -22,198 +23,189 @@ def _mock_account():
     return account
 
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_list_benches(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = '{"message": [{"name": "bench-1", "title": "Bench 1", "extra": "raw"}]}'
-    mock_response.json.return_value = {"message": [{"name": "bench-1", "title": "Bench 1", "extra": "raw"}]}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
+class TestFrappeCloudTools(unittest.TestCase):
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_list_benches(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = '{"message": [{"name": "bench-1", "title": "Bench 1", "extra": "raw"}]}'
+        mock_response.json.return_value = {"message": [{"name": "bench-1", "title": "Bench 1", "extra": "raw"}]}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-    result = handle_fc_list_benches()
-    data = json.loads(result)
-    assert data["success"] is True
-    assert data["results"] == [{"name": "bench-1", "title": "Bench 1"}]
-    mock_request.assert_called_once()
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.bench.all")
+        result = handle_fc_list_benches()
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["results"], [{"name": "bench-1", "title": "Bench 1"}])
+        mock_request.assert_called_once()
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.bench.all"))
 
-    result = handle_fc_list_benches(full=True)
-    data = json.loads(result)
-    assert data["results"][0]["extra"] == "raw"
+        result = handle_fc_list_benches(full=True)
+        data = json.loads(result)
+        self.assertEqual(data["results"][0]["extra"], "raw")
 
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_create_site(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = '{"message": {"name": "site-1"}}'
+        mock_response.json.return_value = {"message": {"name": "site-1"}}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_create_site(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = '{"message": {"name": "site-1"}}'
-    mock_response.json.return_value = {"message": {"name": "site-1"}}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
+        result = handle_fc_create_site(
+            bench="bench-1",
+            site_name="site-1",
+            version="Version 16",
+            domain="frappe.cloud",
+            plan="USD 5",
+        )
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["results"]["name"], "site-1")
+        payload = mock_request.call_args.kwargs["json"]
+        self.assertEqual(payload["site"]["name"], "site-1")
+        self.assertEqual(payload["site"]["group"], "bench-1")
+        self.assertEqual(payload["site"]["plan"], "USD 5")
 
-    result = handle_fc_create_site(
-        bench="bench-1",
-        site_name="site-1",
-        version="Version 16",
-        domain="frappe.cloud",
-        plan="USD 5",
-    )
-    data = json.loads(result)
-    assert data["success"] is True
-    assert data["results"]["name"] == "site-1"
-    payload = mock_request.call_args.kwargs["json"]
-    assert payload["site"]["name"] == "site-1"
-    assert payload["site"]["group"] == "bench-1"
-    assert payload["site"]["plan"] == "USD 5"
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_create_site_requires_version_domain_plan(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        result = handle_fc_create_site(bench="bench-1", site_name="site-1")
+        data = json.loads(result)
+        self.assertFalse(data["success"])
+        self.assertIn("version, domain, and plan are required", data["error"])
+        mock_request.assert_not_called()
 
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_create_bench(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = '{"message": "bench-1"}'
+        mock_response.json.return_value = {"message": "bench-1"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_create_site_requires_version_domain_plan(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    result = handle_fc_create_site(bench="bench-1", site_name="site-1")
-    data = json.loads(result)
-    assert data["success"] is False
-    assert "version, domain, and plan are required" in data["error"]
-    mock_request.assert_not_called()
+        result = handle_fc_create_bench(
+            title="test-bench",
+            version="Version 16",
+            cluster="UAE",
+            apps=[{"name": "frappe", "source": "SRC-frappe-237"}],
+        )
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["results"], "bench-1")
+        payload = mock_request.call_args.kwargs["json"]
+        self.assertEqual(payload["bench"]["title"], "test-bench")
+        self.assertEqual(payload["bench"]["apps"][0]["name"], "frappe")
 
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_create_bench_requires_version_cluster_apps(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        result = handle_fc_create_bench(title="test-bench")
+        data = json.loads(result)
+        self.assertFalse(data["success"])
+        self.assertIn("version and cluster are required", data["error"])
+        mock_request.assert_not_called()
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_create_bench(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = '{"message": "bench-1"}'
-    mock_response.json.return_value = {"message": "bench-1"}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_archive_bench(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = "{}"
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-    result = handle_fc_create_bench(
-        title="test-bench",
-        version="Version 16",
-        cluster="UAE",
-        apps=[{"name": "frappe", "source": "SRC-frappe-237"}],
-    )
-    data = json.loads(result)
-    assert data["success"] is True
-    assert data["results"] == "bench-1"
-    payload = mock_request.call_args.kwargs["json"]
-    assert payload["bench"]["title"] == "test-bench"
-    assert payload["bench"]["apps"][0]["name"] == "frappe"
+        result = handle_fc_archive_bench(bench="bench-1")
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.bench.archive"))
 
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_site_options_uses_current_endpoint(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = '{"message": {"versions": [], "domain": "frappe.cloud"}}'
+        mock_response.json.return_value = {"message": {"versions": [], "domain": "frappe.cloud"}}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_create_bench_requires_version_cluster_apps(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    result = handle_fc_create_bench(title="test-bench")
-    data = json.loads(result)
-    assert data["success"] is False
-    assert "version and cluster are required" in data["error"]
-    mock_request.assert_not_called()
+        result = handle_fc_site_options(bench="bench-1")
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["results"]["domain"], "frappe.cloud")
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.site.options_for_new"))
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"for_bench": "bench-1"})
 
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_add_webhook(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = "{}"
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_archive_bench(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = "{}"
-    mock_response.json.return_value = {}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
+        result = handle_fc_add_webhook(endpoint="https://example.com/webhook", secret="secret", events=["Site Status Update"])
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.webhook.add"))
+        self.assertEqual(mock_request.call_args.kwargs["json"]["events"], ["Site Status Update"])
 
-    result = handle_fc_archive_bench(bench="bench-1")
-    data = json.loads(result)
-    assert data["success"] is True
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.bench.archive")
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_delete_webhook(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = "{}"
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
+        result = handle_fc_delete_webhook(name="webhook-1")
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.client.delete"))
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"doctype": "Press Webhook", "name": "webhook-1"})
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_site_options_uses_current_endpoint(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = '{"message": {"versions": [], "domain": "frappe.cloud"}}'
-    mock_response.json.return_value = {"message": {"versions": [], "domain": "frappe.cloud"}}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_add_ssh_key(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = "{}"
+        mock_response.json.return_value = {}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-    result = handle_fc_site_options(bench="bench-1")
-    data = json.loads(result)
-    assert data["success"] is True
-    assert data["results"]["domain"] == "frappe.cloud"
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.site.options_for_new")
-    assert mock_request.call_args.kwargs["json"] == {"for_bench": "bench-1"}
+        result = handle_fc_add_ssh_key(key="ssh-ed25519 AAAATEST huf")
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.account.add_key"))
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"key": "ssh-ed25519 AAAATEST huf"})
 
+    @patch("huf.ai.tools.frappe_cloud._get_fc_account")
+    @patch("huf.ai.tools.frappe_cloud.httpx.request")
+    def test_handle_fc_generate_bench_ssh_certificate(self, mock_request, mock_get_account):
+        mock_get_account.return_value = _mock_account()
+        mock_response = MagicMock()
+        mock_response.text = '{"message": {"name": "cert-1", "valid_until": "soon", "private": "raw"}}'
+        mock_response.json.return_value = {"message": {"name": "cert-1", "valid_until": "soon", "private": "raw"}}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
 
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_add_webhook(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = "{}"
-    mock_response.json.return_value = {}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
-
-    result = handle_fc_add_webhook(endpoint="https://example.com/webhook", secret="secret", events=["Site Status Update"])
-    data = json.loads(result)
-    assert data["success"] is True
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.webhook.add")
-    assert mock_request.call_args.kwargs["json"]["events"] == ["Site Status Update"]
-
-
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_delete_webhook(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = "{}"
-    mock_response.json.return_value = {}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
-
-    result = handle_fc_delete_webhook(name="webhook-1")
-    data = json.loads(result)
-    assert data["success"] is True
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.client.delete")
-    assert mock_request.call_args.kwargs["json"] == {"doctype": "Press Webhook", "name": "webhook-1"}
-
-
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_add_ssh_key(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = "{}"
-    mock_response.json.return_value = {}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
-
-    result = handle_fc_add_ssh_key(key="ssh-ed25519 AAAATEST huf")
-    data = json.loads(result)
-    assert data["success"] is True
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.account.add_key")
-    assert mock_request.call_args.kwargs["json"] == {"key": "ssh-ed25519 AAAATEST huf"}
-
-
-@patch("huf.ai.tools.frappe_cloud._get_fc_account")
-@patch("huf.ai.tools.frappe_cloud.httpx.request")
-def test_handle_fc_generate_bench_ssh_certificate(mock_request, mock_get_account):
-    mock_get_account.return_value = _mock_account()
-    mock_response = MagicMock()
-    mock_response.text = '{"message": {"name": "cert-1", "valid_until": "soon", "private": "raw"}}'
-    mock_response.json.return_value = {"message": {"name": "cert-1", "valid_until": "soon", "private": "raw"}}
-    mock_response.raise_for_status.return_value = None
-    mock_request.return_value = mock_response
-
-    result = handle_fc_generate_bench_ssh_certificate(bench="bench-1")
-    data = json.loads(result)
-    assert data["success"] is True
-    assert data["results"] == {"name": "cert-1", "valid_until": "soon"}
-    assert mock_request.call_args.args[:2] == ("POST", "https://frappecloud.com/api/method/press.api.bench.generate_certificate")
-    assert mock_request.call_args.kwargs["json"] == {"name": "bench-1"}
+        result = handle_fc_generate_bench_ssh_certificate(bench="bench-1")
+        data = json.loads(result)
+        self.assertTrue(data["success"])
+        self.assertEqual(data["results"], {"name": "cert-1", "valid_until": "soon"})
+        self.assertEqual(mock_request.call_args.args[:2], ("POST", "https://frappecloud.com/api/method/press.api.bench.generate_certificate"))
+        self.assertEqual(mock_request.call_args.kwargs["json"], {"name": "bench-1"})
