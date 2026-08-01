@@ -23,5 +23,9 @@
   "inject_conversation_data": 1,
   "conversation_data_api_permission": "Read",
   "allow_guest": 0,
-  "agent_color": "#0EA5E9"
+  "agent_color": "#0EA5E9",
+  "allow_file_upload": 1,
+  "image_generation_model": "nano-banana-pro",
+  "tts_model": "gemini-3.1-flash-lite",
+  "audio_transcription_model": "gemini-3.1-flash-lite"
 }
