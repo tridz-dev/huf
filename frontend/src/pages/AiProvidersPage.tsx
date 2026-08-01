@@ -1,4 +1,4 @@
-import { ArrowRight, Check, CheckCircle2, ExternalLink, KeyRound, Loader2, Settings, Sparkles, XCircle } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Cloud, ExternalLink, KeyRound, Loader2, Settings, Sparkles, XCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import {
@@ -12,7 +12,7 @@ import {
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   createModel,
@@ -462,9 +462,12 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No providers found.</p>
-          </div>
+          <EmptyState
+            icon={Cloud}
+            title="No providers"
+            description="Add an AI provider to connect models and start building agents."
+            action={{ label: 'Add provider', onClick: handleAddProvider }}
+          />
         }
         renderItem={(provider) => {
           const providerModels = models.filter(m => m.provider === provider.name);

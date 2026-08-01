@@ -8,7 +8,7 @@ import {
 	TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageLayout, GridView, BaseCard, FilterBar } from '../components/dashboard';
+import { PageLayout, GridView, BaseCard, FilterBar, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -401,17 +401,15 @@ function AppsPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={loading}
 					emptyState={
-						<div className="text-center py-12">
-							<AppWindow className="w-12 h-12 text-steel-soft mx-auto mb-4" />
-							<p className="font-body text-steel-soft mb-2">
-								{apps.length > 0 ? 'No apps match your filters' : 'No apps available yet'}
-							</p>
-							<p className="text-sm text-steel">
-								{apps.length > 0
+						<EmptyState
+							icon={AppWindow}
+							title={apps.length > 0 ? 'No apps match your filters' : 'No apps available yet'}
+							description={
+								apps.length > 0
 									? 'Try a different search or category.'
-									: 'Installed apps that depend on HUF will appear here.'}
-							</p>
-						</div>
+									: 'Installed apps that depend on HUF will appear here.'
+							}
+						/>
 					}
 					renderItem={(app) => <AppCard app={app} onToggleEnabled={handleToggleEnabled} />}
 					keyExtractor={(app) => app.app_id}

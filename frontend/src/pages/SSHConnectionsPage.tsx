@@ -10,7 +10,7 @@ import {
   useReactTable,
   HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, StatusDot } from '@/components/dashboard';
+import { FilterBar, LoadMoreButton, PageLayout, StatusDot, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -213,6 +213,12 @@ export function SSHConnectionsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : connections.length === 0 ? (
+          <EmptyState
+            icon={Terminal}
+            title="No SSH connections"
+            description="No SSH connections have been configured yet."
+          />
         ) : (
           <div className="border border-line bg-panel">
             <Table>
@@ -230,27 +236,19 @@ export function SSHConnectionsPage() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/ssh-connections/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel">No SSH Connections found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/ssh-connections/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>

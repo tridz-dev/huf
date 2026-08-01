@@ -2,6 +2,7 @@ export { PageLayout } from './layouts/PageLayout';
 export { PageSection } from './layouts/PageSection';
 
 export { GridView } from './views/GridView';
+export { EmptyState } from './views/EmptyState';
 export { SkeletonGridView } from './views/SkeletonGridView';
 export { ActiveAgentsTab } from './views/ActiveAgentsTab';
 export { ActiveFlowsTab } from './views/ActiveFlowsTab';

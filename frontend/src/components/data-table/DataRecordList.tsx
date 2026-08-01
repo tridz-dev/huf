@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataListView } from '@/components/dashboard/DataListView';
-import { ArrowUpDown } from 'lucide-react';
+import { EmptyState } from '@/components/dashboard';
+import { ArrowUpDown, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatTimeAgo } from '@/utils/time';
@@ -140,7 +141,13 @@ export function DataRecordList({
 			data={records}
 			loading={loading}
 			onRowClick={onRowClick}
-			emptyState={<p className="text-steel">No records found</p>}
+			emptyState={
+			<EmptyState
+				icon={FileText}
+				title="No records"
+				description="This table doesn't have any records yet."
+			/>
+		}
 		/>
 	);
 }

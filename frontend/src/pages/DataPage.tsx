@@ -11,6 +11,7 @@ import {
 	GridView,
 	ItemCard,
 	LoadMoreButton,
+	EmptyState,
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
 import { TableAgentAccessModal } from '../components/data-table/TableAgentAccessModal';
@@ -202,13 +203,12 @@ function DataPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={initialLoading}
 					emptyState={
-						<div className="text-center py-12">
-							<Database className="w-12 h-12 text-steel-soft mx-auto mb-4" />
-							<p className="font-body text-steel-soft mb-2">No data tables yet</p>
-							<p className="text-sm text-steel">
-								Create your first table to start managing structured data.
-							</p>
-						</div>
+						<EmptyState
+							icon={Database}
+							title="No data tables"
+							description="Create your first table to start managing structured data."
+							action={{ label: 'New table', onClick: () => navigate('/data/new') }}
+						/>
 					}
 					renderItem={() => <></>}
 					keyExtractor={() => ''}

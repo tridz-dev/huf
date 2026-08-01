@@ -10,7 +10,7 @@ import {
   useReactTable,
   HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, StatusDot } from '@/components/dashboard';
+import { FilterBar, LoadMoreButton, PageLayout, StatusDot, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Combobox } from '@/components/ui/combobox';
 import {
@@ -207,6 +207,12 @@ export function ExecutionProfilesPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : profiles.length === 0 ? (
+          <EmptyState
+            icon={ShieldCheck}
+            title="No execution profiles"
+            description="No execution profiles have been configured yet."
+          />
         ) : (
           <div className="border border-line bg-panel">
             <Table>
@@ -224,27 +230,19 @@ export function ExecutionProfilesPage() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/execution-profiles/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel">No Execution Profiles found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/execution-profiles/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>

@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   getModels,
@@ -326,9 +326,12 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No models found.</p>
-          </div>
+          <EmptyState
+            icon={Cpu}
+            title="No models"
+            description="Add a model to use with your AI providers."
+            action={{ label: 'Add model', onClick: handleAddModel }}
+          />
         }
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);
