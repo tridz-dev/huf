@@ -3,13 +3,14 @@ import {
   Check,
   Copy,
   Link2,
+  Network,
   Plus,
   Settings,
   ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
-import { PageLayout, GridView, ItemCard } from '@/components/dashboard';
+import { PageLayout, GridView, ItemCard, EmptyState } from '@/components/dashboard';
 import {
   getGateways,
   updateGateway,
@@ -325,16 +326,12 @@ export default function GatewaysPage() {
         loading={loading}
         columns={{ sm: 1, md: 2, lg: 3 }}
         emptyState={
-          <div className="max-w-xl py-12 text-center mx-auto">
-            <div className="mb-3 inline-flex rounded-full bg-panel p-4 text-steel border border-line">
-              <Link2 className="h-8 w-8 text-steel" />
-            </div>
-            <p className="mb-1 font-medium text-ink">No gateways configured yet</p>
-            <p className="text-xs text-steel leading-relaxed">
-              Connect WhatsApp, Facebook Messenger, Instagram Direct, Telegram, or Slack to allow customers and
-              team members to trigger AI Agents directly from messaging apps.
-            </p>
-          </div>
+          <EmptyState
+            icon={Network}
+            title="No gateways"
+            description="Connect WhatsApp, Messenger, Instagram, Telegram, or Slack to let people message your agents."
+            action={{ label: 'Add gateway', onClick: () => setShowSetup(true) }}
+          />
         }
         renderItem={(gateway) => {
           const target =

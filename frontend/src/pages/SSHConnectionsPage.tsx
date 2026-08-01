@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, Loader2, Terminal, Key, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowUpDown, Loader2, Terminal, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   ColumnDef,
@@ -8,10 +8,10 @@ import {
   getSortedRowModel,
   SortingState,
   useReactTable,
+  HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout } from '@/components/dashboard';
+import { FilterBar, LoadMoreButton, PageLayout, StatusDot, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import {
   Table,
@@ -29,8 +29,17 @@ import {
 } from '@/services/sshConnectionApi';
 import { formatTimeAgo } from '@/utils/time';
 
-function getStatusVariant(enabled?: 0 | 1): 'success' | 'secondary' {
-  return enabled === 1 ? 'success' : 'secondary';
+function SortHeader<TData>({ column, label }: { column: HeaderContext<TData, unknown>['column']; label: string }) {
+  return (
+    <Button
+      variant="ghost"
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      className="h-8 px-2 font-body text-[13px] font-medium text-steel hover:text-ink hover:bg-paper-deep"
+    >
+      {label}
+      <ArrowUpDown className="ml-2 h-3.5 w-3.5" />
+    </Button>
+  );
 }
 
 export function SSHConnectionsPage() {
@@ -82,29 +91,18 @@ export function SSHConnectionsPage() {
     () => [
       {
         accessorKey: 'display_name',
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="h-8 px-2"
-          >
-            Display Name
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
+        header: ({ column }) => <SortHeader column={column} label="Display Name" />,
         cell: ({ row }) => (
-          <div className="flex items-center gap-2 font-medium">
-            <Terminal className="h-4 w-4 text-primary shrink-0" />
-            <span>{row.original.display_name || row.original.name}</span>
-          </div>
-        ),
-      },
-      {
-        id: 'target',
-        header: 'Host Target',
-        cell: ({ row }) => (
-          <div className="font-mono text-xs text-steel">
-            {row.original.username}@{row.original.host}:{row.original.port || 22}
+          <div className="flex items-center gap-2">
+            <Terminal className="h-4 w-4 text-steel-soft shrink-0" strokeWidth={1.6} />
+            <div>
+              <div className="font-body text-[13px] font-semibold text-ink">
+                {row.original.display_name || row.original.name}
+              </div>
+              <div className="font-mono text-[11px] text-steel-soft">
+                {row.original.username}@{row.original.host}:{row.original.port || 22}
+              </div>
+            </div>
           </div>
         ),
       },
@@ -112,8 +110,8 @@ export function SSHConnectionsPage() {
         accessorKey: 'auth_method',
         header: 'Auth Method',
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 text-xs text-steel">
-            <Key className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-1.5 font-mono text-[12px] text-steel">
+            <Key className="h-3.5 w-3.5" strokeWidth={1.6} />
             <span>{row.original.auth_method || 'Password'}</span>
           </div>
         ),
@@ -124,11 +122,9 @@ export function SSHConnectionsPage() {
         cell: ({ row }) => (
           <div>
             {row.original.host_key_fingerprint ? (
-              <Badge variant="outline" className="text-xs font-mono">
-                Pinned
-              </Badge>
+              <span className="font-mono text-[11px] text-steel">Pinned</span>
             ) : (
-              <span className="text-xs text-steel-soft">Unenrolled</span>
+              <span className="font-mono text-[11px] text-steel-soft">Unenrolled</span>
             )}
           </div>
         ),
@@ -138,16 +134,11 @@ export function SSHConnectionsPage() {
         header: 'Last Test',
         cell: ({ row }) => {
           const status = row.original.last_test_status;
-          if (!status) return <span className="text-xs text-steel-soft">Never tested</span>;
-          return status === 'Success' ? (
-            <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>Success</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-xs text-rose-600 dark:text-rose-400">
-              <XCircle className="h-3.5 w-3.5" />
-              <span>Failed</span>
+          if (!status) return <span className="font-mono text-[11px] text-steel-soft">Never tested</span>;
+          return (
+            <div className="flex items-center gap-2">
+              <StatusDot variant={status === 'Success' ? 'ok' : 'fail'} />
+              <span className="font-body text-[13px] text-steel">{status}</span>
             </div>
           );
         },
@@ -156,25 +147,19 @@ export function SSHConnectionsPage() {
         accessorKey: 'enabled',
         header: 'Status',
         cell: ({ row }) => (
-          <Badge variant={getStatusVariant(row.original.enabled)}>
-            {row.original.enabled === 1 ? 'Enabled' : 'Disabled'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <StatusDot variant={row.original.enabled === 1 ? 'ok' : 'idle'} />
+            <span className="font-body text-[13px] text-steel">
+              {row.original.enabled === 1 ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
         ),
       },
       {
         id: 'modified',
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="h-8 px-2"
-          >
-            Modified
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
+        header: ({ column }) => <SortHeader column={column} label="Modified" />,
         cell: ({ row }) => (
-          <div className="text-sm text-steel">{formatTimeAgo(row.original.modified ?? null)}</div>
+          <div className="font-mono text-[12px] text-steel">{formatTimeAgo(row.original.modified ?? null)}</div>
         ),
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.modified ? new Date(rowA.original.modified).getTime() : 0;
@@ -203,6 +188,7 @@ export function SSHConnectionsPage() {
 
   return (
     <PageLayout
+      title="SSH Connections"
       subtitle="Manage remote SSH host credentials, keys, and connection policies."
       filters={
         <FilterBar
@@ -227,8 +213,14 @@ export function SSHConnectionsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : connections.length === 0 ? (
+          <EmptyState
+            icon={Terminal}
+            title="No SSH connections"
+            description="No SSH connections have been configured yet."
+          />
         ) : (
-          <div className="overflow-hidden rounded-none border">
+          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -244,27 +236,19 @@ export function SSHConnectionsPage() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/ssh-connections/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel">No SSH Connections found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/ssh-connections/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>

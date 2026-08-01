@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { EmptyState } from './EmptyState';
 import { SkeletonGridView } from './SkeletonGridView';
 
 export interface GridViewColumns {
@@ -112,11 +113,12 @@ export function GridView<T>({
 
   if (items.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="py-12">
         {emptyState || (
-          <div className="text-center text-muted-foreground">
-            <p>No items to display</p>
-          </div>
+          <EmptyState
+            title="No items"
+            description="There are no items to display."
+          />
         )}
       </div>
     );
