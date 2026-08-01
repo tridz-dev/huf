@@ -34,6 +34,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
   const [agentName, setAgentName] = useState<string>(() =>
     chatId ? consumeAgentNameCache(chatId) : (searchParams.get('agent') ?? '')
   );
+  const [agentDisplayName, setAgentDisplayName] = useState<string>('');
+  const [agentModel, setAgentModel] = useState<string | null>(null);
   const [agentColor, setAgentColor] = useState<string | null>(null);
   const [showToolExecutionDetails, setShowToolExecutionDetails] = useState<boolean>(true);
   const [allowFileUpload, setAllowFileUpload] = useState<boolean>(false);
@@ -65,6 +67,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         try {
           const agentData = await getAgent(conversation.agent);
           if (!cancelled) {
+            setAgentDisplayName(agentData.agent_name || conversation.agent);
+            setAgentModel(agentData.model || null);
             setAgentColor(agentData.agent_color || null);
             applyToolDetails(conversation.agent, agentData.show_tool_execution_details);
             setAllowFileUpload(agentData.allow_file_upload === 1);
@@ -75,6 +79,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         } catch (error) {
           console.error('Failed to load agent color', error);
           if (!cancelled) {
+            setAgentDisplayName('');
+            setAgentModel(null);
             setAgentColor(null);
             setShowToolExecutionDetails(true);
             setAllowFileUpload(false);
@@ -94,6 +100,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
 
       if (!agentFromQuery) {
         if (!cancelled) {
+          setAgentDisplayName('');
+          setAgentModel(null);
           setAgentColor(null);
           setShowToolExecutionDetails(true);
           setAllowFileUpload(false);
@@ -107,6 +115,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       try {
         const agentData = await getAgent(agentFromQuery);
         if (!cancelled) {
+          setAgentDisplayName(agentData.agent_name || agentFromQuery);
+          setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
           applyToolDetails(agentFromQuery, agentData.show_tool_execution_details);
           setAllowFileUpload(agentData.allow_file_upload === 1);
@@ -117,6 +127,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       } catch (error) {
         console.error('Failed to load agent color', error);
         if (!cancelled) {
+          setAgentDisplayName('');
+          setAgentModel(null);
           setAgentColor(null);
           setShowToolExecutionDetails(true);
           setAllowFileUpload(false);
@@ -167,6 +179,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       getAgent(currentAgent)
         .then((agentData) => {
           if (cancelled) return;
+          setAgentDisplayName(agentData.agent_name || currentAgent);
+          setAgentModel(agentData.model || null);
           applyToolDetails(currentAgent, agentData.show_tool_execution_details);
           setAllowFileUpload(agentData.allow_file_upload === 1);
           setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
@@ -185,5 +199,15 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     };
   }, [agentName, applyToolDetails]);
 
-  return { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb, runImmediately, autonamingOfConversationTitle };
+  return {
+    agentName,
+    agentDisplayName,
+    agentModel,
+    agentColor,
+    showToolExecutionDetails,
+    allowFileUpload,
+    maxUploadSizeMb,
+    runImmediately,
+    autonamingOfConversationTitle,
+  };
 }

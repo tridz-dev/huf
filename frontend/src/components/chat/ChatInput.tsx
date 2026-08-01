@@ -19,6 +19,7 @@ import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
+import { AgentModelSelector } from './AgentModelSelector';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -49,6 +50,12 @@ interface ChatInputProps {
      * queue-first.
      */
     runImmediately?: boolean;
+    /** Called when the user switches agent/model from the inline selector. */
+    onAgentSwitch?: (agentName: string) => void;
+    /** Display name of the current agent, shown on the selector pill. */
+    agentDisplayName?: string;
+    /** Model of the current agent, shown on the selector pill. */
+    agentModel?: string | null;
 }
 
 export function ChatInput({ 
@@ -66,6 +73,9 @@ export function ChatInput({
     allowFileUpload = false,
     maxUploadSizeMb,
     runImmediately = false,
+    onAgentSwitch,
+    agentDisplayName,
+    agentModel,
 }: ChatInputProps) {
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
@@ -913,60 +923,72 @@ export function ChatInput({
                             />
                         </div>
                     )}
-                    <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
-                            Use
-                            <ShortcutKey>
-                                Shift + Enter
-                            </ShortcutKey>
-                            for new line
-                        </span>
-                        {allowFileUpload && (
-                            <>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
-                                    className="hidden"
-                                    onChange={handleFileSelected}
-                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="icon"
-                                    className="shrink-0 rounded-full"
-                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
-                                    onClick={() => fileInputRef.current?.click()}
-                                    aria-label="Attach file"
-                                >
-                                    <Paperclip className="size-4" />
-                                </Button>
-                            </>
-                        )}
-                        {!message.trim() && !pendingFile && (
-                            <SpeechInput
-                                onTranscriptionChange={handleTranscriptionChange}
-                                onAudioRecorded={handleAudioRecorded}
-                                preferServerStt={true}
+                    <div className="px-3 pb-3 w-full flex items-center justify-between gap-x-2 mt-2">
+                        {onAgentSwitch && (
+                            <AgentModelSelector
+                                variant="pill"
+                                value={agentName}
+                                currentLabel={agentDisplayName ?? agentName}
+                                currentModel={agentModel}
+                                onValueChange={onAgentSwitch}
                                 disabled={isSubmitting || isModelMismatch}
-                                size="icon"
-                                className="shrink-0 rounded-full"
                             />
                         )}
-                        <Button
-                            type="submit"
-                            disabled={
-                                pendingFile?.status === 'uploading' ||
-                                ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
-                                    isSubmitting ||
-                                    isModelMismatch)
-                            }
-                            size="icon"
-                            className="shrink-0"
-                        >
-                            <CornerDownLeft/>
-                        </Button>
+                        <div className="flex items-center justify-end gap-x-2 ml-auto">
+                            <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                                Use
+                                <ShortcutKey>
+                                    Shift + Enter
+                                </ShortcutKey>
+                                for new line
+                            </span>
+                            {allowFileUpload && (
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
+                                        className="hidden"
+                                        onChange={handleFileSelected}
+                                        disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="icon"
+                                        className="shrink-0 rounded-full"
+                                        disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        aria-label="Attach file"
+                                    >
+                                        <Paperclip className="size-4" />
+                                    </Button>
+                                </>
+                            )}
+                            {!message.trim() && !pendingFile && (
+                                <SpeechInput
+                                    onTranscriptionChange={handleTranscriptionChange}
+                                    onAudioRecorded={handleAudioRecorded}
+                                    preferServerStt={true}
+                                    disabled={isSubmitting || isModelMismatch}
+                                    size="icon"
+                                    className="shrink-0 rounded-full"
+                                />
+                            )}
+                            <Button
+                                type="submit"
+                                disabled={
+                                    pendingFile?.status === 'uploading' ||
+                                    ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
+                                        isSubmitting ||
+                                        isModelMismatch)
+                                }
+                                size="icon"
+                                className="shrink-0"
+                            >
+                                <CornerDownLeft/>
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </form>

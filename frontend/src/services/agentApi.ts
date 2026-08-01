@@ -107,6 +107,7 @@ const AGENT_LIST_FIELDS = [
 const AGENT_MODEL_FIELDS = [
   'name',
   'agent_name',
+  'provider',
   'provider_brand',
   'model',
   'agent_color',
@@ -120,6 +121,7 @@ const CHAT_AGENT_FIELDS = [
   'name',
   'agent_name',
   'description',
+  'provider',
   'model',
   'agent_color',
 ];
@@ -185,8 +187,27 @@ export interface ChatAgentItem {
   name: string;
   agent_name: string;
   description?: string | null;
+  provider?: string | null;
   model?: string | null;
   agent_color?: string | null;
+}
+
+/**
+ * Return the set of existing AI Provider document names.
+ * Used to filter out agents whose provider link is stale/deleted.
+ */
+async function getValidProviderNames(): Promise<Set<string>> {
+  try {
+    const providers = await db.getDocList(doctype['AI Provider'], {
+      fields: ['name'],
+      limit: 1000,
+    });
+    return new Set((providers as Array<{ name: string }>).map((p) => p.name));
+  } catch (error) {
+    // Fail-open: if the caller cannot read AI Provider, do not hide agents.
+    console.error('Failed to load AI Provider names for agent filtering', error);
+    return new Set<string>();
+  }
 }
 
 /**
@@ -260,17 +281,24 @@ export async function getAgents(
 
 export async function getChatAgents(): Promise<ChatAgentItem[]> {
   try {
-    const agents = await db.getDocList(doctype.Agent, {
-      fields: CHAT_AGENT_FIELDS,
-      filters: [
-        ['allow_chat', '=', 1],
-        ['disabled', '=', 0],
-      ],
-      limit: 1000,
-      orderBy: { field: 'modified', order: 'desc' },
-    });
+    const [agents, validProviders] = await Promise.all([
+      db.getDocList(doctype.Agent, {
+        fields: CHAT_AGENT_FIELDS,
+        filters: [
+          ['allow_chat', '=', 1],
+          ['disabled', '=', 0],
+        ],
+        limit: 1000,
+        orderBy: { field: 'modified', order: 'desc' },
+      }),
+      getValidProviderNames(),
+    ]);
 
-    return agents as ChatAgentItem[];
+    const validAgents = (agents as ChatAgentItem[]).filter(
+      (agent) => agent.provider && validProviders.has(agent.provider)
+    );
+
+    return validAgents;
   } catch (error) {
     handleFrappeError(error, 'Error fetching chat agents');
     return [];
@@ -788,24 +816,29 @@ export async function getAgentModels(
     }
 
     // Fetch data
-    const agents = await db.getDocList(doctype.Agent, {
-      fields: AGENT_MODEL_FIELDS,
-      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
-      limit: limit + 1, // Fetch one extra to check if there's more
-      ...(start > 0 && { limit_start: start }), // Only include if start > 0
-      orderBy: { field: 'modified', order: 'desc' },
-    });
+    const [agents, validProviders] = await Promise.all([
+      db.getDocList(doctype.Agent, {
+        fields: AGENT_MODEL_FIELDS,
+        filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
+        limit: limit + 1, // Fetch one extra to check if there's more
+        ...(start > 0 && { limit_start: start }), // Only include if start > 0
+        orderBy: { field: 'modified', order: 'desc' },
+      }),
+      getValidProviderNames(),
+    ]);
 
-    // Map agents to model format
-    const mappedModels: AgentModelItem[] = (agents as Array<Record<string, string>>).map((agent) => ({
-      id: agent.name,
-      name: agent.agent_name || agent.name,
-      providerBrand: agent.provider_brand || 'other',
-      providerBrandLabel: getBrandLabel(agent.provider_brand),
-      model: agent.model || '',
-      agent_color: agent.agent_color || null,
-      description: agent.description || null,
-    }));
+    // Map agents to model format, dropping agents whose provider no longer exists
+    const mappedModels: AgentModelItem[] = (agents as Array<Record<string, string>>)
+      .filter((agent) => agent.provider && validProviders.has(agent.provider))
+      .map((agent) => ({
+        id: agent.name,
+        name: agent.agent_name || agent.name,
+        providerBrand: agent.provider_brand || 'other',
+        providerBrandLabel: getBrandLabel(agent.provider_brand),
+        model: agent.model || '',
+        agent_color: agent.agent_color || null,
+        description: agent.description || null,
+      }));
 
     const hasMore = mappedModels.length > limit;
     const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
 import { getAgent } from "@/services/agentApi";
@@ -38,8 +38,9 @@ export function ChatMessageList({
     onConversationCreated,
     getNewConversationPath,
 }: ChatMessageListProps) {
+    const navigate = useNavigate();
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
     const isNewChat = !chatId;
     
@@ -53,7 +54,17 @@ export function ChatMessageList({
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
     const [runSucceeded, setRunSucceeded] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb, runImmediately, autonamingOfConversationTitle } = useChatAgentIdentity(chatId, searchParams);
+    const {
+        agentName,
+        agentDisplayName,
+        agentModel,
+        agentColor,
+        showToolExecutionDetails,
+        allowFileUpload,
+        maxUploadSizeMb,
+        runImmediately,
+        autonamingOfConversationTitle,
+    } = useChatAgentIdentity(chatId, searchParams);
 
     // Check for model mismatch between conversation and agent
     useEffect(() => {
@@ -92,6 +103,21 @@ export function ChatMessageList({
             cancelled = true;
         };
     }, [chatId, agentName]);
+
+    const handleAgentSwitch = useCallback((newAgent: string) => {
+        if (newAgent === agentName) return;
+
+        if (isNewChat) {
+            // New chat: agent is driven by the ?agent= query param; update it in place.
+            setSearchParams((prev) => {
+                prev.set('agent', newAgent);
+                return prev;
+            }, { replace: true });
+        } else {
+            // Existing conversations are pinned to their agent+model; start a fresh chat.
+            navigate(getNewConversationPath?.(newAgent) ?? `/chat/new?agent=${encodeURIComponent(newAgent)}`);
+        }
+    }, [agentName, isNewChat, setSearchParams, navigate, getNewConversationPath]);
 
     useEffect(() => {
         if (!chatId) {
@@ -426,6 +452,9 @@ export function ChatMessageList({
                 allowFileUpload={allowFileUpload}
                 maxUploadSizeMb={maxUploadSizeMb}
                 runImmediately={runImmediately}
+                onAgentSwitch={handleAgentSwitch}
+                agentDisplayName={agentDisplayName}
+                agentModel={agentModel}
             />
             </div>
         </div>
