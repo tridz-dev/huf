@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Link, Settings, Star, Users } from 'lucide-react';
+import { AlertCircle, Bot, Link, Settings, Star, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
@@ -8,6 +8,7 @@ import {
   getIntegrationSettings,
   getIntegrationServices,
 } from '@/services/integrationApi';
+import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
@@ -26,6 +27,8 @@ export function IntegrationSettingsListingPage({
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [services, setServices] = useState<IntegrationServiceDoc[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [addToAgentOpen, setAddToAgentOpen] = useState(false);
+  const [selectedSetting, setSelectedSetting] = useState<IntegrationSettingsDoc | null>(null);
 
   useEffect(() => {
     getIntegrationServices().then(setServices).catch(() => {
@@ -188,12 +191,20 @@ export function IntegrationSettingsListingPage({
               metadata={metadata}
               actions={[
                 {
+                  icon: Bot,
+                  label: 'Add to Agent',
+                  onClick: () => {
+                    setSelectedSetting(setting);
+                    setAddToAgentOpen(true);
+                  },
+                },
+                {
                   icon: Settings,
                   label: 'Configure',
                   onClick: () => navigate(`/integrations/${encodeURIComponent(setting.name)}`),
                 },
               ]}
-              onClick={() => navigate(`/integrations/${encodeURIComponent(setting.name)}`)}
+              onClick={() => navigate(`/integrations/${encodeURIComponent(setting.name)}`)} 
             />
           );
         }}
@@ -219,6 +230,16 @@ export function IntegrationSettingsListingPage({
           {settings.length} integration{settings.length !== 1 ? 's' : ''} in this category
         </div>
       )}
+
+      <AddIntegrationToAgentModal
+        open={addToAgentOpen}
+        onOpenChange={(open) => {
+          setAddToAgentOpen(open);
+          if (!open) setSelectedSetting(null);
+        }}
+        service={selectedSetting?.service || ''}
+        integrationName={selectedSetting?.name}
+      />
     </PageLayout>
   );
 }
