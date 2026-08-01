@@ -41,10 +41,6 @@ export function PlaygroundShell({
       <header className="flex items-center justify-between border-b border-line bg-panel px-5 py-3.5">
         <div className="flex items-center gap-3.5">
           <SidebarTrigger className="-ml-1 text-steel hover:bg-transparent hover:text-ink" />
-          <span className="font-mono text-[11px] uppercase tracking-[.06em] text-steel-soft">
-            HUF
-          </span>
-          <span className="text-xl leading-none text-line">/</span>
           <h1 className="font-display text-xl font-bold uppercase leading-none">Playground</h1>
         </div>
 
