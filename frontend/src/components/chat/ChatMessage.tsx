@@ -7,6 +7,7 @@ import { useUser } from "@/contexts/UserContext";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
 import type { ToolUIPart } from 'ai';
 import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
@@ -154,6 +155,12 @@ export function ChatMessage({
                 ) : (
                     <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
                         <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
+                            {isAssistant && message.reasoning && (
+                                <Reasoning isStreaming={!!message.reasoningStreaming} defaultOpen={false}>
+                                    <ReasoningTrigger />
+                                    <ReasoningContent>{message.reasoning}</ReasoningContent>
+                                </Reasoning>
+                            )}
                             {/* Show loading state while message is generating */}
                             {showLoading && (
                                 <MessageLoadingState

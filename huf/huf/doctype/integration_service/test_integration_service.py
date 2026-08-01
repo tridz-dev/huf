@@ -2,10 +2,10 @@
 # See license.txt
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestIntegrationService(FrappeTestCase):
+class TestIntegrationService(IntegrationTestCase):
 	def test_service_name_required(self):
 		# Regression test: before_insert() used to call self.service_name.lower()
 		# unguarded, raising AttributeError on None instead of the intended

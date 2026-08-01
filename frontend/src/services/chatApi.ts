@@ -204,14 +204,21 @@ export async function getAgentsWithConversationCounts(): Promise<AgentWithCount[
         model?: string;
         allow_chat?: number;
       }>).map(async (agent) => {
-        const count = await fetchDocCount(doctype['Agent Conversation'], [
-          ['agent', '=', agent.name],
-          ['channel', '=', 'Chat'],
-        ]);
+        let count = 0;
+        try {
+          count = (await fetchDocCount(doctype['Agent Conversation'], [
+            ['agent', '=', agent.name],
+            ['channel', '=', 'Chat'],
+          ])) || 0;
+        } catch (error) {
+          // One agent's conversation count being denied/unavailable must not
+          // drop every other agent from the "By Agent" listing.
+          console.error(`Error fetching conversation count for agent ${agent.name}:`, error);
+        }
         return {
           name: agent.name,
           agent_name: agent.agent_name || agent.name,
-          conversationCount: count || 0,
+          conversationCount: count,
           last_updated: agent.modified,
           agent_color: agent.agent_color || null,
           provider: agent.provider,

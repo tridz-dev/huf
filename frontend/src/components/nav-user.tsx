@@ -62,7 +62,7 @@ export function NavUser() {
                   </span>
                 )}
               </div>
-              <div className="grid flex-1 text-left leading-tight">
+              <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-body text-[13px] font-semibold text-ink">
                   {displayName}
                 </span>
@@ -72,7 +72,7 @@ export function NavUser() {
                   </span>
                 )}
               </div>
-              <ChevronsUpDown className="ml-auto size-4 text-steel-soft" />
+              <ChevronsUpDown className="ml-auto size-4 text-steel-soft group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

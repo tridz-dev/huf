@@ -73,6 +73,7 @@ website_route_rules = [
         "to_route": "huf/docs/<path:app_path>"
     },
     {"from_route": "/mcp-oauth-callback", "to_route": "mcp_oauth_callback"},
+    {"from_route": "/huf", "to_route": "huf"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
 ]
 
@@ -213,6 +214,9 @@ doc_events = {
     },
     "Knowledge Input": {
         "on_trash": "huf.ai.knowledge.hooks.on_knowledge_input_deleted",
+    },
+    "Communication": {
+        "after_insert": "huf.ai.gateway_adapters.email.on_communication_inserted",
     },
 }
 

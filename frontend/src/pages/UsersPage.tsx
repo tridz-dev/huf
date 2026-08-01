@@ -10,6 +10,8 @@ import {
   type HufUser,
   type HufRole,
 } from '@/services/permissionsApi';
+import { settleAll } from '@/lib/settleAll';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -187,9 +189,12 @@ export default function UsersPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [u, r] = await Promise.all([getUsers(), getHufRoles()]);
-      setUsers(u);
-      setRoles(r);
+      const errorLabels = ['users', 'roles'];
+      const [u, r] = await settleAll([getUsers(), getHufRoles()], (index, error) => {
+        toast.error(`Failed to load ${errorLabels[index]}: ${getFrappeErrorMessage(error)}`);
+      });
+      if (u) setUsers(u);
+      if (r) setRoles(r);
     } finally {
       setLoading(false);
     }

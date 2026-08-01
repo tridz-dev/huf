@@ -66,9 +66,9 @@ const STARTER_PATHS: Record<StarterPath, {
   google: {
     providerName: 'Google',
     providerBrand: 'google',
-    modelName: 'gemini-2.5-flash',
+    modelName: 'gemini-3.5-flash',
     title: 'Try Gemini with Google AI Studio',
-    description: 'Use Gemini 2.5 Flash with the Google Gemini API free tier to explore Huf.',
+    description: 'Use Gemini 3.5 Flash with the Google Gemini API free tier to explore Huf.',
     caution: 'Free-tier limits apply. Google states that free-tier content may be used to improve its products; avoid sensitive production data.',
     signupUrl: 'https://aistudio.google.com/app/apikey',
     signupLabel: 'Get a Google AI Studio key',

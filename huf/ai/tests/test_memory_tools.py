@@ -300,5 +300,48 @@ class TestMemoryToolAutoWiring(unittest.TestCase):
         self.assertNotIn("save_memory_record", created_names)
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
+class TestInjectModeRelevance(unittest.TestCase):
+    """inject_mode must decide whether the current turn's text filters retrieval.
+
+    Regression guard: "Relevant Only" and "Always" previously hit an identical
+    code path (query was hardcoded to None), so the two modes behaved the same.
+    """
+
+    def _make_policy(self, inject_mode):
+        return MagicMock(
+            enabled=True,
+            inject_mode=inject_mode,
+            max_records=5,
+            token_budget=1000,
+        )
+
+    @patch.object(memory_tools, "search_memory_records")
+    def test_relevant_only_passes_query_through(self, mock_search):
+        mock_search.return_value = {"success": True, "results": []}
+        memory_tools.get_injected_memory_text(
+            "agent-1", self._make_policy("Relevant Only"), query="renewal date"
+        )
+        self.assertEqual(mock_search.call_args.kwargs["query"], "renewal date")
+
+    @patch.object(memory_tools, "search_memory_records")
+    def test_always_ignores_query(self, mock_search):
+        mock_search.return_value = {"success": True, "results": []}
+        memory_tools.get_injected_memory_text(
+            "agent-1", self._make_policy("Always"), query="renewal date"
+        )
+        self.assertIsNone(mock_search.call_args.kwargs["query"])
+
+    @patch.object(memory_tools, "search_memory_records")
+    def test_never_and_tool_only_do_not_retrieve(self, mock_search):
+        for mode in ("Never", "Tool Only"):
+            mock_search.reset_mock()
+            result = memory_tools.get_injected_memory_text(
+                "agent-1", self._make_policy(mode), query="renewal date"
+            )
+            self.assertIsNone(result)
+            mock_search.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

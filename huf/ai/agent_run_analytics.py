@@ -103,11 +103,13 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
     doc.save() if existing else doc.insert()
 
 
-def refresh_rollups():
-    """Recompute the recent mutable window; safe to retry and safe on empty sites."""
+def refresh_rollups(full_backfill: bool = False):
+    """Recompute recent or full rollup window; safe to retry and safe on empty sites."""
     if not frappe.db.exists("DocType", ROLLUP_DOCTYPE):
         return
-    since = add_to_date(now_datetime(), hours=-CORRECTION_WINDOW_HOURS)
+    has_rollups = bool(frappe.db.count(ROLLUP_DOCTYPE))
+    window_days = 90 if (full_backfill or not has_rollups) else 7
+    since = add_to_date(now_datetime(), days=-window_days)
     for granularity, bucket_start, dimension_key in _affected_dimensions(since):
         try:
             _recompute_rollup(granularity, bucket_start, dimension_key)

@@ -1,6 +1,7 @@
 import sys
 from unittest.mock import MagicMock
-sys.modules['frappe'] = MagicMock()
+if 'frappe' not in sys.modules:
+    sys.modules['frappe'] = MagicMock()
 
 import unittest
 from unittest.mock import patch

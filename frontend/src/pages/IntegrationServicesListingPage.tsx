@@ -9,6 +9,7 @@ import { integrationCategoryFilterOptions } from '@/data/integrations';
 import { parseRequiredCredentials } from '@/types/integration.types';
 import type { IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
+import { getServiceIdentity } from '@/data/serviceIdentity';
 
 export function IntegrationServicesListingPage() {
   const navigate = useNavigate();
@@ -104,6 +105,7 @@ export function IntegrationServicesListingPage() {
           </div>
         }
         renderItem={(service) => {
+          const identity = getServiceIdentity(service.service_name);
           const credentialCount = parseRequiredCredentials(service.required_credentials).length;
           const metadata = [
             { label: 'Category', value: service.category },
@@ -122,7 +124,8 @@ export function IntegrationServicesListingPage() {
 
           return (
             <ItemCard
-              title={service.service_name.replace(/_/g, ' ')}
+              title={identity.title}
+              icon={identity.icon}
               description={service.description || 'No description'}
               status={{
                 label: service.is_builtin ? 'built-in' : 'custom',

@@ -5,7 +5,9 @@ from typing import Any
 
 from huf.ai.transaction import commit_if_background
 
-# Helper Functions
+logger = frappe.logger("huf")
+
+
 def _now_iso_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -24,8 +26,8 @@ def _load_state(state_json: str | None | dict) -> dict:
                         f"Skipped double-decoding of conversation_data state: {e}"
                     )
         except (json.JSONDecodeError, TypeError):
-             return {"version": 1, "scope": {}, "items": []}
-             
+            return {"version": 1, "scope": {}, "items": []}
+
     if "items" not in data or not isinstance(data["items"], list):
         data["items"] = []
     if "version" not in data:
@@ -49,8 +51,11 @@ def handle_get_conversation_data(name: str, default: Any = None, conversation_id
                 break
                 
         return {"success": True, "value": value}
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        frappe.log_error(f"Error getting conversation data: {str(e)}", "Conversation Data")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_get_conversation_data failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def handle_set_conversation_data(
@@ -132,8 +137,11 @@ def handle_set_conversation_data(
         
         return {"success": True, "message": f"Set '{name}' match successfully"}
     
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        frappe.log_error(f"Error setting conversation data: {str(e)}", "Conversation Data")
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_set_conversation_data failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 def handle_load_conversation_data(conversation_id: str = None, **kwargs):
@@ -145,6 +153,7 @@ def handle_load_conversation_data(conversation_id: str = None, **kwargs):
         state = _load_state(data_json)
         return {"success": True, "data": state}
     except Exception as e:
+        logger.warning(f"handle_load_conversation_data failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}
 
 @frappe.whitelist()

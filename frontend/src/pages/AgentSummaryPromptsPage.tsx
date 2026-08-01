@@ -28,6 +28,7 @@ import {
   type GetAgentSummaryPromptsParams,
 } from '@/services/agentSummaryPromptApi';
 import { formatTimeAgo } from '@/utils/time';
+import { PromptLibraryTabs } from '@/components/agent/PromptLibraryTabs';
 
 function getStatusVariant(enabled: 0 | 1): 'success' | 'secondary' {
   return enabled === 1 ? 'success' : 'secondary';
@@ -179,6 +180,7 @@ export function AgentSummaryPromptsPage() {
         />
       }
     >
+      <PromptLibraryTabs />
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -218,7 +220,7 @@ export function AgentSummaryPromptsPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel">No Agent Summary Prompts found.</div>
+                      <div className="font-body text-steel">No summarization prompts found.</div>
                     </TableCell>
                   </TableRow>
                 )}

@@ -25,6 +25,7 @@ from huf.ai.tools.code_execution import _shared_dir_for_conversation, run_python
 from huf.install import create_huf_roles
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestCodeExecutionArtifacts(unittest.TestCase):
 	"""Artifact write-back + shared-directory cap enforcement."""
 

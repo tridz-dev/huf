@@ -28,15 +28,24 @@ SEED_FILE = "hub-orchestrator.json"
 # Ordered chat-model preferences; the first one present in AI Model for the
 # chosen provider wins. Falls back to the provider's first non-specialized model.
 PREFERRED_MODELS = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gpt-4o-mini",
-    "gemini-2.5-flash",
     "claude-haiku-4.5",
     "claude-sonnet-4.5",
     "openai/gpt-4o-mini",
-    "google/gemini-2.5-flash",
+    "google/gemini-3.5-flash",
     "sonar",
     "command-a-03-2025",
 ]
+
+DEPRECATED_MODELS = {
+    "gemini-2.5-flash",
+    "google/gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "google/gemini-2.5-flash-lite-preview-06-17",
+}
 
 # Model names matching these are not chat models; never auto-select them.
 _NON_CHAT_MARKERS = ("embedding", "whisper", "dall-e", "gpt-image", "tts", "image", "alternate")
@@ -216,22 +225,20 @@ def create_hub_orchestrator_agent() -> bool:
 
 
 def provision_hub_orchestrator(provider_doc=None) -> bool:
-    """
-    Re-point Hub Orchestrator at a keyed provider and enable it, but only if
-    its current provider is unusable (unset or missing key) or no model is
-    selected. Never overrides a working configuration, and respects a manual
-    disabled state as long as the configured provider is usable.
-
-    Returns True if the agent was updated.
-    """
+    """Assign a usable provider/model pair to Hub Orchestrator if unconfigured."""
     if not frappe.db.exists("Agent", HUB_AGENT_NAME):
         return False
 
     agent = frappe.get_doc("Agent", HUB_AGENT_NAME)
-    if agent.provider and agent.model and _provider_has_key(agent.provider):
+    if (
+        agent.provider
+        and agent.model
+        and _provider_has_key(agent.provider)
+        and agent.model not in DEPRECATED_MODELS
+    ):
         return False
 
-    if provider_doc is not None and provider_doc.get_password("api_key"):
+    if provider_doc is not None and provider_doc.get_password("api_key", raise_exception=False):
         provider_name = provider_doc.name
     else:
         provider_name = _find_keyed_provider()
@@ -255,7 +262,7 @@ def on_ai_provider_update(doc, method=None):
     """doc_events hook: when an AI Provider is saved with an api_key, make sure
     Hub Orchestrator can use it (re-provision if it had no usable provider)."""
     try:
-        if doc.get_password("api_key"):
+        if doc.get_password("api_key", raise_exception=False):
             provision_hub_orchestrator(provider_doc=doc)
     except Exception as e:
         frappe.log_error(f"Hub Orchestrator re-provisioning failed: {e}", "Hub Orchestrator")

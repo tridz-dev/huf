@@ -1,14 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  Plus, MessageSquare, Bot, Workflow,
-  Database, BookOpen, Cpu, LayoutDashboard, Settings, Send,
-  PanelLeftClose, PanelLeftOpen,
-} from 'lucide-react';
-import { useUser } from '@/contexts/UserContext';
+import { Plus, Send } from 'lucide-react';
 import { usePermissions } from '@/contexts/PermissionsContext';
-import { IconRail, IconRailButton } from '@/components/IconRail';
+import { IconRailButton } from '@/components/IconRail';
 import { HubConversationView } from '@/components/hub/HubConversationView';
 import { AutoGrowTextarea } from '@/components/hub/AutoGrowTextarea';
 import { HubRecentChats } from '@/components/hub/HubRecentChats';
@@ -46,37 +41,14 @@ const STARTER_PROMPTS: Record<string, StarterPrompt[]> = {
   ],
 };
 
-const NAV_ITEMS = [
-  { icon: MessageSquare, label: 'Home', path: '/' },
-  { icon: Bot, label: 'Agents', path: '/agents' },
-  { icon: Workflow, label: 'Flows', path: '/flows' },
-  { icon: Database, label: 'Executions', path: '/executions' },
-  { icon: BookOpen, label: 'Knowledge', path: '/knowledge' },
-  { icon: Cpu, label: 'AI Providers', path: '/models' },
-];
-
-const RAIL_VISIBLE_KEY = 'hub:rail-visible';
-
-function readRailVisible(): boolean {
-  try {
-    return localStorage.getItem(RAIL_VISIBLE_KEY) !== 'false';
-  } catch {
-    return true;
-  }
-}
-
 export default function HubSimplePage() {
   const navigate = useNavigate();
-  const { user } = useUser();
   const { hufRole } = usePermissions();
 
   const role =
     hufRole === 'Huf Admin' ? 'admin'
     : hufRole === 'Huf Manager' || hufRole === 'Huf User' ? 'builder'
     : 'viewer';
-
-  const initials = (user?.full_name || user?.name || 'U')
-    .split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -89,19 +61,6 @@ export default function HubSimplePage() {
   const [readiness, setReadiness] = useState<HubReadiness | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [railVisible, setRailVisible] = useState<boolean>(readRailVisible);
-
-  const toggleRail = () => {
-    setRailVisible(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem(RAIL_VISIBLE_KEY, String(next));
-      } catch {
-        void 0;
-      }
-      return next;
-    });
-  };
 
   // Detect slash commands
   useEffect(() => {
@@ -245,75 +204,15 @@ export default function HubSimplePage() {
     setConversationId(id);
   };
 
-  const handleSwitchToAdvanced = () => {
-    navigate('/dashboard');
-  };
-
   return (
-    <div className="h-screen flex bg-paper overflow-hidden">
-      {/* Collapsed rail — same 48px look as the dashboard's collapsed sidebar */}
-      <motion.div
-        initial={false}
-        animate={{ width: railVisible ? 48 : 0 }}
-        transition={{ duration: 0.2, ease: 'easeInOut' }}
-        className="flex flex-shrink-0 overflow-hidden"
-      >
-        <IconRail
-          header={
-            /* Matches AppSidebarHeader's collapsed mark (signal square) */
-            <div className="flex items-center gap-2 px-2 py-3">
-              <span className="inline-block w-2 h-2 bg-signal flex-shrink-0" />
-            </div>
-          }
-          actions={
-            <>
-              <IconRailButton icon={Plus} label="New chat" onClick={handleNewChat} />
-              <HubRecentChats onSelect={handleLoadConversation} />
-            </>
-          }
-          items={NAV_ITEMS.map((item, i) => ({
-            key: item.label,
-            icon: item.icon,
-            label: item.label,
-            active: i === 0,
-            onClick: () => navigate(item.path),
-          }))}
-          footer={
-            <>
-              <IconRailButton
-                icon={LayoutDashboard}
-                label="Switch to Advanced Hub"
-                onClick={handleSwitchToAdvanced}
-              />
-              <IconRailButton
-                icon={Settings}
-                label="Settings"
-                onClick={() => navigate('/models')}
-              />
-            </>
-          }
-        />
-      </motion.div>
-
-      {/* Rail hide/show toggle — stays visible when the rail is hidden */}
-      <button
-        onClick={toggleRail}
-        title={railVisible ? 'Hide sidebar' : 'Show sidebar'}
-        aria-label={railVisible ? 'Hide sidebar' : 'Show sidebar'}
-        className={`fixed top-3 z-50 flex size-7 items-center justify-center rounded-sm border border-line bg-panel text-steel shadow-sm hover:border-steel-soft hover:text-ink transition-all duration-200 ${
-          railVisible ? 'left-[60px]' : 'left-3'
-        }`}
-      >
-        {railVisible ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-      </button>
-
-      {/* Main Content */}
+    <div className="h-full flex bg-paper overflow-hidden">
+      {/* Main Content — sidebar, header and user avatar are provided by
+          UnifiedLayout/AppSidebar so the Hub matches the rest of the app. */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        {/* User avatar top-right */}
-        <div className="absolute top-3 right-4 z-10">
-          <div className="w-7 h-7 rounded-full bg-ink flex items-center justify-center text-paper text-xs font-medium">
-            {initials}
-          </div>
+        {/* Chat toolbar — new chat / resume a recent conversation */}
+        <div className="absolute top-3 left-4 z-10 flex items-center gap-1">
+          <IconRailButton icon={Plus} label="New chat" onClick={handleNewChat} />
+          <HubRecentChats onSelect={handleLoadConversation} />
         </div>
 
         <AnimatePresence mode="wait">
@@ -331,7 +230,7 @@ export default function HubSimplePage() {
                 {/* Greeting */}
                 <div className="mb-8">
                   <h1 className="font-display font-bold text-2xl uppercase tracking-wide text-ink text-center">
-                    What can I do for you.
+                    What can huf do for you today?
                   </h1>
                 </div>
 

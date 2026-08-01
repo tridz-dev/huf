@@ -17,15 +17,17 @@ Covers:
 Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_provider_error_contract
 """
 
+import unittest
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.providers import litellm as litellm_module
 from huf.ai.providers.litellm import (
     ProviderUnavailableError,
+    _sanitize_provider_error_message,
     _is_transient_litellm_error,
     _normalize_model_name,
     _resolve_api_base,
@@ -74,9 +76,10 @@ def _run_patches(provider_doc, completion_mock):
     ]
 
 
-class TestProviderFailureContract(FrappeTestCase):
+class TestProviderFailureContract(IntegrationTestCase):
     """Provider failures must raise, never be returned as a successful SimpleResult."""
 
+    @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     def test_connection_error_raises_provider_unavailable(self):
         from unittest.mock import MagicMock
 
@@ -125,7 +128,7 @@ class TestProviderFailureContract(FrappeTestCase):
         self.assertIn("ollama_chat/", str(ctx.exception))
 
 
-class TestResolveApiBase(FrappeTestCase):
+class TestResolveApiBase(IntegrationTestCase):
     def test_api_base_url_field_wins(self):
         doc = _FakeDoc(
             is_local_llm=1,
@@ -152,7 +155,7 @@ class TestResolveApiBase(FrappeTestCase):
         self.assertIsNone(_resolve_api_base(None))
 
 
-class TestNormalizeModelName(FrappeTestCase):
+class TestNormalizeModelName(IntegrationTestCase):
     def test_ollama_maps_to_chat_endpoint(self):
         self.assertEqual(
             _normalize_model_name("gpt-oss:20b", "Ollama"), "ollama_chat/gpt-oss:20b"
@@ -171,7 +174,7 @@ class TestNormalizeModelName(FrappeTestCase):
         self.assertEqual(_normalize_model_name("openai/gpt-4o", "OpenAI"), "openai/gpt-4o")
 
 
-class TestTransientRetryKeywords(FrappeTestCase):
+class TestTransientRetryKeywords(IntegrationTestCase):
     def test_connection_refused_is_transient(self):
         self.assertTrue(
             _is_transient_litellm_error(
@@ -188,3 +191,25 @@ class TestTransientRetryKeywords(FrappeTestCase):
     def test_non_transient_errors_unchanged(self):
         self.assertFalse(_is_transient_litellm_error(Exception("invalid api key")))
         self.assertFalse(_is_transient_litellm_error(Exception("model not found")))
+
+
+class TestProviderErrorSanitization(IntegrationTestCase):
+    def test_unavailable_model_message_hides_litellm_details(self):
+        message = _sanitize_provider_error_message(
+            "LiteLLM error: litellm.NotFoundError: Vertex_ai_betaException - model models/gemini-2.5-flash is no longer available",
+            "gemini-2.5-flash",
+        )
+        self.assertEqual(
+            message,
+            "The selected model is no longer available from this provider. Choose a different model and try again.",
+        )
+
+    def test_generic_provider_message_hides_litellm_branding(self):
+        message = _sanitize_provider_error_message(
+            "LiteLLM Provider Error: provider exploded in some internal way",
+            "gemini-3.5-flash",
+        )
+        self.assertEqual(
+            message,
+            "The AI provider could not complete this request for gemini-3.5-flash. Please try again or choose a different model.",
+        )

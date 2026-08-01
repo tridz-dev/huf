@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 /**
  * Frappe API Error Handler
  * Extracts user-friendly error messages from Frappe API error responses
@@ -20,14 +22,14 @@ export interface FrappeErrorResponse {
  * Loose shape of a Frappe API error object.
  * Real payloads vary (axios wrappers, SDK errors, plain objects), so all fields are optional.
  */
-interface FrappeErrorShape {
-  _server_messages?: string;
+export interface FrappeErrorShape {
+  message?: string;
+  exception?: string;
+  _server_messages?: string | string[];
+  originalError?: unknown;
   response?: { _server_messages?: string };
   data?: { _server_messages?: string };
-  exception?: string;
   exc_type?: string;
-  message?: string;
-  originalError?: unknown;
 }
 
 /** Error augmented by createFrappeError with the original Frappe error details */
@@ -48,8 +50,10 @@ export function extractFrappeServerMessages(error: unknown): FrappeServerMessage
     let messagesString: string | null = null;
 
     // Check if error has _server_messages property
-    if (err?._server_messages) {
+    if (typeof err?._server_messages === 'string') {
       messagesString = err._server_messages;
+    } else if (Array.isArray(err?._server_messages)) {
+      messagesString = JSON.stringify(err._server_messages);
     } else if (err?.response?._server_messages) {
       // Check if error.response exists (some SDKs wrap errors)
       messagesString = err.response._server_messages;
@@ -110,8 +114,12 @@ export function getFrappeErrorMessage(error: unknown): string {
   if (serverMessages && serverMessages.length > 0) {
     // Return the first message (usually the most relevant)
     const message = serverMessages[0].message || serverMessages[0].title || 'An error occurred';
-    // Remove HTML tags if present (e.g., <strong> tags)
-    return message.replace(/<[^>]*>/g, '');
+    // Strip HTML tags safely using DOMPurify without regexes or double-escaping
+    const clean =
+      typeof window !== 'undefined'
+        ? DOMPurify.sanitize(message, { ALLOWED_TAGS: [] }).trim()
+        : message.replace(/<[^>]*>/g, '').trim();
+    return clean || 'An error occurred';
   }
 
   // Fallback to exception message

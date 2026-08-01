@@ -12,13 +12,50 @@ from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
 
+def _resolve_workspace_link_type():
+	"""Pick a link_type whose target actually resolves for link_to="Huf".
+
+	Frappe validates Desktop Icon.link_to against the doctype named by
+	link_type. "Workspace Sidebar" does not always carry a "Huf" record at
+	after_app_install time (on a fresh site it does not exist yet), which made
+	frappe raise LinkValidationError and abort the whole install. Fall back to
+	"Workspace", which the fixture sync has already created by this point.
+	"""
+	for link_type in ("Workspace Sidebar", "Workspace"):
+		if not frappe.db.table_exists(f"tab{link_type}"):
+			continue
+		if frappe.db.exists(link_type, "Huf"):
+			return link_type
+	return None
+
+
 def setup_desktop_icon_as_workspace(app_name):
 	"""
 	Replace the External App desktop icon with a Workspace Sidebar icon.
 	Runs after Frappe creates desktop icons, so we fix the Huf icon to use Workspace Sidebar.
 	Only applies on Frappe version 16 and above.
+
+	This is cosmetic: any failure here is logged and swallowed rather than
+	aborting `bench install-app huf`.
 	"""
 	if not is_frappe_16() or app_name != "huf":
+		return
+
+	try:
+		_setup_desktop_icon_as_workspace()
+	except Exception:
+		frappe.db.rollback()
+		logger.warning("huf: skipped desktop icon setup", exc_info=True)
+		frappe.log_error(
+			title="Huf: desktop icon setup skipped",
+			message=frappe.get_traceback(with_context=True),
+		)
+
+
+def _setup_desktop_icon_as_workspace():
+	link_type = _resolve_workspace_link_type()
+	if not link_type:
+		logger.warning("huf: no resolvable workspace link target; skipping desktop icon")
 		return
 
 	# Delete the App icon (External type) - we want Workspace Sidebar instead
@@ -38,7 +75,7 @@ def setup_desktop_icon_as_workspace(app_name):
 	)
 	if workspace_icon:
 		doc = frappe.get_doc("Desktop Icon", workspace_icon)
-		doc.link_type = "Workspace Sidebar"
+		doc.link_type = link_type
 		doc.link_to = "Huf"
 		doc.hidden = 0
 		doc.parent_icon = None
@@ -52,7 +89,7 @@ def setup_desktop_icon_as_workspace(app_name):
 			icon = frappe.new_doc("Desktop Icon")
 			icon.label = "Huf"
 			icon.icon_type = "Link"
-			icon.link_type = "Workspace Sidebar"
+			icon.link_type = link_type
 			icon.link_to = "Huf"
 			icon.icon = workspace.get("icon") or "header"
 			icon.standard = 1
@@ -119,6 +156,8 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	create_demo_ai_providers()
+	create_demo_ai_models()
 	try:
 		setup_desktop_icon_as_workspace("huf")
 	except frappe.LinkValidationError:
@@ -218,6 +257,17 @@ def create_demo_ai_providers():
             doc.insert(ignore_permissions=True)
 
 def create_demo_ai_models():
+    deprecated_models = (
+        "gemini-2.5-flash",
+        "google/gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "google/gemini-2.5-flash-lite-preview-06-17",
+    )
+
+    for model_name in deprecated_models:
+        if frappe.db.exists("AI Model", model_name):
+            frappe.delete_doc("AI Model", model_name, ignore_permissions=True, force=True)
+
     models = [
         # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
         # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
@@ -241,8 +291,6 @@ def create_demo_ai_models():
         {"doctype": "AI Model", "model_name": "gemini-3.1-flash-lite", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-3-flash-preview", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemini-2.5-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash-lite", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemma-3-27b-it", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "gemma-3-9b-it", "provider": "Google"},
         {"doctype": "AI Model", "model_name": "nano-banana-pro", "provider": "Google"},
@@ -259,7 +307,6 @@ def create_demo_ai_models():
         {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it", "provider": "OpenRouter"},
         {"doctype": "AI Model", "model_name": "deepseek/deepseek-v4-pro", "provider": "OpenRouter"},
@@ -1180,10 +1227,10 @@ def create_memory_tools():
 def create_default_memory_policies():
 	"""Create default Memory Policy presets."""
 	presets = [
-		{"policy_name": "Conservative", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
-		{"policy_name": "Conversational", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
-		{"policy_name": "Research", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
-		{"policy_name": "Operational", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+		{"policy_name": "Conservative", "description": "Nothing is captured automatically. Memory is written only via explicit tool calls and always needs human approval before it's used, so it's a safe default for agents handling sensitive or high-stakes conversations.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
+		{"policy_name": "Conversational", "description": "For chat agents that should remember users across sessions with minimal friction. Every run is reviewed in the background and captured facts/preferences are injected into every future conversation automatically, no approval step.", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+		{"policy_name": "Research", "description": "For agents doing extended research or knowledge work. The agent proposes what's worth remembering after each run, retrieval is narrowed to what's relevant to the current turn, and a larger token budget supports longer-running context.", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
+		{"policy_name": "Operational", "description": "For task/ops agents where memory should stay out of the way. Nothing is captured or injected automatically — the agent can write memory via a tool call and pull it back only when it explicitly searches for it.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
 	]
 	for preset in presets:
 		if frappe.db.exists("Memory Policy", preset["policy_name"]):
@@ -1248,4 +1295,3 @@ def create_default_execution_profiles():
 			)
 
 	frappe.db.commit()
-

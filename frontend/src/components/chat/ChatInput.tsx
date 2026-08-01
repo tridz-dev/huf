@@ -17,6 +17,8 @@ import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
+import { cacheReasoning } from './chatMessageList.mappers';
+import { cacheAgentNameForChat } from './useChatAgentIdentity';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -154,6 +156,7 @@ export function ChatInput({
             conversationId: string | undefined;
             assistantMessageId: string;
             updateAssistantContent: (content: string) => void;
+            updateAssistantReasoning?: (reasoning: string) => void;
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
         }) => {
@@ -168,6 +171,10 @@ export function ChatInput({
                 lastRunActivityRef.current = Date.now();
                 params.updateAssistantContent(content);
             };
+            const trackReasoningActivity = (reasoning: string) => {
+                lastRunActivityRef.current = Date.now();
+                params.updateAssistantReasoning?.(reasoning);
+            };
             try {
                 const response = await sendMessage(
                     {
@@ -180,6 +187,7 @@ export function ChatInput({
                     {
                         useStreaming,
                         onDelta: useStreaming ? trackActivity : undefined,
+                        onReasoningDelta: useStreaming ? trackReasoningActivity : undefined,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
                     }
@@ -236,6 +244,9 @@ export function ChatInput({
                 prev.map((msg) => {
                     if (msg.key !== tempId) return msg;
                     const existingContent = content ?? msg.versions[0]?.content ?? '';
+                    // Cache reasoning so it survives a ChatMessageList remount
+                    // (e.g. new-conversation navigation that resets prev=[]).
+                    if (msg.reasoning) cacheReasoning(realId, msg.reasoning);
                     return {
                         ...msg,
                         key: realId,
@@ -321,6 +332,16 @@ export function ChatInput({
                 );
                 scrollToBottomAfterPaint?.(false);
             };
+            const updateAssistantReasoning = (reasoning: string) => {
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, reasoning, reasoningStreaming: true }
+                            : msg
+                    )
+                );
+                scrollToBottomAfterPaint?.(false);
+            };
             let assistantKey = assistantMessageId;
 
             let runPhase = false;
@@ -367,6 +388,7 @@ export function ChatInput({
                     conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
                     assistantMessageId,
                     updateAssistantContent,
+                    updateAssistantReasoning,
                     skipUserMessage: true,
                     files: prepareRes.files,
                 });
@@ -377,6 +399,13 @@ export function ChatInput({
                 }
 
                 assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        (msg.key === assistantKey || msg.key === assistantMessageId)
+                            ? { ...msg, reasoningStreaming: false }
+                            : msg
+                    )
+                );
                 if (queued && agentRunId) {
                     linkUserMessageToRun(userMessageKey, agentRunId);
                     setMessages((prev) =>
@@ -394,6 +423,7 @@ export function ChatInput({
                 onStatusChange('ready');
                 if (conversationId && onConversationCreated) {
                     newlyCreatedConversationIdRef.current = conversationId;
+                    cacheAgentNameForChat(conversationId, agentName);
                     onConversationCreated(conversationId, agentName);
                     setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
                 } else {
@@ -464,6 +494,16 @@ export function ChatInput({
             );
             scrollToBottomAfterPaint?.(false);
         };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? { ...msg, reasoning, reasoningStreaming: true }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
 
         let assistantKey = assistantMessageId;
         try {
@@ -473,6 +513,7 @@ export function ChatInput({
                 conversationId: chatId ?? undefined,
                 assistantMessageId,
                 updateAssistantContent,
+                updateAssistantReasoning,
             });
             if (runTimedOutRef.current) {
                 // Hang guard already converted the bubble to an error card.
@@ -480,6 +521,13 @@ export function ChatInput({
                 return;
             }
             assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === assistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
                 setMessages((prev) =>
@@ -496,6 +544,7 @@ export function ChatInput({
             onStatusChange('ready');
             if (conversationId && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = conversationId;
+                cacheAgentNameForChat(conversationId, agentName);
                 onConversationCreated(conversationId, agentName);
                 setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
             } else {
@@ -604,6 +653,14 @@ export function ChatInput({
             );
             scrollToBottomAfterPaint?.(false);
         };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.key === assistantMessageId ? { ...m, reasoning, reasoningStreaming: true } : m
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
         let currentAssistantKey = assistantMessageId;
         try {
             // The transcribe endpoint already persisted the user message;
@@ -614,6 +671,7 @@ export function ChatInput({
                 conversationId: res?.conversation_id,
                 assistantMessageId,
                 updateAssistantContent,
+                updateAssistantReasoning,
                 skipUserMessage: true,
             });
             if (runTimedOutRef.current) {
@@ -622,6 +680,13 @@ export function ChatInput({
                 return transcript;
             }
             currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === currentAssistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
                 setMessages((prev) =>
@@ -638,6 +703,7 @@ export function ChatInput({
             onStatusChange('ready');
             if (res?.conversation_id && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = res.conversation_id;
+                cacheAgentNameForChat(res.conversation_id, agentName);
                 onConversationCreated(res.conversation_id, agentName);
             }
             return transcript;

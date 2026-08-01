@@ -16,6 +16,15 @@ from frappe import _
 
 
 _ADAPTER_CLASSES = {
+	"WhatsApp": ("huf.ai.gateway_adapters.whatsapp", "WhatsAppGatewayAdapter"),
+	"Telegram": ("huf.ai.gateway_adapters.telegram", "TelegramGatewayAdapter"),
+	"Messenger": ("huf.ai.gateway_adapters.messenger", "MessengerGatewayAdapter"),
+	"Instagram": ("huf.ai.gateway_adapters.instagram", "InstagramGatewayAdapter"),
+	"Discord": ("huf.ai.gateway_adapters.discord", "DiscordGatewayAdapter"),
+	"Email": ("huf.ai.gateway_adapters.email", "EmailGatewayAdapter"),
+	"SMS": ("huf.ai.gateway_adapters.sms", "SMSGatewayAdapter"),
+	"Google Chat": ("huf.ai.gateway_adapters.google_chat", "GoogleChatGatewayAdapter"),
+	"Microsoft Teams": ("huf.ai.gateway_adapters.teams", "TeamsGatewayAdapter"),
 	"VK": ("huf.ai.gateway_adapters.vk", "VKGatewayAdapter"),
 	"WeCom": ("huf.ai.gateway_adapters.wecom", "WeComGatewayAdapter"),
 }
@@ -83,14 +92,24 @@ def _text_response(value: str) -> None:
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
-def handle_gateway_webhook(gateway_name: str) -> dict | None:
+def handle_gateway_webhook() -> dict | None:
 	"""Verify a native provider callback, then hand only normalized data to Gateway.
 
 	The URL contains a Gateway document name, never a credential.  Native
 	verification happens before persistence or queueing, and no provider payload
 	is normalized until that verification succeeds.
+
+	gateway_name is read directly from the query string rather than taken as
+	a function argument: every provider here posts application/json, and
+	frappe.app.make_form_dict replaces frappe.form_dict wholesale with the
+	parsed JSON body whenever Content-Type is JSON, so a query-string kwarg
+	never actually reaches this function on a real webhook call.
 	"""
 	from huf.ai.gateway_service import ingest_gateway_event
+
+	gateway_name = frappe.request.args.get("gateway_name") if frappe.request is not None else None
+	if not gateway_name:
+		return {"success": False, "error": "Missing gateway_name"}
 
 	try:
 		gateway = frappe.get_doc("Gateway", gateway_name)
@@ -101,8 +120,8 @@ def handle_gateway_webhook(gateway_name: str) -> dict | None:
 
 	adapter = get_gateway_adapter(gateway)
 	request = _inbound_request()
-	if request.method == "GET" and gateway.provider == "WeCom":
-		_text_response(adapter.verify_url(request))
+	if request.method == "GET" and hasattr(adapter, "verify_url"):
+		_text_response(adapter.verify_url(request) or "")
 		return None
 	if not adapter.verify_inbound(request):
 		return {"success": False, "error": "Provider verification failed"}

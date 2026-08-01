@@ -4,13 +4,13 @@ Tests for Agent-level gating of SSH execution.
 Run with: bench --site <site> run-tests --app huf --module huf.huf.doctype.agent.test_agent_ssh
 """
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 from huf.ai.tools.ssh_execution import run_ssh_command
 from huf.install import create_huf_roles
 
 
-class TestAgentSSH(FrappeTestCase):
+class TestAgentSSH(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()

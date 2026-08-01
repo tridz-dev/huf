@@ -20,9 +20,11 @@ export function setStreamingAvailable(value: boolean): void {
 }
 
 export interface StreamChunk {
-  type: 'delta' | 'tool_call' | 'complete' | 'error';
+  type: 'delta' | 'reasoning' | 'tool_call' | 'complete' | 'error';
   content?: string;
   full_response?: string;
+  full_reasoning?: string;
+  reasoning_content?: string;
   response?: string;
   conversation_id?: string;
   success?: boolean;
@@ -165,6 +167,7 @@ export type ChatResult = NewConversationResponse | SendMessageResponse;
 export interface SendMessageOptions {
   useStreaming: boolean;
   onDelta?: (text: string) => void;
+  onReasoningDelta?: (text: string) => void;
   skipUserMessage?: boolean;
   files?: StreamAgentFile[];
 }
@@ -182,7 +185,7 @@ export async function sendMessage(
   },
   options: SendMessageOptions
 ): Promise<ChatResult> {
-  const { useStreaming, onDelta, skipUserMessage, files } = options;
+  const { useStreaming, onDelta, onReasoningDelta, skipUserMessage, files } = options;
   const streamSkip = params.skipUserMessage ?? skipUserMessage;
   const streamFiles = params.files ?? files;
 
@@ -197,6 +200,9 @@ export async function sendMessage(
     })) {
       if (chunk.type === 'delta' && onDelta && chunk.full_response !== undefined) {
         onDelta(chunk.full_response);
+      }
+      if (chunk.type === 'reasoning' && onReasoningDelta && chunk.full_reasoning !== undefined) {
+        onReasoningDelta(chunk.full_reasoning);
       }
       if (chunk.type === 'complete') {
         lastComplete = chunk;
