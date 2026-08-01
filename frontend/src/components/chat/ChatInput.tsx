@@ -18,6 +18,7 @@ import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
+import { cacheAgentNameForChat } from './useChatAgentIdentity';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -422,6 +423,7 @@ export function ChatInput({
                 onStatusChange('ready');
                 if (conversationId && onConversationCreated) {
                     newlyCreatedConversationIdRef.current = conversationId;
+                    cacheAgentNameForChat(conversationId, agentName);
                     onConversationCreated(conversationId, agentName);
                     setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
                 } else {
@@ -542,6 +544,7 @@ export function ChatInput({
             onStatusChange('ready');
             if (conversationId && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = conversationId;
+                cacheAgentNameForChat(conversationId, agentName);
                 onConversationCreated(conversationId, agentName);
                 setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
             } else {
@@ -700,6 +703,7 @@ export function ChatInput({
             onStatusChange('ready');
             if (res?.conversation_id && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = res.conversation_id;
+                cacheAgentNameForChat(res.conversation_id, agentName);
                 onConversationCreated(res.conversation_id, agentName);
             }
             return transcript;
