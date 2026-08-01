@@ -57,6 +57,7 @@ export function IntegrationSettingsDetailsPage() {
   const [settingUpWebhook, setSettingUpWebhook] = useState(false);
   const [addToAgentOpen, setAddToAgentOpen] = useState(false);
   const [credentialSchema, setCredentialSchema] = useState<CredentialSchemaItem[]>([]);
+  const [serviceCategory, setServiceCategory] = useState<string>('');
   const [agents, setAgents] = useState<Array<{ name: string; agent_name: string }>>([]);
   const [docMeta, setDocMeta] = useState({
     lastUsed: undefined as string | undefined,
@@ -86,7 +87,7 @@ export function IntegrationSettingsDetailsPage() {
   const isTelegram = (isNew ? initialService : watchService) === 'telegram';
 
   const tabConfig = useMemo(() => {
-    const base = {
+    const base: Record<string, { label: string; fields: string[]; default: boolean; disabled: boolean }> = {
       general: {
         label: 'General',
         fields: ['service', 'is_active', 'is_default'],
@@ -99,13 +100,16 @@ export function IntegrationSettingsDetailsPage() {
         default: false,
         disabled: false,
       },
-      recipients: {
+    };
+
+    if (serviceCategory === 'Communication') {
+      base.recipients = {
         label: 'Recipients',
         fields: ['recipients'],
         default: false,
         disabled: false,
-      },
-    };
+      };
+    }
 
     if ((isNew ? initialService : watchService) === 'telegram') {
       return {
@@ -120,7 +124,7 @@ export function IntegrationSettingsDetailsPage() {
     }
 
     return base;
-  }, [isNew, initialService, watchService]);
+  }, [isNew, initialService, watchService, serviceCategory]);
 
   const validTabs = useMemo(() => Object.keys(tabConfig), [tabConfig]);
   const defaultTab = useMemo(
@@ -176,6 +180,7 @@ export function IntegrationSettingsDetailsPage() {
     try {
       const serviceDoc = await getIntegrationService(serviceName);
       setCredentialSchema(parseRequiredCredentials(serviceDoc.required_credentials));
+      setServiceCategory(serviceDoc.category || '');
     } catch (error) {
       toast.error(getFrappeErrorMessage(error) || 'Failed to load service schema');
     }
