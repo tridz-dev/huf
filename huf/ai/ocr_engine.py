@@ -98,7 +98,7 @@ def _resolve_file_doc(file_id: str | None = None, file_url: str | None = None):
             return frappe.get_doc("File", file_id)
         except frappe.DoesNotExistError:
             raise ValueError(f"File document '{file_id}' not found")
-        except (frappe.DoesNotExistError, frappe.DataError) as e:
+        except frappe.DataError as e:
             raise ValueError(f"Error loading File '{file_id}': {e}")
 
     if file_url:
@@ -213,7 +213,7 @@ def _determine_strategy(mime_type: str, ext: str, provider_name: str) -> str:
 
     if _is_pdf(mime_type, ext):
         # Providers with strong multimodal PDF support via vision (or via pypdfium2)
-        if provider in {"google", "gemini", "vertex_ai", "anthropic", "openai"}:
+        if provider in {"google", "gemini", "vertex_ai", "anthropic", "openai", "openrouter"}:
             return "vision"
         # Providers with a standard LiteLLM OCR endpoint
         if provider in {"mistral", "azure"}:
@@ -252,6 +252,7 @@ def _default_model(provider_name: str, strategy: str) -> str | None:
             "gemini": "gemini/gemini-2.5-flash",
             "vertex_ai": "vertex_ai/gemini-2.5-flash",
             "anthropic": "claude-3-5-sonnet-20241022",
+            "openrouter": "openrouter/google/gemini-2.5-flash",
         }.get(provider)
 
     return None
@@ -416,7 +417,9 @@ async def _process_with_vision_model(
                 import io
 
                 pdf = pdfium.PdfDocument(file_path)
-                for i in range(min(len(pdf), 15)):  # Limit to 15 pages for safety
+                total_pages = len(pdf)
+                max_pages = 15
+                for i in range(min(total_pages, max_pages)):
                     page = pdf[i]
                     bitmap = page.render(scale=2)  # ~144 DPI
                     pil_image = bitmap.to_pil()
@@ -426,6 +429,15 @@ async def _process_with_vision_model(
                     content_list.append({
                         "type": "image_url", 
                         "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
+                if total_pages > max_pages:
+                    content_list.append({
+                        "type": "text",
+                        "text": (
+                            f"\n\n[Note: This PDF has {total_pages} pages. "
+                            f"Only the first {max_pages} pages were processed. "
+                            f"Pages {max_pages + 1}–{total_pages} were omitted.]"
+                        ),
                     })
             except ImportError:
                 # Fallback if pypdfium2 somehow isn't available
@@ -547,8 +559,11 @@ async def extract_document(
                 file_id=file_doc.name,
                 file_name=file_doc.file_name,
             )
-    except (OSError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError):  # path resolution fallback
-        pass
+    except (OSError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError) as e:
+        _log_error(
+            f"Path traversal check could not complete for '{file_doc.file_name}': {e}",
+            "OCR Path Safety",
+        )
 
     if not os.path.exists(file_path):
         return ExtractionResult(
@@ -629,9 +644,8 @@ async def extract_document(
             file_hash=content_hash,
         )
 
-    # Fallback chain for PDFs: if the standard LiteLLM OCR endpoint failed,
-    # fall back to local PDF extraction. We do not send PDFs to vision models
-    # because provider support is inconsistent and non-standard.
+    # Fallback chain for PDFs: if the primary strategy (vision or OCR endpoint)
+    # failed, fall back to local PDF text extraction via pypdf.
     if not result.success and _is_pdf(mime_type, ext) and strategy != "local_pdf":
         _log_error(
             f"Primary extraction failed for PDF '{file_name}' ({strategy}); falling back to local PDF extraction.",

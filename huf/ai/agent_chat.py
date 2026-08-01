@@ -595,11 +595,13 @@ def upload_file_and_process_web(
         modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
         supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
+        LOCAL_EXTRACTABLE_EXTS = (".docx", ".xlsx", ".pptx", ".txt", ".md", ".html", ".htm", ".csv", ".json", ".xml", ".log")
         is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+        is_local_extractable = filename.lower().endswith(LOCAL_EXTRACTABLE_EXTS)
         use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
         use_vision = "Vision" in supported and is_image_or_pdf
 
-        if not use_ocr and not use_vision:
+        if not use_ocr and not use_vision and not is_local_extractable:
             return {"success": False, "error": _("This model does not support file analysis.")}
 
     # Ensure conversation exists (or create a new one)
@@ -705,11 +707,13 @@ def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
     modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
     supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
+    LOCAL_EXTRACTABLE_EXTS = (".docx", ".xlsx", ".pptx", ".txt", ".md", ".html", ".htm", ".csv", ".json", ".xml", ".log")
     is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
+    is_local_extractable = filename.lower().endswith(LOCAL_EXTRACTABLE_EXTS)
     use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
     use_vision = "Vision" in supported and is_image_or_pdf
 
-    if not use_ocr and not use_vision:
+    if not use_ocr and not use_vision and not is_local_extractable:
         return None, {"success": False, "error": _("This model does not support file analysis.")}
 
     return agent_doc, None
