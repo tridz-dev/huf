@@ -106,6 +106,104 @@ class TestEvaluateRun(unittest.TestCase):
 			console_api.evaluate_run("Response", "")
 
 
+class TestRunPromptSync(unittest.TestCase):
+	@patch("huf.ai.console_api._simple_completion_with_usage_sync")
+	@patch("huf.ai.console_api.has_capability")
+	def test_run_prompt_sync_returns_telemetry(self, mock_has_capability, mock_completion):
+		mock_has_capability.return_value = True
+		mock_completion.return_value = {
+			"response": "Hello there",
+			"input_tokens": 12,
+			"output_tokens": 34,
+			"cost": 0.0042,
+		}
+
+		with patch("huf.ai.console_api.frappe.db.exists", return_value=True):
+			result = console_api.run_prompt_sync("OpenAI", "gpt-4o", "Say hi")
+
+		self.assertTrue(result["success"])
+		self.assertEqual(result["response"], "Hello there")
+		self.assertEqual(result["provider"], "OpenAI")
+		self.assertEqual(result["model"], "gpt-4o")
+		self.assertIsInstance(result["latency_ms"], int)
+		self.assertGreaterEqual(result["latency_ms"], 0)
+		self.assertEqual(result["input_tokens"], 12)
+		self.assertEqual(result["output_tokens"], 34)
+		self.assertEqual(result["cost"], 0.0042)
+
+	@patch("huf.ai.console_api._simple_completion_with_usage_sync")
+	@patch("huf.ai.console_api.has_capability")
+	def test_run_prompt_sync_passes_generation_params(self, mock_has_capability, mock_completion):
+		mock_has_capability.return_value = True
+		mock_completion.return_value = {
+			"response": "ok",
+			"input_tokens": 1,
+			"output_tokens": 1,
+			"cost": 0.0,
+		}
+
+		with patch("huf.ai.console_api.frappe.db.exists", return_value=True):
+			console_api.run_prompt_sync(
+				"OpenAI", "gpt-4o", "Say hi", temperature=0.7, max_tokens=128
+			)
+
+		mock_completion.assert_called_once()
+		_, kwargs = mock_completion.call_args
+		self.assertEqual(kwargs["temperature"], 0.7)
+		self.assertEqual(kwargs["max_tokens"], 128)
+
+	@patch("huf.ai.console_api._simple_completion_with_usage_sync")
+	@patch("huf.ai.console_api.has_capability")
+	def test_run_prompt_sync_prepends_system_prompt(self, mock_has_capability, mock_completion):
+		mock_has_capability.return_value = True
+		mock_completion.return_value = {
+			"response": "ok",
+			"input_tokens": 1,
+			"output_tokens": 1,
+			"cost": 0.0,
+		}
+
+		with patch("huf.ai.console_api.frappe.db.exists", return_value=True):
+			console_api.run_prompt_sync(
+				"OpenAI", "gpt-4o", "Say hi", system_prompt="  Be terse.  "
+			)
+
+		messages = mock_completion.call_args[0][2]
+		self.assertEqual(messages[0], {"role": "system", "content": "Be terse."})
+		self.assertEqual(messages[1], {"role": "user", "content": "Say hi"})
+
+	@patch("huf.ai.console_api._simple_completion_with_usage_sync")
+	@patch("huf.ai.console_api.has_capability")
+	def test_run_prompt_sync_omits_blank_system_prompt(self, mock_has_capability, mock_completion):
+		mock_has_capability.return_value = True
+		mock_completion.return_value = {
+			"response": "ok",
+			"input_tokens": 1,
+			"output_tokens": 1,
+			"cost": 0.0,
+		}
+
+		with patch("huf.ai.console_api.frappe.db.exists", return_value=True):
+			console_api.run_prompt_sync("OpenAI", "gpt-4o", "Say hi", system_prompt="   ")
+
+		messages = mock_completion.call_args[0][2]
+		self.assertEqual(messages, [{"role": "user", "content": "Say hi"}])
+
+	@patch("huf.ai.console_api.has_capability")
+	def test_run_prompt_sync_requires_prompt_and_provider(self, mock_has_capability):
+		mock_has_capability.return_value = True
+		with self.assertRaises(Exception):
+			console_api.run_prompt_sync("OpenAI", "gpt-4o", "")
+		with self.assertRaises(Exception):
+			console_api.run_prompt_sync("", "", "Say hi")
+
+	@patch("huf.ai.console_api.has_capability")
+	def test_run_prompt_sync_requires_permission(self, mock_has_capability):
+		mock_has_capability.return_value = False
+		with self.assertRaises(Exception):
+			console_api.run_prompt_sync("OpenAI", "gpt-4o", "Say hi")
+
+
 class TestSavePromptTemplate(unittest.TestCase):
 	@patch("huf.ai.console_api.has_capability")
 	@patch("huf.ai.console_api.frappe.get_doc")

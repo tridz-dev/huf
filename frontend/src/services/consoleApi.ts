@@ -25,6 +25,9 @@ export interface RunPromptSyncParams {
   provider: string;
   model: string;
   prompt: string;
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
 }
 
 export interface RunPromptSyncResult {
@@ -32,6 +35,10 @@ export interface RunPromptSyncResult {
   response?: string;
   provider?: string;
   model?: string;
+  latency_ms?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  cost?: number;
   error?: string;
 }
 
@@ -103,17 +110,31 @@ export async function runAgentSync(params: RunAgentSyncParams): Promise<RunAgent
 
 export async function runPromptSync(params: RunPromptSyncParams): Promise<RunPromptSyncResult> {
   try {
-    const result = await call.post('huf.ai.console_api.run_prompt_sync', {
+    const payload: Record<string, unknown> = {
       provider: params.provider,
       model: params.model,
       prompt: params.prompt,
-    });
+    };
+    if (params.temperature !== undefined) {
+      payload.temperature = params.temperature;
+    }
+    if (params.maxTokens !== undefined) {
+      payload.max_tokens = params.maxTokens;
+    }
+    if (params.systemPrompt !== undefined) {
+      payload.system_prompt = params.systemPrompt;
+    }
+    const result = await call.post('huf.ai.console_api.run_prompt_sync', payload);
     const message = result?.message ?? result;
     return {
       success: message?.success !== false,
       response: message?.response ?? '',
       provider: message?.provider,
       model: message?.model,
+      latency_ms: message?.latency_ms,
+      input_tokens: message?.input_tokens,
+      output_tokens: message?.output_tokens,
+      cost: message?.cost,
     };
   } catch (error) {
     handleFrappeError(error, 'Error running prompt');

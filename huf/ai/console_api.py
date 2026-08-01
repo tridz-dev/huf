@@ -13,13 +13,14 @@ Provides:
 import asyncio
 import json
 import re
+import time
 
 import frappe
 from frappe import _
-from frappe.utils import cint
+from frappe.utils import cint, flt
 
 from huf.ai.agent_integration import _run_async_safely
-from huf.ai.providers.litellm import get_simple_completion
+from huf.ai.providers.litellm import get_simple_completion, get_simple_completion_with_usage
 from huf.permissions import has_capability
 
 
@@ -81,6 +82,21 @@ def _simple_completion_sync(provider: str, model: str, messages: list) -> str:
 	return _run_async_safely(get_simple_completion(model, messages, provider))
 
 
+def _simple_completion_with_usage_sync(
+	provider: str,
+	model: str,
+	messages: list,
+	temperature: float | None = None,
+	max_tokens: int | None = None,
+) -> dict:
+	"""Run the async get_simple_completion_with_usage helper safely in a sync Frappe context."""
+	return _run_async_safely(
+		get_simple_completion_with_usage(
+			model, messages, provider, temperature=temperature, max_tokens=max_tokens
+		)
+	)
+
+
 RUN_PROMPT_CAPABILITY = "agent.use"
 
 
@@ -89,6 +105,9 @@ def run_prompt_sync(
 	provider: str,
 	model: str,
 	prompt: str,
+	temperature: float | None = None,
+	max_tokens: int | None = None,
+	system_prompt: str | None = None,
 ):
 	"""Run a prompt directly against a provider+model, without an Agent wrapper.
 
@@ -101,9 +120,13 @@ def run_prompt_sync(
 		provider: AI Provider name to use.
 		model: AI Model name to use.
 		prompt: The user prompt to send.
+		temperature: Optional sampling temperature (defaults to the provider helper's default).
+		max_tokens: Optional maximum completion tokens.
+		system_prompt: Optional system message prepended to the conversation.
 
 	Returns:
-		dict: ``{"success": true, "response": "..."}``
+		dict: ``{"success": true, "response": "...", "latency_ms": int,
+		"input_tokens": int, "output_tokens": int, "cost": float}``
 	"""
 	_require(RUN_PROMPT_CAPABILITY)
 
@@ -117,22 +140,38 @@ def run_prompt_sync(
 	if not frappe.db.exists("AI Model", model):
 		frappe.throw(_("Selected model does not exist."), frappe.ValidationError)
 
-	messages = [{"role": "user", "content": prompt.strip()}]
+	if temperature is not None:
+		temperature = flt(temperature)
+	if max_tokens is not None:
+		max_tokens = cint(max_tokens)
+
+	messages = []
+	if system_prompt and system_prompt.strip():
+		messages.append({"role": "system", "content": system_prompt.strip()})
+	messages.append({"role": "user", "content": prompt.strip()})
 
 	try:
-		response = _simple_completion_sync(provider, model, messages)
+		started_at = time.monotonic()
+		result = _simple_completion_with_usage_sync(
+			provider, model, messages, temperature=temperature, max_tokens=max_tokens
+		)
+		latency_ms = int((time.monotonic() - started_at) * 1000)
 	except Exception as e:
 		frappe.log_error(f"run_prompt_sync failed: {e!s}\n{frappe.get_traceback()}", "Console Direct Run")
 		frappe.throw(_("Run failed. Please try again or choose a different provider."))
 
-	if response is None:
-		response = ""
+	if result is None:
+		result = {}
 
 	return {
 		"success": True,
-		"response": response,
+		"response": result.get("response") or "",
 		"provider": provider,
 		"model": model,
+		"latency_ms": latency_ms,
+		"input_tokens": int(result.get("input_tokens") or 0),
+		"output_tokens": int(result.get("output_tokens") or 0),
+		"cost": round(flt(result.get("cost") or 0.0), 6),
 	}
 
 
