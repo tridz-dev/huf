@@ -83,7 +83,13 @@ export function ConsoleConfigForm({
     onChange({ ...config, ...patch });
   };
 
+  const DIRECT_AGENT_VALUE = '__direct__';
+
   const handleAgentChange = (value: string) => {
+    if (value === DIRECT_AGENT_VALUE) {
+      update({ agentName: '' });
+      return;
+    }
     const agent = agents.find((a) => a.name === value);
     update({
       agentName: value,
@@ -97,11 +103,12 @@ export function ConsoleConfigForm({
       <div className={compact ? 'grid gap-3' : 'grid gap-4 sm:grid-cols-3'}>
         <div className="space-y-2">
           <Label>Agent</Label>
-          <Select value={config.agentName} onValueChange={handleAgentChange}>
+          <Select value={config.agentName || DIRECT_AGENT_VALUE} onValueChange={handleAgentChange}>
             <SelectTrigger>
               <SelectValue placeholder="Select agent" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={DIRECT_AGENT_VALUE}>Direct (no agent)</SelectItem>
               {agents.map((a) => (
                 <SelectItem key={a.name} value={a.name}>
                   {a.agent_name || a.name}
@@ -191,7 +198,11 @@ export function ConsoleConfigForm({
       <div className="flex items-center gap-2 pt-2">
         <Button
           onClick={onRun}
-          disabled={running || !config.agentName || !config.prompt.trim()}
+          disabled={
+            running ||
+            !config.prompt.trim() ||
+            !(config.agentName || (config.provider && config.model))
+          }
           className="gap-2"
         >
           {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}

@@ -7,9 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { ConsoleConfigForm, type ConsoleConfig } from './ConsoleConfigForm';
 import {
   runAgentSync,
+  runPromptSync,
   generatePrompt,
   evaluateRun,
   type RunAgentSyncResult,
+  type RunPromptSyncResult,
   type EvaluateRunResult,
 } from '@/services/consoleApi';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
@@ -22,10 +24,10 @@ interface ConsolePlaygroundProps {
   onConfigChange: (config: ConsoleConfig) => void;
 }
 
-interface PlaygroundResult extends RunAgentSyncResult {
+type PlaygroundResult = (RunAgentSyncResult | RunPromptSyncResult) & {
   evaluation?: EvaluateRunResult;
   agentRunId?: string;
-}
+};
 
 export function ConsolePlayground({
   agents,
@@ -39,20 +41,36 @@ export function ConsolePlayground({
   const [result, setResult] = useState<PlaygroundResult | null>(null);
 
   const handleRun = async () => {
-    if (!config.agentName || !config.prompt.trim()) {
-      toast.error('Agent and prompt are required');
+    if (!config.prompt.trim()) {
+      toast.error('Prompt is required');
       return;
     }
+    if (config.agentName) {
+      if (!config.provider || !config.model) {
+        toast.error('Provider and model are required when using an agent');
+        return;
+      }
+    } else if (!config.provider || !config.model) {
+      toast.error('Provider and model are required');
+      return;
+    }
+
     setRunning(true);
     setResult(null);
     try {
-      const runResult = await runAgentSync({
-        agent_name: config.agentName,
-        prompt: config.prompt.trim(),
-        provider: config.provider || undefined,
-        model: config.model || undefined,
-        now: true,
-      });
+      const runResult = config.agentName
+        ? await runAgentSync({
+            agent_name: config.agentName,
+            prompt: config.prompt.trim(),
+            provider: config.provider,
+            model: config.model,
+            now: true,
+          })
+        : await runPromptSync({
+            provider: config.provider,
+            model: config.model,
+            prompt: config.prompt.trim(),
+          });
       setResult(runResult);
     } catch (error) {
       toast.error(`Run failed: ${getFrappeErrorMessage(error)}`);
