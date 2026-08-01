@@ -3,6 +3,19 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
 
+// Pre-populate the agent name for a new chatId so ChatInput never flashes
+// invisible while `getConversation` is in-flight after a new-conversation
+// navigation (ChatInput returns null when agentName is empty).
+const _agentNameCache = new Map<string, string>();
+export function cacheAgentNameForChat(chatId: string, agentName: string): void {
+  _agentNameCache.set(chatId, agentName);
+}
+function consumeAgentNameCache(chatId: string): string {
+  const name = _agentNameCache.get(chatId);
+  if (name !== undefined) _agentNameCache.delete(chatId);
+  return name ?? '';
+}
+
 /** localStorage key for cross-tab sync of the tool-execution-details toggle */
 function toolDetailsKey(agent: string): string {
   return `huf:agent:${agent}:show_tool_execution_details`;
@@ -18,7 +31,9 @@ export function writeToolDetailsSetting(agent: string, enabled: boolean): void {
 }
 
 export function useChatAgentIdentity(chatId: string | null, searchParams: URLSearchParams) {
-  const [agentName, setAgentName] = useState<string>('');
+  const [agentName, setAgentName] = useState<string>(() =>
+    chatId ? consumeAgentNameCache(chatId) : (searchParams.get('agent') ?? '')
+  );
   const [agentColor, setAgentColor] = useState<string | null>(null);
   const [showToolExecutionDetails, setShowToolExecutionDetails] = useState<boolean>(true);
   const [allowFileUpload, setAllowFileUpload] = useState<boolean>(false);

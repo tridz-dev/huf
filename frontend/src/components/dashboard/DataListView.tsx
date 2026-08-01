@@ -95,59 +95,57 @@ export function DataListView<TData, TValue>({
 					</DropdownMenu>
 				</div>
 			</div>
-			<div className="rounded-none border border-line bg-panel">
-				<Table>
-					<TableHeader>
-						{table.getHeaderGroups().map((headerGroup) => (
-							<TableRow key={headerGroup.id} className="border-line hover:bg-transparent">
-								{headerGroup.headers.map((header) => {
-									return (
-										<TableHead key={header.id} className="text-steel">
-											{header.isPlaceholder
-												? null
-												: flexRender(header.column.columnDef.header, header.getContext())}
-										</TableHead>
-									);
-								})}
-							</TableRow>
-						))}
-					</TableHeader>
-					<TableBody>
-						{loading ? (
-							<TableRow className="border-line hover:bg-transparent">
-								<TableCell colSpan={columns.length} className="h-24 text-center">
-									<div className="space-y-2">
-										{[...Array(5)].map((_, i) => (
-											<div key={i} className="h-12 bg-line rounded-none animate-pulse" />
-										))}
-									</div>
-								</TableCell>
-							</TableRow>
-						) : table.getRowModel().rows?.length ? (
-							table.getRowModel().rows.map((row) => (
-								<TableRow
-									key={row.id}
-									data-state={row.getIsSelected() && 'selected'}
-									className={`border-line transition-colors hover:bg-paper-deep ${onRowClick ? 'cursor-pointer' : ''}`}
-									onClick={() => onRowClick?.(row.original)}
-								>
-									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id} className="text-ink">
-											{flexRender(cell.column.columnDef.cell, cell.getContext())}
-										</TableCell>
-									))}
+			{loading || table.getRowModel().rows?.length ? (
+				<div className="rounded-none border border-line bg-panel">
+					<Table>
+						<TableHeader>
+							{table.getHeaderGroups().map((headerGroup) => (
+								<TableRow key={headerGroup.id} className="border-line hover:bg-transparent">
+									{headerGroup.headers.map((header) => {
+										return (
+											<TableHead key={header.id} className="text-steel">
+												{header.isPlaceholder
+													? null
+													: flexRender(header.column.columnDef.header, header.getContext())}
+											</TableHead>
+										);
+									})}
 								</TableRow>
-							))
-						) : (
-							<TableRow className="border-line hover:bg-transparent">
-								<TableCell colSpan={columns.length} className="h-24 text-center text-steel">
-									{emptyState || 'No results.'}
-								</TableCell>
-							</TableRow>
-						)}
-					</TableBody>
-				</Table>
-			</div>
+							))}
+						</TableHeader>
+						<TableBody>
+							{loading ? (
+								<TableRow className="border-line hover:bg-transparent">
+									<TableCell colSpan={columns.length} className="h-24 text-center">
+										<div className="space-y-2">
+											{[...Array(5)].map((_, i) => (
+												<div key={i} className="h-12 bg-line rounded-none animate-pulse" />
+											))}
+										</div>
+									</TableCell>
+								</TableRow>
+							) : (
+								table.getRowModel().rows.map((row) => (
+									<TableRow
+										key={row.id}
+										data-state={row.getIsSelected() && 'selected'}
+										className={`border-line transition-colors hover:bg-paper-deep ${onRowClick ? 'cursor-pointer' : ''}`}
+										onClick={() => onRowClick?.(row.original)}
+									>
+										{row.getVisibleCells().map((cell) => (
+											<TableCell key={cell.id} className="text-ink">
+												{flexRender(cell.column.columnDef.cell, cell.getContext())}
+											</TableCell>
+										))}
+									</TableRow>
+								))
+							)}
+						</TableBody>
+					</Table>
+				</div>
+			) : (
+				emptyState || 'No results.'
+			)}
 		</div>
 	);
 }

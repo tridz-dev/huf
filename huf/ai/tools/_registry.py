@@ -191,58 +191,6 @@ TELEGRAM_TOOLS = [
 	},
 ]
 
-WHATSAPP_TOOLS = [
-	{
-		"tool_name": "whatsapp",
-		"description": (
-			"Manage Meta WhatsApp messaging. Actions: "
-			"send_message (to, message), "
-			"send_template (to, template_name, language_code), "
-			"list_messages (to, from, limit), "
-			"get_account_info."
-		),
-		"function_path": "huf.ai.tools.whatsapp.handle_action",
-		"category": "Communication Tools",
-		"parameters": [
-			_action("send_message|send_template|list_messages|get_account_info"),
-			_p("to", description="Recipient phone number with country code (e.g. 15551234567)"),
-			_p("message", description="Message body text"),
-			_p("text", description="Alias for message body text"),
-			_p("template_name", description="Meta approved WhatsApp template name"),
-			_p("language_code", description="Language code for template (default en)"),
-			_p("limit", type="integer", description="Max number of messages to return"),
-			_p("phone_number_id", description="Override Meta WhatsApp Phone Number ID"),
-			_p("access_token", description="Override Meta Access Token"),
-		],
-	},
-]
-
-MESSENGER_TOOLS = [
-	{
-		"tool_name": "messenger",
-		"description": (
-			"Manage Facebook Messenger and Instagram Direct messaging. Actions: "
-			"send_message (recipient_id, message, platform), "
-			"list_conversations (platform, limit), "
-			"list_messages (conversation, limit)."
-		),
-		"function_path": "huf.ai.tools.messenger.handle_action",
-		"category": "Communication Tools",
-		"parameters": [
-			_action("send_message|list_conversations|list_messages"),
-			_p("recipient_id", description="Recipient PSID or IGSID user identifier"),
-			_p("to", description="Alias for recipient_id"),
-			_p("message", description="Message body text"),
-			_p("text", description="Alias for message body text"),
-			_p("platform", description="Channel platform: 'messenger' or 'instagram'"),
-			_p("conversation", description="Messenger Conversation ID for listing messages"),
-			_p("limit", type="integer", description="Max items to list"),
-			_p("page_id", description="Override Facebook Page ID or Instagram Professional ID"),
-			_p("access_token", description="Override Meta Access Token"),
-		],
-	},
-]
-
 
 # ---------------------------------------------------------------------------
 # Developer Tools
@@ -1285,11 +1233,11 @@ BUILDER_TOOLS = [
 DOCKER_TOOLS = [
 	{
 		"tool_name": "docker_execution",
-		"description": "Manage Docker containers and images with bounded, explicit operations. Destructive actions require confirm_destructive=true. Supports local socket, Docker contexts, TLS endpoints, or a Frappe SSH Connection.",
+		"description": "Manage Docker containers, images, and Compose deployments with bounded, explicit operations. Compose actions operate on an existing compose file; destructive actions require confirm_destructive=true. Supports local socket, Docker contexts, TLS endpoints, or a Frappe SSH Connection.",
 		"function_path": "huf.ai.tools.docker_execution.handle_action",
 		"category": "Developer Tools",
 		"parameters": [
-			_action("list_containers|list_images|inspect_container|logs|stop_container|start_container|restart_container|remove_container|pull_image|run_container|exec_container"),
+			_action("list_containers|list_images|inspect_container|logs|stop_container|start_container|restart_container|remove_container|pull_image|run_container|exec_container|compose_up|compose_ps|compose_logs|compose_config|compose_down"),
 			_p("container", description="Container name or ID"),
 			_p("image", description="Image name"),
 			_p("command", description="Command to execute (for exec_container)"),
@@ -1305,6 +1253,15 @@ DOCKER_TOOLS = [
 			_p("auto_remove", type="boolean", description="Remove the container when it exits"),
 			_p("confirm_destructive", type="boolean", description="Required confirmation for stop, restart, or remove"),
 			_p("timeout_seconds", type="integer", description="Maximum operation time, capped at 300 seconds"),
+			_p("compose_file", description="Path to an existing Docker Compose file"),
+			_p("project_dir", description="Compose project directory"),
+			_p("project_name", description="Compose project name"),
+			_p("services", description="Comma-separated Compose service names"),
+			_p("detach", type="boolean", description="Run Compose services in the background (default true)"),
+			_p("build", type="boolean", description="Build images before Compose up"),
+			_p("wait", type="boolean", description="Wait for services to become healthy"),
+			_p("remove_orphans", type="boolean", description="Remove Compose containers not in the file"),
+			_p("remove_volumes", type="boolean", description="Remove named volumes during compose_down"),
 			_p("tail", type="integer", description="Number of log lines to tail"),
 			_p("connection_string", description="Docker daemon URL (unix://, ssh://, tcp://)"),
 			_p("context_name", description="Docker context name"),
@@ -1427,8 +1384,6 @@ ALL_INTEGRATION_TOOLS = (
 	+ SLACK_TOOLS
 	+ DISCORD_TOOLS
 	+ TELEGRAM_TOOLS
-	+ WHATSAPP_TOOLS
-	+ MESSENGER_TOOLS
 	+ GITHUB_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS

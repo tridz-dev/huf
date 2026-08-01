@@ -27,6 +27,32 @@ class TestDockerExecution(unittest.TestCase):
         result = handle_action(action="list_containers")
         self.assertFalse(result["success"])
         self.assertIn("Docker CLI is not installed", result["error"])
+
+    @patch("huf.ai.tools.docker_execution._run_subprocess")
+    def test_compose_up_builds_bounded_command(self, mock_run):
+        mock_run.return_value = {"success": True, "output": "ok\n", "stderr": ""}
+        result = handle_action(
+            action="compose_up",
+            compose_file="/srv/app/compose.yml",
+            project_dir="/srv/app",
+            project_name="demo",
+            services="web,worker",
+            build=True,
+            wait=True,
+        )
+        self.assertTrue(result["success"])
+        self.assertEqual(
+            mock_run.call_args[0][0],
+            [
+                "docker", "compose", "--project-directory", "/srv/app", "-f", "/srv/app/compose.yml",
+                "-p", "demo", "up", "-d", "--build", "--wait", "web", "worker",
+            ],
+        )
+
+    def test_compose_down_requires_confirmation(self):
+        result = handle_action(action="compose_down", compose_file="/srv/app/compose.yml")
+        self.assertFalse(result["success"])
+        self.assertIn("confirm_destructive", result["error"])
     
     @patch("huf.ai.tools.docker_execution._run_subprocess")
     def test_list_containers_local(self, mock_run):
