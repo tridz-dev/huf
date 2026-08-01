@@ -3,6 +3,7 @@ export interface CredentialSchemaItem {
   label: string;
   required?: boolean;
   description?: string;
+  secret?: boolean;
 }
 
 export interface IntegrationCredentialRow {
@@ -104,6 +105,7 @@ export function serializeRequiredCredentials(schema: CredentialSchemaItem[]): st
       label: item.label,
       ...(item.required !== undefined ? { required: item.required } : {}),
       ...(item.description ? { description: item.description } : {}),
+      ...(item.secret !== undefined ? { secret: item.secret } : {}),
     })),
   );
 }
