@@ -72,6 +72,34 @@ class TestHubSecret(IntegrationTestCase):
 		cache.delete_value.assert_called_once()
 		self.assertNotIn("provider-secret", json.dumps(result))
 
+	def test_submit_integration_secret_updates_password_row(self):
+		cache = MagicMock()
+		cache.get_value.return_value = {
+			"user": "test@example.com",
+			"conversation_id": "conv-1",
+			"target": {
+				"type": "integration_credential",
+				"integration_settings": "telegram-0001",
+				"credential_key": "token",
+			},
+		}
+		credential = SimpleNamespace(key="token", value=None)
+		settings = SimpleNamespace(
+			name="telegram-0001", credentials=[credential], save=MagicMock()
+		)
+		with (
+			patch("frappe.get_roles", return_value=["System Manager"]),
+			patch("frappe.has_permission", return_value=True),
+			patch("frappe.get_doc", return_value=settings),
+			patch("frappe.cache", return_value=cache),
+			patch.dict(frappe.session, {"user": "test@example.com"}),
+		):
+			result = hub_secret.submit_hub_secret("opaque-request", "telegram-secret", "conv-1")
+
+		self.assertEqual(credential.value, "telegram-secret")
+		settings.save.assert_called_once_with()
+		self.assertNotIn("telegram-secret", json.dumps(result))
+
 	def test_unknown_target_is_rejected(self):
 		with patch("frappe.get_roles", return_value=["System Manager"]):
 			self.assertRaises(
