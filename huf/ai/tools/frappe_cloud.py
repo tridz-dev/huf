@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import frappe
 import httpx
@@ -7,23 +8,48 @@ logger = frappe.logger("huf")
 SERVICE_NAME = "frappe_cloud"
 
 
+class _FCAccount(SimpleNamespace):
+	"""Lightweight wrapper around the active Frappe Cloud integration settings."""
+
+	def save(self, ignore_permissions=False):
+		if self._doc:
+			self._doc.last_error = self.last_error
+			self._doc.save(ignore_permissions=ignore_permissions)
+
+
 def _get_fc_account():
-	"""Return the active/default Frappe Cloud Account document."""
-	filters = {"is_active": 1}
-	accounts = frappe.get_all(
-		"Frappe Cloud Account",
-		filters=filters,
+	"""Return the active/default Frappe Cloud Integration Settings as an account wrapper."""
+	settings = frappe.get_all(
+		"Integration Settings",
+		filters={"service": SERVICE_NAME, "is_active": 1},
 		fields=["name"],
 		order_by="is_default DESC, modified DESC",
 		limit=1,
 	)
-	if not accounts:
-		raise ValueError("No active Frappe Cloud Account configured")
-	return frappe.get_doc("Frappe Cloud Account", accounts[0].name)
+	if not settings:
+		raise ValueError("No active Frappe Cloud integration configured")
+
+	doc = frappe.get_doc("Integration Settings", settings[0].name)
+	creds = {}
+	for row in doc.credentials or []:
+		creds[row.key] = row.get_password("value") or row.value
+
+	api_key = creds.get("api_key")
+	api_secret = creds.get("api_secret")
+	if not api_key or not api_secret:
+		raise ValueError("Frappe Cloud API key/secret not configured")
+
+	return _FCAccount(
+		_doc=doc,
+		server_url=creds.get("server_url") or "https://cloud.frappe.io",
+		api_key=api_key,
+		api_secret=api_secret,
+		last_error=doc.last_error,
+	)
 
 
 def _update_fc_last_error(error: str):
-	"""Persist the last error on the active Frappe Cloud Account."""
+	"""Persist the last error on the active Frappe Cloud integration."""
 	try:
 		account = _get_fc_account()
 		account.last_error = error[:140]
@@ -34,13 +60,8 @@ def _update_fc_last_error(error: str):
 
 def _get_fc_headers():
 	account = _get_fc_account()
-	api_key = account.api_key
-	api_secret = account.get_password("api_secret")
-	if not api_key or not api_secret:
-		raise ValueError("Frappe Cloud API key/secret not configured")
-
 	return {
-		"Authorization": f"token {api_key}:{api_secret}",
+		"Authorization": f"token {account.api_key}:{account.api_secret}",
 		"Accept": "application/json",
 		"Content-Type": "application/json",
 	}
@@ -48,8 +69,7 @@ def _get_fc_headers():
 
 def _get_base_url():
 	account = _get_fc_account()
-	server_url = account.server_url or "https://cloud.frappe.io"
-	return f"{server_url.rstrip('/')}/api/method"
+	return f"{account.server_url.rstrip('/')}/api/method"
 
 
 def _make_fc_request(method: str, endpoint: str, json_data=None, params=None):
