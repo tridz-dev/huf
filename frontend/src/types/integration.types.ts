@@ -137,7 +137,7 @@ export function credentialsToMap(
 
 export function buildCredentialsPayload(
   schema: CredentialSchemaItem[],
-  formValues: Record<string, string>,
+  formValues: Record<string, string | undefined>,
   existingCredentials: IntegrationCredentialRow[] | undefined,
   isNew: boolean,
 ): IntegrationCredentialRow[] {

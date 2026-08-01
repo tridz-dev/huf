@@ -3,7 +3,6 @@
 
 """Generic integration utilities: attach service tools to Agents."""
 
-import json
 from typing import Optional
 
 import frappe
@@ -57,13 +56,13 @@ def _get_tools_for_service(service: str) -> list[dict]:
 
 
 @frappe.whitelist()
-def get_service_tools(service: str) -> str:
-    """Return tools that belong to an integration service (JSON string)."""
+def get_service_tools(service: str) -> dict:
+    """Return tools that belong to an integration service."""
     if not service:
         frappe.throw(_("Service is required"))
 
     tools = _get_tools_for_service(service)
-    return json.dumps({"success": True, "tools": tools})
+    return {"success": True, "tools": tools}
 
 
 @frappe.whitelist()
