@@ -1,41 +1,52 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Loader2, Play } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { Loader2 } from 'lucide-react';
+import { useSidebar } from '@/components/ui/sidebar';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  ConsoleHeader,
+  ConsolePlayground,
+  ConsoleCompare,
+  ConsoleTemplates,
+  SaveTemplateDialog,
+  type ConsoleMode,
+  type ConsoleConfig,
+} from '@/components/console';
 import { getAgents } from '@/services/agentApi';
-import { getProviders, getModels } from '@/services/providerApi';
-import { runAgentSync } from '@/services/consoleApi';
-import type { AgentDoc, AIProvider, AIModel } from '@/types/agent.types';
+import { getProviders } from '@/services/providerApi';
 import { settleAll } from '@/lib/settleAll';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type { AgentDoc, AIProvider } from '@/types/agent.types';
+import type { AgentPromptDoc } from '@/services/agentPromptApi';
 
 export { ConsolePage };
 export default ConsolePage;
 
+function emptyConfig(): ConsoleConfig {
+  return {
+    agentName: '',
+    provider: '',
+    model: '',
+    prompt: '',
+    evaluationCriteria: '',
+  };
+}
+
 function ConsolePage() {
+  const { setOpen } = useSidebar();
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
   const [agents, setAgents] = useState<AgentDoc[]>([]);
   const [providers, setProviders] = useState<AIProvider[]>([]);
-  const [models, setModels] = useState<AIModel[]>([]);
+  const [mode, setMode] = useState<ConsoleMode>('playground');
+  const [playgroundConfig, setPlaygroundConfig] = useState<ConsoleConfig>(emptyConfig());
+  const [compareConfigA, setCompareConfigA] = useState<ConsoleConfig>(emptyConfig());
+  const [compareConfigB, setCompareConfigB] = useState<ConsoleConfig>(emptyConfig());
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
-  const [agentName, setAgentName] = useState<string>('');
-  const [provider, setProvider] = useState<string>('');
-  const [model, setModel] = useState<string>('');
-  const [prompt, setPrompt] = useState('');
-  const [response, setResponse] = useState<string | null>(null);
-  const [lastRunId, setLastRunId] = useState<string | null>(null);
+  // Close the global app sidebar so the console uses the full viewport width.
+  useEffect(() => {
+    setOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -48,51 +59,27 @@ function ConsolePage() {
         },
       );
       if (agentsRes) setAgents(Array.isArray(agentsRes) ? agentsRes : agentsRes.items);
-      if (providersRes) setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      if (providersRes)
+        setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
       setLoading(false);
     })();
   }, []);
 
-  useEffect(() => {
-    if (!provider) {
-      setModels([]);
-      return;
-    }
-    getModels(provider).then(setModels);
-  }, [provider]);
-
-  const handleAgentChange = (value: string) => {
-    setAgentName(value);
-    const agent = agents.find((a) => a.name === value);
-    setProvider(agent?.provider || '');
-    setModel(agent?.model || '');
+  const activePromptBody = () => {
+    if (mode === 'playground') return playgroundConfig.prompt;
+    if (mode === 'compare') return compareConfigA.prompt || compareConfigB.prompt;
+    return '';
   };
 
-  const handleRun = async () => {
-    if (!agentName || !prompt.trim()) {
-      toast.error('Agent and prompt are required');
-      return;
+  const handleLoadTemplate = (prompt: AgentPromptDoc) => {
+    if (mode === 'compare') {
+      setCompareConfigA((prev) => ({ ...prev, prompt: prompt.prompt_body }));
+      setCompareConfigB((prev) => ({ ...prev, prompt: prompt.prompt_body }));
+    } else {
+      setPlaygroundConfig((prev) => ({ ...prev, prompt: prompt.prompt_body }));
+      // Switch to playground so the user can immediately run the loaded template.
+      setMode('playground');
     }
-    setRunning(true);
-    setResponse(null);
-    setLastRunId(null);
-    const result = await runAgentSync({
-      agent_name: agentName,
-      prompt: prompt.trim(),
-      provider: provider || undefined,
-      model: model || undefined,
-      // The Console is an explicit direct-execution surface: it exists to run
-      // an agent synchronously and show the final response in the same
-      // request, so it always opts out of the queue-first default.
-      now: true,
-    });
-    setRunning(false);
-    if (!result.success) {
-      toast.error(result.error || 'Agent run failed');
-      return;
-    }
-    setResponse(result.response ?? '');
-    setLastRunId(result.agent_run_id ?? null);
   };
 
   if (loading) {
@@ -104,121 +91,44 @@ function ConsolePage() {
   }
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 max-w-3xl mx-auto space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Console</h1>
-          <p className="text-sm text-steel">
-            Run any agent synchronously with a one-off prompt, outside of chat.
-          </p>
-        </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <ConsoleHeader
+        mode={mode}
+        onModeChange={setMode}
+        onSaveTemplate={() => setSaveDialogOpen(true)}
+        onLoadTemplate={handleLoadTemplate}
+        canSave={!!activePromptBody().trim()}
+      />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Run Agent</CardTitle>
-            <CardDescription>Provider/model default from the agent but can be overridden.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Agent</Label>
-                <Select value={agentName} onValueChange={handleAgentChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select agent" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((a) => (
-                      <SelectItem key={a.name} value={a.name}>
-                        {a.agent_name || a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Provider</Label>
-                <Select
-                  value={provider}
-                  onValueChange={(v) => {
-                    setProvider(v);
-                    setModel('');
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Default" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {providers.map((p) => (
-                      <SelectItem key={p.name} value={p.name}>
-                        {p.provider_name || p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Model</Label>
-                <Select value={model} onValueChange={setModel} disabled={!provider}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Default" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((m) => (
-                      <SelectItem key={m.name} value={m.name}>
-                        {m.model_name || m.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Prompt</Label>
-              <Textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Type a prompt to send to this agent..."
-                className="min-h-[120px]"
-              />
-            </div>
-
-            <Button onClick={handleRun} disabled={running || !agentName || !prompt.trim()} className="gap-2">
-              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Run
-            </Button>
-          </CardContent>
-        </Card>
-
-        {(response !== null || running) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Response</CardTitle>
-              {lastRunId && (
-                <CardDescription>
-                  <Link to={`/executions/${lastRunId}`} className="text-primary hover:underline">
-                    View run {lastRunId}
-                  </Link>
-                </CardDescription>
-              )}
-            </CardHeader>
-            <CardContent>
-              {running ? (
-                <div className="flex items-center gap-2 text-steel text-sm py-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Running...
-                </div>
-              ) : (
-                <div className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[400px] overflow-auto">
-                  {response || 'No response returned.'}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      <main className="min-h-0 flex-1 overflow-hidden">
+        {mode === 'playground' && (
+          <ConsolePlayground
+            agents={agents}
+            providers={providers}
+            config={playgroundConfig}
+            onConfigChange={setPlaygroundConfig}
+          />
         )}
-      </div>
+        {mode === 'compare' && (
+          <ConsoleCompare
+            agents={agents}
+            providers={providers}
+            configA={compareConfigA}
+            configB={compareConfigB}
+            onConfigAChange={setCompareConfigA}
+            onConfigBChange={setCompareConfigB}
+          />
+        )}
+        {mode === 'templates' && (
+          <ConsoleTemplates onLoadTemplate={handleLoadTemplate} />
+        )}
+      </main>
+
+      <SaveTemplateDialog
+        open={saveDialogOpen}
+        onOpenChange={setSaveDialogOpen}
+        promptBody={activePromptBody()}
+      />
     </div>
   );
 }

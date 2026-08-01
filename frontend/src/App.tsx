@@ -289,7 +289,7 @@ function AppShell() {
             path="/console"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout hideHeader>
                   <Suspense fallback={<PageLoader />}>
                     <ConsolePage />
                   </Suspense>
