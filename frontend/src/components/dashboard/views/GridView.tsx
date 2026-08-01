@@ -113,7 +113,7 @@ export function GridView<T>({
 
   if (items.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="py-12">
         {emptyState || (
           <EmptyState
             title="No items"
