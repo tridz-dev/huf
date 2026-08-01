@@ -21,6 +21,20 @@ export interface RunAgentSyncResult {
   sequence?: number;
 }
 
+export interface RunPromptSyncParams {
+  provider: string;
+  model: string;
+  prompt: string;
+}
+
+export interface RunPromptSyncResult {
+  success: boolean;
+  response?: string;
+  provider?: string;
+  model?: string;
+  error?: string;
+}
+
 export interface GeneratePromptParams {
   description: string;
   tone?: string;
@@ -84,6 +98,26 @@ export async function runAgentSync(params: RunAgentSyncParams): Promise<RunAgent
   } catch (error) {
     handleFrappeError(error, 'Error running agent');
     return { success: false, error: 'Error running agent' };
+  }
+}
+
+export async function runPromptSync(params: RunPromptSyncParams): Promise<RunPromptSyncResult> {
+  try {
+    const result = await call.post('huf.ai.console_api.run_prompt_sync', {
+      provider: params.provider,
+      model: params.model,
+      prompt: params.prompt,
+    });
+    const message = result?.message ?? result;
+    return {
+      success: message?.success !== false,
+      response: message?.response ?? '',
+      provider: message?.provider,
+      model: message?.model,
+    };
+  } catch (error) {
+    handleFrappeError(error, 'Error running prompt');
+    return { success: false, error: 'Error running prompt' };
   }
 }
 

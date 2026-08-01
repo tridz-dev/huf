@@ -81,6 +81,61 @@ def _simple_completion_sync(provider: str, model: str, messages: list) -> str:
 	return _run_async_safely(get_simple_completion(model, messages, provider))
 
 
+RUN_PROMPT_CAPABILITY = "agent.use"
+
+
+@frappe.whitelist()
+def run_prompt_sync(
+	provider: str,
+	model: str,
+	prompt: str,
+):
+	"""Run a prompt directly against a provider+model, without an Agent wrapper.
+
+	This is the console's "direct" execution path. It skips Agent construction,
+	conversation persistence, and run tracking, and returns the raw model response
+	in the same shape as ``run_agent_sync`` so the frontend can treat both paths
+	uniformly.
+
+	Args:
+		provider: AI Provider name to use.
+		model: AI Model name to use.
+		prompt: The user prompt to send.
+
+	Returns:
+		dict: ``{"success": true, "response": "..."}``
+	"""
+	_require(RUN_PROMPT_CAPABILITY)
+
+	if not prompt or not prompt.strip():
+		frappe.throw(_("Prompt is required."), frappe.ValidationError)
+	if not provider or not model:
+		frappe.throw(_("Provider and model are required."), frappe.ValidationError)
+
+	if not frappe.db.exists("AI Provider", provider):
+		frappe.throw(_("Selected provider does not exist."), frappe.ValidationError)
+	if not frappe.db.exists("AI Model", model):
+		frappe.throw(_("Selected model does not exist."), frappe.ValidationError)
+
+	messages = [{"role": "user", "content": prompt.strip()}]
+
+	try:
+		response = _simple_completion_sync(provider, model, messages)
+	except Exception as e:
+		frappe.log_error(f"run_prompt_sync failed: {e!s}\n{frappe.get_traceback()}", "Console Direct Run")
+		frappe.throw(_("Run failed. Please try again or choose a different provider."))
+
+	if response is None:
+		response = ""
+
+	return {
+		"success": True,
+		"response": response,
+		"provider": provider,
+		"model": model,
+	}
+
+
 @frappe.whitelist()
 def generate_prompt(
 	description: str,

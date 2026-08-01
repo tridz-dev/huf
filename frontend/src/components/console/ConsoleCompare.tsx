@@ -5,7 +5,7 @@ import { Loader2, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ConsoleConfigForm, type ConsoleConfig } from './ConsoleConfigForm';
-import { runAgentSync } from '@/services/consoleApi';
+import { runAgentSync, runPromptSync } from '@/services/consoleApi';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
@@ -45,25 +45,41 @@ export function ConsoleCompare({
     setResult: (r: CompareResult | null) => void,
     label: string,
   ) => {
-    if (!config.agentName || !config.prompt.trim()) {
-      toast.error(`${label}: Agent and prompt are required`);
+    if (!config.prompt.trim()) {
+      toast.error(`${label}: Prompt is required`);
       return;
     }
+    if (config.agentName) {
+      if (!config.provider || !config.model) {
+        toast.error(`${label}: Provider and model are required when using an agent`);
+        return;
+      }
+    } else if (!config.provider || !config.model) {
+      toast.error(`${label}: Provider and model are required`);
+      return;
+    }
+
     setRunning(true);
     setResult(null);
     try {
-      const runResult = await runAgentSync({
-        agent_name: config.agentName,
-        prompt: config.prompt.trim(),
-        provider: config.provider || undefined,
-        model: config.model || undefined,
-        now: true,
-      });
+      const runResult = config.agentName
+        ? await runAgentSync({
+            agent_name: config.agentName,
+            prompt: config.prompt.trim(),
+            provider: config.provider,
+            model: config.model,
+            now: true,
+          })
+        : await runPromptSync({
+            provider: config.provider,
+            model: config.model,
+            prompt: config.prompt.trim(),
+          });
       setResult({
         id: `${label}-${Date.now()}`,
         success: runResult.success,
         response: runResult.response,
-        agentRunId: runResult.agent_run_id,
+        agentRunId: 'agent_run_id' in runResult ? runResult.agent_run_id : undefined,
         error: runResult.error,
       });
     } catch (error) {
