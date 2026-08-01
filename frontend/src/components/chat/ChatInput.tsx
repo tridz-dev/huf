@@ -17,6 +17,7 @@ import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
+import { cacheReasoning } from './chatMessageList.mappers';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -242,6 +243,9 @@ export function ChatInput({
                 prev.map((msg) => {
                     if (msg.key !== tempId) return msg;
                     const existingContent = content ?? msg.versions[0]?.content ?? '';
+                    // Cache reasoning so it survives a ChatMessageList remount
+                    // (e.g. new-conversation navigation that resets prev=[]).
+                    if (msg.reasoning) cacheReasoning(realId, msg.reasoning);
                     return {
                         ...msg,
                         key: realId,
