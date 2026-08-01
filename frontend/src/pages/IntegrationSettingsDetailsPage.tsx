@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Bot } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { IntegrationHeader } from '@/components/integrations/IntegrationHeader';
+import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
@@ -52,6 +55,7 @@ export function IntegrationSettingsDetailsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [settingUpWebhook, setSettingUpWebhook] = useState(false);
+  const [addToAgentOpen, setAddToAgentOpen] = useState(false);
   const [credentialSchema, setCredentialSchema] = useState<CredentialSchemaItem[]>([]);
   const [agents, setAgents] = useState<Array<{ name: string; agent_name: string }>>([]);
   const [docMeta, setDocMeta] = useState({
@@ -415,7 +419,19 @@ export function IntegrationSettingsDetailsPage() {
           deleting={deleting}
           onSave={handleFormSubmit}
           onDelete={!isNew ? () => setDeleteDialogOpen(true) : undefined}
-        />
+        >
+          {!isNew && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAddToAgentOpen(true)}
+              type="button"
+            >
+              <Bot className="w-4 h-4 mr-2" />
+              Add to Agent
+            </Button>
+          )}
+        </IntegrationHeader>
 
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
@@ -484,6 +500,13 @@ export function IntegrationSettingsDetailsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AddIntegrationToAgentModal
+        open={addToAgentOpen}
+        onOpenChange={setAddToAgentOpen}
+        service={displayService}
+        integrationName={settingId && !isNew ? settingId : undefined}
+      />
     </div>
   );
 }

@@ -11,6 +11,8 @@
   "api_key",
   "api_secret",
   "is_active",
+  "is_default",
+  "last_error",
   "last_synced_at"
  ],
  "fields": [
@@ -46,12 +48,25 @@
    "label": "Is Active"
   },
   {
+   "default": "0",
+   "description": "Use this as the default account when multiple Frappe Cloud accounts are configured",
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Is Default"
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
    "fieldname": "last_synced_at",
    "fieldtype": "Datetime",
    "label": "Last Synced At"
   }
  ],
- "modified": "2026-07-27 12:00:00.000000",
+ "modified": "2026-08-01 10:00:00.000000",
  "module": "Huf",
  "name": "Frappe Cloud Account"
 }

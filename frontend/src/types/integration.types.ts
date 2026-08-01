@@ -77,6 +77,26 @@ export type CreateIntegrationServicePayload = Pick<
 
 export type UpdateIntegrationServicePayload = Partial<CreateIntegrationServicePayload>;
 
+export interface ServiceTool {
+  name: string;
+  tool_name: string;
+  description: string;
+  tool_type: string;
+  service: string;
+}
+
+export interface AttachServiceToolsPayload {
+  service: string;
+  tool_names: string[];
+  agents: string[];
+}
+
+export interface AttachServiceToolsResponse {
+  attached_to_agents: number;
+  skipped: number;
+  errors?: string[];
+}
+
 export function serializeRequiredCredentials(schema: CredentialSchemaItem[]): string {
   return JSON.stringify(
     schema.map((item) => ({

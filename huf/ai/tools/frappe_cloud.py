@@ -3,17 +3,41 @@ import json
 import frappe
 import httpx
 
-from huf.ai.tools.credentials import get_credential, update_last_error
-
 logger = frappe.logger("huf")
 SERVICE_NAME = "frappe_cloud"
 
 
+def _get_fc_account():
+	"""Return the active/default Frappe Cloud Account document."""
+	filters = {"is_active": 1}
+	accounts = frappe.get_all(
+		"Frappe Cloud Account",
+		filters=filters,
+		fields=["name"],
+		order_by="is_default DESC, modified DESC",
+		limit=1,
+	)
+	if not accounts:
+		raise ValueError("No active Frappe Cloud Account configured")
+	return frappe.get_doc("Frappe Cloud Account", accounts[0].name)
+
+
+def _update_fc_last_error(error: str):
+	"""Persist the last error on the active Frappe Cloud Account."""
+	try:
+		account = _get_fc_account()
+		account.last_error = error[:140]
+		account.save(ignore_permissions=True)
+	except Exception:
+		pass
+
+
 def _get_fc_headers():
-	api_key = get_credential(SERVICE_NAME, "api_key")
-	api_secret = get_credential(SERVICE_NAME, "api_secret")
+	account = _get_fc_account()
+	api_key = account.api_key
+	api_secret = account.get_password("api_secret")
 	if not api_key or not api_secret:
-		raise ValueError("Frappe Cloud credentials not configured")
+		raise ValueError("Frappe Cloud API key/secret not configured")
 
 	return {
 		"Authorization": f"token {api_key}:{api_secret}",
@@ -23,7 +47,8 @@ def _get_fc_headers():
 
 
 def _get_base_url():
-	server_url = get_credential(SERVICE_NAME, "server_url") or "https://cloud.frappe.io"
+	account = _get_fc_account()
+	server_url = account.server_url or "https://cloud.frappe.io"
 	return f"{server_url.rstrip('/')}/api/method"
 
 
@@ -47,7 +72,7 @@ def _success(results=None) -> str:
 def _failure(action: str, error: Exception) -> str:
 	error_msg = f"Frappe Cloud {action} Error: {error!s}"
 	logger.warning(error_msg)
-	update_last_error(SERVICE_NAME, error_msg)
+	_update_fc_last_error(error_msg)
 	return json.dumps({"success": False, "error": str(error)}, default=str)
 
 
@@ -101,11 +126,15 @@ def handle_fc_get_bench(**kwargs) -> str:
 def handle_fc_create_bench(**kwargs) -> str:
 	try:
 		title = kwargs.get("title")
-		version = kwargs.get("version", "Version 16")
-		cluster = kwargs.get("cluster", "UAE")
-		apps = kwargs.get("apps") or [{"name": "frappe", "source": kwargs.get("frappe_source", "SRC-frappe-237")}]
+		version = kwargs.get("version")
+		cluster = kwargs.get("cluster")
+		apps = kwargs.get("apps")
 		if not title:
 			return json.dumps({"success": False, "error": "title is required"})
+		if not version or not cluster:
+			return json.dumps({"success": False, "error": "version and cluster are required"})
+		if not apps:
+			return json.dumps({"success": False, "error": "apps is required (list of {name, source})"})
 		data = _make_fc_request(
 			"POST",
 			"press.api.bench.new",
@@ -187,15 +216,20 @@ def handle_fc_site_plans(**kwargs) -> str:
 def handle_fc_create_site(**kwargs) -> str:
 	try:
 		site_name = kwargs.get("site_name") or kwargs.get("name")
+		version = kwargs.get("version")
+		domain = kwargs.get("domain")
+		plan = kwargs.get("plan")
 		if not site_name:
 			return json.dumps({"success": False, "error": "site_name is required"})
+		if not version or not domain or not plan:
+			return json.dumps({"success": False, "error": "version, domain, and plan are required"})
 
 		site = {
 			"name": site_name,
 			"apps": kwargs.get("apps") or ["frappe"],
-			"version": kwargs.get("version", "Version 16"),
-			"domain": kwargs.get("domain", "frappe.cloud"),
-			"plan": kwargs.get("plan", "USD 5"),
+			"version": version,
+			"domain": domain,
+			"plan": plan,
 		}
 		if kwargs.get("bench"):
 			site["group"] = kwargs["bench"]

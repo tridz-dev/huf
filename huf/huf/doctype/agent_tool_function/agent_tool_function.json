@@ -15,6 +15,7 @@
   "agent",
   "base_url",
   "provider_app",
+  "service",
   "pass_parameters_as_json",
   "function_path",
   "function_name",
@@ -126,6 +127,13 @@
    "label": "Provider App"
   },
   {
+   "depends_on": "eval: doc.types == \"App Provided\";",
+   "description": "Integration service key this tool belongs to (e.g. frappe_cloud)",
+   "fieldname": "service",
+   "fieldtype": "Data",
+   "label": "Service"
+  },
+  {
    "depends_on": "eval:doc.types == 'GET' || doc.types == 'POST'",
    "description": "Optional base URL that will be prefixed to the URL provided by the agent",
    "fieldname": "base_url",
@@ -192,7 +200,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-26 04:48:07.000000",
+ "modified": "2026-08-01 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",
