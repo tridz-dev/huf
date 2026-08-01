@@ -1260,23 +1260,26 @@ BUILDER_TOOLS = [
 			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "
 			"block — include the returned 'block' value VERBATIM in your reply, then STOP "
 			"and wait for the user's answer. kind is one of yes_no|single_choice|multi_choice|"
-			"input|textarea; the choice kinds require options as "
+			"input|textarea|password; password renders a secure field and requires an approved "
+			"secure_target; the choice kinds require options as "
 			"[{id, label, icon?, description?}] (icon must be a supported lucide name; "
 			"unsupported icons are dropped with a warning). Use this ONLY when structured UI "
 			"is clearly better than a typed reply: confirming right before executing a "
 			"mutating plan, choosing from a defined set of options, or collecting a "
 			"required value. Do NOT use it for greetings, small talk, open-ended "
-			"questions, or normal conversation — answer those in plain prose."
+			"questions, or normal conversation — answer those in plain prose. Never ask users "
+			"to paste a provider key or gateway token into a normal input or chat message."
 		),
 		"function_path": "huf.ai.tools.ask_user.ask_user",
 		"category": "Builder",
 		"parameters": [
 			_p("question", required=True, description="The question to show the user"),
-			_p("kind", required=True, description="One of: yes_no, single_choice, multi_choice, input, textarea"),
+			_p("kind", required=True, description="One of: yes_no, single_choice, multi_choice, input, textarea, password"),
 			_p("options", description="JSON list of options [{id, label, icon?, description?}] — required for single_choice/multi_choice"),
 			_p("allow_free_text", type="boolean", description="Allow a free-text answer in addition to options (default true)"),
 			_p("suggested_answers", description="JSON list of suggested free-text answers"),
 			_p("note", description="Optional extra context shown with the question"),
+			_p("secure_target", description="For password only: approved target object, e.g. {type: 'provider_api_key', provider_name: 'OpenAI'} or {type: 'integration_credential', integration_settings: 'telegram-0001', credential_key: 'token'}"),
 		],
 	},
 ]

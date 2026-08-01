@@ -5,6 +5,7 @@ import {
   Home, LayoutDashboard, MessageSquare, CircleHelp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { HubSecretRequest } from '@/services/hubApi';
 
 export interface AskUserOption {
   id?: string;
@@ -15,11 +16,12 @@ export interface AskUserOption {
 
 export interface AskUserPayload {
   question: string;
-  kind: 'yes_no' | 'single_choice' | 'multi_choice' | 'input' | 'textarea';
+  kind: 'yes_no' | 'single_choice' | 'multi_choice' | 'input' | 'textarea' | 'password';
   options?: AskUserOption[];
   allow_free_text?: boolean;
   suggested_answers?: string[];
   note?: string;
+  secure_request?: HubSecretRequest;
 }
 
 // Curated allowlist from the ask-user contract — unknown names fall back to CircleHelp
@@ -60,19 +62,39 @@ export function splitAskUserBlocks(content: string): { text: string; blocks: Ask
 interface HubAskUserProps {
   payload: AskUserPayload;
   onSubmit: (answer: string) => void;
+  onSubmitSecure?: (requestId: string, secret: string) => Promise<void>;
 }
 
-export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
+export function HubAskUser({ payload, onSubmit, onSubmitSecure }: HubAskUserProps) {
   const [answered, setAnswered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [text, setText] = useState('');
   const [showFreeText, setShowFreeText] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const submit = (answer: string) => {
     const trimmed = answer.trim();
     if (!trimmed || answered) return;
     setAnswered(trimmed);
     onSubmit(trimmed);
+  };
+
+  const submitSecret = async () => {
+    const request = payload.secure_request;
+    const secret = text;
+    if (!request || !onSubmitSecure || !secret.trim() || answered || submitting) return;
+    setError(null);
+    setSubmitting(true);
+    setText('');
+    try {
+      await onSubmitSecure(request.request_id, secret);
+      setAnswered('Configured securely');
+    } catch {
+      setError('We could not save this secret. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const toggleOption = (label: string) => {
@@ -87,6 +109,7 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
 
   const isChoice = payload.kind === 'single_choice' || payload.kind === 'multi_choice';
   const isText = payload.kind === 'input' || payload.kind === 'textarea';
+  const isPassword = payload.kind === 'password';
 
   return (
     <div className="mt-3 rounded-sm border border-line bg-panel p-3 max-w-md">
@@ -100,6 +123,30 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
         </div>
       ) : (
         <div className="mt-2.5 space-y-2">
+          {isPassword && (
+            <div className="space-y-1.5">
+              <input
+                type="password"
+                value={text}
+                onChange={e => setText(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); void submitSecret(); }
+                }}
+                autoComplete="new-password"
+                placeholder="Enter the secret..."
+                className="w-full px-2.5 py-1.5 rounded-sm border border-line bg-paper text-xs text-ink placeholder:text-steel-soft outline-none focus:border-signal"
+              />
+              {error && <p className="text-xs text-red-600">{error}</p>}
+              <button
+                onClick={() => void submitSecret()}
+                disabled={!text.trim() || submitting || !payload.secure_request}
+                className="px-3 py-1.5 rounded-sm bg-signal text-white text-xs disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal-ink transition-colors"
+              >
+                {submitting ? 'Saving securely...' : 'Save securely'}
+              </button>
+            </div>
+          )}
+
           {payload.kind === 'yes_no' && (
             <div className="flex gap-2">
               <button

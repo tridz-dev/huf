@@ -26,6 +26,8 @@ interface HubConversationViewProps {
   onNewChat: () => void;
   onHome?: () => void;
   onSendText?: (text: string) => void;
+  onSubmitSecure?: (requestId: string, secret: string, conversationId?: string) => Promise<void>;
+  conversationId?: string;
   isStreaming?: boolean;
   remediation?: HubRemediation[];
 }
@@ -33,7 +35,7 @@ interface HubConversationViewProps {
 export function HubConversationView({
   messages, inputValue, setInputValue, onSend,
   showSlashMenu, slashQuery, onSlashSelect, onNewChat, onHome,
-  onSendText, isStreaming, remediation,
+  onSendText, onSubmitSecure, conversationId, isStreaming, remediation,
 }: HubConversationViewProps) {
   const { user } = useUser();
   const navigate = useNavigate();
@@ -147,6 +149,9 @@ export function HubConversationView({
                               onSubmit={(answer) =>
                                 onSendText?.(`Regarding "${block.question}": ${answer}`)
                               }
+                              onSubmitSecure={onSubmitSecure
+                                ? (requestId, secret) => onSubmitSecure(requestId, secret, conversationId)
+                                : undefined}
                             />
                           ))}
                         </>

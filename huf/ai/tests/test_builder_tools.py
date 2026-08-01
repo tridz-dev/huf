@@ -965,6 +965,46 @@ class TestAskUser(IntegrationTestCase):
 		result = self._run(question="Name?", kind="input", allow_free_text="false")
 		self.assertFalse(result["ask_user"]["allow_free_text"])
 
+	def test_password_requires_secure_target(self):
+		self.assertRaises(
+			frappe.ValidationError,
+			self._run,
+			question="Enter the provider key",
+			kind="password",
+		)
+
+	def test_password_payload_contains_request_metadata_only(self):
+		with patch(
+			"huf.ai.tools.ask_user.create_secret_request",
+			return_value={
+				"request_id": "opaque-request",
+				"conversation_id": "conv-1",
+				"target": {"type": "provider_api_key", "provider_name": "OpenAI"},
+				"target_label": "API key for OpenAI",
+				"expires_in": 600,
+			},
+		):
+			result = self._run(
+				question="Enter the provider key",
+				kind="password",
+				secure_target={"type": "provider_api_key", "provider_name": "OpenAI"},
+				conversation_id="conv-1",
+			)
+
+		self.assertEqual(result["ask_user"]["kind"], "password")
+		self.assertFalse(result["ask_user"]["allow_free_text"])
+		self.assertNotIn("secret", result["block"])
+		self.assertIn("opaque-request", result["block"])
+
+	def test_secure_target_rejected_for_normal_kind(self):
+		self.assertRaises(
+			frappe.ValidationError,
+			self._run,
+			question="Name?",
+			kind="input",
+			secure_target={"type": "provider_api_key", "provider_name": "OpenAI"},
+		)
+
 	def test_denied_without_builder_role(self):
 		with patch("frappe.get_roles", return_value=DENIED_ROLES):
 			self.assertRaises(
