@@ -11,6 +11,7 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getAIModels, type AIModelItem } from '@/services/agentApi';
@@ -40,6 +41,7 @@ export function AgentModelSelector({
   const [aiModels, setAiModels] = useState<AIModelItem[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelSearch, setModelSearch] = useState('');
+  const [providerFilter, setProviderFilter] = useState<string | null>(null);
 
   // Load the model catalog as soon as the selector mounts so the pill can
   // display the selected override even when the popover is closed.
@@ -61,19 +63,25 @@ export function AgentModelSelector({
   useEffect(() => {
     if (open) {
       setModelSearch('');
+      setProviderFilter(null);
     }
   }, [open]);
 
   const filteredModels = useMemo(() => {
+    let models = aiModels;
+    if (providerFilter) {
+      models = models.filter((m) => m.providerBrand === providerFilter);
+    }
     const q = modelSearch.trim().toLowerCase();
-    if (!q) return aiModels;
-    return aiModels.filter(
+    if (!q) return models;
+    return models.filter(
       (m) =>
         m.name.toLowerCase().includes(q) ||
         m.modelName.toLowerCase().includes(q) ||
-        m.providerBrandLabel.toLowerCase().includes(q)
+        m.providerBrandLabel.toLowerCase().includes(q) ||
+        m.modalities?.some((mod) => mod.toLowerCase().includes(q))
     );
-  }, [aiModels, modelSearch]);
+  }, [aiModels, modelSearch, providerFilter]);
 
   const groupedModels = filteredModels.reduce(
     (acc, model) => {
@@ -91,6 +99,16 @@ export function AgentModelSelector({
     () => aiModels.find((m) => m.id === value),
     [aiModels, value]
   );
+
+  const providerOptions = useMemo(() => {
+    const map = new Map<string, { brand: string; label: string }>();
+    aiModels.forEach((m) => {
+      if (!map.has(m.providerBrand)) {
+        map.set(m.providerBrand, { brand: m.providerBrand, label: m.providerBrandLabel });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [aiModels]);
 
   const triggerLabel = currentLabel ?? selectedModel?.name ?? 'Select Model';
   const triggerModel = selectedModel?.modelName ?? currentModel;
@@ -146,6 +164,44 @@ export function AgentModelSelector({
           searchValue={modelSearch}
           onSearchChange={setModelSearch}
         />
+
+        {providerOptions.length > 1 && (
+          <div className="flex items-center gap-1.5 border-b px-3 py-2 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setProviderFilter(null)}
+              className={cn(
+                'shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                providerFilter === null
+                  ? 'bg-zinc-900 text-white'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+              )}
+            >
+              All
+            </button>
+            {providerOptions.map((p) => (
+              <button
+                key={p.brand}
+                type="button"
+                onClick={() => setProviderFilter(p.brand)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                  providerFilter === p.brand
+                    ? 'bg-zinc-900 text-white'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                )}
+              >
+                {isKnownBrand(p.brand) ? (
+                  <ProviderBrandIcon brand={p.brand} size="sm" />
+                ) : (
+                  <span className="size-3.5 shrink-0" aria-hidden />
+                )}
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <ModelSelectorList>
           {modelsLoading ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
@@ -156,39 +212,55 @@ export function AgentModelSelector({
           ) : (
             Object.entries(groupedModels).map(([groupLabel, models]) => (
               <ModelSelectorGroup key={groupLabel} heading={groupLabel}>
-                {models.map((model) => (
-                  <ModelSelectorItem
-                    key={model.id}
-                    className="gap-3 px-3 py-2.5"
-                    data-testid="agent-model-item"
-                    onSelect={() => {
-                      onValueChange(model.id);
-                      setOpen(false);
-                    }}
-                    value={model.id}
-                  >
-                    <div className="relative flex size-8 shrink-0 items-center justify-center">
-                      {isKnownBrand(model.providerBrand) ? (
-                        <ProviderBrandIcon brand={model.providerBrand} size="sm" />
+                {models.map((model) => {
+                  const modalities = model.modalities?.length
+                    ? model.modalities
+                    : ['Text'];
+                  return (
+                    <ModelSelectorItem
+                      key={model.id}
+                      className="gap-3 px-3 py-2.5"
+                      data-testid="agent-model-item"
+                      onSelect={() => {
+                        onValueChange(model.id);
+                        setOpen(false);
+                      }}
+                      value={model.id}
+                    >
+                      <div className="relative flex size-8 shrink-0 items-center justify-center">
+                        {isKnownBrand(model.providerBrand) ? (
+                          <ProviderBrandIcon brand={model.providerBrand} size="sm" />
+                        ) : (
+                          <span className="size-4 shrink-0" aria-hidden />
+                        )}
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <ModelSelectorName>{model.name}</ModelSelectorName>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {model.modelName ? (
+                            <span className="text-xs text-muted-foreground truncate">{model.modelName}</span>
+                          ) : null}
+                          {modalities.slice(0, 3).map((modality) => (
+                            <Badge
+                              key={modality}
+                              variant="outline"
+                              className="text-[10px] px-1 py-0 h-auto font-normal shrink-0"
+                            >
+                              {modality}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {value === model.id ? (
+                        <CheckIcon className="ml-auto size-4 shrink-0" />
                       ) : (
-                        <span className="size-4 shrink-0" aria-hidden />
+                        <div className="ml-auto size-4 shrink-0" />
                       )}
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <ModelSelectorName>{model.name}</ModelSelectorName>
-                      {model.modelName ? (
-                        <span className="text-xs text-muted-foreground truncate">{model.modelName}</span>
-                      ) : null}
-                    </div>
-
-                    {value === model.id ? (
-                      <CheckIcon className="ml-auto size-4 shrink-0" />
-                    ) : (
-                      <div className="ml-auto size-4 shrink-0" />
-                    )}
-                  </ModelSelectorItem>
-                ))}
+                    </ModelSelectorItem>
+                  );
+                })}
               </ModelSelectorGroup>
             ))
           )}

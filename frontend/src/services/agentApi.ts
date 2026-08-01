@@ -117,23 +117,22 @@ export interface AIModelItem {
 
 export async function getAIModels(): Promise<AIModelItem[]> {
   try {
-    const [models, providers] = await Promise.all([
+    const [models, providerResult] = await Promise.all([
       db.getDocList(doctype['AI Model'], {
         fields: ['name', 'model_name', 'provider', 'modalities'],
         limit: 1000,
         orderBy: { field: 'modified', order: 'desc' },
       }),
-      db.getDocList(doctype['AI Provider'], {
-        fields: ['name', 'provider_brand'],
-        limit: 1000,
-      }),
+      call.get('huf.huf.doctype.ai_provider.ai_provider.get_configured_providers'),
     ]);
 
+    const providers = (providerResult?.message ?? providerResult) as Array<{
+      name: string;
+      provider_brand?: string;
+    }>;
+
     const providerBrandMap = new Map(
-      (providers as Array<{ name: string; provider_brand?: string }>).map((p) => [
-        p.name,
-        p.provider_brand || 'other',
-      ])
+      providers.map((p) => [p.name, p.provider_brand || 'other'])
     );
 
     return (models as Array<{
