@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { DataListView } from '@/components/dashboard/DataListView';
-import { ArrowUpDown } from 'lucide-react';
+import { EmptyState } from '@/components/dashboard';
+import { ArrowUpDown, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatTimeAgo } from '@/utils/time';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 interface DataRecordListProps {
@@ -59,14 +61,11 @@ export function DataRecordList({
 	
 	const listFields = useMemo(() => {
 		const visible = fields.filter(
-			(f) =>
-				f.in_list_view === 1 &&
-				f.fieldtype !== 'Section Break' &&
-				f.fieldtype !== 'Column Break'
+			(f) => f.in_list_view === 1 && !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 		);
 		if (visible.length > 0) return visible;
 		return fields
-			.filter((f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break')
+			.filter((f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype))
 			.slice(0, 4);
 	}, [fields]);
 
@@ -140,7 +139,13 @@ export function DataRecordList({
 			data={records}
 			loading={loading}
 			onRowClick={onRowClick}
-			emptyState={<p className="text-steel">No records found</p>}
+			emptyState={
+			<EmptyState
+				icon={FileText}
+				title="No records"
+				description="This table doesn't have any records yet."
+			/>
+		}
 		/>
 	);
 }

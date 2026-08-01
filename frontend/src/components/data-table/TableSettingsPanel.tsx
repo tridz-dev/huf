@@ -10,6 +10,7 @@ import {
 	SelectValue,
 } from '@/components/ui/select';
 import { TABLE_ICONS, TABLE_ICON_MAP } from '@/data/tableIcons';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import { getTableGroups } from '@/services/dataTableApi';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
@@ -47,7 +48,7 @@ export function TableSettingsPanel({
 	onTableGroupChange,
 }: TableSettingsPanelProps) {
 	const dataFields = fields.filter(
-		(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+		(f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 	);
 
 	const [existingGroups, setExistingGroups] = useState<string[]>([]);

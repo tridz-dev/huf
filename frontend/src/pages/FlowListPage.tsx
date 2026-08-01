@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Calendar, Play, Activity, Settings } from 'lucide-react';
-import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
+import { Calendar, Play, Activity, Settings, Workflow } from 'lucide-react';
+import { PageLayout, FilterBar, GridView, ItemCard, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { usePageData } from '../hooks/dashboard/usePageData';
 
@@ -155,6 +155,13 @@ function FlowListPage() {
         items={data}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={loading}
+        emptyState={
+          <EmptyState
+            icon={Workflow}
+            title="No flows"
+            description="No flows have been created yet."
+          />
+        }
         renderItem={(flow) => (
           <ItemCard
             title={flow.name}

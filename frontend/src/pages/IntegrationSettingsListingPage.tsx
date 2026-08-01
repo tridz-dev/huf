@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Settings, Star, Users } from 'lucide-react';
+import { AlertCircle, Bot, Link, Settings, Star, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '@/components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import {
   getIntegrationSettings,
@@ -151,18 +151,19 @@ export function IntegrationSettingsListingPage({
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">
-              {kind === 'channels' ? 'No channels configured yet.' : 'No integrations configured yet.'}
-            </p>
-            <button
-              type="button"
-              className="text-sm text-primary hover:underline"
-              onClick={() => setCatalogOpen(true)}
-            >
-              {kind === 'channels' ? 'Add your first channel' : 'Add your first integration'}
-            </button>
-          </div>
+          <EmptyState
+            icon={Link}
+            title={kind === 'channels' ? 'No channels' : 'No integrations'}
+            description={
+              kind === 'channels'
+                ? 'No messaging channels have been connected yet.'
+                : 'No integrations have been connected yet.'
+            }
+            action={{
+              label: kind === 'channels' ? 'Add channel' : 'Add integration',
+              onClick: () => setCatalogOpen(true),
+            }}
+          />
         }
         renderItem={(setting) => {
           const category = serviceCategoryMap.get(setting.service);
