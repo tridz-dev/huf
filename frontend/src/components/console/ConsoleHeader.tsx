@@ -23,17 +23,17 @@ export function ConsoleHeader({
 }: ConsoleHeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-line bg-panel px-4">
-      <div className="flex items-center gap-4">
-        <h1 className="text-lg font-semibold">Console</h1>
+      <div className="flex h-full items-center gap-6">
+        <h1 className="text-xl font-semibold">Console</h1>
         <Tabs value={mode} onValueChange={(value) => onModeChange(value as ConsoleMode)}>
           <TabsList className="h-8">
-            <TabsTrigger value="playground" className="text-xs">
+            <TabsTrigger value="playground" className="text-xs uppercase tracking-wide">
               Playground
             </TabsTrigger>
-            <TabsTrigger value="compare" className="text-xs">
+            <TabsTrigger value="compare" className="text-xs uppercase tracking-wide">
               Compare
             </TabsTrigger>
-            <TabsTrigger value="templates" className="text-xs">
+            <TabsTrigger value="templates" className="text-xs uppercase tracking-wide">
               Templates
             </TabsTrigger>
           </TabsList>
