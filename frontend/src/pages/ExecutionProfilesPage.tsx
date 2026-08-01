@@ -8,10 +8,10 @@ import {
   getSortedRowModel,
   SortingState,
   useReactTable,
+  HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout } from '@/components/dashboard';
+import { FilterBar, LoadMoreButton, PageLayout, StatusDot } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import {
   Table,
@@ -29,21 +29,17 @@ import {
 } from '@/services/executionProfileApi';
 import { formatTimeAgo } from '@/utils/time';
 
-function getStatusVariant(disabled?: 0 | 1): 'success' | 'secondary' {
-  return disabled === 1 ? 'secondary' : 'success';
-}
-
-function getApprovalBadgeVariant(approvalMode?: string): 'default' | 'outline' | 'destructive' {
-  switch (approvalMode) {
-    case 'Auto Approve':
-      return 'outline';
-    case 'Ask Every Time':
-      return 'default';
-    case 'Never Allow':
-      return 'destructive';
-    default:
-      return 'outline';
-  }
+function SortHeader<TData>({ column, label }: { column: HeaderContext<TData, unknown>['column']; label: string }) {
+  return (
+    <Button
+      variant="ghost"
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      className="h-8 px-2 font-body text-[13px] font-medium text-steel hover:text-ink hover:bg-paper-deep"
+    >
+      {label}
+      <ArrowUpDown className="ml-2 h-3.5 w-3.5" />
+    </Button>
+  );
 }
 
 export function ExecutionProfilesPage() {
@@ -95,25 +91,18 @@ export function ExecutionProfilesPage() {
     () => [
       {
         accessorKey: 'profile_name',
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="h-8 px-2"
-          >
-            Profile Name
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
+        header: ({ column }) => <SortHeader column={column} label="Profile Name" />,
         cell: ({ row }) => (
-          <div className="flex items-center gap-2 font-medium">
-            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
-            <span>{row.original.profile_name || row.original.name}</span>
-            {row.original.is_builtin === 1 && (
-              <Badge variant="outline" className="text-xs">
-                Built-in
-              </Badge>
-            )}
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-steel-soft shrink-0" strokeWidth={1.6} />
+            <div>
+              <div className="font-body text-[13px] font-semibold text-ink">
+                {row.original.profile_name || row.original.name}
+              </div>
+              {row.original.is_builtin === 1 && (
+                <span className="font-mono text-[11px] text-steel-soft">Built-in</span>
+              )}
+            </div>
           </div>
         ),
       },
@@ -121,17 +110,17 @@ export function ExecutionProfilesPage() {
         accessorKey: 'approval_mode',
         header: 'Approval Mode',
         cell: ({ row }) => (
-          <Badge variant={getApprovalBadgeVariant(row.original.approval_mode)}>
+          <span className="font-mono text-[12px] text-steel">
             {row.original.approval_mode || 'Ask Every Time'}
-          </Badge>
+          </span>
         ),
       },
       {
         accessorKey: 'filesystem_policy',
         header: 'Filesystem Policy',
         cell: ({ row }) => (
-          <div className="flex items-center gap-1.5 text-sm text-steel">
-            <HardDrive className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-1.5 font-mono text-[12px] text-steel">
+            <HardDrive className="h-3.5 w-3.5" strokeWidth={1.6} />
             <span>{row.original.filesystem_policy || 'None'}</span>
           </div>
         ),
@@ -140,8 +129,8 @@ export function ExecutionProfilesPage() {
         id: 'limits',
         header: 'Resource Limits',
         cell: ({ row }) => (
-          <div className="flex items-center gap-2 text-xs text-steel">
-            <Cpu className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-1.5 font-mono text-[12px] text-steel">
+            <Cpu className="h-3.5 w-3.5" strokeWidth={1.6} />
             <span>
               {row.original.max_wall_time_s ?? 30}s / {row.original.max_memory_mb ?? 256}MB
             </span>
@@ -152,25 +141,19 @@ export function ExecutionProfilesPage() {
         accessorKey: 'disabled',
         header: 'Status',
         cell: ({ row }) => (
-          <Badge variant={getStatusVariant(row.original.disabled)}>
-            {row.original.disabled === 1 ? 'Disabled' : 'Active'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <StatusDot variant={row.original.disabled === 1 ? 'idle' : 'ok'} />
+            <span className="font-body text-[13px] text-steel">
+              {row.original.disabled === 1 ? 'Disabled' : 'Active'}
+            </span>
+          </div>
         ),
       },
       {
         id: 'modified',
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            className="h-8 px-2"
-          >
-            Modified
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
+        header: ({ column }) => <SortHeader column={column} label="Modified" />,
         cell: ({ row }) => (
-          <div className="text-sm text-steel">{formatTimeAgo(row.original.modified ?? null)}</div>
+          <div className="font-mono text-[12px] text-steel">{formatTimeAgo(row.original.modified ?? null)}</div>
         ),
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.modified ? new Date(rowA.original.modified).getTime() : 0;
@@ -199,6 +182,7 @@ export function ExecutionProfilesPage() {
 
   return (
     <PageLayout
+      title="Execution Profiles"
       subtitle="Manage sandboxed code execution environments, resource limits, and approval policies."
       filters={
         <FilterBar
@@ -224,7 +208,7 @@ export function ExecutionProfilesPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : (
-          <div className="overflow-hidden rounded-none border">
+          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (

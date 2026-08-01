@@ -1,5 +1,4 @@
 import { ArrowRight, Check, CheckCircle2, ExternalLink, KeyRound, Loader2, Settings, Sparkles, XCircle } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import {
@@ -13,7 +12,7 @@ import {
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
-import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
+import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   createModel,
@@ -407,8 +406,9 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
 
   return (
     <PageLayout
-        subtitle="Connect AI providers and external services"
-        filters={
+      title="AI Providers"
+      subtitle="Connect AI providers and external services"
+      filters={
         <FilterBar
           searchPlaceholder="Search providers..."
           searchValue={search}
@@ -416,24 +416,24 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         />
       }
     >
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2 text-primary">
-            <Sparkles className="h-4 w-4" />
-            <CardTitle className="text-base">Get started with AI</CardTitle>
+      <div className="border border-line bg-panel p-4 space-y-3">
+        <div className="flex items-start gap-3">
+          <Sparkles className="h-4 w-4 mt-0.5 text-signal shrink-0" />
+          <div>
+            <h3 className="font-display font-bold text-[15px] uppercase text-ink">Get started with AI</h3>
+            <p className="font-body text-[13px] text-steel mt-0.5">
+              Pick a free-friendly starter path, add its key, and Huf will prepare a model for your first agent.
+            </p>
           </div>
-          <CardDescription>
-            Pick a free-friendly starter path, add its key, and Huf will prepare a model for your first agent.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 sm:flex-row">
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
           {completedStarter ? (
-            <div className="flex w-full flex-col gap-3 rounded-md border border-primary/20 bg-background/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex w-full flex-col gap-3 border border-line bg-paper p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-2">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-good" />
                 <div>
-                  <p className="text-sm font-medium">Your {STARTER_PATHS[completedStarter].providerName} starter is ready</p>
-                  <p className="text-xs text-muted-foreground">Next, create an agent and choose {STARTER_PATHS[completedStarter].modelName}.</p>
+                  <p className="font-body text-[13px] font-medium text-ink">Your {STARTER_PATHS[completedStarter].providerName} starter is ready</p>
+                  <p className="font-body text-xs text-steel">Next, create an agent and choose {STARTER_PATHS[completedStarter].modelName}.</p>
                 </div>
               </div>
               <Button className="shrink-0" onClick={() => navigate('/agents/new')}>
@@ -441,16 +441,16 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               </Button>
             </div>
           ) : (Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
-            <Button key={path} variant="outline" className="h-auto flex-1 justify-between whitespace-normal text-left" onClick={() => setStarterPath(path)}>
+            <Button key={path} variant="outline" className="h-auto flex-1 justify-between whitespace-normal text-left border-line hover:border-ink hover:bg-paper-deep" onClick={() => setStarterPath(path)}>
               <span>
-                <span className="block font-medium">{starter.title}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{starter.modelName}</span>
+                <span className="block font-body font-medium text-[13px] text-ink">{starter.title}</span>
+                <span className="mt-1 block font-mono text-[11px] text-steel-soft">{starter.modelName}</span>
               </span>
-              <ArrowRight className="ml-3 h-4 w-4 shrink-0" />
+              <ArrowRight className="ml-3 h-4 w-4 shrink-0 text-steel" />
             </Button>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load providers</p>
@@ -468,51 +468,38 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         }
         renderItem={(provider) => {
           const providerModels = models.filter(m => m.provider === provider.name);
+          const modelCount = getModelCountForProvider(provider.name);
           return (
-            <Card key={provider.name} className="h-full flex flex-col">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <ProviderBrandIcon
-                      brand={resolveProviderBrand(provider.provider_brand, provider.provider_name)}
-                      size="sm"
-                      showFallback
-                    />
-                    <div>
-                      <CardTitle className="text-base">{provider.provider_name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {getModelCountForProvider(provider.name)} models
-                      </CardDescription>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1">
-                {providerModels.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {providerModels.slice(0, 3).map(model => (
-                      <Badge key={model.name} variant="secondary" className="text-xs">
-                        {model.model_name}
-                        {model.modalities ? ` · ${model.modalities}` : ''}
-                      </Badge>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm font-body text-steel-soft">No models configured</p>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 gap-2"
-                  onClick={() => handleConfigure(provider)}
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure
-                </Button>
-              </CardFooter>
-            </Card>
+            <ItemCard
+              key={provider.name}
+              title={provider.provider_name}
+              description={provider.is_local_llm ? 'Self-hosted endpoint' : 'Cloud API provider'}
+              icon={() => (
+                <ProviderBrandIcon
+                  brand={resolveProviderBrand(provider.provider_brand, provider.provider_name)}
+                  size="sm"
+                  showFallback
+                />
+              )}
+              status={{ label: provider.is_local_llm ? 'Local' : 'Configured', variant: 'success' }}
+              metadata={[
+                { label: 'Models', value: `${modelCount}`, icon: undefined },
+                { label: 'Brand', value: resolveProviderBrand(provider.provider_brand, provider.provider_name) || 'other', icon: undefined },
+              ]}
+              badges={providerModels.slice(0, 3).map(model => ({
+                label: model.model_name,
+                variant: 'secondary' as const,
+              }))}
+              actions={[
+                {
+                  icon: Settings,
+                  label: 'Configure',
+                  onClick: () => handleConfigure(provider),
+                  variant: 'ghost',
+                },
+              ]}
+              onClick={() => handleConfigure(provider)}
+            />
           );
         }}
         keyExtractor={(provider) => provider.name}
