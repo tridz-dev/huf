@@ -1,5 +1,5 @@
 import { Fragment, ReactNode, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -35,7 +35,7 @@ const divider = <div className="w-px self-stretch bg-line" />;
 
 /** Select trigger restyled to sit flush inside the strip (no box of its own). */
 const flushTriggerClass =
-  'h-auto min-w-[150px] gap-2 rounded-none border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:ml-auto [&>svg]:text-steel-soft [&>svg]:opacity-100';
+  'h-auto w-auto min-w-[150px] gap-2 rounded-none border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100';
 
 function searchInputCell(
   searchPlaceholder: string,
@@ -126,7 +126,10 @@ export function FilterBar({
       : filter.options.find((o) => o.value === filter.value)?.label ?? filter.value;
     cells.push(
       <Select key={`filter-${index}`} value={filter.value} onValueChange={filter.onChange}>
-        <SelectTrigger className={flushTriggerClass}>
+        <SelectTrigger
+          className={flushTriggerClass}
+          icon={<ChevronDown className="h-3.5 w-3.5 text-steel-soft" />}
+        >
           <span className="font-mono text-[11px] uppercase tracking-[.08em] text-steel">
             {filter.label}: {current}
           </span>
@@ -145,7 +148,7 @@ export function FilterBar({
   return (
     <div className="flex items-center gap-3">
       {cells.length > 0 && (
-        <div className="flex flex-1 items-stretch rounded border border-ink bg-panel max-sm:flex-wrap">
+        <div className="flex flex-1 items-stretch rounded border border-line bg-panel max-sm:flex-wrap">
           {cells.map((cell, index) => (
             <Fragment key={index}>
               {index > 0 && divider}
