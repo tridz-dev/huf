@@ -146,7 +146,7 @@ export function FilterBar({
   });
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-1 items-center gap-3">
       {cells.length > 0 && (
         <div className="flex flex-1 items-stretch rounded border border-line bg-panel max-sm:flex-wrap">
           {cells.map((cell, index) => (

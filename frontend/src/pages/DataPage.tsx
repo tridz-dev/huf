@@ -171,6 +171,7 @@ function DataPage() {
 
 	return (
 		<PageLayout
+			title="Data"
 			subtitle="Create and manage custom data tables"
 			filters={
 				<div className="flex items-center gap-2">
