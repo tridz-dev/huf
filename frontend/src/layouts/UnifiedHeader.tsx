@@ -9,7 +9,7 @@ import {
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
-import { ApprovalsBell } from '../components/ApprovalsBell';
+// import { ApprovalsBell } from '../components/ApprovalsBell';  // TEMP disabled: see flow_api.py get_pending_approvals
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -94,7 +94,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
       </div> */}
 
       <div className="flex items-center gap-2">
-        <ApprovalsBell />
+        {/* <ApprovalsBell />  TEMP disabled: get_pending_approvals returns 403 even for Admin */}
         {actions}
       </div>
     </div>
