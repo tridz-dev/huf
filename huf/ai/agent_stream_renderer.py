@@ -13,7 +13,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import _has_queued_runs, run_agent_stream
+from huf.ai.agent_integration import _has_queued_runs, _resolve_effective_model, run_agent_stream
 
 
 class AgentStreamRenderer(BaseRenderer):
@@ -76,35 +76,33 @@ class AgentStreamRenderer(BaseRenderer):
 
 	def _render_agent_stream(self, agent_name: str):
 		"""Generate SSE stream for agent response."""
-		# Get prompt from query parameters or request body
-		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
-		
-		# Optional Overrides
-		provider = frappe.form_dict.get("provider")
-		model = frappe.form_dict.get("model")
-		prompt_template = frappe.form_dict.get("prompt_template")
-		prompt_version = frappe.form_dict.get("prompt_version")
-		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
-		
-		if not prompt:
-			# Try to get from POST body
+		# Parse the JSON body once (if present) and merge it with form_dict so
+		# overrides from the POST body are picked up reliably.
+		body = {}
+		if frappe.request.method == "POST":
 			try:
-				if frappe.request.method == "POST":
-					body = frappe.request.get_json(force=True) or {}
-					prompt = body.get("prompt") or body.get("message", "")
-					if not provider: provider = body.get("provider")
-					if not model: model = body.get("model")
-					if not prompt_template: prompt_template = body.get("prompt_template")
-					if not prompt_version: prompt_version = body.get("prompt_version")
-					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
+				body = frappe.request.get_json(force=True) or {}
 			except (json.JSONDecodeError, TypeError, ValueError):
 				pass
+
+		def _get_param(key: str, default=None):
+			return frappe.form_dict.get(key) or body.get(key) or default
+
+		# Get prompt from query parameters or request body
+		prompt = _get_param("prompt") or _get_param("message", "")
+
+		# Optional Overrides
+		provider = _get_param("provider")
+		model = _get_param("model") or _get_param("model_override")
+		prompt_template = _get_param("prompt_template")
+		prompt_version = _get_param("prompt_version")
+		prompt_cache_options = _get_param("prompt_cache_options")
 
 		if not prompt:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": "Prompt parameter required"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -114,20 +112,30 @@ class AgentStreamRenderer(BaseRenderer):
 					"X-Accel-Buffering": "no",
 				},
 			)
-		
+
 		# Get agent configuration
 		try:
 			agent_doc = frappe.get_doc("Agent", agent_name)
+			if not model:
+				model = agent_doc.model
+			# If a model override was supplied but no explicit provider, resolve
+			# the provider from the override model so the right API key/base URL
+			# is used for cross-provider switches.
+			if model and model != agent_doc.model:
+				try:
+					resolved_provider, _, _ = _resolve_effective_model(
+						agent_doc, model=model, provider=provider
+					)
+					provider = resolved_provider
+				except Exception:
+					pass
 			if not provider:
 				provider = agent_doc.provider
-			if not model:
-				model_doc = frappe.get_doc("AI Model", agent_doc.model)
-				model = model_doc.model_name
 		except frappe.DoesNotExistError:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -162,23 +170,13 @@ class AgentStreamRenderer(BaseRenderer):
 			)
 
 		# Get optional parameters
-		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
-		external_id = frappe.form_dict.get("external_id") or frappe.session.user
-		
-		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
-		create_new = frappe.form_dict.get("create_new", False)
-		skip_user_message = frappe.form_dict.get("skip_user_message", False)
-		files = None
-		try:
-			if frappe.request.method == "POST":
-				body = frappe.request.get_json(force=True) or {}
-				if not conversation_id:
-					conversation_id = body.get("conversation_id") or body.get("conversation")
-				create_new = body.get("create_new", create_new)
-				skip_user_message = body.get("skip_user_message", skip_user_message)
-				files = body.get("files")
-		except (json.JSONDecodeError, TypeError, ValueError):
-			pass
+		channel_id = _get_param("channel_id", "sse_stream")
+		external_id = _get_param("external_id") or frappe.session.user
+
+		conversation_id = _get_param("conversation_id") or _get_param("conversation")
+		create_new = bool(_get_param("create_new", False))
+		skip_user_message = bool(_get_param("skip_user_message", False))
+		files = body.get("files")
 
 		create_new = bool(create_new)
 		skip_user_message = bool(skip_user_message)

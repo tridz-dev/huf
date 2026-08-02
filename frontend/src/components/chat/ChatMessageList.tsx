@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
-import { getAgent } from "@/services/agentApi";
+import { getConversationMessages, createAgentRunFeedback, getConversation, setConversationModelOverride, type ChatMessage } from "@/services/chatApi";
+import { getAgent, getAIModels } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
@@ -30,41 +30,49 @@ import {
 interface ChatMessageListProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
-    getNewConversationPath?: (agentName: string) => string;
 }
 
-export function ChatMessageList({ 
-    chatId: chatIdProp, 
+export function ChatMessageList({
+    chatId: chatIdProp,
     onConversationCreated,
-    getNewConversationPath,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
     const isNewChat = !chatId;
-    
+
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
     const [loadingType, setLoadingType] = useState<LoadingType>('default');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
-    const [isModelMismatch, setIsModelMismatch] = useState(false);
+    const [selectedModelOverride, setSelectedModelOverride] = useState<string | null>(null);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
     const [runSucceeded, setRunSucceeded] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb, runImmediately, autonamingOfConversationTitle } = useChatAgentIdentity(chatId, searchParams);
+    const {
+        agentName,
+        agentDisplayName,
+        agentModel,
+        agentColor,
+        showToolExecutionDetails,
+        allowFileUpload,
+        maxUploadSizeMb,
+        runImmediately,
+        autonamingOfConversationTitle,
+    } = useChatAgentIdentity(chatId, searchParams);
 
-    // Check for model mismatch between conversation and agent
+    // Load the persisted model override for this conversation.
     useEffect(() => {
-        if (!chatId || !agentName) {
-            setIsModelMismatch(false);
+        if (!chatId) {
+            setSelectedModelOverride(null);
             return;
         }
 
         let cancelled = false;
 
-        async function checkModelMismatch() {
+        async function loadConversationModel() {
             try {
                 const [conversation, agent] = await Promise.all([
                     getConversation(chatId!),
@@ -73,25 +81,74 @@ export function ChatMessageList({
 
                 if (cancelled) return;
 
-                if (conversation?.model && agent?.model) {
-                    setIsModelMismatch(conversation.model !== agent.model);
+                if (conversation?.model && agent?.model && conversation.model !== agent.model) {
+                    setSelectedModelOverride(conversation.model);
                 } else {
-                    setIsModelMismatch(false);
+                    setSelectedModelOverride(null);
                 }
             } catch (error) {
-                console.error('Error checking model mismatch:', error);
+                console.error('Error loading conversation model override:', error);
                 if (!cancelled) {
-                    setIsModelMismatch(false);
+                    setSelectedModelOverride(null);
                 }
             }
         }
 
-        checkModelMismatch();
+        loadConversationModel();
 
         return () => {
             cancelled = true;
         };
     }, [chatId, agentName]);
+
+    const handleModelOverride = useCallback(async (newModelId: string) => {
+        const currentModel = selectedModelOverride ?? agentModel ?? null;
+        if (newModelId === currentModel) return;
+
+        // If the conversation has image/audio messages in history, block switches
+        // to models that do not support the required modality.
+        const hasImageInHistory = messages.some(
+            (m) => m.from === 'user' && m.attachment?.previewUrl
+        );
+        const hasAudioInHistory = messages.some((m) => m.kind === 'Audio');
+
+        try {
+            const models = await getAIModels();
+            const target = models.find((m) => m.id === newModelId);
+            if (!target) {
+                toast.error('Model not found');
+                return;
+            }
+
+            const modalities = new Set(target.modalities?.map((m) => m.toLowerCase()) ?? []);
+            if (hasImageInHistory && !modalities.has('vision')) {
+                toast.error('This model does not support the images in this conversation.');
+                return;
+            }
+            if (hasAudioInHistory && !modalities.has('audio')) {
+                toast.error('This model does not support the audio messages in this conversation.');
+                return;
+            }
+
+            // Persist the override on the server so it survives reloads.
+            if (chatId) {
+                const res = await setConversationModelOverride({
+                    conversation: chatId,
+                    modelOverride: newModelId,
+                });
+                if (!res.success) {
+                    toast.error('Failed to switch model');
+                    return;
+                }
+            }
+
+            setSelectedModelOverride(newModelId);
+            toast.info('Model switched. Provider prompt cache may reset for this conversation.');
+        } catch (error) {
+            console.error('Error switching model:', error);
+            toast.error('Failed to switch model');
+        }
+    }, [selectedModelOverride, agentModel, chatId, messages]);
 
     useEffect(() => {
         if (!chatId) {
@@ -411,21 +468,23 @@ export function ChatMessageList({
                 </div>
             </div>
             <div className="max-w-4xl mx-auto w-full shrink-0">
-            <ChatInput 
-                chatId={chatId} 
+            <ChatInput
+                chatId={chatId}
                 agentName={agentName}
                 onConversationCreated={onConversationCreated}
-                getNewConversationPath={getNewConversationPath}
                 onStatusChange={setStatus}
                 onLoadingTypeChange={setLoadingType}
                 isCreatingConversationRef={isCreatingConversationRef}
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
                 setMessages={setMessages}
-                isModelMismatch={isModelMismatch}
                 scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                 allowFileUpload={allowFileUpload}
                 maxUploadSizeMb={maxUploadSizeMb}
                 runImmediately={runImmediately}
+                onModelOverride={handleModelOverride}
+                modelOverride={selectedModelOverride}
+                agentDisplayName={agentDisplayName}
+                agentModel={agentModel}
             />
             </div>
         </div>

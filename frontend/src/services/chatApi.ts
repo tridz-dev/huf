@@ -357,6 +357,7 @@ export interface TranscribeAudioParams {
   b64data: string;
   agent: string;
   conversation?: string;
+  modelOverride?: string;
 }
 
 export interface TranscribeAudioResponse {
@@ -378,6 +379,7 @@ export async function transcribeAudio(
       agent: params.agent,
       conversation: params.conversation ?? undefined,
       transcribe_only: true,
+      model_override: params.modelOverride ?? undefined,
     });
     return (result?.message ?? result) as TranscribeAudioResponse;
   } catch (error) {
@@ -390,6 +392,7 @@ export interface UploadFileParams {
   b64data: string;
   agent: string;
   conversation?: string;
+  modelOverride?: string;
 }
 
 export interface UploadFileResponse {
@@ -410,6 +413,7 @@ export async function uploadFileAndProcess(
       b64data: params.b64data,
       agent: params.agent,
       conversation: params.conversation ?? undefined,
+      model_override: params.modelOverride ?? undefined,
     });
     return (result?.message ?? result) as UploadFileResponse;
   } catch (error) {
@@ -422,6 +426,7 @@ export interface UploadFileAttachmentParams {
   filename: string;
   b64data: string;
   agent: string;
+  modelOverride?: string;
 }
 
 export interface UploadFileAttachmentResponse {
@@ -440,6 +445,7 @@ export async function uploadFileAttachment(
       filename: params.filename,
       b64data: params.b64data,
       agent: params.agent,
+      model_override: params.modelOverride ?? undefined,
     });
     return (result?.message ?? result) as UploadFileAttachmentResponse;
   } catch (error) {
@@ -454,6 +460,7 @@ export interface PrepareMessageWithFileParams {
   agent: string;
   conversation?: string;
   message?: string;
+  modelOverride?: string;
 }
 
 export interface PrepareMessageWithFileFile {
@@ -486,6 +493,7 @@ export async function prepareMessageWithFile(
       agent: params.agent,
       conversation: params.conversation ?? undefined,
       message: params.message ?? '',
+      model_override: params.modelOverride ?? undefined,
     });
     return (result?.message ?? result) as PrepareMessageWithFileResponse;
   } catch (error) {
@@ -503,6 +511,7 @@ export interface NewConversationParams {
   /** The user message was already persisted (e.g. file/audio prepare step). */
   skip_user_message?: boolean;
   files?: PrepareMessageWithFileFile[];
+  modelOverride?: string;
 }
 
 export interface NewConversationResponse {
@@ -535,6 +544,7 @@ export interface SendMessageParams {
   /** The user message was already persisted (e.g. file/audio prepare step). */
   skip_user_message?: boolean;
   files?: PrepareMessageWithFileFile[];
+  modelOverride?: string;
 }
 
 export interface SendMessageResponse {
@@ -565,6 +575,7 @@ export async function newConversation(
       message: params.message,
       skip_user_message: params.skip_user_message ? 1 : 0,
       files: params.files,
+      model_override: params.modelOverride ?? undefined,
     });
     return result as NewConversationResponse;
   } catch (error) {
@@ -584,10 +595,37 @@ export async function sendMessageToConversation(
       message: params.message,
       skip_user_message: params.skip_user_message ? 1 : 0,
       files: params.files,
+      model_override: params.modelOverride ?? undefined,
     });
     return result as SendMessageResponse;
   } catch (error) {
     handleFrappeError(error, 'Error sending message to conversation');
+  }
+}
+
+export interface SetConversationModelOverrideParams {
+  conversation: string;
+  modelOverride?: string | null;
+}
+
+export interface SetConversationModelOverrideResponse {
+  success: boolean;
+  conversation_id?: string;
+  model?: string;
+}
+
+export async function setConversationModelOverride(
+  params: SetConversationModelOverrideParams
+): Promise<SetConversationModelOverrideResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_chat.set_conversation_model_override', {
+      conversation: params.conversation,
+      model_override: params.modelOverride ?? undefined,
+    });
+    return (result?.message ?? result) as SetConversationModelOverrideResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error setting conversation model');
+    return { success: false };
   }
 }
 

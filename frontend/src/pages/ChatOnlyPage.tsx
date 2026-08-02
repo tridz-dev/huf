@@ -152,11 +152,6 @@ export default function ChatOnlyPage() {
     [navigate]
   );
 
-  const getNewConversationPath = useCallback(
-    (agentName: string) => `/ui/chat?agent=${encodeURIComponent(agentName)}`,
-    []
-  );
-
   const shouldShowSelector = !chatId && (!effectiveAgent || (!loadingAgents && !currentAgent));
 
   return (
@@ -176,7 +171,6 @@ export default function ChatOnlyPage() {
             key={chatId ?? effectiveAgent}
             chatId={chatId}
             onConversationCreated={handleConversationCreated}
-            getNewConversationPath={getNewConversationPath}
           />
         </div>
       )}

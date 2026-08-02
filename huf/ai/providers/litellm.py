@@ -1823,28 +1823,28 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     break
 
             except InternalServerError as e:
-                raw_msg = f"OpenAI API server error: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except RateLimitError as e:
-                raw_msg = f"RateLimitError: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except ContextWindowExceededError as e:
-                raw_msg = f"ContextWindowExceededError: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except APIError as e:
-                raw_msg = f"API error: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except Exception as e:
                 frappe.log_error(
                     message=f"LiteLLM streaming round error: {str(e)}\n\n{frappe.get_traceback()}",
                     title="LiteLLM Streaming"
                 )
-                raw_msg = f"LiteLLM error: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
 
         # Max rounds reached

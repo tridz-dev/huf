@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { CornerDownLeft, Plus, Paperclip } from "lucide-react";
+import { CornerDownLeft, Paperclip } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
@@ -19,6 +18,7 @@ import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
+import { AgentModelSelector } from './AgentModelSelector';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -33,13 +33,11 @@ interface ChatInputProps {
     chatId: string | null;
     agentName: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
-    getNewConversationPath?: (agentName: string) => string;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
     setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
-    isModelMismatch?: boolean;
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
     allowFileUpload?: boolean;
     maxUploadSizeMb?: number | null;
@@ -49,25 +47,34 @@ interface ChatInputProps {
      * queue-first.
      */
     runImmediately?: boolean;
+    /** Called when the user selects a different model from the inline selector. */
+    onModelOverride?: (modelId: string) => void;
+    /** Currently active model override (AI Model link name). */
+    modelOverride?: string | null;
+    /** Display name of the current agent, shown on the selector pill. */
+    agentDisplayName?: string;
+    /** Model of the current agent, shown on the selector pill. */
+    agentModel?: string | null;
 }
 
-export function ChatInput({ 
-    chatId, 
+export function ChatInput({
+    chatId,
     agentName,
     onConversationCreated,
-    getNewConversationPath,
     onStatusChange,
     onLoadingTypeChange,
     isCreatingConversationRef,
     newlyCreatedConversationIdRef,
     setMessages,
-    isModelMismatch = false,
     scrollToBottomAfterPaint,
     allowFileUpload = false,
     maxUploadSizeMb,
     runImmediately = false,
+    onModelOverride,
+    modelOverride,
+    agentDisplayName,
+    agentModel,
 }: ChatInputProps) {
-    const navigate = useNavigate();
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -183,6 +190,7 @@ export function ChatInput({
                         conversationId: params.conversationId,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
+                        modelOverride: modelOverride ?? undefined,
                     },
                     {
                         useStreaming,
@@ -352,6 +360,7 @@ export function ChatInput({
                     agent: agentName,
                     conversation: chatId ?? undefined,
                     message: messageText,
+                    modelOverride: modelOverride ?? undefined,
                 });
 
                 if (!prepareRes?.success || !prepareRes.agent_prompt) {
@@ -607,6 +616,7 @@ export function ChatInput({
                 b64data: b64,
                 agent: agentName,
                 conversation: chatId ?? undefined,
+                modelOverride: modelOverride ?? undefined,
             });
         } catch (err) {
             failTranscription(
@@ -748,6 +758,7 @@ export function ChatInput({
                 filename: file.name,
                 b64data: b64,
                 agent: agentName,
+                modelOverride: modelOverride ?? undefined,
             });
 
             if (!res?.success || !res.file_id) {
@@ -847,35 +858,8 @@ export function ChatInput({
         adjustTextareaHeight();
     }, [message, adjustTextareaHeight]);
 
-    const handleNewConversation = useCallback(() => {
-        if (agentName) {
-            navigate(getNewConversationPath?.(agentName) ?? `/chat/new?agent=${agentName}`);
-        }
-    }, [navigate, agentName, getNewConversationPath]);
-
     if (!agentName) {
         return null;
-    }
-
-    if (isModelMismatch && chatId) {
-        return (
-            <div className="px-6 pb-6 pt-2">
-                <div className="w-full border border-zinc-200 rounded-xl bg-zinc-50 p-6">
-                    <div className="flex flex-col items-center justify-center gap-4 text-center">
-                        <p className="text-sm text-zinc-600">
-                            Model changed, please start a new conversation
-                        </p>
-                        <Button
-                            onClick={handleNewConversation}
-                            className="gap-2"
-                        >
-                            <Plus className="w-4 h-4" />
-                            New Conversation
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
     }
 
     return (
@@ -896,7 +880,7 @@ export function ChatInput({
                         style={{ 
                             height: `${MIN_HEIGHT}px`
                         }}
-                        disabled={isSubmitting || isModelMismatch}
+                        disabled={isSubmitting}
                     />
                     {pendingFile && (
                         <div className="px-3 pt-2 w-full">
@@ -913,60 +897,71 @@ export function ChatInput({
                             />
                         </div>
                     )}
-                    <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
-                            Use
-                            <ShortcutKey>
-                                Shift + Enter
-                            </ShortcutKey>
-                            for new line
-                        </span>
-                        {allowFileUpload && (
-                            <>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
-                                    className="hidden"
-                                    onChange={handleFileSelected}
-                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    size="icon"
-                                    className="shrink-0 rounded-full"
-                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
-                                    onClick={() => fileInputRef.current?.click()}
-                                    aria-label="Attach file"
-                                >
-                                    <Paperclip className="size-4" />
-                                </Button>
-                            </>
-                        )}
-                        {!message.trim() && !pendingFile && (
-                            <SpeechInput
-                                onTranscriptionChange={handleTranscriptionChange}
-                                onAudioRecorded={handleAudioRecorded}
-                                preferServerStt={true}
-                                disabled={isSubmitting || isModelMismatch}
-                                size="icon"
-                                className="shrink-0 rounded-full"
+                    <div className="px-3 pb-3 w-full flex items-center justify-between gap-x-2 mt-2">
+                        {onModelOverride && (
+                            <AgentModelSelector
+                                variant="pill"
+                                value={modelOverride ?? agentModel ?? ''}
+                                currentLabel={agentDisplayName ?? agentName}
+                                currentModel={agentModel}
+                                onValueChange={onModelOverride}
+                                disabled={isSubmitting}
                             />
                         )}
-                        <Button
-                            type="submit"
-                            disabled={
-                                pendingFile?.status === 'uploading' ||
-                                ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
-                                    isSubmitting ||
-                                    isModelMismatch)
-                            }
-                            size="icon"
-                            className="shrink-0"
-                        >
-                            <CornerDownLeft/>
-                        </Button>
+                        <div className="flex items-center justify-end gap-x-2 ml-auto">
+                            <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                                Use
+                                <ShortcutKey>
+                                    Shift + Enter
+                                </ShortcutKey>
+                                for new line
+                            </span>
+                            {allowFileUpload && (
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
+                                        className="hidden"
+                                        onChange={handleFileSelected}
+                                        disabled={isSubmitting || pendingFile?.status === 'uploading'}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="icon"
+                                        className="shrink-0 rounded-full"
+                                        disabled={isSubmitting || pendingFile?.status === 'uploading'}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        aria-label="Attach file"
+                                    >
+                                        <Paperclip className="size-4" />
+                                    </Button>
+                                </>
+                            )}
+                            {!message.trim() && !pendingFile && (
+                                <SpeechInput
+                                    onTranscriptionChange={handleTranscriptionChange}
+                                    onAudioRecorded={handleAudioRecorded}
+                                    preferServerStt={true}
+                                    disabled={isSubmitting}
+                                    size="icon"
+                                    className="shrink-0 rounded-full"
+                                />
+                            )}
+                            <Button
+                                type="submit"
+                                disabled={
+                                    pendingFile?.status === 'uploading' ||
+                                    ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
+                                        isSubmitting)
+                                }
+                                size="icon"
+                                className="shrink-0"
+                            >
+                                <CornerDownLeft/>
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </form>
