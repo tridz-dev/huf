@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import './pwa/registerSW';
+import { initTheme } from './lib/personalization';
+
+initTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

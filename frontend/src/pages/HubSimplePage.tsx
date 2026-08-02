@@ -11,6 +11,11 @@ import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
 import { getHubReadiness, HubReadiness } from '@/services/hubApi';
 import { getConversationMessages } from '@/services/chatApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
+import {
+  isSceneryEnabled,
+  getSceneryOpacity,
+  SCENERY_IMAGE_URL,
+} from '@/lib/personalization';
 
 interface Message { role: 'user' | 'assistant'; content: string; _key?: string; }
 
@@ -61,6 +66,19 @@ export default function HubSimplePage() {
   const [readiness, setReadiness] = useState<HubReadiness | null>(null);
   const [conversationId, setConversationId] = useState<string | undefined>(undefined);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [scenery, setScenery] = useState(false);
+  const [sceneryOpacity, setSceneryOpacity] = useState(100);
+
+  // Load scenery preference from localStorage on mount and on cross-tab changes
+  useEffect(() => {
+    const update = () => {
+      setScenery(isSceneryEnabled());
+      setSceneryOpacity(getSceneryOpacity());
+    };
+    update();
+    window.addEventListener('storage', update);
+    return () => window.removeEventListener('storage', update);
+  }, []);
 
   // Detect slash commands
   useEffect(() => {
@@ -205,10 +223,23 @@ export default function HubSimplePage() {
   };
 
   return (
-    <div className="h-full flex bg-paper overflow-hidden">
+    <div className="h-full flex bg-paper overflow-hidden relative">
+      {scenery && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-0"
+          style={{
+            backgroundImage: `url(${SCENERY_IMAGE_URL})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            opacity: sceneryOpacity / 100,
+          }}
+        />
+      )}
       {/* Main Content — sidebar, header and user avatar are provided by
           UnifiedLayout/AppSidebar so the Hub matches the rest of the app. */}
-      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
+      <main className="relative z-10 flex-1 flex flex-col h-full overflow-hidden">
         {/* Chat toolbar — new chat / resume a recent conversation */}
         <div className="absolute top-3 left-4 z-10 flex items-center gap-1">
           <IconRailButton icon={Plus} label="New chat" onClick={handleNewChat} />

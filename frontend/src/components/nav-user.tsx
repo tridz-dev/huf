@@ -1,18 +1,10 @@
-import {
-  // BadgeCheck,
-  // Bell,
-  ChevronsUpDown,
-  // CreditCard,
-  LogOut,
-  // Moon,
-  // Sparkles,
-} from "lucide-react"
-// import { useState } from "react"
+import { useEffect, useState } from "react"
+import { Check, ChevronsUpDown, LogOut, Moon, Sun, Monitor } from "lucide-react"
 
 import {
   DropdownMenu,
   DropdownMenuContent,
-  // DropdownMenuGroup,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -27,11 +19,26 @@ import {
 import { useUser } from "@/contexts/UserContext"
 import { getInitials } from "@/utils/getInitials"
 import UserAvatar from "./UserAvatar"
+import {
+  getColorScheme,
+  setColorScheme,
+  type HufColorScheme,
+} from "@/lib/personalization"
+
+const SCHEMES: { id: HufColorScheme; label: string; icon: typeof Sun }[] = [
+  { id: 'light', label: 'Light', icon: Sun },
+  { id: 'dark', label: 'Dark', icon: Moon },
+  { id: 'system', label: 'System', icon: Monitor },
+];
 
 export function NavUser() {
   const { isMobile } = useSidebar()
-  // const [isDark, setIsDark] = useState(false)
   const { logout, user } = useUser()
+  const [colorScheme, setColorSchemeState] = useState<HufColorScheme>('light')
+
+  useEffect(() => {
+    setColorSchemeState(getColorScheme())
+  }, [])
 
   if (!user) {
     return null;
@@ -39,6 +46,11 @@ export function NavUser() {
 
   const displayName = user.full_name || user.name;
   const displayEmail = user.email || '';
+
+  const handleSchemeChange = (scheme: HufColorScheme) => {
+    setColorSchemeState(scheme)
+    setColorScheme(scheme)
+  }
 
   return (
     <SidebarMenu>
@@ -93,32 +105,27 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {/* <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Upgrade to Pro
-              </DropdownMenuItem>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs text-steel-soft px-2 py-1.5 font-normal">
+                Appearance
+              </DropdownMenuLabel>
+              {SCHEMES.map(({ id, label, icon: Icon }) => (
+                <DropdownMenuItem
+                  key={id}
+                  onClick={() => handleSchemeChange(id)}
+                  className="flex items-center justify-between"
+                >
+                  <span className="flex items-center">
+                    <Icon className="mr-2 h-4 w-4" />
+                    {label}
+                  </span>
+                  {colorScheme === id && (
+                    <Check className="h-4 w-4 text-steel" />
+                  )}
+                </DropdownMenuItem>
+              ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheck className="mr-2 h-4 w-4" />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Bell className="mr-2 h-4 w-4" />
-                Notifications
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setIsDark(!isDark)}>
-                <Moon className="mr-2 h-4 w-4" />
-                {isDark ? 'Light Mode' : 'Dark Mode'}
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator /> */}
             <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-700">
               <LogOut className="mr-2 h-4 w-4" />
               Log out
