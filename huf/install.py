@@ -241,6 +241,7 @@ def create_demo_ai_providers():
         {"doctype": "AI Provider", "provider_name": "Huggingface", "provider_brand": "huggingface", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Cohere", "provider_brand": "cohere", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Perplexity", "provider_brand": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Moonshot", "provider_brand": "moonshot", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Google", "provider_brand": "google", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Anthropic", "provider_brand": "anthropic", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "OpenRouter", "provider_brand": "openrouter", "api_key": ""},
@@ -329,6 +330,11 @@ def create_demo_ai_models():
         _m("deepseek-v4-flash", "DeepSeek", TEXT),
         _m("deepseek-chat-v3.1", "DeepSeek", TEXT),
         _m("deepseek-chat-v3-0324", "DeepSeek", TEXT),
+        # Moonshot (direct)
+        _m("kimi-k3", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.7", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.6", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.5", "Moonshot", TEXT, VISION),
         # OpenRouter
         _m("openrouter/free", "OpenRouter", TEXT),
         _m("openai/gpt-5", "OpenRouter", TEXT, VISION),
