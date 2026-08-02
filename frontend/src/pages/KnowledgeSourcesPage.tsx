@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Calendar, Settings, Database, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getKnowledgeSources } from '../services/knowledgeApi';
 import { formatTimeAgo } from '../utils/time';
@@ -82,7 +83,7 @@ function KnowledgeSourcesPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage knowledge sources for your AI agents"
       filters={
         <FilterBar
@@ -165,6 +166,6 @@ function KnowledgeSourcesPage() {
             : 'No more knowledge sources to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

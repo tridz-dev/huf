@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { Database, Settings, Table2, Trash2, Pencil, Layers, List } from 'lucide-react';
 import { TABLE_ICON_MAP } from '@/data/tableIcons';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { PageFrame } from '@/layouts/PageFrame';
 import {
-	PageLayout,
 	FilterBar,
 	GridView,
 	ItemCard,
@@ -170,7 +170,7 @@ function DataPage() {
 	);
 
 	return (
-		<PageLayout
+		<PageFrame
 			title="Data"
 			subtitle="Create and manage custom data tables"
 			filters={
@@ -270,6 +270,6 @@ function DataPage() {
 				table={accessTable}
 				onSaved={loadAgentCounts}
 			/>
-		</PageLayout>
+		</PageFrame>
 	);
 }

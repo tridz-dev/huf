@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Activity, ArrowUpDown, Loader2 } from 'lucide-react';
-import { FilterBar, PageLayout, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -297,7 +298,7 @@ export default function Executions() {
   });
 
   return (
-    <PageLayout
+    <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
       subtitle="Inspect agent runs and their results."
@@ -405,6 +406,6 @@ export default function Executions() {
           {total !== undefined ? `Showing all ${total} executions` : 'No more executions to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

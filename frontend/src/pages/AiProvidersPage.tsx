@@ -12,7 +12,8 @@ import {
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   createModel,
@@ -405,7 +406,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   });
 
   return (
-    <PageLayout
+    <PageFrame
       title="AI Providers"
       subtitle="Connect AI providers and external services"
       filters={
@@ -739,6 +740,6 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
           })()}
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </PageFrame>
   );
 }

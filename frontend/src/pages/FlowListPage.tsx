@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Calendar, Play, Activity, Settings, Workflow } from 'lucide-react';
-import { PageLayout, FilterBar, GridView, ItemCard, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { usePageData } from '../hooks/dashboard/usePageData';
 
@@ -125,7 +126,7 @@ function FlowListPage() {
   };
 
   return (
-    <PageLayout
+    <PageFrame
       title="Flows"
       badge={<ExperimentalBadge />}
       subtitle="Design and orchestrate agent workflows."
@@ -204,6 +205,6 @@ function FlowListPage() {
           refresh();
         }}
       />
-    </PageLayout>
+    </PageFrame>
   );
 }

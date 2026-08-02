@@ -9,7 +9,8 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -159,7 +160,7 @@ export function AgentSummaryPromptsPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage shared summary prompt templates for agents"
       filters={
         <FilterBar
@@ -239,7 +240,7 @@ export function AgentSummaryPromptsPage() {
           {total !== undefined ? `Showing all ${total} summary prompts` : 'No more summary prompts to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

@@ -10,7 +10,8 @@ import {
   useReactTable,
   HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, StatusDot, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, StatusDot, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -180,7 +181,7 @@ export function ExecutionProfilesPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       title="Execution Profiles"
       subtitle="Manage sandboxed code execution environments, resource limits, and approval policies."
       filters={
@@ -259,7 +260,7 @@ export function ExecutionProfilesPage() {
           {total !== undefined ? `Showing all ${total} execution profiles` : 'No more profiles to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

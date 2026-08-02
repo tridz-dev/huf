@@ -8,7 +8,8 @@ import {
 	TriangleAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageLayout, GridView, BaseCard, FilterBar, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { GridView, BaseCard, FilterBar, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { CardHeader, CardTitle, CardDescription, CardAction } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -344,11 +345,11 @@ function AppsPage() {
 	}, [apps, showFilters, search, category]);
 
 	return (
-		<PageLayout
+		<PageFrame
 			title="Apps"
 			badge={<ExperimentalBadge />}
 			subtitle="Launch applications built on HUF"
-			toolbar={
+			actions={
 				<Button
 					variant="ghost"
 					size="icon"
@@ -416,6 +417,6 @@ function AppsPage() {
 				/>
 			)}
 			<AppsHelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
-		</PageLayout>
+		</PageFrame>
 	);
 }

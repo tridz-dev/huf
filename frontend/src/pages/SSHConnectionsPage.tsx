@@ -10,7 +10,8 @@ import {
   useReactTable,
   HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, StatusDot, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, StatusDot, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -186,7 +187,7 @@ export function SSHConnectionsPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       title="SSH Connections"
       subtitle="Manage remote SSH host credentials, keys, and connection policies."
       filters={
@@ -265,7 +266,7 @@ export function SSHConnectionsPage() {
           {total !== undefined ? `Showing all ${total} SSH connections` : 'No more connections to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

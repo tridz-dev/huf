@@ -10,7 +10,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { PageLayout, GridView, ItemCard, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { GridView, ItemCard, EmptyState } from '@/components/dashboard';
 import {
   getGateways,
   updateGateway,
@@ -235,7 +236,7 @@ export default function GatewaysPage() {
   }
 
   return (
-    <PageLayout subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
+    <PageFrame subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
       {tabBar}
 
       {/* Overview Card */}
@@ -625,6 +626,6 @@ export default function GatewaysPage() {
           </div>
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
