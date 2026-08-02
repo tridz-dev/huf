@@ -27,6 +27,7 @@ interface FilterBarProps {
   onSearchSubmit?: () => void;
   filters?: Filter[];
   actions?: ReactNode;
+  primaryAction?: { label: string; icon?: ReactNode; onClick: () => void; disabled?: boolean };
   collapsibleSearch?: boolean;
 }
 
@@ -70,6 +71,7 @@ export function FilterBar({
   onSearchSubmit,
   filters = [],
   actions,
+  primaryAction,
   collapsibleSearch = false,
 }: FilterBarProps) {
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -144,6 +146,21 @@ export function FilterBar({
       </Select>
     );
   });
+
+  if (primaryAction) {
+    cells.push(
+      <button
+        key="primary-action"
+        type="button"
+        className="flex items-center gap-2 self-stretch bg-ink px-4 font-display text-[13px] font-bold uppercase tracking-[.06em] text-paper transition-colors hover:bg-signal disabled:opacity-50"
+        onClick={primaryAction.onClick}
+        disabled={primaryAction.disabled}
+      >
+        {primaryAction.icon}
+        {primaryAction.label}
+      </button>
+    );
+  }
 
   return (
     <div className="flex flex-1 items-center gap-3">
