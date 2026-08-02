@@ -146,8 +146,11 @@ def update_tool_call_message(
     agent_doc=None,
 ) -> bool:
     """
-    Update an existing 'Tool Call' Agent Message with the tool result so the
-    request and result live in a single message row.
+    Update an existing 'Tool Call' Agent Message with a bounded result envelope.
+
+    The raw tool result is persisted through the Result Store (``Agent
+    Execution Result``).  The Agent Message receives only a bounded envelope
+    and a reference, so large payloads do not enter model context.
 
     Args:
         message_name: Name of the Agent Message to update.
@@ -172,34 +175,50 @@ def update_tool_call_message(
         return False
 
     try:
-        if isinstance(result_content, str):
-            result_str = result_content
-        else:
-            result_str = json.dumps(result_content, default=str)
+        from huf.ai.results import policy as result_policy
+        from huf.ai.results.store import persist_result
+        from huf.ai.results.envelope import build_envelope
 
-        result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
+        # Resolve run/conversation/tool_call links from the message.
+        run_name = msg_doc.agent_run
+        conversation_name = msg_doc.conversation
+        tool_call_link = msg_doc.tool_call
+        source_tool = None
+        if tool_call_link:
+            source_tool = frappe.db.get_value("Agent Tool Call", tool_call_link, "tool")
 
-        max_context_chars = 2000
-        if agent_doc:
-            try:
-                max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
-            except (ValueError, TypeError):
-                max_context_chars = 2000
-        max_context_chars = max(max_context_chars, 500)
+        if not run_name or not conversation_name or not tool_call_link:
+            # Fall back to legacy behavior if lineage is missing.
+            return _legacy_update_tool_call_message(
+                msg_doc, tool_call_id, tool_call, result_content, agent_doc
+            )
 
-        use_reference = len(result_str) > max_context_chars
+        status = "Completed"
+        if agent_doc and hasattr(agent_doc, "status"):
+            status = getattr(agent_doc, "status", "Completed")
 
-        existing_content = msg_doc.content or ""
-        if "**Tool Result:**" not in existing_content:
-            msg_doc.content = existing_content + f"\n\n**Tool Result:**\n{result_str}"
+        result_doc, envelope = persist_result(
+            result_content=result_content,
+            run=run_name,
+            tool_call=tool_call_link,
+            conversation=conversation_name,
+            source_tool=source_tool,
+            visibility="model_visible",
+            agent_doc=agent_doc,
+            status=status,
+        )
 
+        size_bytes = result_doc.size_bytes or 0
+        use_reference = size_bytes > result_policy.INLINE_THRESHOLD_BYTES
+
+        envelope_text = json.dumps(envelope, default=str)
+        msg_doc.content = envelope_text
         msg_doc.kind = "Tool Result"
-        msg_doc.record_kind = "tool_result"
+        msg_doc.record_kind = "result_snapshot"
         msg_doc.context_policy = "include_reference" if use_reference else "include_full"
-        msg_doc.context_summary = result_summary
-        msg_doc.reference_doctype = "Agent Tool Call"
-        if msg_doc.tool_call:
-            msg_doc.reference_name = msg_doc.tool_call
+        msg_doc.context_summary = result_doc.summary or envelope.get("summary", "")
+        msg_doc.reference_doctype = "Agent Execution Result"
+        msg_doc.reference_name = result_doc.name
         msg_doc.tool_call_id = tool_call_id
         if tool_call is not None:
             msg_doc.tool_calls = (
@@ -224,6 +243,59 @@ def update_tool_call_message(
             "Tool Call Message Update"
         )
         return False
+
+
+def _legacy_update_tool_call_message(
+    msg_doc,
+    tool_call_id: str,
+    tool_call: dict | list,
+    result_content: Any,
+    agent_doc=None,
+) -> bool:
+    """Legacy fallback used when result-store lineage is unavailable."""
+    if isinstance(result_content, str):
+        result_str = result_content
+    else:
+        result_str = json.dumps(result_content, default=str)
+
+    result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
+
+    max_context_chars = 2000
+    if agent_doc:
+        try:
+            max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
+        except (ValueError, TypeError):
+            max_context_chars = 2000
+    max_context_chars = max(max_context_chars, 500)
+
+    use_reference = len(result_str) > max_context_chars
+
+    existing_content = msg_doc.content or ""
+    if "**Tool Result:**" not in existing_content:
+        msg_doc.content = existing_content + f"\n\n**Tool Result:**\n{result_str}"
+
+    msg_doc.kind = "Tool Result"
+    msg_doc.record_kind = "tool_result"
+    msg_doc.context_policy = "include_reference" if use_reference else "include_full"
+    msg_doc.context_summary = result_summary
+    msg_doc.reference_doctype = "Agent Tool Call"
+    if msg_doc.tool_call:
+        msg_doc.reference_name = msg_doc.tool_call
+    msg_doc.tool_call_id = tool_call_id
+    if tool_call is not None:
+        msg_doc.tool_calls = (
+            json.dumps(tool_call, default=str)
+            if not isinstance(tool_call, str)
+            else tool_call
+        )
+
+    if not frappe.has_permission("Agent Message", "write", doc=msg_doc):
+        frappe.throw(
+            _("Not permitted to update Agent Message {0}").format(msg_doc.name),
+            frappe.PermissionError,
+        )
+    msg_doc.save()
+    return True
 
 
 def sync_tool_status_to_message(tool_call_name: str | None) -> None:
@@ -630,9 +702,24 @@ class ConversationManager:
             content = msg.get("context_summary") or msg.get("content")
         elif policy == "include_reference":
             record_kind = msg.get("record_kind") or "record"
-            summary = msg.get("context_summary") or record_kind
+            summary = msg.get("context_summary") or ""
             ref_doctype = msg.get("reference_doctype") or ""
             ref_name = msg.get("reference_name") or ""
+
+            # If the message points to an Agent Execution Result but has no
+            # summary, load the summary from the canonical result record rather
+            # than falling back to the full envelope content.
+            if not summary and ref_doctype == "Agent Execution Result" and ref_name:
+                try:
+                    summary = frappe.db.get_value(
+                        "Agent Execution Result", ref_name, "summary"
+                    ) or ""
+                except Exception:
+                    summary = ""
+
+            if not summary:
+                summary = record_kind
+
             if ref_doctype and ref_name:
                 content = f"[{record_kind}: {summary} · handle={ref_doctype}/{ref_name}]"
             else:

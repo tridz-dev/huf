@@ -249,6 +249,8 @@ scheduler_events = {
         "huf.ai.knowledge.maintenance.optimize_indexes",
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
+        # Step 3: mark expired Agent Execution Results and delete payload files.
+        "huf.ai.results.policy.expire_stale_results",
     ],
     "cron": {
         "*/1 * * * *": [

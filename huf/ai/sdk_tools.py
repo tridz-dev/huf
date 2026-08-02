@@ -346,6 +346,79 @@ def create_agent_tools(agent) -> list[FunctionTool]:
         if tool:
             tools.append(tool)
 
+    # Result/Context Foundation V1 tools: bounded reads of stored tool/API results.
+    existing_tool_names = {getattr(t, "name", "") for t in tools}
+    if "result_read" not in existing_tool_names:
+        tool = create_function_tool(
+            name="result_read",
+            description=(
+                "Read a bounded view of a stored execution result. "
+                "Views: summary, schema, preview, page, range, path, filter, row. "
+                "Server-side limits always apply; the full payload is never returned."
+            ),
+            tool_name="huf.ai.results.tools.result_read_tool",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "ref": {
+                        "type": "string",
+                        "description": "Result reference, e.g. result://RES-00001"
+                    },
+                    "view": {
+                        "type": "string",
+                        "enum": ["summary", "schema", "preview", "page", "range", "path", "filter", "row"],
+                        "description": "Which bounded view to return"
+                    },
+                    "selector": {
+                        "type": "string",
+                        "description": "Optional range/path/row selector"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "description": "1-based page number for page view"
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "description": "Requested page size (capped server-side)"
+                    },
+                    "filter": {
+                        "type": "object",
+                        "description": "Column-value filters for filter view"
+                    },
+                    "columns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Columns to include for filter view"
+                    },
+                    "max_tokens": {"type": "integer"},
+                    "max_rows": {"type": "integer"},
+                    "max_bytes": {"type": "integer"},
+                },
+                "required": ["ref"]
+            }
+        )
+        if tool:
+            tools.append(tool)
+
+    if "result_index" not in existing_tool_names:
+        tool = create_function_tool(
+            name="result_index",
+            description="List the stored execution results for a conversation.",
+            tool_name="huf.ai.results.tools.result_index_tool",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "conversation_id": {
+                        "type": "string",
+                        "description": "Conversation ID"
+                    }
+                },
+                "required": ["conversation_id"]
+            }
+        )
+        if tool:
+            tools.append(tool)
+
     return tools
 
 
