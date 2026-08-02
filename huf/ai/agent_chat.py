@@ -610,7 +610,7 @@ def upload_file_and_process_web(
         supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
         is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
-        use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+        use_ocr = bool(agent_doc.get("enable_ocr")) or ("OCR" in supported)
         use_vision = "Vision" in supported and is_image_or_pdf
 
         if not use_ocr and not use_vision:
@@ -720,7 +720,7 @@ def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
     supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
     is_image_or_pdf = filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"))
-    use_ocr = bool(agent_doc.get("enable_ocr")) and "OCR" in supported
+    use_ocr = bool(agent_doc.get("enable_ocr")) or ("OCR" in supported)
     use_vision = "Vision" in supported and is_image_or_pdf
 
     if not use_ocr and not use_vision:
