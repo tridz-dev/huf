@@ -149,20 +149,35 @@ def handle_fc_create_bench(**kwargs) -> str:
 		version = kwargs.get("version")
 		cluster = kwargs.get("cluster")
 		apps = kwargs.get("apps")
+		server = kwargs.get("server")
 		if not title:
 			return json.dumps({"success": False, "error": "title is required"})
 		if not version or not cluster:
 			return json.dumps({"success": False, "error": "version and cluster are required"})
 		if not apps:
 			return json.dumps({"success": False, "error": "apps is required (list of {name, source})"})
-		data = _make_fc_request(
-			"POST",
-			"press.api.bench.new",
-			json_data={"bench": {"title": title, "version": version, "cluster": cluster, "apps": apps}},
-		)
+		bench_payload = {
+			"title": title,
+			"version": version,
+			"cluster": cluster,
+			"apps": apps,
+			"saas_app": kwargs.get("saas_app", ""),
+		}
+		if server:
+			bench_payload["server"] = server
+		data = _make_fc_request("POST", "press.api.bench.new", json_data={"bench": bench_payload})
 		return _success(_message(data))
 	except Exception as e:
 		return _failure("Create Bench", e)
+
+
+def handle_fc_bench_options(**kwargs) -> str:
+	"""Return available versions, clusters and apps for creating a new bench."""
+	try:
+		data = _make_fc_request("POST", "press.api.bench.options")
+		return _result(data, kwargs, fields=("versions", "clusters"))
+	except Exception as e:
+		return _failure("Bench Options", e)
 
 
 def handle_fc_archive_bench(**kwargs) -> str:
@@ -476,3 +491,275 @@ def handle_fc_generate_bench_ssh_certificate(**kwargs) -> str:
 		return _result(data, kwargs, fields=("name", "valid_until", "certificate_type", "group", "user_ssh_key"))
 	except Exception as e:
 		return _failure("Generate Bench SSH Certificate", e)
+
+
+# ---------------------------------------------------------------------------
+# Server-level tools
+# ---------------------------------------------------------------------------
+
+
+def handle_fc_list_servers(**kwargs) -> str:
+	"""List Frappe Cloud application and database servers."""
+	try:
+		filters = kwargs.get("filters") or {}
+		server_filter = {"server_type": filters.get("server_type", ""), "tag": filters.get("tag", "")}
+		data = _make_fc_request("POST", "press.api.server.all", json_data={"server_filter": server_filter})
+		return _result(
+			data,
+			kwargs,
+			fields=("name", "title", "status", "creation", "cluster", "plan", "app_server", "region_info"),
+		)
+	except Exception as e:
+		return _failure("List Servers", e)
+
+
+def handle_fc_get_server(**kwargs) -> str:
+	"""Get details of a Frappe Cloud server (App or Database server)."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		data = _make_fc_request("POST", "press.api.server.get", json_data={"name": name})
+		return _result(
+			data,
+			kwargs,
+			fields=("name", "title", "status", "team", "cluster", "region_info", "type", "app_server"),
+		)
+	except Exception as e:
+		return _failure("Get Server", e)
+
+
+def handle_fc_get_server_overview(**kwargs) -> str:
+	"""Get plan and ownership overview for a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		data = _make_fc_request("POST", "press.api.server.overview", json_data={"name": name})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Get Server Overview", e)
+
+
+def handle_fc_server_options(**kwargs) -> str:
+	"""Return regions and plans available for creating a new Frappe Cloud server."""
+	try:
+		data = _make_fc_request("POST", "press.api.server.options")
+		return _result(data, kwargs, fields=("regions", "app_plans", "db_plans", "plan_types"))
+	except Exception as e:
+		return _failure("Server Options", e)
+
+
+def handle_fc_server_plans(**kwargs) -> str:
+	"""List Frappe Cloud server plans for a given server type."""
+	try:
+		server_type = kwargs.get("server_type") or "Server"
+		cluster = kwargs.get("cluster")
+		platform = kwargs.get("platform")
+		payload = {"name": server_type}
+		if cluster:
+			payload["cluster"] = cluster
+		if platform:
+			payload["platform"] = platform
+		data = _make_fc_request("POST", "press.api.server.plans", json_data=payload)
+		message = _message(data) or {}
+		plans = message.get("plans", [])
+		return _success(
+			[
+				{
+					"name": plan.get("name"),
+					"title": plan.get("title"),
+					"price_usd": plan.get("price_usd"),
+					"vcpu": plan.get("vcpu"),
+					"memory": plan.get("memory"),
+					"disk": plan.get("disk"),
+					"platform": plan.get("platform"),
+				}
+				for plan in plans
+			]
+		)
+	except Exception as e:
+		return _failure("Server Plans", e)
+
+
+def handle_fc_create_server(**kwargs) -> str:
+	"""Create a new Frappe Cloud server (unified app + database by default)."""
+	try:
+		title = kwargs.get("title")
+		cluster = kwargs.get("cluster")
+		app_plan = kwargs.get("app_plan")
+		if not title or not cluster or not app_plan:
+			return json.dumps({"success": False, "error": "title, cluster, and app_plan are required"})
+
+		server_payload = {
+			"title": title,
+			"cluster": cluster,
+			"app_plan": app_plan,
+			"auto_increase_storage": kwargs.get("auto_increase_storage", False),
+		}
+
+		db_plan = kwargs.get("db_plan")
+		if db_plan:
+			# Separate app + database server mode
+			server_payload["db_plan"] = db_plan
+			endpoint = "press.api.server.new"
+		else:
+			endpoint = "press.api.server.new_unified"
+
+		data = _make_fc_request("POST", endpoint, json_data={"server": server_payload})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Create Server", e)
+
+
+def handle_fc_archive_server(**kwargs) -> str:
+	"""Archive/delete a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		data = _make_fc_request("POST", "press.api.server.archive", json_data={"name": name})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Archive Server", e)
+
+
+def handle_fc_reboot_server(**kwargs) -> str:
+	"""Reboot a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		data = _make_fc_request("POST", "press.api.server.reboot", json_data={"name": name})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Reboot Server", e)
+
+
+def handle_fc_rename_server(**kwargs) -> str:
+	"""Rename (change the title of) a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		title = kwargs.get("title")
+		if not name or not title:
+			return json.dumps({"success": False, "error": "server and title are required"})
+		data = _make_fc_request("POST", "press.api.server.rename", json_data={"name": name, "title": title})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Rename Server", e)
+
+
+def handle_fc_change_server_plan(**kwargs) -> str:
+	"""Resize/change the plan of a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		plan = kwargs.get("plan")
+		if not name or not plan:
+			return json.dumps({"success": False, "error": "server and plan are required"})
+		data = _make_fc_request("POST", "press.api.server.change_plan", json_data={"name": name, "plan": plan})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Change Server Plan", e)
+
+
+def handle_fc_server_usage(**kwargs) -> str:
+	"""Get current CPU, memory and disk usage for a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		data = _make_fc_request("POST", "press.api.server.usage", json_data={"name": name})
+		return _success(_message(data))
+	except Exception as e:
+		return _failure("Server Usage", e)
+
+
+def handle_fc_list_server_benches(**kwargs) -> str:
+	"""List benches (release groups) running on a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		data = _make_fc_request("POST", "press.api.server.groups", json_data={"name": name})
+		return _result(
+			data,
+			kwargs,
+			fields=("name", "title", "version", "status", "number_of_sites", "number_of_apps"),
+		)
+	except Exception as e:
+		return _failure("List Server Benches", e)
+
+
+def handle_fc_list_server_jobs(**kwargs) -> str:
+	"""List Agent jobs for a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		payload = {"filters": {"server": name}}
+		for key in ("order_by", "limit_start", "limit_page_length"):
+			if kwargs.get(key):
+				payload[key] = kwargs[key]
+		data = _make_fc_request("POST", "press.api.server.jobs", json_data=payload)
+		return _result(
+			data,
+			kwargs,
+			fields=("name", "job_type", "creation", "status", "start", "end", "duration"),
+		)
+	except Exception as e:
+		return _failure("List Server Jobs", e)
+
+
+def handle_fc_list_server_plays(**kwargs) -> str:
+	"""List Ansible plays for a Frappe Cloud server."""
+	try:
+		name = kwargs.get("server") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "server is required"})
+		payload = {"filters": {"server": name}}
+		for key in ("order_by", "limit_start", "limit_page_length"):
+			if kwargs.get(key):
+				payload[key] = kwargs[key]
+		data = _make_fc_request("POST", "press.api.server.plays", json_data=payload)
+		return _result(
+			data,
+			kwargs,
+			fields=("name", "play", "creation", "status", "start", "end", "duration"),
+		)
+	except Exception as e:
+		return _failure("List Server Plays", e)
+
+
+def handle_fc_list_bench_jobs(**kwargs) -> str:
+	"""List Agent jobs for a Frappe Cloud bench/release group."""
+	try:
+		name = kwargs.get("bench") or kwargs.get("name")
+		if not name:
+			return json.dumps({"success": False, "error": "bench is required"})
+		payload = {"filters": {"bench": name}}
+		for key in ("order_by", "limit_start", "limit_page_length"):
+			if kwargs.get(key):
+				payload[key] = kwargs[key]
+		data = _make_fc_request("POST", "press.api.bench.jobs", json_data=payload)
+		return _result(
+			data,
+			kwargs,
+			fields=("name", "job_type", "creation", "status", "start", "end", "duration"),
+		)
+	except Exception as e:
+		return _failure("List Bench Jobs", e)
+
+
+def handle_fc_list_marketplace_apps(**kwargs) -> str:
+	"""List apps available on the Frappe Cloud Marketplace."""
+	try:
+		filters = kwargs.get("filters") or {}
+		limit = kwargs.get("limit", 50)
+		data = _make_fc_request(
+			"POST",
+			"press.api.marketplace.get_apps",
+			json_data={"filters": filters, "limit": limit},
+		)
+		return _result(data, kwargs, fields=("name", "title", "description", "image", "publisher"))
+	except Exception as e:
+		return _failure("List Marketplace Apps", e)
