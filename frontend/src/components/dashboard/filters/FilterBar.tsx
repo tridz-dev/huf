@@ -24,6 +24,7 @@ interface FilterBarProps {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  onSearchSubmit?: () => void;
   filters?: Filter[];
   actions?: ReactNode;
   collapsibleSearch?: boolean;
@@ -40,6 +41,7 @@ function searchInputCell(
   searchPlaceholder: string,
   searchValue: string | undefined,
   onSearchChange: (value: string) => void,
+  onSearchSubmit?: () => void,
   autoFocus = false,
   trailing?: ReactNode
 ) {
@@ -51,6 +53,9 @@ function searchInputCell(
         className="w-full bg-transparent py-2.5 font-body text-[13.5px] text-ink outline-none placeholder:text-steel-soft"
         value={searchValue}
         onChange={(e) => onSearchChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && onSearchSubmit) onSearchSubmit();
+        }}
         autoFocus={autoFocus}
       />
       {trailing}
@@ -62,6 +67,7 @@ export function FilterBar({
   searchPlaceholder = 'Search...',
   searchValue,
   onSearchChange,
+  onSearchSubmit,
   filters = [],
   actions,
   collapsibleSearch = false,
@@ -96,6 +102,7 @@ export function FilterBar({
           searchPlaceholder,
           searchValue,
           onSearchChange,
+          onSearchSubmit,
           collapsibleSearch,
           collapsibleSearch ? (
             <button

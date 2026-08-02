@@ -3,8 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { FilterBar } from '@/components/dashboard/filters/FilterBar';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
 import { BulkImportModal } from '@/components/data-table/BulkImportModal';
@@ -197,25 +197,22 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				</div>
 
 				{/* Search + Refresh */}
-				<div className="flex items-center gap-4">
-					<div className="flex-1">
-						<Input
-							placeholder="Search records..."
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') loadRecords(true); }}
-							className="h-8 text-sm max-w-sm rounded-none border-line bg-panel text-ink focus-visible:ring-1 focus-visible:ring-steel"
-						/>
-					</div>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-8 w-8 rounded-none border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
-						onClick={() => loadRecords(true)}
-					>
-						<RefreshCcw className="w-3.5 h-3.5" />
-					</Button>
-				</div>
+				<FilterBar
+					searchPlaceholder="Search records..."
+					searchValue={search}
+					onSearchChange={setSearch}
+					onSearchSubmit={() => loadRecords(true)}
+					actions={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-8 w-8 rounded-none border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
+							onClick={() => loadRecords(true)}
+						>
+							<RefreshCcw className="w-3.5 h-3.5" />
+						</Button>
+					}
+				/>
 
 				{/* Records table */}
 				{records.length === 0 && !recordsLoading ? (
