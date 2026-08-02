@@ -3,6 +3,11 @@ import base64
 
 import frappe
 from frappe.utils.file_manager import save_file
+try:
+    from requests.exceptions import RequestException
+except ImportError:
+    class RequestException(Exception):
+        pass
 
 from huf.ai import audio_service
 from huf.ai.transaction import commit_if_background
@@ -171,9 +176,9 @@ async def handle_generate_image(
                         img_response = _http_request("GET", image_url, timeout=30)
                         img_response.raise_for_status()
                         image_bytes = img_response.content
-                    except ValueError as e:
+                    except (ValueError, RequestException) as e:
                         frappe.logger("huf").warning(
-                            f"Image URL blocked by SSRF filter: {image_url} — {e}"
+                            f"Image download failed for URL {image_url}: {e}"
                         )
                         continue
                 elif image_b64:
