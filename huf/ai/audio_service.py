@@ -694,19 +694,6 @@ def create_audio_user_message(
 
     agent_doc = frappe.get_doc("Agent", agent_name) if agent_name else None
 
-    # Get conversation_index
-    last_index = frappe.db.sql(
-        """
-        SELECT MAX(conversation_index) as last_index
-        FROM `tabAgent Message`
-        WHERE conversation = %s
-        """,
-        (conversation_id,),
-        as_dict=1,
-    )
-
-    conversation_index = (last_index[0].last_index if last_index and last_index[0].last_index is not None else 0) + 1
-
     # Create or Update Agent Message
     if message_id and frappe.db.exists("Agent Message", message_id):
         message_doc = frappe.get_doc("Agent Message", message_id)
@@ -723,35 +710,60 @@ def create_audio_user_message(
             message_doc.agent_run = agent_run_id
         message_doc.save()
     else:
-        message_doc = frappe.get_doc({
-            "doctype": "Agent Message",
-            "conversation": conversation_id,
-            "role": "user",
-            "content": transcript,
-            "kind": "Audio",
-            "agent": agent_name,
-            "provider": agent_doc.provider if agent_doc else None,
-            "model": agent_doc.model if agent_doc else None,
-            "agent_run": agent_run_id,
-            "conversation_index": conversation_index,
-            "is_agent_message": 0,
-            "user": frappe.session.user,
-        })
-        if stt_model_link:
-            message_doc.stt_model = stt_model_link
-        if message_status:
-            message_doc.status = message_status
-        if file_doc and file_doc.file_url:
-            message_doc.voice_message = file_doc.file_url
-        # Audio user messages are created during agent/chat execution.
-        # Authenticated users require Agent Message create permission;
-        # Guest agents rely on the system-level bypass.
-        if frappe.session.user == "Guest":
-            message_doc.insert(ignore_permissions=True)
-        else:
-            if not frappe.has_permission("Agent Message", "create", doc=message_doc):
-                frappe.throw(_("Not permitted to create Agent Message"), frappe.PermissionError)
-            message_doc.insert()
+        # MA-11: allocate conversation_index with a retry loop so concurrent
+        # audio inserts cannot read the same MAX and create duplicate indices.
+        max_retries = 3
+        message_doc = None
+        conversation_index = 0
+        for attempt in range(max_retries):
+            last_index = frappe.db.sql(
+                """
+                SELECT MAX(conversation_index) as last_index
+                FROM `tabAgent Message`
+                WHERE conversation = %s
+                """,
+                (conversation_id,),
+                as_dict=1,
+            )
+            conversation_index = (
+                last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
+            ) + 1
+
+            message_doc = frappe.get_doc({
+                "doctype": "Agent Message",
+                "conversation": conversation_id,
+                "role": "user",
+                "content": transcript,
+                "kind": "Audio",
+                "agent": agent_name,
+                "provider": agent_doc.provider if agent_doc else None,
+                "model": agent_doc.model if agent_doc else None,
+                "agent_run": agent_run_id,
+                "conversation_index": conversation_index,
+                "is_agent_message": 0,
+                "user": frappe.session.user,
+            })
+            if stt_model_link:
+                message_doc.stt_model = stt_model_link
+            if message_status:
+                message_doc.status = message_status
+            if file_doc and file_doc.file_url:
+                message_doc.voice_message = file_doc.file_url
+            # Audio user messages are created during agent/chat execution.
+            # Authenticated users require Agent Message create permission;
+            # Guest agents rely on the system-level bypass.
+            try:
+                if frappe.session.user == "Guest":
+                    message_doc.insert(ignore_permissions=True)
+                else:
+                    if not frappe.has_permission("Agent Message", "create", doc=message_doc):
+                        frappe.throw(_("Not permitted to create Agent Message"), frappe.PermissionError)
+                    message_doc.insert()
+                break
+            except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+                if attempt == max_retries - 1:
+                    raise
+                continue
 
     # Check if file is already attached to this message
     if file_doc and message_doc:

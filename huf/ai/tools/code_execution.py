@@ -1422,3 +1422,7 @@ def _apply_result(
 		call.error_message = None
 
 	call.save(ignore_permissions=True)
+
+	# MA-10: keep the linked Agent Message's fetch_from tool fields in sync.
+	from huf.ai.conversation_manager import sync_tool_status_to_message
+	sync_tool_status_to_message(call.name)

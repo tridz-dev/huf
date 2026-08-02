@@ -663,6 +663,12 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                         frappe.PermissionError,
                     )
                 doc.save()
+
+                # MA-10: keep the linked Agent Message's fetch_from tool fields
+                # in sync when the tool call reaches a terminal state.
+                from huf.ai.conversation_manager import sync_tool_status_to_message
+                sync_tool_status_to_message(doc.name)
+
                 return doc.name
             else:
                 return None
@@ -720,6 +726,13 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
     name = raw_call.get("name") if isinstance(raw_call, dict) else getattr(raw_call, "name", None)
     args = raw_call.get("arguments") if isinstance(raw_call, dict) and not is_output else (getattr(raw_call, "arguments", None) if not is_output else None)
     call_id = raw_call.get("id") if isinstance(raw_call, dict) else getattr(raw_call, "id", None)
+
+    # MA-08: propagate failure markers produced by provider modules so the
+    # Agent Tool Call is recorded as Failed rather than Completed.
+    if error is None and isinstance(raw_call, dict):
+        if raw_call.get("failed"):
+            error = raw_call.get("error_message") or "Tool execution failed"
+
     return process_tool_call(
         agent_run=run_doc.name,
         conversation=conversation.name,

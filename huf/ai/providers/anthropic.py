@@ -128,32 +128,45 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 for tool_use in tool_uses:
                     tool_name = tool_use.name
                     tool_args = tool_use.input
-                    
+
                     tool_to_run = _find_tool(agent, tool_name)
                     result_content = ''
+                    tool_failed = False
+                    error_message = None
 
                     if tool_to_run:
                         try:
                             result_content = await _execute_tool_call(tool_to_run, json.dumps(tool_args))
                         except Exception as e:
-                            result_content = f"Error executing tool {tool_name}: {str(e)}"
+                            tool_failed = True
+                            error_message = str(e)
+                            result_content = f"Error executing tool {tool_name}: {error_message}"
                     else:
-                        result_content = f"Tool '{tool_name}' not found."
+                        tool_failed = True
+                        error_message = f"Tool '{tool_name}' not found."
+                        result_content = error_message
 
                     all_new_items.append(
                         SimpleNamespace(
                             type="tool_call_output_item",
-                            raw_item={"name": tool_name, "output": result_content}
+                            raw_item={
+                                "name": tool_name,
+                                "output": result_content,
+                                "failed": tool_failed,
+                                "error_message": error_message,
+                            }
                         )
                     )
 
                     if isinstance(result_content, (dict, list)):
                         result_content = json.dumps(result_content, default=str)
-                    
+
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": tool_use.id,
-                        "content": str(result_content)
+                        "content": str(result_content),
+                        "failed": tool_failed,
+                        "error_message": error_message,
                     })
 
                 messages.append(assistant_message)
