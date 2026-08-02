@@ -35,26 +35,30 @@ export function PageFrame({
   return (
     <div ref={scrollRef} className="h-full overflow-auto">
       <div className={cn('p-6 space-y-6', className)}>
-        {(title || subtitle || actions) && (
-          <div className="flex items-end justify-between gap-4">
-            <div className="space-y-1">
-              {title && (
-                <div className="flex items-center gap-3">
-                  <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-tight">
-                    {title}
-                  </h1>
-                  {badge}
+        {(title || subtitle || actions || filters) && (
+          <div className="space-y-4">
+            {(title || subtitle || actions) && (
+              <div className="flex items-end justify-between gap-4">
+                <div className="space-y-1">
+                  {title && (
+                    <div className="flex items-center gap-3">
+                      <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-tight">
+                        {title}
+                      </h1>
+                      {badge}
+                    </div>
+                  )}
+                  {subtitle && (
+                    <p className="font-body text-steel text-[14.5px]">{subtitle}</p>
+                  )}
                 </div>
-              )}
-              {subtitle && (
-                <p className="font-body text-steel text-[14.5px]">{subtitle}</p>
-              )}
-            </div>
-            {actions && <div className="flex items-center gap-2">{actions}</div>}
+                {actions && <div className="flex items-center gap-2">{actions}</div>}
+              </div>
+            )}
+
+            {filters && <div>{filters}</div>}
           </div>
         )}
-
-        {filters && <div>{filters}</div>}
 
         <div>{children}</div>
       </div>
