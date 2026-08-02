@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -132,8 +132,8 @@ const operateNavItems = [
 		badge: "Experimental",
 	},
 	{
-		title: "Console",
-		url: "/console",
+		title: "Playground",
+		url: "/playground",
 		icon: Terminal,
 		capability: "agent.use",
 	},
@@ -145,6 +145,12 @@ const operateNavItems = [
  * destinations off-screen.
  */
 const settingsNavGroups = [
+  {
+    label: "General",
+    items: [
+      { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
+    ],
+  },
   {
     label: "Intelligence",
     items: [

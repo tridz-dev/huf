@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
-import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
+import { Activity, ArrowUpDown, Loader2 } from 'lucide-react';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -297,7 +298,7 @@ export default function Executions() {
   });
 
   return (
-    <PageLayout
+    <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
       subtitle="Inspect agent runs and their results."
@@ -349,6 +350,12 @@ export default function Executions() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : runs.length === 0 ? (
+          <EmptyState
+            icon={Activity}
+            title="No executions"
+            description="No agent runs have been recorded yet."
+          />
         ) : (
           <div className="border border-line bg-panel">
             <Table>
@@ -368,27 +375,19 @@ export default function Executions() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/executions/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="text-steel">No executions found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/executions/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -407,6 +406,6 @@ export default function Executions() {
           {total !== undefined ? `Showing all ${total} executions` : 'No more executions to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

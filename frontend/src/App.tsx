@@ -58,7 +58,7 @@ const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
-const ConsolePage = lazy(() => import('./pages/ConsolePage'));
+const PlaygroundPage = lazy(() => import('./pages/PlaygroundPage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
@@ -74,9 +74,11 @@ const IntegrationServiceFormPageWrapper = lazy(
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
+const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
+import { initTheme } from './lib/personalization';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -109,6 +111,10 @@ function AppShell() {
 
   useEffect(() => {
     clearChunkReloadFlag();
+  }, []);
+
+  useEffect(() => {
+    initTheme();
   }, []);
 
   return (
@@ -286,17 +292,18 @@ function AppShell() {
             }
           />
           <Route
-            path="/console"
+            path="/playground"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout hideHeader>
                   <Suspense fallback={<PageLoader />}>
-                    <ConsolePage />
+                    <PlaygroundPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
           />
+          <Route path="/console" element={<Navigate to="/playground" replace />} />
           <Route
             path="/data/new"
             element={
@@ -454,6 +461,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/general"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GeneralSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

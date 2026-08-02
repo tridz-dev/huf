@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PageLayout } from "@/components/dashboard";
+import { PageFrame } from "@/layouts/PageFrame";
 import { ExperimentalBadge } from "@/components/common/ExperimentalBadge";
 import { MemoryList } from "@/components/memory/MemoryList";
 import { MemoryPolicyList } from "@/components/memory/MemoryPolicyList";
@@ -33,13 +33,13 @@ export default function MemoryPage() {
   };
 
   return (
-    <PageLayout
+    <PageFrame
       title="Memory"
       badge={<ExperimentalBadge />}
       subtitle="Facts, preferences, and context your AI agents have learned from conversations."
     >
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-        <TabsList variant="panel" className="border-b-0">
+        <TabsList>
           <TabsTrigger value="memories">Memories</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
         </TabsList>
@@ -52,6 +52,6 @@ export default function MemoryPage() {
           <MemoryPolicyList />
         </TabsContent>
       </Tabs>
-    </PageLayout>
+    </PageFrame>
   );
 }

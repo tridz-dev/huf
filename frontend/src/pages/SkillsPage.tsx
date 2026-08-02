@@ -12,7 +12,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getSkills, deleteSkill, updateSkill } from '../services/skillApi';
@@ -132,7 +133,7 @@ export function SkillsPage() {
   };
 
   return (
-    <PageLayout
+    <PageFrame
       title="Skills"
       badge={<ExperimentalBadge />}
       subtitle="Manage reusable skill bundles for your agents"
@@ -171,9 +172,12 @@ export function SkillsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">No skills found.</p>
-          </div>
+          <EmptyState
+            icon={Sparkles}
+            title="No skills"
+            description="Create a skill to get started."
+            action={{ label: 'New skill', onClick: () => navigate('/skills/new') }}
+          />
         }
         renderItem={(skill) => (
           <ItemCard
@@ -245,7 +249,7 @@ export function SkillsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </PageLayout>
+    </PageFrame>
   );
 }
 

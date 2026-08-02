@@ -15,4 +15,5 @@ huf.patches.v1.update_agent_background_color
 huf.patches.v1.repair_tool_call_messages
 huf.patches.v1.fix_agent_message_status
 huf.patches.v1.sync_data_table_permissions
+huf.patches.v1.add_frappe_cloud_service
 huf.patches.add_ocr_custom_fields_to_file

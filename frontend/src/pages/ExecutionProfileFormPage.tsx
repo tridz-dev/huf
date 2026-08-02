@@ -197,26 +197,24 @@ export function ExecutionProfileFormPage() {
     <div className="flex-1 overflow-y-auto">
       <div className="space-y-6 max-w-4xl mx-auto p-6 pb-12">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="h-8 w-8 text-steel-soft shrink-0 mt-1" strokeWidth={1.6} />
           <div>
             <InlineEditName
               value={form.watch('profile_name') || (isNew ? 'New Execution Profile' : id!)}
               onChange={(name: string) => form.setValue('profile_name', name, { shouldDirty: true })}
               placeholder="Profile Name"
-              className="text-2xl font-bold tracking-tight"
+              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:uppercase [&_h1]:leading-tight"
             />
-            <p className="text-sm text-muted-foreground">
-              {isNew ? 'Create a new sandboxed execution profile' : `ID: ${id}`}
+            <p className="font-mono text-[12px] text-steel mt-1">
+              {isNew ? 'Create a new sandboxed execution profile' : `ID ${id}`}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           {!isNew && (
-            <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving}>
+            <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving} className="border-line hover:border-ink hover:bg-paper-deep">
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
             </Button>
           )}
@@ -229,10 +227,10 @@ export function ExecutionProfileFormPage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Card>
+          <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle>General Settings</CardTitle>
-              <CardDescription>Configure security policy and sandbox behavior</CardDescription>
+              <CardTitle className="font-display font-bold text-[18px] uppercase">General Settings</CardTitle>
+              <CardDescription className="font-body text-[13px] text-steel">Configure security policy and sandbox behavior</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -254,7 +252,7 @@ export function ExecutionProfileFormPage() {
                 control={form.control}
                 name="disabled"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-center justify-between border border-line bg-paper p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Disable Profile</FormLabel>
                       <FormDescription>Disabled profiles cannot be selected or used for code execution.</FormDescription>
@@ -337,10 +335,10 @@ export function ExecutionProfileFormPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle>Resource Limits</CardTitle>
-              <CardDescription>Specify CPU, time, memory, and output boundaries for code runs</CardDescription>
+              <CardTitle className="font-display font-bold text-[18px] uppercase">Resource Limits</CardTitle>
+              <CardDescription className="font-body text-[13px] text-steel">Specify CPU, time, memory, and output boundaries for code runs</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
               <FormField

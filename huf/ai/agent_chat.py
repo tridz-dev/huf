@@ -10,8 +10,9 @@ from frappe.utils.file_manager import save_file
 logger = frappe.logger("huf")
 
 from huf.ai import audio_service
+from huf.ai import conversation_fork
 from huf.ai import sdk_tools
-from huf.ai.agent_integration import _is_truthy, _run_async_safely, run_agent_sync
+from huf.ai.agent_integration import _is_truthy, _resolve_effective_model, _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
 
 
@@ -139,6 +140,7 @@ def upload_audio_and_transcribe_web(
     agent: str,
     conversation: str | None = None,
     transcribe_only: bool = False,
+    model_override: str | None = None,
 ):
     """Web endpoint: save audio, transcribe via STT, optionally run the agent with the transcript."""
     if not b64data or not filename:
@@ -254,11 +256,16 @@ def upload_audio_and_transcribe_web(
         }
 
     # Run agent with transcript as prompt, within the same conversation
+    effective_model = (
+        model_override
+        if model_override
+        else (conv.model if conv and conv.model else frappe.db.get_value("Agent", agent, "model"))
+    )
     run_result = run_agent_sync(
         agent_name=agent,
         prompt=transcript,
         provider=provider,
-        model=frappe.db.get_value("Agent", agent, "model"),
+        model=effective_model,
         channel_id="Chat",
         conversation_id=conversation_id,
     )
@@ -375,7 +382,54 @@ def create_conversation(agent: str, channel: str = "Chat"):
         raise
 
 @frappe.whitelist()
-def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
+def set_conversation_model_override(conversation: str, model_override: str | None = None):
+    """Persist (or clear) a per-conversation model override.
+
+    Passing an empty/None model_override clears the override and resets the
+    conversation model to the agent's default model.
+    """
+    if not conversation:
+        frappe.throw(_("conversation is required"))
+
+    try:
+        conv_doc = frappe.get_doc("Agent Conversation", conversation)
+    except frappe.DoesNotExistError:
+        frappe.throw(_("Conversation not found: {0}").format(conversation))
+
+    agent_name = conv_doc.agent
+    if not agent_name:
+        frappe.throw(_("Conversation has no agent set"))
+
+    agent_doc = frappe.get_doc("Agent", agent_name)
+
+    if model_override:
+        _resolve_effective_model(agent_doc, model=model_override)
+        conv_doc.db_set("model", model_override)
+    else:
+        conv_doc.db_set("model", agent_doc.model)
+
+    return {
+        "success": True,
+        "conversation_id": conv_doc.name,
+        "model": conv_doc.model,
+    }
+
+
+@frappe.whitelist()
+def fork_conversation(conversation_id: str, mode: str, title: str | None = None):
+    """Fork an existing Agent Conversation into a new one."""
+    try:
+        return conversation_fork.fork_conversation_impl(conversation_id, mode, title)
+    except Exception:  # boundary exception handler: API endpoint
+        frappe.log_error(
+            message=f"fork_conversation error: {frappe.get_traceback()}",
+            title="Huf API",
+        )
+        raise
+
+
+@frappe.whitelist()
+def new_conversation(agent: str, message: str, skip_user_message=0, files=None, model_override: str | None = None):
 
     if not agent:
         frappe.throw(_("agent is required"))
@@ -386,11 +440,13 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
         cm = ConversationManager(agent_name=agent, channel="Chat")
         conversation = cm.create_new_conversation()
 
+        effective_model = model_override if model_override else frappe.db.get_value("Agent", agent, "model")
+
         run_result = run_agent_sync(
             agent_name=agent,
             prompt=message,
             provider=frappe.db.get_value("Agent", agent, "provider"),
-            model=frappe.db.get_value("Agent", agent, "model"),
+            model=effective_model,
             channel_id="Chat",
             conversation_id=conversation.name,
             skip_user_message=_is_truthy(skip_user_message),
@@ -417,7 +473,13 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None):
 
 
 @frappe.whitelist()
-def send_message_to_conversation(conversation: str, message: str, skip_user_message=0, files=None):
+def send_message_to_conversation(
+    conversation: str,
+    message: str,
+    skip_user_message=0,
+    files=None,
+    model_override: str | None = None,
+):
     if not conversation:
         frappe.throw(_("conversation is required"))
     if not message:
@@ -436,11 +498,19 @@ def send_message_to_conversation(conversation: str, message: str, skip_user_mess
         if not agent_name:
             frappe.throw(_("Conversation has no agent set"))
 
+        # Prefer the explicit runtime override, then the persisted conversation
+        # override, then the agent's default model.
+        effective_model = (
+            model_override
+            if model_override
+            else (conv_doc.model or frappe.db.get_value("Agent", agent_name, "model"))
+        )
+
         result = run_agent_sync(
             agent_name=agent_name,
             prompt=message,
             provider=frappe.db.get_value("Agent", agent_name, "provider"),
-            model=frappe.db.get_value("Agent", agent_name, "model"),
+            model=effective_model,
             channel_id=conv_doc.channel or "Chat",
             conversation_id=conv_doc.name,
             skip_user_message=_is_truthy(skip_user_message),
@@ -548,6 +618,7 @@ def upload_file_and_process_web(
     b64data: str,
     agent: str,
     conversation: str | None = None,
+    model_override: str | None = None,
 ):
     """Web endpoint: save an uploaded document/image/audio against a real Agent Conversation
     and extract its text via OCR/vision or STT transcription, honoring the agent's upload capability flags.
@@ -673,7 +744,7 @@ def upload_file_and_process_web(
     }
 
 
-def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
+def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes, model_override: str | None = None):
     """Shared validation for web chat file uploads."""
     if not agent:
         frappe.throw(_("agent is required"))
@@ -703,8 +774,17 @@ def _validate_web_file_upload(agent: str, filename: str, file_bytes: bytes):
             }
         return agent_doc, None
 
-    model_name = agent_doc.get("model")
-    modalities = (frappe.db.get_value("AI Model", model_name, "modalities") or "") if model_name else ""
+    # Validate modality support against the effective model (override or default).
+    effective_model = model_override if model_override else agent_doc.get("model")
+    if not effective_model:
+        return None, {"success": False, "error": _("No model configured for this agent.")}
+
+    try:
+        _resolve_effective_model(agent_doc, model=model_override)
+    except frappe.ValidationError as e:
+        return None, {"success": False, "error": str(e)}
+
+    modalities = frappe.db.get_value("AI Model", effective_model, "modalities") or ""
     supported = {m.strip() for m in modalities.split(",") if m.strip()}
 
     LOCAL_EXTRACTABLE_EXTS = (".docx", ".xlsx", ".pptx", ".txt", ".md", ".html", ".htm", ".csv", ".json", ".xml", ".log")
@@ -738,7 +818,7 @@ def _ensure_web_chat_conversation(agent: str, conversation: str | None = None):
 
 
 @frappe.whitelist()
-def upload_file_attachment_web(filename: str, b64data: str, agent: str):
+def upload_file_attachment_web(filename: str, b64data: str, agent: str, model_override: str | None = None):
     """Stage a chat attachment upload. Saves the file and returns file_id without OCR or agent run."""
     if not b64data or not filename:
         frappe.throw(_("Filename and file data are required"))
@@ -751,7 +831,7 @@ def upload_file_attachment_web(filename: str, b64data: str, agent: str):
     except (ValueError, binascii.Error):
         frappe.throw(_("Invalid base64 data"))
 
-    _, error = _validate_web_file_upload(agent, filename, file_bytes)
+    _, error = _validate_web_file_upload(agent, filename, file_bytes, model_override=model_override)
     if error:
         return error
 
@@ -807,6 +887,7 @@ def prepare_message_with_file_web(
     file_id: str | None = None,
     filename: str | None = None,
     b64data: str | None = None,
+    model_override: str | None = None,
 ):
     """Attach a staged file to a conversation message and prepare the agent prompt without running the agent."""
     if not file_id and (not b64data or not filename):
@@ -821,7 +902,7 @@ def prepare_message_with_file_web(
         except (ValueError, binascii.Error):
             frappe.throw(_("Invalid base64 data"))
 
-        _, error = _validate_web_file_upload(agent, filename, file_bytes)
+        _, error = _validate_web_file_upload(agent, filename, file_bytes, model_override=model_override)
         if error:
             return error
 

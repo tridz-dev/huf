@@ -1,8 +1,9 @@
 import { useEffect, type ReactNode } from 'react';
-import { Calendar, Activity, Settings, Zap, Server, Lock } from 'lucide-react';
+import { Calendar, Activity, Settings, Zap, Server, Lock, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { getAgents } from '../services/agentApi';
@@ -147,7 +148,7 @@ function AgentsPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       title="Agents"
       subtitle="Create and manage your AI agents."
       filters={
@@ -183,9 +184,12 @@ function AgentsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel mb-4">No agents found.</p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No agents"
+            description="Create an agent to get started."
+            action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
+          />
         }
         renderItem={(agent) => {
           const status = getStatusLabel(agent);
@@ -247,6 +251,6 @@ function AgentsPage() {
           {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

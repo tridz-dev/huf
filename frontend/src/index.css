@@ -16,11 +16,11 @@
 
 @layer base {
   :root {
-    /* HUF Design System v1.0 — Instrument / Control-Room */
+    /* HUF Design System — Themable tokens (default = Winter) */
 
     /* Surfaces */
-    --paper:      #F2F3EF;
-    --paper-deep: #E9EBE4;
+    --paper:      #EEF0EC;
+    --paper-deep: #E2E4DE;
     --panel:      #FBFCFA;
 
     /* Text & lines */
@@ -28,14 +28,15 @@
     --ink-soft:   #2A2F36;
     --steel:      #5A636F;
     --steel-soft: #8A929C;
-    --line:       #D7DACF;
+    --line:       #DEE1D9;
     --line-marketing: #C7CCC0;
     --line-dark:  #343A42;
 
     /* Signal */
-    --signal:     #E8531F;
-    --signal-ink: #BC3E0F;
+    --signal:     #C6511F;
+    --signal-ink: #9C3F17;
     --good:       #3F7A4E;
+    --coral-soft: #FAECE7;
 
     /* Shape */
     --r: 2px;
@@ -45,46 +46,114 @@
     --body:    'IBM Plex Sans', sans-serif;
     --mono:    'IBM Plex Mono', monospace;
 
-    /* shadcn compatibility — mapped to HUF tokens */
+    /* shadcn compatibility — mapped to HUF tokens so themes propagate */
     --radius: 2px;
-    --background: #F2F3EF;
-    --foreground: #15181C;
-    --card: #FBFCFA;
-    --card-foreground: #15181C;
-    --popover: #FBFCFA;
-    --popover-foreground: #15181C;
-    --primary: #15181C;
-    --primary-foreground: #F2F3EF;
-    --secondary: #E9EBE4;
-    --secondary-foreground: #15181C;
-    --muted: #E9EBE4;
-    --muted-foreground: #5A636F;
-    --accent: #E9EBE4;
-    --accent-foreground: #15181C;
+    --background: var(--paper);
+    --foreground: var(--ink);
+    --card: var(--panel);
+    --card-foreground: var(--ink);
+    --popover: var(--panel);
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--paper);
+    --secondary: var(--paper-deep);
+    --secondary-foreground: var(--ink);
+    --muted: var(--paper-deep);
+    --muted-foreground: var(--steel);
+    --accent: var(--paper-deep);
+    --accent-foreground: var(--ink);
     --destructive: #C0392B;
-    --destructive-foreground: #F2F3EF;
-    --border: #D7DACF;
-    --input: #D7DACF;
-    --ring: #E8531F;
+    --destructive-foreground: var(--paper);
+    --border: var(--line);
+    --input: var(--line);
+    --ring: var(--signal);
 
     /* Sidebar */
-    --sidebar-background: #E9EBE4;
-    --sidebar-foreground: #15181C;
-    --sidebar-primary: #15181C;
-    --sidebar-primary-foreground: #F2F3EF;
-    --sidebar-accent: #FBFCFA;
-    --sidebar-accent-foreground: #15181C;
-    --sidebar-border: #D7DACF;
-    --sidebar-ring: #E8531F;
+    --sidebar-background: var(--paper-deep);
+    --sidebar-foreground: var(--ink);
+    --sidebar-primary: var(--ink);
+    --sidebar-primary-foreground: var(--paper);
+    --sidebar-accent: var(--panel);
+    --sidebar-accent-foreground: var(--ink);
+    --sidebar-border: var(--line);
+    --sidebar-ring: var(--signal);
 
     /* Audio player resolved colors */
-    --color-background: #F2F3EF;
-    --color-foreground: #15181C;
-    --color-primary: #15181C;
-    --color-secondary: #E9EBE4;
-    --color-accent: #E9EBE4;
-    --color-border: #D7DACF;
-    --color-muted-foreground: #5A636F;
+    --color-background: var(--paper);
+    --color-foreground: var(--ink);
+    --color-primary: var(--ink);
+    --color-secondary: var(--paper-deep);
+    --color-accent: var(--paper-deep);
+    --color-border: var(--line);
+    --color-muted-foreground: var(--steel);
+  }
+
+  [data-theme="winter"] {
+    --paper:      #EEF0EC;
+    --paper-deep: #E2E4DE;
+    --panel:      #FBFCFA;
+    --ink:        #15181C;
+    --ink-soft:   #2A2F36;
+    --steel:      #5A636F;
+    --steel-soft: #8A929C;
+    --line:       #DEE1D9;
+    --line-marketing: #C7CCC0;
+    --line-dark:  #343A42;
+    --signal:     #C6511F;
+    --signal-ink: #9C3F17;
+    --good:       #3F7A4E;
+    --coral-soft: #FAECE7;
+  }
+
+  [data-theme="midnight"] {
+    --paper:      #14161A;
+    --paper-deep: #0E1013;
+    --panel:      #1E2126;
+    --ink:        #EDEFEA;
+    --ink-soft:   #C5C9CF;
+    --steel:      #7C8794;
+    --steel-soft: #A8B0BA;
+    --line:       #2A2E35;
+    --line-marketing: #3A3F47;
+    --line-dark:  #7C8794;
+    --signal:     #FF7A3D;
+    --signal-ink: #FF9A63;
+    --good:       #5FC97A;
+    --coral-soft: #2E201B;
+  }
+
+  [data-theme="summer"] {
+    --paper:      #FFF3D6;
+    --paper-deep: #F5E6C0;
+    --panel:      #FFFCF3;
+    --ink:        #1C1608;
+    --ink-soft:   #3D3520;
+    --steel:      #8A7A4A;
+    --steel-soft: #B3A278;
+    --line:       #F0DFA8;
+    --line-marketing: #E8D9A8;
+    --line-dark:  #5A4F32;
+    --signal:     #FF5A1F;
+    --signal-ink: #D6440F;
+    --good:       #2E9A4E;
+    --coral-soft: #FFF0E6;
+  }
+
+  [data-theme="morning"] {
+    --paper:      #FBE4D6;
+    --paper-deep: #F5D6C5;
+    --panel:      #FFF8F4;
+    --ink:        #241511;
+    --ink-soft:   #4A3029;
+    --steel:      #9C6A55;
+    --steel-soft: #C79A85;
+    --line:       #F0C9B4;
+    --line-marketing: #ECC9B4;
+    --line-dark:  #6B4A3B;
+    --signal:     #E8531F;
+    --signal-ink: #BC3E0F;
+    --good:       #4E8F5C;
+    --coral-soft: #FCECE6;
   }
 
   @keyframes blink { 50% { opacity: .2; } }

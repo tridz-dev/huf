@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Plus, ShieldCheck, Layers, Sparkles, Trash2, Settings } from 'lucide-react';
+import { Plus, ShieldCheck, Layers, Sparkles, Trash2, Settings, Brain } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { FilterBar, GridView, ItemCard } from '@/components/dashboard';
+import { FilterBar, GridView, ItemCard, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { getMemoryPolicies, deleteMemoryPolicy } from '@/services/memoryPolicyApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
@@ -98,12 +98,11 @@ export function MemoryPolicyList() {
             onChange: (value) => setFilter('status', value),
           },
         ]}
-        actions={
-          <Button variant="display" size="sm" onClick={() => navigate('/memory/policies/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Policy
-          </Button>
-        }
+        primaryAction={{
+          label: 'New Policy',
+          icon: <Plus className="h-3.5 w-3.5" />,
+          onClick: () => navigate('/memory/policies/new'),
+        }}
       />
 
       {error && !initialLoading && (
@@ -120,17 +119,12 @@ export function MemoryPolicyList() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No memory policies yet.</p>
-            <p className="text-sm text-steel max-w-md mx-auto mb-6">
-              A memory policy controls how an agent captures, retrieves, and writes
-              long-term memory. Create one to attach it to an agent's Memory settings.
-            </p>
-            <Button variant="display" size="sm" onClick={() => navigate('/memory/policies/new')}>
-              <Plus className="w-4 h-4 mr-2" />
-              New Policy
-            </Button>
-          </div>
+          <EmptyState
+            icon={Brain}
+            title="No memory policies"
+            description="Create a memory policy to control how agents capture and retrieve long-term memory."
+            action={{ label: 'New policy', onClick: () => navigate('/memory/policies/new') }}
+          />
         }
         renderItem={(policy) => (
           <ItemCard

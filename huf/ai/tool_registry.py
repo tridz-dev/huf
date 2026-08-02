@@ -482,6 +482,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                     for p in parameters
                 ],
                 "provider_app": app,
+                "service": d.get("service", ""),
             }
             
             if tool_name in existing_tools:

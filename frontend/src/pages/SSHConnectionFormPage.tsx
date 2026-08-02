@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Save, Trash2, Terminal, Loader2, Play, ShieldCheck, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
+import { StatusDot } from '@/components/dashboard';
+import { Save, Trash2, Terminal, Loader2, Play, ShieldCheck, RefreshCw } from 'lucide-react';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import {
   createSSHConnection,
@@ -260,19 +260,17 @@ export function SSHConnectionFormPage() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto pb-12">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            <Terminal className="h-6 w-6" />
-          </div>
+        <div className="flex items-start gap-3">
+          <Terminal className="h-8 w-8 text-steel-soft shrink-0 mt-1" strokeWidth={1.6} />
           <div>
             <InlineEditName
               value={form.watch('display_name') || (isNew ? 'New SSH Connection' : id!)}
               onChange={(name: string) => form.setValue('display_name', name, { shouldDirty: true })}
               placeholder="Display Name"
-              className="text-2xl font-bold tracking-tight"
+              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:uppercase [&_h1]:leading-tight"
             />
-            <p className="text-sm text-muted-foreground">
-              {isNew ? 'Create a new remote SSH target connection' : `ID: ${id}`}
+            <p className="font-mono text-[12px] text-steel mt-1">
+              {isNew ? 'Create a new remote SSH target connection' : `ID ${id}`}
             </p>
           </div>
         </div>
@@ -280,11 +278,11 @@ export function SSHConnectionFormPage() {
         <div className="flex items-center gap-2">
           {!isNew && (
             <>
-              <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testing}>
-                {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2 text-emerald-600" />}
+              <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testing} className="border-line hover:border-ink hover:bg-paper-deep">
+                {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2 text-steel" />}
                 Test Connection
               </Button>
-              <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving}>
+              <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving} className="border-line hover:border-ink hover:bg-paper-deep">
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
               </Button>
             </>
@@ -298,10 +296,10 @@ export function SSHConnectionFormPage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Card>
+          <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle>Connection Details</CardTitle>
-              <CardDescription>Specify target hostname, port, and authentication credentials</CardDescription>
+              <CardTitle className="font-display font-bold text-[18px] uppercase">Connection Details</CardTitle>
+              <CardDescription className="font-body text-[13px] text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -323,7 +321,7 @@ export function SSHConnectionFormPage() {
                 control={form.control}
                 name="enabled"
                 render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <FormItem className="flex flex-row items-center justify-between border border-line bg-paper p-4">
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Enable Connection</FormLabel>
                       <FormDescription>Disabled connections cannot be executed against by AI agents.</FormDescription>
@@ -465,50 +463,55 @@ export function SSHConnectionFormPage() {
           </Card>
 
           {!isNew && connectionDoc && (
-            <Card>
+            <Card className="border-line bg-panel">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ShieldCheck className="h-5 w-5 text-primary" />
+                <CardTitle className="flex items-center gap-2 font-display font-bold text-[18px] uppercase">
+                  <ShieldCheck className="h-5 w-5 text-steel-soft" strokeWidth={1.6} />
                   Host Key Security & Status
                 </CardTitle>
-                <CardDescription>Pinned host key verification prevents MITM attacks</CardDescription>
+                <CardDescription className="font-body text-[13px] text-steel">Pinned host key verification prevents MITM attacks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2 rounded-lg border p-4 text-sm">
+                <div className="grid gap-4 sm:grid-cols-2 border border-line bg-paper p-4 text-sm">
                   <div>
-                    <span className="text-muted-foreground block text-xs">Host Key Fingerprint</span>
-                    <span className="font-mono font-medium text-xs break-all">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-steel-soft block">Host Key Fingerprint</span>
+                    <span className="font-mono text-[12px] text-ink break-all">
                       {connectionDoc.host_key_fingerprint || 'Not enrolled yet'}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-muted-foreground block text-xs">Host Key Type</span>
-                    <span className="font-mono font-medium text-xs">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-steel-soft block">Host Key Type</span>
+                    <span className="font-mono text-[12px] text-ink">
                       {connectionDoc.host_key_type || 'N/A'}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-muted-foreground block text-xs">Last Test Status</span>
-                    <div className="mt-1">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-steel-soft block">Last Test Status</span>
+                    <div className="mt-1 flex items-center gap-2">
                       {connectionDoc.last_test_status === 'Success' ? (
-                        <Badge variant="outline" className="text-emerald-600 border-emerald-600">
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> Success
-                        </Badge>
+                        <>
+                          <StatusDot variant="ok" />
+                          <span className="font-body text-[13px] text-steel">Success</span>
+                        </>
                       ) : connectionDoc.last_test_status ? (
-                        <Badge variant="destructive">
-                          <XCircle className="h-3 w-3 mr-1" /> Failed
-                        </Badge>
+                        <>
+                          <StatusDot variant="fail" />
+                          <span className="font-body text-[13px] text-steel">Failed</span>
+                        </>
                       ) : (
-                        <span className="text-muted-foreground text-xs">Not tested</span>
+                        <>
+                          <StatusDot variant="idle" />
+                          <span className="font-body text-[13px] text-steel">Not tested</span>
+                        </>
                       )}
                     </div>
                   </div>
 
                   <div>
-                    <span className="text-muted-foreground block text-xs">Last Error</span>
-                    <span className="text-xs text-destructive break-words">
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-steel-soft block">Last Error</span>
+                    <span className="font-mono text-[12px] text-destructive break-words">
                       {connectionDoc.last_error || 'None'}
                     </span>
                   </div>
@@ -521,11 +524,12 @@ export function SSHConnectionFormPage() {
                     size="sm"
                     onClick={handleEnrollHostKey}
                     disabled={enrolling}
+                    className="border-line hover:border-ink hover:bg-paper-deep"
                   >
                     {enrolling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                     Enroll / Update Host Key
                   </Button>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="font-body text-xs text-steel">
                     Connects to target server to automatically fetch and pin its public host key fingerprint.
                   </span>
                 </div>

@@ -1,6 +1,6 @@
 import { createElement } from 'react';
 import type { ComponentType } from 'react';
-import { Workflow } from 'lucide-react';
+import { Cloud, Workflow } from 'lucide-react';
 import { FaMicrosoft, FaSlack } from 'react-icons/fa';
 import {
   SiDiscord,
@@ -83,6 +83,7 @@ const serviceIdentities: Record<string, { title: string; icon: ServiceIcon }> = 
   google_maps: { title: 'Google Maps', icon: SiGooglemaps },
   google_meet: { title: 'Google Meet', icon: SiGooglemeet },
   serpapi: { title: 'SerpApi', icon: SerpApiIcon },
+  frappe_cloud: { title: 'Frappe Cloud', icon: Cloud },
 };
 
 export function getServiceIdentity(serviceName: string | null | undefined) {

@@ -1,4 +1,4 @@
-import { PageLayout } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ export function SshPage() {
   const navigate = useNavigate();
 
   return (
-    <PageLayout
+    <PageFrame
       title="SSH Execution"
       badge={<ExperimentalBadge />}
       subtitle="Allow agents to run one-shot remote SSH commands against allowlisted target servers."
@@ -54,7 +54,7 @@ export function SshPage() {
           </CardContent>
         </Card>
       </div>
-    </PageLayout>
+    </PageFrame>
   );
 }
 

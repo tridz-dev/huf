@@ -43,12 +43,36 @@ def get_provider_settings(provider_name):
     """
     if not provider_name:
         return []
-    
+
     candidates = frappe.db.sql("""
         SELECT name FROM `tabDocType`
-        WHERE issingle = 1 
+        WHERE issingle = 1
         AND name LIKE %s
         AND name LIKE '%%Settings'
     """, (f"%{provider_name}%",), as_dict=True)
-    
+
     return [c.name for c in candidates]
+
+
+@frappe.whitelist()
+def get_configured_providers():
+    """Return providers that have an API key configured (or are local LLMs).
+
+    Only names and brands are returned; keys are never exposed.
+    """
+    providers = frappe.get_all(
+        "AI Provider",
+        fields=["name", "provider_brand", "is_local_llm"],
+    )
+    result = []
+    for p in providers:
+        if p.is_local_llm:
+            result.append({"name": p.name, "provider_brand": p.provider_brand})
+            continue
+        try:
+            key = frappe.get_doc("AI Provider", p.name).get_password("api_key")
+        except Exception:
+            key = None
+        if key:
+            result.append({"name": p.name, "provider_brand": p.provider_brand})
+    return result
