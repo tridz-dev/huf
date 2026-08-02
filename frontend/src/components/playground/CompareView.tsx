@@ -49,7 +49,7 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
 
   return (
     <div className="mb-2 flex items-center gap-2">
-      <span className="font-display text-[16px] font-bold">{glyph}</span>
+      <span className="font-sans text-[12px] font-medium uppercase tracking-[.06em] text-steel">{glyph}</span>
       {editing ? (
         <input
           autoFocus

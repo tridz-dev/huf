@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -45,7 +46,7 @@ function Cell({
 
 /** Select trigger restyled to sit flush inside a strip cell (no box of its own). */
 const flushTriggerClass =
-  'h-auto w-full justify-between gap-1 rounded-none border-0 bg-transparent px-0 py-0 text-[13.5px] text-ink shadow-none focus:ring-0 focus:ring-offset-0 disabled:opacity-40 [&>span]:truncate';
+  'h-auto w-auto justify-start gap-2 rounded-none border-0 bg-transparent px-0 py-0 text-[13.5px] text-ink shadow-none focus:ring-0 focus:ring-offset-0 disabled:opacity-40 [&>span]:truncate';
 
 export function ConfigStrip({ agents, providers, config, onChange, compact }: ConfigStripProps) {
   const [models, setModels] = useState<AIModel[]>([]);
@@ -93,7 +94,10 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
 
   const agentControl = (
     <Select value={config.agentName || DIRECT_AGENT_VALUE} onValueChange={handleAgentChange}>
-      <SelectTrigger className={flushTriggerClass}>
+      <SelectTrigger
+        className={flushTriggerClass}
+        icon={<ChevronDown className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />}
+      >
         <SelectValue placeholder="Direct (no agent)" />
       </SelectTrigger>
       <SelectContent>
@@ -109,7 +113,10 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
 
   const providerControl = (
     <Select value={config.provider} onValueChange={(v) => update({ provider: v, model: '' })}>
-      <SelectTrigger className={flushTriggerClass}>
+      <SelectTrigger
+        className={flushTriggerClass}
+        icon={<ChevronDown className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />}
+      >
         <SelectValue placeholder="Select provider" />
       </SelectTrigger>
       <SelectContent>
@@ -128,7 +135,10 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
       onValueChange={(v) => update({ model: v })}
       disabled={!config.provider}
     >
-      <SelectTrigger className={cn(flushTriggerClass, 'font-mono text-[12.5px]')}>
+      <SelectTrigger
+        className={cn(flushTriggerClass, 'font-mono text-[12.5px]')}
+        icon={<ChevronDown className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />}
+      >
         <SelectValue placeholder={config.provider ? 'Select model' : 'Pick a provider first'} />
       </SelectTrigger>
       <SelectContent>
@@ -165,7 +175,7 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
 
   if (compact) {
     return (
-      <div className="grid grid-cols-2 rounded border border-ink bg-panel [&>div]:px-3.5 [&>div]:py-2.5">
+      <div className="grid grid-cols-2 rounded border border-line bg-panel [&>div]:px-3.5 [&>div]:py-2.5">
         <Cell label="Provider" className="border-b border-r border-line">
           {providerControl}
         </Cell>
@@ -181,7 +191,7 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
   }
 
   return (
-    <div className="grid grid-cols-4 rounded border border-ink bg-panel max-lg:grid-cols-2">
+    <div className="grid grid-cols-4 rounded border border-line bg-panel max-lg:grid-cols-2">
       <Cell label="Agent" className="border-r border-line max-lg:border-b">
         {agentControl}
       </Cell>
