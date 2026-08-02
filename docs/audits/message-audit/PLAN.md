@@ -11,11 +11,35 @@ Each phase is independently shippable, ordered by risk (no schema change → add
 that proves it done. Base branch for implementation: `develop` (per workspace
 branch topology), in a worktree inside this track.
 
+## Track boundaries — Result/Context Foundation vs Artifact Workspace V1
+
+This MessageAudit plan is now the docs baseline for the larger Result/Context +
+Artifact Workspace program. The program is split into two tracks:
+
+- **`ResultContextFoundation` (Steps 1–3, this plan + `HUF_ARTIFACT_RESULT_CONTEXT_IMPLEMENTATION_PLAN.md`):**
+  - Step 1: rebase PR #405 / MessageAudit onto current `origin/develop` and push.
+  - Step 2: critical correctness/security fixes from the audit that are still valid.
+  - Step 3: Result/Context Foundation V1 — durable result store, bounded envelopes,
+    selective reads, private payload storage, and lineage from run/tool to message.
+  - Do **not** create Artifact Workspace DocTypes here.
+
+- **`Artifact Workspace V1` (Step 4, `HUF_ARTIFACT_WORKSPACE_COMPLETE_SPEC_AND_PHASED_PLAN.md`):**
+  - Build `Artifact`, `Artifact Version`, `Artifact Asset`, and `Artifact Operation`
+    records and APIs.
+  - Reuse the envelope/reference contract, private-file storage policy, `result_read`
+    view model, idempotency/compare-and-swap pattern, and provenance fields from
+    Step 3.
+  - Start only after Result/Context Foundation V1 is working and its DoD is met.
+
+- **Future tracks (Steps 5–7):** Message/tool-call projection cleanup, execution-record
+  unification, and format-specific plans (XLSX/PPTX/optimization) will each get their
+  own detailed plan written against the post-V1 code, migration state, and tests.
+
 ---
 
 ## Phase 0 — Baseline (docs, this track) ✅
 
-- [x] STATE.md / FINDINGS.md / PLAN.md written, cited at `eebb9dc`.
+- [x] STATE.md / FINDINGS.md / PLAN.md rebased against `origin/develop` @ `2c3fd73c`; citations and findings updated.
 - [ ] File GitHub issues for MA items (needs owner go-ahead — outward action).
 - [ ] Owner review: pick which "decide" tasks (P2.1–P2.3) land as designed.
 
@@ -25,13 +49,13 @@ Small, reviewable PRs; each behind the existing test suite + one new test.
 
 | # | Task | Findings | Files | Done when |
 |---|---|---|---|---|
-| 1.1 | Harden or remove `agent_chat.add_message`: add conversation-ownership check (mirror `get_message_permission_conditions`) + restrict `role` to `user`/`system`-with-capability; or delete the endpoint (zero in-repo callers) | MA-12 | `ai/agent_chat.py:873-923` | API returns 403 for non-owner; legit callers unaffected; test added |
-| 1.2 | Fix stream token undercount: accumulate `stream_usage` across tool rounds instead of resetting | MA-09 | `ai/providers/litellm.py:975,984-989,1238-1255` | streaming run with tool calls records total tokens == sum of rounds; sync/stream parity test |
-| 1.3 | Make ATC `Failed` real: pass `error=` from exception paths, stop storing exceptions as `Completed`; surface error to the message row | MA-08, MA-10(b) | `ai/agent_integration.py:397-485`, `ai/providers/litellm.py:1080-1102` | a raising tool produces ATC `Failed` + `error_message`; message/socket show failure |
-| 1.4 | Put index assignment behind the per-conversation lock (align with queue-first) or add `UNIQUE(conversation, conversation_index)`; dedupe the 3 MAX+1 copies (~~user-field precedence fix~~ — MA-14 withdrawn, no bug) | MA-11 | `ai/conversation_manager.py:420-448`, `ai/sdk_tools.py:1539-1550,2154-2166,2468-2475` | no duplicate indices under concurrent inserts (test) |
+| 1.1 | Harden or remove `agent_chat.add_message`: add conversation-ownership check (mirror `get_message_permission_conditions`) + restrict `role` to `user`/`system`-with-capability; or delete the endpoint (zero in-repo callers) | MA-12 | `huf/ai/agent_chat.py:1048-1100` | API returns 403 for non-owner; legit callers unaffected; test added |
+| 1.2 | Fix stream token undercount: accumulate `stream_usage` across tool rounds instead of resetting | MA-09 | `huf/ai/providers/litellm.py:1519,1851-1857,1922-1928` | streaming run with tool calls records total tokens == sum of rounds; sync/stream parity test |
+| 1.3 | Make ATC `Failed` real: pass `error=` from exception paths, stop storing exceptions as `Completed`; surface error to the message row | MA-08, MA-10(b) | `huf/ai/providers/litellm.py:1049-1057,1670-1698`; `huf/ai/providers/anthropic.py:139`; `huf/ai/providers/google.py:178`; `huf/ai/providers/openrouter.py:102` | a raising tool produces ATC `Failed` + `error_message`; message/socket show failure |
+| 1.4 | Put index assignment behind the per-conversation lock or add `UNIQUE(conversation, conversation_index)`; cover `audio_service.py` and `conversation_manager.py` (~~user-field precedence fix~~ — MA-14 withdrawn, no bug) | MA-11 | `huf/ai/conversation_manager.py:439-467`, `huf/ai/audio_service.py:697-708` | no duplicate indices under concurrent inserts (test) |
 | 1.5 | Kill `tool_status` staleness: drop the three `fetch_from` fields, read `tool_name/args/status` via the `tool_call` link at read time (report/API projection) | MA-10 | `agent_message.json`, `chatApi.ts:305-306`, desk list views | UI shows live ATC status; no fetch copies in schema |
-| 1.6 | Quiet routine repairs: log repairs at debug level (or count-only), not Error Log | MA-15 | `ai/conversation_manager.py:312-319` | routine trims produce no Error Log rows |
-| 1.7 | ElevenLabs drift: `total_cost`→`cost`; stop rewriting `creation` | MA-16 | `ai/providers/elevenlabs_convai_api.py:186-237` | voice runs record cost; message timestamps immutable |
+| 1.6 | Quiet routine repairs: log repairs at debug level (or count-only), not Error Log | MA-15 | `huf/ai/conversation_manager.py:321-328` | routine trims produce no Error Log rows |
+| 1.7 | ElevenLabs drift: `total_cost`→`cost`; stop rewriting `creation` | MA-16 | `huf/ai/providers/elevenlabs_convai_api.py:194,238` | voice runs record cost; message timestamps immutable |
 
 ## Phase 2 — Truthful context semantics (additive schema evolution)
 
@@ -72,8 +96,8 @@ untested ones are exactly the phantom ones — STATE §8).
 
 ## Cross-track dependencies
 
-- **QueueFirstRuns**: queue-first's per-conversation lock is the natural home for
-  1.4; land that branch or cherry-pick the lock first.
+- **QueueFirstRuns**: queue-first has merged into `develop`; its per-conversation
+  lock is the natural home for 1.4.
 - **CommitAudit**: Phases 1–2 touch commit-adjacent paths — follow its
   `safe_commit` guidance, don't reintroduce raw commits.
 - **CodeDiscovery**: ADR 0003 (3.1) and GLOSSARY updates (2.6) belong to its

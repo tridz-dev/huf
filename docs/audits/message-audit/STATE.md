@@ -1,10 +1,10 @@
 # STATE — Agent Message context semantics (as-built)
 
-Audit base: `feature/inline-video-playback` @ `eebb9dc` (verified current for these
-semantics — see CONTEXT.md). All citations are repo-relative paths with lines at that
+Audit base: `origin/develop` @ `2c3fd73c81d2af40a392c7dbd1976f6068019d20` (rebasing
+covered in CONTEXT.md). All citations are repo-relative paths with lines at that
 commit. Terminology follows `Tracks/CodeDiscovery/GLOSSARY.md` (frozen). Built from
-first-hand reading (schema, consumer, tests, public API) plus four verified code
-sweeps: write-path census (A), Agent Tool Call map (B), execution records (C1),
+first-hand reading (schema, consumer, tests, public API) plus focused re-sweeps for
+this rebase: write-path census (A), Agent Tool Call map (B), execution records (C1),
 read-side/frontend consumers (C2).
 
 ---
@@ -29,7 +29,7 @@ Field groups:
 Permissions (`agent_message.json:346-391`): System Manager + Huf Manager full; **Huf
 User can create/write**; Huf Viewer read. Row-level scoping exists only as a
 list-query condition — `get_message_permission_conditions`
-(`agent_integration.py:1997-2013`, registered `hooks.py:155`) restricts message lists
+(`agent_integration.py:3328+`, registered `hooks.py:165`) restricts message lists
 to conversations the user owns unless they hold `chat.view_all`. There is **no
 doc-level `has_permission` hook**, and the `visibility` field does **not** interact
 with Frappe permissions at all; it is pure metadata (nothing enforces it — see §3.4).
@@ -38,7 +38,7 @@ with Frappe permissions at all; it is pure metadata (nothing enforces it — see
 
 ## 2. History assembly — the only policy consumer
 
-`ConversationManager.get_conversation_history` (`huf/ai/conversation_manager.py:493-526`)
+`ConversationManager.get_conversation_history` (`huf/ai/conversation_manager.py:517-550`)
 fetches the last N messages (`conversation_index desc`, then reversed) projecting:
 
 ```
@@ -50,23 +50,23 @@ reference_name, record_kind, tool_call, tool_call_id, tool_calls, creation
 fields.** Whatever those fields say has zero effect on what the model sees.
 
 The slice limit is a **message count** (default 20, caller passes
-`(history_limit or 20) + 10` — `agent_integration.py:702`), never tokens. Token-based
+`(history_limit or 20) + 10` — `agent_integration.py:1160+`), never tokens. Token-based
 bounding exists only for knowledge (RAG) injection, separately
 (`knowledge/context_builder.py`, `max_knowledge_tokens or 4000`).
 
-### 2.1 `_message_to_context` (`conversation_manager.py:549-667`) — policy truth table
+### 2.1 `_message_to_context` (`conversation_manager.py:573-714`) — policy truth table
 
 | `context_policy` | Actual behavior | Sound? |
 |---|---|---|
-| `NULL`/missing | treated as `include_full` (`:551`) | backward-compat, fine |
+| `NULL`/missing | treated as `include_full` (`:575`) | backward-compat, fine |
 | `include_full` | full `content` | ✅ as named |
-| `include_summary` | `context_summary` **or full content fallback** (`:564`) | ⚠️ silent fallback doubles cost when summary missing |
-| `include_reference` | emits `[record_kind: summary · handle=Dt/Name]` text (`:565-573`); raw content excluded | ✅ works; the only place `record_kind` is ever read |
-| `include_on_demand` | **dropped entirely** (`:554`) | ❌ misnamed: no handle is left behind, so the model cannot know the content exists to demand it |
+| `include_summary` | `context_summary` **or full content fallback** (`:588`) | ⚠️ silent fallback doubles cost when summary missing |
+| `include_reference` | emits `[record_kind: summary · handle=Dt/Name]` text (`:589-597`); raw content excluded | ✅ works; the only place `record_kind` is ever read |
+| `include_on_demand` | **dropped entirely** (`:578`) | ❌ misnamed: no handle is left behind, so the model cannot know the content exists to demand it |
 | `exclude` | dropped entirely | ✅ as named (indistinguishable from `transient_only`) |
 | `transient_only` | dropped entirely | ⚠️ duplicates `exclude`; "transient" intent (show once, then drop) is not implementable — no "seen" marker exists |
-| `token_budgeted` | `context_summary` or content (`:574-575`) | ❌ **no budgeting**: `token_estimate` is never read anywhere; behavior identical to `include_summary` |
-| `provider_cached` | full content (`:576-577`) | ❌ **no caching semantics**: identical to `include_full`; pure label |
+| `token_budgeted` | `context_summary` or content (`:598-599`) | ❌ **no budgeting**: `token_estimate` is never read by history assembly; behavior identical to `include_summary` |
+| `provider_cached` | full content (`:600-601`) | ❌ **no caching semantics**: identical to `include_full`; pure label |
 
 Of 8 declared policies: 4 work as named (`include_full`, `include_summary` with
 caveat, `include_reference`, `exclude`), 2 are aliases that mislead
@@ -87,24 +87,26 @@ assistant(`tool_calls`) + `role:"tool"` pairs:
    produced by the merge path (`update_tool_call_message`, §6).
 3. **Separate tool row** — `role="tool"` → single `role:"tool"` message (`:653-662`).
 
-`repair_message_sequence` (`:220-321`) runs before every completion call in the sync
+`repair_message_sequence` (`:229-321`) runs before every completion call in the sync
 path (`providers/litellm.py:484`, inside the round loop) but only **once per run** in
-the stream path (`:938`, before the round loop — rounds 2+ reuse the repaired
+the stream path (before the round loop — rounds 2+ reuse the repaired
 sequence): drops assistant declarations with no
 matching results, synthesizes missing assistant declarations from Agent Tool Call
-(`_synthesize_assistant_tool_call`, `:106-137`), drops unrepairable tool results, and
-**writes an Error Log entry on every repair** (`:312-319`) — routine trims become
+(`_synthesize_assistant_tool_call`, `:107-138`), drops unrepairable tool results, and
+**writes an Error Log entry on every repair** (`:321-328`) — routine trims become
 error-log spam.
 
 ### 2.3 Ordering & indexing hazards
 
 - `add_message` assigns `conversation_index = MAX(conversation_index)+1` via SQL
-  (`conversation_manager.py:420-448`). No unique constraint, no locking → concurrent
+  (`conversation_manager.py:439-467`). No unique constraint, no locking → concurrent
   inserts in one conversation can share an index; history order between equal indices
-  is undefined. (Queue-first's per-conversation lock mitigates this on its branch.)
-  The media-tool paths re-implement the same MAX+1 logic **three times**
-  (`sdk_tools.py:1539-1550` image, `:2154-2166` audio, `:2468-2475` STT).
-- `total_messages` on the conversation is set to `last_index+1` (`:483-486`) — a
+  is undefined.
+- `audio_service.py` duplicates the same MAX+1 pattern (`:697-708`) for voice messages.
+- The media-tool paths in `sdk_tools.py` no longer assign `conversation_index`
+  directly (they route through `ConversationManager.add_message`); the MAX+1 hazard is
+  now concentrated in `conversation_manager.py` and `audio_service.py`.
+- `total_messages` on the conversation is set to `last_index+1` (`:507-510`) — a
   denormalized counter that drifts if any insert fails between the two writes.
 
 ---
@@ -113,11 +115,11 @@ error-log spam.
 
 | Field | Writers | Readers | Verdict |
 |---|---|---|---|
-| `context_policy` | `update_tool_call_message` (`conversation_manager.py:197`) + sync fallback (`agent_integration.py:1004`) — the only automatic writers: `include_reference` iff result > `agent.max_context_chars` (default 2000, min 500), else explicit `include_full`; public API passthrough (`agent_chat.py:873-923`) | `_message_to_context` only | **Two policies ever set automatically.** The other 6 are reachable only via the public API, desk, or tests |
-| `record_kind` | same two paths → `tool_result` only (`conversation_manager.py:196`, `agent_integration.py:1003`); API passthrough | `_message_to_context` `include_reference` formatting (`:566`) | 9 of 10 values never written; cosmetic even when read |
-| `context_summary` | same two paths → first 200 chars + `"..."` (`:179,198`, `:988`); API passthrough | `include_summary` / `token_budgeted` / `include_reference` paths | Works, but summary = dumb truncation, never a real summary |
-| `visibility` | **Nothing** (schema default `user_visible`); API passthrough | **Nothing anywhere** — not projected in history query, no query filter, no permission branch, no UI. The `ui_only`/`audit_only`/`model_visible`/`developer_only` options are dead values | **Dead field** (repo-wide confirmed, sweep C2) |
-| `token_estimate` | **Nothing**; API passthrough | **Nothing anywhere** — not even history assembly fetches it | **Dead field** (repo-wide confirmed, sweep C2). `token_budgeted` ignores it |
+| `context_policy` | `update_tool_call_message` (`conversation_manager.py:198`) + sync fallback (`agent_integration.py:1654`) — the only automatic writers: `include_reference` iff result > `agent.max_context_chars` (default 2000, min 500), else explicit `include_full`; public API passthrough (`agent_chat.py:1054-1089`); code execution writes it on `Agent Context Artifact` (`code_execution.py:349`) | `_message_to_context` only | **Two policies ever set automatically on Agent Message.** The other 6 are reachable only via the public API, desk, or tests. `Agent Context Artifact` uses `context_policy` for display/filter but not as an enforced model-context contract |
+| `record_kind` | same two paths → `tool_result` only (`conversation_manager.py:197`, `agent_integration.py:1653`); API passthrough | `_message_to_context` `include_reference` formatting (`:590`) | 9 of 10 values never written by app code; cosmetic even when read |
+| `context_summary` | same two paths → first 200 chars + `"..."` (`:180,199`, `:1638`); API passthrough | `include_summary` / `token_budgeted` / `include_reference` paths | Works, but summary = dumb truncation, never a real summary |
+| `visibility` | **Nothing on Agent Message** (schema default `user_visible`); API passthrough (`agent_chat.py:1058-1088`); `Agent Context Artifact` has a writer (`code_execution.py:348`) | **Nothing on Agent Message** — not projected in history query, no query filter, no permission branch, no UI. The `ui_only`/`audit_only`/`model_visible`/`developer_only` options are dead values for messages | **Dead field on Agent Message** (repo-wide confirmed, sweep C2). Live only on `Agent Context Artifact` |
+| `token_estimate` | **Nothing on Agent Message**; API passthrough; `Agent Context Artifact` has a writer (`code_execution.py:351`) | **Nothing on Agent Message** — not even history assembly fetches it | **Dead field on Agent Message** (repo-wide confirmed, sweep C2). Live only on `Agent Context Artifact` |
 
 **Read-side census (sweep C2, repo-wide):** besides `_message_to_context`, no code
 branches on any of the five fields for Agent Message. None of the five is ever sent
@@ -133,10 +135,11 @@ read by the frontend — display/filter only (`agentContextArtifactApi.ts:39-88`
 
 ### 3.4 The public write API is a trust-boundary hole
 
-`agent_chat.add_message` (`agent_chat.py:873-923`) is `@frappe.whitelist()` (no
-`allow_guest`, so any authenticated session) and performs **no ownership or
-permission check** on the target conversation. It has **zero in-repo callers**
-(sweeps A+C2) — an unused but live endpoint. Any logged-in user can:
+`agent_chat.add_message` (`agent_chat.py:1049-1099`) is `@frappe.whitelist()` (no
+`allow_guest`, so any authenticated session). It loads the conversation but performs
+**no ownership or write-permission check** on it (only the standard `Agent Message`
+create/write permission checks inside `ConversationManager`). It has **zero in-repo
+callers** (sweeps A+C2) — an unused but live endpoint. Any logged-in user can:
 
 - insert a message into **any** conversation by id;
 - choose `role` freely — including `system` or `agent` — injecting content that
@@ -149,43 +152,44 @@ permission check** on the target conversation. It has **zero in-repo callers**
 
 ## 4. Write-path census (sweep A, verified repo-wide)
 
-Hub: `ConversationManager.add_message` (`conversation_manager.py:396-491`). Census:
+Hub: `ConversationManager.add_message` (`conversation_manager.py:415-516`). Census:
 
 | Path | Trigger | Context-field writes |
 |---|---|---|
-| `agent_integration.py:747` (sync) / `:1447` (stream) | user prompt | none (`kind="Message"`) |
-| `agent_integration.py:926-942` / `:1583-1599` | tool call starts | `kind="Tool Call"`, `tool_call` link, `tool_call_id`, `tool_calls` JSON |
-| `agent_integration.py:992-1008` (sync fallback) | tool result, merge failed | `kind="Tool Result"`, `record_kind="tool_result"`, policy per threshold, `context_summary`, `reference_*` |
-| `agent_integration.py:1134` / `:1702-1704` | final agent reply | none |
-| `agent_integration.py:1227-1254` / `:1799-1914` | error events | `kind="Error"` |
-| `conversation_manager.py:140-217` (update) | tool result merge | see §6 |
-| `agent_chat.py:873-923` (whitelisted API) | external HTTP | passthrough of all five fields (see §3.4) |
+| `agent_integration.py:1160` (sync) / `:1572` (stream tool-call start) | user prompt / tool call starts | none (`kind="Message"`) / `kind="Tool Call"`, `tool_call` link, `tool_call_id`, `tool_calls` JSON |
+| `agent_integration.py:1642-1658` (stream fallback) | tool result, merge failed | `kind="Tool Result"`, `record_kind="tool_result"`, policy per threshold, `context_summary`, `reference_*` |
+| `agent_integration.py:1846` / `:2927` | final agent reply | none |
+| `agent_integration.py:2008+` / `:3079+` / `:3188+` | error events | `kind="Error"` |
+| `conversation_manager.py:141-227` (update) | tool result merge | see §6 |
+| `agent_chat.py:1049-1099` (whitelisted API) | external HTTP | passthrough of all five fields (see §3.4) |
 | `agent_chat.py:37-45,168-176,477-485,584-592,784-792` | voice/file uploads | `kind="Audio"`/`"Message"`; note `:477-485`/`:584-592` insert **with** permissions — inconsistent with every other path |
-| `sdk_tools.py:1608-1622,2180-2195,2479-2503` | image/audio/STT tool results | `kind="Image"`/`"Audio"`; own MAX+1 index (`:1539-1550`) — same race as §2.3 |
-| `ocr_engine.py:684-702` | OCR extraction | none |
-| `transcription_handler.py:119-135` | provider STT | none (no `kind`, no `session_id`) |
-| `elevenlabs_convai_api.py:228-237` | voice-call transcript backfill | none; then `db_set("creation", ...)` rewrites timestamps |
+| `sdk_tools.py` | image/audio/STT tool results | `kind="Image"`/`"Audio"`; no longer writes `Agent Message` directly; routes through `ConversationManager.add_message` |
+| `code_execution.py:341-362` | code-execution file write-back | writes `context_policy`, `visibility`, `token_estimate` to `Agent Context Artifact` (not `Agent Message`) |
+| `ocr_engine.py` | OCR extraction | none |
+| `transcription_handler.py` | provider STT | none (no `kind`, no `session_id`) |
+| `elevenlabs_convai_api.py` | voice-call transcript backfill | none; then `db_set("creation", ...)` rewrites timestamps |
 | `patches/v1/repair_tool_call_messages.py` | migration | backfills `tool_call_id`/`tool_calls` from Agent Tool Call |
 
 Census conclusions:
 
-- **Only two paths** ever set `context_policy` (same threshold rule) and
-  **`tool_result` is the only `record_kind` ever written** by app code.
+- **Only two paths** ever set `context_policy` on `Agent Message` (same threshold
+  rule) and **`tool_result` is the only `record_kind` ever written** by app code.
   `include_summary / exclude / transient_only / token_budgeted / provider_cached /
   include_on_demand` and the other 9 record kinds are written **only by tests** or
-  the public API.
+  the public API. `Agent Context Artifact` now has writers for `context_policy`,
+  `visibility`, and `token_estimate` (`code_execution.py:341-362`), but those fields
+  remain dead on `Agent Message` itself.
 - **No writers anywhere** for `status`, `content_type`, `generated_video` — three
-  more dead-on-arrival fields beyond `visibility`/`token_estimate`.
+  more dead-on-arrival fields beyond `visibility`/`token_estimate` on `Agent Message`.
 - `flow_engine.py` and `huf/ai/orchestration/` write **zero** Agent Messages
   directly; flow/orchestration messages exist only via `run_agent_sync`.
-- `sdk_tools.py:1669`/`:2249` `new_agent_message` are realtime socket events, not writes.
+- `sdk_tools.py` realtime socket events (`new_agent_message`) are not writes.
 - ATC↔AM asymmetry both directions: (i) streaming — if the message lookup for the
   merge fails, the result is saved on the Agent Tool Call and **no message gets it**
-  (only an error log, `litellm.py:1104-1151`); sync — `process_tool_call(is_output=True)`
-  returns `None` when no Queued ATC is found (`agent_integration.py:430-431`), no
+  (only an error log, `litellm.py:1709-1748`); sync — `process_tool_call(is_output=True)`
+  returns `None` when no Queued ATC is found (`agent_integration.py:618-719`), no
   message written. (ii) Media/user/error messages have no `tool_call` link at all;
-  the sync path needs a special `kind="Image"` lookup to merge image results
-  (`:1014-1028`).
+  the sync path needs a special `kind="Image"` lookup to merge image results.
 - ~~`add_message` `user` field bug (`conversation_manager.py:441`)~~ — **withdrawn
   (verification pass 2026-07-18)**: Python's conditional expression binds looser than
   `or`, so the line parses as `(external_id or session.user) if role == "user" else
@@ -345,13 +349,11 @@ shapes — the misleading/unsupported policies are exactly the untested ones.
 
 ## 9. Branch deltas
 
-- `origin/develop` @ `95daa90`: `Queues`→`Queued` typo fix in `status` options;
-  Agent Run gains `reference_doctype`/`reference_name` trigger links (PR #401). No
-  message-semantics change.
-- `origin/feature/queue-first-agent-runs` @ `726762f`: reworks `agent_integration.py`
-  (+619) around queued execution; `conversation_manager.py` untouched; adds a guard
-  re-creating the user message if missing when a queued run executes (checks
-  `Agent Message` by `agent_run`+`role=user`). Context semantics unchanged.
+- Audit base is now `origin/develop` @ `2c3fd73c`. The `Queues`→`Queued` typo fix
+  and Agent Run `reference_doctype`/`reference_name` trigger links are already
+  present on this base. No message-semantics change relative to the prior audit.
+- `origin/feature/queue-first-agent-runs` has been merged into `develop`; the
+  per-conversation lock and queued-run drainer are now the default execution mode.
 
 ---
 

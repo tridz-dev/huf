@@ -4,8 +4,8 @@
 |-------|-------|
 | Track | `MessageAudit` |
 | Huf piece | `product` ([`huf/`](../../huf/)) |
-| Status | Done (Audit complete: STATE.md (as-built semantics), FINDINGS.md (MA-01..25), PLAN.md (4 phases); implementation phases queued as future tracks) |
-| Last updated | 2026-07-18 |
+| Status | Rebased audit against current `origin/develop`; docs-only update. |
+| Last updated | 2026-08-02 |
 
 ## What
 Audit of the **Agent Message** doctype and its context semantics — `context_policy`,
@@ -23,16 +23,15 @@ context-policy machinery; (3) the Agent Message ↔ Agent Tool Call duplication 
 register; (6) an incremental unification plan. Docs-only — no product code changes.
 
 ## Source & working copy
-- Reference (read-only): [`huf/`](../../huf/) symlink → `/Users/safwan/Code/Huf/huf`
-- **Branch audited:** `feature/inline-video-playback` @ `eebb9dc` (same base as
-  CodeDiscovery/CommitAudit; verified current for these semantics — `origin/develop`
-  @ `95daa90` only fixes the `Queues` typo + adds Agent Run trigger refs, and
-  `origin/feature/queue-first-agent-runs` @ `726762f` touches run lifecycle, not
-  message context semantics).
-- No working copy: docs-only track.
+- Working copy: `/Users/safwan/Code/Huf/worktrees/artifact-result-context-v1` (branch
+  `feat/artifact-result-context-v1`, rebased onto `origin/develop` @
+  `2c3fd73c81d2af40a392c7dbd1976f6068019d20`).
+- **Branch audited:** `origin/develop` @ `2c3fd73c81d2af40a392c7dbd1976f6068019d20`.
+- `docs/audits/` does not exist on `origin/develop`; this audit is the docs-only PR
+  #405 branch content.
 - Path note: repo nests the app one level deep — doctypes live at
-  `huf/huf/huf/doctype/<name>/` from the workspace root; `huf/ai/` citations from
-  CodeDiscovery resolve to `huf/huf/ai/`.
+  `huf/huf/doctype/<name>/` from the workspace root; `huf/ai/` citations resolve to
+  `huf/huf/ai/`.
 
 ## Key files
 - [`STATE.md`](STATE.md) — current-state report: schema, writers, readers, semantics per field.
@@ -43,26 +42,32 @@ register; (6) an incremental unification plan. Docs-only — no product code cha
 
 ## How to resume
 1. Read this file, then `STATE.md` → `FINDINGS.md` → `PLAN.md`.
-2. Code citations are repo-relative paths at `eebb9dc`; use the `huf/` symlink.
+2. Code citations are repo-relative paths at `origin/develop` @ `2c3fd73c`.
 3. Cross-check terminology against `Tracks/CodeDiscovery/GLOSSARY.md` (frozen).
-4. If implementing fixes: create a worktree inside this track, base on `develop`,
-   and file issues on `tridz-dev/huf` (precedent: CodeDiscovery issues #363–#385).
+4. If implementing fixes: work in `/Users/safwan/Code/Huf/worktrees/artifact-result-context-v1`,
+   base on `origin/develop` @ `2c3fd73c`, and file issues on `tridz-dev/huf`.
 
 ## Constraints / gotchas
-- Docs-only: do not edit code through the symlinked `huf/`.
-- Queue-first (PR #362) is treated-as-merged per owner (CodeDiscovery F-03) but is
-  **not** in the audited base; where behavior differs, it is flagged in STATE.md.
+- Docs-only: do not edit product code while updating this audit.
 - `frappe.db.commit()` policy for message paths is CommitAudit's scope — referenced,
   not re-audited here.
 
-## Verification pass (2026-07-18)
-Independent re-verification of STATE/FINDINGS/PLAN at `eebb9dc`, orchestrated per
-sub-task: 4 parallel kimi executors (policy table & history assembly; dead
-fields/write census/public API; ATC duplication/merge/stream usage; execution
-records & tests), each report reviewed and the load-bearing claims re-checked
-first-hand by the orchestrator. Outcome: 23/25 findings confirmed as written;
-**MA-14 withdrawn** (precedence claim was wrong — agent messages always get
-`user="Agent"`); MA-11/MA-15 sharpened (3 MAX+1 copies in sdk_tools; stream-path
-repair runs once per run, Error Log only on actual repairs); minor cite fixes
-(chatApi path is `frontend/src/services/`, ChatMessage kind branches at :149/:169,
-elevenlabs path under `providers/`, sync fallback lacks the 500-char floor).
+## Relationship to Result Store and Artifact Workspace
+
+- `Agent Message` is not the durable owner of large tool/API payloads.
+- `Agent Tool Call` is not by itself a sufficient large-result store.
+- Results require bounded envelopes and selective reads.
+- Artifacts require immutable versions and operations.
+- `Agent Context Artifact` is a compatibility/context bridge, not the canonical
+  artifact registry.
+- Result references and artifact references must be version-aware where mutation is
+  possible.
+- Message history must carry compact references, not complete work or unbounded
+  results.
+
+## Verification pass (2026-08-02)
+Rebased audit against `origin/develop` @ `2c3fd73c`. Re-classified findings in
+`FINDINGS.md` based on direct code checks; updated line numbers and census results in
+`STATE.md`. Added the required relationship to Result Store and Artifact Workspace.
+Track boundaries for `ResultContextFoundation` (Steps 1–3) and `Artifact Workspace V1`
+(Step 4) are documented in `PLAN.md`.
