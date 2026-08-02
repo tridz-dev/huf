@@ -26,6 +26,6 @@
   "agent_color": "#0EA5E9",
   "allow_file_upload": 1,
   "image_generation_model": "nano-banana-pro",
-  "tts_model": "gemini-3.1-flash-lite",
-  "audio_transcription_model": "gemini-3.1-flash-lite"
+  "tts_model": "gemini-3.1-flash-tts-preview",
+  "audio_transcription_model": "gpt-4o-mini-transcribe"
 }
