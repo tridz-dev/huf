@@ -156,7 +156,13 @@ def handle_fc_create_bench(**kwargs) -> str:
 			return json.dumps({"success": False, "error": "version and cluster are required"})
 		if not apps:
 			return json.dumps({"success": False, "error": "apps is required (list of {name, source})"})
-		bench_payload = {"title": title, "version": version, "cluster": cluster, "apps": apps}
+		bench_payload = {
+			"title": title,
+			"version": version,
+			"cluster": cluster,
+			"apps": apps,
+			"saas_app": kwargs.get("saas_app", ""),
+		}
 		if server:
 			bench_payload["server"] = server
 		data = _make_fc_request("POST", "press.api.bench.new", json_data={"bench": bench_payload})
@@ -496,7 +502,8 @@ def handle_fc_list_servers(**kwargs) -> str:
 	"""List Frappe Cloud application and database servers."""
 	try:
 		filters = kwargs.get("filters") or {}
-		data = _make_fc_request("POST", "press.api.server.all", json_data={"server_filter": filters})
+		server_filter = {"server_type": filters.get("server_type", ""), "tag": filters.get("tag", "")}
+		data = _make_fc_request("POST", "press.api.server.all", json_data={"server_filter": server_filter})
 		return _result(
 			data,
 			kwargs,

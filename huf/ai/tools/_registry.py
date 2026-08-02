@@ -1312,6 +1312,7 @@ FRAPPE_CLOUD_TOOLS = [
 			_p("cluster", description="Cluster name (e.g. UAE)"),
 			_p("apps", description="List of apps to add"),
 			_p("server", description="Optional dedicated server name to host the bench on"),
+			_p("saas_app", description="Optional SaaS app name"),
 		],
 	},
 	{
