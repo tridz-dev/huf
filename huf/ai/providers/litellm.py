@@ -1145,6 +1145,77 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         return ""
 
 
+async def get_simple_completion_with_usage(
+    model: str,
+    messages: list,
+    provider: str,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict:
+    """
+    Like get_simple_completion, but also returns token usage and cost.
+    Bypasses Agent logic for direct LLM access.
+    """
+    result = {"response": "", "input_tokens": 0, "output_tokens": 0, "cost": 0.0}
+    try:
+        litellm.drop_params = True
+
+        provider_doc = frappe.get_doc("AI Provider", provider)
+        api_key = provider_doc.get_password("api_key")
+
+        normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
+        provider_name = normalized_model.split("/")[0]
+
+        completion_kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "temperature": 0.3 if temperature is None else temperature,
+            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+        }
+        if max_tokens:
+            completion_kwargs["max_tokens"] = max_tokens
+
+        api_base = _resolve_api_base(provider_doc)
+        if api_base:
+            completion_kwargs["api_base"] = api_base
+
+        _setup_api_key(provider_name, api_key, completion_kwargs)
+
+        try:
+            response = await _litellm_completion_with_retry(**completion_kwargs)
+        except BadRequestError as e:
+            if "unsupported value" in str(e).lower() and "temperature" in str(e).lower():
+                completion_kwargs.pop("temperature", None)
+                response = await _litellm_completion_with_retry(**completion_kwargs)
+            else:
+                raise e
+
+        result["response"] = response.choices[0].message.content
+
+        usage = response.usage
+        result["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
+        result["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
+
+        try:
+            cost, _cost_source = calculate_cost(
+                model_name=model,
+                input_tokens=result["input_tokens"],
+                output_tokens=result["output_tokens"],
+                litellm_response=response,
+            )
+            result["cost"] = round(float(cost), 6)
+        except (ValueError, TypeError, AttributeError, KeyError):
+            # Cost calculation is best-effort; ignore failures.
+            pass
+
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"LiteLLM simple completion failed: {e!s}\n{frappe.get_traceback()}")
+
+    return result
+
+
 async def run_stream(agent, enhanced_prompt, provider, model, context=None):
     """
     Streaming version of LiteLLM provider implementation.
