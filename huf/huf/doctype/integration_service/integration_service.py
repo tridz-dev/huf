@@ -31,7 +31,8 @@ class IntegrationService(Document):
 		builtin_services = [
 			"slack", "discord", "telegram", "github", "docker",
 			"jira", "linear", "clickup", "trello", "notion",
-			"zendesk", "calcom", "zoom", "tavily", "gmail"
+			"zendesk", "calcom", "zoom", "tavily", "gmail",
+			"frappe_cloud"
 		]
 		if self.service_name and self.service_name.lower() in builtin_services:
 			self.is_builtin = 1

@@ -10,6 +10,7 @@ from frappe.utils.file_manager import save_file
 logger = frappe.logger("huf")
 
 from huf.ai import audio_service
+from huf.ai import conversation_fork
 from huf.ai import sdk_tools
 from huf.ai.agent_integration import _is_truthy, _resolve_effective_model, _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
@@ -412,6 +413,19 @@ def set_conversation_model_override(conversation: str, model_override: str | Non
         "conversation_id": conv_doc.name,
         "model": conv_doc.model,
     }
+
+
+@frappe.whitelist()
+def fork_conversation(conversation_id: str, mode: str, title: str | None = None):
+    """Fork an existing Agent Conversation into a new one."""
+    try:
+        return conversation_fork.fork_conversation_impl(conversation_id, mode, title)
+    except Exception:  # boundary exception handler: API endpoint
+        frappe.log_error(
+            message=f"fork_conversation error: {frappe.get_traceback()}",
+            title="Huf API",
+        )
+        raise
 
 
 @frappe.whitelist()
