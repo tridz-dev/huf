@@ -283,8 +283,7 @@ def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	_verify_pending_approval_permission(flow_run_id)
 
 	from huf.ai.flow_engine import approve_flow_run as engine_approve
 
@@ -310,8 +309,7 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	_verify_pending_approval_permission(flow_run_id)
 
 	from huf.ai.flow_engine import approve_flow_run as engine_approve
 
@@ -323,6 +321,48 @@ def reject_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 		"status": doc.status,
 		"current_node_id": doc.current_node_id,
 	}
+
+
+def _verify_pending_approval_permission(flow_run_id: str):
+	"""Verify the current user is allowed to act on the pending flow approval."""
+	user = frappe.session.user
+	pending = frappe.get_all(
+		"Pending Approval",
+		filters={
+			"reference_doctype": "Flow Run",
+			"reference_name": flow_run_id,
+			"status": "Pending",
+		},
+		fields=["name", "approval_type", "approver_role", "approver_user", "approver_users"],
+	)
+
+	if not pending:
+		# Fallback for in-flight approvals created before the Pending Approval DocType existed.
+		flow_run = frappe.get_doc("Flow Run", flow_run_id)
+		if flow_run.status != "Waiting Approval":
+			frappe.throw(_("Flow Run is not waiting for approval"), frappe.PermissionError)
+		from huf.ai.flow_engine import _verify_approval_permission
+		_verify_approval_permission(json.loads(flow_run.waiting or "{}"))
+		return
+
+	approval = pending[0]
+	approval_type = approval.approval_type or "role"
+
+	if approval_type == "role":
+		role = approval.approver_role
+		if role and role in frappe.get_roles(user):
+			return
+	elif approval_type == "user":
+		if approval.approver_user and approval.approver_user == user:
+			return
+	elif approval_type == "users":
+		users = approval.approver_users or ""
+		if isinstance(users, str):
+			users = [u.strip() for u in users.split(",") if u.strip()]
+		if user in users:
+			return
+
+	frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
 # ---------------------------------------------------------------------------
@@ -1103,86 +1143,87 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 # ---------------------------------------------------------------------------
 
 
-# TEMPORARILY DISABLED (2026-08-02):
-# get_pending_approvals returns 403 even for Administrator, so the Approval
-# Inbox bell is disabled until the permission check is fixed/replaced.
-# See UnifiedHeader.tsx and ApprovalsBell.tsx for the related UI removal.
-# ---------------------------------------------------------------------------
-# @frappe.whitelist()
-# def get_pending_approvals(limit: int = 50) -> list:
-# 	"""
-# 	Get list of flow runs waiting for approval that the current user can approve.
-# 	
-# 	This endpoint is used by the Approval Inbox feature to show users
-# 	all pending approvals that require their attention.
-# 	
-# 	Args:
-# 	    limit: Maximum number of results (default 50)
-# 	
-# 	Returns:
-# 	    list of pending approval items with flow details
-# 	"""
-# 	if not frappe.has_permission("Flow Run", "read"):
-# 		frappe.throw(_("Not permitted"), frappe.PermissionError)
-# 
-# 	user = frappe.session.user
-# 	user_roles = set(frappe.get_roles(user))
-# 
-# 	# Get all flow runs waiting for approval
-# 	pending_runs = frappe.get_all(
-# 		"Flow Run",
-# 		filters={"status": "Waiting Approval"},
-# 		fields=[
-# 			"name",
-# 			"flow_id",
-# 			"flow_version",
-# 			"current_node_id",
-# 			"status",
-# 			"waiting",
-# 			"started_at",
-# 			"modified",
-# 		],
-# 		order_by="modified desc",
-# 		limit_page_length=limit,
-# 	)
-# 
-# 	results = []
-# 
-# 	for run in pending_runs:
-# 		try:
-# 			waiting = json.loads(run.waiting) if run.waiting else {}
-# 		except (json.JSONDecodeError, TypeError):
-# 			waiting = {}
-# 
-# 		approval_type = waiting.get("approval_type", "role")
-# 		can_approve = False
-# 
-# 		# Check if current user can approve this flow run
-# 		if approval_type == "role":
-# 			approver_role = waiting.get("approver_role")
-# 			if approver_role and approver_role in user_roles:
-# 				can_approve = True
-# 		elif approval_type in ("user", "users"):
-# 			approver_users = waiting.get("approver_users", [])
-# 			if isinstance(approver_users, str):
-# 				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
-# 			if user in approver_users:
-# 				can_approve = True
-# 
-# 		if can_approve:
-# 			results.append({
-# 				"flow_run_id": run.name,
-# 				"flow_id": run.flow_id,
-# 				"flow_version": run.flow_version,
-# 				"current_node_id": run.current_node_id,
-# 				"title": waiting.get("title", "Approval Required"),
-# 				"instructions": waiting.get("instructions", ""),
-# 				"approval_type": approval_type,
-# 				"approver_role": waiting.get("approver_role"),
-# 				"approver_users": waiting.get("approver_users", []),
-# 				"started_at": str(run.started_at) if run.started_at else None,
-# 				"waiting_since": str(run.modified) if run.modified else None,
-# 				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
-# 			})
-# 
-# 	return results
+@frappe.whitelist()
+def get_pending_approvals(limit: int = 50) -> list:
+	"""
+	Get list of pending approvals that the current user can act on.
+
+	This endpoint is used by the Approval Inbox feature to show users
+	all pending approvals that require their attention.
+
+	Args:
+	    limit: Maximum number of results (default 50)
+
+	Returns:
+	    list of pending approval items with flow details
+	"""
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Authentication required"), frappe.PermissionError)
+
+	# The Pending Approval DocType uses a permission_query_conditions hook
+	# (huf.huf.doctype.pending_approval.pending_approval.get_permission_query_conditions)
+	# to scope list queries to records where the current user is a designated approver.
+	pending = frappe.get_all(
+		"Pending Approval",
+		filters={"status": "Pending"},
+		fields=[
+			"name",
+			"reference_name",
+			"reference_link",
+			"feature",
+			"flow_id",
+			"current_node_id",
+			"title",
+			"instructions",
+			"approval_type",
+			"approver_role",
+			"approver_user",
+			"approver_users",
+			"creation",
+			"modified",
+		],
+		order_by="modified desc",
+		limit_page_length=limit,
+	)
+
+	results = []
+	user = frappe.session.user
+	user_roles = set(frappe.get_roles(user))
+
+	for approval in pending:
+		approval_type = approval.approval_type or "role"
+		can_approve = False
+		returned_users = []
+
+		if approval_type == "role":
+			role = approval.approver_role
+			if role and role in user_roles:
+				can_approve = True
+		elif approval_type == "user":
+			if approval.approver_user and approval.approver_user == user:
+				can_approve = True
+		elif approval_type == "users":
+			approver_users = approval.approver_users or ""
+			if isinstance(approver_users, str):
+				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
+			if user in approver_users:
+				can_approve = True
+				returned_users = approver_users
+
+		if can_approve:
+			results.append({
+				"flow_run_id": approval.reference_name,
+				"flow_id": approval.flow_id,
+				"flow_version": None,
+				"current_node_id": approval.current_node_id,
+				"title": approval.title or "Approval Required",
+				"instructions": approval.instructions or "",
+				"approval_type": approval_type,
+				"approver_role": approval.approver_role,
+				"approver_users": returned_users,
+				"started_at": str(approval.creation) if approval.creation else None,
+				"waiting_since": str(approval.modified) if approval.modified else None,
+				"view_link": approval.reference_link or f"/huf/flows/{approval.flow_id}?run={approval.reference_name}",
+			})
+
+	return results
