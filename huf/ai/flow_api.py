@@ -1103,81 +1103,86 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 # ---------------------------------------------------------------------------
 
 
-@frappe.whitelist()
-def get_pending_approvals(limit: int = 50) -> list:
-	"""
-	Get list of flow runs waiting for approval that the current user can approve.
-	
-	This endpoint is used by the Approval Inbox feature to show users
-	all pending approvals that require their attention.
-	
-	Args:
-	    limit: Maximum number of results (default 50)
-	
-	Returns:
-	    list of pending approval items with flow details
-	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	
-	user = frappe.session.user
-	user_roles = set(frappe.get_roles(user))
-	
-	# Get all flow runs waiting for approval
-	pending_runs = frappe.get_all(
-		"Flow Run",
-		filters={"status": "Waiting Approval"},
-		fields=[
-			"name",
-			"flow_id",
-			"flow_version",
-			"current_node_id",
-			"status",
-			"waiting",
-			"started_at",
-			"modified",
-		],
-		order_by="modified desc",
-		limit_page_length=limit,
-	)
-	
-	results = []
-	
-	for run in pending_runs:
-		try:
-			waiting = json.loads(run.waiting) if run.waiting else {}
-		except (json.JSONDecodeError, TypeError):
-			waiting = {}
-		
-		approval_type = waiting.get("approval_type", "role")
-		can_approve = False
-		
-		# Check if current user can approve this flow run
-		if approval_type == "role":
-			approver_role = waiting.get("approver_role")
-			if approver_role and approver_role in user_roles:
-				can_approve = True
-		elif approval_type in ("user", "users"):
-			approver_users = waiting.get("approver_users", [])
-			if isinstance(approver_users, str):
-				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
-			if user in approver_users:
-				can_approve = True
-		
-		if can_approve:
-			results.append({
-				"flow_run_id": run.name,
-				"flow_id": run.flow_id,
-				"flow_version": run.flow_version,
-				"current_node_id": run.current_node_id,
-				"title": waiting.get("title", "Approval Required"),
-				"instructions": waiting.get("instructions", ""),
-				"approval_type": approval_type,
-				"approver_role": waiting.get("approver_role"),
-				"approver_users": waiting.get("approver_users", []),
-				"started_at": str(run.started_at) if run.started_at else None,
-				"waiting_since": str(run.modified) if run.modified else None,
-				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
-			})
-	
-	return results
+# TEMPORARILY DISABLED (2026-08-02):
+# get_pending_approvals returns 403 even for Administrator, so the Approval
+# Inbox bell is disabled until the permission check is fixed/replaced.
+# See UnifiedHeader.tsx and ApprovalsBell.tsx for the related UI removal.
+# ---------------------------------------------------------------------------
+# @frappe.whitelist()
+# def get_pending_approvals(limit: int = 50) -> list:
+# 	"""
+# 	Get list of flow runs waiting for approval that the current user can approve.
+# 	
+# 	This endpoint is used by the Approval Inbox feature to show users
+# 	all pending approvals that require their attention.
+# 	
+# 	Args:
+# 	    limit: Maximum number of results (default 50)
+# 	
+# 	Returns:
+# 	    list of pending approval items with flow details
+# 	"""
+# 	if not frappe.has_permission("Flow Run", "read"):
+# 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+# 
+# 	user = frappe.session.user
+# 	user_roles = set(frappe.get_roles(user))
+# 
+# 	# Get all flow runs waiting for approval
+# 	pending_runs = frappe.get_all(
+# 		"Flow Run",
+# 		filters={"status": "Waiting Approval"},
+# 		fields=[
+# 			"name",
+# 			"flow_id",
+# 			"flow_version",
+# 			"current_node_id",
+# 			"status",
+# 			"waiting",
+# 			"started_at",
+# 			"modified",
+# 		],
+# 		order_by="modified desc",
+# 		limit_page_length=limit,
+# 	)
+# 
+# 	results = []
+# 
+# 	for run in pending_runs:
+# 		try:
+# 			waiting = json.loads(run.waiting) if run.waiting else {}
+# 		except (json.JSONDecodeError, TypeError):
+# 			waiting = {}
+# 
+# 		approval_type = waiting.get("approval_type", "role")
+# 		can_approve = False
+# 
+# 		# Check if current user can approve this flow run
+# 		if approval_type == "role":
+# 			approver_role = waiting.get("approver_role")
+# 			if approver_role and approver_role in user_roles:
+# 				can_approve = True
+# 		elif approval_type in ("user", "users"):
+# 			approver_users = waiting.get("approver_users", [])
+# 			if isinstance(approver_users, str):
+# 				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
+# 			if user in approver_users:
+# 				can_approve = True
+# 
+# 		if can_approve:
+# 			results.append({
+# 				"flow_run_id": run.name,
+# 				"flow_id": run.flow_id,
+# 				"flow_version": run.flow_version,
+# 				"current_node_id": run.current_node_id,
+# 				"title": waiting.get("title", "Approval Required"),
+# 				"instructions": waiting.get("instructions", ""),
+# 				"approval_type": approval_type,
+# 				"approver_role": waiting.get("approver_role"),
+# 				"approver_users": waiting.get("approver_users", []),
+# 				"started_at": str(run.started_at) if run.started_at else None,
+# 				"waiting_since": str(run.modified) if run.modified else None,
+# 				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
+# 			})
+# 
+# 	return results
