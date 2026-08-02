@@ -74,9 +74,11 @@ const IntegrationServiceFormPageWrapper = lazy(
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
+const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
+import { initTheme } from './lib/personalization';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -109,6 +111,10 @@ function AppShell() {
 
   useEffect(() => {
     clearChunkReloadFlag();
+  }, []);
+
+  useEffect(() => {
+    initTheme();
   }, []);
 
   return (
@@ -455,6 +461,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/general"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GeneralSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

@@ -73,9 +73,12 @@ export function IconRail({
   return (
     <aside
       className={cn(
-        "flex h-full w-12 flex-shrink-0 flex-col bg-sidebar border-r border-sidebar-border",
+        "flex h-full w-12 flex-shrink-0 flex-col border-r border-sidebar-border",
         className,
       )}
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--signal) 5%, var(--sidebar-background))',
+      }}
     >
       {header && <div className="flex flex-col p-2">{header}</div>}
       {actions && (
