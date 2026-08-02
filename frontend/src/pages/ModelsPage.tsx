@@ -18,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   getModels,
@@ -307,7 +308,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   });
 
   return (
-    <PageLayout
+    <PageFrame
       title="Models"
       subtitle="Manage AI models and their capabilities"
       filters={
@@ -554,6 +555,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </PageFrame>
   );
 }

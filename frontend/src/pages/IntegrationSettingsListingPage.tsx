@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Bot, Link, Settings, Star, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import {
   getIntegrationSettings,
@@ -114,7 +115,7 @@ export function IntegrationSettingsListingPage({
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle={
         kind === 'channels'
           ? 'Connect the messaging apps where people talk to your agents'
@@ -240,7 +241,7 @@ export function IntegrationSettingsListingPage({
         service={selectedSetting?.service || ''}
         integrationName={selectedSetting?.name}
       />
-    </PageLayout>
+    </PageFrame>
   );
 }
 

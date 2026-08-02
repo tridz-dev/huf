@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Calendar, Settings, Tag, Server } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
 import { formatTimeAgo } from '../utils/time';
@@ -77,7 +78,7 @@ export default function McpListingPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       title="MCP Servers"
       subtitle="Connect Model Context Protocol servers."
       filters={
@@ -143,6 +144,6 @@ export default function McpListingPage() {
           {total !== undefined ? `Showing all ${total} MCP servers` : 'No more MCP servers to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

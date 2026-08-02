@@ -159,7 +159,7 @@ function PlaygroundPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-paper text-ink">
+    <>
       <PlaygroundShell
         mode={mode}
         onModeChange={setMode}
@@ -168,9 +168,7 @@ function PlaygroundPage() {
         canSaveTemplate={!!activePromptBody().trim()}
         onLoadTemplate={() => setPickerOpen(true)}
         onSaveTemplate={handleSaveCurrent}
-      />
-
-      <main className="min-h-0 flex-1 overflow-hidden">
+      >
         {mode === 'playground' ? (
           <PlaygroundView
             agents={agents}
@@ -198,7 +196,7 @@ function PlaygroundPage() {
             ledger={ledgerProps}
           />
         )}
-      </main>
+      </PlaygroundShell>
 
       <TemplatePickerDialog
         open={pickerOpen}
@@ -213,6 +211,6 @@ function PlaygroundPage() {
         }}
         promptBody={savePromptOverride ?? activePromptBody()}
       />
-    </div>
+    </>
   );
 }

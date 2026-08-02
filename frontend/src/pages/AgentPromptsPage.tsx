@@ -9,10 +9,10 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Combobox } from '@/components/ui/combobox';
 import {
   Table,
   TableBody,
@@ -160,23 +160,22 @@ export function AgentPromptsPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage shared prompt templates for agents"
       filters={
         <FilterBar
           searchPlaceholder="Search prompts..."
           searchValue={search}
           onSearchChange={setSearch}
-          actions={
-            <div className="w-full sm:w-48">
-              <Combobox
-                options={statusOptions}
-                value={filters.status || 'all'}
-                onValueChange={(value) => setFilter('status', value || 'all')}
-                placeholder="Status"
-              />
-            </div>
-          }
+          filters={[
+            {
+              label: 'Status',
+              value: filters.status || 'all',
+              options: statusOptions,
+              onChange: (value) => setFilter('status', value || 'all'),
+              placeholder: 'All',
+            },
+          ]}
         />
       }
     >
@@ -241,7 +240,7 @@ export function AgentPromptsPage() {
           {total !== undefined ? `Showing all ${total} prompts` : 'No more prompts to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

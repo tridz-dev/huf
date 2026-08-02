@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Calendar, KeyRound, Puzzle, Settings, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { getIntegrationServicesPaginated } from '@/services/integrationApi';
 import { integrationCategoryFilterOptions } from '@/data/integrations';
@@ -62,7 +63,7 @@ export function IntegrationServicesListingPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Define integration service catalogs and credential schemas used by Integration Settings"
       filters={
         <FilterBar
@@ -157,7 +158,7 @@ export function IntegrationServicesListingPage() {
           {total !== undefined ? `Showing all ${total} services` : 'No more services to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
-import { FilterBar, PageLayout, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getArtifacts, type AgentContextArtifactDoc, type ArtifactListParams } from '@/services/agentContextArtifactApi';
@@ -84,7 +85,7 @@ function AgentContextArtifactsPage() {
   );
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Browse context artifacts stored for agent runs and conversations"
       filters={
         <FilterBar
@@ -167,6 +168,6 @@ function AgentContextArtifactsPage() {
           {total !== undefined ? `Showing all ${total} artifacts` : 'No more artifacts to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

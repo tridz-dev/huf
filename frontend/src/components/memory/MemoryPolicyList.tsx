@@ -98,12 +98,11 @@ export function MemoryPolicyList() {
             onChange: (value) => setFilter('status', value),
           },
         ]}
-        actions={
-          <Button variant="display" size="sm" onClick={() => navigate('/memory/policies/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            New Policy
-          </Button>
-        }
+        primaryAction={{
+          label: 'New Policy',
+          icon: <Plus className="h-3.5 w-3.5" />,
+          onClick: () => navigate('/memory/policies/new'),
+        }}
       />
 
       {error && !initialLoading && (

@@ -10,9 +10,9 @@ import {
   useReactTable,
   HeaderContext,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout, StatusDot, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, StatusDot, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
-import { Combobox } from '@/components/ui/combobox';
 import {
   Table,
   TableBody,
@@ -181,7 +181,7 @@ export function ExecutionProfilesPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       title="Execution Profiles"
       subtitle="Manage sandboxed code execution environments, resource limits, and approval policies."
       filters={
@@ -189,16 +189,15 @@ export function ExecutionProfilesPage() {
           searchPlaceholder="Search execution profiles..."
           searchValue={search}
           onSearchChange={setSearch}
-          actions={
-            <div className="w-full sm:w-48">
-              <Combobox
-                options={statusOptions}
-                value={filters.status || 'all'}
-                onValueChange={(value) => setFilter('status', value || 'all')}
-                placeholder="Status"
-              />
-            </div>
-          }
+          filters={[
+            {
+              label: 'Status',
+              value: filters.status || 'all',
+              options: statusOptions,
+              onChange: (value) => setFilter('status', value || 'all'),
+              placeholder: 'All',
+            },
+          ]}
         />
       }
     >
@@ -261,7 +260,7 @@ export function ExecutionProfilesPage() {
           {total !== undefined ? `Showing all ${total} execution profiles` : 'No more profiles to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

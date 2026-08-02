@@ -12,7 +12,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getSkills, deleteSkill, updateSkill } from '../services/skillApi';
@@ -132,7 +133,7 @@ export function SkillsPage() {
   };
 
   return (
-    <PageLayout
+    <PageFrame
       title="Skills"
       badge={<ExperimentalBadge />}
       subtitle="Manage reusable skill bundles for your agents"
@@ -248,7 +249,7 @@ export function SkillsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </PageLayout>
+    </PageFrame>
   );
 }
 

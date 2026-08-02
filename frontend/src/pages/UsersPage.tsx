@@ -15,7 +15,8 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { PageLayout, FilterBar, EmptyState } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, EmptyState } from '@/components/dashboard';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -242,9 +243,9 @@ export default function UsersPage() {
   }, [users, search, statusFilter]);
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage who has access to Huf and what they can do."
-      toolbar={
+      actions={
         <Button onClick={() => setShowInvite(true)}>
           <UserPlus className="h-4 w-4 mr-2" />
           Invite user
@@ -351,6 +352,6 @@ export default function UsersPage() {
         onClose={() => setShowInvite(false)}
         onInvited={(u) => setUsers((prev) => [u, ...prev])}
       />
-    </PageLayout>
+    </PageFrame>
   );
 }
