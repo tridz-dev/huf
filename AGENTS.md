@@ -24,6 +24,16 @@ The application is built on the Frappe Framework (Python) and uses the standard 
     -   `frontend/src/pages/`: Page components for different application views.
 -   `.github/workflows/`: CI definitions for tests and linting.
 
+## Workspace & Worktree Rule
+
+If you are starting work from the shared agent workspace at `/Users/safwan/Code/Huf/workspace/`, **do not edit this `huf/` checkout directly**. The `workspace/AGENTS.md` treats the symlinked `huf/` as a read-only reference.
+
+- Create a track under `workspace/Tracks/<name>/` (or use an existing track).
+- Add a git worktree of the `huf` repo inside that track.
+- Make all code changes in the worktree, not in the main checkout.
+
+This keeps the source checkout clean, prevents unrelated local changes from leaking into PRs, and ensures the workspace worktree rules are followed. If you are already inside a dedicated worktree, this rule does not apply and you may edit normally.
+
 ## Security Considerations
 -   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
 -   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
