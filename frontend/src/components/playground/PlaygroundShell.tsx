@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { PlaygroundMode } from './types';
 
 interface PlaygroundShellProps {
@@ -78,24 +78,16 @@ export function PlaygroundShell({
         </div>
       </header>
 
-      {/* Mode tabs — sentence-case Plex Sans on a shared baseline, signal underline */}
-      <div className="flex border-b border-line bg-paper px-5">
-        {tabs.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => onModeChange(tab.value)}
-            className={cn(
-              '-mb-px mr-6 border-b-2 px-1 py-3 text-[13px] transition-colors',
-              mode === tab.value
-                ? 'border-signal text-ink'
-                : 'border-transparent text-steel hover:text-ink',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Mode tabs — shared §6.5 underline vocabulary on a paper row */}
+      <Tabs value={mode} onValueChange={(value) => onModeChange(value as PlaygroundMode)}>
+        <TabsList className="bg-paper px-5">
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value} className="mr-6 px-1 py-3">
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
     </>
   );
 }

@@ -39,7 +39,7 @@ export default function MemoryPage() {
       subtitle="Facts, preferences, and context your AI agents have learned from conversations."
     >
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-        <TabsList variant="panel" className="border-b-0">
+        <TabsList>
           <TabsTrigger value="memories">Memories</TabsTrigger>
           <TabsTrigger value="policies">Policies</TabsTrigger>
         </TabsList>
