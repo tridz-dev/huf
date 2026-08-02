@@ -144,6 +144,7 @@ def update_tool_call_message(
     tool_call: dict | list,
     result_content: Any,
     agent_doc=None,
+    status: str = "Completed",
 ) -> bool:
     """
     Update an existing 'Tool Call' Agent Message with a bounded result envelope.
@@ -158,6 +159,7 @@ def update_tool_call_message(
         tool_call: Tool call payload (dict or list) to persist in tool_calls.
         result_content: Raw result returned by the tool.
         agent_doc: Agent DocType (used for max_context_chars threshold).
+        status: Execution status for the result record ("Completed" or "Failed").
 
     Returns:
         True if the message was updated, False otherwise.
@@ -177,7 +179,6 @@ def update_tool_call_message(
     try:
         from huf.ai.results import policy as result_policy
         from huf.ai.results.store import persist_result
-        from huf.ai.results.envelope import build_envelope
 
         # Resolve run/conversation/tool_call links from the message.
         run_name = msg_doc.agent_run
@@ -193,9 +194,7 @@ def update_tool_call_message(
                 msg_doc, tool_call_id, tool_call, result_content, agent_doc
             )
 
-        status = "Completed"
-        if agent_doc and hasattr(agent_doc, "status"):
-            status = getattr(agent_doc, "status", "Completed")
+        result_status = status if status in ("Completed", "Failed") else "Completed"
 
         result_doc, envelope = persist_result(
             result_content=result_content,
@@ -205,7 +204,7 @@ def update_tool_call_message(
             source_tool=source_tool,
             visibility="model_visible",
             agent_doc=agent_doc,
-            status=status,
+            status=result_status,
         )
 
         size_bytes = result_doc.size_bytes or 0
@@ -237,7 +236,7 @@ def update_tool_call_message(
             )
         msg_doc.save()
         return True
-    except (frappe.ValidationError, frappe.PermissionError, frappe.TimestampMismatchError) as e:
+    except Exception as e:
         frappe.log_error(
             f"Error updating tool call message '{message_name}': {e}",
             "Tool Call Message Update"

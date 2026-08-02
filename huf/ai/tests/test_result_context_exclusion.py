@@ -8,7 +8,7 @@ import json
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.conversation_manager import ConversationManager
+from huf.ai.conversation_manager import ConversationManager, update_tool_call_message
 from huf.ai.results import policy
 from huf.ai.results.store import persist_result
 from huf.ai.results.views import result_read
@@ -213,6 +213,44 @@ class TestResultContextExclusion(IntegrationTestCase):
 
         data2 = result_read(result_doc.name, view="row", selector="99999")
         self.assertEqual(data2["rows"][0]["id"], 99999)
+
+    def test_failed_tool_call_marks_result_failed(self):
+        """update_tool_call_message propagates a failed tool status to the result record."""
+        message = self.cm.add_message(
+            conversation=self.conversation,
+            role="agent",
+            content="call the tool",
+            provider=self.provider,
+            model=self.model,
+            agent=self.agent.name,
+            run_name=self.run.name,
+            kind="Tool Call",
+            tool_call=self.tool_call.name,
+            tool_call_id=self.tool_call.call_id,
+        )
+        self._cleanup.append(("Agent Message", message.name))
+
+        updated = update_tool_call_message(
+            message_name=message.name,
+            tool_call_id=self.tool_call.call_id,
+            tool_call={"id": self.tool_call.call_id, "type": "function", "function": {"name": "test_tool"}},
+            result_content={"error": "something went wrong"},
+            agent_doc=self.agent,
+            status="Failed",
+        )
+        self.assertTrue(updated)
+
+        result_name = frappe.db.get_value(
+            "Agent Execution Result",
+            {"tool_call": self.tool_call.name},
+            "name",
+        )
+        self.assertTrue(result_name)
+        self._cleanup.append(("Agent Execution Result", result_name))
+        self.assertEqual(
+            frappe.db.get_value("Agent Execution Result", result_name, "status"),
+            "Failed",
+        )
 
     def test_expired_result_is_handled_explicitly(self):
         """Expired results return an explicit error envelope."""

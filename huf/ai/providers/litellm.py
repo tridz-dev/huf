@@ -1817,6 +1817,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                         tool_call=[tool_call],
                                                         result_content=result_content,
                                                         agent_doc=agent_doc,
+                                                        status="Failed" if tool_failed else "Completed",
                                                     )
                                                     if not updated:
                                                         message_name = None

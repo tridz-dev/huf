@@ -1642,6 +1642,7 @@ def _execute_agent_run(
                         tool_call=[tool_call_dict],
                         result_content=tool_result,
                         agent_doc=agent_doc,
+                        status=tool_status,
                     )
 
                     if not updated:
@@ -1651,7 +1652,6 @@ def _execute_agent_run(
                         # only contains a bounded envelope/reference.
                         from huf.ai.results import policy as result_policy
                         from huf.ai.results.store import persist_result
-                        from huf.ai.results.envelope import build_envelope
 
                         result_doc, envelope = persist_result(
                             result_content=tool_result,

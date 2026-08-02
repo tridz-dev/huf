@@ -38,7 +38,7 @@ def _is_conversation_participant(conversation_name: str) -> bool:
     # conversations.
     participant = frappe.db.exists(
         "Agent Message",
-        {"conversation": conversation_name, "owner": ("!=", "Administrator"), "owner": user},
+        {"conversation": conversation_name, "owner": user},
     )
     if participant:
         return True
