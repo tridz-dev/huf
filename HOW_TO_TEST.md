@@ -29,7 +29,17 @@ Run all bench commands through the Frappe container:
 docker exec fdocker_devcontainer-frappe-1 bash -c "cd /workspace/development/16 && bench --site huf.localhost <COMMAND>"
 ```
 
-### 1.1 Migrate the site
+### 1.1 Build the frontend SPA
+
+The HUF UI is a Vite SPA. After pulling the branch, build it with **yarn** inside the container:
+
+```bash
+docker exec fdocker_devcontainer-frappe-1 bash -c "cd /workspace/development/16/apps/huf/frontend && yarn build"
+```
+
+Do not use `npm run build` for HUF/Frappe apps in this bench.
+
+### 1.2 Migrate the site
 
 ```bash
 docker exec fdocker_devcontainer-frappe-1 bash -c "cd /workspace/development/16 && bench --site huf.localhost migrate"
@@ -55,7 +65,60 @@ curl -s -o /dev/null -w '%{http_code}' http://huf.localhost:8100/huf/sub_oauth
 
 ---
 
-## 2. Run the test suite
+## 2. Use the HUF UI (recommended)
+
+### 2.1 Open the Subscription Connections page
+
+Go to **AI Providers** (`http://huf.localhost:8100/huf/providers`) and click **Connections** in the top-right.
+
+Or visit directly:
+
+```
+http://huf.localhost:8100/huf/provider-connections
+```
+
+### 2.2 Create a connection
+
+1. Click **Add Connection**.
+2. Fill in:
+   - **Connection Name**: anything unique
+   - **AI Provider**: pick the provider you created (brand must be `openai_community` or `kimi_community`)
+   - **Adapter Type**: `openai_community_subscription` or `kimi_community_subscription`
+   - **Auth Method**: auto-populated from the adapter
+   - **Eligible Models**: `["gpt-4o"]` or `["kimi-for-coding"]`
+3. Click **Create Connection**.
+
+### 2.3 Authorize
+
+For **OpenAI Community**:
+
+1. Click **Authorize** on the connection row.
+2. Open the printed **Authorization URL** in a new tab.
+3. After authorizing, copy the final browser URL (`https://...?code=...&state=...`).
+4. Paste it into the **Pasted Callback URL** field.
+5. Click **Complete Authorization**.
+
+For **Kimi For Coding**:
+
+1. Click **Authorize** on the connection row.
+2. Open the **verification page** link in a new tab.
+3. Enter the displayed **User Code** on the Kimi site.
+4. Click **Complete Authorization** in HUF.
+
+Status changes to `Active` when successful.
+
+### 2.4 Run an agent
+
+Create or run an Agent with:
+
+| Field | Value |
+|-------|-------|
+| AI Provider | `OpenAI Community` or `Kimi For Coding` |
+| Model | `gpt-4o` or `kimi-for-coding` |
+
+The runtime auto-discovers the active connection for the current user.
+
+## 3. Run the test suite
 
 ```bash
 docker exec fdocker_devcontainer-frappe-1 bash -c "cd /workspace/development/16 && \
@@ -74,7 +137,7 @@ Expected results:
 
 ---
 
-## 3. Test the OpenAI Community adapter (live OAuth)
+## 4. Test the OpenAI Community adapter (live OAuth)
 
 ### 3.1 Create the AI Provider
 
@@ -146,7 +209,7 @@ run_agent_sync(
 
 ---
 
-## 4. Test the Kimi For Coding adapter (device flow)
+## 5. Test the Kimi For Coding adapter (device flow)
 
 ### 4.1 Create the AI Provider
 
@@ -209,7 +272,7 @@ run_agent_sync(
 
 ---
 
-## 5. Useful URLs
+## 6. Useful URLs
 
 | URL | Purpose |
 |-----|---------|
@@ -220,7 +283,7 @@ run_agent_sync(
 
 ---
 
-## 6. Optional site config overrides
+## 7. Optional site config overrides
 
 ### OpenAI Community
 
@@ -245,7 +308,7 @@ Defaults are hard-coded to the values used by the referenced community plugins.
 
 ---
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
@@ -257,7 +320,7 @@ Defaults are hard-coded to the values used by the referenced community plugins.
 
 ---
 
-## 8. Files changed
+## 9. Files changed
 
 ```
 huf/ai/agent_integration.py
@@ -273,8 +336,14 @@ huf/ai/tests/test_subscription_adapter_openai_community.py
 huf/ai/tests/test_subscription_adapter_kimi_community.py
 huf/huf/doctype/ai_provider/ai_provider.json
 huf/huf/doctype/ai_provider/ai_provider.py
-huf/huf/doctype/ai_provider_connection/
+huf/huf/doctype/ai_provider_connection/ai_provider_connection.py
 huf/www/sub_oauth.py
 huf/www/sub_oauth.html
+frontend/src/App.tsx
+frontend/src/components/AiProvidersHeaderActions.tsx
+frontend/src/data/doctypes.ts
+frontend/src/pages/AiProviderConnectionsPage.tsx
+frontend/src/pages/AiProviderConnectionsPageWrapper.tsx
+frontend/src/services/providerConnectionApi.ts
 HOW_TO_TEST.md
 ```
