@@ -34,7 +34,7 @@
    "fieldname": "provider_brand",
    "fieldtype": "Select",
    "label": "Provider Brand",
-   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nother",
+   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nmoonshot\nai21\nbaseten\ncloudflare-workers-ai\nclarifai\nnomic\nreplicate\nsagemaker\nstability-ai\nvllm\nwatsonx\nother",
    "reqd": 1
   },
   {
@@ -56,8 +56,7 @@
    "label": "PORT"
   },
   {
-   "depends_on": "eval:doc.is_local_llm == 1;",
-   "description": "e.g. http://host.docker.internal:11434 — Ollama on the Docker host",
+   "description": "e.g. http://host.docker.internal:11434 for Ollama, or https://api.moonshot.cn/v1 for Moonshot China",
    "fieldname": "api_base_url",
    "fieldtype": "Data",
    "label": "API Base URL"
