@@ -1,0 +1,170 @@
+import { useEffect, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  Code2,
+  FileText,
+  Image as ImageIcon,
+  Network,
+  PanelRightClose,
+  PanelRightOpen,
+  Video,
+} from 'lucide-react';
+import { formatTimeAgo } from '@/utils/time';
+import {
+  listConversationArtifacts,
+  type ArtifactListItem,
+} from '@/services/artifactPanelApi';
+
+const COLLAPSED_STORAGE_KEY = 'huf-artifacts-panel-collapsed';
+
+// Mirrors the `artifact_type` Select options on the Artifact doctype:
+// code, document, markdown, html, svg, mermaid, chart, jsx, video, image,
+// web-preview, text.
+const ARTIFACT_TYPE_ICONS: Record<string, LucideIcon> = {
+  code: Code2,
+  jsx: Code2,
+  html: Code2,
+  'web-preview': Code2,
+  svg: ImageIcon,
+  image: ImageIcon,
+  video: Video,
+  chart: BarChart3,
+  mermaid: Network,
+  document: FileText,
+  markdown: FileText,
+  text: FileText,
+};
+
+function getArtifactIcon(artifactType: string): LucideIcon {
+  return ARTIFACT_TYPE_ICONS[artifactType] ?? FileText;
+}
+
+function readCollapsedPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(COLLAPSED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export interface ArtifactsPanelProps {
+  conversationId: string | undefined;
+}
+
+export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
+  const [collapsed, setCollapsed] = useState<boolean>(readCollapsedPreference);
+  const [artifacts, setArtifacts] = useState<ArtifactListItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+    } catch {
+      // localStorage unavailable (private mode, etc.) - preference just won't persist.
+    }
+  }, [collapsed]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      setArtifacts([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    listConversationArtifacts(conversationId).then((items) => {
+      if (!cancelled) {
+        setArtifacts(items);
+        setLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
+
+  const count = artifacts.length;
+
+  if (collapsed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setCollapsed(false)}
+        aria-label="Expand artifacts panel"
+        className="relative flex w-10 shrink-0 flex-col items-center gap-2 border-l border-line bg-panel py-4 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+      >
+        <PanelRightOpen className="size-4" />
+        <span className="rotate-180 text-xs font-medium tracking-wide [writing-mode:vertical-rl]">
+          Artifacts
+        </span>
+        {count > 0 && (
+          <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex h-full w-72 shrink-0 flex-col border-l border-line bg-panel">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-3">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">Artifacts</h2>
+          {count > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-medium text-muted-foreground">
+              {count}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          aria-label="Collapse artifacts panel"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <PanelRightClose className="size-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {loading && artifacts.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">Loading...</p>
+        ) : count === 0 ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">No artifacts yet</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {artifacts.map((artifact) => {
+              const Icon = getArtifactIcon(artifact.artifact_type);
+              return (
+                <li key={artifact.name}>
+                  <a
+                    href={`/artifact/${artifact.name}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-start gap-2 px-3 py-2.5 hover:bg-muted/40"
+                  >
+                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {artifact.title || artifact.artifact_type}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {artifact.artifact_type}
+                        {' · '}
+                        {formatTimeAgo(artifact.creation)}
+                      </p>
+                    </div>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ArtifactsPanel;
