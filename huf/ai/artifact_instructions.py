@@ -57,7 +57,12 @@ graph TD
 <web-preview url="https://example.com" title="Example Site" />
 
 6. JSX PREVIEW (inline component, not inside an artifact)
-<jsx-preview jsx="<div style={{ color: 'blue' }}>Hello</div>" title="Inline JSX" />
+<jsx-preview title="Inline JSX">
+<div style={{ color: 'blue' }}>Hello</div>
+</jsx-preview>
+Always use this open/close form and put the JSX in the tag body. Never pass JSX
+via a jsx="..." attribute — JSX contains > and quote characters, which terminate
+the attribute early and cause the whole element to be dropped without rendering.
 
 GENERAL RULES:
 - Only use the tags above (plus the chart artifact format described separately). Unknown types render as plain text.
