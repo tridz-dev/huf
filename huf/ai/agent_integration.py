@@ -138,11 +138,36 @@ class AgentManager:
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
 
+    def _has_active_subscription_connection(self) -> bool:
+        """Return True when an active AI Provider Connection exists for this provider/user."""
+        try:
+            connections = frappe.get_all(
+                "AI Provider Connection",
+                filters={
+                    "provider": self.settings.name,
+                    "user": frappe.session.user,
+                    "is_active": 1,
+                },
+                fields=["name"],
+                limit_page_length=1,
+            )
+            if not connections:
+                return False
+            conn_doc = frappe.get_doc("AI Provider Connection", connections[0].name)
+            return conn_doc.is_active_connection() and conn_doc.check_and_refresh()
+        except Exception:
+            return False
+
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
         api_key = self.settings.get_password("api_key")
         if not api_key:
-            frappe.throw(_("API key is not configured in AI Provider."))
+            # Allow agents to run through a subscription adapter even when the
+            # shared AI Provider has no API key.
+            if self._has_active_subscription_connection():
+                api_key = "subscription-managed"
+            else:
+                frappe.throw(_("API key is not configured in AI Provider."))
 
         provider_kwargs = {"api_key": api_key, "use_responses": True}
         # Support local/custom OpenAI-compatible endpoints (e.g. Kimi Code API)
@@ -871,6 +896,7 @@ def run_agent_sync(
     prompt_cache_options=None,
     files=None,
     skip_user_message: bool = False,
+    subscription_connection_name: str = None,
     now=None,
 ):
 
@@ -954,6 +980,7 @@ def run_agent_sync(
         "prompt_cache_options": prompt_cache_options,
         "files": files,
         "skip_user_message": skip_user_message,
+        "subscription_connection_name": subscription_connection_name,
     }
 
     run_doc_data = {
@@ -1010,6 +1037,7 @@ def run_agent_sync(
         "prompt_cache_options": prompt_cache_options,
         "files": files,
         "skip_user_message": skip_user_message,
+        "subscription_connection_name": subscription_connection_name,
     }
 
     is_queued = not getattr(agent_doc, "run_immediately", 0) and not _is_truthy(now)
@@ -1252,6 +1280,7 @@ def _execute_agent_run(
     prompt_cache_options=None,
     files=None,
     skip_user_message=False,
+    subscription_connection_name=None,
 ):
     """Execute an agent against an existing Agent Run and conversation.
 
@@ -1380,6 +1409,8 @@ def _execute_agent_run(
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
+            "subscription_connection_name": subscription_connection_name,
+            "user": frappe.session.user,
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -1466,6 +1497,8 @@ def _execute_agent_run(
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
+            "subscription_connection_name": subscription_connection_name,
+            "user": frappe.session.user,
         }
         run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model, context)
         result = _run_async_safely(run)
@@ -2341,6 +2374,7 @@ async def run_agent_stream(
     prompt_cache_options=None,
     skip_user_message: bool = False,
     files=None,
+    subscription_connection_name: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2524,6 +2558,8 @@ async def run_agent_stream(
             "prompt_cache_options": resolved_prompt_cache,
             "_tool_call_message_map": tool_call_message_map,
             "files": files,
+            "subscription_connection_name": subscription_connection_name,
+            "user": frappe.session.user,
         }
 
         stored_summary = conv_manager.get_stored_summary(conversation.name)

@@ -34,7 +34,7 @@
    "fieldname": "provider_brand",
    "fieldtype": "Select",
    "label": "Provider Brand",
-   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nother",
+   "options": "openai\nopenai_community\nkimi_community\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nother",
    "reqd": 1
   },
   {

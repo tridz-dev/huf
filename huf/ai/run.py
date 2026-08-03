@@ -1,19 +1,152 @@
 import frappe
 from frappe import _
+from types import SimpleNamespace
 
 
 class RunProvider:
     """
     Central routing layer for AI providers.
     Routes existing providers (OpenAI, Anthropic, Google, OpenRouter) to LiteLLM
-    for unified handling while maintaining backward compatibility.
-
-    New providers can be added via LiteLLM without code changes - just create
-    AI Provider and AI Model documents with the correct format.
+    for unified handling while maintaining backward compatibility, or to native
+    subscription adapters when a subscription connection is specified/active.
     """
 
     @staticmethod
+    def _get_subscription_connection(context, provider=None, model=None):
+        """
+        Resolve an active AI Provider Connection for this run.
+
+        Precedence:
+        1. ``subscription_connection`` object or name passed in context.
+        2. ``subscription_connection_name`` passed in context.
+        3. Auto-discover an active connection for the provider + current user +
+           model when none is explicitly supplied.
+        """
+        if not context:
+            context = {}
+
+        connection = context.get("subscription_connection")
+        connection_name = context.get("subscription_connection_name")
+
+        if not connection and connection_name:
+            if frappe.db.exists("AI Provider Connection", connection_name):
+                connection = frappe.get_doc("AI Provider Connection", connection_name)
+
+        if connection:
+            if isinstance(connection, str):
+                if frappe.db.exists("AI Provider Connection", connection):
+                    connection = frappe.get_doc("AI Provider Connection", connection)
+                else:
+                    return None
+
+            if hasattr(connection, "check_and_refresh"):
+                if connection.check_and_refresh():
+                    return connection
+                frappe.throw(
+                    _(
+                        "Subscription connection '{0}' is expired or inactive. Please re-authorize."
+                    ).format(connection.name)
+                )
+            return connection
+
+        # Auto-discover active subscription connection for provider/user/model.
+        if provider:
+            user = context.get("user") or frappe.session.user
+            filters = {
+                "provider": provider,
+                "user": user,
+                "is_active": 1,
+            }
+            connections = frappe.get_all(
+                "AI Provider Connection",
+                filters=filters,
+                fields=["name"],
+                order_by="modified desc",
+                limit_page_length=10,
+            )
+            for conn_row in connections:
+                try:
+                    conn_doc = frappe.get_doc("AI Provider Connection", conn_row.name)
+                except Exception:
+                    continue
+                if not conn_doc.is_active_connection():
+                    continue
+                if model and not conn_doc.matches_model(model):
+                    continue
+                if conn_doc.check_and_refresh():
+                    return conn_doc
+
+        return None
+
+    @staticmethod
+    def _normalize_subscription_result(result):
+        """
+        Convert a subscription adapter dict result into a HUF-compatible result
+        object with ``final_output``, ``usage``, ``new_items`` and ``cost``.
+        """
+        if result is None:
+            return SimpleNamespace(final_output="", usage={}, new_items=[], cost=0.0)
+
+        if not isinstance(result, dict):
+            return result
+
+        usage = result.get("usage") or {}
+        if not isinstance(usage, dict):
+            usage = {}
+
+        return SimpleNamespace(
+            final_output=result.get("response", ""),
+            usage=usage,
+            new_items=result.get("new_items") or [],
+            cost=result.get("cost", 0.0),
+            metadata={k: v for k, v in result.items() if k not in ("response", "usage", "new_items", "cost")},
+        )
+
+    @staticmethod
+    async def _normalize_subscription_stream(stream):
+        """
+        Compatibility wrapper for subscription adapters that emit raw chunks
+        without a ``type`` field.  Infers HUF chunk types where possible.
+        """
+        full_response = ""
+        async for chunk in stream:
+            if not isinstance(chunk, dict):
+                continue
+
+            chunk_type = chunk.get("type")
+            if not chunk_type:
+                if chunk.get("finish_reason") == "stop":
+                    chunk_type = "complete"
+                else:
+                    chunk_type = "delta"
+                chunk = dict(chunk)
+                chunk["type"] = chunk_type
+
+            if chunk_type == "delta":
+                full_response += chunk.get("content", "")
+                chunk.setdefault("full_response", full_response)
+                yield chunk
+            elif chunk_type == "complete":
+                chunk.setdefault("full_response", full_response)
+                yield chunk
+            else:
+                yield chunk
+
+    @staticmethod
     def run(agent, enhanced_prompt, provider, model, context=None):
+        sub_conn = RunProvider._get_subscription_connection(context, provider, model)
+        if sub_conn:
+            from huf.ai.providers.adapters import get_adapter
+            adapter = get_adapter(sub_conn.adapter_type)
+            result = adapter.run(
+                connection_doc=sub_conn,
+                agent=agent,
+                enhanced_prompt=enhanced_prompt,
+                model=model,
+                context=context,
+            )
+            return RunProvider._normalize_subscription_result(result)
+
         provider_lower = provider.lower()
         original_exception = None
 
@@ -82,8 +215,22 @@ class RunProvider:
         """
         Streaming version of run() - yields chunks instead of returning final result.
 
-        Routes streaming requests to LiteLLM for supported providers.
+        Routes streaming requests to LiteLLM for supported providers or to native
+        subscription adapters when a subscription connection is specified/active.
         """
+        sub_conn = RunProvider._get_subscription_connection(context, provider, model)
+        if sub_conn:
+            from huf.ai.providers.adapters import get_adapter
+            adapter = get_adapter(sub_conn.adapter_type)
+            stream = adapter.stream_response(
+                connection_doc=sub_conn,
+                agent=agent,
+                enhanced_prompt=enhanced_prompt,
+                model=model,
+                context=context,
+            )
+            return RunProvider._normalize_subscription_stream(stream)
+
         try:
             from huf.ai.providers import litellm
             return litellm.run_stream(
@@ -108,9 +255,3 @@ class RunProvider:
                 f"LiteLLM Streaming Error: {provider}",
             )
             frappe.throw(_(f"Error streaming from provider {provider}: {str(e)}"))
-
-        # For other providers, streaming not yet supported
-        # frappe.throw(
-        #     _("Streaming not yet supported for provider '{provider}'. "
-        #       "Please use run() for non-streaming requests.").format(provider=provider)
-        # )

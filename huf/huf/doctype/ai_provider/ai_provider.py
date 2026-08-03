@@ -25,6 +25,10 @@ class AIProvider(Document):
 					indicator="orange",
 				)
 
+	# Brands that are backed by per-user subscription connections rather than a
+	# shared API key are allowed to omit the API key field.
+	SUBSCRIPTION_BRANDS = ("openai_community", "kimi_community")
+
 	def validate_api_key(self):
 		if self.is_local_llm:
 			if not (self.api_base_url or self.url):
@@ -33,6 +37,11 @@ class AIProvider(Document):
 				# Local providers (Ollama, LM Studio) need no key; set a dummy
 				# value to satisfy legacy readers that expect one.
 				self.api_key = "not-needed"
+		elif self.provider_brand in self.SUBSCRIPTION_BRANDS:
+			# Subscription-backed providers use per-user OAuth tokens stored in
+			# AI Provider Connection; no global API key is required.
+			if not self.api_key:
+				self.api_key = "subscription"
 		elif not self.api_key:
 			frappe.throw(_("API Key is required for cloud providers."))
 
