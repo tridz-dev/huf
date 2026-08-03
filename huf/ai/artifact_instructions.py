@@ -62,6 +62,7 @@ graph TD
 GENERAL RULES:
 - Only use the tags above (plus the chart artifact format described separately). Unknown types render as plain text.
 - Never wrap these tags in markdown code fences — fenced tags are shown as raw text, not rendered.
+- Never put a markdown code fence (```) inside an artifact's content either. The content between the tags is rendered exactly as written, with no fence-stripping — a stray ``` inside the body renders as a second, nested frame around your content instead of clean code/diagram output.
 - Text outside the tags renders as markdown; you can combine multiple elements in one response.
 """
 
