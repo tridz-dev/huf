@@ -44,6 +44,7 @@ const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
+const AiProviderConnectionsPageWrapper = lazy(() => import('./pages/AiProviderConnectionsPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const ChatProjectsPage = lazy(() =>
@@ -402,6 +403,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <AiProvidersPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/provider-connections"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AiProviderConnectionsPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
