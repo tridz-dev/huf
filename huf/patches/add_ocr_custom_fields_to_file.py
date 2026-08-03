@@ -9,7 +9,7 @@ def execute():
                 "label": "OCR Extraction (HUF)",
                 "fieldtype": "Section Break",
                 "insert_after": "content_hash",
-                "collapsible": 1,
+                "collapsible": 0,
             },
             {
                 "fieldname": "huf_ocr_text",
@@ -26,7 +26,7 @@ def execute():
                 "read_only": 1,
                 "insert_after": "huf_ocr_text",
                 "no_copy": 1,
-                "hidden": 1,
+                "hidden": 0,
             },
             {
                 "fieldname": "huf_ocr_strategy",
