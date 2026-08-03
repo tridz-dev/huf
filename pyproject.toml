@@ -15,7 +15,9 @@ dependencies = [
     # extension (litellm-rust) whose PyO3 build caps at Python 3.13 — both
     # break under frappe v16's Python 3.14 requirement. Revisit this ceiling
     # once litellm ships a Python 3.14-compatible release.
-    "litellm>=1.0.0,!=1.82.7,!=1.82.8,<1.83.8",
+    # Lower-bound 1.74.7 ensures Moonshot AI and other newer providers are
+    # available in the bundled LiteLLM provider registry.
+    "litellm>=1.74.7,!=1.82.7,!=1.82.8,<1.83.8",
     "llama-index-core>=0.10.0",
     "sqlite-vec",
     "pysqlite3-binary; platform_machine == 'x86_64' and python_version < '3.14'",

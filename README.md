@@ -187,9 +187,25 @@ Connect agents to external software and services:
 
 Connect to any AI provider or run local models on private hardware:
 
-- **Cloud Providers** — OpenAI, Anthropic, Google Gemini, Groq, Mistral, OpenRouter (with seeded free models), and more
+- **Cloud Providers** — OpenAI, Anthropic, Google Gemini, Groq, Mistral, OpenRouter (with seeded free models), Moonshot, and more
 - **Local Endpoints** — Ollama, LM Studio, or any OpenAI-compatible local API
 - **Unified Routing** — LiteLLM integration layer handles model parameter mapping and fallbacks seamlessly
+
+#### Provider support & LiteLLM version policy
+
+HUF routes all chat/completion inference through [LiteLLM](https://docs.litellm.ai/docs/providers), so any provider that LiteLLM supports can be used. The curated **Provider Brand** list in the AI Provider DocType is used for UI labels and logos; if a provider is not in the catalog, use **Other / Custom** and enter the model as LiteLLM expects it (e.g. `someprovider/model-name`).
+
+Version constraints in `pyproject.toml`:
+
+```toml
+litellm>=1.74.7,!=1.82.7,!=1.82.8,<1.83.8
+```
+
+- `>=1.74.7` ensures providers such as **Moonshot AI** are present in LiteLLM’s provider registry.
+- `!=1.82.7,!=1.82.8` excludes the compromised PyPI releases from March 2026.
+- `<1.83.8` caps the version because LiteLLM `1.83.8+` restricts installs to Python `<3.14`, and `1.90+` builds the `litellm-rust` extension with PyO3 that currently only supports up to Python 3.13. Frappe v16 requires Python 3.14, so newer LiteLLM releases cannot be installed cleanly until LiteLLM ships Python 3.14-compatible wheels ([upstream issue](https://github.com/BerriAI/litellm/issues/33116)).
+
+Regional or self-hosted endpoints can be configured via the **API Base URL** field on any AI Provider, including hosted providers such as Moonshot China (`https://api.moonshot.cn/v1`).
 
 ### Observability & Analytics
 
@@ -301,7 +317,7 @@ bench restart
 
 HUF was affected as a downstream consumer. We responded immediately:
 
-- Blocked both compromised versions in our dependency constraints (`litellm>=1.0.0,!=1.82.7,!=1.82.8`)
+- Blocked both compromised versions in our dependency constraints (`litellm>=1.74.7,!=1.82.7,!=1.82.8,<1.83.8`)
 - Added install-time detection in `huf/install.py` — if a compromised version is already present in your environment, HUF will surface a critical alert on startup
 
 If you are running either of those LiteLLM versions, upgrade immediately.
