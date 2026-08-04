@@ -1,17 +1,19 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import type { ScrollToBottom } from "use-stick-to-bottom";
 import { getConversationMessages, createAgentRunFeedback, getConversation, setConversationModelOverride, type ChatMessage } from "@/services/chatApi";
 import { getAgent, getAIModels } from "@/services/agentApi";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
+import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { EmptyChatState } from './EmptyChatState';
 import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
-import { useChatScrollToBottom } from './useChatScrollToBottom';
+import { ChatScrollBridge } from './ChatScrollBridge';
 import { useRunStatusPolling } from './useRunStatusPolling';
 import { usePendingRunHydration } from './usePendingRunHydration';
 import {
@@ -213,6 +215,7 @@ export function ChatMessageList({
         loadingMore,
         hasMore,
         sentinelRef,
+        scrollRef,
         error: messagesError,
     } = useInfiniteScroll<
         { limit?: number; start?: number },
@@ -380,11 +383,21 @@ export function ChatMessageList({
         }
     }, [chatId]);
 
-    const { scrollContainerRef, scrollToBottomAfterPaint } = useChatScrollToBottom({
-        chatId,
-        initialLoading,
-        messages,
-    });
+    const scrollToBottomRef = useRef<ScrollToBottom | null>(null);
+    const handleScrollToBottomReady = useCallback((scrollToBottom: ScrollToBottom) => {
+        scrollToBottomRef.current = scrollToBottom;
+    }, []);
+
+    const scrollToBottomAfterPaint = useCallback((instant = false) => {
+        void scrollToBottomRef.current?.({
+            animation: instant ? 'instant' : 'smooth',
+        });
+    }, []);
+
+    useLayoutEffect(() => {
+        if (initialLoading || messages.length === 0) return;
+        void scrollToBottomRef.current?.({ animation: 'instant' });
+    }, [chatId, initialLoading, messages.length, scrollToBottomAfterPaint]);
 
     const handleFeedback = useCallback(
         async (
@@ -423,8 +436,17 @@ export function ChatMessageList({
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
-                <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
+            <Conversation
+                key={chatId ?? '__new_chat__'}
+                className="flex-1 min-h-0"
+                initial="instant"
+                resize="smooth"
+            >
+                <ChatScrollBridge
+                    infiniteScrollRef={scrollRef}
+                    onScrollToBottomReady={handleScrollToBottomReady}
+                />
+                <ConversationContent className="max-w-4xl mx-auto px-6 py-4 pb-8 gap-8">
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
@@ -441,7 +463,7 @@ export function ChatMessageList({
                             <p className="text-sm text-muted-foreground">No messages yet</p>
                         </div>
                     ) : (
-                        <div className="mt-2 space-y-8">
+                        <>
                             {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
                                 <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
                             )}
@@ -463,10 +485,11 @@ export function ChatMessageList({
                                     scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                                 />
                             ))}
-                        </div>
+                        </>
                     )}
-                </div>
-            </div>
+                </ConversationContent>
+                <ConversationScrollButton />
+            </Conversation>
             <div className="max-w-4xl mx-auto w-full shrink-0">
             <ChatInput
                 chatId={chatId}
