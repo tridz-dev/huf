@@ -41,3 +41,27 @@ export async function listConversationArtifacts(
     return [];
   }
 }
+
+/**
+ * Export an artifact to PDF or DOCX format.
+ *
+ * Degrades gracefully by design: export is a secondary action in the panel,
+ * so any failure resolves to null rather than throwing. The caller should
+ * handle null gracefully (e.g., show a transient toast). Errors are logged
+ * via handleFrappeError so they remain visible in devtools.
+ */
+export async function exportArtifactFromPanel(
+  name: string,
+  format: 'pdf' | 'docx'
+): Promise<{ file_url: string; format: string } | null> {
+  try {
+    const result = await call.get('huf.ai.artifact_export_api.export_artifact', {
+      name,
+      format,
+    });
+    return (result?.message ?? result) as { file_url: string; format: string };
+  } catch (error) {
+    handleFrappeError(error, 'Error exporting artifact');
+    return null;
+  }
+}

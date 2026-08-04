@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
   Code2,
+  Download,
   FileText,
   Image as ImageIcon,
   Network,
@@ -13,6 +14,7 @@ import {
 import { formatTimeAgo } from '@/utils/time';
 import {
   listConversationArtifacts,
+  exportArtifactFromPanel,
   type ArtifactListItem,
 } from '@/services/artifactPanelApi';
 
@@ -40,6 +42,10 @@ function getArtifactIcon(artifactType: string): LucideIcon {
   return ARTIFACT_TYPE_ICONS[artifactType] ?? FileText;
 }
 
+function isDocumentType(artifactType: string): boolean {
+  return artifactType === 'document' || artifactType === 'markdown';
+}
+
 function readCollapsedPreference(): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -57,6 +63,7 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
   const [collapsed, setCollapsed] = useState<boolean>(readCollapsedPreference);
   const [artifacts, setArtifacts] = useState<ArtifactListItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     try {
@@ -83,6 +90,25 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
       cancelled = true;
     };
   }, [conversationId]);
+
+  const handleExport = async (
+    artifactName: string,
+    format: 'pdf' | 'docx',
+    e: React.MouseEvent
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const key = `${artifactName}-${format}`;
+    setExporting((prev) => ({ ...prev, [key]: true }));
+
+    const result = await exportArtifactFromPanel(artifactName, format);
+    setExporting((prev) => ({ ...prev, [key]: false }));
+
+    if (result?.file_url) {
+      window.open(result.file_url, '_blank');
+    }
+  };
 
   const count = artifacts.length;
 
@@ -137,26 +163,52 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
           <ul className="flex flex-col divide-y divide-line">
             {artifacts.map((artifact) => {
               const Icon = getArtifactIcon(artifact.artifact_type);
+              const isDoc = isDocumentType(artifact.artifact_type);
+              const pdfKey = `${artifact.name}-pdf`;
+              const isPdfExporting = exporting[pdfKey];
               return (
                 <li key={artifact.name}>
-                  <a
-                    href={`/artifact/${artifact.name}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-start gap-2 px-3 py-2.5 hover:bg-muted/40"
-                  >
-                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
-                        {artifact.title || artifact.artifact_type}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {artifact.artifact_type}
-                        {' · '}
-                        {formatTimeAgo(artifact.creation)}
-                      </p>
-                    </div>
-                  </a>
+                  <div className="flex items-start gap-2 px-3 py-2.5 hover:bg-muted/40 group">
+                    <a
+                      href={`/artifact/${artifact.name}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-start gap-2 min-w-0 flex-1"
+                    >
+                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {artifact.title || artifact.artifact_type}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {isDoc && (
+                            <>
+                              <span className="inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground">
+                                DOC
+                              </span>
+                            </>
+                          )}
+                          {artifact.artifact_type}
+                          {' · '}
+                          {formatTimeAgo(artifact.creation)}
+                        </p>
+                      </div>
+                    </a>
+                    {isDoc && (
+                      <div className="flex gap-1 shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={(e) => handleExport(artifact.name, 'pdf', e)}
+                          disabled={isPdfExporting}
+                          aria-label="Download as PDF"
+                          className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Download as PDF"
+                        >
+                          <Download className="size-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </li>
               );
             })}
