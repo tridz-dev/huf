@@ -1061,12 +1061,44 @@ def add_message(
     """
     Exposes ConversationManager.add_message as a public API.
     Used for creating context artifacts, tool results, and out-of-band context.
+
+    Security guards (MA-12):
+    - Caller must own the conversation or have write permission on it.
+    - Only ``user``, ``tool`` and ``system`` roles are accepted from the public
+      API. The agent runtime adds ``agent`` messages through
+      ``ConversationManager.add_message`` directly, not through this endpoint.
     """
     if not conversation_id or not role:
         frappe.throw(_("conversation_id and role are required"))
 
+    # MA-12: restrict public roles. ``agent`` messages are written by the
+    # backend runtime via ConversationManager.add_message, not via the public
+    # HTTP API.
+    allowed_public_roles = ("user", "tool", "system")
+    if role not in allowed_public_roles:
+        frappe.throw(
+            _("Role '{0}' is not allowed via the public add_message API.").format(role),
+            frappe.PermissionError,
+        )
+
     try:
         conv_doc = frappe.get_doc("Agent Conversation", conversation_id)
+
+        # MA-12: verify conversation-level write permission before accepting a
+        # message. This blocks cross-conversation injection by anyone who holds
+        # generic Agent Message create permission. Ownership is the primary gate;
+        # System Manager and the chat.view_all capability can bypass it.
+        from huf.permissions import has_capability, SYSTEM_MANAGER
+
+        is_owner = conv_doc.owner == frappe.session.user
+        is_system_manager = SYSTEM_MANAGER in frappe.get_roles()
+        can_view_all = has_capability(frappe.session.user, "chat.view_all")
+        if not (is_owner or is_system_manager or can_view_all):
+            frappe.throw(
+                _("Not permitted to add messages to this conversation."),
+                frappe.PermissionError,
+            )
+
         agent_name = conv_doc.agent
 
         cm = ConversationManager(agent_name=agent_name)

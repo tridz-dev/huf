@@ -178,6 +178,27 @@ def _copy_message(
         "raw_payload": source_msg.raw_payload,
     }
 
+    # MA-11: guard against an explicit index that already exists in the target
+    # conversation (e.g. concurrent forks or caller bugs). Fork targets are
+    # newly created, so this is defensive rather than the normal allocation path.
+    if frappe.db.exists("Agent Message", {
+        "conversation": target.name,
+        "conversation_index": conversation_index,
+    }):
+        last_index = frappe.db.sql(
+            """
+            SELECT MAX(conversation_index) as last_index
+            FROM `tabAgent Message`
+            WHERE conversation = %s
+            """,
+            (target.name,),
+            as_dict=1,
+        )
+        conversation_index = (
+            last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
+        ) + 1
+        doc_data["conversation_index"] = conversation_index
+
     # Remove None values for optional fields so Frappe uses defaults/empties.
     doc_data = {k: v for k, v in doc_data.items() if v is not None}
 

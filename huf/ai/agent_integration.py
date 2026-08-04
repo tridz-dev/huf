@@ -663,6 +663,12 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                         frappe.PermissionError,
                     )
                 doc.save()
+
+                # MA-10: keep the linked Agent Message's fetch_from tool fields
+                # in sync when the tool call reaches a terminal state.
+                from huf.ai.conversation_manager import sync_tool_status_to_message
+                sync_tool_status_to_message(doc.name)
+
                 return doc.name
             else:
                 return None
@@ -720,6 +726,13 @@ def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None,
     name = raw_call.get("name") if isinstance(raw_call, dict) else getattr(raw_call, "name", None)
     args = raw_call.get("arguments") if isinstance(raw_call, dict) and not is_output else (getattr(raw_call, "arguments", None) if not is_output else None)
     call_id = raw_call.get("id") if isinstance(raw_call, dict) else getattr(raw_call, "id", None)
+
+    # MA-08: propagate failure markers produced by provider modules so the
+    # Agent Tool Call is recorded as Failed rather than Completed.
+    if error is None and isinstance(raw_call, dict):
+        if raw_call.get("failed"):
+            error = raw_call.get("error_message") or "Tool execution failed"
+
     return process_tool_call(
         agent_run=run_doc.name,
         conversation=conversation.name,
@@ -1629,20 +1642,36 @@ def _execute_agent_run(
                         tool_call=[tool_call_dict],
                         result_content=tool_result,
                         agent_doc=agent_doc,
+                        status=tool_status,
                     )
 
                     if not updated:
                         # Fallback: create a separate Tool Result message if the
-                        # original Tool Call message could not be updated.
-                        tool_result_str = str(tool_result) if tool_result is not None else ""
-                        tool_result_summary = (tool_result_str[:200] + "...") if len(tool_result_str) > 200 else tool_result_str
-                        max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000))
-                        use_reference = len(tool_result_str) > max_context_chars
+                        # original Tool Call message could not be updated.  Route
+                        # the raw result through the Result Store so the message
+                        # only contains a bounded envelope/reference.
+                        from huf.ai.results import policy as result_policy
+                        from huf.ai.results.store import persist_result
+
+                        result_doc, envelope = persist_result(
+                            result_content=tool_result,
+                            run=run_doc.name,
+                            tool_call=updated_tool_call_id,
+                            conversation=conversation.name,
+                            source_tool=tool_name,
+                            visibility="model_visible",
+                            agent_doc=agent_doc,
+                            status=tool_status,
+                        )
+
+                        size_bytes = result_doc.size_bytes or 0
+                        use_reference = size_bytes > result_policy.INLINE_THRESHOLD_BYTES
+                        envelope_text = json.dumps(envelope, default=str)
 
                         result_message = conv_manager.add_message(
                             conversation,
                             role="tool",
-                            content=tool_result_str,
+                            content=envelope_text,
                             provider=resolved_provider,
                             model=resolved_model,
                             agent=agent_name,
@@ -1650,11 +1679,11 @@ def _execute_agent_run(
                             kind="Tool Result",
                             tool_call=updated_tool_call_id,
                             tool_call_id=call_id,
-                            record_kind="tool_result",
+                            record_kind="result_snapshot",
                             context_policy="include_reference" if use_reference else "include_full",
-                            context_summary=tool_result_summary,
-                            reference_doctype="Agent Tool Call",
-                            reference_name=updated_tool_call_id
+                            context_summary=result_doc.summary or envelope.get("summary", ""),
+                            reference_doctype="Agent Execution Result",
+                            reference_name=result_doc.name
                         )
                         message_name = result_message.name
 

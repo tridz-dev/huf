@@ -144,10 +144,14 @@ def update_tool_call_message(
     tool_call: dict | list,
     result_content: Any,
     agent_doc=None,
+    status: str = "Completed",
 ) -> bool:
     """
-    Update an existing 'Tool Call' Agent Message with the tool result so the
-    request and result live in a single message row.
+    Update an existing 'Tool Call' Agent Message with a bounded result envelope.
+
+    The raw tool result is persisted through the Result Store (``Agent
+    Execution Result``).  The Agent Message receives only a bounded envelope
+    and a reference, so large payloads do not enter model context.
 
     Args:
         message_name: Name of the Agent Message to update.
@@ -155,6 +159,7 @@ def update_tool_call_message(
         tool_call: Tool call payload (dict or list) to persist in tool_calls.
         result_content: Raw result returned by the tool.
         agent_doc: Agent DocType (used for max_context_chars threshold).
+        status: Execution status for the result record ("Completed" or "Failed").
 
     Returns:
         True if the message was updated, False otherwise.
@@ -172,34 +177,47 @@ def update_tool_call_message(
         return False
 
     try:
-        if isinstance(result_content, str):
-            result_str = result_content
-        else:
-            result_str = json.dumps(result_content, default=str)
+        from huf.ai.results import policy as result_policy
+        from huf.ai.results.store import persist_result
 
-        result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
+        # Resolve run/conversation/tool_call links from the message.
+        run_name = msg_doc.agent_run
+        conversation_name = msg_doc.conversation
+        tool_call_link = msg_doc.tool_call
+        source_tool = None
+        if tool_call_link:
+            source_tool = frappe.db.get_value("Agent Tool Call", tool_call_link, "tool")
 
-        max_context_chars = 2000
-        if agent_doc:
-            try:
-                max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
-            except (ValueError, TypeError):
-                max_context_chars = 2000
-        max_context_chars = max(max_context_chars, 500)
+        if not run_name or not conversation_name or not tool_call_link:
+            # Fall back to legacy behavior if lineage is missing.
+            return _legacy_update_tool_call_message(
+                msg_doc, tool_call_id, tool_call, result_content, agent_doc
+            )
 
-        use_reference = len(result_str) > max_context_chars
+        result_status = status if status in ("Completed", "Failed") else "Completed"
 
-        existing_content = msg_doc.content or ""
-        if "**Tool Result:**" not in existing_content:
-            msg_doc.content = existing_content + f"\n\n**Tool Result:**\n{result_str}"
+        result_doc, envelope = persist_result(
+            result_content=result_content,
+            run=run_name,
+            tool_call=tool_call_link,
+            conversation=conversation_name,
+            source_tool=source_tool,
+            visibility="model_visible",
+            agent_doc=agent_doc,
+            status=result_status,
+        )
 
+        size_bytes = result_doc.size_bytes or 0
+        use_reference = size_bytes > result_policy.INLINE_THRESHOLD_BYTES
+
+        envelope_text = json.dumps(envelope, default=str)
+        msg_doc.content = envelope_text
         msg_doc.kind = "Tool Result"
-        msg_doc.record_kind = "tool_result"
+        msg_doc.record_kind = "result_snapshot"
         msg_doc.context_policy = "include_reference" if use_reference else "include_full"
-        msg_doc.context_summary = result_summary
-        msg_doc.reference_doctype = "Agent Tool Call"
-        if msg_doc.tool_call:
-            msg_doc.reference_name = msg_doc.tool_call
+        msg_doc.context_summary = result_doc.summary or envelope.get("summary", "")
+        msg_doc.reference_doctype = "Agent Execution Result"
+        msg_doc.reference_name = result_doc.name
         msg_doc.tool_call_id = tool_call_id
         if tool_call is not None:
             msg_doc.tool_calls = (
@@ -218,12 +236,95 @@ def update_tool_call_message(
             )
         msg_doc.save()
         return True
-    except (frappe.ValidationError, frappe.PermissionError, frappe.TimestampMismatchError) as e:
+    except Exception as e:
         frappe.log_error(
             f"Error updating tool call message '{message_name}': {e}",
             "Tool Call Message Update"
         )
         return False
+
+
+def _legacy_update_tool_call_message(
+    msg_doc,
+    tool_call_id: str,
+    tool_call: dict | list,
+    result_content: Any,
+    agent_doc=None,
+) -> bool:
+    """Legacy fallback used when result-store lineage is unavailable."""
+    if isinstance(result_content, str):
+        result_str = result_content
+    else:
+        result_str = json.dumps(result_content, default=str)
+
+    result_summary = (result_str[:200] + "...") if len(result_str) > 200 else result_str
+
+    max_context_chars = 2000
+    if agent_doc:
+        try:
+            max_context_chars = int(getattr(agent_doc, "max_context_chars", 2000) or 2000)
+        except (ValueError, TypeError):
+            max_context_chars = 2000
+    max_context_chars = max(max_context_chars, 500)
+
+    use_reference = len(result_str) > max_context_chars
+
+    existing_content = msg_doc.content or ""
+    if "**Tool Result:**" not in existing_content:
+        msg_doc.content = existing_content + f"\n\n**Tool Result:**\n{result_str}"
+
+    msg_doc.kind = "Tool Result"
+    msg_doc.record_kind = "tool_result"
+    msg_doc.context_policy = "include_reference" if use_reference else "include_full"
+    msg_doc.context_summary = result_summary
+    msg_doc.reference_doctype = "Agent Tool Call"
+    if msg_doc.tool_call:
+        msg_doc.reference_name = msg_doc.tool_call
+    msg_doc.tool_call_id = tool_call_id
+    if tool_call is not None:
+        msg_doc.tool_calls = (
+            json.dumps(tool_call, default=str)
+            if not isinstance(tool_call, str)
+            else tool_call
+        )
+
+    if not frappe.has_permission("Agent Message", "write", doc=msg_doc):
+        frappe.throw(
+            _("Not permitted to update Agent Message {0}").format(msg_doc.name),
+            frappe.PermissionError,
+        )
+    msg_doc.save()
+    return True
+
+
+def sync_tool_status_to_message(tool_call_name: str | None) -> None:
+    """Re-sync fetch_from tool fields from ``Agent Tool Call`` to its ``Agent Message``.
+
+    ``tool_name``, ``tool_args`` and ``tool_status`` on ``Agent Message`` are
+    ``fetch_from`` copies of the linked ``Agent Tool Call``. They are refreshed
+    only when the message is saved, so sync-fallback rows can keep stale values
+    (e.g. ``tool_status="Queued"``) after the tool call completes. This helper
+    forces the re-sync explicitly.
+    """
+    if not tool_call_name:
+        return
+
+    message_name = frappe.db.get_value("Agent Message", {"tool_call": tool_call_name}, "name")
+    if not message_name:
+        return
+
+    try:
+        tc_doc = frappe.get_doc("Agent Tool Call", tool_call_name)
+        msg_doc = frappe.get_doc("Agent Message", message_name)
+        msg_doc.tool_status = tc_doc.status
+        msg_doc.tool_name = tc_doc.tool
+        msg_doc.tool_args = tc_doc.tool_args
+        msg_doc.save(ignore_permissions=True)
+    except Exception as e:
+        frappe.log_error(
+            f"Error syncing tool status from {tool_call_name} to message {message_name}: {e}",
+            "Tool Status Sync"
+        )
 
 
 def repair_message_sequence(messages: list, conversation_name: str | None = None) -> list:
@@ -436,14 +537,6 @@ class ConversationManager:
     ):
         """Add message to conversation with optional context policy."""
         try:
-            last_index = frappe.db.sql("""
-                SELECT MAX(conversation_index) as last_index
-                FROM `tabAgent Message`
-                WHERE conversation = %s
-            """, (conversation.name,), as_dict=1)
-
-            last_index = last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
-
             # Backward compatibility: older callers passed the Agent Tool Call link
             # name via the ``tool_call_id`` argument. New callers should use
             # ``tool_call`` for the link and ``tool_call_id`` for the LLM call id.
@@ -464,7 +557,6 @@ class ConversationManager:
                 "agent": agent,
                 "provider": provider,
                 "model": model,
-                "conversation_index": last_index + 1,
                 "is_agent_message": 1 if role == "agent" else 0,
                 "tool_call": tool_call_link,
                 "tool_call_id": tool_call_id,
@@ -496,13 +588,34 @@ class ConversationManager:
             if token_estimate is not None:
                 doc_data["token_estimate"] = token_estimate
 
-            message = frappe.get_doc(doc_data)
             if not frappe.has_permission("Agent Message", "create"):
                 frappe.throw(
                     _("Not permitted to create Agent Message"),
                     frappe.PermissionError,
                 )
-            message.insert()
+
+            # MA-11: allocate conversation_index with a retry loop so concurrent
+            # inserts cannot read the same MAX and create duplicate indices.
+            max_retries = 3
+            message = None
+            last_index = 0
+            for attempt in range(max_retries):
+                last_index = frappe.db.sql("""
+                    SELECT MAX(conversation_index) as last_index
+                    FROM `tabAgent Message`
+                    WHERE conversation = %s
+                """, (conversation.name,), as_dict=1)
+                last_index = last_index[0].last_index if last_index and last_index[0].last_index is not None else 0
+
+                doc_data["conversation_index"] = last_index + 1
+                message = frappe.get_doc(doc_data)
+                try:
+                    message.insert()
+                    break
+                except (frappe.DuplicateEntryError, frappe.UniqueValidationError):
+                    if attempt == max_retries - 1:
+                        raise
+                    continue
 
             frappe.db.set_value("Agent Conversation", conversation.name, {
                 "total_messages": last_index + 1,
@@ -588,9 +701,24 @@ class ConversationManager:
             content = msg.get("context_summary") or msg.get("content")
         elif policy == "include_reference":
             record_kind = msg.get("record_kind") or "record"
-            summary = msg.get("context_summary") or record_kind
+            summary = msg.get("context_summary") or ""
             ref_doctype = msg.get("reference_doctype") or ""
             ref_name = msg.get("reference_name") or ""
+
+            # If the message points to an Agent Execution Result but has no
+            # summary, load the summary from the canonical result record rather
+            # than falling back to the full envelope content.
+            if not summary and ref_doctype == "Agent Execution Result" and ref_name:
+                try:
+                    summary = frappe.db.get_value(
+                        "Agent Execution Result", ref_name, "summary"
+                    ) or ""
+                except Exception:
+                    summary = ""
+
+            if not summary:
+                summary = record_kind
+
             if ref_doctype and ref_name:
                 content = f"[{record_kind}: {summary} · handle={ref_doctype}/{ref_name}]"
             else:

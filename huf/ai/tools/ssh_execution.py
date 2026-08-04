@@ -662,3 +662,7 @@ def _apply_result(call, result: SSHExecutionResult, limits: dict | None = None) 
 		"timed_out": bool(result.timed_out),
 	}
 	call.save(ignore_permissions=True)
+
+	# MA-10: keep the linked Agent Message's fetch_from tool fields in sync.
+	from huf.ai.conversation_manager import sync_tool_status_to_message
+	sync_tool_status_to_message(call.name)

@@ -117,6 +117,51 @@ def _raise_provider_unavailable(raw_message: str, normalized_model: str | None =
     )
 
 
+def _merge_stream_usage(round_totals: dict, usage) -> dict:
+    """Merge per-round streaming usage into running totals.
+
+    ``usage`` may be a dict or a LiteLLM usage object. Numeric fields such as
+    ``prompt_tokens``, ``completion_tokens``, ``cached_tokens`` and
+    ``cache_creation_tokens`` are summed. The merged dict is returned.
+    """
+    if usage is None:
+        return round_totals
+
+    if hasattr(usage, "dict"):
+        usage = usage.dict()
+    elif hasattr(usage, "model_dump"):
+        usage = usage.model_dump()
+
+    if not isinstance(usage, dict):
+        return round_totals
+
+    numeric_keys = (
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "cached_tokens",
+        "cache_creation_tokens",
+        "cache_miss_tokens",
+        "cache_creation_input_tokens",
+        "cache_write_tokens",
+        "cache_write_input_tokens",
+        "cache_hit_tokens",
+    )
+
+    for key in numeric_keys:
+        value = usage.get(key)
+        if value is None:
+            continue
+        try:
+            value = int(value)
+        except (ValueError, TypeError):
+            continue
+        if value:
+            round_totals[key] = round_totals.get(key, 0) + value
+
+    return round_totals
+
+
 # High-performance in-memory cache for provider capabilities
 # Stores capability flags to avoid Redis hits on every request
 _L1_CAPABILITY_CACHE = {}
@@ -1041,6 +1086,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 result_content = ""
 
                 if tool_to_run:
+                    tool_failed = False
+                    error_message = None
                     try:
                         # Emit socket event for tool execution start BEFORE executing
                         if context and context.get("conversation_id"):
@@ -1060,23 +1107,33 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                                 after_commit=False
                             )
                             transaction_checkpoint(reason="agent_streaming_progress")
-                        
+
                         result_content = await _execute_tool_call(
                             tool_to_run, tool_args, context, tool_call.id
                         )
                     except Exception as e:
+                        tool_failed = True
+                        error_message = str(e)
                         frappe.log_error(
-                            message=f"Error executing tool {tool_name}: {str(e)}\n\n{frappe.get_traceback()}",
+                            message=f"Error executing tool {tool_name}: {error_message}\n\n{frappe.get_traceback()}",
                             title="LiteLLM Tool Execution Error"
                         )
-                        result_content = f"Error executing tool {tool_name}: {str(e)}"
+                        result_content = f"Error executing tool {tool_name}: {error_message}"
                 else:
-                    result_content = f"Tool '{tool_name}' not found."
+                    tool_failed = True
+                    error_message = f"Tool '{tool_name}' not found."
+                    result_content = error_message
 
                 all_new_items.append(
                     SimpleNamespace(
                         type="tool_call_output_item",
-                        raw_item={"name": tool_name, "output": result_content, "id": tool_call.id},
+                        raw_item={
+                            "name": tool_name,
+                            "output": result_content,
+                            "id": tool_call.id,
+                            "failed": tool_failed,
+                            "error_message": error_message,
+                        },
                     )
                 )
 
@@ -1086,6 +1143,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
                         "content": _truncate_tool_result_for_context(result_content, max_context_chars),
+                        "failed": tool_failed,
+                        "error_message": error_message,
                     }
                 )
 
@@ -1518,6 +1577,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         tool_loop_repeats = 0
         MAX_TOOL_LOOP_REPEATS = 1  # allow one retry, stop on the second repeat
 
+        # MA-09: aggregate usage across all tool rounds instead of keeping only
+        # the last round's usage.
+        round_totals = {}
+
         for round_num in range(MAX_ROUNDS):
             try:
                 # Use LiteLLM completion with stream=True
@@ -1681,16 +1744,20 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         )
                                         transaction_checkpoint(reason="agent_streaming_progress")
 
+                                    tool_failed = False
+                                    error_message = None
                                     try:
                                         result_content = await _execute_tool_call(
                                             tool_to_run, tool_args, context, tool_call.get("id")
                                         )
                                     except Exception as e:
+                                        tool_failed = True
+                                        error_message = str(e)
                                         frappe.log_error(
-                                            message=f"Error executing tool {tool_name}: {str(e)}\n\n{frappe.get_traceback()}",
+                                            message=f"Error executing tool {tool_name}: {error_message}\n\n{frappe.get_traceback()}",
                                             title="LiteLLM Streaming Tool Execution Error"
                                         )
-                                        result_content = f"Error executing tool {tool_name}: {str(e)}"
+                                        result_content = f"Error executing tool {tool_name}: {error_message}"
 
                                     # Update Agent Tool Call with result (runs even if tool raised)
                                     if context and context.get("conversation_id"):
@@ -1705,7 +1772,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
                                             if tool_call_doc:
                                                 tc_doc = frappe.get_doc("Agent Tool Call", tool_call_doc)
-                                                tc_doc.status = "Completed"
+                                                # MA-08: surface tool failures instead of recording Completed.
+                                                tc_doc.status = "Failed" if tool_failed else "Completed"
+                                                if tool_failed:
+                                                    tc_doc.error_message = error_message
                                                 # JSON field: store valid JSON (dict)
                                                 if isinstance(result_content, (dict, list)):
                                                     tc_doc.tool_result = result_content
@@ -1720,6 +1790,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     if not frappe.has_permission("Agent Tool Call", "write", doc=tc_doc):
                                                         frappe.throw(_("Not permitted to update Agent Tool Call"), frappe.PermissionError)
                                                     tc_doc.save()
+
+                                                # MA-10: re-sync fetch_from tool fields on the linked
+                                                # Agent Message so tool_status does not stay stale.
+                                                from huf.ai.conversation_manager import sync_tool_status_to_message
+                                                sync_tool_status_to_message(tool_call_doc)
 
                                                 # Find the Agent Message to update. Prefer the in-memory
                                                 # map passed via context, then fall back to DB lookups.
@@ -1757,6 +1832,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                         tool_call=[tool_call],
                                                         result_content=result_content,
                                                         agent_doc=agent_doc,
+                                                        status="Failed" if tool_failed else "Completed",
                                                     )
                                                     if not updated:
                                                         message_name = None
@@ -1775,6 +1851,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     if isinstance(result_content, (dict, list))
                                                     else {"output": str(result_content)[:140000]}
                                                 )
+                                                final_tool_status = "Failed" if tool_failed else "Completed"
                                                 frappe.publish_realtime(
                                                     event=f'conversation:{context.get("conversation_id")}',
                                                     message={
@@ -1784,8 +1861,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                         "message_id": message_name,
                                                         "tool_call_id": tool_call["id"],
                                                         "tool_name": tool_name,
-                                                        "tool_status": "Completed",
-                                                        "status": "Completed",
+                                                        "tool_status": final_tool_status,
+                                                        "status": final_tool_status,
+                                                        "error_message": error_message if tool_failed else None,
                                                         "tool_result": tool_result_for_socket,
                                                         "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
                                                     },
@@ -1834,6 +1912,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                         if finish_reason == "stop":
                             is_stop = True
 
+                    # MA-09: aggregate this round's usage before continuing.
+                    round_totals = _merge_stream_usage(round_totals, stream_usage)
+
                 if is_stop:
                     break
 
@@ -1863,13 +1944,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 return
 
         # Max rounds reached
-        if stream_usage and hasattr(stream_usage, "dict"):
-             stream_usage = stream_usage.dict()
-        elif stream_usage and hasattr(stream_usage, "model_dump"):
-             stream_usage = stream_usage.model_dump()
-
-        if not stream_usage or not isinstance(stream_usage, dict):
-            stream_usage = {}
+        # MA-09: report the aggregated usage across all rounds, not just the
+        # last round's usage.
+        stream_usage = round_totals
 
         # Extract cache creation tokens and cache skipped flag for stream_usage
         s_cached = 0

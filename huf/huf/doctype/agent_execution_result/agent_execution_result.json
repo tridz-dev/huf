@@ -1,0 +1,239 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-08-02 18:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "source_section",
+  "conversation",
+  "agent_run",
+  "tool_call",
+  "source_tool",
+  "column_break_source",
+  "status",
+  "result_type",
+  "visibility",
+  "idempotency_key",
+  "content_section",
+  "summary",
+  "size_bytes",
+  "estimated_tokens",
+  "content_hash",
+  "column_break_content",
+  "available_views",
+  "expires_on",
+  "payload_section",
+  "schema_json",
+  "preview_json",
+  "inline_payload",
+  "payload_file"
+ ],
+ "fields": [
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Conversation",
+   "options": "Agent Conversation",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent Run",
+   "options": "Agent Run",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "tool_call",
+   "fieldtype": "Link",
+   "label": "Tool Call",
+   "options": "Agent Tool Call",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_tool",
+   "fieldtype": "Data",
+   "label": "Source Tool",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_source",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Completed\nFailed\nExpired",
+   "read_only": 1
+  },
+  {
+   "fieldname": "result_type",
+   "fieldtype": "Select",
+   "label": "Result Type",
+   "options": "json\ntable\ntext\nfile\ncollection",
+   "read_only": 1
+  },
+  {
+   "default": "model_visible",
+   "fieldname": "visibility",
+   "fieldtype": "Select",
+   "label": "Visibility",
+   "options": "user_visible\nmodel_visible\nui_only\naudit_only\ndeveloper_only",
+   "read_only": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "read_only": 1
+  },
+  {
+   "fieldname": "content_section",
+   "fieldtype": "Section Break",
+   "label": "Content Metadata"
+  },
+  {
+   "fieldname": "summary",
+   "fieldtype": "Small Text",
+   "label": "Summary"
+  },
+  {
+   "fieldname": "size_bytes",
+   "fieldtype": "Int",
+   "label": "Size (bytes)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_tokens",
+   "fieldtype": "Int",
+   "label": "Estimated Tokens",
+   "read_only": 1
+  },
+  {
+   "fieldname": "content_hash",
+   "fieldtype": "Data",
+   "label": "Content Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_content",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "available_views",
+   "fieldtype": "JSON",
+   "label": "Available Views",
+   "read_only": 1
+  },
+  {
+   "fieldname": "expires_on",
+   "fieldtype": "Datetime",
+   "label": "Expires On"
+  },
+  {
+   "fieldname": "payload_section",
+   "fieldtype": "Section Break",
+   "label": "Payload"
+  },
+  {
+   "fieldname": "schema_json",
+   "fieldtype": "Code",
+   "label": "Schema JSON",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "preview_json",
+   "fieldtype": "Code",
+   "label": "Preview JSON",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "inline_payload",
+   "fieldtype": "Code",
+   "label": "Inline Payload",
+   "options": "JSON",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payload_file",
+   "fieldtype": "Attach",
+   "label": "Payload File",
+   "read_only": 1
+  },
+  {
+   "default": "RES-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Naming Series",
+   "options": "RES-.#####",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-02 18:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Execution Result",
+ "naming_rule": "By Naming Series",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -351,3 +351,144 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
                     flow_webhook_clean()
         finally:
             frappe.request = None
+
+
+class TestAddMessageApiPermissions(IntegrationTestCase):
+    """MA-12: public add_message API must enforce conversation ownership and role allow-list."""
+
+    def setUp(self):
+        super().setUp()
+        self._cleanup = []
+        self._original_user = frappe.session.user
+
+        # Ensure a test AI Provider / Model / Agent exist.
+        provider_name = self._get_or_create_provider()
+        model_name = self._get_or_create_model(provider_name)
+        self.agent = self._create_agent(provider_name, model_name)
+
+    def tearDown(self):
+        for doctype, name in reversed(self._cleanup):
+            try:
+                frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
+            except Exception:
+                pass
+        frappe.session.user = self._original_user
+        super().tearDown()
+
+    def _get_or_create_provider(self):
+        existing = frappe.db.get_value("AI Provider", {"provider_name": "openai"}, "name")
+        if existing:
+            return existing
+        provider = frappe.get_doc({
+            "doctype": "AI Provider",
+            "provider_name": "openai",
+            "provider_type": "OpenAI Compatible",
+        })
+        provider.insert(ignore_permissions=True)
+        self._cleanup.append(("AI Provider", provider.name))
+        return provider.name
+
+    def _get_or_create_model(self, provider):
+        existing = frappe.db.get_value("AI Model", {"provider": provider}, "name")
+        if existing:
+            return existing
+        model = frappe.get_doc({
+            "doctype": "AI Model",
+            "model_name": "gpt-4o-mini",
+            "provider": provider,
+        })
+        model.insert(ignore_permissions=True)
+        self._cleanup.append(("AI Model", model.name))
+        return model.name
+
+    def _create_agent(self, provider, model):
+        agent = frappe.get_doc({
+            "doctype": "Agent",
+            "agent_name": f"test-agent-{frappe.generate_hash(length=8)}",
+            "provider": provider,
+            "model": model,
+            "instructions": "You are a test agent for automated security tests.",
+        })
+        agent.insert(ignore_permissions=True)
+        self._cleanup.append(("Agent", agent.name))
+        return agent
+
+    def _create_user(self, roles=("Huf User",)):
+        email = f"huf-test-{frappe.generate_hash(length=10)}@example.com"
+        user = frappe.get_doc({
+            "doctype": "User",
+            "email": email,
+            "first_name": "Test",
+            "send_welcome_email": 0,
+        })
+        for role in roles:
+            user.append("roles", {"role": role})
+        user.insert(ignore_permissions=True)
+        self._cleanup.append(("User", user.name))
+        return user.name
+
+    def _create_conversation(self, owner):
+        # Create as owner so Frappe stamps the correct owner.
+        frappe.session.user = owner
+        conversation = frappe.get_doc({
+            "doctype": "Agent Conversation",
+            "agent": self.agent.name,
+            "title": f"test-conv-{frappe.generate_hash(length=6)}",
+            "session_id": f"test-session-{frappe.generate_hash(length=10)}",
+            "is_active": 1,
+        })
+        conversation.insert(ignore_permissions=True)
+        self._cleanup.append(("Agent Conversation", conversation.name))
+        return conversation
+
+    def test_user_cannot_add_message_to_other_users_conversation(self):
+        from huf.ai.agent_chat import add_message
+
+        user_a = self._create_user()
+        user_b = self._create_user()
+
+        conversation = self._create_conversation(user_a)
+        frappe.session.user = user_b
+
+        with self.assertRaises(frappe.PermissionError):
+            add_message(
+                conversation_id=conversation.name,
+                role="user",
+                content="injected message",
+            )
+
+    def test_add_message_rejects_agent_role_from_web_session(self):
+        from huf.ai.agent_chat import add_message
+
+        user = self._create_user()
+        conversation = self._create_conversation(user)
+        frappe.session.user = user
+
+        with self.assertRaises(frappe.PermissionError):
+            add_message(
+                conversation_id=conversation.name,
+                role="agent",
+                content="injected agent message",
+            )
+
+    def test_owner_can_add_user_and_tool_messages(self):
+        from huf.ai.agent_chat import add_message
+
+        user = self._create_user()
+        conversation = self._create_conversation(user)
+        frappe.session.user = user
+
+        result_user = add_message(
+            conversation_id=conversation.name,
+            role="user",
+            content="hello",
+        )
+        self.assertTrue(result_user.get("success"))
+
+        result_tool = add_message(
+            conversation_id=conversation.name,
+            role="tool",
+            content="tool result",
+            record_kind="tool_result",
+        )
+        self.assertTrue(result_tool.get("success"))

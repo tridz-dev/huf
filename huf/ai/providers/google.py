@@ -170,26 +170,37 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                     tool_to_run = _find_tool(agent, function_name)
                     result_content = ''
+                    tool_failed = False
+                    error_message = None
 
                     if tool_to_run:
                         try:
                             result_content = await _execute_tool_call(tool_to_run, json.dumps(function_args))
                         except Exception as e:
-                            result_content = f"Error executing tool {function_name}: {str(e)}"
+                            tool_failed = True
+                            error_message = str(e)
+                            result_content = f"Error executing tool {function_name}: {error_message}"
                     else:
-                        result_content = f"Tool '{function_name}' not found."
+                        tool_failed = True
+                        error_message = f"Tool '{function_name}' not found."
+                        result_content = error_message
 
                     all_new_items.append(
                         SimpleNamespace(
                             type="tool_call_output_item",
-                            raw_item={"name": function_name, "output": result_content}
+                            raw_item={
+                                "name": function_name,
+                                "output": result_content,
+                                "failed": tool_failed,
+                                "error_message": error_message,
+                            }
                         )
                     )
 
                     function_responses.append({
                         "functionResponse": {
                             "name": function_name,
-                            "response": {"result": result_content}
+                            "response": {"result": result_content, "failed": tool_failed, "error_message": error_message}
                         }
                     })
 
