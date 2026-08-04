@@ -172,6 +172,13 @@ def handle_redline_artifact(**kwargs) -> str:
 			frappe.delete_doc("File", row.name, ignore_permissions=True, force=True)
 
 		file_doc = save_file(file_name, redlined_docx, "Artifact", artifact.name, is_private=True)
+		# See the matching comment in artifact_export_api.export_artifact: a
+		# write made through a GET-style whitelisted invocation is rolled
+		# back at request teardown unless committed explicitly. This tool
+		# handler is normally called by the agent runtime, not raw HTTP GET,
+		# but committing explicitly here is correct regardless of caller and
+		# costs nothing extra.
+		frappe.db.commit()
 	except frappe.PermissionError:
 		return json.dumps({"success": False, "error": "You do not have permission to redline this artifact."})
 	except Exception as e:

@@ -67,6 +67,17 @@ def export_artifact(name: str, format: str) -> dict:
 
 	file_doc = save_file(f"{artifact.name}.{format}", rendered_bytes, "Artifact", name, is_private=True)
 
+	# This method is invoked via HTTP GET from the frontend (frappe-js-sdk's
+	# call.get performs an actual axios GET), and Frappe's request teardown
+	# does not auto-commit writes made during a GET request - only POST/PUT/
+	# DELETE. Without an explicit commit here, the File row (and the
+	# _delete_existing_export deletions above) are rolled back the moment
+	# this request completes, even though the response already reports
+	# success with a file_url. Confirmed by reproduction: calling this over
+	# real HTTP left zero File rows attached to the artifact immediately
+	# afterward, despite the 200 response.
+	frappe.db.commit()
+
 	return {"file_url": file_doc.file_url, "format": format}
 
 
