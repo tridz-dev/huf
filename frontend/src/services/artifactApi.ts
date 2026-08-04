@@ -24,3 +24,18 @@ export async function getArtifact(name: string): Promise<ArtifactDoc> {
     handleFrappeError(error, 'Error fetching artifact');
   }
 }
+
+export async function exportArtifact(
+  name: string,
+  format: 'pdf' | 'docx' | 'html'
+): Promise<{ file_url: string; format: string }> {
+  try {
+    const result = await call.get('huf.ai.artifact_export_api.export_artifact', {
+      name,
+      format,
+    });
+    return (result?.message ?? result) as { file_url: string; format: string };
+  } catch (error) {
+    handleFrappeError(error, 'Error exporting artifact');
+  }
+}

@@ -10,9 +10,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2, ExternalLink, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, ExternalLink, AlertCircle, FileText, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getArtifact, type ArtifactDoc } from '@/services/artifactApi';
+import { getArtifact, exportArtifact, type ArtifactDoc } from '@/services/artifactApi';
 import { ArtifactRenderer } from '@/components/chat/ArtifactRenderer';
 import type { ParsedArtifact, ArtifactType } from '@/types/artifact.types';
 
@@ -55,6 +55,8 @@ export function ArtifactViewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [artifact, setArtifact] = useState<ArtifactDoc | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -159,14 +161,35 @@ export function ArtifactViewPage() {
               </Button>
             </Link>
           )}
-          <ArtifactExportStandalone containerRef={containerRef} />
+          <ArtifactExportStandalone
+            containerRef={containerRef}
+            artifact={artifact}
+            pdfPreviewUrl={pdfPreviewUrl}
+            showPdfPreview={showPdfPreview}
+            onPdfPreviewUrlChange={setPdfPreviewUrl}
+            onShowPdfPreviewChange={setShowPdfPreview}
+          />
         </div>
       </header>
 
       {/* Content */}
-      <main ref={containerRef} className="min-h-0 flex-1 overflow-auto p-6">
+      <main className="min-h-0 flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-4xl space-y-4">
-          <ArtifactRenderer artifact={parsedArtifact} />
+          {/* PDF Preview */}
+          {showPdfPreview && pdfPreviewUrl && (
+            <div className="rounded border bg-white">
+              <iframe
+                src={pdfPreviewUrl}
+                className="w-full border-0 rounded"
+                style={{ height: '600px' }}
+                title="PDF preview"
+              />
+            </div>
+          )}
+          {/* Artifact Renderer */}
+          <div ref={containerRef}>
+            <ArtifactRenderer artifact={parsedArtifact} />
+          </div>
         </div>
       </main>
     </div>
@@ -174,20 +197,34 @@ export function ArtifactViewPage() {
 }
 
 /**
- * Standalone PNG export button for the toolbar.
- * Mirrors PreviewViewPage's JSXPreviewExportStandalone but exports whatever
- * is rendered in the artifact container.
+ * Standalone export button for the toolbar.
+ * Handles PNG export and document/markdown download/preview (PDF, DOCX).
  */
 function ArtifactExportStandalone({
   containerRef,
+  artifact,
+  pdfPreviewUrl,
+  showPdfPreview,
+  onPdfPreviewUrlChange,
+  onShowPdfPreviewChange,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
+  artifact: ArtifactDoc;
+  pdfPreviewUrl: string | null;
+  showPdfPreview: boolean;
+  onPdfPreviewUrlChange: (url: string | null) => void;
+  onShowPdfPreviewChange: (show: boolean) => void;
 }) {
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportingPng, setIsExportingPng] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingDocx, setIsExportingDocx] = useState(false);
+
+  const isDocumentType =
+    artifact.artifact_type === 'document' || artifact.artifact_type === 'markdown';
 
   const handleExportPng = async () => {
     if (!containerRef.current) return;
-    setIsExporting(true);
+    setIsExportingPng(true);
     try {
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(containerRef.current, {
@@ -201,15 +238,103 @@ function ArtifactExportStandalone({
     } catch (err) {
       console.error('Failed to export PNG:', err);
     } finally {
-      setIsExporting(false);
+      setIsExportingPng(false);
     }
   };
 
+  const handleDownloadPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      const result = await exportArtifact(artifact.name, 'pdf');
+      if (result?.file_url) {
+        window.open(result.file_url, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to export PDF:', err);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const handleDownloadDocx = async () => {
+    setIsExportingDocx(true);
+    try {
+      const result = await exportArtifact(artifact.name, 'docx');
+      if (result?.file_url) {
+        window.open(result.file_url, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to export DOCX:', err);
+    } finally {
+      setIsExportingDocx(false);
+    }
+  };
+
+  const handleTogglePdfPreview = async () => {
+    if (!showPdfPreview) {
+      // Loading PDF preview
+      if (!pdfPreviewUrl) {
+        try {
+          const result = await exportArtifact(artifact.name, 'pdf');
+          if (result?.file_url) {
+            onPdfPreviewUrlChange(result.file_url);
+          }
+        } catch (err) {
+          console.error('Failed to load PDF preview:', err);
+          return;
+        }
+      }
+    }
+    onShowPdfPreviewChange(!showPdfPreview);
+  };
+
   return (
-    <Button variant="outline" size="sm" onClick={handleExportPng} disabled={isExporting}>
-      <ExternalLink className="mr-2 size-4" />
-      {isExporting ? 'Exporting...' : 'Export PNG'}
-    </Button>
+    <div className="flex items-center gap-2">
+      {isDocumentType && (
+        <>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadPdf}
+            disabled={isExportingPdf}
+          >
+            <FileText className="mr-2 size-4" />
+            {isExportingPdf ? 'Exporting...' : 'PDF'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadDocx}
+            disabled={isExportingDocx}
+          >
+            <FileText className="mr-2 size-4" />
+            {isExportingDocx ? 'Exporting...' : 'DOCX'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTogglePdfPreview}
+            disabled={isExportingPdf}
+          >
+            {showPdfPreview ? (
+              <>
+                <EyeOff className="mr-2 size-4" />
+                Hide PDF
+              </>
+            ) : (
+              <>
+                <Eye className="mr-2 size-4" />
+                Preview PDF
+              </>
+            )}
+          </Button>
+        </>
+      )}
+      <Button variant="outline" size="sm" onClick={handleExportPng} disabled={isExportingPng}>
+        <ExternalLink className="mr-2 size-4" />
+        {isExportingPng ? 'Exporting...' : 'Export PNG'}
+      </Button>
+    </div>
   );
 }
 
