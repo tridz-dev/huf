@@ -38,6 +38,7 @@ dependencies = [
     "tabulate",
     "pypdf",
     "python-docx",
+    "markdown",
     "openpyxl",
     "python-pptx",
     "beautifulsoup4",

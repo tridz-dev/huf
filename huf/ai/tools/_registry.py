@@ -1763,6 +1763,55 @@ FRAPPE_CLOUD_TOOLS = [
 	},
 ]
 
+DOCUMENT_ARTIFACT_TOOLS = [
+	{
+		"tool_name": "list_document_artifacts",
+		"description": (
+			"List document artifacts (created via <artifact type=\"document\">) in a conversation, "
+			"returning each one's id, title, and creation time. A document artifact's id is not "
+			"known to you at the moment you emit its <artifact> tag - it only exists once that "
+			"message has been saved. Call this tool in a LATER turn to discover the id of a "
+			"document created earlier in the conversation before calling export_artifact or "
+			"redline_artifact on it."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_list_document_artifacts",
+		"category": "Document Tools",
+		"parameters": [
+			_p("conversation_id", required=True, description="The conversation to list document artifacts for"),
+		],
+	},
+	{
+		"tool_name": "export_artifact",
+		"description": (
+			"Export a document artifact (created via <artifact type=\"document\">) as a "
+			"downloadable PDF, DOCX, or HTML file. Only artifacts of type 'document' or "
+			"'markdown' can be exported - their content is treated as markdown source."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_export_artifact",
+		"category": "Document Tools",
+		"parameters": [
+			_p("artifact_id", required=True, description="The id/name of the Artifact to export"),
+			_p("format", required=True, description="One of 'pdf', 'docx', 'html'"),
+		],
+	},
+	{
+		"tool_name": "redline_artifact",
+		"description": (
+			"Apply tracked-changes (Word redlining) edits to a document artifact, producing a "
+			"new derived DOCX with insertions and deletions marked and attributed to an author - "
+			"the original artifact content is not modified. Use this when the user asks for "
+			"suggested edits or a marked-up revision rather than a silent rewrite."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_redline_artifact",
+		"category": "Document Tools",
+		"parameters": [
+			_p("artifact_id", required=True, description="The id/name of the Artifact to redline"),
+			_p("edits", type="json", required=True, description="List of {find, replace} dicts describing the edits to mark as tracked changes"),
+			_p("author", description="Attribution for the tracked changes; defaults to the current user"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
 	RECIPIENT_TOOLS
 	+ SLACK_TOOLS
@@ -1790,4 +1839,5 @@ ALL_INTEGRATION_TOOLS = (
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS
 	+ FRAPPE_CLOUD_TOOLS
+	+ DOCUMENT_ARTIFACT_TOOLS
 )

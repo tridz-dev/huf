@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import ChatListing from "@/components/chat/ChatListing";
 import ChatWindow from "@/components/chat/ChatWindowV2";
+import { ArtifactsPanel } from "@/components/chat/ArtifactsPanel";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export { ChatPage };
@@ -92,6 +93,9 @@ function ChatPage() {
                     onToggleSidebar={isMobile ? toggleSidebar : undefined}
                 />
             </div>
+
+            {/* Artifacts panel - hidden on mobile to avoid crowding the chat window */}
+            {!isMobile && <ArtifactsPanel conversationId={chatId ?? undefined} />}
         </section>
     );
 }

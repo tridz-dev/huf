@@ -218,6 +218,10 @@ doc_events = {
     "Communication": {
         "after_insert": "huf.ai.gateway_adapters.email.on_communication_inserted",
     },
+    "Agent Message": {
+        "after_insert": "huf.ai.artifact_extraction.on_agent_message_change",
+        "on_update": "huf.ai.artifact_extraction.on_agent_message_change",
+    },
 }
 
 # Scheduled Tasks
