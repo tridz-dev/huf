@@ -2,6 +2,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 
 import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
+import type { AgentStarterPromptRow } from '@/types/agent.types';
+
+const DEFAULT_COLD_START_AGENT = 'Hub Orchestrator';
 
 // Pre-populate the agent name for a new chatId so ChatInput never flashes
 // invisible while `getConversation` is in-flight after a new-conversation
@@ -32,11 +35,15 @@ export function writeToolDetailsSetting(agent: string, enabled: boolean): void {
 
 export function useChatAgentIdentity(chatId: string | null, searchParams: URLSearchParams) {
   const [agentName, setAgentName] = useState<string>(() =>
-    chatId ? consumeAgentNameCache(chatId) : (searchParams.get('agent') ?? '')
+    chatId
+      ? consumeAgentNameCache(chatId)
+      : (searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT)
   );
   const [agentDisplayName, setAgentDisplayName] = useState<string>('');
   const [agentModel, setAgentModel] = useState<string | null>(null);
   const [agentColor, setAgentColor] = useState<string | null>(null);
+  const [agentDescription, setAgentDescription] = useState<string>('');
+  const [starterPrompts, setStarterPrompts] = useState<AgentStarterPromptRow[]>([]);
   const [showToolExecutionDetails, setShowToolExecutionDetails] = useState<boolean>(true);
   const [allowFileUpload, setAllowFileUpload] = useState<boolean>(false);
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | null>(null);
@@ -70,6 +77,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
             setAgentDisplayName(agentData.agent_name || conversation.agent);
             setAgentModel(agentData.model || null);
             setAgentColor(agentData.agent_color || null);
+            setAgentDescription(agentData.description || '');
+            setStarterPrompts(agentData.starter_prompts || []);
             applyToolDetails(conversation.agent, agentData.show_tool_execution_details);
             setAllowFileUpload(agentData.allow_file_upload === 1);
             setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
@@ -82,6 +91,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
             setAgentDisplayName('');
             setAgentModel(null);
             setAgentColor(null);
+            setAgentDescription('');
+            setStarterPrompts([]);
             setShowToolExecutionDetails(true);
             setAllowFileUpload(false);
             setMaxUploadSizeMb(null);
@@ -95,22 +106,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     }
 
     async function loadFromQueryParam() {
-      const agentFromQuery = searchParams.get('agent') ?? '';
+      const agentFromQuery = searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT;
       if (!cancelled) setAgentName(agentFromQuery);
-
-      if (!agentFromQuery) {
-        if (!cancelled) {
-          setAgentDisplayName('');
-          setAgentModel(null);
-          setAgentColor(null);
-          setShowToolExecutionDetails(true);
-          setAllowFileUpload(false);
-          setMaxUploadSizeMb(null);
-          setRunImmediately(false);
-          setAutonamingOfConversationTitle(true);
-        }
-        return;
-      }
 
       try {
         const agentData = await getAgent(agentFromQuery);
@@ -118,6 +115,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
           setAgentDisplayName(agentData.agent_name || agentFromQuery);
           setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
+          setAgentDescription(agentData.description || '');
+          setStarterPrompts(agentData.starter_prompts || []);
           applyToolDetails(agentFromQuery, agentData.show_tool_execution_details);
           setAllowFileUpload(agentData.allow_file_upload === 1);
           setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
@@ -130,6 +129,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
           setAgentDisplayName('');
           setAgentModel(null);
           setAgentColor(null);
+          setAgentDescription('');
+          setStarterPrompts([]);
           setShowToolExecutionDetails(true);
           setAllowFileUpload(false);
           setMaxUploadSizeMb(null);
@@ -181,6 +182,9 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
           if (cancelled) return;
           setAgentDisplayName(agentData.agent_name || currentAgent);
           setAgentModel(agentData.model || null);
+          setAgentColor(agentData.agent_color || null);
+          setAgentDescription(agentData.description || '');
+          setStarterPrompts(agentData.starter_prompts || []);
           applyToolDetails(currentAgent, agentData.show_tool_execution_details);
           setAllowFileUpload(agentData.allow_file_upload === 1);
           setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
@@ -204,6 +208,8 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     agentDisplayName,
     agentModel,
     agentColor,
+    agentDescription,
+    starterPrompts,
     showToolExecutionDetails,
     allowFileUpload,
     maxUploadSizeMb,

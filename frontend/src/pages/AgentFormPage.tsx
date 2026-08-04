@@ -108,6 +108,10 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     run_immediately: agent.run_immediately === 1,
     description: agent.description || '',
     instructions: agent.instructions || '',
+    starter_prompts: (agent.starter_prompts || []).map((row) => ({
+      name: row.name,
+      prompt_text: row.prompt_text || '',
+    })),
     default_plan: agent.default_plan || [],
     prompt_mode: agent.prompt_mode || 'Local',
     agent_prompt: agent.agent_prompt || '',
@@ -194,7 +198,7 @@ export function AgentFormPage() {
   const tabConfig = useMemo(() => ({
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -390,6 +394,7 @@ export function AgentFormPage() {
         run_immediately: true,
         description: '',
         instructions: '',
+        starter_prompts: [],
         default_plan: [],
         prompt_mode: "Local",
         agent_prompt: '',
@@ -1183,6 +1188,10 @@ export function AgentFormPage() {
             run_immediately: data.run_immediately === 1,
             description: data.description || '',
             instructions: data.instructions || '',
+            starter_prompts: (data.starter_prompts || []).map((row) => ({
+              name: row.name,
+              prompt_text: row.prompt_text || '',
+            })),
             default_plan: data.default_plan || [],
             prompt_mode: data.prompt_mode || 'Local',
             agent_prompt: data.agent_prompt || '',
@@ -1494,6 +1503,9 @@ export function AgentFormPage() {
         run_immediately: values.run_immediately ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
+        starter_prompts: (values.starter_prompts || [])
+          .filter((row) => row.prompt_text?.trim())
+          .map((row) => ({ prompt_text: row.prompt_text.trim() })),
         default_plan: values.default_plan || [],
         prompt_mode: values.prompt_mode || 'Local',
         agent_prompt: values.agent_prompt || '',
@@ -1679,6 +1691,10 @@ export function AgentFormPage() {
           run_immediately: newAgent.run_immediately === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
+          starter_prompts: (newAgent.starter_prompts || []).map((row) => ({
+            name: row.name,
+            prompt_text: row.prompt_text || '',
+          })),
           default_plan: newAgent.default_plan || [],
           prompt_mode: newAgent.prompt_mode || 'Local',
           agent_prompt: newAgent.agent_prompt || '',

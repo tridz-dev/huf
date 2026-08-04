@@ -22,6 +22,7 @@ import {
 
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
+const ArtifactViewPage = lazy(() => import('./pages/ArtifactViewPage'));
 
 function ChatOnlyRedirectGuard() {
 	const location = useLocation();
@@ -77,6 +78,14 @@ function LazyPreviewViewPage() {
 	);
 }
 
+function LazyArtifactViewPage() {
+	return (
+		<Suspense fallback={<PageLoader />}>
+			<ArtifactViewPage />
+		</Suspense>
+	);
+}
+
 const router = createBrowserRouter(
 	[
 		{
@@ -105,6 +114,16 @@ const router = createBrowserRouter(
 					element: (
 						<ProtectedRoute>
 							<LazyPreviewViewPage />
+						</ProtectedRoute>
+					),
+				},
+				{
+					// Standalone like /view/:messageId — the page is h-screen and
+					// renders no shell chrome of its own.
+					path: 'artifact/:artifactId',
+					element: (
+						<ProtectedRoute>
+							<LazyArtifactViewPage />
 						</ProtectedRoute>
 					),
 				},

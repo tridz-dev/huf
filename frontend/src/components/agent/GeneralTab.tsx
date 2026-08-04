@@ -8,7 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Plus, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
@@ -305,6 +306,71 @@ We generally recommend altering this or temperature but not both.`}
           locked={locked}
         />
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Starter Prompts</CardTitle>
+          <CardDescription>
+            Up to 3 starter prompts shown to users when starting a chat with this agent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {form.watch('starter_prompts')?.map((_row, index) => (
+            <div key={index} className="flex items-start gap-2">
+              <FormField
+                control={form.control}
+                name={`starter_prompts.${index}.prompt_text`}
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormControl>
+                      <Textarea
+                        placeholder="Enter a starter prompt"
+                        className="min-h-[60px] resize-y"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const current = form.getValues('starter_prompts') || [];
+                  form.setValue(
+                    'starter_prompts',
+                    current.filter((_r, i) => i !== index),
+                    { shouldDirty: true }
+                  );
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {(form.watch('starter_prompts') || []).length < 3 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const current = form.getValues('starter_prompts') || [];
+                if (current.length >= 3) return;
+                form.setValue(
+                  'starter_prompts',
+                  [...current, { prompt_text: '' }],
+                  { shouldDirty: true }
+                );
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add starter prompt
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

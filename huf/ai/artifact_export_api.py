@@ -1,0 +1,200 @@
+# Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
+# For license information, please see license.txt
+
+"""Export a document Artifact's markdown content as a downloadable PDF/DOCX/HTML file.
+
+Reuses the conversation-ownership check from ``huf.ai.artifact_api`` — a
+caller must own the artifact's conversation (or hold System Manager) to
+export it, exactly as for reading it.
+
+Rendering pipeline: markdown -> sanitized HTML (``artifacts.render.html``) ->
+PDF/DOCX bytes (``artifacts.render.pdf`` / ``artifacts.render.docx``). Each
+export is saved as a private Frappe File attached to the Artifact; a stale
+File from a prior export is deleted first so re-export after a content edit
+always reflects the current artifact content rather than a cached copy.
+"""
+
+import frappe
+from frappe import _
+from frappe.utils.file_manager import save_file
+
+from huf.ai.artifact_api import _check_conversation_access
+from huf.ai.artifacts.render.docx import html_to_docx
+from huf.ai.artifacts.render.html import render_document_html
+from huf.ai.artifacts.render.pdf import html_to_pdf
+
+#: Supported export formats and how to turn rendered HTML into file bytes.
+_FORMATS = ("pdf", "docx", "html")
+
+#: Artifact types whose content is markdown source the render pipeline can consume.
+_EXPORTABLE_ARTIFACT_TYPES = ("document", "markdown")
+
+#: Hard cap on unsaved content accepted by preview_document_html. There is no
+#: Artifact row backing this call, so a huge paste can't be rejected by any
+#: existing size limit on the doctype - reject it here before it reaches the
+#: render pipeline and ties up a worker.
+_MAX_PREVIEW_CONTENT_BYTES = 200_000
+
+
+def _normalize_language(language: str | None) -> str:
+	"""Map an Artifact.language value onto the render pipeline's two modes.
+
+	Honours ``Artifact.language``: a document authored in HTML must NOT be
+	pushed through the markdown parser, which would mangle its markup. Any
+	value other than "html" is treated as markdown, so existing rows (which
+	predate the html source option and often have language empty) keep
+	rendering exactly as before.
+	"""
+	return "html" if (language or "").strip().lower() == "html" else "markdown"
+
+
+def _render_artifact_html(artifact) -> str:
+	"""Render an Artifact's source to a full HTML document."""
+	return render_document_html(
+		artifact.content,
+		title=artifact.title or artifact.name,
+		language=_normalize_language(artifact.language),
+	)
+
+
+@frappe.whitelist()
+def get_artifact_html(name: str) -> str:
+	"""Return a document Artifact rendered as self-contained HTML.
+
+	Backs the in-chat document preview. The returned document inlines its own
+	stylesheet (fonts + components), so the client can drop it straight into a
+	sandboxed iframe and see exactly what the PDF export will contain - one
+	renderer, so preview and PDF cannot drift.
+
+	Read-only: unlike export_artifact this writes nothing, so it needs no
+	commit and leaves no File rows behind.
+	"""
+	if not name:
+		frappe.throw(_("Artifact name is required"), frappe.ValidationError)
+
+	artifact = frappe.get_doc("Artifact", name)
+
+	_check_conversation_access(artifact.conversation)
+
+	if artifact.artifact_type not in _EXPORTABLE_ARTIFACT_TYPES:
+		frappe.throw(
+			_("Artifact type {0} cannot be rendered as a document.").format(artifact.artifact_type),
+			frappe.ValidationError,
+		)
+
+	return _render_artifact_html(artifact)
+
+
+@frappe.whitelist()
+def preview_document_html(content: str, language: str = "markdown", title: str = "") -> str:
+	"""Render UNSAVED document content as self-contained HTML.
+
+	Backs the in-chat preview for a document/markdown artifact that is still
+	being composed - either mid-stream, or parsed inline from a chat message
+	that was never persisted as its own Artifact row. In both cases there is
+	no artifact ``name`` yet, so ``get_artifact_html`` cannot be used: there is
+	no row to look up, and consequently no conversation to permission-check
+	against. The @frappe.whitelist() default (login required) is the only
+	access control here - any authenticated user can preview arbitrary
+	content they hand in, exactly as they could by typing it into any other
+	rendering endpoint.
+
+	Read-only and stateless: like get_artifact_html, this writes nothing (no
+	File rows, no commit) and shares the same renderer, so a transient
+	preview and the eventual saved-artifact preview can never drift apart.
+	"""
+	if not content:
+		frappe.throw(_("Content is required"), frappe.ValidationError)
+
+	if len(content.encode("utf-8")) > _MAX_PREVIEW_CONTENT_BYTES:
+		frappe.throw(
+			_("Content is too large to preview ({0} KB limit).").format(_MAX_PREVIEW_CONTENT_BYTES // 1000),
+			frappe.ValidationError,
+		)
+
+	return render_document_html(
+		content,
+		title=title or _("Untitled document"),
+		language=_normalize_language(language),
+	)
+
+
+@frappe.whitelist()
+def export_artifact(name: str, format: str) -> dict:
+	"""Export an Artifact as pdf, docx, or html. Returns {"file_url": str}."""
+	if not name:
+		frappe.throw(_("Artifact name is required"), frappe.ValidationError)
+
+	if format not in _FORMATS:
+		frappe.throw(
+			_("Unsupported export format: {0}. Must be one of {1}.").format(format, ", ".join(_FORMATS)),
+			frappe.ValidationError,
+		)
+
+	artifact = frappe.get_doc("Artifact", name)
+
+	_check_conversation_access(artifact.conversation)
+
+	if artifact.artifact_type not in _EXPORTABLE_ARTIFACT_TYPES:
+		frappe.throw(
+			_("Artifact type {0} cannot be exported — only document/markdown artifacts are supported.").format(
+				artifact.artifact_type
+			),
+			frappe.ValidationError,
+		)
+
+	html = _render_artifact_html(artifact)
+
+	if format == "html":
+		rendered_bytes = html.encode("utf-8")
+	elif format == "pdf":
+		rendered_bytes = html_to_pdf(html)
+	else:
+		rendered_bytes = html_to_docx(html)
+
+	_delete_existing_export(name, format)
+
+	file_doc = save_file(f"{artifact.name}.{format}", rendered_bytes, "Artifact", name, is_private=True)
+
+	# This method is invoked via HTTP GET from the frontend (frappe-js-sdk's
+	# call.get performs an actual axios GET), and Frappe's request teardown
+	# does not auto-commit writes made during a GET request - only POST/PUT/
+	# DELETE. Without an explicit commit here, the File row (and the
+	# _delete_existing_export deletions above) are rolled back the moment
+	# this request completes, even though the response already reports
+	# success with a file_url. Confirmed by reproduction: calling this over
+	# real HTTP left zero File rows attached to the artifact immediately
+	# afterward, despite the 200 response.
+	frappe.db.commit()
+
+	return {"file_url": file_doc.file_url, "format": format}
+
+
+def _delete_existing_export(artifact_name: str, format: str) -> None:
+	"""Remove any previously exported File for this (artifact, format) pair, if any.
+
+	A caller may re-export after editing the artifact's content, so any stale
+	File for the same (artifact, format) pair must go before saving the fresh
+	one — otherwise a naive re-save could leave two File rows, or callers
+	could observe stale content. Always regenerating (rather than trying to
+	match content hashes) keeps this correctness-first.
+
+	Matched by extension rather than the exact requested file_name: Frappe's
+	save_file() gives private files (is_private=True) a randomized on-disk
+	name for URL-guessing protection, so the "<artifact_name>.<format>" name
+	passed to save_file is never actually what ends up stored in the File
+	doctype's own file_name field either - only the extension survives.
+	`format` is validated against a fixed whitelist before this is called, so
+	the LIKE pattern below is not attacker-controlled.
+	"""
+	existing = frappe.get_all(
+		"File",
+		filters={
+			"attached_to_doctype": "Artifact",
+			"attached_to_name": artifact_name,
+			"file_name": ["like", f"%.{format}"],
+		},
+		fields=["name"],
+	)
+	for row in existing:
+		frappe.delete_doc("File", row.name, ignore_permissions=True, force=True)

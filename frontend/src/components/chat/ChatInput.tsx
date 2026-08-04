@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
 import { CornerDownLeft, Paperclip } from "lucide-react";
 import { Button } from "../ui/button";
@@ -18,7 +18,6 @@ import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
-import { AgentModelSelector } from './AgentModelSelector';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -50,6 +49,10 @@ function rekeyAssistantToRunId(
   );
 }
 
+export interface ChatInputHandle {
+    send(text: string): Promise<void>;
+}
+
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
@@ -69,17 +72,9 @@ interface ChatInputProps {
      * queue-first.
      */
     runImmediately?: boolean;
-    /** Called when the user selects a different model from the inline selector. */
-    onModelOverride?: (modelId: string) => void;
-    /** Currently active model override (AI Model link name). */
-    modelOverride?: string | null;
-    /** Display name of the current agent, shown on the selector pill. */
-    agentDisplayName?: string;
-    /** Model of the current agent, shown on the selector pill. */
-    agentModel?: string | null;
 }
 
-export function ChatInput({
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
     chatId,
     agentName,
     onConversationCreated,
@@ -93,11 +88,7 @@ export function ChatInput({
     allowFileUpload = false,
     maxUploadSizeMb,
     runImmediately = false,
-    onModelOverride,
-    modelOverride,
-    agentDisplayName,
-    agentModel,
-}: ChatInputProps) {
+}: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -214,7 +205,6 @@ export function ChatInput({
                         conversationId: params.conversationId,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
-                        modelOverride: modelOverride ?? undefined,
                     },
                     {
                         useStreaming,
@@ -313,6 +303,115 @@ export function ChatInput({
         });
     }, []);
 
+    const sendTextMessage = useCallback(async (text: string) => {
+        if (!text || !agentName) return;
+
+        setIsSubmitting(true);
+        onStatusChange('submitted');
+
+        const userMessageKey = `user-${Date.now()}`;
+        const userMessage: MessageType = {
+            key: userMessageKey,
+            from: 'user',
+            versions: [{ id: userMessageKey, content: text }],
+        };
+        setMessages((prev) => [...prev, userMessage]);
+        setMessage('');
+        if (textareaRef.current) textareaRef.current.focus();
+
+        const assistantMessageId = `assistant-${Date.now()}`;
+        setMessages((prev) => [
+            ...prev,
+            { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
+        ]);
+        onActivePendingKeyChange?.(assistantMessageId);
+
+        const updateAssistantContent = (content: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? { ...msg, versions: [{ id: assistantMessageId, content }] }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? { ...msg, reasoning, reasoningStreaming: true }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
+
+        let assistantKey = assistantMessageId;
+        try {
+            if (!chatId) isCreatingConversationRef.current = true;
+            const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
+                message: text,
+                conversationId: chatId ?? undefined,
+                assistantMessageId,
+                updateAssistantContent,
+                updateAssistantReasoning,
+            });
+            if (runTimedOutRef.current) {
+                // Hang guard already converted the bubble to an error card.
+                isCreatingConversationRef.current = false;
+                return;
+            }
+            assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === assistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
+            if (queued && agentRunId) {
+                linkUserMessageToRun(userMessageKey, agentRunId);
+                setMessages((prev) => rekeyAssistantToRunId(prev, assistantMessageId, agentRunId));
+                onActivePendingKeyChange?.(agentRunId);
+            }
+            if (agentMessageId && !queued) {
+                syncAssistantMessageId(assistantKey, agentMessageId);
+            }
+            onStatusChange('ready');
+            onActivePendingKeyChange?.(null);
+            if (conversationId && onConversationCreated) {
+                newlyCreatedConversationIdRef.current = conversationId;
+                cacheAgentNameForChat(conversationId, agentName);
+                onConversationCreated(conversationId, agentName);
+                setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
+            } else {
+                isCreatingConversationRef.current = false;
+            }
+            setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
+        } catch (error) {
+            if (streamingAvailable) setStreamingAvailable(false);
+            isCreatingConversationRef.current = false;
+            onStatusChange('error');
+            onActivePendingKeyChange?.(null);
+            const errorText = error instanceof Error ? error.message : 'An error occurred';
+            if (!runTimedOutRef.current) {
+                // Replace the pending bubble with an error card (never a fake
+                // assistant bubble or an endless loading state).
+                markAssistantError(assistantKey, errorText);
+            }
+            toast.error('Failed to send message', {
+                description: errorText,
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [agentName, chatId, onConversationCreated, onStatusChange, onActivePendingKeyChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+
+    useImperativeHandle(ref, () => ({
+        send: sendTextMessage,
+    }));
+
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -385,7 +484,6 @@ export function ChatInput({
                     agent: agentName,
                     conversation: chatId ?? undefined,
                     message: messageText,
-                    modelOverride: modelOverride ?? undefined,
                 });
 
                 if (!prepareRes?.success || !prepareRes.agent_prompt) {
@@ -495,108 +593,8 @@ export function ChatInput({
             return;
         }
 
-        const messageText = message.trim();
-        setIsSubmitting(true);
-        onStatusChange('submitted');
-
-        const userMessageKey = `user-${Date.now()}`;
-        const userMessage: MessageType = {
-            key: userMessageKey,
-            from: 'user',
-            versions: [{ id: userMessageKey, content: messageText }],
-        };
-        setMessages((prev) => [...prev, userMessage]);
-        setMessage('');
-        if (textareaRef.current) textareaRef.current.focus();
-
-        const assistantMessageId = `assistant-${Date.now()}`;
-        setMessages((prev) => [
-            ...prev,
-            { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
-        ]);
-        onActivePendingKeyChange?.(assistantMessageId);
-
-        const updateAssistantContent = (content: string) => {
-            setMessages((prev) =>
-                prev.map((msg) =>
-                    msg.key === assistantMessageId
-                        ? { ...msg, versions: [{ id: assistantMessageId, content }] }
-                        : msg
-                )
-            );
-            scrollToBottomAfterPaint?.(false);
-        };
-        const updateAssistantReasoning = (reasoning: string) => {
-            setMessages((prev) =>
-                prev.map((msg) =>
-                    msg.key === assistantMessageId
-                        ? { ...msg, reasoning, reasoningStreaming: true }
-                        : msg
-                )
-            );
-            scrollToBottomAfterPaint?.(false);
-        };
-
-        let assistantKey = assistantMessageId;
-        try {
-            if (!chatId) isCreatingConversationRef.current = true;
-            const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
-                message: messageText,
-                conversationId: chatId ?? undefined,
-                assistantMessageId,
-                updateAssistantContent,
-                updateAssistantReasoning,
-            });
-            if (runTimedOutRef.current) {
-                // Hang guard already converted the bubble to an error card.
-                isCreatingConversationRef.current = false;
-                return;
-            }
-            assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
-            setMessages((prev) =>
-                prev.map((msg) =>
-                    (msg.key === assistantKey || msg.key === assistantMessageId)
-                        ? { ...msg, reasoningStreaming: false }
-                        : msg
-                )
-            );
-            if (queued && agentRunId) {
-                linkUserMessageToRun(userMessageKey, agentRunId);
-                setMessages((prev) => rekeyAssistantToRunId(prev, assistantMessageId, agentRunId));
-                onActivePendingKeyChange?.(agentRunId);
-            }
-            if (agentMessageId && !queued) {
-                syncAssistantMessageId(assistantKey, agentMessageId);
-            }
-            onStatusChange('ready');
-            onActivePendingKeyChange?.(null);
-            if (conversationId && onConversationCreated) {
-                newlyCreatedConversationIdRef.current = conversationId;
-                cacheAgentNameForChat(conversationId, agentName);
-                onConversationCreated(conversationId, agentName);
-                setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
-            } else {
-                isCreatingConversationRef.current = false;
-            }
-            setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
-        } catch (error) {
-            if (streamingAvailable) setStreamingAvailable(false);
-            isCreatingConversationRef.current = false;
-            onStatusChange('error');
-            onActivePendingKeyChange?.(null);
-            const errorText = error instanceof Error ? error.message : 'An error occurred';
-            if (!runTimedOutRef.current) {
-                // Replace the pending bubble with an error card (never a fake
-                // assistant bubble or an endless loading state).
-                markAssistantError(assistantKey, errorText);
-            }
-            toast.error('Failed to send message', {
-                description: errorText,
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+        await sendTextMessage(message.trim());
+    }, [message, agentName, pendingFile, isSubmitting, sendTextMessage, onStatusChange, chatId, onConversationCreated, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -638,7 +636,6 @@ export function ChatInput({
                 b64data: b64,
                 agent: agentName,
                 conversation: chatId ?? undefined,
-                modelOverride: modelOverride ?? undefined,
             });
         } catch (err) {
             failTranscription(
@@ -777,7 +774,6 @@ export function ChatInput({
                 filename: file.name,
                 b64data: b64,
                 agent: agentName,
-                modelOverride: modelOverride ?? undefined,
             });
 
             if (!res?.success || !res.file_id) {
@@ -916,18 +912,7 @@ export function ChatInput({
                             />
                         </div>
                     )}
-                    <div className="px-3 pb-3 w-full flex items-center justify-between gap-x-2 mt-2">
-                        {onModelOverride && (
-                            <AgentModelSelector
-                                variant="pill"
-                                value={modelOverride ?? agentModel ?? ''}
-                                currentLabel={agentDisplayName ?? agentName}
-                                currentModel={agentModel}
-                                onValueChange={onModelOverride}
-                                disabled={isSubmitting}
-                            />
-                        )}
-                        <div className="flex items-center justify-end gap-x-2 ml-auto">
+                    <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
                             <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
                                 Use
                                 <ShortcutKey>
@@ -981,10 +966,9 @@ export function ChatInput({
                                 <CornerDownLeft/>
                             </Button>
                         </div>
-                    </div>
                 </div>
             </form>
             <p className="mt-3 text-[10px] text-zinc-400 text-center">AI output can be inaccurate. Double check important info.</p>
         </div>
     );
-}
+});
