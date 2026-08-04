@@ -228,6 +228,18 @@ def _render_markdown(source: str) -> str:
 	)
 
 
+def _strip_orphaned_class_markers(markdown_source: str) -> str:
+	"""Remove `{: .class-name}` markers that are orphaned by a blank line.
+
+	The attr_list extension requires NO blank line between content and its
+	class marker, or the marker becomes literal text. Agents routinely add
+	blank lines anyway. Rather than leaving stray `{: .text-center}` etc. in
+	the rendered HTML, strip them here - the document reads fine without the
+	alignment, and the alternative (leaving literal text) is worse.
+	"""
+	return re.sub(r"\n\n+(\{:\s+\.[a-z0-9_-]+(?:\s+\.[a-z0-9_-]+)*\s*\})", "", markdown_source)
+
+
 def _expand_columns_blocks(markdown_source: str) -> str:
 	"""Replace ``:::columns-N ... :::`` regions with their rendered
 	``<div class="columns-N">...</div>`` HTML, so the surrounding markdown
@@ -361,11 +373,12 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 	if language == "html":
 		html_body = markdown_source
 	else:
-		# Expand :::columns-N...::: regions first (they're pre-rendered to raw
-		# HTML <div> markup), THEN run the rest of the source through markdown
-		# normally. Markdown leaves embedded raw HTML block tags alone by
-		# default, so the already-rendered <div> passes through untouched.
-		preprocessed_source = _expand_columns_blocks(markdown_source)
+		# Strip orphaned `{: .class-name}` markers that agents often separate
+		# from their content by a blank line (causing attr_list to fail).
+		# Then expand :::columns-N...::: regions (pre-rendered to raw HTML),
+		# then run through markdown. Markdown leaves embedded raw HTML alone.
+		cleaned_source = _strip_orphaned_class_markers(markdown_source)
+		preprocessed_source = _expand_columns_blocks(cleaned_source)
 		html_body = _render_markdown(preprocessed_source)
 
 	# Sanitize the HTML to remove any dangerous content.
