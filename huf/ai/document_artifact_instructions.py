@@ -95,6 +95,29 @@ Indented text.
 Alignment classes: `.text-left`, `.text-center`, `.text-right`.
 Indent classes: `.indent-1`, `.indent-2`, `.indent-3` (increasing depth).
 
+### Multi-column layout
+
+Wrap a region in `:::columns-2` / `:::columns-3` ... `:::` (own line, exact
+match, no other content on the marker lines) to lay it out in real
+newspaper-style columns in both the PDF and the DOCX export - not just a
+visual CSS effect, a genuine multi-column DOCX section:
+
+```
+:::columns-2
+## Left topic
+
+Ordinary markdown works normally inside here - headings, paragraphs,
+lists, tables.
+
+## Right topic
+
+More content, flows into the second column automatically.
+:::
+```
+
+Content before and after the `:::columns-N` block stays in normal
+single-column flow.
+
 ### What NOT to put in a document artifact
 
 Never put a markdown code fence (```) inside a document artifact's content -

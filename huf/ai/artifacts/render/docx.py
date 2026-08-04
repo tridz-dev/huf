@@ -20,10 +20,14 @@ BeautifulSoup) to keep this module dependency-free beyond python-docx.
 
 import base64
 import io
+import re
 from html.parser import HTMLParser
 
 from docx import Document
+from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Inches
 
 
@@ -49,7 +53,14 @@ _BLOCK_TAGS = {
 	"ul", "ol", "li",
 	"table", "thead", "tbody", "tr", "th", "td",
 	"blockquote", "hr", "pre",
+	"div",
 }
+
+#: Container tags whose children must each render as their own separate docx
+#: block, never flattened into a single joined string via full_text. div is
+#: only ever used by render_document_html for a columns-N section wrapper -
+#: a structural container, not a text-bearing leaf like p/blockquote.
+_CONTAINER_TAGS = ("table", "thead", "tbody", "tr", "th", "td", "div")
 
 #: Tags whose text (and descendant text) should be dropped from the parent's
 #: rendered text rather than concatenated inline. None of the tags in the
@@ -91,7 +102,7 @@ class _Node:
 		"""
 		parts = [self.text] if self.text else []
 		for child in self.children:
-			if child.tag in _BLOCK_TAGS and child.tag not in ("table", "thead", "tbody", "tr", "th", "td"):
+			if child.tag in _BLOCK_TAGS and child.tag not in _CONTAINER_TAGS:
 				child_text = child.full_text
 				if child_text:
 					parts.append(child_text)
@@ -247,8 +258,55 @@ def _render_node(doc: Document, node: _Node) -> None:
 		doc.add_paragraph("_" * 40)
 	elif tag == "img":
 		_add_image(doc, node)
+	elif tag == "div":
+		_render_div(doc, node)
 	# thead/tbody/tr/th/td/li are handled by their container (table/ul/ol)
 	# and should never appear as direct children of the root.
+
+
+_COLUMNS_CLASS_RE = re.compile(r"^columns-([23])$")
+
+
+def _render_div(doc: Document, node: _Node) -> None:
+	"""Render a <div> — currently only used by render_document_html for a
+	``columns-N`` section wrapper. A div without a recognised columns class
+	renders as a plain passthrough (its children rendered inline, no section
+	change), so future non-columns div usage degrades gracefully rather than
+	silently dropping content.
+	"""
+	column_count = None
+	for class_name in node.classes():
+		match = _COLUMNS_CLASS_RE.match(class_name)
+		if match:
+			column_count = int(match.group(1))
+			break
+
+	if column_count is None:
+		for child in node.children:
+			_render_node(doc, child)
+		return
+
+	_set_section_columns(doc.add_section(WD_SECTION.CONTINUOUS), column_count)
+	for child in node.children:
+		_render_node(doc, child)
+	# Close the columns region: a fresh CONTINUOUS section reset to a single
+	# column, so content after the div returns to normal single-column flow
+	# rather than inheriting the multi-column layout indefinitely.
+	_set_section_columns(doc.add_section(WD_SECTION.CONTINUOUS), 1)
+
+
+def _set_section_columns(section, column_count: int) -> None:
+	"""Set the number of layout columns on a docx section via its raw
+	sectPr XML — python-docx has no public column-count API. A freshly
+	created section's sectPr has no <w:cols> element yet, so one is created
+	if absent rather than assumed to already exist.
+	"""
+	sect_pr = section._sectPr
+	cols = sect_pr.find(qn("w:cols"))
+	if cols is None:
+		cols = OxmlElement("w:cols")
+		sect_pr.append(cols)
+	cols.set(qn("w:num"), str(column_count))
 
 
 def html_to_docx(html: str) -> bytes:

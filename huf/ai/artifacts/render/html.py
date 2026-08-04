@@ -8,8 +8,23 @@ is consumed by downstream renderers (PDF and DOCX), so the output shape and
 sanitization are critical for stability.
 """
 
+import re
+
 import markdown
 import bleach
+
+#: Matches a Pandoc-style fenced div marking a multi-column region:
+#:   :::columns-2
+#:   ...markdown content...
+#:   :::
+#: There is no native markdown syntax for a "start/end" block region, so this
+#: is a small custom convention, pre-processed BEFORE the main markdown pass
+#: (the inner content is itself run through markdown.markdown() recursively,
+#: so ordinary markdown still works inside a columns block).
+COLUMNS_BLOCK_RE = re.compile(
+	r"^:::columns-(2|3)\s*\n(.*?)\n:::\s*$",
+	re.MULTILINE | re.DOTALL,
+)
 
 
 #: CSS stylesheet for print-ready HTML documents. Defines the selectors that
@@ -115,6 +130,16 @@ th {
 	margin-left: 1.5in;
 }
 
+.columns-2 {
+	column-count: 2;
+	column-gap: 1cm;
+}
+
+.columns-3 {
+	column-count: 3;
+	column-gap: 0.8cm;
+}
+
 @page {
 	size: A4;
 	margin: 2cm;
@@ -128,6 +153,28 @@ th {
 """
 
 
+def _render_markdown(source: str) -> str:
+	return markdown.markdown(
+		source,
+		extensions=["tables", "fenced_code", "attr_list", "sane_lists"]
+	)
+
+
+def _expand_columns_blocks(markdown_source: str) -> str:
+	"""Replace ``:::columns-N ... :::`` regions with their rendered
+	``<div class="columns-N">...</div>`` HTML, so the surrounding markdown
+	pass (which has no concept of this custom block syntax) never sees them.
+	"""
+
+	def _replace(match: re.Match) -> str:
+		column_count = match.group(1)
+		inner_markdown = match.group(2)
+		inner_html = _render_markdown(inner_markdown)
+		return f'<div class="columns-{column_count}">{inner_html}</div>'
+
+	return COLUMNS_BLOCK_RE.sub(_replace, markdown_source)
+
+
 def render_document_html(markdown_source: str, title: str = "") -> str:
 	"""Render markdown to a full, sanitized, print-ready HTML document.
 
@@ -139,11 +186,12 @@ def render_document_html(markdown_source: str, title: str = "") -> str:
 		A complete HTML document string with sanitized content, ready for
 		conversion to PDF or DOCX.
 	"""
-	# Convert markdown to HTML with the required extensions
-	html_body = markdown.markdown(
-		markdown_source,
-		extensions=["tables", "fenced_code", "attr_list", "sane_lists"]
-	)
+	# Expand :::columns-N...::: regions first (they're pre-rendered to raw
+	# HTML <div> markup), THEN run the rest of the source through markdown
+	# normally. Markdown leaves embedded raw HTML block tags alone by
+	# default, so the already-rendered <div> passes through untouched.
+	preprocessed_source = _expand_columns_blocks(markdown_source)
+	html_body = _render_markdown(preprocessed_source)
 
 	# Define allowed tags and attributes for sanitization
 	allowed_tags = [
