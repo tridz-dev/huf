@@ -215,6 +215,11 @@ export interface AgentOrchestrationPlanRow {
   instruction: string;
   output_ref: string;
 }
+
+export interface AgentStarterPromptRow {
+  name?: string;
+  prompt_text: string;
+}
 /**
  * Agent document type from Frappe
  * Represents the raw Agent document structure from Frappe database
@@ -254,6 +259,7 @@ export interface AgentDoc {
   doc_event: DocEventType | null;
   description?: string | null;
   instructions: string;
+  starter_prompts?: AgentStarterPromptRow[];
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
   agent_knowledge?: AgentKnowledgeRow[];
   agent_skill?: AgentSkillRow[];
