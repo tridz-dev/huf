@@ -29,7 +29,9 @@ interface WorkSurfaceFrameProps {
 export function WorkSurfaceFrame({ title, actions, tabs, children }: WorkSurfaceFrameProps) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-paper text-ink">
-      <header className="flex items-center justify-between border-b border-line bg-panel px-5 py-3.5">
+      <header
+        className={`flex items-center justify-between bg-panel px-5 py-3.5 ${tabs ? '' : 'border-b border-line'}`}
+      >
         <div className="flex items-center gap-3.5">
           <SidebarTrigger className="-ml-1 text-steel hover:bg-transparent hover:text-ink" />
           {title && <h1 className="font-display text-xl font-bold uppercase leading-none">{title}</h1>}
@@ -38,15 +40,17 @@ export function WorkSurfaceFrame({ title, actions, tabs, children }: WorkSurface
       </header>
 
       {tabs && (
-        <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
-          <TabsList className="bg-paper px-5">
-            {tabs.items.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="mr-6 px-1 py-3">
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="shrink-0 bg-paper px-5">
+          <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className="w-full">
+            <TabsList layout="scroll" className="w-full border-b border-line bg-transparent p-0">
+              {tabs.items.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value} className="shrink-0">
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       )}
 
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
