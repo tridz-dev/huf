@@ -66,8 +66,7 @@ function ChatPage() {
 
             {/* Chat window - always full width */}
             <div className="flex-1 min-w-0 min-h-0 h-full relative">
-                {/* Desktop-only floating toggle */}
-                {!isMobile && (
+                {(isMobile ? !sidebarOpen : true) && (
                     <Button
                         variant="ghost"
                         size="icon"
@@ -88,8 +87,6 @@ function ChatPage() {
                 <ChatWindow
                     chatId={chatId}
                     onConversationCreated={handleConversationCreated}
-                    sidebarOpen={sidebarOpen}
-                    onToggleSidebar={isMobile ? toggleSidebar : undefined}
                 />
             </div>
         </section>

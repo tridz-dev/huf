@@ -16,7 +16,12 @@ function AppShellLayoutInner() {
 		.filter(Boolean)
 		.pop();
 
-	const hideHeader = config.hideHeader ?? routeHandle?.hideHeader;
+	const hideHeaderFromPath =
+		location.pathname.startsWith('/chat') ||
+		location.pathname === '/' ||
+		location.pathname.startsWith('/playground');
+
+	const hideHeader = config.hideHeader ?? routeHandle?.hideHeader ?? hideHeaderFromPath;
 	const headerActions = config.headerActions ?? routeHandle?.headerActions;
 	const breadcrumbs = config.breadcrumbs ?? routeHandle?.breadcrumbs;
 
