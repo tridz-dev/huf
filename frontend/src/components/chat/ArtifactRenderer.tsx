@@ -39,6 +39,19 @@ import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
 import { Video } from '@/components/ai-elements/video';
+import { DocumentPreview } from '@/components/chat/DocumentPreview';
+
+/** Ids minted by the client-side parser for transient, unsaved artifacts. */
+const TRANSIENT_ARTIFACT_ID = /^artifact-\d+-\d+$/;
+
+/**
+ * True when an id refers to a durable, server-owned Artifact row rather than a
+ * throwaway id created while parsing message content in the browser. Only
+ * durable artifacts can be fetched by name from the server.
+ */
+function isDurableArtifactId(id: string | undefined): id is string {
+	return Boolean(id) && !TRANSIENT_ARTIFACT_ID.test(id as string);
+}
 
 interface ArtifactRendererProps {
 	artifact: ParsedArtifact;
@@ -243,7 +256,17 @@ export function ArtifactRenderer({
 
 			case 'markdown':
 			case 'document':
-				return <MessageResponse>{artifact.content}</MessageResponse>;
+				// Only a DURABLE (server-owned) artifact can be previewed, since
+				// the preview endpoint resolves it by name. In chat these objects
+				// come from the client-side parser, which mints throwaway ids of
+				// the form `artifact-<timestamp>-<index>` (artifactParser.ts) -
+				// those match no Artifact row, so previewing them would 404 every
+				// document. Fall back to inline rendering for those.
+				return isDurableArtifactId(artifact.id) ? (
+					<DocumentPreview artifactName={artifact.id} />
+				) : (
+					<MessageResponse>{artifact.content}</MessageResponse>
+				);
 
 			case 'jsx':
 			case 'chart':

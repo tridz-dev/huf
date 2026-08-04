@@ -25,6 +25,15 @@ export async function getArtifact(name: string): Promise<ArtifactDoc> {
   }
 }
 
+export async function getArtifactHtml(name: string): Promise<string> {
+  try {
+    const result = await call.get('huf.ai.artifact_export_api.get_artifact_html', { name });
+    return (result?.message ?? result) as string;
+  } catch (error) {
+    handleFrappeError(error, 'Error rendering artifact');
+  }
+}
+
 export async function exportArtifact(
   name: string,
   format: 'pdf' | 'docx' | 'html'
