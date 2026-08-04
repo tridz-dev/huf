@@ -53,6 +53,52 @@ DEFAULT_HEADING_FONT = CURATED_FONTS["Source Serif 4"][1]
 DEFAULT_MONO_FONT = CURATED_FONTS["JetBrains Mono"][1]
 
 
+#: CSS properties permitted in an inline ``style="..."`` attribute.
+#:
+#: bleach drops the entire style attribute unless a CSSSanitizer is supplied,
+#: so without this the agent's inline styling silently disappears while
+#: <style> blocks keep working - a confusing half-capability. The list is
+#: deliberately generous: under WeasyPrint there is no script execution, and
+#: the genuine risk (resource fetching via url()) is handled by
+#: safe_url_fetcher, not by restricting which properties may be set.
+ALLOWED_CSS_PROPERTIES = [
+	# colour / text
+	"color", "background", "background-color", "opacity",
+	"font", "font-family", "font-size", "font-style", "font-weight", "font-variant",
+	"line-height", "letter-spacing", "word-spacing", "text-align", "text-decoration",
+	"text-transform", "text-indent", "white-space", "vertical-align",
+	# box
+	"margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+	"padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+	"width", "height", "min-width", "min-height", "max-width", "max-height",
+	# border
+	"border", "border-top", "border-right", "border-bottom", "border-left",
+	"border-color", "border-style", "border-width", "border-radius", "border-collapse",
+	# layout
+	"display", "flex", "flex-direction", "flex-wrap", "flex-grow", "flex-shrink", "flex-basis",
+	"justify-content", "align-items", "align-self", "gap", "row-gap", "column-gap",
+	"grid-template-columns", "grid-template-rows", "grid-column", "grid-row",
+	"column-count", "column-gap", "column-span",
+	# paged media
+	"page-break-before", "page-break-after", "page-break-inside",
+	"break-before", "break-after", "break-inside",
+	# misc presentational
+	"list-style", "list-style-type", "overflow", "box-shadow", "float", "clear",
+]
+
+
+def css_sanitizer():
+	"""bleach CSSSanitizer restricted to ALLOWED_CSS_PROPERTIES.
+
+	Imported lazily so this module stays importable if bleach's optional CSS
+	extra is ever absent - callers can then fall back to dropping inline
+	styles rather than failing to import the whole render pipeline.
+	"""
+	from bleach.css_sanitizer import CSSSanitizer
+
+	return CSSSanitizer(allowed_css_properties=ALLOWED_CSS_PROPERTIES)
+
+
 def google_fonts_import() -> str:
 	"""One @import covering the whole curated set.
 

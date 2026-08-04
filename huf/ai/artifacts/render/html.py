@@ -13,6 +13,14 @@ import re
 import markdown
 import bleach
 
+from huf.ai.artifacts.render.safety import (
+	css_sanitizer,
+	google_fonts_import,
+	DEFAULT_BODY_FONT,
+	DEFAULT_HEADING_FONT,
+	DEFAULT_MONO_FONT,
+)
+
 #: Matches a Pandoc-style fenced div marking a multi-column region:
 #:   :::columns-2
 #:   ...markdown content...
@@ -31,11 +39,21 @@ COLUMNS_BLOCK_RE = re.compile(
 #: downstream PDF/DOCX renderers rely on. Includes paged-media syntax for
 #: WeasyPrint and similar tools.
 PRINT_STYLESHEET = """
+__GOOGLE_FONTS_IMPORT__
+
 body {
-	font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+	font-family: __BODY_FONT__;
 	font-size: 11pt;
 	line-height: 1.6;
 	color: #333;
+}
+
+h1, h2, h3, h4, h5, h6 {
+	font-family: __HEADING_FONT__;
+}
+
+pre, code {
+	font-family: __MONO_FONT__;
 }
 
 h1 {
@@ -152,11 +170,22 @@ th {
 }
 """
 
+#: PRINT_STYLESHEET with the curated-font placeholders resolved. Kept as a
+#: separate constant (rather than resolving inline at every call) since the
+#: substitution only ever depends on the safety module's fixed defaults.
+PRINT_STYLESHEET = (
+	PRINT_STYLESHEET
+	.replace("__GOOGLE_FONTS_IMPORT__", google_fonts_import())
+	.replace("__BODY_FONT__", DEFAULT_BODY_FONT)
+	.replace("__HEADING_FONT__", DEFAULT_HEADING_FONT)
+	.replace("__MONO_FONT__", DEFAULT_MONO_FONT)
+)
+
 
 def _render_markdown(source: str) -> str:
 	return markdown.markdown(
 		source,
-		extensions=["tables", "fenced_code", "attr_list", "sane_lists"]
+		extensions=["tables", "fenced_code", "attr_list", "sane_lists", "md_in_html"]
 	)
 
 
@@ -175,46 +204,77 @@ def _expand_columns_blocks(markdown_source: str) -> str:
 	return COLUMNS_BLOCK_RE.sub(_replace, markdown_source)
 
 
-def render_document_html(markdown_source: str, title: str = "") -> str:
-	"""Render markdown to a full, sanitized, print-ready HTML document.
+#: Tags permitted through sanitization for BOTH the markdown and html paths.
+ALLOWED_TAGS = [
+	"p", "h1", "h2", "h3", "h4", "h5", "h6",
+	"ul", "ol", "li",
+	"table", "thead", "tbody", "tr", "th", "td",
+	"blockquote",
+	"strong", "em", "a", "img", "br", "hr",
+	"pre", "code",
+	"span", "div",
+	"section", "aside", "header", "footer", "main",
+	"figure", "figcaption", "small", "style",
+]
+
+#: Per-tag attribute allowances beyond the global set below.
+_TAG_ALLOWED_ATTRIBUTES = {
+	"a": ["href", "title"],
+	"img": ["src", "alt"],
+}
+
+#: Attributes permitted on every tag.
+_GLOBAL_ALLOWED_ATTRIBUTES = {"class", "id", "style"}
+
+
+def _attribute_filter(tag: str, name: str, value: str) -> bool:
+	"""bleach attribute-filter callable: global class/id/style, any data-*
+	attribute (needed since the component stylesheet uses CSS
+	``content: attr(data-label)``), plus each tag's own extra attributes.
+	"""
+	if name.startswith("data-"):
+		return True
+	if name in _GLOBAL_ALLOWED_ATTRIBUTES:
+		return True
+	return name in _TAG_ALLOWED_ATTRIBUTES.get(tag, [])
+
+
+def render_document_html(markdown_source: str, title: str = "", language: str = "markdown") -> str:
+	"""Render a document source to a full, sanitized, print-ready HTML document.
 
 	Args:
-		markdown_source: Markdown text to render
+		markdown_source: Document source text to render. Markdown by default;
+			treated as raw HTML when ``language == "html"``.
 		title: Optional title for the HTML document
+		language: "markdown" (default) or "html". When "html", the source is
+			sanitized and embedded directly - no markdown conversion runs.
 
 	Returns:
 		A complete HTML document string with sanitized content, ready for
 		conversion to PDF or DOCX.
 	"""
-	# Expand :::columns-N...::: regions first (they're pre-rendered to raw
-	# HTML <div> markup), THEN run the rest of the source through markdown
-	# normally. Markdown leaves embedded raw HTML block tags alone by
-	# default, so the already-rendered <div> passes through untouched.
-	preprocessed_source = _expand_columns_blocks(markdown_source)
-	html_body = _render_markdown(preprocessed_source)
+	if language == "html":
+		html_body = markdown_source
+	else:
+		# Expand :::columns-N...::: regions first (they're pre-rendered to raw
+		# HTML <div> markup), THEN run the rest of the source through markdown
+		# normally. Markdown leaves embedded raw HTML block tags alone by
+		# default, so the already-rendered <div> passes through untouched.
+		preprocessed_source = _expand_columns_blocks(markdown_source)
+		html_body = _render_markdown(preprocessed_source)
 
-	# Define allowed tags and attributes for sanitization
-	allowed_tags = [
-		"p", "h1", "h2", "h3", "h4", "h5", "h6",
-		"ul", "ol", "li",
-		"table", "thead", "tbody", "tr", "th", "td",
-		"blockquote",
-		"strong", "em", "a", "img", "br", "hr",
-		"pre", "code",
-		"span", "div"
-	]
-
-	allowed_attributes = {
-		"*": ["class"],
-		"a": ["href", "title"],
-		"img": ["src", "alt"]
-	}
-
-	# Sanitize the HTML to remove any dangerous content
+	# Sanitize the HTML to remove any dangerous content.
+	#
+	# css_sanitizer is required for inline style="..." to survive at all:
+	# bleach drops the whole attribute unless one is supplied, which would
+	# silently discard the agent's inline styling while <style> blocks kept
+	# working. It also acts as a second filter, restricting inline CSS to
+	# ALLOWED_CSS_PROPERTIES.
 	sanitized_body = bleach.clean(
 		html_body,
-		tags=allowed_tags,
-		attributes=allowed_attributes,
+		tags=ALLOWED_TAGS,
+		attributes=_attribute_filter,
+		css_sanitizer=css_sanitizer(),
 		strip=True
 	)
 
