@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getConversationMessages, createAgentRunFeedback, getConversation, setConversationModelOverride, type ChatMessage } from "@/services/chatApi";
-import { getAgent, getAIModels } from "@/services/agentApi";
+import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
-import { ChatInput } from './ChatInput';
-import { EmptyChatState } from './EmptyChatState';
+import { ChatInput, type ChatInputHandle } from './ChatInput';
+import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
 import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
@@ -46,7 +46,7 @@ export function ChatMessageList({
     const [loadingType, setLoadingType] = useState<LoadingType>('default');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
-    const [selectedModelOverride, setSelectedModelOverride] = useState<string | null>(null);
+    const chatInputRef = useRef<ChatInputHandle>(null);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
     const [runSucceeded, setRunSucceeded] = useState(false);
@@ -54,8 +54,9 @@ export function ChatMessageList({
     const {
         agentName,
         agentDisplayName,
-        agentModel,
+        agentDescription,
         agentColor,
+        starterPrompts,
         showToolExecutionDetails,
         allowFileUpload,
         maxUploadSizeMb,
@@ -63,92 +64,6 @@ export function ChatMessageList({
         autonamingOfConversationTitle,
     } = useChatAgentIdentity(chatId, searchParams);
 
-    // Load the persisted model override for this conversation.
-    useEffect(() => {
-        if (!chatId) {
-            setSelectedModelOverride(null);
-            return;
-        }
-
-        let cancelled = false;
-
-        async function loadConversationModel() {
-            try {
-                const [conversation, agent] = await Promise.all([
-                    getConversation(chatId!),
-                    getAgent(agentName),
-                ]);
-
-                if (cancelled) return;
-
-                if (conversation?.model && agent?.model && conversation.model !== agent.model) {
-                    setSelectedModelOverride(conversation.model);
-                } else {
-                    setSelectedModelOverride(null);
-                }
-            } catch (error) {
-                console.error('Error loading conversation model override:', error);
-                if (!cancelled) {
-                    setSelectedModelOverride(null);
-                }
-            }
-        }
-
-        loadConversationModel();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [chatId, agentName]);
-
-    const handleModelOverride = useCallback(async (newModelId: string) => {
-        const currentModel = selectedModelOverride ?? agentModel ?? null;
-        if (newModelId === currentModel) return;
-
-        // If the conversation has image/audio messages in history, block switches
-        // to models that do not support the required modality.
-        const hasImageInHistory = messages.some(
-            (m) => m.from === 'user' && m.attachment?.previewUrl
-        );
-        const hasAudioInHistory = messages.some((m) => m.kind === 'Audio');
-
-        try {
-            const models = await getAIModels();
-            const target = models.find((m) => m.id === newModelId);
-            if (!target) {
-                toast.error('Model not found');
-                return;
-            }
-
-            const modalities = new Set(target.modalities?.map((m) => m.toLowerCase()) ?? []);
-            if (hasImageInHistory && !modalities.has('vision')) {
-                toast.error('This model does not support the images in this conversation.');
-                return;
-            }
-            if (hasAudioInHistory && !modalities.has('audio')) {
-                toast.error('This model does not support the audio messages in this conversation.');
-                return;
-            }
-
-            // Persist the override on the server so it survives reloads.
-            if (chatId) {
-                const res = await setConversationModelOverride({
-                    conversation: chatId,
-                    modelOverride: newModelId,
-                });
-                if (!res.success) {
-                    toast.error('Failed to switch model');
-                    return;
-                }
-            }
-
-            setSelectedModelOverride(newModelId);
-            toast.info('Model switched. Provider prompt cache may reset for this conversation.');
-        } catch (error) {
-            console.error('Error switching model:', error);
-            toast.error('Failed to switch model');
-        }
-    }, [selectedModelOverride, agentModel, chatId, messages]);
 
     useEffect(() => {
         if (!chatId) {
@@ -412,19 +327,17 @@ export function ChatMessageList({
         [agentName, chatId]
     );
 
-    if (isNewChat && !agentName) {
-        return (
-            <EmptyChatState />
-        );
-    }
-
     // Don't show loading state if we already have messages (e.g., during transition)
     const shouldShowLoading = initialLoading && messages.length === 0;
+    const isColdStart = isNewChat && messages.length === 0;
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
-                <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
+                <div className={isColdStart
+                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex items-center justify-center"
+                    : "max-w-4xl mx-auto px-6 py-4 space-y-4"
+                }>
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
@@ -436,10 +349,13 @@ export function ChatMessageList({
                                 <p className="text-xs text-muted-foreground">{messagesError.message || 'An error occurred while fetching messages.'}</p>
                             </div>
                         </div>
-                    ) : messages.length === 0 && !isNewChat ? (
-                        <div className="flex items-center justify-center py-20">
-                            <p className="text-sm text-muted-foreground">No messages yet</p>
-                        </div>
+                    ) : isColdStart ? (
+                        <ColdStartHero
+                            agentName={agentName}
+                            agentDisplayName={agentDisplayName}
+                            agentDescription={agentDescription}
+                            agentColor={agentColor}
+                        />
                     ) : (
                         <div className="mt-2 space-y-8">
                             {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
@@ -468,7 +384,16 @@ export function ChatMessageList({
                 </div>
             </div>
             <div className="max-w-4xl mx-auto w-full shrink-0">
+            {isColdStart && (
+                <div className="px-6 pb-2">
+                    <StarterPromptGrid
+                        starterPrompts={starterPrompts}
+                        onSendStarter={(text) => chatInputRef.current?.send(text)}
+                    />
+                </div>
+            )}
             <ChatInput
+                ref={chatInputRef}
                 chatId={chatId}
                 agentName={agentName}
                 onConversationCreated={onConversationCreated}
@@ -481,10 +406,6 @@ export function ChatMessageList({
                 allowFileUpload={allowFileUpload}
                 maxUploadSizeMb={maxUploadSizeMb}
                 runImmediately={runImmediately}
-                onModelOverride={handleModelOverride}
-                modelOverride={selectedModelOverride}
-                agentDisplayName={agentDisplayName}
-                agentModel={agentModel}
             />
             </div>
         </div>

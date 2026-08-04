@@ -26,6 +26,7 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"run_immediately",
 		"description",
 		"instructions",
+		"starter_prompts",
 		"prompt_mode",
 		"agent_prompt",
 		"prompt_version_locked",

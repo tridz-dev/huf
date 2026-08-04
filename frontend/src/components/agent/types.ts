@@ -26,6 +26,12 @@ export const agentFormSchema = z.object({
   ).default([]),
 
   prompt_mode: z.enum(["Local", "Template"]).default("Local"),
+  starter_prompts: z.array(
+    z.object({
+      name: z.string().optional(),
+      prompt_text: z.string().min(1, 'Prompt text is required'),
+    })
+  ).max(3, 'A maximum of 3 starter prompts is allowed.').default([]),
   agent_prompt: z.string().optional(),
   prompt_version_locked: z.boolean().optional(),
   template_version_at_attach: z.number().optional(),
