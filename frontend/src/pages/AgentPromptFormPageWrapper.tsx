@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { AgentPromptFormPage } from './AgentPromptFormPage';
 import { getAgentPrompt } from '../services/agentPromptApi';
 
@@ -29,9 +29,7 @@ function AgentPromptFormPageWrapper() {
 
   const breadcrumbs = [{ label: 'Prompts', href: '/prompts' }, { label: promptTitle }];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <AgentPromptFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <AgentPromptFormPage />;
 }

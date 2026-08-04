@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '@/layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { IntegrationSettingsDetailsPage } from './IntegrationSettingsDetailsPage';
 import { getIntegrationSetting } from '@/services/integrationApi';
 
@@ -31,9 +31,7 @@ function IntegrationSettingsDetailsPageWrapper() {
     { label: title },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <IntegrationSettingsDetailsPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <IntegrationSettingsDetailsPage />;
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
 import { IntegrationSettingsListingPage } from './IntegrationSettingsListingPage';
-import { UnifiedLayout } from '@/layouts/UnifiedLayout';
 import { IntegrationSettingsHeaderActions } from '@/components/integrations/IntegrationSettingsHeaderActions';
 
 export { IntegrationSettingsListingPageWrapper };
@@ -14,11 +14,11 @@ function IntegrationSettingsListingPageWrapper() {
     setCatalogOpenKey((prev) => prev + 1);
   };
 
+  usePageLayout({ headerActions: <IntegrationSettingsHeaderActions /> });
+
   return (
     <IntegrationSettingsProvider onAddIntegration={handleAddIntegration}>
-      <UnifiedLayout headerActions={<IntegrationSettingsHeaderActions />}>
-        <IntegrationSettingsListingPage catalogOpenKey={catalogOpenKey} />
-      </UnifiedLayout>
+      <IntegrationSettingsListingPage catalogOpenKey={catalogOpenKey} />
     </IntegrationSettingsProvider>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { McpDetailsPage } from './McpDetailsPage';
 import { getMCPServer } from '../services/mcpApi';
 import { getAgent } from '../services/agentApi';
@@ -49,10 +49,7 @@ function McpDetailsPageWrapper() {
     { label: serverName },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <McpDetailsPage />
-    </UnifiedLayout>
-  );
-}
+  usePageLayout({ breadcrumbs });
 
+  return <McpDetailsPage />;
+}

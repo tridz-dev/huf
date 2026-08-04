@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { SkillFormPage } from './SkillFormPage';
 import { getSkill } from '../services/skillApi';
 
@@ -32,9 +32,7 @@ function SkillFormPageWrapper() {
     { label: skillTitle },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <SkillFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <SkillFormPage />;
 }

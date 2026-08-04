@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { KnowledgeSourceFormPage } from './KnowledgeSourceFormPage';
 import { getKnowledgeSource } from '../services/knowledgeApi';
 import { getAgent } from '../services/agentApi';
@@ -51,9 +51,7 @@ function KnowledgeSourceFormPageWrapper() {
     { label: sourceName },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <KnowledgeSourceFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <KnowledgeSourceFormPage />;
 }

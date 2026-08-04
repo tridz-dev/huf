@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '@/layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { IntegrationServiceFormPage } from './IntegrationServiceFormPage';
 import { getIntegrationService } from '@/services/integrationApi';
 
@@ -28,11 +28,9 @@ export function IntegrationServiceFormPageWrapper() {
     { label: title },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <IntegrationServiceFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <IntegrationServiceFormPage />;
 }
 
 export default IntegrationServiceFormPageWrapper;

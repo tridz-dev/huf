@@ -1,6 +1,6 @@
 import { useEffect, useState, ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { DataTableViewPage } from './DataTableViewPage';
 import { getTableSchema } from '../services/dataTableApi';
 
@@ -26,9 +26,7 @@ export function DataTableViewWrapper() {
 		{ label: tableName },
 	];
 
-	return (
-		<UnifiedLayout breadcrumbs={breadcrumbs} headerActions={headerActions}>
-			<DataTableViewPage onHeaderActionsChange={setHeaderActions} />
-		</UnifiedLayout>
-	);
+	usePageLayout({ breadcrumbs, headerActions });
+
+	return <DataTableViewPage onHeaderActionsChange={setHeaderActions} />;
 }

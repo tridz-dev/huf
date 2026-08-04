@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { IntegrationServicesProvider } from '@/contexts/IntegrationServicesContext';
 import { IntegrationServicesListingPage } from './IntegrationServicesListingPage';
-import { UnifiedLayout } from '@/layouts/UnifiedLayout';
 import { IntegrationServicesHeaderActions } from '@/components/integration-services/IntegrationServicesHeaderActions';
 
 export function IntegrationServicesListingPageWrapper() {
@@ -11,11 +11,11 @@ export function IntegrationServicesListingPageWrapper() {
     navigate('/integration-services/new');
   };
 
+  usePageLayout({ headerActions: <IntegrationServicesHeaderActions /> });
+
   return (
     <IntegrationServicesProvider onAddService={handleAddService}>
-      <UnifiedLayout headerActions={<IntegrationServicesHeaderActions />}>
-        <IntegrationServicesListingPage />
-      </UnifiedLayout>
+      <IntegrationServicesListingPage />
     </IntegrationServicesProvider>
   );
 }

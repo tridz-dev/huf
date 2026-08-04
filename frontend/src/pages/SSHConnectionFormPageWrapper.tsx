@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { SSHConnectionFormPage } from './SSHConnectionFormPage';
 import { getSSHConnection } from '../services/sshConnectionApi';
 
@@ -30,11 +30,9 @@ export function SSHConnectionFormPageWrapper() {
     { label: connectionTitle },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <SSHConnectionFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <SSHConnectionFormPage />;
 }
 
 export default SSHConnectionFormPageWrapper;

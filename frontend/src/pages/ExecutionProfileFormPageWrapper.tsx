@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { ExecutionProfileFormPage } from './ExecutionProfileFormPage';
 import { getExecutionProfile } from '../services/executionProfileApi';
 
@@ -30,11 +30,9 @@ export function ExecutionProfileFormPageWrapper() {
     { label: profileTitle },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <ExecutionProfileFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <ExecutionProfileFormPage />;
 }
 
 export default ExecutionProfileFormPageWrapper;

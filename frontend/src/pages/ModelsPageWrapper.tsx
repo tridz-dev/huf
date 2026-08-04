@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { ModelsProvider } from '../contexts/ModelsContext';
 import { ModelsPage } from './ModelsPage';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
 import { ModelsHeaderActions } from '../components/ModelsHeaderActions';
 
 export function ModelsPageWrapper() {
@@ -11,11 +11,11 @@ export function ModelsPageWrapper() {
     setAddModelKey(prev => prev + 1);
   };
 
+  usePageLayout({ headerActions: <ModelsHeaderActions /> });
+
   return (
     <ModelsProvider onAddModel={handleAddModel}>
-      <UnifiedLayout headerActions={<ModelsHeaderActions />}>
-        <ModelsPage addModelKey={addModelKey} />
-      </UnifiedLayout>
+      <ModelsPage addModelKey={addModelKey} />
     </ModelsProvider>
   );
 }

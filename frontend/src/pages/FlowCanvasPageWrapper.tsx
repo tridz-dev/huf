@@ -1,9 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { FlowCanvasPage } from './FlowCanvasPage';
-import { UnifiedLayout, BreadcrumbItem } from '../layouts/UnifiedLayout';
 import { FlowsHeaderActions } from '../components/FlowsHeaderActions';
-import { FlowsSidebarContent } from '../components/FlowsSidebarContent';
 import { useFlowContext } from '../contexts/FlowContext';
 
 export { FlowCanvasPageWrapper };
@@ -19,20 +18,17 @@ function FlowCanvasPageWrapper() {
     }
   }, [flowId, setActiveFlow]);
 
-  const breadcrumbs: BreadcrumbItem[] = useMemo(() => {
+  const breadcrumbs = useMemo(() => {
     return [
       { label: 'Flows', href: '/flows' },
       { label: activeFlow?.name || 'Loading...' },
     ];
   }, [activeFlow]);
 
-  return (
-    <UnifiedLayout
-      sidebarContent={<FlowsSidebarContent />}
-      headerActions={<FlowsHeaderActions />}
-      breadcrumbs={breadcrumbs}
-    >
-      <FlowCanvasPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({
+    breadcrumbs,
+    headerActions: <FlowsHeaderActions />,
+  });
+
+  return <FlowCanvasPage />;
 }

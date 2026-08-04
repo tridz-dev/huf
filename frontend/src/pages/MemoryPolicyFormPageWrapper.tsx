@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { MemoryPolicyFormPage } from './MemoryPolicyFormPage';
 import { getMemoryPolicy } from '../services/memoryPolicyApi';
 
@@ -33,9 +33,7 @@ function MemoryPolicyFormPageWrapper() {
     { label: policyLabel },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <MemoryPolicyFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <MemoryPolicyFormPage />;
 }

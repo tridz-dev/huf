@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { UnifiedLayout } from '@/layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { DataRecordViewPage } from '@/pages/DataRecordViewPage';
 import { getTableSchema } from '@/services/dataTableApi';
 import type { DataTableSchema } from '../types/dataTable.types';
@@ -31,13 +31,12 @@ export default function DataRecordViewWrapper() {
 		{ label: recordLabel },
 	];
 
+	usePageLayout({ breadcrumbs, headerActions });
+
 	return (
-		<UnifiedLayout breadcrumbs={breadcrumbs} headerActions={headerActions}>
-			<DataRecordViewPage
-				schema={schema}
-				onHeaderActionsChange={setHeaderActions}
-			/>
-		</UnifiedLayout>
+		<DataRecordViewPage
+			schema={schema}
+			onHeaderActionsChange={setHeaderActions}
+		/>
 	);
 }
-

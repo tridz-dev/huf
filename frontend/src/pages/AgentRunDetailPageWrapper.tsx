@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import AgentRunDetailPage from './AgentRunDetailPage';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
@@ -36,9 +36,7 @@ function AgentRunDetailPageWrapper() {
     { label: runName },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <AgentRunDetailPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <AgentRunDetailPage />;
 }

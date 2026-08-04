@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { AgentFormPage } from './AgentFormPage';
 import { getAgent } from '../services/agentApi';
 
@@ -30,9 +30,7 @@ function AgentFormPageWrapper() {
     { label: agentName },
   ];
 
-  return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <AgentFormPage />
-    </UnifiedLayout>
-  );
+  usePageLayout({ breadcrumbs });
+
+  return <AgentFormPage />;
 }

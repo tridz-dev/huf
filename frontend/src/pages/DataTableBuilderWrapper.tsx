@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { UnifiedLayout } from '../layouts/UnifiedLayout';
+import { usePageLayout } from '@/hooks/usePageLayout';
 import { DataTableBuilderPage } from './DataTableBuilderPage';
 import { getTableSchema } from '../services/dataTableApi';
 
@@ -29,9 +29,7 @@ export function DataTableBuilderWrapper() {
 			]
 		: [{ label: 'Data', href: '/data' }, { label: 'New Table' }];
 
-	return (
-		<UnifiedLayout breadcrumbs={breadcrumbs}>
-			<DataTableBuilderPage />
-		</UnifiedLayout>
-	);
+	usePageLayout({ breadcrumbs });
+
+	return <DataTableBuilderPage />;
 }
