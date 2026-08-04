@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
@@ -169,8 +170,8 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
               return (
                 <li key={artifact.name}>
                   <div className="flex items-start gap-2 px-3 py-2.5 hover:bg-muted/40 group">
-                    <a
-                      href={`/artifact/${artifact.name}`}
+                    <Link
+                      to={`/artifact/${artifact.name}`}
                       target="_blank"
                       rel="noreferrer"
                       className="flex items-start gap-2 min-w-0 flex-1"
@@ -193,7 +194,7 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
                           {formatTimeAgo(artifact.creation)}
                         </p>
                       </div>
-                    </a>
+                    </Link>
                     {isDoc && (
                       <div className="flex gap-1 shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
