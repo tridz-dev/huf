@@ -94,14 +94,14 @@ export function ChatAgentPicker({
         </Button>
       </ModelSelectorTrigger>
 
-      <ModelSelectorContent shouldFilter={false} title="Start a new chat" className="min-h-[40%]">
+      <ModelSelectorContent shouldFilter={false} title="Start a new chat" className="max-h-[80vh] overflow-hidden">
         <ModelSelectorInput
           placeholder="Search agents..."
           searchValue={agentSearch}
           onSearchChange={setAgentSearch}
         />
 
-        <ModelSelectorList>
+        <ModelSelectorList className="max-h-[60vh] overflow-y-auto">
           {agentsLoading ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
               Loading agents...

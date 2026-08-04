@@ -299,7 +299,9 @@
 .coldstart-name {
   font-family: var(--display);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 .coldstart-desc {
   font-family: var(--body);
