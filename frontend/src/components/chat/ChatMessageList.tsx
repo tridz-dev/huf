@@ -7,7 +7,7 @@ import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
-import { EmptyChatState } from './EmptyChatState';
+import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
 import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
@@ -335,7 +335,7 @@ export function ChatMessageList({
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
                 <div className={isColdStart
-                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex flex-col justify-end"
+                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex items-center justify-center"
                     : "max-w-4xl mx-auto px-6 py-4 space-y-4"
                 }>
                     {shouldShowLoading ? (
@@ -350,13 +350,11 @@ export function ChatMessageList({
                             </div>
                         </div>
                     ) : isColdStart ? (
-                        <EmptyChatState
+                        <ColdStartHero
                             agentName={agentName}
                             agentDisplayName={agentDisplayName}
                             agentDescription={agentDescription}
                             agentColor={agentColor}
-                            starterPrompts={starterPrompts}
-                            onSendStarter={(text) => chatInputRef.current?.send(text)}
                         />
                     ) : (
                         <div className="mt-2 space-y-8">
@@ -386,6 +384,14 @@ export function ChatMessageList({
                 </div>
             </div>
             <div className="max-w-4xl mx-auto w-full shrink-0">
+            {isColdStart && (
+                <div className="px-6 pb-2">
+                    <StarterPromptGrid
+                        starterPrompts={starterPrompts}
+                        onSendStarter={(text) => chatInputRef.current?.send(text)}
+                    />
+                </div>
+            )}
             <ChatInput
                 ref={chatInputRef}
                 chatId={chatId}
