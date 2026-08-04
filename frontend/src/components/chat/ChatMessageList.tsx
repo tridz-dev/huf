@@ -329,11 +329,15 @@ export function ChatMessageList({
 
     // Don't show loading state if we already have messages (e.g., during transition)
     const shouldShowLoading = initialLoading && messages.length === 0;
+    const isColdStart = isNewChat && messages.length === 0;
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
-                <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
+                <div className={isColdStart
+                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex flex-col justify-end"
+                    : "max-w-4xl mx-auto px-6 py-4 space-y-4"
+                }>
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
@@ -345,7 +349,7 @@ export function ChatMessageList({
                                 <p className="text-xs text-muted-foreground">{messagesError.message || 'An error occurred while fetching messages.'}</p>
                             </div>
                         </div>
-                    ) : isNewChat && messages.length === 0 ? (
+                    ) : isColdStart ? (
                         <EmptyChatState
                             agentName={agentName}
                             agentDisplayName={agentDisplayName}

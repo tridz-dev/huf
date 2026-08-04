@@ -23,7 +23,7 @@ export function EmptyChatState({
     const displayName = agentDisplayName || agentName;
 
     return (
-        <div className="pt-6">
+        <div>
             <div className="coldstart-header">
                 <ChatAvatar
                     variant="listing_ai"
@@ -51,11 +51,6 @@ export function EmptyChatState({
                             {prompt.prompt_text}
                         </button>
                     ))}
-                </div>
-            )}
-            {starterPrompts.length === 0 && (
-                <div className="px-[18px] pb-4 text-xs font-body text-steel-soft">
-                    Start typing to begin the conversation.
                 </div>
             )}
         </div>

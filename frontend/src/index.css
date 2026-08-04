@@ -283,7 +283,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 18px;
+  padding: 14px 0;
 }
 .coldstart-avatar {
   width: 26px;
@@ -312,7 +312,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  padding: 0 18px 18px;
+  padding: 0 0 18px;
 }
 @media (max-width: 480px) {
   .starter-grid {
