@@ -5,7 +5,7 @@ import { Skeleton } from '../ui/skeleton';
 import ChatAvatar from './ChatAvatar';
 import { getInitials } from '@/utils/getInitials';
 import { getAgentsWithConversationCounts, type AgentWithCount } from '@/services/chatApi';
-import { AgentModelSelector } from './AgentModelSelector';
+import { ChatAgentPicker } from './ChatAgentPicker';
 import { DEFAULT_AGENT_COLOR } from '@/data/color';
 
 export function EmptyChatState() {
@@ -57,10 +57,11 @@ export function EmptyChatState() {
                 <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Select an agent to start chatting</p>
                     <div className="flex justify-center">
-                        <AgentModelSelector
+                        <ChatAgentPicker
                             value={selectedAgent}
                             onValueChange={handleAgentSelect}
                             showLabel={true}
+                            label="Select Agent"
                         />
                     </div>
                 </div>

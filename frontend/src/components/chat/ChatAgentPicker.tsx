@@ -23,6 +23,7 @@ interface ChatAgentPickerProps {
   onValueChange: (value: string) => void;
   disabled?: boolean;
   showLabel?: boolean;
+  label?: string;
 }
 
 export function ChatAgentPicker({
@@ -30,6 +31,7 @@ export function ChatAgentPicker({
   onValueChange,
   disabled,
   showLabel = false,
+  label = 'New chat',
 }: ChatAgentPickerProps) {
   const [open, setOpen] = useState(false);
   const [agents, setAgents] = useState<ChatAgentItem[]>([]);
@@ -88,7 +90,7 @@ export function ChatAgentPicker({
           )}
         >
           <Plus className={showLabel ? 'w-4 h-4' : 'w-5 h-5'} />
-          {showLabel && <span>New chat</span>}
+          {showLabel && <span>{label}</span>}
         </Button>
       </ModelSelectorTrigger>
 
