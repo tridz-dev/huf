@@ -151,6 +151,50 @@ class TestPrintStylesheet(unittest.TestCase):
 		self.assertIn("element(foot)", self.document)
 		self.assertIn("running(foot)", self.document)
 
+	def test_running_footer_is_hidden_on_screen(self):
+		"""`running(foot)` only lifts the footer out of flow in PAGED media.
+		A browser ignores it, so the hoisted element (moved to the top of the
+		body so the PDF repeats it on every page) rendered as the FIRST line
+		of the preview - a document opened in the artifact pane led with
+		"CONFIDENTIAL - PAGE 1 OF 2" above its own letterhead.
+
+		Verified in a real browser: without this the computed display was
+		`flex`, taken from the AUTHOR's <style> block. Hence !important - an
+		author's rules sit later in the cascade and win at equal specificity.
+		The rule must stay inside @media screen so the PDF keeps its footer.
+		"""
+		screen_block = self.document[self.document.index("@media screen {") :]
+		screen_block = screen_block[: screen_block.index("\n}\n\nh1")]
+
+		self.assertIn(".doc-footer", screen_block)
+		self.assertIn("display: none !important", screen_block)
+
+	def test_author_styles_cannot_unhide_the_screen_footer(self):
+		"""The regression itself: an author setting `display: flex` on
+		.doc-footer must not put the footer back into the preview flow.
+
+		The author's <style> survives sanitization into the BODY, i.e. after
+		the platform stylesheet in </head>, so it wins any equal-specificity
+		contest. Only !important on the platform side beats it - that is the
+		property this test pins.
+		"""
+		author_css = ".doc-footer { display: flex; }"
+		document = render_document_html(
+			f"<style>{author_css}</style>"
+			'<p>Body.</p><p class="doc-footer">CONFIDENTIAL</p>',
+			language="html",
+		)
+
+		head_end = document.index("</head>")
+		platform_rule = document.index("display: none !important")
+		author_rule = document.index(author_css)
+
+		# The author's rule really does land later in the cascade...
+		self.assertLess(platform_rule, head_end)
+		self.assertGreater(author_rule, head_end)
+		# ...so the platform rule can only win by being !important.
+		self.assertIn("display: none !important", document[:head_end])
+
 
 class TestDocxExport(unittest.TestCase):
 	"""Each test here is a document that exported successfully while losing

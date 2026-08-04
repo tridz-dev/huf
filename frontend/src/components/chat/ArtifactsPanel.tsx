@@ -13,11 +13,8 @@ import {
   Video,
 } from 'lucide-react';
 import { formatTimeAgo } from '@/utils/time';
-import {
-  listConversationArtifacts,
-  exportArtifactFromPanel,
-  type ArtifactListItem,
-} from '@/services/artifactPanelApi';
+import { exportArtifactFromPanel, type ArtifactListItem } from '@/services/artifactPanelApi';
+import type { ArtifactPaneTarget } from '@/components/chat/useArtifactPane';
 
 const COLLAPSED_STORAGE_KEY = 'huf-artifacts-panel-collapsed';
 
@@ -43,7 +40,7 @@ function getArtifactIcon(artifactType: string): LucideIcon {
   return ARTIFACT_TYPE_ICONS[artifactType] ?? FileText;
 }
 
-function isDocumentType(artifactType: string): boolean {
+export function isDocumentType(artifactType: string): boolean {
   return artifactType === 'document' || artifactType === 'markdown';
 }
 
@@ -57,13 +54,21 @@ function readCollapsedPreference(): boolean {
 }
 
 export interface ArtifactsPanelProps {
-  conversationId: string | undefined;
+  /** Artifacts to list, fetched once by the shared `useConversationArtifacts` hook in ChatPageV2 and passed down here (and to `ArtifactPreviewPane`'s header switcher) so neither consumer double-fetches. */
+  artifacts: ArtifactListItem[];
+  loading: boolean;
+  /**
+   * When provided, clicking a document/markdown artifact opens it in the
+   * in-app preview pane (see ArtifactPreviewPane.tsx) instead of navigating
+   * to `/artifact/:name` in a new tab. Other artifact types (code, chart,
+   * etc.) keep the existing new-tab behavior regardless, since only
+   * DocumentPreview-backed types are supported by the pane today.
+   */
+  onOpenArtifact?: (artifact: ArtifactPaneTarget) => void;
 }
 
-export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
+export function ArtifactsPanel({ artifacts, loading, onOpenArtifact }: ArtifactsPanelProps) {
   const [collapsed, setCollapsed] = useState<boolean>(readCollapsedPreference);
-  const [artifacts, setArtifacts] = useState<ArtifactListItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -73,24 +78,6 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
       // localStorage unavailable (private mode, etc.) - preference just won't persist.
     }
   }, [collapsed]);
-
-  useEffect(() => {
-    if (!conversationId) {
-      setArtifacts([]);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    listConversationArtifacts(conversationId).then((items) => {
-      if (!cancelled) {
-        setArtifacts(items);
-        setLoading(false);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [conversationId]);
 
   const handleExport = async (
     artifactName: string,
@@ -167,34 +154,55 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
               const isDoc = isDocumentType(artifact.artifact_type);
               const pdfKey = `${artifact.name}-pdf`;
               const isPdfExporting = exporting[pdfKey];
+              const rowContent = (
+                <>
+                  <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {artifact.title || artifact.artifact_type}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {isDoc && (
+                        <>
+                          <span className="inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground">
+                            DOC
+                          </span>
+                        </>
+                      )}
+                      {artifact.artifact_type}
+                      {' · '}
+                      {formatTimeAgo(artifact.creation)}
+                    </p>
+                  </div>
+                </>
+              );
               return (
                 <li key={artifact.name}>
                   <div className="flex items-start gap-2 px-3 py-2.5 hover:bg-muted/40 group">
-                    <Link
-                      to={`/artifact/${artifact.name}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-start gap-2 min-w-0 flex-1"
-                    >
-                      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">
-                          {artifact.title || artifact.artifact_type}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {isDoc && (
-                            <>
-                              <span className="inline-block mr-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground">
-                                DOC
-                              </span>
-                            </>
-                          )}
-                          {artifact.artifact_type}
-                          {' · '}
-                          {formatTimeAgo(artifact.creation)}
-                        </p>
-                      </div>
-                    </Link>
+                    {isDoc && onOpenArtifact ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenArtifact({
+                            name: artifact.name,
+                            title: artifact.title,
+                            artifact_type: artifact.artifact_type,
+                          })
+                        }
+                        className="flex items-start gap-2 min-w-0 flex-1 text-left"
+                      >
+                        {rowContent}
+                      </button>
+                    ) : (
+                      <Link
+                        to={`/artifact/${artifact.name}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-start gap-2 min-w-0 flex-1"
+                      >
+                        {rowContent}
+                      </Link>
+                    )}
                     {isDoc && (
                       <div className="flex gap-1 shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
