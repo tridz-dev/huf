@@ -39,7 +39,14 @@ def html_to_pdf(html: str) -> bytes:
 		# Primary path: WeasyPrint for excellent CSS support
 		from weasyprint import HTML
 
-		pdf_bytes = HTML(string=html).write_pdf()
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		# url_fetcher is the SSRF control: document CSS is agent-authored and
+		# may reference external resources, so fetching is restricted to
+		# data: URLs and the allowlisted font hosts. Without it, a rule like
+		# background:url(http://169.254.169.254/...) would make this worker
+		# issue an attacker-chosen request from inside the network.
+		pdf_bytes = HTML(string=html, url_fetcher=safe_url_fetcher).write_pdf()
 		return pdf_bytes
 
 	except Exception as e:
