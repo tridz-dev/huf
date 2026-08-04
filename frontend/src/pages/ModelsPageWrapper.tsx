@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { usePageLayout } from '@/hooks/usePageLayout';
+import { PageHeaderActions } from '@/layouts/PageHeaderActions';
 import { ModelsProvider } from '../contexts/ModelsContext';
 import { ModelsPage } from './ModelsPage';
 import { ModelsHeaderActions } from '../components/ModelsHeaderActions';
@@ -11,10 +11,11 @@ export function ModelsPageWrapper() {
     setAddModelKey(prev => prev + 1);
   };
 
-  usePageLayout({ headerActions: <ModelsHeaderActions /> });
-
   return (
     <ModelsProvider onAddModel={handleAddModel}>
+      <PageHeaderActions>
+        <ModelsHeaderActions />
+      </PageHeaderActions>
       <ModelsPage addModelKey={addModelKey} />
     </ModelsProvider>
   );

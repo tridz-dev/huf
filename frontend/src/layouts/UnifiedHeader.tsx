@@ -9,6 +9,7 @@ import {
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
+import { usePageLayoutContextOptional } from '@/contexts/PageLayoutContext';
 // import { ApprovalsBell } from '../components/ApprovalsBell';  // TEMP disabled: see flow_api.py get_pending_approvals
 
 interface UnifiedHeaderProps {
@@ -18,6 +19,8 @@ interface UnifiedHeaderProps {
 
 export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
   const location = useLocation();
+  // Stable useState setter, so React does not re-run the ref on every render.
+  const setHeaderActionsSlot = usePageLayoutContextOptional()?.setHeaderActionsSlot;
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -96,6 +99,8 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
       <div className="flex items-center gap-2">
         {/* <ApprovalsBell />  TEMP disabled: get_pending_approvals returns 403 even for Admin */}
         {actions}
+        {/* Portal target for actions that need page-level context — see PageHeaderActions. */}
+        <div ref={setHeaderActionsSlot} className="flex items-center gap-2" />
       </div>
     </div>
   );

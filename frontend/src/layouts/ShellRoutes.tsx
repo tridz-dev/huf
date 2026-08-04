@@ -3,6 +3,8 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { FlowProvider } from '@/contexts/FlowContext';
 import { ModalProvider } from '@/contexts/ModalContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { PageHeaderActions } from '@/layouts/PageHeaderActions';
+import { FlowsListHeaderActions } from '@/components/FlowsListHeaderActions';
 import { DataTableBuilderWrapper } from '@/pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from '@/pages/DataTableViewWrapper';
 import { getOutletRemountKey } from '@/layouts/getPageTransitionKey';
@@ -65,7 +67,18 @@ function FlowLayout() {
 	return (
 		<FlowProvider>
 			<Routes>
-				<Route index element={<FlowListPage />} />
+				<Route
+					index
+					element={
+						<>
+							{/* Inside FlowProvider — the button calls useFlowContext. */}
+							<PageHeaderActions>
+								<FlowsListHeaderActions />
+							</PageHeaderActions>
+							<FlowListPage />
+						</>
+					}
+				/>
 				<Route
 					path=":flowId"
 					element={

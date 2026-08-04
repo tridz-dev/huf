@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePageLayout } from '@/hooks/usePageLayout';
+import { PageHeaderActions } from '@/layouts/PageHeaderActions';
 import { FlowCanvasPage } from './FlowCanvasPage';
 import { FlowsHeaderActions } from '../components/FlowsHeaderActions';
 import { useFlowContext } from '../contexts/FlowContext';
@@ -25,10 +26,14 @@ function FlowCanvasPageWrapper() {
     ];
   }, [activeFlow]);
 
-  usePageLayout({
-    breadcrumbs,
-    headerActions: <FlowsHeaderActions />,
-  });
+  usePageLayout({ breadcrumbs });
 
-  return <FlowCanvasPage />;
+  return (
+    <>
+      <PageHeaderActions>
+        <FlowsHeaderActions />
+      </PageHeaderActions>
+      <FlowCanvasPage />
+    </>
+  );
 }

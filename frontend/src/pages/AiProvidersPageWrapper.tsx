@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { usePageLayout } from '@/hooks/usePageLayout';
+import { PageHeaderActions } from '@/layouts/PageHeaderActions';
 import { AiProvidersProvider } from '../contexts/AiProvidersContext';
 import { AiProvidersPage } from './AiProvidersPage';
 import { AiProvidersHeaderActions } from '../components/AiProvidersHeaderActions';
@@ -15,10 +15,11 @@ function AiProvidersPageWrapper() {
     setAddProviderKey(prev => prev + 1);
   };
 
-  usePageLayout({ headerActions: <AiProvidersHeaderActions /> });
-
   return (
     <AiProvidersProvider onAddProvider={handleAddProvider}>
+      <PageHeaderActions>
+        <AiProvidersHeaderActions />
+      </PageHeaderActions>
       <AiProvidersPage addProviderKey={addProviderKey} />
     </AiProvidersProvider>
   );

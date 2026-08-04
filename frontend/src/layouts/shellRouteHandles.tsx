@@ -1,7 +1,6 @@
 import { HomeHeaderActions } from '@/components/HomeHeaderActions';
 import { AgentsHeaderActions } from '@/components/AgentsHeaderActions';
 import { McpHeaderActions } from '@/components/McpHeaderActions';
-import { FlowsListHeaderActions } from '@/components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from '@/components/KnowledgeHeaderActions';
 import { SkillsHeaderActions } from '@/components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from '@/components/AgentPromptsHeaderActions';
@@ -21,7 +20,6 @@ const EXACT_HANDLES: Record<string, AppShellRouteHandle> = {
 	'/execution-profiles': { headerActions: <ExecutionProfilesHeaderActions /> },
 	'/ssh-connections': { headerActions: <SSHConnectionsHeaderActions /> },
 	'/data': { headerActions: <DataHeaderActions /> },
-	'/flows': { headerActions: <FlowsListHeaderActions /> },
 	'/knowledge': { headerActions: <KnowledgeHeaderActions /> },
 	'/skills': { headerActions: <SkillsHeaderActions /> },
 	'/mcp': { headerActions: <McpHeaderActions /> },
