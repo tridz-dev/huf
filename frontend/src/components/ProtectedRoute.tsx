@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { AlertCircle, Home } from 'lucide-react';
 import { useUser } from '@/contexts/UserContext';
 import { usePermissions } from '@/contexts/PermissionsContext';
@@ -7,7 +7,7 @@ import { AuthenticatingPage } from './AuthenticatingPage';
 import { Button } from './ui/button';
 
 interface ProtectedRouteProps {
-  children: ReactNode;
+  children?: ReactNode;
   /**
    * Capability required to view this route (see huf/permissions.py
    * CAPABILITIES). Only pass this for routes that are exclusively a
@@ -57,7 +57,7 @@ export function ProtectedRoute({ children, requiredCapability }: ProtectedRouteP
     );
   }
 
-  return <>{children}</>;
+  return <>{children ?? <Outlet />}</>;
 }
 
 

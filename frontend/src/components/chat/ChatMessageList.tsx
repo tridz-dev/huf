@@ -51,6 +51,7 @@ export function ChatMessageList({
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
     const [selectedModelOverride, setSelectedModelOverride] = useState<string | null>(null);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
+    const [isSwitchingChat, setIsSwitchingChat] = useState(false);
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
     const [runSucceeded, setRunSucceeded] = useState(false);
 
@@ -298,6 +299,7 @@ export function ChatMessageList({
     // Show error toast when there's an error loading messages
     useEffect(() => {
         if (messagesError && chatId) {
+            setIsSwitchingChat(false);
             toast.error('Failed to load messages', {
                 description: messagesError.message || 'An error occurred while fetching messages. Please try again.',
                 duration: 5000,
@@ -320,6 +322,7 @@ export function ChatMessageList({
 
         const isNewConversationTransition = chatId === newlyCreatedConversationIdRef.current;
         if (!isNewConversationTransition) {
+            setIsSwitchingChat(true);
             setMessages([]);
             setIsTransitioningToNewConversation(false);
         }
@@ -355,6 +358,7 @@ export function ChatMessageList({
             // If we have conversationItems, merge them; otherwise preserve existing messages
             if (conversationItemsForChat.length > 0) {
                 setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItemsForChat, true));
+                setIsSwitchingChat(false);
             }
             // If conversationItems is empty, keep existing messages (don't clear)
             return;
@@ -362,6 +366,7 @@ export function ChatMessageList({
 
         // Normal merge for existing conversations
         setMessages((prev) => mergeConversationItemsIntoMessages(prev, conversationItemsForChat, false));
+        setIsSwitchingChat(false);
     }, [chatId, conversationItems, conversationItemsForChat, isTransitioningToNewConversation]);
 
     // Hydrate open Agent Runs after persisted messages are merged (reload / chat switch).
@@ -432,13 +437,12 @@ export function ChatMessageList({
         );
     }
 
-    // Don't show loading state if we already have messages (e.g., during transition)
-    const shouldShowLoading = initialLoading && messages.length === 0;
+    const shouldShowLoading =
+        messages.length === 0 && (initialLoading || isSwitchingChat);
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <Conversation
-                key={chatId ?? '__new_chat__'}
                 className="flex-1 min-h-0"
                 initial="instant"
                 resize="smooth"

@@ -1,20 +1,23 @@
-import { Outlet, useLocation, useMatches } from 'react-router-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { Suspense, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { UnifiedLayout } from '@/layouts/UnifiedLayout';
+import { ShellRoutes } from '@/layouts/ShellRoutes';
 import { getPageTransitionKey } from '@/layouts/getPageTransitionKey';
+import { getShellRouteHandle } from '@/layouts/shellRouteHandles';
 import { PageLayoutProvider, usePageLayoutContext, type PageLayoutConfig } from '@/contexts/PageLayoutContext';
+import { PageLoader } from '@/components/PageLoader';
 
 export interface AppShellRouteHandle extends PageLayoutConfig {}
 
 function AppShellLayoutInner() {
 	const location = useLocation();
-	const matches = useMatches();
-	const { config } = usePageLayoutContext();
+	const { config, setConfig } = usePageLayoutContext();
 
-	const routeHandle = matches
-		.map((match) => match.handle as AppShellRouteHandle | undefined)
-		.filter(Boolean)
-		.pop();
+	useEffect(() => {
+		setConfig({});
+	}, [location.pathname, location.search, setConfig]);
+
+	const routeHandle = getShellRouteHandle(location.pathname);
 
 	const hideHeaderFromPath =
 		location.pathname.startsWith('/chat') ||
@@ -31,18 +34,19 @@ function AppShellLayoutInner() {
 			headerActions={headerActions}
 			breadcrumbs={breadcrumbs}
 		>
-			<AnimatePresence mode="wait" initial={false}>
-				<motion.div
+			<Suspense fallback={<PageLoader />}>
+				{/*
+					Fade only the content area — the sidebar and header stay mounted,
+					unlike the old app-wide AnimatePresence. Pure CSS, so it adds no
+					render work to navigation.
+				*/}
+				<div
 					key={getPageTransitionKey(location.pathname)}
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					exit={{ opacity: 0 }}
-					transition={{ duration: 0.15 }}
-					className="flex h-full min-h-0 flex-col"
+					className="flex flex-1 min-h-0 flex-col animate-in fade-in duration-200 motion-reduce:animate-none"
 				>
-					<Outlet />
-				</motion.div>
-			</AnimatePresence>
+					<ShellRoutes />
+				</div>
+			</Suspense>
 		</UnifiedLayout>
 	);
 }
