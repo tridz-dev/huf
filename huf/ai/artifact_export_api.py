@@ -30,6 +30,51 @@ _FORMATS = ("pdf", "docx", "html")
 _EXPORTABLE_ARTIFACT_TYPES = ("document", "markdown")
 
 
+def _render_artifact_html(artifact) -> str:
+	"""Render an Artifact's source to a full HTML document.
+
+	Honours ``Artifact.language``: a document authored in HTML must NOT be
+	pushed through the markdown parser, which would mangle its markup. Any
+	value other than "html" is treated as markdown, so existing rows (which
+	predate the html source option and often have language empty) keep
+	rendering exactly as before.
+	"""
+	language = "html" if (artifact.language or "").strip().lower() == "html" else "markdown"
+	return render_document_html(
+		artifact.content,
+		title=artifact.title or artifact.name,
+		language=language,
+	)
+
+
+@frappe.whitelist()
+def get_artifact_html(name: str) -> str:
+	"""Return a document Artifact rendered as self-contained HTML.
+
+	Backs the in-chat document preview. The returned document inlines its own
+	stylesheet (fonts + components), so the client can drop it straight into a
+	sandboxed iframe and see exactly what the PDF export will contain - one
+	renderer, so preview and PDF cannot drift.
+
+	Read-only: unlike export_artifact this writes nothing, so it needs no
+	commit and leaves no File rows behind.
+	"""
+	if not name:
+		frappe.throw(_("Artifact name is required"), frappe.ValidationError)
+
+	artifact = frappe.get_doc("Artifact", name)
+
+	_check_conversation_access(artifact.conversation)
+
+	if artifact.artifact_type not in _EXPORTABLE_ARTIFACT_TYPES:
+		frappe.throw(
+			_("Artifact type {0} cannot be rendered as a document.").format(artifact.artifact_type),
+			frappe.ValidationError,
+		)
+
+	return _render_artifact_html(artifact)
+
+
 @frappe.whitelist()
 def export_artifact(name: str, format: str) -> dict:
 	"""Export an Artifact as pdf, docx, or html. Returns {"file_url": str}."""
@@ -54,7 +99,7 @@ def export_artifact(name: str, format: str) -> dict:
 			frappe.ValidationError,
 		)
 
-	html = render_document_html(artifact.content, title=artifact.title or artifact.name)
+	html = _render_artifact_html(artifact)
 
 	if format == "html":
 		rendered_bytes = html.encode("utf-8")
