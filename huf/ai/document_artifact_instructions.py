@@ -1,14 +1,29 @@
 # Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
-"""Prompt section teaching the model how to author document artifacts and use
-the export/redline/list tools built for them.
+"""Prompt sections teaching the model how to author document artifacts and
+use the export/redline/list tools built for them.
 
-Injected conditionally, the same way MEDIA_ELEMENT_INSTRUCTIONS is (see
-huf.ai.artifact_instructions.agent_has_media_tools and its call site in
-huf.ai.agent_integration): only when the acting agent actually has the
-document tools available, so an agent without them never pays the token
-cost of instructions it cannot act on.
+Split into two pieces with different injection rules, because they have
+different capability requirements:
+
+- DOCUMENT_ARTIFACT_INSTRUCTIONS (authoring): emitting an
+  <artifact type="document"> tag requires NO tool - it is parsed
+  automatically on message save, exactly like chart/mermaid/html
+  artifacts. This is injected UNCONDITIONALLY whenever allow_chat is set,
+  the same way CHART_ARTIFACT_INSTRUCTIONS and AI_ELEMENT_INSTRUCTIONS
+  are (see their call site in huf.ai.agent_integration). Without this, an
+  agent with no document tools linked has no way to know the artifact
+  type exists at all, and falls back to whatever it knows from training -
+  observed in practice as the model dumping a raw python-docx script
+  instead of using the artifact pipeline.
+
+- DOCUMENT_EXPORT_TOOL_INSTRUCTIONS (export/redline/list): these DO
+  require the corresponding Agent Tool Function to be linked to the
+  agent, so this section is gated behind agent_has_document_tools,
+  mirroring how MEDIA_ELEMENT_INSTRUCTIONS is gated behind
+  agent_has_media_tools - describing a tool the agent cannot call would
+  just cause a hallucinated tool-call attempt.
 """
 
 import re
@@ -43,10 +58,17 @@ def agent_has_document_tools(agent_doc) -> bool:
 DOCUMENT_ARTIFACT_INSTRUCTIONS = """
 ## Document Artifacts (PDF/DOCX export)
 
-`<artifact type="document">` content is treated as markdown source that can
-be exported to a real downloadable PDF or DOCX file. Use this artifact type
-for reports, proposals, memos, or any content the user may want to download
-or print - not for short answers that belong in your regular reply.
+When the user asks for a document, report, proposal, memo, or anything they
+may want to download as a PDF or Word file - INCLUDING when they explicitly
+say "make it a docx" or "give me a Word document" - use
+`<artifact type="document">` with markdown content. Do NOT write a
+python-docx script, a code snippet, or any other workaround: the platform
+renders this artifact type, and (when available - see below) exposes tools
+to export it to a real .docx or .pdf file. Writing code for the user to run
+themselves is the WRONG answer whenever this artifact type is available -
+it produces no actual file and asks the user to do the work you were asked
+to do. A downloadable .docx is delivered by the export pipeline, not by
+generating a python script.
 
 ### Supported markdown
 
@@ -80,7 +102,22 @@ the same rule that applies to every other artifact type. Never put raw HTML
 tags in it either; only the markdown syntax above is rendered - anything
 else is stripped for safety before export.
 
-### Exporting and redlining - id sequencing matters
+### Downloading
+
+If the user just asks to download the document you created as PDF or DOCX,
+tell them the download buttons already shown on the artifact do this - you
+do not need to do anything else; a working file is produced automatically
+from the markdown content once the artifact is saved.
+"""
+
+DOCUMENT_EXPORT_TOOL_INSTRUCTIONS = """
+### Exporting and redlining via tools - id sequencing matters
+
+You also have `list_document_artifacts`, `export_artifact`, and
+`redline_artifact` tools for cases where YOU (not the user clicking a
+button) need to trigger an export or produce a marked-up revision - for
+example, exporting a document from several turns ago, or applying suggested
+edits as Word tracked changes rather than silently rewriting the document.
 
 A document artifact's id is NOT known to you at the moment you emit its
 `<artifact type="document">` tag - it is only assigned after that message
@@ -92,15 +129,9 @@ or by a previous turn):
 1. Call `list_document_artifacts(conversation_id)` first to find its id.
 2. Call `export_artifact(artifact_id, format)` with `format` one of `"pdf"`,
    `"docx"`, `"html"` - returns a downloadable file URL.
-3. To suggest edits as Word tracked changes rather than silently rewriting
-   the document, call `redline_artifact(artifact_id, edits, author)` with
-   `edits` as a list of `{"find": "...", "replace": "..."}` objects. This
-   produces a NEW derived DOCX with insertions/deletions marked - it does
-   not modify the artifact's own content, so the original stays intact.
-
-If the user just asks to "download this as PDF" right after you created the
-document, tell them the download buttons on the artifact itself already do
-this - you do not need to call a tool for that; the tools above are for
-when the MODEL needs to trigger an export or produce a redline, not for a
-user clicking a button that already exists in the UI.
+3. To suggest edits as Word tracked changes, call
+   `redline_artifact(artifact_id, edits, author)` with `edits` as a list of
+   `{"find": "...", "replace": "..."}` objects. This produces a NEW derived
+   DOCX with insertions/deletions marked - it does not modify the
+   artifact's own content, so the original stays intact.
 """

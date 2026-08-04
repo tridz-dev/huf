@@ -447,11 +447,13 @@ class AgentManager:
 
             from huf.ai.document_artifact_instructions import (
                 DOCUMENT_ARTIFACT_INSTRUCTIONS,
+                DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
                 agent_has_document_tools,
             )
 
+            instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
             if agent_has_document_tools(self.agent_doc):
-                instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
+                instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
