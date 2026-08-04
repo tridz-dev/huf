@@ -9,6 +9,7 @@ import { ArtifactsPanel } from "@/components/chat/ArtifactsPanel";
 import { ArtifactPreviewPane } from "@/components/chat/artifacts/ArtifactPreviewPane";
 import { useArtifactPane } from "@/components/chat/useArtifactPane";
 import { useConversationArtifacts } from "@/components/chat/useConversationArtifacts";
+import { useChatSocket, type OpenArtifactPaneEvent } from "@/hooks/useChatSocket";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export { ChatPage };
@@ -23,8 +24,38 @@ function ChatPage() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const toggleSidebar = useCallback(() => setSidebarOpen((prev) => !prev), []);
     const artifactPane = useArtifactPane();
-    const { artifacts: conversationArtifacts, loading: artifactsLoading } =
+    const { artifacts: conversationArtifacts, loading: artifactsLoading, refetch: refetchArtifacts } =
         useConversationArtifacts(chatId ?? undefined);
+
+    // An agent tool (show_artifact) can open the preview pane on its own
+    // initiative, via a `conversation:<id>` socket event - mirrors the
+    // click-to-open path from ArtifactsPanel/ArtifactPreviewPane, just
+    // triggered server-side instead of by the user.
+    const handleOpenArtifactPane = useCallback(
+        async (event: OpenArtifactPaneEvent) => {
+            if (event.conversation_id !== chatId) return;
+
+            const known = conversationArtifacts.find((a) => a.name === event.artifact_id);
+            if (known) {
+                artifactPane.open({ name: known.name, title: known.title, artifact_type: known.artifact_type });
+                return;
+            }
+
+            // Just-created artifact: the last-fetched list is stale. Re-fetch
+            // once before giving up, rather than silently doing nothing.
+            const refreshed = await refetchArtifacts();
+            const found = refreshed.find((a) => a.name === event.artifact_id);
+            if (found) {
+                artifactPane.open({ name: found.name, title: found.title, artifact_type: found.artifact_type });
+            }
+        },
+        [chatId, conversationArtifacts, refetchArtifacts, artifactPane.open]
+    );
+
+    useChatSocket({
+        conversationId: chatId,
+        onOpenArtifactPane: handleOpenArtifactPane,
+    });
 
     // Auto-close sidebar on mobile, auto-open on desktop
     useEffect(() => {

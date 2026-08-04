@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { listConversationArtifacts, type ArtifactListItem } from '@/services/artifactPanelApi';
 
 export interface UseConversationArtifactsResult {
   artifacts: ArtifactListItem[];
   loading: boolean;
+  /** Re-fetch the list on demand, e.g. after a socket event references an
+   * artifact_id not yet in the last-fetched list (see `show_artifact`
+   * handling in ChatPageV2). */
+  refetch: () => Promise<ArtifactListItem[]>;
 }
 
 /**
@@ -38,5 +42,14 @@ export function useConversationArtifacts(
     };
   }, [conversationId]);
 
-  return { artifacts, loading };
+  const refetch = useCallback(async () => {
+    if (!conversationId) {
+      return [];
+    }
+    const items = await listConversationArtifacts(conversationId);
+    setArtifacts(items);
+    return items;
+  }, [conversationId]);
+
+  return { artifacts, loading, refetch };
 }

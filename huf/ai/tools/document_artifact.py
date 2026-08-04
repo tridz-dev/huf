@@ -60,6 +60,70 @@ def handle_list_document_artifacts(**kwargs) -> str:
 	return json.dumps({"success": True, "artifacts": documents})
 
 
+def handle_show_artifact(**kwargs) -> str:
+	"""Open a document Artifact in the user's right-side preview pane, without
+	requiring the user to click anything.
+
+	``conversation_id`` is injected automatically from the run context (see
+	huf.ai.sdk_tools._merge_run_context) rather than supplied by the model, so
+	it reflects the conversation the agent is actually running in - the model
+	cannot point the pane at a conversation it does not otherwise have access
+	to just by asserting a different id.
+
+	Args (via kwargs):
+		artifact_id (str): The Artifact's name/id. As with export_artifact and
+			redline_artifact, a document's id is not known until the message
+			that created it has been saved - use list_document_artifacts first
+			if the id is not already known from an earlier turn.
+
+	Returns:
+		JSON string with success=True on success, or success=False + error on
+		failure (including permission denial, a missing artifact, and an
+		artifact that belongs to a different conversation) - never raises.
+	"""
+	artifact_id = (kwargs.get("artifact_id") or "").strip()
+	conversation_id = (kwargs.get("conversation_id") or "").strip()
+
+	if not artifact_id:
+		return json.dumps({"success": False, "error": "'artifact_id' is required"})
+	if not conversation_id:
+		return json.dumps({"success": False, "error": "'conversation_id' is required"})
+
+	from huf.ai.artifact_api import _check_conversation_access
+
+	try:
+		_check_conversation_access(conversation_id)
+
+		artifact = frappe.get_doc("Artifact", artifact_id)
+
+		# The channel name (conversation:<id>) is guessable, so `user=` on the
+		# publish below is the only access gate on who actually receives the
+		# event - but an artifact belonging to a DIFFERENT conversation must
+		# still be rejected here, so a compromised/confused agent cannot make
+		# the user's own conversation open a pane pointed at someone else's
+		# document merely by having read access to their own conversation.
+		if artifact.conversation != conversation_id:
+			return json.dumps({"success": False, "error": "This artifact does not belong to the current conversation."})
+	except frappe.DoesNotExistError:
+		return json.dumps({"success": False, "error": f"No artifact found with id {artifact_id}"})
+	except frappe.PermissionError:
+		return json.dumps({"success": False, "error": "You do not have permission to view this conversation."})
+	except Exception as e:
+		return json.dumps({"success": False, "error": str(e)})
+
+	frappe.publish_realtime(
+		event=f"conversation:{conversation_id}",
+		message={
+			"type": "open_artifact_pane",
+			"artifact_id": artifact.name,
+			"conversation_id": conversation_id,
+		},
+		user=frappe.session.user,
+	)
+
+	return json.dumps({"success": True, "artifact_id": artifact.name})
+
+
 def handle_export_artifact(**kwargs) -> str:
 	"""Export a document Artifact as pdf, docx, or html.
 

@@ -32,7 +32,7 @@ import frappe
 
 # Tool names that mark an agent as document-capable. Matches the exact
 # tool_name values registered in huf.ai.tools._registry.DOCUMENT_ARTIFACT_TOOLS.
-DOCUMENT_TOOL_NAME = re.compile(r"export_artifact|redline_artifact|list_document_artifacts", re.IGNORECASE)
+DOCUMENT_TOOL_NAME = re.compile(r"export_artifact|redline_artifact|list_document_artifacts|show_artifact", re.IGNORECASE)
 
 
 def agent_has_document_tools(agent_doc) -> bool:
@@ -215,11 +215,14 @@ the artifact once it is saved.
 DOCUMENT_EXPORT_TOOL_INSTRUCTIONS = """
 ### Exporting and redlining via tools - id sequencing matters
 
-You also have `list_document_artifacts`, `export_artifact`, and
-`redline_artifact` tools for cases where YOU (not the user clicking a
-button) need to trigger an export or produce a marked-up revision - for
-example, exporting a document from several turns ago, or applying suggested
-edits as Word tracked changes rather than silently rewriting the document.
+You also have `list_document_artifacts`, `export_artifact`, `redline_artifact`,
+and `show_artifact` tools for cases where YOU (not the user clicking a
+button) need to trigger an export, produce a marked-up revision, or open a
+document in the user's preview pane - for example, exporting a document from
+several turns ago, applying suggested edits as Word tracked changes rather
+than silently rewriting the document, or surfacing a document you just
+created so the user sees it immediately without clicking. `show_artifact`
+takes only `artifact_id` and requires no extra step to describe.
 
 A document artifact's id is NOT known to you at the moment you emit its
 `<artifact type="document">` tag - it is only assigned after that message
