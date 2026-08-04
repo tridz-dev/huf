@@ -445,6 +445,14 @@ class AgentManager:
             if agent_has_media_tools(self.agent_doc):
                 instructions += MEDIA_ELEMENT_INSTRUCTIONS
 
+            from huf.ai.document_artifact_instructions import (
+                DOCUMENT_ARTIFACT_INSTRUCTIONS,
+                agent_has_document_tools,
+            )
+
+            if agent_has_document_tools(self.agent_doc):
+                instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
+
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
             top_p=self.agent_doc.top_p

@@ -17,6 +17,49 @@ import json
 import frappe
 
 
+def handle_list_document_artifacts(**kwargs) -> str:
+	"""List document/markdown artifacts in a conversation, for the model to
+	discover an artifact_id before calling export_artifact/redline_artifact.
+
+	Artifacts are only persisted after the message that created them is
+	saved - a model cannot know the id of a document it is emitting in the
+	CURRENT turn's <artifact type="document"> tag, since that tag has not
+	been parsed into an Artifact row yet. This tool lets a LATER turn look
+	up the id of a document created earlier in the same conversation
+	(including one created just now, in the previous assistant turn) rather
+	than requiring the user to paste an id by hand.
+
+	Args (via kwargs):
+		conversation_id (str): The conversation to list artifacts for.
+
+	Returns:
+		JSON string with success=True + artifacts (list of {id, title,
+		created} for document/markdown-type artifacts only, newest first) on
+		success, or success=False + error on failure.
+	"""
+	conversation_id = (kwargs.get("conversation_id") or "").strip()
+	if not conversation_id:
+		return json.dumps({"success": False, "error": "'conversation_id' is required"})
+
+	from huf.ai.artifact_api import list_conversation_artifacts
+
+	try:
+		rows = list_conversation_artifacts(conversation_id)
+	except frappe.PermissionError:
+		return json.dumps({"success": False, "error": "You do not have permission to list artifacts for this conversation."})
+	except Exception as e:
+		return json.dumps({"success": False, "error": str(e)})
+
+	documents = [
+		{"id": row["name"], "title": row.get("title") or row["artifact_type"], "created": str(row.get("creation") or "")}
+		for row in rows
+		if row.get("artifact_type") in ("document", "markdown")
+	]
+	documents.sort(key=lambda d: d["created"], reverse=True)
+
+	return json.dumps({"success": True, "artifacts": documents})
+
+
 def handle_export_artifact(**kwargs) -> str:
 	"""Export a document Artifact as pdf, docx, or html.
 

@@ -1765,6 +1765,22 @@ FRAPPE_CLOUD_TOOLS = [
 
 DOCUMENT_ARTIFACT_TOOLS = [
 	{
+		"tool_name": "list_document_artifacts",
+		"description": (
+			"List document artifacts (created via <artifact type=\"document\">) in a conversation, "
+			"returning each one's id, title, and creation time. A document artifact's id is not "
+			"known to you at the moment you emit its <artifact> tag - it only exists once that "
+			"message has been saved. Call this tool in a LATER turn to discover the id of a "
+			"document created earlier in the conversation before calling export_artifact or "
+			"redline_artifact on it."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_list_document_artifacts",
+		"category": "Document Tools",
+		"parameters": [
+			_p("conversation_id", required=True, description="The conversation to list document artifacts for"),
+		],
+	},
+	{
 		"tool_name": "export_artifact",
 		"description": (
 			"Export a document artifact (created via <artifact type=\"document\">) as a "
