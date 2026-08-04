@@ -82,27 +82,41 @@ def handle_show_artifact(**kwargs) -> str:
 		artifact that belongs to a different conversation) - never raises.
 	"""
 	artifact_id = (kwargs.get("artifact_id") or "").strip()
-	conversation_id = (kwargs.get("conversation_id") or "").strip()
+	run_conversation_id = (kwargs.get("conversation_id") or "").strip()
 
 	if not artifact_id:
 		return json.dumps({"success": False, "error": "'artifact_id' is required"})
-	if not conversation_id:
-		return json.dumps({"success": False, "error": "'conversation_id' is required"})
 
 	from huf.ai.artifact_api import _check_conversation_access
 
 	try:
-		_check_conversation_access(conversation_id)
-
 		artifact = frappe.get_doc("Artifact", artifact_id)
 
-		# The channel name (conversation:<id>) is guessable, so `user=` on the
-		# publish below is the only access gate on who actually receives the
-		# event - but an artifact belonging to a DIFFERENT conversation must
-		# still be rejected here, so a compromised/confused agent cannot make
-		# the user's own conversation open a pane pointed at someone else's
-		# document merely by having read access to their own conversation.
-		if artifact.conversation != conversation_id:
+		# The conversation is derived from the ARTIFACT, never taken on the
+		# model's word, and is not required in kwargs at all.
+		#
+		# Relying on the injected conversation_id was wrong: _merge_run_context
+		# only reaches handlers on some execution paths, and on the path this
+		# bench actually runs the tool arrived with no conversation_id, so
+		# every call failed with "'conversation_id' is required" - while the
+		# agent cheerfully told the user it had opened the panel. Deriving it
+		# here works on every path and removes a parameter the model would
+		# otherwise have to guess (the sibling list_document_artifacts tool
+		# does ask the model for one, and was observed guessing it wrong).
+		#
+		# This is also the stricter choice: access is checked against the
+		# artifact's OWN conversation, so an agent cannot reach a document
+		# outside conversations this user may read, whatever it passes.
+		conversation_id = artifact.conversation
+		if not conversation_id:
+			return json.dumps({"success": False, "error": "This artifact is not linked to a conversation."})
+
+		_check_conversation_access(conversation_id)
+
+		# When the run context DID supply a conversation, the artifact must
+		# belong to it - an agent running in conversation A should not push a
+		# pane open for the user's unrelated conversation B.
+		if run_conversation_id and artifact.conversation != run_conversation_id:
 			return json.dumps({"success": False, "error": "This artifact does not belong to the current conversation."})
 	except frappe.DoesNotExistError:
 		return json.dumps({"success": False, "error": f"No artifact found with id {artifact_id}"})

@@ -998,6 +998,26 @@ class TestMergeRunContext(IntegrationTestCase):
 		merged = sdk_tools._merge_run_context({}, {"agent_name": "Hub Orchestrator"})
 		self.assertEqual(merged["agent_name"], "Hub Orchestrator")
 
+	def test_blank_llm_value_is_overridden_by_ctx(self):
+		"""A key present but EMPTY must not block injection.
+
+		This was a plain setdefault, which only fills a missing key. Models
+		routinely emit ids they cannot know as "" - observed live: gemini sent
+		{"conversation_id": ""} to list_document_artifacts, setdefault kept the
+		empty string, and the tool failed with "'conversation_id' is required"
+		while the run context held the real id the whole time. Every
+		context-injected tool was exposed, not just the document ones.
+		"""
+		ctx = {"conversation_id": "conv-1", "agent_run_id": "run-1", "agent_name": "Real Agent"}
+
+		for blank in ("", "   ", None):
+			merged = sdk_tools._merge_run_context({"conversation_id": blank}, ctx)
+			self.assertEqual(merged["conversation_id"], "conv-1", f"blank={blank!r}")
+
+		# A real value the model supplied still wins.
+		merged = sdk_tools._merge_run_context({"conversation_id": "conv-explicit"}, ctx)
+		self.assertEqual(merged["conversation_id"], "conv-explicit")
+
 	def test_sdk_toolcontext_wrapping(self):
 		ctx = SimpleNamespace(context={"agent_name": "Hub Orchestrator"})
 		merged = sdk_tools._merge_run_context({"agent_name": "explicit"}, ctx)

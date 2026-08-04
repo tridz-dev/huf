@@ -106,11 +106,23 @@ class TestShowArtifact(unittest.TestCase):
 		self.assertFalse(result["success"])
 		mock_publish.assert_not_called()
 
-	def test_missing_conversation_id_fails_cleanly(self):
-		"""conversation_id is always injected by the run context, but the
-		handler must not assume that and blow up if it is ever absent."""
-		result = json.loads(handle_show_artifact(artifact_id=self.artifact_in_a))
-		self.assertFalse(result["success"])
+	def test_works_without_an_injected_conversation_id(self):
+		"""THE regression. The handler originally required conversation_id,
+		assuming _merge_run_context always supplies it. It does not - on the
+		execution path this bench actually runs, the tool arrived with no
+		conversation_id and every real agent call failed with
+		"'conversation_id' is required" while the agent told the user it had
+		opened the panel. Caught only by driving a real agent turn in a
+		browser; both the unit tests and a direct console call passed,
+		because both happened to pass the argument.
+
+		The conversation is now derived from the artifact, so the tool works
+		on every path with no injection at all."""
+		with mock.patch("frappe.publish_realtime") as mock_publish:
+			result = json.loads(handle_show_artifact(artifact_id=self.artifact_in_a))
+
+		self.assertTrue(result["success"], result)
+		self.assertEqual(mock_publish.call_args.kwargs["event"], f"conversation:{self.conversation_a}")
 
 	# -- success path + user= scoping ---------------------------------------
 
