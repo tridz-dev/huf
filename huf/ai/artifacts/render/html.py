@@ -20,6 +20,7 @@ from huf.ai.artifacts.render.safety import (
 	DEFAULT_HEADING_FONT,
 	DEFAULT_MONO_FONT,
 )
+from huf.ai.artifacts.render.components import components_css
 
 #: Matches a Pandoc-style fenced div marking a multi-column region:
 #:   :::columns-2
@@ -180,6 +181,14 @@ PRINT_STYLESHEET = (
 	.replace("__HEADING_FONT__", DEFAULT_HEADING_FONT)
 	.replace("__MONO_FONT__", DEFAULT_MONO_FONT)
 )
+
+#: Component registry CSS (huf/ai/artifacts/render/components.py) is
+#: appended after the base rules above so the PDF stylesheet and the
+#: browser preview both render document components (doc-header, callout,
+#: metric-grid, split, data-table, etc.) with the exact same CSS the DOCX
+#: renderer's recipes are keyed against - one registry, not two drifting
+#: definitions.
+PRINT_STYLESHEET = PRINT_STYLESHEET + "\n" + components_css()
 
 
 def _render_markdown(source: str) -> str:
