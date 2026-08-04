@@ -345,7 +345,6 @@ export function AgentFormPage() {
   const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
   const [triggerFilter, setTriggerFilter] = useState<string>('all');
   const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
-  const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showToolFormModal, setShowToolFormModal] = useState(false);
   const [editingToolId, setEditingToolId] = useState<string | null>(null);
@@ -1933,18 +1932,6 @@ export function AgentFormPage() {
     isSubmitting: saving,
   });
 
-  const handleOptimizePrompt = () => {
-    setOptimizingPrompt((value) => value);
-    toast.info('Coming Soon!');
-    // setOptimizingPrompt(true);
-    // setTimeout(() => {
-    //   const currentInstructions = form.getValues('instructions');
-    //   const optimized = `${currentInstructions}\n\n[Optimized by AI]\n- Enhanced clarity and structure\n- Added specific examples\n- Improved constraint definition`;
-    //   form.setValue('instructions', optimized);
-    //   setOptimizingPrompt(false);
-    //   toast.success('Prompt optimized successfully!');
-    // }, 2000);
-  };
 
   const [runningTest, setRunningTest] = useState(false);
 
@@ -2431,8 +2418,6 @@ export function AgentFormPage() {
                   providers={providers}
                   models={models}
                   watchProvider={watchProvider}
-                  optimizingPrompt={optimizingPrompt}
-                  onOptimizePrompt={handleOptimizePrompt}
                   promptOptions={promptOptions}
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt

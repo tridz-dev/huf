@@ -5,32 +5,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { UseFormReturn, ControllerRenderProps, FieldValues } from 'react-hook-form';
-import { cn } from '@/lib/utils';
 
 interface InstructionsTextareaProps<TFieldValues extends FieldValues = FieldValues> {
-  // Form mode props
   form?: UseFormReturn<TFieldValues>;
   field?: ControllerRenderProps<TFieldValues>;
-  
-  // Standalone mode props
   value?: string;
   onChange?: (value: string) => void;
-  
-  // Common props
   placeholder?: string;
   className?: string;
-  optimizingPrompt?: boolean;
-  onOptimizePrompt?: () => void;
-  showOptimize?: boolean;
   showExpand?: boolean;
   onExpand?: () => void;
-  /** Force the textarea read-only (e.g. locked system agent). */
   disabled?: boolean;
-  // Modal props
   modalTitle?: string;
+  modalDescription?: string;
   modalOpen?: boolean;
   onModalOpenChange?: (open: boolean) => void;
-  // Internal prop to force standalone mode (used in modal)
   _isInModal?: boolean;
 }
 
@@ -39,15 +28,13 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
   field,
   value: controlledValue,
   onChange: controlledOnChange,
-  placeholder = "Define system prompt, goals, constraints...",
-  className = "min-h-[300px] font-mono resize-y",
-  optimizingPrompt = false,
-  onOptimizePrompt,
-  showOptimize = true,
+  placeholder = 'Define system prompt, goals, constraints...',
+  className = 'min-h-[300px] font-mono resize-y',
   showExpand = true,
   onExpand,
   disabled = false,
-  modalTitle = "Instructions",
+  modalTitle = 'Instructions',
+  modalDescription = 'Define system prompt, goals, and constraints',
   modalOpen: externalModalOpen,
   onModalOpenChange: externalOnModalOpenChange,
   _isInModal = false,
@@ -55,26 +42,21 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
   const [internalModalOpen, setInternalModalOpen] = useState(false);
   const [modalValue, setModalValue] = useState('');
 
-  // Determine if we're in form mode or standalone mode
-  // Force standalone mode if we're inside the modal
   const isFormMode = !_isInModal && !!form && !!field;
   const isControlled = !isFormMode && controlledValue !== undefined;
 
-  // Modal state management
   const isModalControlled = externalModalOpen !== undefined;
   const modalOpen = isModalControlled ? externalModalOpen : internalModalOpen;
-  const setModalOpen = isModalControlled 
+  const setModalOpen = isModalControlled
     ? (open: boolean) => externalOnModalOpenChange?.(open)
     : setInternalModalOpen;
 
-  // Get current value
-  const currentValue = isFormMode 
-    ? (field?.value as string | undefined) || '' 
-    : isControlled 
-    ? controlledValue 
-    : '';
+  const currentValue = isFormMode
+    ? (field?.value as string | undefined) || ''
+    : isControlled
+      ? controlledValue
+      : '';
 
-  // Handle value changes
   const handleChange = (newValue: string) => {
     if (isFormMode && field) {
       field.onChange(newValue);
@@ -83,7 +65,6 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
     }
   };
 
-  // Handle expand (open modal)
   const handleExpand = () => {
     if (onExpand) {
       onExpand();
@@ -93,20 +74,17 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
     }
   };
 
-  // Handle update from modal
   const handleUpdateFromModal = () => {
     handleChange(modalValue);
     setModalOpen(false);
   };
 
-  // Sync modal value when modal opens
   useEffect(() => {
     if (modalOpen) {
       setModalValue(currentValue);
     }
   }, [modalOpen, currentValue]);
 
-  // Textarea component
   const textareaElement = (
     <Textarea
       placeholder={placeholder}
@@ -116,34 +94,12 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
       disabled={disabled || (isFormMode ? field?.disabled : false)}
     />
   );
-  
+
   return (
     <>
       <div className="relative">
-        {isFormMode ? (
-          <FormControl>
-            {textareaElement}
-          </FormControl>
-        ) : (
-          textareaElement
-        )}
-        
-        {/* Action buttons */}
-        <div className={cn("absolute right-4 flex gap-2",isFormMode ? "top-4" : "top-2")}>
-          {/* {showOptimize && onOptimizePrompt && (
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              onClick={onOptimizePrompt}
-              disabled={optimizingPrompt}
-            >
-              <Sparkles className="w-4 h-4 mr-2" />
-              {optimizingPrompt ? 'Optimizing...' : 'Optimize'}
-            </Button>
-          )} */}
-        </div>
-        
+        {isFormMode ? <FormControl>{textareaElement}</FormControl> : textareaElement}
+
         {showExpand && !modalOpen && (
           <div className="absolute right-4 bottom-4 z-10">
             <Button
@@ -159,12 +115,11 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
         )}
       </div>
 
-      {/* Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="w-full min-w-0 max-h-[90vh] sm:max-w-[95vw] flex flex-col">
           <DialogHeader>
             <DialogTitle>{modalTitle}</DialogTitle>
-            <DialogDescription>Define system prompt, goals, and constraints</DialogDescription>
+            <DialogDescription>{modalDescription}</DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-auto py-4 min-h-0">
             <InstructionsTextarea
@@ -172,11 +127,9 @@ export function InstructionsTextarea<TFieldValues extends FieldValues = FieldVal
               onChange={setModalValue}
               placeholder={placeholder}
               className="min-h-[60vh] font-mono resize-y w-[calc(100%-2px)] mx-auto"
-              optimizingPrompt={optimizingPrompt}
-              onOptimizePrompt={onOptimizePrompt}
-              showOptimize={showOptimize}
               showExpand={false}
-              _isInModal={true}
+              modalDescription={modalDescription}
+              _isInModal
             />
           </div>
           <DialogFooter>

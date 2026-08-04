@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoreVertical, Save, Trash2, Copy, GitFork } from 'lucide-react';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
-import { InstructionsTextarea } from '@/components/agent/InstructionsTextarea';
+import { InstructionsTextarea } from '@/components/InstructionsTextarea';
 import { AgentPromptNewVersionDialog } from '@/components/agent/AgentPromptNewVersionDialog';
 import {
   createAgentSummaryPrompt,
@@ -575,7 +575,6 @@ export function AgentSummaryPromptFormPage() {
                   onChange={(value) => form.setValue('prompt_body', value, { shouldDirty: true })}
                   placeholder="Write the summary prompt here. Use {summary_data} as a placeholder for the JSON input."
                   className="min-h-[340px] font-mono resize-y"
-                  showOptimize={false}
                   showExpand
                 />
               </CardContent>

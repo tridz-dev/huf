@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { InstructionsTextarea } from '@/components/InstructionsTextarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -668,13 +669,15 @@ export function SkillFormPage() {
                       render={({ field }) => (
                         <FormItem className="sm:col-span-2">
                           <FormLabel>Instructions</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="System prompt text injected when this skill is loaded"
-                              className="min-h-[160px] resize-y"
-                              {...field}
-                            />
-                          </FormControl>
+                          <InstructionsTextarea
+                            form={form}
+                            field={field}
+                            placeholder="System prompt text injected when this skill is loaded"
+                            className="min-h-[160px] font-mono resize-y"
+                            modalTitle="Skill Instructions"
+                            modalDescription="System prompt text injected when this skill is loaded"
+                            showExpand
+                          />
                           <FormMessage />
                         </FormItem>
                       )}

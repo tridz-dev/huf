@@ -12,7 +12,7 @@ import { AlertTriangle } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
-import { InstructionsTextarea } from './InstructionsTextarea';
+import { InstructionsTextarea } from '@/components/InstructionsTextarea';
 import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateSection';
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
@@ -23,8 +23,6 @@ interface GeneralTabProps {
   providers: AIProvider[];
   models: AIModel[];
   watchProvider: string;
-  optimizingPrompt: boolean;
-  onOptimizePrompt: () => void;
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
   showAddNewPrompt?: boolean;
@@ -37,8 +35,6 @@ export function GeneralTab({
   providers,
   models,
   watchProvider,
-  optimizingPrompt,
-  onOptimizePrompt,
   promptOptions,
   loadingPrompts,
   showAddNewPrompt = true,
@@ -288,10 +284,7 @@ We generally recommend altering this or temperature but not both.`}
                   <InstructionsTextarea
                     form={form}
                     field={field}
-                    optimizingPrompt={optimizingPrompt}
-                    onOptimizePrompt={onOptimizePrompt}
-                    showOptimize={true}
-                    showExpand={true}
+                    showExpand
                     disabled={locked}
                   />
                   <FormDescription>
