@@ -45,6 +45,7 @@ export function ChatMessageList({
 
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
+    const [activePendingKey, setActivePendingKey] = useState<string | null>(null);
     const [loadingType, setLoadingType] = useState<LoadingType>('default');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
@@ -480,6 +481,7 @@ export function ChatMessageList({
                                     agentColor={agentColor}
                                     showToolExecutionDetails={showToolExecutionDetails}
                                     status={status}
+                                    activePendingKey={activePendingKey}
                                     loadingType={loadingType}
                                     onFeedback={handleFeedback}
                                     scrollToBottomAfterPaint={scrollToBottomAfterPaint}
@@ -496,6 +498,7 @@ export function ChatMessageList({
                 agentName={agentName}
                 onConversationCreated={onConversationCreated}
                 onStatusChange={setStatus}
+                onActivePendingKeyChange={setActivePendingKey}
                 onLoadingTypeChange={setLoadingType}
                 isCreatingConversationRef={isCreatingConversationRef}
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}

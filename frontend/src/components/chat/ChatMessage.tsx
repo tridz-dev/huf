@@ -52,6 +52,7 @@ interface ChatMessageProps {
     agentColor: string | null;
     showToolExecutionDetails?: boolean;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
+    activePendingKey?: string | null;
     loadingType?: LoadingType;
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
     scrollToBottomAfterPaint: (instant?: boolean) => void;
@@ -63,6 +64,7 @@ export function ChatMessage({
     agentColor,
     showToolExecutionDetails = true,
     status,
+    activePendingKey = null,
     loadingType = 'default',
     onFeedback,
     scrollToBottomAfterPaint,
@@ -79,7 +81,7 @@ export function ChatMessage({
     );
 
     const showLoading = isAssistant && !message.error && (
-        ((status === 'submitted' || status === 'streaming') && isEmpty) ||
+        (message.key === activePendingKey && (status === 'submitted' || status === 'streaming') && isEmpty) ||
         message.runStatus === 'Queued' ||
         message.runStatus === 'Started'
     );

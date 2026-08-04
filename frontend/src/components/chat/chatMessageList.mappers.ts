@@ -69,6 +69,25 @@ function safeStringify(value: unknown): string {
   }
 }
 
+function isEmptyAssistantContent(message: MessageType): boolean {
+  const content = message.versions[0]?.content ?? '';
+  return !content.trim();
+}
+
+/** Find a client-side temp assistant bubble that can be rekeyed to an agent run id. */
+export function findReconcilableTempAssistant(prev: MessageType[]): number {
+  for (let i = prev.length - 1; i >= 0; i--) {
+    const msg = prev[i];
+    if (msg.from !== 'assistant') continue;
+    if (msg.runStatus) continue;
+    if (!isEmptyAssistantContent(msg)) continue;
+    if (msg.key.startsWith('assistant-') || !msg.agentRunId) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCallEvent | Record<string, unknown>): MessageType[] {
   const event = normalizeToolCallEvent(
     typeof rawEvent?.type === 'string' ? (rawEvent as Record<string, unknown>) : (rawEvent as Record<string, unknown>)
@@ -133,6 +152,26 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
   if (!event.agent_run_id) return prev;
 
   const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
+  const tempIndex = findReconcilableTempAssistant(prev);
+  if (tempIndex >= 0) {
+    const updated = [...prev];
+    const existing = updated[tempIndex];
+    updated[tempIndex] = {
+      ...existing,
+      key: event.agent_run_id,
+      agentRunId: event.agent_run_id,
+      kind: isImageGeneration ? 'Image' : existing.kind,
+      versions: [
+        {
+          id: event.message_id || event.agent_run_id,
+          content: existing.versions[0]?.content ?? '',
+        },
+      ],
+      tools: [updatedTool],
+    };
+    return updated;
+  }
+
   const newMessage: MessageType = {
     key: event.agent_run_id,
     from: 'assistant',
@@ -204,6 +243,18 @@ export function upsertAgentRunStatusFromSocket(
         ...updated[runIndex],
         runStatus: event.status,
         agentRunId: event.agent_run_id || updated[runIndex].agentRunId,
+      };
+      return updated;
+    }
+    const tempIndex = findReconcilableTempAssistant(prev);
+    if (tempIndex >= 0) {
+      const updated = [...prev];
+      updated[tempIndex] = {
+        ...updated[tempIndex],
+        key: event.agent_run_id,
+        runStatus: event.status,
+        agentRunId: event.agent_run_id,
+        versions: [{ id: event.agent_run_id, content: '' }],
       };
       return updated;
     }

@@ -29,11 +29,33 @@ export type LoadingType = 'default' | 'transcribing';
  */
 const RUN_RESPONSE_TIMEOUT_MS = 180_000;
 
+function rekeyAssistantToRunId(
+  prev: MessageType[],
+  assistantMessageId: string,
+  agentRunId: string,
+): MessageType[] {
+  if (prev.some((msg) => msg.key === agentRunId)) {
+    return prev.filter((msg) => msg.key !== assistantMessageId);
+  }
+  return prev.map((msg) =>
+    msg.key === assistantMessageId
+      ? {
+          ...msg,
+          key: agentRunId,
+          runStatus: 'Queued' as const,
+          agentRunId,
+          versions: [{ id: agentRunId, content: '' }],
+        }
+      : msg,
+  );
+}
+
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
+    onActivePendingKeyChange?: (key: string | null) => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
@@ -62,6 +84,7 @@ export function ChatInput({
     agentName,
     onConversationCreated,
     onStatusChange,
+    onActivePendingKeyChange,
     onLoadingTypeChange,
     isCreatingConversationRef,
     newlyCreatedConversationIdRef,
@@ -116,6 +139,7 @@ export function ChatInput({
             }
             runTimedOutRef.current = true;
             onStatusChange('error');
+            onActivePendingKeyChange?.(null);
             setMessages((prev) =>
                 prev.map((msg) =>
                     msg.key === assistantKey && !msg.runStatus
@@ -329,6 +353,7 @@ export function ChatInput({
                 ...prev,
                 { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
             ]);
+            onActivePendingKeyChange?.(assistantMessageId);
 
             const updateAssistantContent = (content: string) => {
                 setMessages((prev) =>
@@ -417,19 +442,15 @@ export function ChatInput({
                 );
                 if (queued && agentRunId) {
                     linkUserMessageToRun(userMessageKey, agentRunId);
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.key === assistantMessageId
-                                ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
-                                : msg
-                        )
-                    );
+                    setMessages((prev) => rekeyAssistantToRunId(prev, assistantMessageId, agentRunId));
+                    onActivePendingKeyChange?.(agentRunId);
                 }
 
                 if (agentMessageId && !queued) {
                     syncAssistantMessageId(assistantKey, agentMessageId);
                 }
                 onStatusChange('ready');
+                onActivePendingKeyChange?.(null);
                 if (conversationId && onConversationCreated) {
                     newlyCreatedConversationIdRef.current = conversationId;
                     cacheAgentNameForChat(conversationId, agentName);
@@ -447,6 +468,7 @@ export function ChatInput({
                 if (streamingAvailable) setStreamingAvailable(false);
                 isCreatingConversationRef.current = false;
                 onStatusChange('error');
+                onActivePendingKeyChange?.(null);
                 const errorText = error instanceof Error ? error.message : 'Failed to send file';
                 if (runPhase) {
                     // The file was accepted; the run itself failed — show an
@@ -492,6 +514,7 @@ export function ChatInput({
             ...prev,
             { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
         ]);
+        onActivePendingKeyChange?.(assistantMessageId);
 
         const updateAssistantContent = (content: string) => {
             setMessages((prev) =>
@@ -539,18 +562,14 @@ export function ChatInput({
             );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
-                setMessages((prev) =>
-                    prev.map((msg) =>
-                        msg.key === assistantMessageId
-                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
-                            : msg
-                    )
-                );
+                setMessages((prev) => rekeyAssistantToRunId(prev, assistantMessageId, agentRunId));
+                onActivePendingKeyChange?.(agentRunId);
             }
             if (agentMessageId && !queued) {
                 syncAssistantMessageId(assistantKey, agentMessageId);
             }
             onStatusChange('ready');
+            onActivePendingKeyChange?.(null);
             if (conversationId && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = conversationId;
                 cacheAgentNameForChat(conversationId, agentName);
@@ -564,6 +583,7 @@ export function ChatInput({
             if (streamingAvailable) setStreamingAvailable(false);
             isCreatingConversationRef.current = false;
             onStatusChange('error');
+            onActivePendingKeyChange?.(null);
             const errorText = error instanceof Error ? error.message : 'An error occurred';
             if (!runTimedOutRef.current) {
                 // Replace the pending bubble with an error card (never a fake
@@ -597,12 +617,14 @@ export function ChatInput({
             ...prev,
             { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
         ]);
+        onActivePendingKeyChange?.(assistantMessageId);
         onStatusChange('submitted');
         onLoadingTypeChange?.('transcribing');
 
         const failTranscription = (title: string, description: string): never => {
             setMessages((prev) => prev.filter((m) => m.key !== assistantMessageId));
             onStatusChange('error');
+            onActivePendingKeyChange?.(null);
             onLoadingTypeChange?.('default');
             isCreatingConversationRef.current = false;
             toast.error(title, { description });
@@ -699,18 +721,14 @@ export function ChatInput({
             );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
-                setMessages((prev) =>
-                    prev.map((msg) =>
-                        msg.key === assistantMessageId
-                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
-                            : msg
-                    )
-                );
+                setMessages((prev) => rekeyAssistantToRunId(prev, assistantMessageId, agentRunId));
+                onActivePendingKeyChange?.(agentRunId);
             }
             if (agentMessageId && !queued) {
                 syncAssistantMessageId(currentAssistantKey, agentMessageId);
             }
             onStatusChange('ready');
+            onActivePendingKeyChange?.(null);
             if (res?.conversation_id && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = res.conversation_id;
                 cacheAgentNameForChat(res.conversation_id, agentName);
@@ -720,6 +738,7 @@ export function ChatInput({
         } catch (agentErr) {
             isCreatingConversationRef.current = false;
             onStatusChange('error');
+            onActivePendingKeyChange?.(null);
             const agentErrorText = agentErr instanceof Error ? agentErr.message : 'An error occurred';
             if (!runTimedOutRef.current) {
                 markAssistantError(currentAssistantKey, agentErrorText);

@@ -4,6 +4,7 @@ import {
   mergeConversationItemsIntoMessages,
   mergePendingRunsIntoMessages,
   upsertAgentRunStatusFromSocket,
+  upsertToolUpdateFromSocket,
 } from './chatMessageList.mappers';
 import type { MessageType } from './types';
 import type { ChatMessage, PendingConversationRun } from '@/services/chatApi';
@@ -103,6 +104,60 @@ describe('upsertAgentRunStatusFromSocket', () => {
       status: 'success',
     });
     expect(next).toBe(prev);
+  });
+
+  it('rekeys a temp assistant bubble on Queued instead of appending', () => {
+    const prev: MessageType[] = [
+      {
+        key: 'assistant-123',
+        from: 'assistant',
+        versions: [{ id: 'assistant-123', content: '' }],
+      },
+    ];
+    const next = upsertAgentRunStatusFromSocket(prev, {
+      type: 'agent_run_status',
+      agent_run_id: 'AR-1',
+      conversation_id: 'CONV-1',
+      status: 'Queued',
+    });
+    expect(next).toHaveLength(1);
+    expect(next[0].key).toBe('AR-1');
+    expect(next[0].runStatus).toBe('Queued');
+  });
+
+  it('updates an existing run-keyed bubble on Queued without duplicating', () => {
+    const prev: MessageType[] = [pendingRun('AR-1')];
+    const next = upsertAgentRunStatusFromSocket(prev, {
+      type: 'agent_run_status',
+      agent_run_id: 'AR-1',
+      conversation_id: 'CONV-1',
+      status: 'Queued',
+    });
+    expect(next).toHaveLength(1);
+    expect(next[0].runStatus).toBe('Queued');
+  });
+});
+
+describe('upsertToolUpdateFromSocket', () => {
+  it('rekeys a temp assistant bubble when a tool event arrives', () => {
+    const prev: MessageType[] = [
+      {
+        key: 'assistant-456',
+        from: 'assistant',
+        versions: [{ id: 'assistant-456', content: '' }],
+      },
+    ];
+    const next = upsertToolUpdateFromSocket(prev, {
+      type: 'tool_call_started',
+      agent_run_id: 'AR-2',
+      conversation_id: 'CONV-1',
+      tool_call_id: 'tc-1',
+      tool_name: 'get_list',
+      tool_status: 'Queued',
+    });
+    expect(next).toHaveLength(1);
+    expect(next[0].key).toBe('AR-2');
+    expect(next[0].tools).toHaveLength(1);
   });
 });
 
