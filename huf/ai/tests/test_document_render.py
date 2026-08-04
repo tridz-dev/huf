@@ -239,6 +239,49 @@ class TestDocxExport(unittest.TestCase):
 		body = _docx_part(html_to_docx(html), "word/document.xml")
 		self.assertIn('w:type="page"', body)
 
+	def test_split_is_linearised_not_nested(self):
+		"""DOCX carries content, the PDF carries the design. A .split mapped
+		to a two-column table put a data-table inside a table cell, and Word
+		clipped the inner table's last column mid-word while the sidebar
+		painted over it. The sidebar now flows below the main content."""
+		html = render_document_html(
+			'<div class="split">'
+			'<section class="split-main"><table class="data-table">'
+			"<tr><th>Pillar</th><th>Status</th></tr><tr><td>Cloud</td><td>Live</td></tr>"
+			"</table></section>"
+			'<aside class="split-side"><h3>Key Snapshot</h3><p>Enterprise Tech</p></aside>'
+			"</div>",
+			language="html",
+		)
+		body = _docx_part(html_to_docx(html), "word/document.xml")
+
+		self.assertNotIn("<w:tbl>", body.split("<w:tbl>", 1)[1].split("</w:tbl>", 1)[0])
+		self.assertIn("Key Snapshot", body)
+		self.assertIn("Enterprise Tech", body)
+
+	def test_tables_have_fixed_widths(self):
+		"""Autofit let an inner table compute a width wider than its
+		container, which is what Word clipped."""
+		html = render_document_html(
+			'<table class="data-table"><tr><th>A</th><th>B</th></tr></table>', language="html"
+		)
+		body = _docx_part(html_to_docx(html), "word/document.xml")
+
+		self.assertEqual(body.count("<w:tbl>"), body.count('w:type="fixed"'))
+
+	def test_headings_take_the_theme_colour(self):
+		"""Word's built-in Heading styles carry their own blue, so a themed
+		document came out with a correct brand colour and blue headings -
+		reading as though the theme had not applied at all."""
+		html = render_document_html(
+			"<style>:root { --ink: #121212; }</style>"
+			'<h1 class="doc-title">Title</h1><h3>Section</h3>',
+			language="html",
+		)
+		body = _docx_part(html_to_docx(html), "word/document.xml")
+
+		self.assertIn('w:val="121212"', body)
+
 	def test_status_badge_text_is_not_dropped(self):
 		"""Plain-table cells assigned cell.text from a block-filtered walk,
 		so an inline badge inside a table cell was discarded entirely."""

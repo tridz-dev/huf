@@ -44,7 +44,7 @@ from docx.enum.section import WD_SECTION
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Inches, Pt, RGBColor
+from docx.shared import Cm, Emu, Inches, Pt, RGBColor
 
 from huf.ai.artifacts.render.components import COMPONENTS, COMPONENT_CLASSES, THEME, resolve_theme_token
 
@@ -62,6 +62,14 @@ _INDENTS = {
 	"indent-2": 2,
 	"indent-3": 3,
 }
+
+#: Fallback content width (A4, 2cm margins - 21cm - 4cm = 17cm), used only if
+#: a table is ever built without the real value threaded through
+#: theme["_content_width_emu"] (see html_to_docx / _document_content_width_emu).
+#: html_to_docx always sets that key before rendering anything, so this is a
+#: defensive last resort, not the normal path - the normal path reads the
+#: Document's actual section geometry rather than hardcoding a page size.
+_FALLBACK_CONTENT_WIDTH_EMU = Cm(17)
 
 #: Block-level tags that terminate the "current" node when closed. Everything
 #: else (inline tags, and stray tags outside the sanitized vocabulary) is
@@ -425,6 +433,7 @@ def _add_table(container, table_node: _Node, theme: dict):
 	num_cols = max(len(row) for row in rows)
 	table = container.add_table(rows=len(rows), cols=num_cols)
 	table.style = "Table Grid"
+	_set_table_widths(table, theme)
 
 	for row_index, row in enumerate(rows):
 		for col_index, cell_node in enumerate(row):
@@ -475,7 +484,16 @@ def _render_node(container, node: _Node, theme: dict) -> None:
 
 	if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
 		level = int(tag[1])
-		_add_heading(container, node.full_text, level)
+		paragraph = _add_heading(container, node.full_text, level)
+		# Plain (non-component) heading tags used to land in Word's built-in
+		# Heading-style blue exactly like doc-title before the fix in
+		# _render_heading_recipe - observed in production for ordinary
+		# <h2>/<h3> tags authored inside a .split (e.g. "Core Strategic
+		# Pillars", "Key Snapshot"), which never carry a registry component
+		# class at all. The PDF's base stylesheet sets no heading colour, so
+		# headings there simply inherit the body's --ink colour; applying
+		# theme["ink"] here matches that instead of Word's template default.
+		_color_heading_runs(paragraph, theme["ink"])
 	elif tag == "p":
 		if node.children and all(child.tag == "img" for child in node.children) and not node.full_text:
 			for child in node.children:
@@ -598,6 +616,8 @@ def _render_component(container, node: _Node, class_name: str, recipe: dict, the
 		_render_paragraph_recipe(container, node, recipe, theme)
 	elif kind == "heading":
 		_render_heading_recipe(container, node, recipe, theme)
+	elif kind == "passthrough":
+		_render_passthrough_recipe(container, node, theme)
 	elif kind == "page_break":
 		_render_page_break_recipe(container, node, recipe)
 	elif kind == "footer":
@@ -652,10 +672,7 @@ def _render_synthetic_table(container, node: _Node, recipe: dict, theme: dict) -
 
 	table = container.add_table(rows=1, cols=cols)
 	_set_table_borders(table, recipe.get("borders", True))
-
-	widths = recipe.get("widths")
-	if widths:
-		_set_column_widths(table, widths)
+	_set_table_widths(table, theme, recipe.get("widths"))
 
 	shading = recipe.get("shading")
 	col_align = recipe.get("col_align")
@@ -710,6 +727,7 @@ def _render_metric_grid(container, node: _Node, recipe: dict, theme: dict) -> No
 	cols = 2
 	rows = (len(metrics) + cols - 1) // cols
 	table = container.add_table(rows=rows, cols=cols)
+	_set_table_widths(table, theme)
 
 	for index, metric_node in enumerate(metrics):
 		row_index, col_index = divmod(index, cols)
@@ -784,6 +802,32 @@ def _render_metric_value_cell(container, node: _Node, recipe: dict, theme: dict)
 			label_run.font.color.rgb = _rgb_color(resolve_theme_token(label_color, theme))
 
 
+def _render_passthrough_recipe(container, node: _Node, theme: dict) -> None:
+	"""type: "passthrough" (split, split-main). Renders the node's children
+	directly into `container`, in document order, adding NO table/cell/
+	wrapper of its own - this is what linearises a .split (a CSS grid in the
+	PDF - see components.py's "split" comment) into a single flowing column
+	in Word: main content followed by the sidebar block, one after another,
+	instead of a two-column table that let a nested data-table overflow its
+	cell and get clipped.
+
+	Walks `_ordered_parts` (the same ordering machinery `_all_descendant_text`
+	uses) rather than `node.children` alone, so text sitting directly on the
+	node itself - not inside a child element, e.g.
+	``<div class="split">intro text<div class="split-side">...</div></div>``
+	- is rendered as its own paragraph in the right position instead of
+	silently disappearing (a bare _Node.children walk would only see the
+	``split-side`` child and drop "intro text" entirely).
+	"""
+	for kind, value in node._ordered_parts:
+		if kind == "text":
+			text = value.strip()
+			if text:
+				container.add_paragraph(text)
+		else:
+			_render_node(container, value, theme)
+
+
 def _render_run_recipe(container, node: _Node, recipe: dict, theme: dict) -> None:
 	"""type: "run" (brand, status-badge). A single run in its own paragraph,
 	optionally bold/coloured/shaded/sized.
@@ -823,8 +867,29 @@ def _render_paragraph_recipe(container, node: _Node, recipe: dict, theme: dict) 
 
 
 def _render_heading_recipe(container, node: _Node, recipe: dict, theme: dict) -> None:
-	"""type: "heading" (doc-title)."""
-	_add_heading(container, node.full_text, recipe.get("level", 1))
+	"""type: "heading" (doc-title). Word's built-in Heading/Title styles
+	carry their OWN colour (a blue that belongs to the default template, not
+	to this document) - see components.py's "doc-title" comment: a themed
+	document's brand line took the theme colour while its title stayed
+	stubbornly Word-blue. An optional "color" key, resolved through
+	resolve_theme_token exactly like every other recipe colour, is applied
+	to the run(s) here instead of being left to the built-in style.
+	"""
+	paragraph = _add_heading(container, node.full_text, recipe.get("level", 1))
+	color = recipe.get("color")
+	if color:
+		_color_heading_runs(paragraph, resolve_theme_token(color, theme))
+
+
+def _color_heading_runs(paragraph, hex_color: str) -> None:
+	"""Set an explicit colour on every run of a heading paragraph, so it
+	overrides whichever built-in Heading/Title style Word would otherwise
+	paint blue. `add_paragraph(text, style=...)` puts the whole string into
+	a single run today, but this loops rather than assuming exactly one run
+	exists, in case a future heading ever carries mixed-run content.
+	"""
+	for run in paragraph.runs:
+		run.font.color.rgb = _rgb_color(hex_color)
 
 
 def _render_page_break_recipe(container, node: _Node, recipe: dict) -> None:
@@ -984,18 +1049,58 @@ def _set_table_borders(table, visible: bool) -> None:
 	tbl_pr.append(borders)
 
 
-def _set_column_widths(table, ratios: list[float]) -> None:
-	"""Apply proportional column widths (e.g. split's [0.66, 0.34]) against
-	a fixed 6" reference width. Word requires the width to be set on both
-	the column AND every cell in it for a fixed-width table to render
-	correctly - setting only one is a well-known python-docx gotcha.
+def _set_table_widths(table, theme: dict, ratios: list[float] | None = None) -> None:
+	"""Disable autofit and give a table explicit widths that sum to the
+	page's available content width.
+
+	Observed failure: python-docx leaves a freshly created table's autofit
+	ON, so an unconstrained table (a data-table nested in a .split cell, in
+	the case actually seen) computed a width wider than its container and
+	Word clipped the final column mid-word while the sidebar painted over
+	the top of it. The split is linearised now (see the "passthrough"
+	recipe type), but the same autofit default risks the same overflow for
+	ANY table this renderer builds - data-table, synthetic tables
+	(doc-header/callout/split-side), and the metric-grid alike - so every
+	call site sets widths here rather than patching just the one case that
+	was observed.
+
+	`ratios` (e.g. doc-header's implicit 2 equal columns, or a future
+	recipe's [0.66, 0.34]) are honoured when a recipe supplies them;
+	otherwise the content width is split evenly across the table's actual
+	column count. Word also requires the width to be set on both the
+	column AND every cell in that column for a fixed layout to stick -
+	setting only one is a well-known python-docx gotcha.
 	"""
+	# `table.autofit = False` (python-docx) already gets-or-adds the
+	# <w:tblLayout> element and sets w:type="fixed" on it - a second,
+	# manually-created <w:tblLayout> here would be a duplicate, schema-
+	# invalid child of <w:tblPr> (CT_TblPrBase permits exactly one), so this
+	# relies on the setter rather than also emitting the element by hand.
 	table.autofit = False
-	reference_width = 6.0
-	for index, ratio in enumerate(ratios):
-		width = Inches(reference_width * ratio)
-		if index < len(table.columns):
-			table.columns[index].width = width
+
+	num_cols = len(table.columns)
+	if not num_cols:
+		return
+
+	content_width = theme.get("_content_width_emu") or _FALLBACK_CONTENT_WIDTH_EMU
+
+	if ratios:
+		col_widths = [Emu(int(content_width * ratio)) for ratio in ratios]
+		# Defensive padding: a recipe's ratio list and the table's real
+		# column count could disagree (e.g. overflow bucketing in
+		# _render_synthetic_table put more logical children than "cols" into
+		# the last physical cell, but never changes the physical column
+		# count) - repeat the last ratio's width rather than leaving a
+		# column with no explicit width at all.
+		while len(col_widths) < num_cols:
+			col_widths.append(col_widths[-1])
+	else:
+		equal_width = Emu(content_width // num_cols)
+		col_widths = [equal_width] * num_cols
+
+	for index in range(num_cols):
+		width = col_widths[index]
+		table.columns[index].width = width
 		for row in table.rows:
 			if index < len(row.cells):
 				row.cells[index].width = width
@@ -1014,6 +1119,21 @@ def _clear_cell(cell) -> None:
 	if len(cell.paragraphs) == 1 and not paragraph.runs and not paragraph.text:
 		element = paragraph._p
 		element.getparent().remove(element)
+
+
+def _document_content_width_emu(doc) -> int:
+	"""EMU width of `doc`'s printable content area: page width minus the
+	first section's left/right margins, read from the section's actual
+	geometry rather than hardcoded - a template change (or any page size
+	other than the current default) is honoured automatically. Computed
+	once in html_to_docx and threaded through every render call via
+	theme["_content_width_emu"] (the same vehicle already used to thread
+	the document's colour palette everywhere), since only the top-level
+	Document object can see section geometry - a table nested inside a
+	cell has no way to ask "how wide is the page" on its own.
+	"""
+	section = doc.sections[0]
+	return section.page_width - section.left_margin - section.right_margin
 
 
 def html_to_docx(html: str) -> bytes:
@@ -1041,6 +1161,11 @@ def html_to_docx(html: str) -> bytes:
 	# only tags from the sanitized vocabulary open nodes, so non-body content
 	# (title, style rules) never produces nodes under root.
 	doc = Document()
+	# See _document_content_width_emu - stashed on theme (already threaded
+	# to every _render_node/recipe call) rather than added as a new
+	# parameter to every one of those functions, since the whole document
+	# shares one content width just like it shares one palette.
+	theme["_content_width_emu"] = _document_content_width_emu(doc)
 
 	for node in builder.root.children:
 		_render_node(doc, node, theme)

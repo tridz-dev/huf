@@ -146,7 +146,13 @@ COMPONENTS = {
 	margin-bottom: 0.1em;
 }
 """,
-		"docx": {"type": "heading", "level": 1},
+		# Word's built-in Heading styles carry their OWN colour (a blue that
+		# belongs to the default template, not to this document). A themed
+		# document therefore came out with a correctly-coloured brand and
+		# stubbornly blue headings, which read as "the theme did not apply".
+		# The colour is set explicitly on the run instead - matching the PDF,
+		# where headings simply inherit the body colour.
+		"docx": {"type": "heading", "level": 1, "color": "var(--ink)"},
 	},
 	"doc-subtitle": {
 		"css": """
@@ -252,7 +258,18 @@ COMPONENTS = {
 	margin: 12pt 0;
 }
 """,
-		"docx": {"type": "table", "cols": 2, "borders": False, "widths": [0.66, 0.34]},
+		# LINEARISED in Word, deliberately, rather than mapped to a two-column
+		# table. A nested data-table inside a split cell overflowed the cell it
+		# sat in - python-docx leaves autofit on, so the inner table computed a
+		# width wider than its container and Word clipped the last column
+		# mid-word while the sidebar painted over the top of it.
+		#
+		# Fixing the widths would have produced a cramped two-column imitation
+		# of a web layout. A Word document that flows in a single column reads
+		# as deliberate; one that half-imitates a grid reads as broken. So the
+		# sidebar drops BELOW the main content instead, and the PDF remains the
+		# format that carries the designed layout.
+		"docx": {"type": "passthrough"},
 	},
 	"split-main": {
 		"css": """
@@ -260,7 +277,7 @@ COMPONENTS = {
 	min-width: 0;
 }
 """,
-		"docx": {"type": "cell"},
+		"docx": {"type": "passthrough"},
 	},
 	"split-side": {
 		"css": """
@@ -273,7 +290,9 @@ COMPONENTS = {
 	padding: 10pt 12pt;
 }
 """,
-		"docx": {"type": "cell", "shading": "var(--surface)"},
+		# Full-width shaded block once the split is linearised, so the sidebar
+		# still reads as an aside rather than as more body copy.
+		"docx": {"type": "table", "cols": 1, "shading": "var(--surface)", "borders": True},
 	},
 	"data-table": {
 		"css": """
