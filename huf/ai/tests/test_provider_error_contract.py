@@ -148,8 +148,13 @@ class TestResolveApiBase(IntegrationTestCase):
         doc = _FakeDoc(is_local_llm=1, url="http://host.docker.internal:11434", port=11434)
         self.assertEqual(_resolve_api_base(doc), "http://host.docker.internal:11434")
 
-    def test_not_local_returns_none(self):
-        doc = _FakeDoc(is_local_llm=0, api_base_url="http://host.docker.internal:11434")
+    def test_not_local_without_api_base_returns_none(self):
+        # A non-local provider falls back to LiteLLM's default endpoint only
+        # when it supplies no explicit api_base_url. An explicit api_base_url
+        # is honoured regardless of is_local_llm — see
+        # test_api_base_url_works_for_non_local_providers, which covers hosted
+        # regional endpoints such as Moonshot CN.
+        doc = _FakeDoc(is_local_llm=0, url="http://ignored", port=1234)
         self.assertIsNone(_resolve_api_base(doc))
 
     def test_local_without_any_url_returns_none(self):

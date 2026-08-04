@@ -57,11 +57,17 @@ graph TD
 <web-preview url="https://example.com" title="Example Site" />
 
 6. JSX PREVIEW (inline component, not inside an artifact)
-<jsx-preview jsx="<div style={{ color: 'blue' }}>Hello</div>" title="Inline JSX" />
+<jsx-preview title="Inline JSX">
+<div style={{ color: 'blue' }}>Hello</div>
+</jsx-preview>
+Always use this open/close form and put the JSX in the tag body. Never pass JSX
+via a jsx="..." attribute — JSX contains > and quote characters, which terminate
+the attribute early and cause the whole element to be dropped without rendering.
 
 GENERAL RULES:
 - Only use the tags above (plus the chart artifact format described separately). Unknown types render as plain text.
 - Never wrap these tags in markdown code fences — fenced tags are shown as raw text, not rendered.
+- Never put a markdown code fence (```) inside an artifact's content either. The content between the tags is rendered exactly as written, with no fence-stripping — a stray ``` inside the body renders as a second, nested frame around your content instead of clean code/diagram output.
 - Text outside the tags renders as markdown; you can combine multiple elements in one response.
 """
 
