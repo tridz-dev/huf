@@ -121,16 +121,98 @@ single-column flow.
 ### What NOT to put in a document artifact
 
 Never put a markdown code fence (```) inside a document artifact's content -
-the same rule that applies to every other artifact type. Never put raw HTML
-tags in it either; only the markdown syntax above is rendered - anything
-else is stripped for safety before export.
+the same rule that applies to every other artifact type.
+
+## Designed documents: `language="html"`
+
+For anything with real visual design - a branded report, KPI cards, a
+sidebar, coloured callouts - author it as HTML instead:
+
+    <artifact type="document" language="html"> ... </artifact>
+
+Use this whenever the user asks for something "rich", "designed",
+"professional", with "columns"/"cards"/"a sidebar", or shows you a layout to
+match. Plain markdown (the default above) stays the right choice for prose:
+notes, summaries, plain reports.
+
+### Ready-made components - prefer these over hand-written CSS
+
+These classes are already styled. Using them is far cheaper than writing
+your own CSS, and they are the ONLY things guaranteed to survive into the
+.docx as well as the PDF:
+
+- `doc-header` - top banner row; put the brand in `<span class="brand">` and
+  the doc id/date in `<div class="doc-meta">`
+- `doc-title` / `doc-subtitle` - document title and its standfirst
+- `callout` - highlighted summary box (use for an executive summary)
+- `metric-grid` containing `metric` - KPI cards, laid out 2 per row. Write
+  the label as an ATTRIBUTE, not as text:
+  `<div class="metric" data-label="GROSS REVENUE">$4.25M</div>`
+- `split` containing `split-main` + `split-side` - body with a sidebar
+- `data-table` - a table with a styled header row
+- `doc-footer` - small footer line
+
+Example - this is the whole vocabulary needed for a corporate report:
+
+    <header class="doc-header">
+      <span class="brand">ACME CORP</span>
+      <div class="doc-meta">Q3-2024<br>October 24</div>
+    </header>
+    <h1 class="doc-title">Q3 Review</h1>
+    <p class="doc-subtitle">Performance and outlook</p>
+    <div class="callout"><b>Summary:</b> revenue up 18.4%.</div>
+    <div class="metric-grid">
+      <div class="metric" data-label="REVENUE">$4.25M</div>
+      <div class="metric" data-label="GROWTH">+18.4%</div>
+    </div>
+    <div class="split">
+      <section class="split-main">
+        <h2>Highlights</h2>
+        <table class="data-table">
+          <tr><th>Unit</th><th>Target</th></tr>
+          <tr><td>Cloud</td><td>1,800</td></tr>
+        </table>
+      </section>
+      <aside class="split-side"><h3>Priorities</h3><p>Scale APAC.</p></aside>
+    </div>
+    <p class="doc-footer">Confidential</p>
+
+### Writing less: markdown inside HTML
+
+Add `markdown="1"` to any container and write markdown inside it - much
+shorter than hand-writing table markup. There must be a blank line after the
+opening tag:
+
+    <section class="split-main" markdown="1">
+
+    ## Highlights
+
+    | Unit | Target |
+    |---|---|
+    | Cloud | 1,800 |
+
+    </section>
+
+### Custom styling and fonts
+
+You may add your own `<style>` block for colours, spacing and layout beyond
+the components. Available fonts (already loaded - just name them):
+Inter, Source Sans 3, Roboto (sans); Merriweather, Source Serif 4,
+Playfair Display (serif); JetBrains Mono, Source Code Pro (mono). You may
+`@import` another Google Font if you genuinely need one.
+
+Be aware of the trade-off: custom CSS shapes the PDF, but the .docx can
+only reproduce what Word itself supports. Colours, fonts, borders and
+shading carry across; free-form layout (flexbox, grid, floats, absolute
+positioning) does not. The components above are mapped deliberately for
+both, so a document built from them looks right in either format - prefer
+them when the user may want the Word file.
 
 ### Downloading
 
-If the user just asks to download the document you created as PDF or DOCX,
-tell them the download buttons already shown on the artifact do this - you
-do not need to do anything else; a working file is produced automatically
-from the markdown content once the artifact is saved.
+If the user just asks to download the document as PDF or DOCX, the download
+buttons on the artifact already do this - a working file is produced from
+the artifact once it is saved.
 """
 
 DOCUMENT_EXPORT_TOOL_INSTRUCTIONS = """
