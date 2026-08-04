@@ -32,12 +32,10 @@ export function EmptyChatState({
                 >
                     {getInitials(displayName)}
                 </ChatAvatar>
-                <div className="min-w-0">
-                    <div className="coldstart-name">{displayName}</div>
-                    {agentDescription && (
-                        <div className="coldstart-desc">{agentDescription}</div>
-                    )}
-                </div>
+                <div className="coldstart-name">{displayName}</div>
+                {agentDescription && (
+                    <div className="coldstart-desc">{agentDescription}</div>
+                )}
             </div>
             {starterPrompts.length > 0 && (
                 <div className="starter-grid">

@@ -281,32 +281,36 @@
 /* Cold-start chat screen */
 .coldstart-header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 0;
+  text-align: center;
 }
 .coldstart-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 18px;
   font-weight: 500;
 }
 .coldstart-name {
   font-family: var(--display);
-  font-size: 13px;
+  font-size: 39px;
   font-weight: 600;
+  line-height: 1.1;
   text-transform: uppercase;
   letter-spacing: 0.025em;
 }
 .coldstart-desc {
   font-family: var(--body);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--steel);
+  max-width: 600px;
 }
 .starter-grid {
   display: grid;
