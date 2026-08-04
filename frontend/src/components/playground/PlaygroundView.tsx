@@ -26,7 +26,7 @@ export function PlaygroundView({
 }: PlaygroundViewProps) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      <div className="px-5 pt-[18px]">
+      <div className="px-4 pt-[18px]">
         <ConfigStrip agents={agents} providers={providers} config={config} onChange={onConfigChange} />
       </div>
 
@@ -41,7 +41,7 @@ export function PlaygroundView({
         <ResponsePanel title="Response" state={slot} className="h-full" />
       </div>
 
-      <div className="px-5 pb-[18px]">
+      <div className="px-4 pb-[18px]">
         <RunLedger {...ledger} />
       </div>
     </div>

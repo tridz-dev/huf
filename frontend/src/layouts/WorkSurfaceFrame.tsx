@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { AppTopbar } from '@/layouts/AppTopbar';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export interface WorkSurfaceTab {
@@ -29,18 +29,15 @@ interface WorkSurfaceFrameProps {
 export function WorkSurfaceFrame({ title, actions, tabs, children }: WorkSurfaceFrameProps) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-paper text-ink">
-      <header
-        className={`flex items-center justify-between bg-panel px-5 py-3.5 ${tabs ? '' : 'border-b border-line'}`}
-      >
-        <div className="flex items-center gap-3.5">
-          <SidebarTrigger className="-ml-1 text-steel hover:bg-transparent hover:text-ink" />
+      <AppTopbar hideBorder={Boolean(tabs)}>
+        <div className="flex flex-1 items-center justify-between gap-3">
           {title && <h1 className="font-display text-xl font-bold uppercase leading-none">{title}</h1>}
+          {actions && <div className="flex items-center gap-2.5">{actions}</div>}
         </div>
-        {actions && <div className="flex items-center gap-2.5">{actions}</div>}
-      </header>
+      </AppTopbar>
 
       {tabs && (
-        <div className="shrink-0 bg-paper px-5">
+        <div className="shrink-0 bg-paper px-4">
           <Tabs value={tabs.value} onValueChange={tabs.onValueChange} className="w-full">
             <TabsList layout="scroll" className="w-full border-b border-line bg-transparent p-0">
               {tabs.items.map((tab) => (

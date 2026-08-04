@@ -130,7 +130,7 @@ export function CompareView({
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       {/* Control row */}
-      <div className="flex items-center justify-between px-5 pt-3">
+      <div className="flex items-center justify-between px-4 pt-3">
         <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[.08em] text-steel-soft">
           <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.8} />
           Comparing two configurations
@@ -228,7 +228,7 @@ export function CompareView({
         </div>
       </div>
 
-      <div className="px-5 pb-[18px]">
+      <div className="px-4 pb-[18px]">
         <RunLedger {...ledger} />
       </div>
     </div>
