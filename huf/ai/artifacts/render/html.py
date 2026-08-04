@@ -46,7 +46,24 @@ body {
 	font-family: __BODY_FONT__;
 	font-size: 11pt;
 	line-height: 1.6;
-	color: #333;
+	color: var(--ink);
+}
+
+/* The @page box below sets the PRINT margin, but @page rules are print-media
+   only - WeasyPrint honours them, but the in-chat/permalink preview renders
+   this same HTML in a plain browser iframe, where @page is simply ignored.
+   Without this, the preview's content sits flush against the iframe edges
+   while the PDF looks correctly margined. Scoping the padding to @media
+   screen gives the preview an equivalent margin WITHOUT adding to the PDF:
+   WeasyPrint also renders "screen" as a media type it doesn't match against
+   here (it's asked to print), so a bare `body { padding: 2cm }` outside this
+   block would double the PDF margin to 4cm (2cm @page margin + 2cm padding).
+   Keeping it inside @media screen is what keeps the two renders separate. */
+@media screen {
+	body {
+		padding: 2cm;
+		box-sizing: border-box;
+	}
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -100,12 +117,12 @@ h6 {
 }
 
 blockquote {
-	border-left: 4px solid #999;
+	border-left: 4px solid var(--rule);
 	font-style: italic;
 	padding-left: 1em;
 	margin-left: 0;
 	margin-right: 0;
-	color: #666;
+	color: var(--muted);
 }
 
 table {
@@ -115,14 +132,14 @@ table {
 }
 
 th, td {
-	border: 1px solid #444;
+	border: 1px solid var(--rule);
 	padding: 6px;
 	text-align: left;
 }
 
 th {
 	font-weight: bold;
-	background-color: #f5f5f5;
+	background-color: var(--surface);
 }
 
 .text-left {
@@ -159,14 +176,27 @@ th {
 	column-gap: 0.8cm;
 }
 
+/* A single @page rule carries both the running footer (.doc-footer, pulled
+   out of flow via `position: running(foot)` in components.py) and the page
+   number. These are two separate margin boxes rather than one combined
+   value because WeasyPrint's `content` property cannot concatenate an
+   element() reference with a counter() - `content: element(foot) counter(page)`
+   is not valid syntax, so the footer text and the page number each need
+   their own @bottom-* box. Verified against WeasyPrint 68. */
 @page {
 	size: A4;
 	margin: 2cm;
-}
 
-@page {
-	@bottom-center {
-		content: counter(page);
+	@bottom-left {
+		content: element(foot);
+		font-size: 7.5pt;
+		color: var(--muted);
+	}
+
+	@bottom-right {
+		content: counter(page) " of " counter(pages);
+		font-size: 7.5pt;
+		color: var(--muted);
 	}
 }
 """
@@ -211,6 +241,72 @@ def _expand_columns_blocks(markdown_source: str) -> str:
 		return f'<div class="columns-{column_count}">{inner_html}</div>'
 
 	return COLUMNS_BLOCK_RE.sub(_replace, markdown_source)
+
+
+#: Opening tag of any element carrying the ``doc-footer`` component class.
+_DOC_FOOTER_OPEN_RE = re.compile(
+	r"""<(?P<tag>[a-zA-Z][a-zA-Z0-9]*)\b[^>]*\bclass\s*=\s*["'][^"']*\bdoc-footer\b[^"']*["'][^>]*>""",
+	re.IGNORECASE,
+)
+
+#: Any tag, used only to balance nesting while locating a footer's end tag.
+_ANY_TAG_RE = re.compile(r"<(?P<closing>/?)(?P<tag>[a-zA-Z][a-zA-Z0-9]*)\b[^>]*?(?P<selfclose>/?)>")
+
+#: HTML void elements, which never have a matching close tag.
+_VOID_TAGS = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"})
+
+
+def _hoist_running_footer(body_html: str) -> str:
+	"""Move a ``.doc-footer`` element to the very start of the body.
+
+	``.doc-footer`` is a CSS running element (``position: running(foot)`` in
+	components.py), pulled into every page's bottom margin box by the @page
+	rule above. But a running element only applies to the page it occurs on
+	and every page AFTER it - that is how CSS GCPM defines it, and WeasyPrint
+	68 implements it faithfully: a footer written at the END of a 27-page
+	document appeared on page 27 alone.
+
+	Authors write footers last, because that is where a footer visually
+	belongs - the real agent-authored document that prompted this fix closed
+	with its footer paragraph. Relying on the prompt to say "put the footer
+	first" would be a rule the model has every reason to forget, and the
+	failure is silent: the export looks fine on the last page and blank
+	everywhere else.
+
+	Hoisting is invisible in the output because the element is out of flow in
+	any case, so moving it changes nothing except which pages it reaches.
+
+	Bails out unchanged if the element cannot be located unambiguously
+	(unbalanced markup, no footer present), since a wrong slice would corrupt
+	the document - a footer on one page is a far smaller defect than mangled
+	body HTML.
+	"""
+	match = _DOC_FOOTER_OPEN_RE.search(body_html)
+	if not match:
+		return body_html
+
+	tag = match.group("tag").lower()
+
+	if tag in _VOID_TAGS or match.group(0).rstrip().endswith("/>"):
+		end = match.end()
+	else:
+		depth = 1
+		end = None
+		for candidate in _ANY_TAG_RE.finditer(body_html, match.end()):
+			if candidate.group("tag").lower() != tag or candidate.group("selfclose"):
+				continue
+			depth += -1 if candidate.group("closing") else 1
+			if depth == 0:
+				end = candidate.end()
+				break
+
+		if end is None:
+			# Unbalanced markup - leave the document exactly as authored.
+			return body_html
+
+	footer = body_html[match.start() : end]
+
+	return footer + body_html[: match.start()] + body_html[end:]
 
 
 #: Tags permitted through sanitization for BOTH the markdown and html paths.
@@ -286,6 +382,10 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 		css_sanitizer=css_sanitizer(),
 		strip=True
 	)
+
+	# Hoisted AFTER sanitization so the slice being moved is already known to
+	# be well-formed, allowlisted markup rather than raw agent output.
+	sanitized_body = _hoist_running_footer(sanitized_body)
 
 	# Build the complete HTML document
 	html_document = f"""<!DOCTYPE html>

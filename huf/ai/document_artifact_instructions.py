@@ -59,69 +59,33 @@ DOCUMENT_ARTIFACT_INSTRUCTIONS = """
 ## Document Artifacts (PDF/DOCX export)
 
 When the user asks for a document, report, proposal, memo, or anything they
-may want to download as a PDF or Word file - INCLUDING when they explicitly
-say "make it a docx" or "give me a Word document" - use
-`<artifact type="document">` with markdown content. Do NOT write a
-python-docx script, a code snippet, or any other workaround: the platform
-renders this artifact type, and (when available - see below) exposes tools
-to export it to a real .docx or .pdf file. Writing code for the user to run
-themselves is the WRONG answer whenever this artifact type is available -
-it produces no actual file and asks the user to do the work you were asked
-to do. A downloadable .docx is delivered by the export pipeline, not by
-generating a python script.
+may want to download as a PDF or Word file - INCLUDING when they say "make
+it a docx" - use `<artifact type="document">`. Never write a python-docx
+script or any other code workaround: the platform renders this type and
+exports it to a real .pdf/.docx. Emitting a script produces no file and
+hands the work back to the user.
 
-### Supported markdown
+Content is markdown by default: headings, **bold**, *italic*, tables,
+blockquotes, lists, links and images all work. Never put a markdown code
+fence (```) inside a document artifact.
 
-- Headings: `#` through `######`
-- Paragraphs, **bold**, *italic*
-- Tables: standard `| A | B |` / `|---|---|` syntax
-- Blockquotes: `> quoted text`
-- Bulleted lists (`- item`) and numbered lists (`1. item`)
-- Links and images
+### Alignment, indent, columns
 
-### Alignment and indent
-
-Attach a class to the line IMMEDIATELY above it, with NO blank line in
-between, or the marker is dropped as literal text instead of being applied:
+Attach a class to the line IMMEDIATELY above it, with NO blank line between,
+or the marker is dropped as literal text:
 
 ```
 Right aligned text.
 {: .text-right}
-
-Indented text.
-{: .indent-2}
 ```
 
-Alignment classes: `.text-left`, `.text-center`, `.text-right`.
-Indent classes: `.indent-1`, `.indent-2`, `.indent-3` (increasing depth).
+Classes: `.text-left`, `.text-center`, `.text-right`, `.indent-1` through
+`.indent-3`.
 
-### Multi-column layout
-
-Wrap a region in `:::columns-2` / `:::columns-3` ... `:::` (own line, exact
-match, no other content on the marker lines) to lay it out in real
-newspaper-style columns in both the PDF and the DOCX export - not just a
-visual CSS effect, a genuine multi-column DOCX section:
-
-```
-:::columns-2
-## Left topic
-
-Ordinary markdown works normally inside here - headings, paragraphs,
-lists, tables.
-
-## Right topic
-
-More content, flows into the second column automatically.
-:::
-```
-
-Content before and after the `:::columns-N` block stays in normal
-single-column flow.
-
-### What NOT to put in a document artifact
-
-Never put a markdown code fence (```) inside a document artifact's content -
-the same rule that applies to every other artifact type.
+Wrap a region in `:::columns-2` (or `-3`) ... `:::`, each marker alone on
+its own line, for genuine newspaper columns in both the PDF and the DOCX -
+a real multi-column DOCX section, not just a CSS effect. Ordinary markdown
+works inside. Content outside the block stays single-column.
 
 ## Designed documents: `language="html"`
 
@@ -146,11 +110,19 @@ your own CSS, and they are the ONLY things guaranteed to survive into the
 - `doc-title` / `doc-subtitle` - document title and its standfirst
 - `callout` - highlighted summary box (use for an executive summary)
 - `metric-grid` containing `metric` - KPI cards, laid out 2 per row. Write
-  the label as an ATTRIBUTE, not as text:
+  the label as an ATTRIBUTE and the value as the element's own text - do
+  not wrap the value in an inner tag:
   `<div class="metric" data-label="GROSS REVENUE">$4.25M</div>`
 - `split` containing `split-main` + `split-side` - body with a sidebar
 - `data-table` - a table with a styled header row
-- `doc-footer` - small footer line
+- `status-badge` - small inline pill, e.g. a status inside a table cell
+- `page-break` - `<div class="page-break"></div>` starts a new page. Use
+  this rather than styling your own divider; a bordered break element gets
+  painted into the PDF as a stray line.
+- `doc-footer` - write it ONCE, anywhere in the document. It is lifted out
+  of the flow and repeated at the bottom of EVERY page. Never write a page
+  number yourself: "Page 3 of 7" is added automatically on the right. A
+  hand-written count is wrong the moment the pagination shifts.
 
 Example - this is the whole vocabulary needed for a corporate report:
 
@@ -193,20 +165,45 @@ opening tag:
 
     </section>
 
-### Custom styling and fonts
+### Colours: set the theme, do NOT restyle the components
 
-You may add your own `<style>` block for colours, spacing and layout beyond
-the components. Available fonts (already loaded - just name them):
-Inter, Source Sans 3, Roboto (sans); Merriweather, Source Serif 4,
-Playfair Display (serif); JetBrains Mono, Source Code Pro (mono). You may
-`@import` another Google Font if you genuinely need one.
+The entire palette is driven by seven CSS custom properties. Re-theme a
+whole document by overriding them once:
 
-Be aware of the trade-off: custom CSS shapes the PDF, but the .docx can
-only reproduce what Word itself supports. Colours, fonts, borders and
-shading carry across; free-form layout (flexbox, grid, floats, absolute
-positioning) does not. The components above are mapped deliberately for
-both, so a document built from them looks right in either format - prefer
-them when the user may want the Word file.
+    <style>
+      :root {
+        --accent: #D32F2F;          /* brand colour: rules, table headers */
+        --accent-contrast: #FFFFFF; /* text drawn on top of --accent */
+        --ink: #121212;             /* body text */
+        --muted: #6B7891;           /* labels, footer, captions */
+        --rule: #E0E0E0;            /* hairlines and borders */
+        --surface: #F8F9FA;         /* card and sidebar fills */
+        --callout-bg: #FFEBEE;      /* callout fill */
+      }
+    </style>
+
+This is the ONLY styling that reaches both the PDF and the .docx. Writing
+your own rules for `.callout`, `.metric`, `.doc-header` and friends changes
+the PDF alone - Word still renders the theme colours, and the two files come
+out looking like different documents. Set the variables; leave the component
+classes alone.
+
+Seven lines of `:root` replace an entire stylesheet. Reach for extra CSS
+only for something the components genuinely do not cover.
+
+### Fonts
+
+Already loaded - just name them: Inter, Source Sans 3, Roboto (sans);
+Merriweather, Source Serif 4, Playfair Display (serif); JetBrains Mono,
+Source Code Pro (mono). You may `@import` another Google Font if you
+genuinely need one.
+
+### The PDF/DOCX trade-off
+
+Colours, fonts, borders and shading carry into Word. Free-form layout
+(flexbox, grid, floats, absolute positioning) does not. The components above
+are mapped deliberately for both, so a document built from them looks right
+in either format - prefer them whenever the user may want the Word file.
 
 ### Downloading
 

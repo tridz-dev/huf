@@ -34,6 +34,29 @@ export async function getArtifactHtml(name: string): Promise<string> {
   }
 }
 
+/**
+ * Render UNSAVED document content (still being composed, or parsed inline
+ * from a chat message that has no durable Artifact row) as self-contained
+ * HTML. Unlike getArtifactHtml this sends the content itself rather than a
+ * name, so it can be a sizeable body — use the POST-style call helper.
+ */
+export async function previewDocumentHtml(
+  content: string,
+  language: string = 'markdown',
+  title: string = ''
+): Promise<string> {
+  try {
+    const result = await call.post('huf.ai.artifact_export_api.preview_document_html', {
+      content,
+      language,
+      title,
+    });
+    return (result?.message ?? result) as string;
+  } catch (error) {
+    handleFrappeError(error, 'Error rendering document preview');
+  }
+}
+
 export async function exportArtifact(
   name: string,
   format: 'pdf' | 'docx' | 'html'

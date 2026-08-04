@@ -17,7 +17,6 @@ import {
 	ArtifactClose,
 } from '@/components/ai-elements/artifact';
 import { CodeBlock } from '@/components/ai-elements/code-block';
-import { MessageResponse } from '@/components/ai-elements/message';
 import {
 	CopyIcon,
 	DownloadIcon,
@@ -256,16 +255,22 @@ export function ArtifactRenderer({
 
 			case 'markdown':
 			case 'document':
-				// Only a DURABLE (server-owned) artifact can be previewed, since
-				// the preview endpoint resolves it by name. In chat these objects
-				// come from the client-side parser, which mints throwaway ids of
-				// the form `artifact-<timestamp>-<index>` (artifactParser.ts) -
-				// those match no Artifact row, so previewing them would 404 every
-				// document. Fall back to inline rendering for those.
+				// A DURABLE (server-owned) artifact is previewed by name via
+				// get_artifact_html. In chat, most of these objects come from the
+				// client-side parser instead, which mints throwaway ids of the
+				// form `artifact-<timestamp>-<index>` (artifactParser.ts) - those
+				// match no Artifact row. Rather than falling back to raw
+				// <MessageResponse> (which prints an HTML document's <style>
+				// block as literal text, see the bug this fixes), render those
+				// through preview_document_html by sending the content directly.
 				return isDurableArtifactId(artifact.id) ? (
 					<DocumentPreview artifactName={artifact.id} />
 				) : (
-					<MessageResponse>{artifact.content}</MessageResponse>
+					<DocumentPreview
+						content={artifact.content}
+						language={artifact.language}
+						title={artifact.title}
+					/>
 				);
 
 			case 'jsx':

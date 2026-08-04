@@ -29,9 +29,15 @@ _FORMATS = ("pdf", "docx", "html")
 #: Artifact types whose content is markdown source the render pipeline can consume.
 _EXPORTABLE_ARTIFACT_TYPES = ("document", "markdown")
 
+#: Hard cap on unsaved content accepted by preview_document_html. There is no
+#: Artifact row backing this call, so a huge paste can't be rejected by any
+#: existing size limit on the doctype - reject it here before it reaches the
+#: render pipeline and ties up a worker.
+_MAX_PREVIEW_CONTENT_BYTES = 200_000
 
-def _render_artifact_html(artifact) -> str:
-	"""Render an Artifact's source to a full HTML document.
+
+def _normalize_language(language: str | None) -> str:
+	"""Map an Artifact.language value onto the render pipeline's two modes.
 
 	Honours ``Artifact.language``: a document authored in HTML must NOT be
 	pushed through the markdown parser, which would mangle its markup. Any
@@ -39,11 +45,15 @@ def _render_artifact_html(artifact) -> str:
 	predate the html source option and often have language empty) keep
 	rendering exactly as before.
 	"""
-	language = "html" if (artifact.language or "").strip().lower() == "html" else "markdown"
+	return "html" if (language or "").strip().lower() == "html" else "markdown"
+
+
+def _render_artifact_html(artifact) -> str:
+	"""Render an Artifact's source to a full HTML document."""
 	return render_document_html(
 		artifact.content,
 		title=artifact.title or artifact.name,
-		language=language,
+		language=_normalize_language(artifact.language),
 	)
 
 
@@ -73,6 +83,40 @@ def get_artifact_html(name: str) -> str:
 		)
 
 	return _render_artifact_html(artifact)
+
+
+@frappe.whitelist()
+def preview_document_html(content: str, language: str = "markdown", title: str = "") -> str:
+	"""Render UNSAVED document content as self-contained HTML.
+
+	Backs the in-chat preview for a document/markdown artifact that is still
+	being composed - either mid-stream, or parsed inline from a chat message
+	that was never persisted as its own Artifact row. In both cases there is
+	no artifact ``name`` yet, so ``get_artifact_html`` cannot be used: there is
+	no row to look up, and consequently no conversation to permission-check
+	against. The @frappe.whitelist() default (login required) is the only
+	access control here - any authenticated user can preview arbitrary
+	content they hand in, exactly as they could by typing it into any other
+	rendering endpoint.
+
+	Read-only and stateless: like get_artifact_html, this writes nothing (no
+	File rows, no commit) and shares the same renderer, so a transient
+	preview and the eventual saved-artifact preview can never drift apart.
+	"""
+	if not content:
+		frappe.throw(_("Content is required"), frappe.ValidationError)
+
+	if len(content.encode("utf-8")) > _MAX_PREVIEW_CONTENT_BYTES:
+		frappe.throw(
+			_("Content is too large to preview ({0} KB limit).").format(_MAX_PREVIEW_CONTENT_BYTES // 1000),
+			frappe.ValidationError,
+		)
+
+	return render_document_html(
+		content,
+		title=title or _("Untitled document"),
+		language=_normalize_language(language),
+	)
 
 
 @frappe.whitelist()
