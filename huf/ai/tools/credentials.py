@@ -15,6 +15,7 @@
 #       service_name instead.
 
 import os
+
 import frappe
 
 from huf.ai.transaction import commit_if_background
@@ -53,22 +54,22 @@ def require_credential(service: str, key: str) -> str:
 					return cred.get_password("value")
 	except Exception:
 		pass
-	
+
 	# Fallback to environment variable
 	# Construct env var name: SERVICE_KEY (uppercase, underscore separated)
 	env_var_name = f"{service.upper()}_{key.upper()}"
 	value = os.getenv(env_var_name)
-	
+
 	if value:
 		return value
-	
+
 	# Also try common alternative naming patterns
 	alt_names = _get_alt_env_names(service, key)
 	for alt_name in alt_names:
 		value = os.getenv(alt_name)
 		if value:
 			return value
-	
+
 	# If still not found, raise error
 	raise ValueError(
 		f"Credential not found for service '{service}', key '{key}'. "
@@ -79,7 +80,7 @@ def require_credential(service: str, key: str) -> str:
 def _get_alt_env_names(service: str, key: str) -> list:
 	"""Get alternative environment variable names for common services."""
 	alt_names = []
-	
+
 	# Common patterns
 	if key == "api_key":
 		alt_names.append(f"{service.upper()}_API_KEY")
@@ -94,7 +95,7 @@ def _get_alt_env_names(service: str, key: str) -> list:
 	elif key == "client_secret":
 		alt_names.append(f"{service.upper()}_CLIENT_SECRET")
 		alt_names.append(f"{service.upper()}_SECRET")
-	
+
 	# Service-specific patterns
 	service_patterns = {
 		"openai": ["OPENAI_API_KEY"],
@@ -112,6 +113,7 @@ def _get_alt_env_names(service: str, key: str) -> list:
 		"calcom": ["CALCOM_API_KEY"],
 		"clickup": ["CLICKUP_API_KEY", "CLICKUP_SPACE_ID"],
 		"giphy": ["GIPHY_API_KEY"],
+		"jira": ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"],
 		"linear": ["LINEAR_API_KEY"],
 		"notion": ["NOTION_API_KEY", "NOTION_DATABASE_ID"],
 		"openweather": ["OPENWEATHER_API_KEY"],
@@ -126,12 +128,12 @@ def _get_alt_env_names(service: str, key: str) -> list:
 		"zendesk": ["ZENDESK_USERNAME", "ZENDESK_PASSWORD", "ZENDESK_COMPANY_NAME"],
 		"zoom": ["ZOOM_ACCOUNT_ID", "ZOOM_CLIENT_ID", "ZOOM_CLIENT_SECRET"],
 	}
-	
+
 	if service in service_patterns:
 		for pattern in service_patterns[service]:
 			if pattern not in alt_names:
 				alt_names.append(pattern)
-	
+
 	return alt_names
 
 
@@ -170,7 +172,7 @@ def update_last_error(service: str, error: str):
 			order_by="is_default DESC, modified DESC",
 			limit=1
 		)
-		
+
 		if settings:
 			doc = frappe.get_doc("Integration Settings", settings[0].name)
 			doc.last_error = error[:140]  # Truncate to field length

@@ -254,6 +254,254 @@ GITHUB_TOOLS = [
 	},
 ]
 
+JIRA_TOOLS = [
+	{
+		"tool_name": "jira_search_issues",
+		"description": "Search Jira issues using JQL (Jira Query Language). Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN.",
+		"function_path": "huf.ai.tools.jira.handle_search_issues",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("jql", required=True, description="JQL query, e.g. 'project = ABC AND status = \"In Progress\"'"),
+			_p("max_results", type="int", description="Max issues to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "jira_get_issue",
+		"description": "Get details of a Jira issue by key. Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN.",
+		"function_path": "huf.ai.tools.jira.handle_get_issue",
+		"category": "Project Management Tools",
+		"parameters": [_p("issue_key", required=True, description="Issue key, e.g. 'ABC-123'")],
+	},
+	{
+		"tool_name": "jira_create_issue",
+		"description": "Create a Jira issue. Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN.",
+		"function_path": "huf.ai.tools.jira.handle_create_issue",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("project_key", required=True, description="Project key, e.g. 'ABC'"),
+			_p("summary", required=True, description="Issue summary/title"),
+			_p("issue_type", description="Issue type name, e.g. 'Task', 'Bug', 'Story' (default 'Task')"),
+			_p("description", description="Issue description text"),
+		],
+	},
+	{
+		"tool_name": "jira_add_comment",
+		"description": "Add a comment to a Jira issue. Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN.",
+		"function_path": "huf.ai.tools.jira.handle_add_comment",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("issue_key", required=True, description="Issue key, e.g. 'ABC-123'"),
+			_p("comment", required=True, description="Comment text"),
+		],
+	},
+]
+
+LINEAR_TOOLS = [
+	{
+		"tool_name": "linear_list_issues",
+		"description": "List Linear issues, optionally filtered by team. Requires LINEAR_API_KEY.",
+		"function_path": "huf.ai.tools.linear.handle_list_issues",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("team_key", description="Team key to filter by, e.g. 'ENG'"),
+			_p("limit", type="int", description="Max issues to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "linear_get_issue",
+		"description": "Get details of a Linear issue by its identifier (e.g. 'ENG-123'). Requires LINEAR_API_KEY.",
+		"function_path": "huf.ai.tools.linear.handle_get_issue",
+		"category": "Project Management Tools",
+		"parameters": [_p("issue_id", required=True, description="Issue identifier, e.g. 'ENG-123'")],
+	},
+	{
+		"tool_name": "linear_create_issue",
+		"description": "Create a Linear issue. Requires LINEAR_API_KEY.",
+		"function_path": "huf.ai.tools.linear.handle_create_issue",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("team_key", required=True, description="Team key, e.g. 'ENG'"),
+			_p("title", required=True, description="Issue title"),
+			_p("description", description="Issue description (Markdown)"),
+		],
+	},
+]
+
+CLICKUP_TOOLS = [
+	{
+		"tool_name": "clickup_list_tasks",
+		"description": "List tasks in a ClickUp list. Requires CLICKUP_API_KEY.",
+		"function_path": "huf.ai.tools.clickup.handle_list_tasks",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("list_id", required=True, description="ClickUp list ID"),
+			_p("include_closed", type="bool", description="Include closed tasks (default false)"),
+		],
+	},
+	{
+		"tool_name": "clickup_get_task",
+		"description": "Get details of a ClickUp task by ID. Requires CLICKUP_API_KEY.",
+		"function_path": "huf.ai.tools.clickup.handle_get_task",
+		"category": "Project Management Tools",
+		"parameters": [_p("task_id", required=True, description="ClickUp task ID")],
+	},
+	{
+		"tool_name": "clickup_create_task",
+		"description": "Create a task in a ClickUp list. Requires CLICKUP_API_KEY.",
+		"function_path": "huf.ai.tools.clickup.handle_create_task",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("list_id", required=True, description="ClickUp list ID"),
+			_p("name", required=True, description="Task name"),
+			_p("description", description="Task description"),
+		],
+	},
+]
+
+TRELLO_TOOLS = [
+	{
+		"tool_name": "trello_list_boards",
+		"description": "List Trello boards for the authenticated user. Requires TRELLO_API_KEY, TRELLO_TOKEN.",
+		"function_path": "huf.ai.tools.trello.handle_list_boards",
+		"category": "Project Management Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "trello_list_cards",
+		"description": "List cards on a Trello board. Requires TRELLO_API_KEY, TRELLO_TOKEN.",
+		"function_path": "huf.ai.tools.trello.handle_list_cards",
+		"category": "Project Management Tools",
+		"parameters": [_p("board_id", required=True, description="Trello board ID")],
+	},
+	{
+		"tool_name": "trello_create_card",
+		"description": "Create a card on a Trello list. Requires TRELLO_API_KEY, TRELLO_TOKEN.",
+		"function_path": "huf.ai.tools.trello.handle_create_card",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("list_id", required=True, description="Trello list ID"),
+			_p("name", required=True, description="Card name"),
+			_p("description", description="Card description"),
+		],
+	},
+]
+
+NOTION_TOOLS = [
+	{
+		"tool_name": "notion_query_database",
+		"description": "Query a Notion database, optionally with a filter/sort payload. Requires NOTION_API_KEY; defaults to NOTION_DATABASE_ID if database_id is omitted.",
+		"function_path": "huf.ai.tools.notion.handle_query_database",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("database_id", description="Notion database ID (defaults to NOTION_DATABASE_ID credential)"),
+			_p("page_size", type="int", description="Max results to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "notion_get_page",
+		"description": "Get a Notion page's properties by ID. Requires NOTION_API_KEY.",
+		"function_path": "huf.ai.tools.notion.handle_get_page",
+		"category": "Project Management Tools",
+		"parameters": [_p("page_id", required=True, description="Notion page ID")],
+	},
+	{
+		"tool_name": "notion_create_page",
+		"description": "Create a page (row) in a Notion database with a title property. Requires NOTION_API_KEY; defaults to NOTION_DATABASE_ID if database_id is omitted.",
+		"function_path": "huf.ai.tools.notion.handle_create_page",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("title", required=True, description="Title for the new page"),
+			_p("database_id", description="Notion database ID (defaults to NOTION_DATABASE_ID credential)"),
+		],
+	},
+]
+
+ZENDESK_TOOLS = [
+	{
+		"tool_name": "zendesk_list_tickets",
+		"description": "List Zendesk tickets. Requires ZENDESK_USERNAME, ZENDESK_PASSWORD, ZENDESK_COMPANY_NAME.",
+		"function_path": "huf.ai.tools.zendesk.handle_list_tickets",
+		"category": "Support Tools",
+		"parameters": [_p("status", description="Filter by status: new, open, pending, hold, solved, closed")],
+	},
+	{
+		"tool_name": "zendesk_get_ticket",
+		"description": "Get details of a Zendesk ticket by ID. Requires ZENDESK_USERNAME, ZENDESK_PASSWORD, ZENDESK_COMPANY_NAME.",
+		"function_path": "huf.ai.tools.zendesk.handle_get_ticket",
+		"category": "Support Tools",
+		"parameters": [_p("ticket_id", required=True, description="Zendesk ticket ID")],
+	},
+	{
+		"tool_name": "zendesk_create_ticket",
+		"description": "Create a Zendesk ticket. Requires ZENDESK_USERNAME, ZENDESK_PASSWORD, ZENDESK_COMPANY_NAME.",
+		"function_path": "huf.ai.tools.zendesk.handle_create_ticket",
+		"category": "Support Tools",
+		"parameters": [
+			_p("subject", required=True, description="Ticket subject"),
+			_p("comment", required=True, description="Initial comment/description body"),
+			_p("priority", description="Priority: low, normal, high, urgent"),
+		],
+	},
+]
+
+CALCOM_TOOLS = [
+	{
+		"tool_name": "calcom_list_bookings",
+		"description": "List Cal.com bookings. Requires CALCOM_API_KEY.",
+		"function_path": "huf.ai.tools.calcom.handle_list_bookings",
+		"category": "Scheduling Tools",
+		"parameters": [_p("status", description="Filter by status: upcoming, past, cancelled")],
+	},
+	{
+		"tool_name": "calcom_get_booking",
+		"description": "Get details of a Cal.com booking by UID. Requires CALCOM_API_KEY.",
+		"function_path": "huf.ai.tools.calcom.handle_get_booking",
+		"category": "Scheduling Tools",
+		"parameters": [_p("booking_uid", required=True, description="Cal.com booking UID")],
+	},
+	{
+		"tool_name": "calcom_create_booking",
+		"description": "Create a Cal.com booking for an event type. Requires CALCOM_API_KEY.",
+		"function_path": "huf.ai.tools.calcom.handle_create_booking",
+		"category": "Scheduling Tools",
+		"parameters": [
+			_p("event_type_id", required=True, type="int", description="Cal.com event type ID"),
+			_p("start", required=True, description="ISO 8601 start time, e.g. '2026-08-10T15:00:00Z'"),
+			_p("attendee_name", required=True, description="Attendee full name"),
+			_p("attendee_email", required=True, description="Attendee email address"),
+			_p("timezone", description="Attendee IANA timezone, e.g. 'America/New_York' (default 'UTC')"),
+		],
+	},
+]
+
+ZOOM_TOOLS = [
+	{
+		"tool_name": "zoom_list_meetings",
+		"description": "List scheduled Zoom meetings for the authenticated user. Requires ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET.",
+		"function_path": "huf.ai.tools.zoom.handle_list_meetings",
+		"category": "Communication Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "zoom_get_meeting",
+		"description": "Get details of a Zoom meeting by ID. Requires ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET.",
+		"function_path": "huf.ai.tools.zoom.handle_get_meeting",
+		"category": "Communication Tools",
+		"parameters": [_p("meeting_id", required=True, description="Zoom meeting ID")],
+	},
+	{
+		"tool_name": "zoom_create_meeting",
+		"description": "Create a scheduled Zoom meeting. Requires ZOOM_ACCOUNT_ID, ZOOM_CLIENT_ID, ZOOM_CLIENT_SECRET.",
+		"function_path": "huf.ai.tools.zoom.handle_create_meeting",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("topic", required=True, description="Meeting topic/title"),
+			_p("start_time", description="ISO 8601 start time, e.g. '2026-08-10T15:00:00Z' (omit for instant meeting)"),
+			_p("duration", type="int", description="Duration in minutes (default 30)"),
+		],
+	},
+]
+
 # ---------------------------------------------------------------------------
 # Frappe App Tools  (added in this branch — consolidated action-based)
 # ---------------------------------------------------------------------------
@@ -1856,5 +2104,13 @@ ALL_INTEGRATION_TOOLS = (
 	+ _with_service(SERP_HOTEL_TOOLS, "serpapi")
 	+ _with_service(SERP_REVIEW_TOOLS, "serpapi")
 	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
+	+ _with_service(JIRA_TOOLS, "jira")
+	+ _with_service(LINEAR_TOOLS, "linear")
+	+ _with_service(CLICKUP_TOOLS, "clickup")
+	+ _with_service(TRELLO_TOOLS, "trello")
+	+ _with_service(NOTION_TOOLS, "notion")
+	+ _with_service(ZENDESK_TOOLS, "zendesk")
+	+ _with_service(CALCOM_TOOLS, "calcom")
+	+ _with_service(ZOOM_TOOLS, "zoom")
 	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
