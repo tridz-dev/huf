@@ -142,7 +142,7 @@ def test_gateway_health(gateway_name: str) -> dict[str, Any]
    > **Step 2**: Send `/newbot`, give your bot a name and username.  
    > **Step 3**: Copy the HTTP API Token provided by BotFather and paste it here!"
 3. **User Action**: Sends token `7182938475:AAFx...`.
-4. **Agent Action**: Calls `setup_gateway(provider="Telegram", gateway_name="Telegram Main Bot", credentials={"bot_token": "7182938475:AAFx..."})`.
+4. **Agent Action**: Calls `setup_gateway(provider="Telegram", gateway_name="Telegram Main Bot", credentials={"token": "7182938475:AAFx..."})`.
 5. **Result**:
    - Token verified via Telegram `getMe`.
    - Webhook URL automatically configured via `setWebhook`.

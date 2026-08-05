@@ -64,19 +64,26 @@ def setup_gateway(
 		return {"success": False, "error": f"Credential validation failed for {provider}: {exc}"}
 
 	# 2. Save Integration Settings
-	integration_name = f"Integration-{gateway_name}"
-	if frappe.db.exists("Integration Settings", integration_name):
-		int_doc = frappe.get_doc("Integration Settings", integration_name)
+	#
+	# Integration Settings autonames as "{service}-####" (no field named
+	# "integration_name", no "is_enabled" — those don't exist on this
+	# doctype). It also isn't keyed one-to-one by gateway: re-running setup
+	# for an existing gateway must reuse the Integration Settings already
+	# linked to it (via Gateway.integration_settings), not fabricate a name
+	# to look up, which would never match the real autoname and silently
+	# create a fresh duplicate on every call.
+	existing_gateway = frappe.db.get_value("Gateway", gateway_name, "integration_settings")
+	if existing_gateway and frappe.db.exists("Integration Settings", existing_gateway):
+		int_doc = frappe.get_doc("Integration Settings", existing_gateway)
 		int_doc.service = provider.lower().replace(" ", "_")
-		int_doc.is_enabled = 1
+		int_doc.is_active = 1
 		int_doc.credentials = []
 	else:
 		int_doc = frappe.get_doc(
 			{
 				"doctype": "Integration Settings",
-				"integration_name": integration_name,
 				"service": provider.lower().replace(" ", "_"),
-				"is_enabled": 1,
+				"is_active": 1,
 			}
 		)
 
@@ -104,6 +111,16 @@ def setup_gateway(
 	gw_doc.room_policy = room_policy
 	gw_doc.room_sender_policy = room_sender_policy
 	gw_doc.mention_required = 1 if mention_required else 0
+	# Gateway.validate() throws if default_target_type is set without its
+	# matching default_agent/default_flow. default_target_type defaults to
+	# "Agent" above so setup would otherwise fail whenever a caller sets up
+	# a channel without picking a target yet — clear it in that case rather
+	# than force a target pick during onboarding; otherwise respect the
+	# caller's explicit choice.
+	if default_target_type == "Agent" and not default_agent:
+		default_target_type = None
+	elif default_target_type == "Flow" and not default_flow:
+		default_target_type = None
 	gw_doc.default_target_type = default_target_type
 	if default_agent:
 		gw_doc.default_agent = default_agent
@@ -118,12 +135,12 @@ def setup_gateway(
 
 	# 5. Provider-specific auto-registration (e.g. Telegram setWebhook)
 	auto_webhook_status = "Not applicable"
-	if provider == "Telegram" and "bot_token" in credentials:
+	if provider == "Telegram" and "token" in credentials:
 		try:
 			import requests
 
 			res = requests.post(
-				f"https://api.telegram.org/bot{credentials['bot_token']}/setWebhook",
+				f"https://api.telegram.org/bot{credentials['token']}/setWebhook",
 				json={"url": webhook_url},
 				timeout=10,
 			)

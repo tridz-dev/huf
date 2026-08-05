@@ -25,7 +25,7 @@ class TestGatewayPairingTools(unittest.TestCase):
         res = setup_gateway(
             provider="Telegram",
             gateway_name=test_gw,
-            credentials={"bot_token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"},
+            credentials={"token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"},
             direct_policy="Pairing",
         )
         self.assertTrue(res["success"])
@@ -33,15 +33,17 @@ class TestGatewayPairingTools(unittest.TestCase):
         self.assertIn("handle_gateway_webhook", res["webhook_url"])
 
         # Clean up
+        integration_settings = frappe.db.get_value("Gateway", test_gw, "integration_settings")
         frappe.db.delete("Gateway", {"name": test_gw})
-        frappe.db.delete("Integration Settings", {"integration_name": f"Integration-{test_gw}"})
+        if integration_settings:
+            frappe.db.delete("Integration Settings", {"name": integration_settings})
 
     def test_pairing_request_lifecycle(self):
         gw_name = "Test Pairing Gateway"
         setup_gateway(
             provider="Telegram",
             gateway_name=gw_name,
-            credentials={"bot_token": "987654321:ABCdefGHIjklMNOpqrsTUVwxyz"},
+            credentials={"token": "987654321:ABCdefGHIjklMNOpqrsTUVwxyz"},
             direct_policy="Pairing",
         )
 
@@ -59,16 +61,18 @@ class TestGatewayPairingTools(unittest.TestCase):
         self.assertEqual(approval["state"], "Approved")
 
         # Cleanup
+        integration_settings = frappe.db.get_value("Gateway", gw_name, "integration_settings")
         frappe.db.delete("Gateway Access Entry", {"gateway": gw_name})
         frappe.db.delete("Gateway", {"name": gw_name})
-        frappe.db.delete("Integration Settings", {"integration_name": f"Integration-{gw_name}"})
+        if integration_settings:
+            frappe.db.delete("Integration Settings", {"name": integration_settings})
 
     def test_gateway_health_check(self):
         gw_name = "Health Check Bot"
         setup_gateway(
             provider="Telegram",
             gateway_name=gw_name,
-            credentials={"bot_token": "111222333:ABCdefGHIjklMNOpqrsTUVwxyz"},
+            credentials={"token": "111222333:ABCdefGHIjklMNOpqrsTUVwxyz"},
         )
 
         health = test_gateway_health(gw_name)
@@ -76,8 +80,10 @@ class TestGatewayPairingTools(unittest.TestCase):
         self.assertEqual(health["report"]["provider"], "Telegram")
 
         # Cleanup
+        integration_settings = frappe.db.get_value("Gateway", gw_name, "integration_settings")
         frappe.db.delete("Gateway", {"name": gw_name})
-        frappe.db.delete("Integration Settings", {"integration_name": f"Integration-{gw_name}"})
+        if integration_settings:
+            frappe.db.delete("Integration Settings", {"name": integration_settings})
 
 
 if __name__ == "__main__":
