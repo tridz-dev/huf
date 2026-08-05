@@ -152,20 +152,23 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                 })}
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  type="button"
                   onClick={() => submit(selected.join(', '))}
                   disabled={selected.length === 0}
-                  className="px-3 py-1.5 rounded-sm bg-signal text-white text-xs disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal-ink transition-colors"
+                  className="h-auto rounded-sm bg-signal px-3 py-1.5 text-xs font-normal text-white hover:bg-signal-ink disabled:bg-paper-deep disabled:text-steel-soft disabled:opacity-100"
                 >
                   Submit
-                </button>
+                </Button>
                 {payload.allow_free_text && !showFreeText && (
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
                     onClick={() => setShowFreeText(true)}
-                    className="text-xs text-steel-soft hover:text-signal transition-colors"
+                    className="h-auto p-0 text-xs font-normal text-steel-soft hover:bg-transparent hover:text-signal"
                   >
                     Something else…
-                  </button>
+                  </Button>
                 )}
               </div>
             </>
@@ -174,15 +177,15 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
           {(isText || (isChoice && payload.allow_free_text && showFreeText)) && (
             <div className="space-y-1.5">
               {payload.kind === 'textarea' ? (
-                <textarea
+                <Textarea
                   value={text}
                   onChange={e => setText(e.target.value)}
                   rows={3}
                   placeholder="Type your answer..."
-                  className="w-full px-2.5 py-1.5 rounded-sm border border-line bg-paper text-xs text-ink placeholder:text-steel-soft resize-none outline-none focus:border-signal"
+                  className="min-h-0 resize-none bg-paper text-xs"
                 />
               ) : (
-                <input
+                <Input
                   type="text"
                   value={text}
                   onChange={e => setText(e.target.value)}
@@ -190,29 +193,32 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                     if (e.key === 'Enter') { e.preventDefault(); submit(text); }
                   }}
                   placeholder="Type your answer..."
-                  className="w-full px-2.5 py-1.5 rounded-sm border border-line bg-paper text-xs text-ink placeholder:text-steel-soft outline-none focus:border-signal"
+                  className="bg-paper text-xs"
                 />
               )}
               {isText && (payload.suggested_answers?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {payload.suggested_answers!.map(s => (
-                    <button
+                    <Button
                       key={s}
+                      type="button"
+                      variant="outline"
                       onClick={() => setText(s)}
-                      className="px-2 py-1 rounded-sm border border-line text-[11px] text-steel hover:border-signal hover:text-signal transition-colors"
+                      className="h-auto rounded-sm border-line bg-transparent px-2 py-1 text-[11px] font-normal text-steel hover:border-signal hover:bg-transparent hover:text-signal"
                     >
                       {s}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
-              <button
+              <Button
+                type="button"
                 onClick={() => submit(text)}
                 disabled={!text.trim()}
-                className="px-3 py-1.5 rounded-sm bg-signal text-white text-xs disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal-ink transition-colors"
+                className="h-auto rounded-sm bg-signal px-3 py-1.5 text-xs font-normal text-white hover:bg-signal-ink disabled:bg-paper-deep disabled:text-steel-soft disabled:opacity-100"
               >
                 Submit
-              </button>
+              </Button>
             </div>
           )}
         </div>

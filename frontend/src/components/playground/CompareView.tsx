@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { ArrowRightLeft, Copy, GitCompare, Pencil } from 'lucide-react';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { ConfigStrip } from './ConfigStrip';
 import { PromptPanel } from './PromptPanel';
 import { ResponsePanel } from './ResponsePanel';
@@ -69,17 +70,18 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
           className="w-32 border-b border-dashed border-ink bg-transparent text-[12.5px] text-ink outline-none"
         />
       ) : (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => {
             setDraft(label);
             setEditing(true);
           }}
-          className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+          className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
         >
           <span className="border-b border-dashed border-line">{label}</span>
           <Pencil className="h-3 w-3 text-steel-soft" strokeWidth={1.8} />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -137,28 +139,31 @@ export function CompareView({
           Two configurations
         </div>
         <div className="flex items-center gap-4">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={handleCopyAtoB}
-            className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
           >
             <Copy className="h-3.5 w-3.5" strokeWidth={1.8} />
             Copy A → B
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={handleSwap}
-            className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
           >
             <ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
             Swap
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             role="switch"
             aria-checked={diffEnabled}
             onClick={() => setDiffEnabled((on) => !on)}
-            className="flex items-center gap-1.5 text-[12.5px] text-ink"
+            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-ink hover:bg-transparent"
           >
             <GitCompare className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />
             Diff responses
@@ -175,7 +180,7 @@ export function CompareView({
                 )}
               />
             </span>
-          </button>
+          </Button>
         </div>
       </div>
 

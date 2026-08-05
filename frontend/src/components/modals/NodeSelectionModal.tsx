@@ -11,6 +11,7 @@ import {
 } from '../ui/dialog-scroll';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -264,9 +265,9 @@ export function NodeSelectionModal({
           </div>
           <div>
             <Label htmlFor="headers">Custom Headers (JSON string)</Label>
-            <textarea
+            <Textarea
               id="headers"
-              className="flex min-h-[60px] w-full rounded border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
+              className="bg-paper font-mono text-xs"
               value={JSON.stringify(config.headers || {}, null, 2)}
               onChange={(e) => {
                 try {
@@ -281,9 +282,9 @@ export function NodeSelectionModal({
           </div>
           <div>
             <Label htmlFor="body-template">Expected Body Template (JSON for validation or documentation)</Label>
-            <textarea
+            <Textarea
               id="body-template"
-              className="flex min-h-[100px] w-full rounded border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
+              className="min-h-[100px] bg-paper font-mono text-xs"
               value={config.body_template || ''}
               onChange={(e) => setTriggerConfig({ ...config, body_template: e.target.value })}
               placeholder='{ "order_id": "123", "amount": 100 }'
@@ -432,9 +433,11 @@ export function NodeSelectionModal({
             const isValidComponent = Icon && (typeof Icon === 'function' || (typeof Icon === 'object' && '$$typeof' in Icon));
 
             return (
-              <button
+              <Button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded border border-line hover:border-ink hover:bg-paper-deep transition-all"
+                type="button"
+                variant="ghost"
+                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -448,7 +451,7 @@ export function NodeSelectionModal({
                     </div>
                   )}
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -529,10 +532,12 @@ export function NodeSelectionModal({
                             const summary = agent.description?.slice(0, 120) || 'No description';
 
                             return (
-                            <button
+                            <Button
                               key={agent.name}
-                              className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
-                                ? 'border-signal bg-panel'
+                              type="button"
+                              variant="ghost"
+                              className={`flex h-auto w-full items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === agent.name
+                                ? 'border-signal bg-panel hover:bg-panel'
                                 : 'border-line hover:border-ink hover:bg-paper-deep'
                                 }`}
                               onClick={() => {
@@ -573,7 +578,7 @@ export function NodeSelectionModal({
                                   {agent.prompt_mode === 'Template' ? ' • Template' : ''}
                                 </div>
                               </div>
-                            </button>
+                            </Button>
                           );
                           })}
                         </div>
@@ -590,10 +595,12 @@ export function NodeSelectionModal({
                             {highlightTriggers.map((trigger) => {
                               const Icon = iconMap[trigger.icon || 'Webhook'];
                               return (
-                                <button
+                                <Button
                                   key={trigger.id}
-                                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedItem === trigger.id
-                                    ? 'border-signal bg-panel'
+                                  type="button"
+                                  variant="ghost"
+                                  className={`flex h-auto items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
+                                    ? 'border-signal bg-panel hover:bg-panel'
                                     : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
@@ -604,7 +611,7 @@ export function NodeSelectionModal({
                                   <div className="text-left flex-1 min-w-0">
                                     <div className="text-sm font-medium">{trigger.name}</div>
                                   </div>
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
@@ -620,10 +627,12 @@ export function NodeSelectionModal({
                             {popularTriggers.map((trigger) => {
                               const Icon = iconMap[trigger.icon || 'Webhook'];
                               return (
-                                <button
+                                <Button
                                   key={trigger.id}
-                                  className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === trigger.id
-                                    ? 'border-signal bg-panel'
+                                  type="button"
+                                  variant="ghost"
+                                  className={`flex h-auto w-full items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
+                                    ? 'border-signal bg-panel hover:bg-panel'
                                     : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
@@ -639,7 +648,7 @@ export function NodeSelectionModal({
                                       </div>
                                     )}
                                   </div>
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
