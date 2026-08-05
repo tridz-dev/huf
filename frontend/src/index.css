@@ -121,6 +121,13 @@
     --text-subtitle-size:   18px;
     --text-subtitle-weight: 590;
 
+    /* 16px has no custom token on purpose: Tailwind's own `text-base` is
+       already exactly 16px, and the design doc uses 16px 50 times (four of
+       them as 16px/590 card titles). So `text-base` IS the sanctioned 16px
+       step — callsites using it are correct and must not be "migrated" to
+       15px or 18px. Likewise `text-xs` (12px) and `text-sm` (14px) are the
+       sanctioned small tier. Only ARBITRARY sizes — text-[Npx] — are drift. */
+
     --text-body-size:   15px;
     --text-body-weight: 400;
 

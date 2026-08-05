@@ -70,12 +70,17 @@ const SHARED = [
 // decisions — `text-right` on a numeric table cell is correct and must not be
 // reported. Only size, weight, transform, tracking and colour count.
 const TEXT_LAYOUT = 'left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|top|middle|bottom';
+// Sanctioned scale steps. `text-xs`/`text-sm`/`text-base` map to 12/14/16px,
+// all three of which the design doc uses heavily (16px alone appears 50 times),
+// so they are part of the system rather than drift. Only ARBITRARY sizes —
+// `text-[Npx]` — and the larger display sizes count as an override.
+const TEXT_SANCTIONED = 'xs|sm|base';
 const OVERRIDE = new RegExp(
-  `\\b(?:p|px|py|pt|pb|pl|pr)-|\\brounded|\\bshadow|\\btext-(?:xs|sm|base|lg|xl|\\[)|` +
+  `\\b(?:p|px|py|pt|pb|pl|pr)-|\\brounded|\\bshadow|\\btext-(?:lg|xl|\\[)|` +
   `\\bfont-(?:bold|semibold|medium|normal)|\\buppercase\\b|\\btracking-|` +
   `\\b(?:h|w|size|min-w|min-h)-(?!full\\b|auto\\b)|` +
   `\\b(?:bg|border|ring|fill|stroke|divide|outline|accent|caret|decoration|placeholder)-|` +
-  `\\btext-(?!${TEXT_LAYOUT})[a-z]`,
+  `\\btext-(?!${TEXT_LAYOUT}|${TEXT_SANCTIONED}\\b)[a-z]`,
 );
 
 const findings = { undefinedToken: [], rawPalette: [], deadDark: [], override: [] };
