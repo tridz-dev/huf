@@ -68,7 +68,7 @@ function SectionHeader({ icon: Icon, title }: { icon?: LucideIcon; title: ReactN
   return (
     <div className="flex items-center gap-2">
       {Icon ? <Icon className="w-4 h-4 text-steel-soft shrink-0" /> : null}
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-steel">{title}</h3>
+      <h3 className="font-mono text-eyebrow uppercase text-steel">{title}</h3>
     </div>
   );
 }
@@ -979,7 +979,7 @@ export function ToolCreationForm({
                   disabled={loading}
                 >
                   <FileText className="w-4 h-4 text-steel-soft shrink-0" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Details</h3>
+                  <h3 className="font-mono text-eyebrow uppercase text-steel shrink-0">Details</h3>
                   {!contractOpen && (
                     <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
                   )}
@@ -1053,7 +1053,7 @@ export function ToolCreationForm({
                   disabled={loading}
                 >
                   <ShieldCheck className="w-4 h-4 text-steel-soft shrink-0" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Guardrails</h3>
+                  <h3 className="font-mono text-eyebrow uppercase text-steel shrink-0">Guardrails</h3>
                   {!guardrailsOpen && (
                     <span className="text-sm text-steel truncate ml-1">— {guardrailsSummary}</span>
                   )}

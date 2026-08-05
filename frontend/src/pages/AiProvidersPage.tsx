@@ -417,11 +417,11 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         />
       }
     >
-      <div className="border border-line bg-panel p-4 space-y-3">
+      <div className="bg-[#f6f4ff] rounded-lg p-4 space-y-3">
         <div className="flex items-start gap-3">
           <Sparkles className="h-4 w-4 mt-0.5 text-signal shrink-0" />
           <div>
-            <h3 className="font-display font-bold text-[15px] uppercase text-ink">Get started with AI</h3>
+            <h3 className="text-[14px] font-semibold text-ink">Get started with AI</h3>
             <p className="font-body text-[13px] text-steel mt-0.5">
               Pick a free-friendly starter path, add its key, and Huf will prepare a model for your first agent.
             </p>
@@ -442,7 +442,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               </Button>
             </div>
           ) : (Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
-            <Button key={path} variant="outline" className="h-auto flex-1 justify-between whitespace-normal text-left border-line hover:border-ink hover:bg-paper-deep" onClick={() => setStarterPath(path)}>
+            <Button key={path} variant="ghost" className="h-auto flex-1 justify-between whitespace-normal text-left rounded-md bg-white hover:bg-white hover:shadow-md" onClick={() => setStarterPath(path)}>
               <span>
                 <span className="block font-body font-medium text-[13px] text-ink">{starter.title}</span>
                 <span className="mt-1 block font-mono text-[11px] text-steel-soft">{starter.modelName}</span>

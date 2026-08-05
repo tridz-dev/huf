@@ -133,7 +133,7 @@ export function ToolsTab({
             </div>
             <Button size="sm" variant="outline" onClick={onAddTools} type="button" disabled={locked}>
               <Plus className="w-4 h-4 mr-2" />
-              Add Tool
+              Add tool
             </Button>
           </div>
         </CardHeader>
@@ -144,7 +144,7 @@ export function ToolsTab({
               <p className="text-xs font-body text-steel-soft mb-4">Add tools to let this agent query data, run APIs, or call other agents.</p>
               <Button onClick={onAddTools} variant="outline" type="button" disabled={locked}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Tool
+                Add tool
               </Button>
             </div>
           ) : (
@@ -229,7 +229,7 @@ export function ToolsTab({
                 disabled={mcpLoading}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Connect MCP Server
+                Connect MCP server
               </Button>
             </div>
           </div>
@@ -253,7 +253,7 @@ export function ToolsTab({
                   onClick={() => handleMCPAction('add')}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Connect MCP Server
+                  Connect MCP server
                 </Button>
               </div>
             </div>

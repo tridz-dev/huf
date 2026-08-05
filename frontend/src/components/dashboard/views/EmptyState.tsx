@@ -15,27 +15,21 @@ export interface EmptyStateProps {
 
 export function EmptyState({
   icon: Icon = PackageOpen,
-  title = 'No items',
-  description = 'There are no items to display.',
+  title = 'Nothing here yet',
+  description = 'Items you create will show up here.',
   action,
   className,
 }: EmptyStateProps) {
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center text-center border border-line bg-panel p-10',
+        'flex flex-col items-center justify-center text-center p-10',
         className,
       )}
     >
-      {Icon && (
-        <div className="flex h-12 w-12 items-center justify-center border border-line bg-paper-deep mb-5">
-          <Icon className="h-6 w-6 text-steel" />
-        </div>
-      )}
+      {Icon && <Icon className="h-[22px] w-[22px] text-steel-soft" />}
       {title && (
-        <h3 className="font-display font-bold text-[18px] uppercase tracking-[.02em] text-ink">
-          {title}
-        </h3>
+        <h3 className="text-[15px] font-medium text-ink mt-3">{title}</h3>
       )}
       {description && (
         <p className="font-body text-[13px] text-steel mt-1">{description}</p>
@@ -44,7 +38,7 @@ export function EmptyState({
         <Button
           variant="outline"
           size="sm"
-          className="mt-5 border-line text-ink hover:bg-paper-deep rounded"
+          className="mt-5"
           onClick={action.onClick}
         >
           {action.label}

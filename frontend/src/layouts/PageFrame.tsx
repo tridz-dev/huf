@@ -49,7 +49,7 @@ export function PageFrame({
                     </div>
                   )}
                   {subtitle && (
-                    <p className="font-body text-steel text-[14.5px]">{subtitle}</p>
+                    <p className="font-body text-steel text-[13px]">{subtitle}</p>
                   )}
                 </div>
                 {actions && <div className="flex items-center gap-2">{actions}</div>}

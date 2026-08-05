@@ -861,7 +861,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     return (
         <div className="px-6 pb-6 pt-2">
             <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-                <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
+                <div className="w-full border border-input rounded-lg shadow-md focus-within:ring-1 focus-within:ring-ring transition-all">
                     <Textarea
                         ref={textareaRef}
                         value={message}
@@ -894,7 +894,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         </div>
                     )}
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                            <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                            <span className="flex items-center gap-x-1 text-[10px] text-steel-soft">
                                 Use
                                 <ShortcutKey>
                                     Shift + Enter
@@ -949,7 +949,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         </div>
                 </div>
             </form>
-            <p className="mt-3 text-[10px] text-zinc-400 text-center">AI output can be inaccurate. Double check important info.</p>
+            <p className="mt-3 text-[10px] text-steel-soft text-center">AI output can be inaccurate. Double check important info.</p>
         </div>
     );
 });

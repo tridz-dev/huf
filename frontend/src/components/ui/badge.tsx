@@ -21,7 +21,7 @@ const badgeVariants = cva(
           'rounded-full border-good/40 bg-transparent text-good font-mono uppercase tracking-wide',
         outline: 'rounded-full border-line text-steel font-mono uppercase tracking-wide',
         'pill-success': 'rounded-full border-transparent bg-[#e8f5ee] text-good font-sans normal-case tracking-normal text-[11px] font-medium',
-        'pill-warning': 'rounded-full border-transparent bg-[#fdf3e0] text-[#8a5a00] font-sans normal-case tracking-normal text-[11px] font-medium',
+        'pill-warning': 'rounded-full border-transparent bg-warning-tint text-warning font-sans normal-case tracking-normal text-[11px] font-medium',
         'pill-danger': 'rounded-full border-transparent bg-destructive-tint text-destructive font-sans normal-case tracking-normal text-[11px] font-medium',
         'pill-neutral': 'rounded-full border-transparent bg-paper-deep text-steel font-sans normal-case tracking-normal text-[11px] font-medium',
         chip: 'rounded-sm border-transparent bg-paper-deep text-steel font-mono normal-case tracking-normal',

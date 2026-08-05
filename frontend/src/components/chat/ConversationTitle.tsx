@@ -25,10 +25,11 @@ type ConversationTitleProps = {
     value: string,
     conversationId: string,
     animate?: boolean,
+    className?: string,
 } & VariantProps<typeof conversationTitleVariants>
 
 const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProps>(
-    function ConversationTitle({variant, value, conversationId, animate = false}, ref){
+    function ConversationTitle({variant, value, conversationId, animate = false, className}, ref){
     const [active, setActive] = useState(false);
     const [shouldAnimate, setShouldAnimate] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -159,7 +160,7 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProp
     if (!active) {
         return (
             <div
-                className={cn(conversationTitleVariants({ variant }), "relative min-w-0")}
+                className={cn(conversationTitleVariants({ variant }), "relative min-w-0", className)}
                 onDoubleClick={toggleInput}
                 role="button"
                 tabIndex={0}
@@ -180,7 +181,7 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProp
     return (
         <input
         ref={inputRef} 
-        className={cn(conversationTitleVariants({variant}))}
+        className={cn(conversationTitleVariants({variant}), className)}
         defaultValue={value}
         readOnly={!active}
         onDoubleClick={toggleInput}

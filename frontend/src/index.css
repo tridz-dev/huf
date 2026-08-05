@@ -41,9 +41,12 @@
     --signal:     #7A5AF0;
     --signal-ink: #5B3FC4;
     --good:       #1C7C54;
+    --good-tint:  #E8F5EE;
     --destructive-tint: #FDECEA;
     --destructive: #B3261E;
     --destructive-foreground: var(--paper);
+    --warning:      #8A5A00;
+    --warning-tint: #FDF3E0;
 
     /* Shape */
     --r: 8px;
@@ -67,32 +70,32 @@
 
     /* Control sizing
        Arithmetic (border-box, worst case = bordered variant e.g. `outline`
-       has 1px border = 2px total height eaten; text-sm line-height 20px,
-       text-xs line-height 16px per default Tailwind config — no fontSize
-       override in tailwind.config.js):
-         sm  (icon-sm too): text-xs 16px line-height, no vertical padding
-             class applied (flex `items-center` centers within fixed
-             height) -> min needed 16 + 2 border = 18px. 32px gives
-             comfortable headroom and clears the ~32px minimum comfortable
-             tap-target guideline.
-         md  (default, icon too): text-sm 20px line-height + control-py
-             (8px * 2 = 16px) + 2px border = 38px needed exactly.
-             Previously 34px height vs a 36px requirement (20 + 14 + 2)
-             caused ~2px overflow — text/padding didn't fit the box,
-             reading as vertically cramped/off-center. Raised height to
-             38px and py to 8px so the stack fits exactly.
-         lg: text-sm 20px line-height, no vertical padding class (flex
-             centers) -> min needed 20 + 2 border = 22px. 44px keeps lg
-             clearly larger than md (was equal to md's old 38px) with
-             generous headroom for a prominent CTA.
-       Horizontal padding scaled to preserve original px/height ratios
-       (px-lg/h-lg was 28/38=0.74, now 32/44=0.73; px/h-md was
-       14/34=0.41, now 16/38=0.42; px-sm/h-sm was 10/30=0.33, now
-       12/32=0.375) so proportions stay consistent across the new
-       heights. */
-    --control-h-sm: 32px;
-    --control-h-md: 38px;
-    --control-h-lg: 44px;
+       has 1px border = 2px total height eaten):
+         md (default, icon too, and Input/Select/Textarea): the actual
+             class applied by these components is `text-ui-text`
+             (--text-ui-size 13px / --text-ui-weight 500 — see the Type
+             scale below), whose Tailwind fontSize entry does NOT specify
+             a lineHeight, so no line-height utility is emitted and the
+             browser falls back to the UA-computed "normal" line-height
+             for the -apple-system stack at 13px, which renders at ~16px
+             (13px * ~1.23). That 16px content line-height + control-py
+             (8px * 2 = 16px) + 2px border = 34px, matching the design
+             doc's "Density: Controls 8px radius at 34px tall" and the
+             Inputs section's "field height 34px". control-py stays 8px
+             unchanged — it already balances the equation once height is
+             derived from the 13px text-ui-text class these components
+             actually use (an earlier pass's 38px/20px-line-height math
+             mistakenly assumed the default Tailwind `text-sm` size/line-
+             height, which none of these components render with).
+         sm (icon-sm too): scaled down from md by the same relative step
+             the previous 32/38/44 triad used (~±6px around a 38px
+             center), rounded to clean numbers: 30px.
+         lg: scaled up from md the same way: 38px.
+       Horizontal padding (--control-px/-sm/-lg) is unchanged by this
+       pass — out of scope here, kept at prior values. */
+    --control-h-sm: 30px;
+    --control-h-md: 34px;
+    --control-h-lg: 38px;
     --control-px: 16px;
     --control-px-sm: 12px;
     --control-px-lg: 32px;
@@ -140,7 +143,7 @@
     --accent: var(--paper-deep);
     --accent-foreground: var(--ink);
     --border: var(--line);
-    --input: var(--line);
+    --input: #E4E4E8;
     --ring: var(--signal);
 
     /* Sidebar */
@@ -430,7 +433,6 @@
   font-size: 39px;
   font-weight: 600;
   line-height: 1.1;
-  text-transform: uppercase;
   letter-spacing: 0.025em;
 }
 .coldstart-desc {

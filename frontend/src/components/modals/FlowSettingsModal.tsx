@@ -189,14 +189,14 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
         </DialogScrollBody>
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
           <Button
-            variant="outline"
+            variant="destructive-ghost"
             size="sm"
-            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 gap-2"
+            className="gap-2"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={isDeleting || isSaving}
           >
             {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            Delete Flow
+            Delete flow
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose} disabled={isDeleting || isSaving}>
@@ -204,7 +204,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             </Button>
             <Button size="sm" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow} className="gap-2">
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save Changes
+              Save changes
             </Button>
           </div>
         </DialogScrollFooter>

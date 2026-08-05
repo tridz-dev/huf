@@ -49,14 +49,14 @@ export function TriggersTab({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <div className="space-y-1.5">
-          <CardTitle>Agent Triggers</CardTitle>
+          <CardTitle>Agent triggers</CardTitle>
           <CardDescription>
             Define multiple ways this agent can run
           </CardDescription>
         </div>
         <Button onClick={onAddTrigger} size="sm" type="button">
           <Plus className="w-4 h-4 mr-2" />
-          Add Trigger
+          Add trigger
         </Button>
       </CardHeader>
       <CardContent>
@@ -65,7 +65,7 @@ export function TriggersTab({
             <p className="font-body text-steel-soft mb-4">No triggers added yet.</p>
             <Button onClick={onAddTrigger} variant="outline" type="button">
               <Plus className="w-4 h-4 mr-2" />
-              Add Trigger
+              Add trigger
             </Button>
           </div>
         ) : (
@@ -78,7 +78,7 @@ export function TriggersTab({
                     <SelectValue placeholder="Filter by type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="all">All types</SelectItem>
                     {Array.isArray(triggerTypes) && triggerTypes.map((type) => (
                       <SelectItem key={type.name} value={type.name}>
                         {type.name}
@@ -92,7 +92,7 @@ export function TriggersTab({
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="all">All status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="disabled">Disabled</SelectItem>
                 </SelectContent>

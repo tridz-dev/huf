@@ -3,6 +3,7 @@ import { Calendar, Activity, Settings, Zap, Server, Lock, Users } from 'lucide-r
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
+import { Button } from '@/components/ui/button';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { usePermissions } from '../contexts/PermissionsContext';
@@ -151,6 +152,7 @@ function AgentsPage() {
     <PageFrame
       title="Agents"
       subtitle="Create and manage your AI agents."
+      actions={<Button onClick={() => navigate('/agents/new')}>New agent</Button>}
       filters={
         <FilterBar
           searchPlaceholder="Search agents..."

@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { PageFrame } from '@/layouts/PageFrame';
+import { Button } from '@/components/ui/button';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
@@ -137,6 +138,7 @@ export function SkillsPage() {
       title="Skills"
       badge={<ExperimentalBadge />}
       subtitle="Manage reusable skill bundles for your agents"
+      actions={<Button onClick={() => navigate('/skills/new')}>New skill</Button>}
       filters={
         <FilterBar
           searchPlaceholder="Search skills..."

@@ -26,7 +26,10 @@ export default {
         signal:         'var(--signal)',
         'signal-ink':   'var(--signal-ink)',
         good:           'var(--good)',
+        'good-tint':    'var(--good-tint)',
         'destructive-tint': 'var(--destructive-tint)',
+        warning:        'var(--warning)',
+        'warning-tint': 'var(--warning-tint)',
 
         // shadcn compatibility
         background: 'var(--background)',

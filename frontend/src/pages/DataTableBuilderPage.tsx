@@ -424,21 +424,28 @@ export function DataTableBuilderPage() {
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel">
-				<Button
-					variant="outline"
-					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}
-				>
-					Cancel
-				</Button>
-				<Button onClick={handleSave} disabled={saving}>
-					{saving ? (
-						<Loader2 className="w-4 h-4 mr-2 animate-spin" />
-					) : (
-						<Save className="w-4 h-4 mr-2" />
-					)}
-					{isEdit ? 'Save Changes' : 'Create Table'}
-				</Button>
+			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-white/[.92] backdrop-blur-[12px]">
+				{state.isDirty ? (
+					<span className="text-xs text-steel-soft">Unsaved changes</span>
+				) : (
+					<span />
+				)}
+				<div className="flex items-center gap-2">
+					<Button
+						variant="outline"
+						onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}
+					>
+						Cancel
+					</Button>
+					<Button onClick={handleSave} disabled={saving}>
+						{saving ? (
+							<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+						) : (
+							<Save className="w-4 h-4 mr-2" />
+						)}
+						{isEdit ? 'Save changes' : 'Create table'}
+					</Button>
+				</div>
 			</div>
 
 			<UnsavedChangesDialog blocker={blocker} />

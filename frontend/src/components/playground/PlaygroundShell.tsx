@@ -24,7 +24,7 @@ interface PlaygroundShellProps {
 }
 
 const tabs: WorkSurfaceTab[] = [
-  { value: 'playground', label: 'Playground' },
+  { value: 'playground', label: 'Single' },
   { value: 'compare', label: 'Compare' },
 ];
 

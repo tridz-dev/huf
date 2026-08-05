@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Clock4, PanelLeftClose, Plus, Users } from 'lucide-react';
+import { Clock4, PanelLeftClose, Plus, Search, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -44,6 +44,12 @@ function getRecentBucketLabel(ts?: string): string {
   if (diffDays === 1) return 'YESTERDAY';
   if (diffDays <= 7) return 'THIS WEEK';
   return 'OLDER';
+}
+
+const UNTITLED_CONVERSATION_TITLE = 'Untitled Chat';
+
+function isUntitledConversationTitle(title: string): boolean {
+  return !title || title === UNTITLED_CONVERSATION_TITLE;
 }
 
 export default function ChatListing({ onClose }: { onClose?: () => void }) {
@@ -562,6 +568,7 @@ function AgentConversationItem({
                       value={chat.title}
                       conversationId={chat.id}
                       animate={animatingConversationId === chat.id}
+                      className={isUntitledConversationTitle(chat.title) ? 'italic text-steel-soft' : undefined}
                     />
                     <p className="ps-1 text-[10px] text-steel-soft truncate mt-0.5 group-hover:text-steel">
                       {chat.timestampLabel ?? ''}
@@ -767,6 +774,7 @@ function RecentsConversationList({
                                 value={chat.title}
                                 conversationId={chat.id}
                                 animate={animatingConversationId === chat.id}
+                                className={isUntitledConversationTitle(chat.title) ? 'italic text-steel-soft' : undefined}
                               />
                               <p className="ps-1 text-xs truncate text-steel">{chat.agent}</p>
                             </div>
@@ -811,9 +819,21 @@ function ChatListHeader({
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center gap-2">
         <SidebarTrigger className="-ml-1" />
-        <h1 className="font-semibold text-sm tracking-tight text-ink">Chat</h1>
+        <div className="flex flex-col leading-none">
+          <span className="font-mono text-eyebrow uppercase text-steel-soft">Conversations</span>
+          <h1 className="font-semibold text-sm tracking-tight text-ink">Chat</h1>
+        </div>
       </div>
       <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-steel hover:text-ink"
+        >
+          <Search className="w-4 h-4" />
+          <span className="sr-only">Search conversations</span>
+        </Button>
         {onAgentSelect && (
           <ChatAgentPicker
             value={selectedAgent}

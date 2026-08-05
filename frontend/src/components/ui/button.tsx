@@ -17,6 +17,8 @@ const buttonVariants = cva(
           'bg-ink text-primary-foreground hover:bg-ink/90 font-display font-bold text-[13px]',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        'destructive-ghost':
+          'bg-transparent text-destructive hover:bg-destructive-tint',
         outline:
           'border border-line bg-panel text-ink hover:bg-paper-deep',
         secondary:

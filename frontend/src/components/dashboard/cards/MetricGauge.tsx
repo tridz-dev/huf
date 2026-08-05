@@ -25,14 +25,14 @@ export function MetricGauge({
   info,
 }: MetricGaugeProps) {
   return (
-    <div className="px-[22px] py-5 min-w-0">
+    <div className="px-[18px] py-4 min-w-0">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-body text-[12.5px] font-semibold text-steel">
+          <div className="font-body text-[13px] font-medium text-ink">
             {label}
           </div>
           {period && (
-            <div className="font-mono text-[10.5px] text-steel-soft mt-1">
+            <div className="font-mono text-eyebrow text-steel-soft mt-1">
               {period}
             </div>
           )}
@@ -54,7 +54,7 @@ export function MetricGauge({
       <div className="mt-4 flex items-baseline">
         <span
           className={cn(
-            'font-display font-bold text-[40px] leading-none',
+            'font-display font-semibold text-[30px] tracking-[-.02em] leading-none tabular-nums',
             flag ? 'text-signal-ink' : 'text-ink'
           )}
         >
@@ -78,7 +78,7 @@ export function GaugeRow({ children, className }: GaugeRowProps) {
     <TooltipProvider>
       <div
         className={cn(
-          'border border-ink bg-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y divide-line overflow-hidden',
+          'border border-line rounded-lg bg-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y divide-line overflow-hidden',
           className
         )}
       >

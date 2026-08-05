@@ -48,9 +48,9 @@ const tabsListVariants = cva('gap-0', {
     variant: {
       // Single underline-style tab vocabulary; apple-quiet system font stack,
       // sentence case, steel → ink when active, purple signal bottom border on
-      // shared ink baseline.
+      // shared line baseline.
       underline:
-        'inline-flex items-center justify-start border-b border-ink bg-transparent p-0',
+        'inline-flex items-center justify-start border-b border-line bg-transparent p-0',
       // Apple/iOS segmented control: a sunken track (bg-paper-deep, the app's
       // canonical recessed-surface token — see AgentRunDetailPage.tsx,
       // ToolCard.tsx) framing the raised active segment.

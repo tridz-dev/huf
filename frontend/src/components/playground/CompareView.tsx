@@ -1,11 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  ArrowLeftRight,
-  ArrowRightLeft,
-  Copy,
-  GitCompare,
-  Pencil,
-} from 'lucide-react';
+import { ArrowRightLeft, Copy, GitCompare, Pencil } from 'lucide-react';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import { cn } from '@/lib/utils';
 import { ConfigStrip } from './ConfigStrip';
@@ -40,6 +34,7 @@ interface EditableLabelProps {
 function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(label);
+  const isColumnA = glyph === 'A';
 
   const commit = () => {
     const trimmed = draft.trim();
@@ -49,7 +44,14 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
 
   return (
     <div className="mb-2 flex items-center gap-2">
-      <span className="font-sans text-eyebrow font-medium uppercase text-steel">{glyph}</span>
+      <span
+        className={cn(
+          'inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] text-[11px] font-medium text-white',
+          isColumnA ? 'bg-ink' : 'bg-signal',
+        )}
+      >
+        {glyph}
+      </span>
       {editing ? (
         <input
           autoFocus
@@ -132,8 +134,7 @@ export function CompareView({
       {/* Control row */}
       <div className="flex items-center justify-between px-5 pt-3">
         <div className="flex items-center gap-2 font-mono text-eyebrow uppercase text-steel-soft">
-          <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.8} />
-          Comparing two configurations
+          Two configurations
         </div>
         <div className="flex items-center gap-4">
           <button
@@ -161,11 +162,16 @@ export function CompareView({
           >
             <GitCompare className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />
             Diff responses
-            <span className="relative inline-block h-[14px] w-[26px] rounded border border-ink">
+            <span
+              className={cn(
+                'relative inline-flex h-[19px] w-[32px] shrink-0 items-center rounded-full p-[2px] transition-colors',
+                diffEnabled ? 'bg-signal' : 'bg-steel-soft',
+              )}
+            >
               <span
                 className={cn(
-                  'absolute top-[1px] h-[10px] w-[11px] transition-all',
-                  diffEnabled ? 'right-[1px] bg-signal' : 'left-[1px] bg-steel-soft',
+                  'block h-[15px] w-[15px] rounded-full bg-white shadow-sm transition-transform',
+                  diffEnabled ? 'translate-x-[13px]' : 'translate-x-0',
                 )}
               />
             </span>

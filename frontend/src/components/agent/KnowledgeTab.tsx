@@ -24,14 +24,14 @@ export function KnowledgeTab({
           <div>
             <CardTitle className="flex items-center gap-2">
               <BookOpen className="w-5 h-5" />
-              Knowledge Sources
+              Knowledge sources
             </CardTitle>
             <CardDescription>Knowledge sources this agent can access</CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={onAdd} type="button">
               <Plus className="w-4 h-4 mr-2" />
-              Add Knowledge
+              Add knowledge
             </Button>
           </div>
         </div>
@@ -46,7 +46,7 @@ export function KnowledgeTab({
             <div className="flex items-center justify-center gap-2 flex-wrap">
               <Button onClick={onAdd} variant="outline" type="button">
                 <Plus className="w-4 h-4 mr-2" />
-                Add Knowledge
+                Add knowledge
               </Button>
             </div>
           </div>

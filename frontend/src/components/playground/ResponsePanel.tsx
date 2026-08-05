@@ -93,15 +93,23 @@ function ResponseBody({ state, diffSegments }: { state: SlotState; diffSegments?
   if (diffSegments) {
     return (
       <p className="whitespace-pre-wrap break-words px-3.5 py-3 text-[13.5px] leading-relaxed">
-        {diffSegments.map((segment, index) =>
-          segment.changed ? (
-            <span key={index} className="bg-destructive-tint">
-              {segment.text}
-            </span>
-          ) : (
-            <span key={index}>{segment.text}</span>
-          ),
-        )}
+        {diffSegments.map((segment, index) => {
+          if (segment.type === 'added') {
+            return (
+              <span key={index} className="bg-good-tint">
+                {segment.text}
+              </span>
+            );
+          }
+          if (segment.type === 'removed') {
+            return (
+              <span key={index} className="bg-destructive-tint">
+                {segment.text}
+              </span>
+            );
+          }
+          return <span key={index}>{segment.text}</span>;
+        })}
       </p>
     );
   }
