@@ -260,7 +260,7 @@ export default function HubSimplePage() {
               <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col items-center justify-center px-4">
                 {/* Greeting */}
                 <div className="mb-8">
-                  <h1 className="font-display font-bold text-2xl uppercase tracking-wide text-ink text-center">
+                  <h1 className="font-display font-bold text-2xl tracking-wide text-ink text-center">
                     What can huf do for you today?
                   </h1>
                 </div>

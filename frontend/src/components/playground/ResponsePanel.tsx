@@ -124,7 +124,7 @@ export function ResponsePanel({
   return (
     <div className={cn('flex min-h-[260px] flex-col rounded border border-line bg-panel', className)}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
-        <span className="flex-none font-sans text-[12px] font-medium uppercase tracking-[.06em] text-steel">{title}</span>
+        <span className="flex-none font-sans text-eyebrow font-medium uppercase text-steel">{title}</span>
         <StatusReadout state={state} />
       </div>
 

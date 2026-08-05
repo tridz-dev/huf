@@ -1,5 +1,6 @@
 import { Fragment, ReactNode, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -132,7 +133,7 @@ export function FilterBar({
           className={flushTriggerClass}
           icon={<ChevronDown className="h-3.5 w-3.5 text-steel-soft" />}
         >
-          <span className="font-mono text-[11px] uppercase tracking-[.08em] text-steel">
+          <span className="font-mono text-eyebrow uppercase text-steel">
             {filter.label}: {current}
           </span>
         </SelectTrigger>
@@ -149,16 +150,16 @@ export function FilterBar({
 
   if (primaryAction) {
     cells.push(
-      <button
+      <Button
         key="primary-action"
-        type="button"
-        className="flex items-center gap-2 self-stretch bg-ink px-4 font-display text-[13px] font-bold uppercase tracking-[.06em] text-paper transition-colors hover:bg-signal disabled:opacity-50"
+        variant="default"
+        className="h-auto gap-2 self-stretch rounded-none px-4"
         onClick={primaryAction.onClick}
         disabled={primaryAction.disabled}
       >
         {primaryAction.icon}
         {primaryAction.label}
-      </button>
+      </Button>
     );
   }
 

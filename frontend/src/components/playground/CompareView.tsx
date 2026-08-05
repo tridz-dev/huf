@@ -49,7 +49,7 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
 
   return (
     <div className="mb-2 flex items-center gap-2">
-      <span className="font-sans text-[12px] font-medium uppercase tracking-[.06em] text-steel">{glyph}</span>
+      <span className="font-sans text-eyebrow font-medium uppercase text-steel">{glyph}</span>
       {editing ? (
         <input
           autoFocus
@@ -131,7 +131,7 @@ export function CompareView({
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       {/* Control row */}
       <div className="flex items-center justify-between px-5 pt-3">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[.08em] text-steel-soft">
+        <div className="flex items-center gap-2 font-mono text-eyebrow uppercase text-steel-soft">
           <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.8} />
           Comparing two configurations
         </div>

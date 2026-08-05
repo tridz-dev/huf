@@ -94,7 +94,7 @@ export default function RolesPage() {
     <div className="h-full overflow-auto">
       <div className="p-6 max-w-5xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
+          <h1 className="font-display text-title text-ink flex items-center gap-2">
             <ShieldCheck className="h-6 w-6" />
             Roles
           </h1>

@@ -27,7 +27,7 @@ function SettingsPage() {
     <div className="h-full overflow-auto">
       <div className="p-6 max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-semibold">Settings</h1>
+          <h1 className="font-display text-title text-ink">Settings</h1>
           <p className="text-sm text-steel">
             Defaults and provider configuration shared across agents.
           </p>

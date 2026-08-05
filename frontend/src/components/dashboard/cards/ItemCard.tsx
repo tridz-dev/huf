@@ -113,7 +113,7 @@ export function ItemCard({
                     key={index}
                     className="flex items-center justify-between text-sm leading-tight"
                   >
-                    <div className="flex items-center gap-1 font-mono text-[11px] uppercase tracking-wide text-steel-soft">
+                    <div className="flex items-center gap-1 font-mono text-eyebrow uppercase text-steel-soft">
                       {item.icon && <item.icon className="w-3 h-3" />}
                       <span>{item.label}</span>
                     </div>

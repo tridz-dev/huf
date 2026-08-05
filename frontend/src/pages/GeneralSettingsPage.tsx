@@ -39,7 +39,7 @@ function GeneralSettingsPage() {
         <div className="flex items-center gap-3">
           <SlidersHorizontal className="w-6 h-6 text-muted-foreground" />
           <div>
-            <h1 className="text-2xl font-bold">General Settings</h1>
+            <h1 className="font-display text-title text-ink">General Settings</h1>
             <p className="text-sm text-muted-foreground">
               Personalization options for the HUF interface.
             </p>

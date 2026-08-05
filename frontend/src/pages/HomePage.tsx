@@ -249,7 +249,7 @@ function HomePage() {
       <div className="p-6 space-y-6">
         {/* HUF Page head */}
         <div>
-          <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-none tracking-tight">
+          <h1 className="font-display font-bold text-[36px] text-ink leading-none tracking-tight">
             Dashboard
           </h1>
           <p className="font-body text-steel text-[14.5px] mt-1">

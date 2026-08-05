@@ -75,7 +75,7 @@ export function InlineEditName({
           onBlur={commit}
           onKeyDown={handleKeyDown}
           autoFocus
-          className="text-2xl font-bold h-auto border-0 px-0 py-0 focus-visible:ring-0 flex-1 min-w-0"
+          className="font-display text-title text-ink h-auto border-0 px-0 py-0 focus-visible:ring-0 flex-1 min-w-0"
         />
         {editButton}
       </div>
@@ -84,7 +84,7 @@ export function InlineEditName({
 
   return (
     <div className={cn('inline-flex items-center gap-2 max-w-md min-w-0', className)}>
-      <h1 className="text-2xl font-bold min-w-0 max-w-full truncate">
+      <h1 className="font-display text-title text-ink min-w-0 max-w-full truncate">
         {value || placeholder}
       </h1>
       {editButton}

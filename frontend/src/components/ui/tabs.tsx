@@ -14,9 +14,9 @@ const TabsSizeContext = React.createContext<'default' | 'compact'>('default');
 const tabsListVariants = cva('gap-0', {
   variants: {
     variant: {
-      // DESIGN.md §6.5: the single tab vocabulary — underline style, IBM Plex
-      // Sans 13px medium, sentence case, steel → ink when active, 2px signal
-      // bottom border on the shared 1px ink baseline.
+      // Single underline-style tab vocabulary; apple-quiet system font stack,
+      // sentence case, steel → ink when active, purple signal bottom border on
+      // shared ink baseline.
       underline:
         'inline-flex items-center justify-start border-b border-ink bg-transparent p-0',
       // Apple/iOS segmented control: a sunken track (bg-paper-deep, the app's

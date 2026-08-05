@@ -413,7 +413,7 @@ export function SkillFormPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Sparkles className="w-6 h-6 text-muted-foreground" />
             <div>
-              <h1 className="text-2xl font-bold">{isNew ? 'New Skill' : form.watch('title') || 'Skill'}</h1>
+              <h1 className="font-display text-title text-ink">{isNew ? 'New Skill' : form.watch('title') || 'Skill'}</h1>
               <p className="text-sm text-muted-foreground">{isNew ? 'Create a reusable skill bundle' : form.watch('skill_name')}</p>
             </div>
             <Badge variant={watchStatus === 'Active' ? 'default' : 'secondary'}>{watchStatus}</Badge>

@@ -246,7 +246,7 @@ export default function GatewaysPage() {
             <Link2 className="h-6 w-6" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-lg font-semibold text-ink">Channel Gateways & Messaging Ingress</h1>
+            <h1 className="font-display text-title text-ink">Channel Gateways & Messaging Ingress</h1>
             <p className="max-w-3xl text-sm text-steel leading-relaxed">
               Gateways serve as safe front doors from external messaging channels (WhatsApp, Messenger,
               Instagram, Telegram, Slack, Email) directly into Huf. Incoming messages are verified, checked

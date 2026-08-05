@@ -18,7 +18,7 @@ function formatTime(ranAt: number): string {
 export function RunLedger({ entries, latestEntryId, onRestore, onSaveAsTemplate }: RunLedgerProps) {
   return (
     <div className="rounded border border-line bg-panel">
-      <div className="border-b border-line px-3.5 py-2.5 font-display text-[14px] font-bold uppercase">
+      <div className="border-b border-line px-3.5 py-2.5 font-mono text-eyebrow font-medium uppercase text-steel">
         Run ledger
       </div>
 

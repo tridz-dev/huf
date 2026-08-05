@@ -1,5 +1,6 @@
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
@@ -463,8 +464,8 @@ export function AdvancedTab({
 											</p>
 										</div>
 										<FormControl>
-											<textarea
-												className="flex min-h-[120px] w-full rounded-none border border-input bg-paper px-3 py-2 text-sm ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+											<Textarea
+												className="min-h-[120px]"
 												placeholder="Enter the prompt used to summarize conversation history..."
 												{...field}
 												value={field.value || ''}

@@ -40,7 +40,7 @@ export function IntegrationServiceHeader({
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
           {isNew ? (
-            <h1 className="text-2xl font-bold">
+            <h1 className="font-display text-title text-ink">
               New Integration Service
             </h1>
           ) : (

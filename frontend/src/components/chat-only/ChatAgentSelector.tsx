@@ -74,7 +74,7 @@ export function ChatAgentSelector({
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <MessageSquarePlus className="size-5" />
           </div>
-          <h1 className="text-xl font-semibold text-zinc-950">
+          <h1 className="text-xl font-semibold text-ink">
             {firstName ? `Hi ${firstName}, choose an assistant` : "Choose an assistant"}
           </h1>
           <p className="text-sm text-zinc-500">Start a focused chat with one of your available Huf agents.</p>
@@ -149,7 +149,7 @@ function CenteredState({
         <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
           {icon}
         </div>
-        <h1 className="text-lg font-semibold text-zinc-950">{title}</h1>
+        <h1 className="text-lg font-semibold text-ink">{title}</h1>
         <p className="text-sm leading-6 text-zinc-500">{description}</p>
       </div>
     </div>
