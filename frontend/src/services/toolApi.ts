@@ -78,7 +78,7 @@ export async function getToolTypes(): Promise<AgentToolType[]> {
 export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentToolFunctionRef[]> {
   try {
     const options = {
-      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype"],
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype", "service"],
       limit: 1000,
       filters: [] as Array<{ field: string; operator: string; value: string }>,
     };
@@ -105,7 +105,7 @@ export async function getToolFunctionsByName(toolNames: string[]): Promise<Agent
     if (toolNames.length === 0) return [];
     
     const tools = await db.getDocList(doctype['Agent Tool Function'], {
-      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype"],
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype", "service"],
       filters: [["name", "in", toolNames]],
       limit: 1000,
     });
