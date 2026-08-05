@@ -229,7 +229,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </div>
           </div>
           <div>
-            <Label htmlFor="webhook-auth" size="sm">Authentication Key (Optional)</Label>
+            <Label htmlFor="webhook-auth" size="sm">Authentication key (optional)</Label>
             <Input
               id="webhook-auth"
               value={config.auth || ''}
@@ -238,7 +238,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             />
           </div>
           <div>
-            <Label htmlFor="method" size="sm">HTTP Method (Expected)</Label>
+            <Label htmlFor="method" size="sm">HTTP method (expected)</Label>
             <Select
               value={config.method || 'POST'}
               onValueChange={(value) => handleUpdateTriggerConfig('method', value)}
@@ -262,7 +262,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       return (
         <>
           <div>
-            <Label htmlFor="interval-type">Schedule Type</Label>
+            <Label htmlFor="interval-type">Schedule type</Label>
             <Select
               value={config.intervalType}
               onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
@@ -274,7 +274,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 <SelectItem value="minutes">Minutes</SelectItem>
                 <SelectItem value="hours">Hours</SelectItem>
                 <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (Cron)</SelectItem>
+                <SelectItem value="custom">Custom (cron)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -292,7 +292,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           )}
           {config.intervalType === 'custom' && (
             <div>
-              <Label htmlFor="cron">Cron Expression</Label>
+              <Label htmlFor="cron">Cron expression</Label>
               <Input
                 id="cron"
                 value={config.cronExpression || ''}
@@ -309,7 +309,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       return (
         <>
           <div>
-            <Label htmlFor="doctype">Document Type</Label>
+            <Label htmlFor="doctype">Document type</Label>
             <Combobox
               options={docTypes}
               value={config.doctype || ''}
@@ -321,7 +321,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             />
           </div>
           <div>
-            <Label htmlFor="event">Event Type</Label>
+            <Label htmlFor="event">Event type</Label>
             <Select
               value={config.event}
               onValueChange={(value) => handleUpdateTriggerConfig('event', value as DocEventType)}
@@ -333,9 +333,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 <SelectItem value="save">Save</SelectItem>
                 <SelectItem value="update">Update</SelectItem>
                 <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before Save</SelectItem>
-                <SelectItem value="before-update">Before Update</SelectItem>
-                <SelectItem value="before-delete">Before Delete</SelectItem>
+                <SelectItem value="before-save">Before save</SelectItem>
+                <SelectItem value="before-update">Before update</SelectItem>
+                <SelectItem value="before-delete">Before delete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -405,7 +405,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </div>
 
             <div>
-              <Label htmlFor="edge-label">Edge Label</Label>
+              <Label htmlFor="edge-label">Edge label</Label>
               <Input
                 id="edge-label"
                 value={(selectedEdge.label as string) || ''}
@@ -424,7 +424,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
             <div className="space-y-4">
               <div>
-                <Label htmlFor="edge-type" size="sm">Edge Type</Label>
+                <Label htmlFor="edge-type" size="sm">Edge type</Label>
                 <Select
                   value={selectedEdge.data?.edgeType || 'always'}
                   onValueChange={(value) => {
@@ -440,9 +440,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="always">Always (Default)</SelectItem>
-                    <SelectItem value="on_success">On Success</SelectItem>
-                    <SelectItem value="on_failure">On Failure</SelectItem>
+                    <SelectItem value="always">Always (default)</SelectItem>
+                    <SelectItem value="on_success">On success</SelectItem>
+                    <SelectItem value="on_failure">On failure</SelectItem>
                     <SelectItem value="expression">Expression</SelectItem>
                   </SelectContent>
                 </Select>
@@ -450,7 +450,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
               {selectedEdge.data?.edgeType === 'expression' && (
                 <div>
-                  <Label htmlFor="edge-expr" size="sm">Condition Expression</Label>
+                  <Label htmlFor="edge-expr" size="sm">Condition expression</Label>
                   <Input
                     id="edge-expr"
                     value={selectedEdge.data?.condition || ''}
@@ -487,7 +487,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               </div>
 
               <div>
-                <Label htmlFor="edge-outcome" size="sm">Approval Outcome</Label>
+                <Label htmlFor="edge-outcome" size="sm">Approval outcome</Label>
                 <Select
                   value={selectedEdge.data?.meta?.outcome || 'none'}
                   onValueChange={(value) => {
@@ -529,7 +529,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </div>
 
             <div>
-              <Label htmlFor="node-title">Node Title</Label>
+              <Label htmlFor="node-title">Node title</Label>
               <Input
                 id="node-title"
                 value={selectedNode.data.label}
@@ -542,7 +542,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               <>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <Label>Trigger Type</Label>
+                    <Label>Trigger type</Label>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -586,7 +586,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'agent-run') {
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">Agent Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Agent configuration</Label>
                     <div>
                       <Label htmlFor="agent-name" size="sm">Agent</Label>
                       <Combobox
@@ -602,7 +602,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="prompt-template" size="sm">Prompt Template</Label>
+                        <Label htmlFor="prompt-template" size="sm">Prompt template</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.prompt_template || '';
                           handleUpdateActionConfig('prompt_template', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
@@ -617,7 +617,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="save-key" size="sm">Save Response To</Label>
+                      <Label htmlFor="save-key" size="sm">Save response to</Label>
                       <Input
                         id="save-key"
                         value={config.save_response_to_context || ''}
@@ -632,7 +632,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'tool-call') {
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">Tool Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Tool configuration</Label>
                     <div>
                       <Label htmlFor="tool-name" size="sm">Tool</Label>
                       <Combobox
@@ -698,7 +698,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       )}
                     </div>
                     <div>
-                      <Label htmlFor="save-result" size="sm">Save Result To Context</Label>
+                      <Label htmlFor="save-result" size="sm">Save result to context</Label>
                       <Input
                         id="save-result"
                         value={(config.output?.save_result_to_context) || ''}
@@ -713,12 +713,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'router') {
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">LLM Router Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">LLM router configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Connect edges from this node to other nodes. The LLM will use edge labels to decide where to route.
                     </div>
                     <div>
-                      <Label htmlFor="router-agent" size="sm">Routing Agent</Label>
+                      <Label htmlFor="router-agent" size="sm">Routing agent</Label>
                       <Combobox
                         options={agents}
                         value={config.router_agent_name || ''}
@@ -731,7 +731,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="conv-mode" size="sm">Conversation Mode</Label>
+                      <Label htmlFor="conv-mode" size="sm">Conversation mode</Label>
                       <Select
                         value={config.conversation_mode || 'flow_shared'}
                         onValueChange={(value) => handleUpdateActionConfig('conversation_mode', value)}
@@ -740,8 +740,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="flow_shared">Flow Shared (Default)</SelectItem>
-                          <SelectItem value="isolated">Isolated (No history)</SelectItem>
+                          <SelectItem value="flow_shared">Flow shared (default)</SelectItem>
+                          <SelectItem value="isolated">Isolated (no history)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -754,7 +754,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const approverUsers = (config as { approver_users?: string[] | string }).approver_users;
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">Human Approval Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Human approval configuration</Label>
                     <div>
                       <Label htmlFor="approval-title" size="sm">Title</Label>
                       <Input
@@ -776,7 +776,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="context-summary" size="sm">Context Summary</Label>
+                        <Label htmlFor="context-summary" size="sm">Context summary</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.context_summary || '';
                           handleUpdateActionConfig('context_summary', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
@@ -791,7 +791,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="approval-type" size="sm">Approval Type</Label>
+                      <Label htmlFor="approval-type" size="sm">Approval type</Label>
                       <Select
                         value={approvalType}
                         onValueChange={(value) => handleUpdateActionConfig('approval_type', value)}
@@ -800,14 +800,14 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="role">By Role</SelectItem>
-                          <SelectItem value="user">By User</SelectItem>
+                          <SelectItem value="role">By role</SelectItem>
+                          <SelectItem value="user">By user</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     {approvalType === 'role' && (
                       <div>
-                        <Label htmlFor="approver-role" size="sm">Approver Role</Label>
+                        <Label htmlFor="approver-role" size="sm">Approver role</Label>
                         <Combobox
                           options={roles}
                           value={(config as { approver_role?: string }).approver_role || ''}
@@ -821,7 +821,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     )}
                     {approvalType === 'user' && (
                       <div>
-                        <Label htmlFor="approver-users" size="sm">Approver Users (comma-separated emails)</Label>
+                        <Label htmlFor="approver-users" size="sm">Approver users (comma-separated emails)</Label>
                         <Input
                           id="approver-users"
                           value={Array.isArray(approverUsers)
@@ -847,7 +847,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="ref-name" size="sm">Reference Document Name</Label>
+                        <Label htmlFor="ref-name" size="sm">Reference document name</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.reference_name || '';
                           handleUpdateActionConfig('reference_name', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
@@ -862,7 +862,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="save-decision" size="sm">Store Decision in Context Key</Label>
+                      <Label htmlFor="save-decision" size="sm">Store decision in context key</Label>
                       <Input
                         id="save-decision"
                         value={config.store_decision_in_context || ''}
@@ -877,7 +877,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'condition') {
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">Condition (IF) Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Condition (IF) configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Evaluates a boolean expression against context. Routes to True or False branch node.
                     </div>
@@ -898,7 +898,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="true-node" size="sm">True Branch (Node ID)</Label>
+                      <Label htmlFor="true-node" size="sm">True branch (node ID)</Label>
                       <Input
                         id="true-node"
                         value={config.true_node || ''}
@@ -907,7 +907,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="false-node" size="sm">False Branch (Node ID)</Label>
+                      <Label htmlFor="false-node" size="sm">False branch (node ID)</Label>
                       <Input
                         id="false-node"
                         value={config.false_node || ''}
@@ -922,7 +922,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'http-request') {
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">HTTP Request Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">HTTP request configuration</Label>
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <Label htmlFor="http-url" size="sm">URL</Label>
@@ -1005,7 +1005,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="http-save" size="sm">Save Result To Context</Label>
+                      <Label htmlFor="http-save" size="sm">Save result to context</Label>
                       <Input
                         id="http-save"
                         value={config.save_result_to_context || ''}
@@ -1021,7 +1021,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const transformations = config.transformations || [];
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">Transform Data Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Transform data configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Map, copy, or template data between context variables.
                     </div>
@@ -1043,7 +1043,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           </Button>
                         </div>
                         <div>
-                          <Label size="sm">Source Field</Label>
+                          <Label size="sm">Source field</Label>
                           <Input
                             value={t.source_field || ''}
                             onChange={(e) => {
@@ -1056,7 +1056,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           />
                         </div>
                         <div>
-                          <Label size="sm">Target Field</Label>
+                          <Label size="sm">Target field</Label>
                           <Input
                             value={t.target_field || ''}
                             onChange={(e) => {
@@ -1110,12 +1110,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'loop') {
                 return (
                   <div className="space-y-3">
-                    <Label weight="semibold" className="mb-2 block">Loop Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Loop configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Iterate over an array in context. Each iteration sets the current item and index.
                     </div>
                     <div>
-                      <Label htmlFor="loop-iterate" size="sm">Iterate Over (Context Key)</Label>
+                      <Label htmlFor="loop-iterate" size="sm">Iterate over (context key)</Label>
                       <Input
                         id="loop-iterate"
                         value={config.iterate_over || ''}
@@ -1125,7 +1125,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-item" size="sm">Item Variable</Label>
+                      <Label htmlFor="loop-item" size="sm">Item variable</Label>
                       <Input
                         id="loop-item"
                         value={config.item_key || 'loop_item'}
@@ -1135,7 +1135,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-index" size="sm">Index Variable</Label>
+                      <Label htmlFor="loop-index" size="sm">Index variable</Label>
                       <Input
                         id="loop-index"
                         value={config.index_key || 'loop_index'}
@@ -1145,7 +1145,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-body" size="sm">Loop Body Node (Node ID)</Label>
+                      <Label htmlFor="loop-body" size="sm">Loop body node (node ID)</Label>
                       <Input
                         id="loop-body"
                         value={config.loop_node || ''}
@@ -1154,7 +1154,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-done" size="sm">Done Node (Node ID)</Label>
+                      <Label htmlFor="loop-done" size="sm">Done node (node ID)</Label>
                       <Input
                         id="loop-done"
                         value={config.done_node || ''}
@@ -1163,7 +1163,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-max" size="sm">Max Iterations</Label>
+                      <Label htmlFor="loop-max" size="sm">Max iterations</Label>
                       <Input
                         id="loop-max"
                         type="number"
@@ -1180,7 +1180,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               // Fallback: show JSON for other action types
               return (
                 <div>
-                  <Label className="mb-2 block">Action Configuration</Label>
+                  <Label className="mb-2 block">Action configuration</Label>
                   <div className="p-3 rounded-md bg-muted/30 border border-border">
                     <code className="text-xs text-muted-foreground font-mono block overflow-x-auto">
                       {JSON.stringify(config, null, 2)}

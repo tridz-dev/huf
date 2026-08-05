@@ -48,7 +48,7 @@ export function MCPToolDetailModal({
 
           {/* Tool Name */}
           <div className="space-y-2 flex-shrink-0">
-            <Label>Tool Name</Label>
+            <Label>Tool name</Label>
             <div className="p-3 rounded-lg border bg-paper-deep/30">
               <p className="text-sm font-mono">{tool.tool_name}</p>
             </div>

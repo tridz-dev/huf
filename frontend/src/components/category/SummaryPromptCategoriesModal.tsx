@@ -229,7 +229,7 @@ export function SummaryPromptCategoriesModal({
               </p>
 
               <div className="space-y-2">
-                <Label>Category Name</Label>
+                <Label>Category name</Label>
                 <Input
                   placeholder="e.g. Summarization"
                   value={formData.category_name}
@@ -274,7 +274,7 @@ export function SummaryPromptCategoriesModal({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Parent Category</Label>
+                  <Label>Parent category</Label>
                   <Select
                     value={formData.parent_category || '__none__'}
                     onValueChange={(value) =>

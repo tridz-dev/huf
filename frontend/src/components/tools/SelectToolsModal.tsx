@@ -261,8 +261,8 @@ export function SelectToolsModal({
           className="flex min-h-0 flex-1 flex-col overflow-hidden px-6"
         >
           <TabsList layout="grid" cols={2} className="flex-shrink-0">
-            <TabsTrigger value="tool-library">Tool Library</TabsTrigger>
-            <TabsTrigger value="create-new">Create New</TabsTrigger>
+            <TabsTrigger value="tool-library">Tool library</TabsTrigger>
+            <TabsTrigger value="create-new">Create new</TabsTrigger>
           </TabsList>
 
           {/* Tool Library Tab */}

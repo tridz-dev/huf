@@ -125,7 +125,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
         </DialogScrollHeader>
         <DialogScrollBody className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Flow Name</Label>
+            <Label htmlFor="name">Flow name</Label>
             <Input
               id="name"
               value={name}
@@ -134,7 +134,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="description">Description (Optional)</Label>
+            <Label htmlFor="description">Description (optional)</Label>
             <Textarea
               id="description"
               className="min-h-[80px]"
@@ -160,7 +160,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="mode">Execution Mode</Label>
+              <Label htmlFor="mode">Execution mode</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as 'normal' | 'agentic')}>
                 <SelectTrigger id="mode">
                   <SelectValue />
@@ -172,7 +172,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="max-hops">Max Hops</Label>
+              <Label htmlFor="max-hops">Max hops</Label>
               <Input
                 id="max-hops"
                 type="number"

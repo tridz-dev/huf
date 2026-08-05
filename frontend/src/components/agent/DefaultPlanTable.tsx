@@ -56,7 +56,7 @@ export function DefaultPlanTable({
 												</SelectTrigger>
 												<SelectContent>
 													<SelectItem value="pending">Pending</SelectItem>
-													<SelectItem value="in_progress">In Progress</SelectItem>
+													<SelectItem value="in_progress">In progress</SelectItem>
 													<SelectItem value="done">Done</SelectItem>
 													<SelectItem value="failed">Failed</SelectItem>
 												</SelectContent>

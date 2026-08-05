@@ -31,7 +31,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
             name="server_name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Server Name</FormLabel>
+                <FormLabel>Server name</FormLabel>
                 <FormControl>
                   <Input placeholder="my-mcp-server" {...field} />
                 </FormControl>
@@ -107,7 +107,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
                 name="tool_namespace"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tool Namespace</FormLabel>
+                    <FormLabel>Tool namespace</FormLabel>
                     <FormControl>
                       <Input placeholder="gmail" {...field} />
                     </FormControl>
@@ -122,7 +122,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
                 name="timeout_seconds"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Timeout (Seconds)</FormLabel>
+                    <FormLabel>Timeout (seconds)</FormLabel>
                     <FormControl>
                       <Input
                         type="text"

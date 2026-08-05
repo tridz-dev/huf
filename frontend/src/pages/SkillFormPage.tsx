@@ -463,7 +463,7 @@ export function SkillFormPage() {
                       name="skill_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Skill Name</FormLabel>
+                          <FormLabel>Skill name</FormLabel>
                           <FormControl>
                             <Input placeholder="my-skill" {...field} disabled={!isNew} />
                           </FormControl>
@@ -559,7 +559,7 @@ export function SkillFormPage() {
                       name="source_type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Source Type</FormLabel>
+                          <FormLabel>Source type</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
@@ -582,7 +582,7 @@ export function SkillFormPage() {
                       name="provider_app"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Provider App</FormLabel>
+                          <FormLabel>Provider app</FormLabel>
                           <FormControl>
                             <Input placeholder="huf" {...field} />
                           </FormControl>
@@ -609,7 +609,7 @@ export function SkillFormPage() {
                       name="source_path"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Source Path</FormLabel>
+                          <FormLabel>Source path</FormLabel>
                           <FormControl>
                             <Input placeholder="skills" {...field} />
                           </FormControl>
@@ -622,7 +622,7 @@ export function SkillFormPage() {
                       name="source_ref"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Source Ref</FormLabel>
+                          <FormLabel>Source ref</FormLabel>
                           <FormControl>
                             <Input placeholder="main" {...field} />
                           </FormControl>
@@ -636,7 +636,7 @@ export function SkillFormPage() {
                       render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                           <div className="space-y-0.5">
-                            <FormLabel className="text-base">Auto Load</FormLabel>
+                            <FormLabel className="text-base">Auto load</FormLabel>
                             <FormDescription>Load this skill automatically when attached</FormDescription>
                           </div>
                           <FormControl>
@@ -802,7 +802,7 @@ export function SkillFormPage() {
 
               <TabsContent value="mcp" className="space-y-4">
                 <ChildTableCard
-                  title="MCP Servers"
+                  title="MCP servers"
                   description="MCP servers bundled with this skill"
                   icon={Plug}
                   emptyText="No MCP servers linked yet."

@@ -110,7 +110,7 @@ function HttpProviderForm({
             onValueChange={(v) => setForm((f) => ({ ...f, provider: v || undefined }))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select AI Provider" />
+              <SelectValue placeholder="Select AI provider" />
             </SelectTrigger>
             <SelectContent>
               {providers.map((p) => (
@@ -158,7 +158,7 @@ function HttpProviderForm({
         </div>
 
         <div className="space-y-2">
-          <Label>Auth Type</Label>
+          <Label>Auth type</Label>
           <Select
             value={form.auth_type || 'Bearer Token'}
             onValueChange={(v) => setForm((f) => ({ ...f, auth_type: v as 'Bearer Token' | 'API Key Header' | 'None' }))}
@@ -175,7 +175,7 @@ function HttpProviderForm({
         </div>
 
         <div className="space-y-2">
-          <Label>File Param</Label>
+          <Label>File param</Label>
           <Input
             value={form.file_param || ''}
             onChange={(e) => setForm((f) => ({ ...f, file_param: e.target.value }))}
@@ -184,7 +184,7 @@ function HttpProviderForm({
         </div>
 
         <div className="space-y-2">
-          <Label>Response Path</Label>
+          <Label>Response path</Label>
           <Input
             value={form.response_path || ''}
             onChange={(e) => setForm((f) => ({ ...f, response_path: e.target.value }))}
@@ -242,7 +242,7 @@ function ElevenlabsForm({
             onValueChange={(v) => setForm((f) => ({ ...f, provider: v || undefined }))}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select AI Provider" />
+              <SelectValue placeholder="Select AI provider" />
             </SelectTrigger>
             <SelectContent>
               {providers.map((p) => (
@@ -264,7 +264,7 @@ function ElevenlabsForm({
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label>Webhook Secret</Label>
+          <Label>Webhook secret</Label>
           <Input
             type="password"
             autoComplete="off"

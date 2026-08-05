@@ -88,7 +88,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
                 name="knowledge_source"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Knowledge Source</FormLabel>
+                    <FormLabel>Knowledge source</FormLabel>
                     <FormControl>
                       <Combobox
                         options={knowledgeSourceOptions}
@@ -115,7 +115,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
                   name="promotion_min_confidence"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min Confidence</FormLabel>
+                      <FormLabel>Min confidence</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -139,7 +139,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
                   name="promotion_min_importance"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min Importance</FormLabel>
+                      <FormLabel>Min importance</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -174,7 +174,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
             name="ttl_days"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>TTL Days</FormLabel>
+                <FormLabel>TTL days</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

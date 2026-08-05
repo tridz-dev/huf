@@ -112,7 +112,7 @@ export function TriggerConfigModal({
             />
           </div>
           <div>
-            <Label htmlFor="api-key">API Key</Label>
+            <Label htmlFor="api-key">API key</Label>
             <Input
               id="api-key"
               value={config.apiKey || ''}
@@ -121,7 +121,7 @@ export function TriggerConfigModal({
             />
           </div>
           <div>
-            <Label htmlFor="method">HTTP Method</Label>
+            <Label htmlFor="method">HTTP method</Label>
             <Select
               value={config.method}
               onValueChange={(value) =>
@@ -147,7 +147,7 @@ export function TriggerConfigModal({
       return (
         <div className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="interval-type">Schedule Type</Label>
+            <Label htmlFor="interval-type">Schedule type</Label>
             <Select
               value={config.intervalType}
               onValueChange={(value) =>
@@ -161,7 +161,7 @@ export function TriggerConfigModal({
                 <SelectItem value="minutes">Minutes</SelectItem>
                 <SelectItem value="hours">Hours</SelectItem>
                 <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (Cron)</SelectItem>
+                <SelectItem value="custom">Custom (cron)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -181,7 +181,7 @@ export function TriggerConfigModal({
           )}
           {config.intervalType === 'custom' && (
             <div>
-              <Label htmlFor="cron">Cron Expression</Label>
+              <Label htmlFor="cron">Cron expression</Label>
               <Input
                 id="cron"
                 value={config.cronExpression || ''}
@@ -200,7 +200,7 @@ export function TriggerConfigModal({
       return (
         <div className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="doctype">Document Type</Label>
+            <Label htmlFor="doctype">Document type</Label>
             <Input
               id="doctype"
               value={config.doctype || ''}
@@ -209,7 +209,7 @@ export function TriggerConfigModal({
             />
           </div>
           <div>
-            <Label htmlFor="event">Event Type</Label>
+            <Label htmlFor="event">Event type</Label>
             <Select
               value={config.event}
               onValueChange={(value) =>
@@ -223,9 +223,9 @@ export function TriggerConfigModal({
                 <SelectItem value="save">Save</SelectItem>
                 <SelectItem value="update">Update</SelectItem>
                 <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before Save</SelectItem>
-                <SelectItem value="before-update">Before Update</SelectItem>
-                <SelectItem value="before-delete">Before Delete</SelectItem>
+                <SelectItem value="before-save">Before save</SelectItem>
+                <SelectItem value="before-update">Before update</SelectItem>
+                <SelectItem value="before-delete">Before delete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -281,7 +281,7 @@ export function TriggerConfigModal({
         <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as ModalTab); setSelectedTrigger(null); setConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
           <TabsList layout="grid" cols={4} className="flex-shrink-0">
             <TabsTrigger value="explore">Explore</TabsTrigger>
-            <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
+            <TabsTrigger value="ai-agents">AI & agents</TabsTrigger>
             <TabsTrigger value="apps">Apps</TabsTrigger>
             <TabsTrigger value="utility">Utility</TabsTrigger>
           </TabsList>

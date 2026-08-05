@@ -79,7 +79,7 @@ export default function McpListingPage() {
 
   return (
     <PageFrame
-      title="MCP Servers"
+      title="MCP servers"
       subtitle="Connect Model Context Protocol servers."
       filters={
         <FilterBar

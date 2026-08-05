@@ -18,7 +18,7 @@ export function AppSidebarHeader() {
           </span>
           <span className="inline-block h-2 w-2 flex-shrink-0 bg-signal group-data-[collapsible=icon]:h-[26px] group-data-[collapsible=icon]:w-[26px] group-data-[collapsible=icon]:rounded-[7px]" />
           <span className="font-mono text-[10px] text-steel-soft uppercase tracking-widest group-data-[collapsible=icon]:hidden">
-            AI Platform
+            AI platform
           </span>
         </div>
       </SidebarMenuItem>

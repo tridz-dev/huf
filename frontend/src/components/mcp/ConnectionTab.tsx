@@ -189,7 +189,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
       {/* URL-first primary card */}
       <Card>
         <CardHeader>
-          <CardTitle>MCP Server URL</CardTitle>
+          <CardTitle>MCP server URL</CardTitle>
           <CardDescription>
             Paste the MCP endpoint and click Connect. HUF discovers OAuth settings and registers automatically.
           </CardDescription>
@@ -289,7 +289,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                 name="auth_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Authentication Mode</FormLabel>
+                    <FormLabel>Authentication mode</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value || 'none'}
@@ -321,7 +321,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                       name="auth_header_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Header Name</FormLabel>
+                          <FormLabel>Header name</FormLabel>
                           <FormControl>
                             <Input
                               placeholder="Authorization"
@@ -359,7 +359,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                 name="transport_type"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Transport Type</FormLabel>
+                    <FormLabel>Transport type</FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
@@ -396,7 +396,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name={`custom_headers.${index}.header_name`}
                           render={({ field: f }) => (
                             <FormItem>
-                              <FormLabel>Header Name</FormLabel>
+                              <FormLabel>Header name</FormLabel>
                               <FormControl>
                                 <Input {...f} placeholder="X-Custom-Header" />
                               </FormControl>
@@ -409,7 +409,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name={`custom_headers.${index}.header_value`}
                           render={({ field: f }) => (
                             <FormItem>
-                              <FormLabel>Header Value</FormLabel>
+                              <FormLabel>Header value</FormLabel>
                               <FormControl>
                                 <Input {...f} placeholder="Header value" />
                               </FormControl>
@@ -485,7 +485,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name="oauth_client_secret"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Client Secret</FormLabel>
+                              <FormLabel>Client secret</FormLabel>
                               <FormControl>
                                 <Input
                                   type="password"
@@ -503,7 +503,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name="oauth_authorization_endpoint"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Authorization Endpoint</FormLabel>
+                              <FormLabel>Authorization endpoint</FormLabel>
                               <FormControl>
                                 <Input
                                   placeholder="https://provider.example.com/oauth/authorize"
@@ -520,7 +520,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name="oauth_token_endpoint"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Token Endpoint</FormLabel>
+                              <FormLabel>Token endpoint</FormLabel>
                               <FormControl>
                                 <Input
                                   placeholder="https://provider.example.com/oauth/token"
@@ -556,7 +556,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name="oauth_extra_authorize_params"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Extra Authorize Params (JSON)</FormLabel>
+                              <FormLabel>Extra authorize params (JSON)</FormLabel>
                               <FormControl>
                                 <Textarea
                                   placeholder='{"access_type": "offline"}'
@@ -574,7 +574,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                           name="oauth_redirect_uri"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Custom Redirect URI</FormLabel>
+                              <FormLabel>Custom redirect URI</FormLabel>
                               <FormControl>
                                 <Input
                                   placeholder="https://provider.example.com/mcp-oauth-callback"

@@ -100,7 +100,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="policy_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Policy Name</FormLabel>
+                  <FormLabel>Policy name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. support-agent-memory" {...field} />
                   </FormControl>
@@ -150,7 +150,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="scope_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Scope Type</FormLabel>
+                  <FormLabel>Scope type</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -180,7 +180,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="scope_key"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Scope Key</FormLabel>
+                <FormLabel>Scope key</FormLabel>
                 <FormControl>
                   <Input placeholder="Leave empty to use runtime context" {...field} />
                 </FormControl>
@@ -207,7 +207,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="capture_mode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Capture Mode</FormLabel>
+                  <FormLabel>Capture mode</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -237,7 +237,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="learning_agent"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Learning Agent</FormLabel>
+                  <FormLabel>Learning agent</FormLabel>
                   <FormControl>
                     <Combobox
                       options={agentOptions}
@@ -271,7 +271,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="default_status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Default Status</FormLabel>
+                <FormLabel>Default status</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -299,7 +299,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="allowed_record_types"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Allowed Record Types</FormLabel>
+                <FormLabel>Allowed record types</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder={'One record type per line, e.g.\nfact\npreference\ninstruction'}
@@ -331,7 +331,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="inject_mode"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Inject Mode</FormLabel>
+                <FormLabel>Inject mode</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -363,7 +363,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="max_records"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Max Records</FormLabel>
+                  <FormLabel>Max records</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -385,7 +385,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="token_budget"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Token Budget</FormLabel>
+                  <FormLabel>Token budget</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -468,7 +468,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                 name="knowledge_source"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Knowledge Source</FormLabel>
+                    <FormLabel>Knowledge source</FormLabel>
                     <FormControl>
                       <Combobox
                         options={knowledgeSourceOptions}
@@ -495,7 +495,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                   name="promotion_min_confidence"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min Confidence</FormLabel>
+                      <FormLabel>Min confidence</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -519,7 +519,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                   name="promotion_min_importance"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min Importance</FormLabel>
+                      <FormLabel>Min importance</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -554,7 +554,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="ttl_days"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>TTL Days</FormLabel>
+                <FormLabel>TTL days</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

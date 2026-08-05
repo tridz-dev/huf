@@ -71,7 +71,7 @@ export function GeneralTab({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>LLM Configuration</CardTitle>
+          <CardTitle>LLM configuration</CardTitle>
           <CardDescription>Configure language model settings</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -81,7 +81,7 @@ export function GeneralTab({
               name="agent_name"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Agent Name</FormLabel>
+                  <FormLabel>Agent name</FormLabel>
                   <FormControl>
                     <Input placeholder="my-agent" {...field} />
                   </FormControl>
@@ -225,7 +225,7 @@ We generally recommend altering this or temperature but not both.`}
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                 <div className="space-y-0.5 pr-4">
-                  <FormLabel className="text-base">Run Immediately</FormLabel>
+                  <FormLabel className="text-base">Run immediately</FormLabel>
                   <FormDescription>
                     When enabled, agent runs execute synchronously and return a direct response. When disabled (default), runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require an immediate response.
                   </FormDescription>
@@ -250,7 +250,7 @@ We generally recommend altering this or temperature but not both.`}
             name="prompt_mode"
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel>Prompt Mode</FormLabel>
+                <FormLabel>Prompt mode</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
                   <FormControl>
                     <SelectTrigger>
@@ -428,7 +428,7 @@ We generally recommend altering this or temperature but not both.`}
               name="cache_control_type"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Cache Control Type</FormLabel>
+                  <FormLabel>Cache control type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -456,7 +456,7 @@ We generally recommend altering this or temperature but not both.`}
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Cache System Message</FormLabel>
+                    <FormLabel className="text-base">Cache system message</FormLabel>
                     <FormDescription>
                       Cache the system message/instructions to avoid re-sending them on every request.
                     </FormDescription>
@@ -476,7 +476,7 @@ We generally recommend altering this or temperature but not both.`}
               render={({ field }) => (
                 <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Cache Conversation History</FormLabel>
+                    <FormLabel className="text-base">Cache conversation history</FormLabel>
                     <FormDescription>
                       Cache conversation history messages to reduce token usage in multi-turn conversations.
                     </FormDescription>

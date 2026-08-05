@@ -250,7 +250,7 @@ export function KnowledgeInputsModal({
           {showCreate && (
             <div className="rounded-lg border p-4 space-y-4">
               <div className="space-y-2">
-                <Label>Input Type</Label>
+                <Label>Input type</Label>
                 <Select value={inputType} onValueChange={(v) => setInputType(v as KnowledgeInputType)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -301,7 +301,7 @@ export function KnowledgeInputsModal({
 
               {inputType === 'Text' && (
                 <div className="space-y-2">
-                  <Label>Text Content</Label>
+                  <Label>Text content</Label>
                   <Textarea
                     placeholder="Paste text content here..."
                     className="min-h-[120px] resize-y"

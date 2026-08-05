@@ -716,7 +716,7 @@ export function AgentFormPage() {
         console.error('Error loading SSH connections:', error);
         if (!cancelled) {
           setSSHConnectionOptions([]);
-          toast.error('Failed to load SSH Connections');
+          toast.error('Failed to load SSH connections');
         }
       } finally {
         if (!cancelled) {

@@ -35,7 +35,7 @@ function SettingsPage() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList>
-            <TabsTrigger value="agent">Agent Defaults</TabsTrigger>
+            <TabsTrigger value="agent">Agent defaults</TabsTrigger>
             <TabsTrigger value="voice">Voice / STT</TabsTrigger>
           </TabsList>
 

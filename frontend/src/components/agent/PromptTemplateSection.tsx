@@ -56,7 +56,7 @@ export function PromptTemplateSection({
           name="agent_prompt"
           render={({ field }) => (
             <FormItem id="agent-prompt-field" className="sm:col-span-2">
-              <FormLabel>Agent Prompt</FormLabel>
+              <FormLabel>Agent prompt</FormLabel>
               <div className="flex items-center gap-2">
                 <FormControl>
                   <Combobox
@@ -126,7 +126,7 @@ export function PromptTemplateSection({
           render={({ field }) => (
             <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
               <div className="space-y-0.5 pr-4">
-                <FormLabel className="text-base">Lock Template Version</FormLabel>
+                <FormLabel className="text-base">Lock template version</FormLabel>
                 <FormDescription>
                   If checked, this agent will stay on the prompt version it was attached to, ignoring newer versions.
                 </FormDescription>

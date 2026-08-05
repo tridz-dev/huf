@@ -687,7 +687,7 @@ export function ToolCreationForm({
             name="function_path"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Function Path</FormLabel>
+                <FormLabel>Function path</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app.api.my_function"
@@ -708,7 +708,7 @@ export function ToolCreationForm({
             name="function_name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Function Name</FormLabel>
+                <FormLabel>Function name</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="e.g., myClientFunction"
@@ -729,7 +729,7 @@ export function ToolCreationForm({
             name="provider_app"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Provider App</FormLabel>
+                <FormLabel>Provider app</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app"
@@ -794,7 +794,7 @@ export function ToolCreationForm({
       {selectedType && shouldShowField('http_headers', selectedType) && (
         <div className="space-y-4 rounded-lg border border-line bg-panel p-4">
           <div className="flex items-center justify-between">
-            <SectionHeader title="HTTP Headers" />
+            <SectionHeader title="HTTP headers" />
             <Button
               type="button"
               variant="outline"

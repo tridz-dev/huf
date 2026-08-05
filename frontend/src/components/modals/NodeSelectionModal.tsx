@@ -236,7 +236,7 @@ export function NodeSelectionModal({
             <p className="text-[10px] text-steel-soft mt-1">This is your endpoint. Send data here to trigger this flow.</p>
           </div>
           <div>
-            <Label htmlFor="method">HTTP Method</Label>
+            <Label htmlFor="method">HTTP method</Label>
             <Select
               value={config.method || 'POST'}
               onValueChange={(value) =>
@@ -255,7 +255,7 @@ export function NodeSelectionModal({
             </Select>
           </div>
           <div>
-            <Label htmlFor="api-key">Security — API Key (Optional)</Label>
+            <Label htmlFor="api-key">Security — API key (optional)</Label>
             <Input
               id="api-key"
               value={config.apiKey || ''}
@@ -264,7 +264,7 @@ export function NodeSelectionModal({
             />
           </div>
           <div>
-            <Label htmlFor="headers">Custom Headers (JSON string)</Label>
+            <Label htmlFor="headers">Custom headers (JSON string)</Label>
             <Textarea
               id="headers"
               className="bg-paper font-mono text-xs"
@@ -298,7 +298,7 @@ export function NodeSelectionModal({
       return (
         <div className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="interval-type">Schedule Type</Label>
+            <Label htmlFor="interval-type">Schedule type</Label>
             <Select
               value={config.intervalType}
               onValueChange={(value) =>
@@ -312,7 +312,7 @@ export function NodeSelectionModal({
                 <SelectItem value="minutes">Minutes</SelectItem>
                 <SelectItem value="hours">Hours</SelectItem>
                 <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (Cron)</SelectItem>
+                <SelectItem value="custom">Custom (cron)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -332,7 +332,7 @@ export function NodeSelectionModal({
           )}
           {config.intervalType === 'custom' && (
             <div>
-              <Label htmlFor="cron">Cron Expression</Label>
+              <Label htmlFor="cron">Cron expression</Label>
               <Input
                 id="cron"
                 value={config.cronExpression || ''}
@@ -356,7 +356,7 @@ export function NodeSelectionModal({
       return (
         <div className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="doctype">Document Type</Label>
+            <Label htmlFor="doctype">Document type</Label>
             <Combobox
               options={comboboxOptions}
               value={config.doctype || ''}
@@ -368,7 +368,7 @@ export function NodeSelectionModal({
             />
           </div>
           <div>
-            <Label htmlFor="event">Event Type</Label>
+            <Label htmlFor="event">Event type</Label>
             <Select
               value={config.event}
               onValueChange={(value) =>
@@ -382,9 +382,9 @@ export function NodeSelectionModal({
                 <SelectItem value="save">Save</SelectItem>
                 <SelectItem value="update">Update</SelectItem>
                 <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before Save</SelectItem>
-                <SelectItem value="before-update">Before Update</SelectItem>
-                <SelectItem value="before-delete">Before Delete</SelectItem>
+                <SelectItem value="before-save">Before save</SelectItem>
+                <SelectItem value="before-update">Before update</SelectItem>
+                <SelectItem value="before-delete">Before delete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -495,7 +495,7 @@ export function NodeSelectionModal({
             <Tabs value={triggerSubTab} onValueChange={(v) => { setTriggerSubTab(v as TriggerSubTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
               <TabsList layout="grid" cols={2} className="flex-shrink-0">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
-                <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
+                <TabsTrigger value="ai-agents">AI & agents</TabsTrigger>
               </TabsList>
 
               <div className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">

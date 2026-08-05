@@ -228,7 +228,7 @@ export function SkillImportModal({ open, onOpenChange, onSuccess }: SkillImportM
 
           <TabsContent value="huf" className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="huf_file">Skill Package (.huf)</Label>
+              <Label htmlFor="huf_file">Skill package (.huf)</Label>
               <Input
                 id="huf_file"
                 type="file"

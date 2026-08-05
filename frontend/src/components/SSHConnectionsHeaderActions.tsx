@@ -12,7 +12,7 @@ export function SSHConnectionsHeaderActions() {
   return (
     <Button variant="display" onClick={handleNewConnection}>
       <Plus className="mr-2 h-4 w-4" />
-      New SSH Connection
+      New SSH connection
     </Button>
   );
 }

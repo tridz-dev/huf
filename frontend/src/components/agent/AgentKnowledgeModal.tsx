@@ -109,7 +109,7 @@ export function AgentKnowledgeModal({
 
         <DialogScrollBody className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label>Knowledge Source *</Label>
+            <Label>Knowledge source *</Label>
             {sourceOptions.length === 0 && onCreateNew ? (
               <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-6 text-center">
                 <p className="text-sm text-steel">No knowledge sources registered yet</p>
@@ -170,7 +170,7 @@ export function AgentKnowledgeModal({
               />
             </div>
             <div className="space-y-2">
-              <Label>Max Chunks</Label>
+              <Label>Max chunks</Label>
               <Input
                 type="number"
                 value={maxChunks}
@@ -179,7 +179,7 @@ export function AgentKnowledgeModal({
               />
             </div>
             <div className="space-y-2">
-              <Label>Token Budget</Label>
+              <Label>Token budget</Label>
               <Input
                 type="number"
                 value={tokenBudget}

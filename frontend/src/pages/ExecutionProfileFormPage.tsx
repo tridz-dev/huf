@@ -238,7 +238,7 @@ export function ExecutionProfileFormPage() {
                 name="profile_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Profile Name</FormLabel>
+                    <FormLabel>Profile name</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Standard Sandbox" {...field} />
                     </FormControl>
@@ -254,7 +254,7 @@ export function ExecutionProfileFormPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between border border-line bg-paper p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Disable Profile</FormLabel>
+                      <FormLabel className="text-base">Disable profile</FormLabel>
                       <FormDescription>Disabled profiles cannot be selected or used for code execution.</FormDescription>
                     </div>
                     <FormControl>
@@ -270,7 +270,7 @@ export function ExecutionProfileFormPage() {
                   name="approval_mode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Approval Mode</FormLabel>
+                      <FormLabel>Approval mode</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -294,7 +294,7 @@ export function ExecutionProfileFormPage() {
                   name="filesystem_policy"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Filesystem Policy</FormLabel>
+                      <FormLabel>Filesystem policy</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -319,7 +319,7 @@ export function ExecutionProfileFormPage() {
                 name="allowed_modules"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Allowed Python Modules</FormLabel>
+                    <FormLabel>Allowed python modules</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder='["math", "json", "re", "datetime"]'
@@ -346,7 +346,7 @@ export function ExecutionProfileFormPage() {
                 name="max_wall_time_s"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max Wall Time (Seconds)</FormLabel>
+                    <FormLabel>Max wall time (seconds)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
@@ -361,7 +361,7 @@ export function ExecutionProfileFormPage() {
                 name="max_cpu_seconds"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max CPU Time (Seconds)</FormLabel>
+                    <FormLabel>Max CPU time (seconds)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
@@ -376,7 +376,7 @@ export function ExecutionProfileFormPage() {
                 name="max_memory_mb"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max Memory (MB)</FormLabel>
+                    <FormLabel>Max memory (MB)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
@@ -391,7 +391,7 @@ export function ExecutionProfileFormPage() {
                 name="max_output_bytes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max Output (Bytes)</FormLabel>
+                    <FormLabel>Max output (bytes)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>

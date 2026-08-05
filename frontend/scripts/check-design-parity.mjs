@@ -147,7 +147,11 @@ function isTitleCase(text) {
   for (const w of words) {
     // Allowlisted brand/acronym words neither extend nor bridge a run —
     // "Google Chat" and "New GitHub Repo" must not trip the detector.
-    if (CASING_ALLOWLIST.has(w)) { run = 0; continue; }
+    // ...but an allowlisted ACRONYM must not reset, or it shields the word
+    // after it: "MCP Servers" and "AI Providers" scored zero and sat in the
+    // page titles unflagged. Brand words still reset ("Google Chat"); an
+    // acronym falls through to the run-opening branch below.
+    if (CASING_ALLOWLIST.has(w) && !isAcronym(w)) { run = 0; continue; }
     if (isCapitalisedWord(w)) {
       run += 1;
       if (run >= 2) return true;
@@ -168,6 +172,10 @@ function isTitleCase(text) {
 const TITLE_AND_MENU_TAGS = [
   'DialogTitle', 'AlertDialogTitle', 'SheetTitle', 'CardTitle',
   'DropdownMenuItem', 'CommandItem', 'ContextMenuItem', 'MenubarItem',
+  // Form field labels are copy too. "Allow SSH Execution" and "Allowlisted
+  // SSH Connections" sat in AdvancedTab unflagged because FormLabel/Label
+  // were not in this list and the text is same-line.
+  'FormLabel', 'Label', 'TabsTrigger', 'SelectItem',
 ];
 const TITLE_TAG_RE = new RegExp(
   `<(${TITLE_AND_MENU_TAGS.join('|')})(?:\\s[^>]*)?>([^<{]+)</\\1>`, 'g',
@@ -269,6 +277,15 @@ for (const file of walk(SRC)) {
     if (!casingExempt && !isComment) {
       // 5a. Dialog/Sheet/Card titles and menu items.
       for (const m of line.matchAll(TITLE_TAG_RE)) {
+        // A <SelectItem value="X">X</SelectItem> is rendering a backend enum
+        // verbatim (79 of them here: "FIFO", "Read", "Common Destination").
+        // Sentence-casing the text would desync it from the doctype option it
+        // names, so the same label===value rule used for object literals
+        // applies. Only the display-text-differs-from-value case is copy.
+        const mirrorsValue = new RegExp(
+          `value=(['"])${m[2].trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\1`,
+        ).test(line);
+        if (mirrorsValue) continue;
         if (isTitleCase(m[2])) findings.titleCase.push(`${at}  <${m[1]}>${m[2].trim()}</${m[1]}>`);
       }
       // 5b. title=/label=/placeholder=/aria-label= props.

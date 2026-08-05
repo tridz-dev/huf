@@ -157,7 +157,7 @@ export function AdvancedTab({
 					name="context_strategy"
 					render={({ field }) => (
 						<FormItem>
-							<FormLabel>Context Strategy</FormLabel>
+							<FormLabel>Context strategy</FormLabel>
 							<Select onValueChange={field.onChange} value={field.value || ''}>
 								<FormControl>
 									<SelectTrigger>
@@ -184,7 +184,7 @@ export function AdvancedTab({
 						name="history_limit"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>History Limit</FormLabel>
+								<FormLabel>History limit</FormLabel>
 								<FormControl>
 									<Input
 										type="number"
@@ -205,7 +205,7 @@ export function AdvancedTab({
 						name="max_turns"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Max Turns</FormLabel>
+								<FormLabel>Max turns</FormLabel>
 								<FormControl>
 									<Input
 										type="number"
@@ -227,7 +227,7 @@ export function AdvancedTab({
 					name="max_knowledge_tokens"
 					render={({ field }) => (
 						<FormItem>
-							<FormLabel>Max Knowledge Tokens</FormLabel>
+							<FormLabel>Max knowledge tokens</FormLabel>
 							<FormControl>
 								<Input
 									type="number"
@@ -249,7 +249,7 @@ export function AdvancedTab({
 					render={({ field }) => (
 						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Autonaming of Conversation Title</FormLabel>
+								<FormLabel className="text-base">Autonaming of conversation title</FormLabel>
 								<FormDescription>
 									If enabled, the conversation title will be automatically updated based on the initial context.
 								</FormDescription>
@@ -273,7 +273,7 @@ export function AdvancedTab({
 							name="summary_ratio"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Summary Ratio</FormLabel>
+									<FormLabel>Summary ratio</FormLabel>
 									<FormControl>
 										<Input
 											type="text"
@@ -294,7 +294,7 @@ export function AdvancedTab({
 							name="summary_model"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Summary Model</FormLabel>
+									<FormLabel>Summary model</FormLabel>
 									<FormControl>
 										<LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
 											<Select
@@ -348,7 +348,7 @@ export function AdvancedTab({
 							name="summary_prompt_template"
 							render={({ field }) => (
 								<FormItem id="summary-prompt-template-field">
-									<FormLabel>Summary Prompt Template</FormLabel>
+									<FormLabel>Summary prompt template</FormLabel>
 									<div className="flex items-center gap-2">
 										<FormControl>
 											<Combobox
@@ -417,7 +417,7 @@ export function AdvancedTab({
 								render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 										<div className="space-y-0.5 pr-4">
-											<FormLabel className="text-base">Lock Summary Prompt Version</FormLabel>
+											<FormLabel className="text-base">Lock summary prompt version</FormLabel>
 											<FormDescription>
 												If checked, this agent will stay on the summary prompt version it was attached to, ignoring newer versions.
 											</FormDescription>
@@ -434,7 +434,7 @@ export function AdvancedTab({
 								name="summary_template_version_at_attach"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Summary Attached at Version</FormLabel>
+										<FormLabel>Summary attached at version</FormLabel>
 										<FormControl>
 											<div className="flex min-h-10 items-center rounded-md border bg-paper-deep/40 px-3 text-sm text-steel">
 												{field.value ?? 'Will be recorded after template attachment'}
@@ -493,7 +493,7 @@ export function AdvancedTab({
 					render={({ field }) => (
 						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Allow Conversation Data Management</FormLabel>
+								<FormLabel className="text-base">Allow conversation data management</FormLabel>
 								<FormDescription>
 									If enabled, the agent can store key-value pairs in the conversation context.
 								</FormDescription>
@@ -522,7 +522,7 @@ export function AdvancedTab({
 						render={({ field }) => (
 							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5 pr-4">
-									<FormLabel className="text-base">Inject Conversation Data into Prompt</FormLabel>
+									<FormLabel className="text-base">Inject conversation data into prompt</FormLabel>
 									<FormDescription>
 										Auto-injects all active memory items into the LLM system prompt on every turn. Disabling this avoids &apos;Context Bloat&apos; (saving tokens/cost and improving speed) and allows on-demand access strictly through the &apos;get_conversation_data&apos; tool.
 									</FormDescription>
@@ -541,7 +541,7 @@ export function AdvancedTab({
 						name="conversation_data_api_permission"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Conversation Data API Permission</FormLabel>
+								<FormLabel>Conversation data API permission</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || ''}>
 									<FormControl>
 										<SelectTrigger>
@@ -567,7 +567,7 @@ export function AdvancedTab({
 					name="max_context_chars"
 					render={({ field }) => (
 						<FormItem>
-							<FormLabel>Max Context Characters</FormLabel>
+							<FormLabel>Max context characters</FormLabel>
 							<FormControl>
 								<Input
 									type="number"
@@ -596,7 +596,7 @@ export function AdvancedTab({
 						name="reasoning_mode"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Reasoning Mode</FormLabel>
+								<FormLabel>Reasoning mode</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
 									<FormControl>
 										<SelectTrigger>
@@ -604,9 +604,9 @@ export function AdvancedTab({
 										</SelectTrigger>
 									</FormControl>
 									<SelectContent>
-										<SelectItem value="Auto">Auto (Default / Model Native)</SelectItem>
-										<SelectItem value="Off">Off (Force Disable)</SelectItem>
-										<SelectItem value="On">On (Force Enable)</SelectItem>
+										<SelectItem value="Auto">Auto (default / model native)</SelectItem>
+										<SelectItem value="Off">Off (force disable)</SelectItem>
+										<SelectItem value="On">On (force enable)</SelectItem>
 									</SelectContent>
 								</Select>
 								<FormDescription>
@@ -622,7 +622,7 @@ export function AdvancedTab({
 						name="reasoning_effort"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Reasoning Effort</FormLabel>
+								<FormLabel>Reasoning effort</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
 									<FormControl>
 										<SelectTrigger>
@@ -630,7 +630,7 @@ export function AdvancedTab({
 										</SelectTrigger>
 									</FormControl>
 									<SelectContent>
-										<SelectItem value="Auto">Auto (Default)</SelectItem>
+										<SelectItem value="Auto">Auto (default)</SelectItem>
 										<SelectItem value="Low">Low</SelectItem>
 										<SelectItem value="Medium">Medium</SelectItem>
 										<SelectItem value="High">High</SelectItem>
@@ -650,7 +650,7 @@ export function AdvancedTab({
 							name="reasoning_budget_tokens"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Reasoning Budget Tokens</FormLabel>
+									<FormLabel>Reasoning budget tokens</FormLabel>
 									<FormControl>
 										<Input
 											type="number"
@@ -674,7 +674,7 @@ export function AdvancedTab({
 						name="reasoning_summary"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Reasoning Summary</FormLabel>
+								<FormLabel>Reasoning summary</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || 'None'}>
 									<FormControl>
 										<SelectTrigger>
@@ -707,7 +707,7 @@ export function AdvancedTab({
 					render={({ field }) => (
 						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Enable Memory</FormLabel>
+								<FormLabel className="text-base">Enable memory</FormLabel>
 								<FormDescription>
 									Enable long-term, scoped memory for this agent.
 								</FormDescription>
@@ -726,7 +726,7 @@ export function AdvancedTab({
 							name="memory_policy"
 							render={({ field }) => (
 								<FormItem className="sm:col-span-2">
-									<FormLabel>Memory Policy</FormLabel>
+									<FormLabel>Memory policy</FormLabel>
 									<FormControl>
 										<Combobox
 											options={memoryPolicyComboboxOptions}
@@ -829,7 +829,7 @@ export function AdvancedTab({
 					render={({ field }) => (
 						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Show Tool Execution Details</FormLabel>
+								<FormLabel className="text-base">Show tool execution details</FormLabel>
 								<FormDescription className="whitespace-pre-line">
 									{`Enable to display tool execution status and responses in the agent output.
 This includes whether each tool call is completed and its corresponding result.`}
@@ -969,7 +969,7 @@ This includes whether each tool call is completed and its corresponding result.`
 						render={({ field }) => (
 							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Allow File Upload</FormLabel>
+									<FormLabel className="text-base">Allow file upload</FormLabel>
 									<FormDescription>
 										Lets users attach documents or images in chat for this agent.
 									</FormDescription>
@@ -1006,7 +1006,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								name="max_upload_size_mb"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Max Upload Size (MB)</FormLabel>
+										<FormLabel>Max upload size (MB)</FormLabel>
 										<FormControl>
 											<Input
 												type="number"
@@ -1047,7 +1047,7 @@ This includes whether each tool call is completed and its corresponding result.`
 						render={({ field }) => (
 							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Allow Code Execution</FormLabel>
+									<FormLabel className="text-base">Allow code execution</FormLabel>
 									<FormDescription>
 										Explicit second confirmation enabling the Python Code Execution tool for this agent. The tool stays inert until this is checked and an Execution Profile is selected.
 									</FormDescription>
@@ -1066,7 +1066,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								name="execution_profile"
 								render={({ field }) => (
 									<FormItem className="sm:col-span-2">
-										<FormLabel>Execution Profile</FormLabel>
+										<FormLabel>Execution profile</FormLabel>
 										<div className="flex items-center gap-2">
 											<FormControl>
 												<Combobox
@@ -1128,7 +1128,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								name="execution_shared_dir_limit_mb"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Shared Dir Limit (MB)</FormLabel>
+										<FormLabel>Shared dir limit (MB)</FormLabel>
 										<FormControl>
 											<Input
 												type="number"
@@ -1153,7 +1153,7 @@ This includes whether each tool call is completed and its corresponding result.`
 			<FormSettingsSection
 				title={
 					<div className="flex items-center gap-2.5">
-						<span>SSH Execution</span>
+						<span>SSH execution</span>
 						<ExperimentalBadge size="sm" />
 					</div>
 				}
@@ -1166,7 +1166,7 @@ This includes whether each tool call is completed and its corresponding result.`
 						render={({ field }) => (
 							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Allow SSH Execution</FormLabel>
+									<FormLabel className="text-base">Allow SSH execution</FormLabel>
 									<FormDescription>
 										Enables the SSH execution tool for this agent only when at least one SSH Connection is selected below and the acting user holds the ssh.run capability.
 									</FormDescription>
@@ -1185,7 +1185,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								name="ssh_connections"
 								render={({ field }) => (
 									<FormItem className="sm:col-span-2">
-										<FormLabel>Allowlisted SSH Connections</FormLabel>
+										<FormLabel>Allowlisted SSH connections</FormLabel>
 										<div className="flex items-center gap-2">
 											<FormControl>
 												<MultiSelectCombobox

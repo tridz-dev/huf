@@ -265,7 +265,7 @@ export function BulkImportModal({
 							) : (
 								<Download className="w-3.5 h-3.5 mr-1.5" />
 							)}
-							Download CSV Template
+							Download CSV template
 						</Button>
 					</div>
 

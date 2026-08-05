@@ -83,7 +83,7 @@ export function ToolsTab({
               name="auto_sync_interval"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Sync Interval (Hours)</FormLabel>
+                  <FormLabel>Sync interval (hours)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"

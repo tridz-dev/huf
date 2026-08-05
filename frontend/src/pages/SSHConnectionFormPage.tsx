@@ -307,7 +307,7 @@ export function SSHConnectionFormPage() {
                 name="display_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Display Name</FormLabel>
+                    <FormLabel>Display name</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Production Web Worker 01" {...field} />
                     </FormControl>
@@ -323,7 +323,7 @@ export function SSHConnectionFormPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between border border-line bg-paper p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Enable Connection</FormLabel>
+                      <FormLabel className="text-base">Enable connection</FormLabel>
                       <FormDescription>Disabled connections cannot be executed against by AI agents.</FormDescription>
                     </div>
                     <FormControl>
@@ -339,7 +339,7 @@ export function SSHConnectionFormPage() {
                   name="host"
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
-                      <FormLabel>Host / IP Address</FormLabel>
+                      <FormLabel>Host / IP address</FormLabel>
                       <FormControl>
                         <Input placeholder="192.168.1.10 or server.example.com" {...field} />
                       </FormControl>
@@ -368,7 +368,7 @@ export function SSHConnectionFormPage() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>SSH Username</FormLabel>
+                    <FormLabel>SSH username</FormLabel>
                     <FormControl>
                       <Input placeholder="root or ubuntu or deploy" {...field} />
                     </FormControl>
@@ -382,7 +382,7 @@ export function SSHConnectionFormPage() {
                 name="auth_method"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Authentication Method</FormLabel>
+                    <FormLabel>Authentication method</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -427,7 +427,7 @@ export function SSHConnectionFormPage() {
                     name="private_key"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Private Key (PEM format)</FormLabel>
+                        <FormLabel>Private key (PEM format)</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder={isNew ? '-----BEGIN OPENSSH PRIVATE KEY-----...' : 'Leave blank to keep existing private key'}
@@ -445,7 +445,7 @@ export function SSHConnectionFormPage() {
                     name="private_key_passphrase"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Passphrase (Optional)</FormLabel>
+                        <FormLabel>Passphrase (optional)</FormLabel>
                         <FormControl>
                           <Input
                             type="password"

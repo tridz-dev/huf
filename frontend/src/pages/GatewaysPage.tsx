@@ -518,7 +518,7 @@ export default function GatewaysPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">None (Disabled)</SelectItem>
+                        <SelectItem value="__none">None (disabled)</SelectItem>
                         <SelectItem value="Agent">Agent</SelectItem>
                         <SelectItem value="Flow">Flow</SelectItem>
                       </SelectContent>
@@ -541,7 +541,7 @@ export default function GatewaysPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none">Choose Agent…</SelectItem>
+                          <SelectItem value="__none">Choose agent…</SelectItem>
                           {agents.map((a) => (
                             <SelectItem key={a.name} value={a.name}>
                               {a.agent_name}
@@ -568,7 +568,7 @@ export default function GatewaysPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none">Choose Flow…</SelectItem>
+                          <SelectItem value="__none">Choose flow…</SelectItem>
                           {flows.map((f) => (
                             <SelectItem key={f.name} value={f.name}>
                               {f.title}
@@ -597,10 +597,10 @@ export default function GatewaysPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Open">Open — Allow anyone to message</SelectItem>
+                    <SelectItem value="Open">Open — allow anyone to message</SelectItem>
                     <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
-                    <SelectItem value="Pairing">Pairing — Require pairing request approval</SelectItem>
-                    <SelectItem value="Disabled">Disabled — Reject direct messages</SelectItem>
+                    <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
+                    <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
                   </SelectContent>
                 </Select>
               </label>

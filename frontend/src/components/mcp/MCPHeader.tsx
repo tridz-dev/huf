@@ -74,7 +74,7 @@ export function MCPHeader({
           )}
           <Badge variant="outline">
             <Server className="w-3 h-3 mr-1" />
-            MCP Server
+            MCP server
           </Badge>
         </div>
       </div>

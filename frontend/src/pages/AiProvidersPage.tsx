@@ -407,7 +407,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
 
   return (
     <PageFrame
-      title="AI Providers"
+      title="AI providers"
       subtitle="Connect AI providers and external services"
       filters={
         <FilterBar

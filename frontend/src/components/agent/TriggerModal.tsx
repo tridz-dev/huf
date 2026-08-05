@@ -225,7 +225,7 @@ export function TriggerModal({
                 name="trigger_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Trigger Name</FormLabel>
+                    <FormLabel>Trigger name</FormLabel>
                     <FormControl>
                       <Input placeholder="Enter trigger name" {...field} />
                     </FormControl>
@@ -239,7 +239,7 @@ export function TriggerModal({
             {/* Trigger Name Display - Read-only when editing */}
             {editingTrigger && (
               <FormItem>
-                <FormLabel>Trigger Name</FormLabel>
+                <FormLabel>Trigger name</FormLabel>
                 <FormControl>
                   <Input value={editingTrigger.trigger_name} disabled />
                 </FormControl>
@@ -252,7 +252,7 @@ export function TriggerModal({
               name="trigger_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Trigger Type</FormLabel>
+                  <FormLabel>Trigger type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>

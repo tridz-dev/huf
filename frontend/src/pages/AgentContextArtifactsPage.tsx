@@ -30,7 +30,7 @@ const VISIBILITY_OPTIONS = [
   { label: 'All visibility', value: 'all' },
   { label: 'User visible', value: 'user_visible' },
   { label: 'Model visible', value: 'model_visible' },
-  { label: 'UI Only', value: 'ui_only' },
+  { label: 'UI only', value: 'ui_only' },
   { label: 'Audit only', value: 'audit_only' },
   { label: 'Developer only', value: 'developer_only' },
 ];

@@ -475,7 +475,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 {formData.use_custom_pricing && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label htmlFor="input_cost">Input Cost per 1M Tokens (USD)</Label>
+                      <Label htmlFor="input_cost">Input cost per 1M tokens (USD)</Label>
                       <p className="text-xs text-steel-soft">
                         Cost in USD per 1 million prompt/input tokens. E.g. enter 2.50 for $2.50 per 1M tokens. Enter 0 for free/self-hosted models.
                       </p>
@@ -492,7 +492,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="output_cost">Output Cost per 1M Tokens (USD)</Label>
+                      <Label htmlFor="output_cost">Output cost per 1M tokens (USD)</Label>
                       <p className="text-xs text-steel-soft">
                         Cost in USD per 1 million completion/output tokens. E.g. enter 10.00 for $10.00 per 1M tokens.
                       </p>

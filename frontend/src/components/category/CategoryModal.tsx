@@ -447,7 +447,7 @@ export function CategoryModal({
             <div className="space-y-5 border rounded-lg p-4">
               {/* Name */}
               <div className="space-y-1.5">
-                <Label>Category Name *</Label>
+                <Label>Category name *</Label>
                 <Input
                   placeholder="Enter category name"
                   value={newCategoryData.category_name}
@@ -541,7 +541,7 @@ export function CategoryModal({
 
               {/* Parent */}
               <div className="space-y-1.5">
-                <Label>Parent Category</Label>
+                <Label>Parent category</Label>
                 <Select
                   value={newCategoryData.parent_category || '__none'}
                   onValueChange={(value) =>

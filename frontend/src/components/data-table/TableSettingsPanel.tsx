@@ -169,8 +169,8 @@ export function TableSettingsPanel({
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="Autoincrement">Auto-increment (1, 2, 3...)</SelectItem>
-							<SelectItem value="Hash">Random Hash</SelectItem>
-							<SelectItem value="By Field">By Field Value</SelectItem>
+							<SelectItem value="Hash">Random hash</SelectItem>
+							<SelectItem value="By Field">By field value</SelectItem>
 						</SelectContent>
 					</Select>
 				</div>
