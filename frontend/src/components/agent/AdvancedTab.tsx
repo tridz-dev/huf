@@ -149,7 +149,7 @@ export function AdvancedTab({
 	return (
 		<div className="space-y-12">
 			<FormSettingsSection
-				title="Conversation Strategy"
+				title="Conversation strategy"
 				description="Define the rules for how the agent manages its memory window when a conversation grows long and approaches token limits."
 			>
 				<FormField

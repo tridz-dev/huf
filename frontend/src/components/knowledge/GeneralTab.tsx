@@ -160,7 +160,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {isVectorKnowledgeType(watchKnowledgeType) && (
         <Card>
           <CardHeader>
-            <CardTitle>Vector Settings</CardTitle>
+            <CardTitle>Vector settings</CardTitle>
             <CardDescription>Configure embedding model for vector-based retrieval</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -233,7 +233,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {watchKnowledgeType === 'chroma' && (
         <Card>
           <CardHeader>
-            <CardTitle>Chroma Connection Settings</CardTitle>
+            <CardTitle>Chroma connection settings</CardTitle>
             <CardDescription>Configure how this knowledge source connects to ChromaDB</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -332,7 +332,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {watchKnowledgeType === 'pgvector' && (
         <Card>
           <CardHeader>
-            <CardTitle>PGVector Connection Settings</CardTitle>
+            <CardTitle>PGVector connection settings</CardTitle>
             <CardDescription>Connect HUF Knowledge to PostgreSQL with the pgvector extension</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -553,7 +553,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {watchKnowledgeType === 'redis' && (
         <Card>
           <CardHeader>
-            <CardTitle>Redis Connection Settings</CardTitle>
+            <CardTitle>Redis connection settings</CardTitle>
             <CardDescription>
               Connect HUF Knowledge to Redis with RediSearch vector search
             </CardDescription>
@@ -567,7 +567,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Chunking Settings</CardTitle>
+          <CardTitle>Chunking settings</CardTitle>
           <CardDescription>Control how content is split into chunks for indexing</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">

@@ -271,7 +271,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
             <CardHeader className="cursor-pointer select-none">
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1.5">
-                  <CardTitle className="text-base">Advanced Settings</CardTitle>
+                  <CardTitle className="text-base">Advanced settings</CardTitle>
                   <CardDescription>
                     Authentication mode, transport, and custom headers. Usually not needed.
                   </CardDescription>

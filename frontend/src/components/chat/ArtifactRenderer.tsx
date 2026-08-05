@@ -210,7 +210,7 @@ export function ArtifactRenderer({
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="html" />
 						</details>
@@ -228,7 +228,7 @@ export function ArtifactRenderer({
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="xml" />
 						</details>
@@ -241,7 +241,7 @@ export function ArtifactRenderer({
 						<Mermaid chart={artifact.content} />
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="mermaid" />
 						</details>
@@ -287,7 +287,7 @@ export function ArtifactRenderer({
 						</JSXPreview>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="jsx" />
 						</details>

@@ -104,7 +104,7 @@ export function DefaultPlanTable({
 			</div>
 
 			<Button type="button" variant="ghost" size="sm" className="mt-3" onClick={onAddRow}>
-				Add Row
+				Add row
 			</Button>
 		</>
 	)

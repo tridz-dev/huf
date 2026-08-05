@@ -27,7 +27,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Write Permissions</CardTitle>
+          <CardTitle>Write permissions</CardTitle>
           <CardDescription>
             Control which scopes this policy is allowed to write memory records into.
           </CardDescription>
@@ -68,7 +68,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
 
       <Card>
         <CardHeader>
-          <CardTitle>Knowledge Projection</CardTitle>
+          <CardTitle>Knowledge projection</CardTitle>
           <CardDescription>
             Optionally promote high-confidence memories into a permanent Knowledge Source.
           </CardDescription>
@@ -77,7 +77,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
           <SwitchField
             form={form}
             name="auto_promote_to_knowledge"
-            label="Auto Promote to Knowledge"
+            label="Auto promote to knowledge"
             description="Automatically copies memory records that clear the confidence and importance thresholds below into a Knowledge Source, making them retrievable outside the memory system."
           />
 

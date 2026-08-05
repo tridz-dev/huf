@@ -52,7 +52,7 @@ export function ToolsTab({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Sync Settings</CardTitle>
+          <CardTitle>Sync settings</CardTitle>
           <CardDescription>Configure tool synchronization settings</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -120,7 +120,7 @@ export function ToolsTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Available Tools</CardTitle>
+          <CardTitle>Available tools</CardTitle>
           <CardDescription>
             {tools.length > 0
               ? `${tools.length} tool${tools.length !== 1 ? 's' : ''} available`

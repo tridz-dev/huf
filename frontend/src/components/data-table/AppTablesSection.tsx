@@ -42,7 +42,7 @@ export function AppTablesSection() {
 		<section className="mt-8 border-t border-line pt-6 space-y-3">
 			<div className="space-y-1">
 				<h2 className="font-display font-bold text-[16px] text-ink">
-					App Tables
+					App tables
 				</h2>
 				<p className="text-sm font-body text-steel">
 					Tables exposed by installed HUF Apps.

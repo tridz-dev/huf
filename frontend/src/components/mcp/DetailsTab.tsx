@@ -21,7 +21,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Server Details</CardTitle>
+        <CardTitle>Server details</CardTitle>
         <CardDescription>Configure MCP server basic information</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6">

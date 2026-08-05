@@ -528,7 +528,7 @@ export function ToolCreationForm({
           className="shrink-0"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Tool Settings
+          Back to tool settings
         </Button>
 
         <div className="rounded border bg-paper px-3 py-2 text-sm font-medium">
@@ -839,7 +839,7 @@ export function ToolCreationForm({
                 onClick={() => setShowFieldSelector(true)}
                 disabled={loading}
               >
-                Select Fields from DocType
+                Select fields from DocType
               </Button>
             )}
             {selectedType === 'Custom Function' && (
@@ -1153,7 +1153,7 @@ export function ToolCreationForm({
             </Collapsible>
 
             <div className="flex items-center justify-between gap-2">
-              <SectionHeader icon={Braces} title="Function Definition" />
+              <SectionHeader icon={Braces} title="Function definition" />
               <Button
                 type="button"
                 variant="outline"

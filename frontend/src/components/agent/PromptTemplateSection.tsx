@@ -45,7 +45,7 @@ export function PromptTemplateSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prompt Template</CardTitle>
+        <CardTitle>Prompt template</CardTitle>
         <CardDescription>
           Define system prompt, goal, and constraints. Use &apos;Local&apos; for inline prompts or &apos;Template&apos; to link a reusable prompt from the library.
         </CardDescription>

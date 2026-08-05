@@ -99,7 +99,7 @@ export function TableSettingsPanel({
 			    below the fields that define what the table actually is. */}
 			<div className="space-y-3 pt-2 border-t border-line">
 				<h4 className="text-xs font-medium text-steel-soft tracking-wide">
-					Additional Settings
+					Additional settings
 				</h4>
 
 				<div className="space-y-1">
@@ -161,7 +161,7 @@ export function TableSettingsPanel({
 
 				<div className="space-y-1">
 					<Label htmlFor="table-autoname" size="sm" tone="muted">
-						Naming Method
+						Naming method
 					</Label>
 					<Select value={autonameMethod} onValueChange={onAutonameMethodChange}>
 						<SelectTrigger className="h-7 text-xs">
@@ -178,7 +178,7 @@ export function TableSettingsPanel({
 				{autonameMethod === 'By Field' && (
 					<div className="space-y-1">
 						<Label htmlFor="table-title-field" size="sm" tone="muted">
-							Title Field
+							Title field
 						</Label>
 						<Select value={titleField} onValueChange={onTitleFieldChange}>
 							<SelectTrigger className="h-7 text-xs">

@@ -41,7 +41,7 @@ export function IntegrationServiceHeader({
         <div className="flex items-center gap-3 flex-wrap">
           {isNew ? (
             <h1 className="font-display text-title text-ink">
-              New Integration Service
+              New integration service
             </h1>
           ) : (
             <InlineEditName

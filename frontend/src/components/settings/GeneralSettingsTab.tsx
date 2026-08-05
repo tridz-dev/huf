@@ -159,7 +159,7 @@ function GeneralSettingsTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Hub Scenery</CardTitle>
+          <CardTitle>Hub scenery</CardTitle>
           <CardDescription>
             Toggle a full-page background image on the Hub. The choice and opacity are remembered
             in localStorage, and the preview below updates live on this page.

@@ -262,7 +262,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
           <SwitchField
             form={form}
             name="approval_required"
-            label="Approval Required"
+            label="Approval required"
             description="New memory records start as pending and must be approved by a user before becoming active. Turn this off to trust captured memory automatically."
           />
 
@@ -407,7 +407,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
 
       <Card>
         <CardHeader>
-          <CardTitle>Write Permissions</CardTitle>
+          <CardTitle>Write permissions</CardTitle>
           <CardDescription>
             Control which scopes this policy is allowed to write memory records into.
           </CardDescription>
@@ -448,7 +448,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
 
       <Card>
         <CardHeader>
-          <CardTitle>Knowledge Projection</CardTitle>
+          <CardTitle>Knowledge projection</CardTitle>
           <CardDescription>
             Optionally promote high-confidence memories into a permanent Knowledge Source.
           </CardDescription>
@@ -457,7 +457,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
           <SwitchField
             form={form}
             name="auto_promote_to_knowledge"
-            label="Auto Promote to Knowledge"
+            label="Auto promote to knowledge"
             description="Automatically copies memory records that clear the confidence and importance thresholds below into a Knowledge Source, making them retrievable outside the memory system."
           />
 

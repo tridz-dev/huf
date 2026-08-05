@@ -124,7 +124,7 @@ export function FieldConfigPanel({
 			{properties.includes('options') && field.fieldtype === 'Link' && (
 				<div className="space-y-1.5">
 					<Label htmlFor="field-link-target" size="sm">
-						Link Target
+						Link target
 					</Label>
 					<Select
 						value={field.options || ''}
@@ -147,13 +147,13 @@ export function FieldConfigPanel({
 			{(properties.includes('default') || properties.includes('description')) && (
 				<div className="space-y-3 pt-2 border-t border-line">
 					<h4 className="text-xs font-medium text-steel-soft uppercase tracking-wide">
-						Additional Settings
+						Additional settings
 					</h4>
 
 					{properties.includes('default') && (
 						<div className="space-y-1">
 							<Label htmlFor="field-default" size="sm" tone="muted">
-								Default Value
+								Default value
 							</Label>
 							<Input
 								id="field-default"
@@ -168,7 +168,7 @@ export function FieldConfigPanel({
 					{properties.includes('description') && (
 						<div className="space-y-1">
 							<Label htmlFor="field-description" size="sm" tone="muted">
-								Help Text
+								Help text
 							</Label>
 							<Input
 								id="field-description"
@@ -227,7 +227,7 @@ export function FieldConfigPanel({
 								}
 							/>
 							<Label htmlFor="field-read-only" size="sm" weight="normal">
-								Read Only
+								Read only
 							</Label>
 						</div>
 					)}
@@ -242,7 +242,7 @@ export function FieldConfigPanel({
 								}
 							/>
 							<Label htmlFor="field-in-list-view" size="sm" weight="normal">
-								Show in List View
+								Show in list view
 							</Label>
 						</div>
 					)}

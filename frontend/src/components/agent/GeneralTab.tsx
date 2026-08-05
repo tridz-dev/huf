@@ -241,7 +241,7 @@ We generally recommend altering this or temperature but not both.`}
 
       <Card>
         <CardHeader>
-          <CardTitle>Prompt Source</CardTitle>
+          <CardTitle>Prompt source</CardTitle>
           <CardDescription>Choose whether this agent uses inline instructions or a reusable prompt template.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -316,7 +316,7 @@ We generally recommend altering this or temperature but not both.`}
 
       <Card>
         <CardHeader>
-          <CardTitle>Starter Prompts</CardTitle>
+          <CardTitle>Starter prompts</CardTitle>
           <CardDescription>
             Up to 3 starter prompts shown to users when starting a chat with this agent.
           </CardDescription>
@@ -381,7 +381,7 @@ We generally recommend altering this or temperature but not both.`}
 
       <Card>
         <CardHeader>
-          <CardTitle>Prompt Caching</CardTitle>
+          <CardTitle>Prompt caching</CardTitle>
           <CardDescription>
             Configure prompt caching to reduce costs by caching repeated prompt content
           </CardDescription>

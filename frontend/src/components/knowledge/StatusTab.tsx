@@ -56,7 +56,7 @@ export function StatusTab({ source }: StatusTabProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Index Status</CardTitle>
+          <CardTitle>Index status</CardTitle>
           <CardDescription>Current state of the knowledge source index</CardDescription>
         </CardHeader>
         <CardContent>
