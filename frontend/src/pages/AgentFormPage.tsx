@@ -2390,7 +2390,6 @@ export function AgentFormPage() {
         <AgentHeader
           form={form}
           watchDisabled={watchDisabled}
-          providers={providers}
           models={models}
           activeTriggerCount={activeTriggerCount}
           isNew={isNew}
@@ -2422,7 +2421,7 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="scroll" className="w-full">
+              <TabsList layout="overflow" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}

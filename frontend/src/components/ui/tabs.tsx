@@ -1,15 +1,47 @@
 import * as React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cva, type VariantProps } from 'class-variance-authority';
+import { ChevronDown } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-const Tabs = TabsPrimitive.Root;
+// Tracks the controlled value/onValueChange passed to `Tabs` so that
+// `TabsList`'s layout="overflow" mode (several DOM levels below the Radix
+// root) can tell which tab is active without Radix exposing that context
+// publicly, and can move overflowed tabs back into view when selected via
+// the "More" dropdown. Uncontrolled `Tabs` (defaultValue only, no
+// value/onValueChange) simply leaves this context empty — layout="overflow"
+// degrades to "always show the first N tabs" in that case, which no current
+// caller relies on.
+const TabsActiveContext = React.createContext<{
+  value?: string;
+  onValueChange?: (value: string) => void;
+}>({});
+
+const Tabs = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>
+>(({ value, onValueChange, ...props }, ref) => (
+  <TabsActiveContext.Provider value={{ value, onValueChange }}>
+    <TabsPrimitive.Root ref={ref} value={value} onValueChange={onValueChange} {...props} />
+  </TabsActiveContext.Provider>
+));
+Tabs.displayName = TabsPrimitive.Root.displayName;
 
 type TabsVariant = 'underline' | 'pill';
 
 const TabsVariantContext = React.createContext<TabsVariant>('underline');
 const TabsSizeContext = React.createContext<'default' | 'compact'>('default');
+
+// Beyond this many triggers, layout="overflow" collapses the rest into a
+// "More" dropdown instead of letting the tab bar scroll or wrap.
+const OVERFLOW_VISIBLE_COUNT = 6;
 
 const tabsListVariants = cva('gap-0', {
   variants: {
@@ -29,6 +61,10 @@ const tabsListVariants = cva('gap-0', {
       grid: 'grid w-full',
       scroll:
         'flex h-auto w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hidden',
+      // Same row as "inline", but paired with overflow-collapsing logic in
+      // TabsList below instead of horizontal scrolling — see
+      // OVERFLOW_VISIBLE_COUNT.
+      overflow: 'flex h-auto items-center justify-start',
     },
     size: {
       default: '',
@@ -76,25 +112,106 @@ interface TabsListProps
   cols?: number;
 }
 
+/**
+ * Splits `children` (expected to be TabsTrigger elements) into the triggers
+ * shown inline and the ones collapsed into the "More" menu, keeping the
+ * currently active tab always visible.
+ *
+ * If the active tab would otherwise land in the overflow bucket, it's
+ * swapped in for the last inline slot (which drops into overflow instead) —
+ * so the user never has to open the menu to see which tab they're on.
+ */
+function partitionOverflowTriggers(children: React.ReactNode, activeValue: string | undefined) {
+  const items = React.Children.toArray(children).filter(React.isValidElement) as React.ReactElement<{
+    value?: string;
+    disabled?: boolean;
+    children?: React.ReactNode;
+  }>[];
+
+  if (items.length <= OVERFLOW_VISIBLE_COUNT) {
+    return { visible: items, overflow: [] as typeof items };
+  }
+
+  let visible = items.slice(0, OVERFLOW_VISIBLE_COUNT);
+  let overflow = items.slice(OVERFLOW_VISIBLE_COUNT);
+
+  const activeOverflowIndex = overflow.findIndex((item) => item.props.value === activeValue);
+  if (activeOverflowIndex !== -1) {
+    const activeItem = overflow[activeOverflowIndex];
+    const displaced = visible[visible.length - 1];
+    visible = [...visible.slice(0, -1), activeItem];
+    overflow = [
+      displaced,
+      ...overflow.slice(0, activeOverflowIndex),
+      ...overflow.slice(activeOverflowIndex + 1),
+    ];
+  }
+
+  return { visible, overflow };
+}
+
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   TabsListProps
->(({ className, variant = 'underline', layout = 'inline', size = 'default', cols, style, ...props }, ref) => (
-  <TabsVariantContext.Provider value={variant ?? 'underline'}>
-    <TabsSizeContext.Provider value={size ?? 'default'}>
-      <TabsPrimitive.List
-        ref={ref}
-        style={
-          layout === 'grid' && cols
-            ? { ...style, gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
-            : style
-        }
-        className={cn(tabsListVariants({ variant, layout, size }), className)}
-        {...props}
-      />
-    </TabsSizeContext.Provider>
-  </TabsVariantContext.Provider>
-));
+>(({ className, variant = 'underline', layout = 'inline', size = 'default', cols, style, children, ...props }, ref) => {
+  const { value: activeValue, onValueChange } = React.useContext(TabsActiveContext);
+  const isOverflow = layout === 'overflow';
+
+  const { visible, overflow } = isOverflow
+    ? partitionOverflowTriggers(children, activeValue)
+    : { visible: null, overflow: [] as ReturnType<typeof partitionOverflowTriggers>['overflow'] };
+
+  return (
+    <TabsVariantContext.Provider value={variant ?? 'underline'}>
+      <TabsSizeContext.Provider value={size ?? 'default'}>
+        <TabsPrimitive.List
+          ref={ref}
+          style={
+            layout === 'grid' && cols
+              ? { ...style, gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
+              : style
+          }
+          className={cn(tabsListVariants({ variant, layout, size }), className)}
+          {...props}
+        >
+          {isOverflow ? (
+            <>
+              {visible}
+              {overflow.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex shrink-0 items-center whitespace-nowrap px-4 py-2 font-body text-[13px] font-medium text-steel-soft transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    >
+                      More
+                      <ChevronDown className="ml-1 size-[13px]" aria-hidden="true" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {overflow.map((item) => (
+                      <DropdownMenuItem
+                        key={item.props.value}
+                        disabled={item.props.disabled}
+                        onSelect={() => {
+                          if (item.props.value) onValueChange?.(item.props.value);
+                        }}
+                      >
+                        {item.props.children}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
+          ) : (
+            children
+          )}
+        </TabsPrimitive.List>
+      </TabsSizeContext.Provider>
+    </TabsVariantContext.Provider>
+  );
+});
 TabsList.displayName = TabsPrimitive.List.displayName;
 
 interface TabsTriggerProps

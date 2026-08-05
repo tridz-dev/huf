@@ -525,8 +525,8 @@ export const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  // Purple signal left-edge accent with token-driven rounded radius on active state
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:border-l-2 data-[active=true]:border-signal data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-line data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
+  // Filled pill shape with raised shadow on active state — calm, integrated appearance
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:shadow-md data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
   {
     variants: {
       variant: {
