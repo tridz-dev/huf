@@ -81,10 +81,20 @@ export default {
         'space-5': 'var(--space-5)',
         'space-6': 'var(--space-6)',
         'space-7': 'var(--space-7)',
-        'control-px':    'var(--control-px)',
-        'control-px-sm': 'var(--control-px-sm)',
-        'control-px-lg': 'var(--control-px-lg)',
-        'control-py':    'var(--control-py)',
+        // NOTE: Tailwind's px-{key}/py-{key} utilities both look up the
+        // *same* `spacing` theme namespace, keyed only by what follows the
+        // axis prefix — so `px-control` and `py-control` would collide on
+        // one shared key/value if both used the literal key "control".
+        // Horizontal and vertical control padding differ (16px vs 8px), so
+        // they need distinct key names: 'control' (→ px-control) vs
+        // 'control-y' (→ py-control-y). Do not name these back to
+        // 'control-px'/'control-py' — that produces classes px-control-px /
+        // py-control-py, which don't match what button.tsx actually uses
+        // (px-control / py-control-y), silently generating no CSS at all.
+        'control':       'var(--control-px)',
+        'control-sm':    'var(--control-px-sm)',
+        'control-lg':    'var(--control-px-lg)',
+        'control-y':     'var(--control-py)',
       },
       height: {
         'control-sm': 'var(--control-h-sm)',
