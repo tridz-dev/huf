@@ -310,10 +310,13 @@ export default function UsersPage() {
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="ml-auto flex items-center gap-1 hover:opacity-80">
+                        <Button
+                          variant="ghost"
+                          className="ml-auto flex h-auto items-center gap-1 p-0 hover:bg-transparent hover:opacity-80"
+                        >
                           <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
                           <ChevronDown className="h-3 w-3 shrink-0 text-steel-soft" />
-                        </button>
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         {roles.map((r) => (

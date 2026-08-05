@@ -289,7 +289,7 @@ export default function GatewaysPage() {
           onSubmit={handleCreateGateway}
         >
           <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Gateway Name
+            Gateway name
             <Input
               className="h-10 text-sm"
               value={gatewayName}
@@ -300,7 +300,7 @@ export default function GatewaysPage() {
           </label>
 
           <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Channel Provider
+            Channel provider
             <Select value={provider} onValueChange={(v) => setProvider(v as GatewayProvider)}>
               <SelectTrigger className="h-10 text-sm">
                 <SelectValue />
@@ -444,7 +444,7 @@ export default function GatewaysPage() {
                 const matches = integrationSettings.filter((s) => s.service === requiredService);
                 return (
                   <label className="grid gap-1 text-xs font-medium text-ink">
-                    Connected Integration
+                    Connected integration
                     {matches.length > 0 ? (
                       <Select
                         value={editingGateway.integration_settings || '__none'}
@@ -504,7 +504,7 @@ export default function GatewaysPage() {
                 <p className="text-xs font-semibold text-ink">AI Routing Target</p>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="grid gap-1 text-xs font-medium text-ink">
-                    Target Type
+                    Target type
                     <Select
                       value={editingGateway.default_target_type || '__none'}
                       onValueChange={(v) =>
@@ -527,7 +527,7 @@ export default function GatewaysPage() {
 
                   {editingGateway.default_target_type === 'Agent' && (
                     <label className="grid gap-1 text-xs font-medium text-ink">
-                      Select Agent
+                      Select agent
                       <Select
                         value={editingGateway.default_agent || '__none'}
                         onValueChange={(v) =>
@@ -554,7 +554,7 @@ export default function GatewaysPage() {
 
                   {editingGateway.default_target_type === 'Flow' && (
                     <label className="grid gap-1 text-xs font-medium text-ink">
-                      Select Flow
+                      Select flow
                       <Select
                         value={editingGateway.default_flow || '__none'}
                         onValueChange={(v) =>

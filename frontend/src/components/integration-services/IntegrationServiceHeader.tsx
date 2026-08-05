@@ -47,13 +47,13 @@ export function IntegrationServiceHeader({
             <InlineEditName
               value={title}
               onChange={onTitleChange}
-              placeholder="Integration Service Name"
+              placeholder="e.g. WhatsApp integration"
             />
           )}
           {!isNew && isBuiltin && <Badge variant="outline">Built-in</Badge>}
           <Badge variant="outline">
             <Link2 className="w-3 h-3 mr-1" />
-            Service Catalog
+            Service catalog
           </Badge>
         </div>
       </div>

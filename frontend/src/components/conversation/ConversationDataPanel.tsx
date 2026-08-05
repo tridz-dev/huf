@@ -70,7 +70,7 @@ export function ConversationDataPanel({ conversationId, canWrite }: Conversation
       <SheetTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Database className="h-4 w-4" />
-          Conversation Data
+          Conversation data
         </Button>
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">

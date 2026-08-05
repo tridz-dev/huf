@@ -243,7 +243,7 @@ export function KnowledgeInputsModal({
               onClick={() => setShowCreate(!showCreate)}
             >
               <Plus className="w-4 h-4 mr-2" />
-              New Input
+              New input
             </Button>
           </div>
 

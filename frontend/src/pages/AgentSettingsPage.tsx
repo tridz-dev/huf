@@ -110,7 +110,7 @@ export function AgentSettingsPage() {
             <Button onClick={handleSave} disabled={saving}>
               {saving && <span className="mr-2 animate-spin">⟳</span>}
               <Save className="w-4 h-4 mr-2" />
-              Save Destinations
+              Save destinations
             </Button>
           </div>
         </CardContent>

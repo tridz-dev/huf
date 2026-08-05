@@ -39,14 +39,14 @@ export function SshPage() {
             <div className="rounded-lg border border-line bg-paper-deep p-4 space-y-2">
               <h3 className="font-semibold text-ink flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-steel" />
-                Agent Configuration
+                Agent configuration
               </h3>
               <p>
                 Enable SSH execution for specific agents under their <strong>Advanced Settings</strong> tab. Select allowlisted connections and execution profiles.
               </p>
               <div className="pt-2">
                 <Button variant="outline" size="sm" onClick={() => navigate('/agents')} className="gap-2">
-                  Configure Agents
+                  Configure agents
                   <ExternalLink className="w-3.5 h-3.5" />
                 </Button>
               </div>

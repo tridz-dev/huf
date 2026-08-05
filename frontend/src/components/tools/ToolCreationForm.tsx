@@ -803,7 +803,7 @@ export function ToolCreationForm({
               disabled={loading}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add Header
+              Add header
             </Button>
           </div>
           {httpHeaders.length === 0 ? (
@@ -875,7 +875,7 @@ export function ToolCreationForm({
               disabled={loading}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add Parameter
+              Add parameter
             </Button>
           </div>
         </div>
@@ -1067,7 +1067,7 @@ export function ToolCreationForm({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Required Permission
+                        Required permission
                         {renderAutoBadge('required_permission')}
                       </FormLabel>
                       <Select
@@ -1105,7 +1105,7 @@ export function ToolCreationForm({
                     <FormItem className="flex flex-row items-center justify-between rounded border p-4">
                       <div className="space-y-0.5">
                         <FormLabel>
-                          Read Only
+                          Read only
                           {renderAutoBadge('is_read_only')}
                         </FormLabel>
                         <p className="text-sm text-steel">

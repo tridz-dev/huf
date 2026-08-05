@@ -393,13 +393,13 @@ export function AgentSummaryPromptFormPage() {
                           <Input
                             {...field}
                             className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                            placeholder="Summary Prompt Title"
+                            placeholder="e.g. Conversation summary"
                           />
                         ) : (
                           <InlineEditName
                             value={field.value}
                             onChange={field.onChange}
-                            placeholder="Summary Prompt Title"
+                            placeholder="e.g. Conversation summary"
                           />
                         )}
                       </FormControl>
@@ -459,7 +459,7 @@ export function AgentSummaryPromptFormPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleForkPrompt}>
                         <GitFork className="mr-2 h-4 w-4" />
-                        Fork Prompt
+                        Fork prompt
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -483,7 +483,7 @@ export function AgentSummaryPromptFormPage() {
                     <FormItem className="space-y-2 sm:col-span-2">
                       <Label>Title</Label>
                       <FormControl>
-                        <Input {...field} placeholder="Summary prompt title" />
+                        <Input {...field} placeholder="e.g. Conversation summary" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

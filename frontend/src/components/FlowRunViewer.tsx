@@ -84,7 +84,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                 <SheetHeader className="mb-6">
                     <SheetTitle className="flex items-center gap-2">
                         <Box className="w-5 h-5 text-muted-foreground" />
-                        Run Details
+                        Run details
                     </SheetTitle>
                     <SheetDescription>
                         {runId}

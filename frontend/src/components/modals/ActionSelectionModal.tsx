@@ -119,9 +119,10 @@ export function ActionSelectionModal({
           {actions.map((action) => {
             const Icon = iconMap[action.icon || "FileText"];
             return (
-              <button
+              <Button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded border border-border hover:border-primary/50 hover:bg-accent transition-all"
+                variant="outline"
+                className="h-auto items-center justify-start gap-3 p-3 hover:border-primary/50 hover:bg-accent"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -135,7 +136,7 @@ export function ActionSelectionModal({
                     </div>
                   )}
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>

@@ -51,7 +51,7 @@ export const MemoryContextBadge: React.FC<MemoryContextBadgeProps> = ({ memoryRe
         <div className="bg-muted/30 p-3 border-b border-border/50">
           <h4 className="text-sm font-semibold flex items-center gap-2">
             <Brain className="h-4 w-4 text-primary" />
-            Context Injected
+            Context injected
           </h4>
           <p className="text-xs text-muted-foreground mt-1">
             The agent used these personal memories to personalize its response.

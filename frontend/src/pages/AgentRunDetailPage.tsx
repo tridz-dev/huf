@@ -212,7 +212,7 @@ function AgentRunDetailPage() {
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
               className="h-8 px-2"
             >
-              Cached Tokens
+              Cached tokens
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           );
@@ -340,7 +340,7 @@ function AgentRunDetailPage() {
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
               <CardTitle className="flex items-center gap-3">
-                Agent Run
+                Agent run
                 <Badge variant={getAgentRunStatusVariant(run.status)}>{status}</Badge>
               </CardTitle>
               <CardDescription className="mt-1">

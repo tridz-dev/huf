@@ -218,7 +218,7 @@ export function SummaryPromptCategoriesModal({
               }}
             >
               <Plus className="w-4 h-4 mr-2" />
-              New Category
+              New category
             </Button>
           </div>
 

@@ -437,7 +437,7 @@ export function CategoryModal({
                   handleSave();
                 }}
               >
-                Save Selection
+                Save selection
               </Button>
             </div>
           </TabsContent>

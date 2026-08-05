@@ -168,7 +168,7 @@ export function AgentHeader({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
-                  View Logs
+                  View logs
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />

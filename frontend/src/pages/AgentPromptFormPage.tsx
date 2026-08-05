@@ -470,13 +470,13 @@ export function AgentPromptFormPage() {
                           <Input
                             {...field}
                             className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                            placeholder="Prompt Title"
+                            placeholder="e.g. Customer support greeting"
                           />
                         ) : (
                           <InlineEditName
                             value={field.value}
                             onChange={field.onChange}
-                            placeholder="Prompt Title"
+                            placeholder="e.g. Customer support greeting"
                           />
                         )}
                       </FormControl>
@@ -536,7 +536,7 @@ export function AgentPromptFormPage() {
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleForkPrompt}>
                         <GitFork className="mr-2 h-4 w-4" />
-                        Fork Prompt
+                        Fork prompt
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -562,7 +562,7 @@ export function AgentPromptFormPage() {
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Prompt title"
+                          placeholder="e.g. Customer support greeting"
                         />
                       </FormControl>
                       <FormMessage />

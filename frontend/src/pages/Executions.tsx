@@ -229,7 +229,7 @@ export default function Executions() {
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
               className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
-              Cached Tokens
+              Cached tokens
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           );

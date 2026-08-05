@@ -391,7 +391,7 @@ export function FlowCanvas({
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Trigger
+                Add trigger
               </Button>
             )}
             <Button

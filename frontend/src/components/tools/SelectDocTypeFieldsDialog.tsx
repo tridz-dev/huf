@@ -142,7 +142,7 @@ export function SelectDocTypeFieldsDialog({
             onClick={handleAddFields}
             disabled={loading || selectedKeys.length === 0 || fieldOptions.length === 0}
           >
-            Add Fields
+            Add fields
           </Button>
         </DialogScrollFooter>
       </DialogScrollContent>

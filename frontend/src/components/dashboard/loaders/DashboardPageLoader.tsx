@@ -39,7 +39,7 @@ export function DashboardPageLoader() {
               </TabsList>
             </Tabs>
             <Button variant="outline" size="sm" disabled>
-              Show More
+              Show more
             </Button>
           </div>
 

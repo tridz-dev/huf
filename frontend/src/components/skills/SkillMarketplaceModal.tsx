@@ -84,7 +84,7 @@ export function SkillMarketplaceModal({ open, onOpenChange, onSuccess }: SkillMa
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Store className="w-5 h-5" />
-            Skills Marketplace
+            Skills marketplace
           </DialogTitle>
           <DialogDescription>
             Browse and install curated skills from the Huf marketplace.

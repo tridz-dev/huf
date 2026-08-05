@@ -103,18 +103,19 @@ function CategoryChip({
 	onClick: () => void;
 }) {
 	return (
-		<button
+		<Button
 			type="button"
+			variant="outline"
 			onClick={onClick}
 			className={cn(
-				'inline-flex items-center rounded border px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide transition-colors',
+				'h-auto items-center px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide',
 				active
 					? 'border-ink text-ink'
 					: 'border-line bg-paper-deep text-steel hover:text-ink'
 			)}
 		>
 			{label}
-		</button>
+		</Button>
 	);
 }
 

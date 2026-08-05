@@ -515,7 +515,7 @@ export function NodeSelectionModal({
                     ) : (
                       <div>
                         <h3 className="text-sm font-medium mb-3 text-steel">
-                          Available Agents
+                          Available agents
                         </h3>
                         <div className="space-y-2">
                           {agents.filter((agent) => {
@@ -680,7 +680,7 @@ export function NodeSelectionModal({
           </Button>
           {mainTab === 'triggers' && (
             <Button onClick={handleSaveTrigger} disabled={!selectedItem}>
-              Save Configuration
+              Save configuration
             </Button>
           )}
         </DialogScrollFooter>

@@ -297,9 +297,10 @@ export function TriggerConfigModal({
                     {highlightTriggers.map((trigger) => {
                       const Icon = iconMap[trigger.icon || 'Webhook'];
                       return (
-                        <button
+                        <Button
                           key={trigger.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedTrigger === trigger.id
+                          variant="outline"
+                          className={`h-auto items-center justify-start gap-3 rounded-lg p-3 ${selectedTrigger === trigger.id
                             ? 'border-signal bg-panel'
                             : 'border-line hover:border-ink hover:bg-paper-deep'
                             }`}
@@ -311,7 +312,7 @@ export function TriggerConfigModal({
                           <div className="text-left flex-1 min-w-0">
                             <div className="text-sm font-medium">{trigger.name}</div>
                           </div>
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
@@ -327,9 +328,10 @@ export function TriggerConfigModal({
                     {popularTriggers.map((trigger) => {
                       const Icon = iconMap[trigger.icon || 'Webhook'];
                       return (
-                        <button
+                        <Button
                           key={trigger.id}
-                          className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedTrigger === trigger.id
+                          variant="outline"
+                          className={`h-auto w-full items-center justify-start gap-3 rounded-lg p-3 ${selectedTrigger === trigger.id
                             ? 'border-signal bg-panel'
                             : 'border-line hover:border-ink hover:bg-paper-deep'
                             }`}
@@ -346,7 +348,7 @@ export function TriggerConfigModal({
                               </div>
                             )}
                           </div>
-                        </button>
+                        </Button>
                       );
                     })}
                   </div>
@@ -363,7 +365,7 @@ export function TriggerConfigModal({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={!selectedTrigger}>
-            Save Configuration
+            Save configuration
           </Button>
         </div>
       </DialogContent>

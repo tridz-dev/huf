@@ -440,7 +440,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                   onClick={() => append({ header_name: '', header_value: '' })}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Header
+                  Add header
                 </Button>
               </div>
 
@@ -448,9 +448,10 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                 <div className="rounded-lg border">
                   <Collapsible open={showManualOAuth} onOpenChange={setShowManualOAuth}>
                     <CollapsibleTrigger asChild>
-                      <button
+                      <Button
                         type="button"
-                        className="flex w-full items-center justify-between gap-4 p-4 text-left"
+                        variant="ghost"
+                        className="h-auto w-full items-center justify-between gap-4 rounded-none p-4 text-left hover:bg-transparent"
                       >
                         <div className="space-y-0.5">
                           <p className="text-sm font-medium">Manual OAuth Fallback</p>
@@ -461,7 +462,7 @@ export function ConnectionTab({ form, serverName, isNew, onSaveAndConnect }: Con
                         <ChevronDown
                           className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${showManualOAuth ? 'rotate-180' : ''}`}
                         />
-                      </button>
+                      </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <div className="grid gap-6 border-t p-4">

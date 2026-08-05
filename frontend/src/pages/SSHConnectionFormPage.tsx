@@ -266,7 +266,7 @@ export function SSHConnectionFormPage() {
             <InlineEditName
               value={form.watch('display_name') || (isNew ? 'New SSH Connection' : id!)}
               onChange={(name: string) => form.setValue('display_name', name, { shouldDirty: true })}
-              placeholder="Display Name"
+              placeholder="e.g. Production Web Server"
               className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"
             />
             <p className="font-mono text-[12px] text-steel mt-1">
@@ -280,7 +280,7 @@ export function SSHConnectionFormPage() {
             <>
               <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testing} className="border-line hover:border-ink hover:bg-paper-deep">
                 {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2 text-steel" />}
-                Test Connection
+                Test connection
               </Button>
               <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving} className="border-line hover:border-ink hover:bg-paper-deep">
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
