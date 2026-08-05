@@ -442,7 +442,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               </Button>
             </div>
           ) : (Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
-            <Button key={path} variant="ghost" className="h-auto flex-1 justify-between whitespace-normal text-left rounded-md bg-white hover:bg-white hover:shadow-md" onClick={() => setStarterPath(path)}>
+            <Button key={path} variant="ghost" className="h-auto flex-1 justify-between whitespace-normal text-left rounded-md bg-panel hover:bg-panel hover:shadow-md" onClick={() => setStarterPath(path)}>
               <span>
                 <span className="block font-body font-medium text-[13px] text-ink">{starter.title}</span>
                 <span className="mt-1 block font-mono text-[11px] text-steel-soft">{starter.modelName}</span>
@@ -627,12 +627,12 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-start gap-2">
                         {connectionTest.provider.ok ? (
-                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-good" />
                         ) : (
                           <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
                         )}
                         <div className="min-w-0">
-                          <span className={connectionTest.provider.ok ? 'text-green-700' : 'text-destructive'}>
+                          <span className={connectionTest.provider.ok ? 'text-good' : 'text-destructive'}>
                             {connectionTest.provider.ok ? 'Endpoint reachable' : 'Endpoint unreachable'}
                           </span>
                           {connectionTest.provider.error && (
@@ -643,7 +643,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                       {connectionTest.models.map((model) => (
                         <div key={model.name} className="flex items-start gap-2">
                           {model.ok ? (
-                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-good" />
                           ) : (
                             <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
                           )}

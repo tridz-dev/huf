@@ -62,7 +62,7 @@ export function ToolsTab({
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
-                  <FormLabel className="text-base">Enable Auto Sync</FormLabel>
+                  <FormLabel className="text-base">Enable auto sync</FormLabel>
                   <FormDescription>
                     Automatically sync tools periodically
                   </FormDescription>

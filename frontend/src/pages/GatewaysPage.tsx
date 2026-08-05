@@ -253,7 +253,7 @@ export default function GatewaysPage() {
               against security admission policies, and routed to your designated Agents or Flows.
             </p>
             <div className="flex items-center gap-2 text-xs font-medium text-steel">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <ShieldCheck className="h-4 w-4 text-good" />
               Live webhooks automatically authenticate signatures and enforce allowlists before executing AI tasks.
             </div>
           </div>
@@ -375,7 +375,7 @@ export default function GatewaysPage() {
 
       {/* Native In-App Gateway Settings Modal / Drawer */}
       {editingGateway && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-xl rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line pb-4">
@@ -413,7 +413,7 @@ export default function GatewaysPage() {
                       setEditingGateway({ ...editingGateway, is_enabled: e.target.checked ? 1 : 0 })
                     }
                   />
-                  <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                  <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-panel after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-panel after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-good"></div>
                 </label>
               </div>
 
@@ -591,7 +591,7 @@ export default function GatewaysPage() {
                   >
                     {copiedWebhook ? (
                       <>
-                        <Check className="mr-1 h-3.5 w-3.5 text-emerald-500" /> Copied
+                        <Check className="mr-1 h-3.5 w-3.5 text-good" /> Copied
                       </>
                     ) : (
                       <>

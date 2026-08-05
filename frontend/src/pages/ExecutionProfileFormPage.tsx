@@ -204,7 +204,7 @@ export function ExecutionProfileFormPage() {
               value={form.watch('profile_name') || (isNew ? 'New Execution Profile' : id!)}
               onChange={(name: string) => form.setValue('profile_name', name, { shouldDirty: true })}
               placeholder="Profile Name"
-              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:uppercase [&_h1]:leading-tight"
+              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"
             />
             <p className="font-mono text-[12px] text-steel mt-1">
               {isNew ? 'Create a new sandboxed execution profile' : `ID ${id}`}
@@ -229,7 +229,7 @@ export function ExecutionProfileFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px] uppercase">General Settings</CardTitle>
+              <CardTitle className="font-display font-bold text-[18px]">General Settings</CardTitle>
               <CardDescription className="font-body text-[13px] text-steel">Configure security policy and sandbox behavior</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -337,7 +337,7 @@ export function ExecutionProfileFormPage() {
 
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px] uppercase">Resource Limits</CardTitle>
+              <CardTitle className="font-display font-bold text-[18px]">Resource Limits</CardTitle>
               <CardDescription className="font-body text-[13px] text-steel">Specify CPU, time, memory, and output boundaries for code runs</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">

@@ -124,7 +124,7 @@ export function AgentModelSelector({
             disabled={disabled}
             data-testid="agent-model-selector-trigger"
             className={cn(
-              'h-auto gap-1.5 rounded-md border px-2 py-1 text-xs font-normal text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900',
+              'h-auto gap-1.5 rounded-md border px-2 py-1 text-xs font-normal text-steel hover:bg-paper-deep hover:text-ink',
               disabled && 'disabled:opacity-100'
             )}
           >
@@ -173,8 +173,8 @@ export function AgentModelSelector({
               className={cn(
                 'shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
                 providerFilter === null
-                  ? 'bg-zinc-900 text-white'
-                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                  ? 'bg-ink text-panel'
+                  : 'bg-paper-deep text-steel hover:bg-paper-deep'
               )}
             >
               All
@@ -187,8 +187,8 @@ export function AgentModelSelector({
                 className={cn(
                   'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
                   providerFilter === p.brand
-                    ? 'bg-zinc-900 text-white'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                    ? 'bg-ink text-panel'
+                    : 'bg-paper-deep text-steel hover:bg-paper-deep'
                 )}
               >
                 {isKnownBrand(p.brand) ? (

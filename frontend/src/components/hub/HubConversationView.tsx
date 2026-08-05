@@ -109,16 +109,16 @@ export function HubConversationView({
                   </div>
                 )}
                 {msg.content === '__NO_PROVIDER__' ? (
-                  <div className="inline-block max-w-[85%] px-4 py-3 rounded-sm bg-amber-50 border border-amber-200 text-left">
-                    <p className="text-sm font-medium text-amber-800 mb-1">No AI Provider configured</p>
+                  <div className="inline-block max-w-[85%] px-4 py-3 rounded-sm bg-warning border border-warning text-left">
+                    <p className="text-sm font-medium text-warning mb-1">No AI Provider configured</p>
                     {remediation && remediation.length > 0 ? (
-                      <ul className="text-xs text-amber-700 mb-3 space-y-1">
+                      <ul className="text-xs text-warning mb-3 space-y-1">
                         {remediation.map((item) => (
                           <li key={item.code}>{item.message}</li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-xs text-amber-700 mb-3">Add a provider and model to start using Hub Orchestrator.</p>
+                      <p className="text-xs text-warning mb-3">Add a provider and model to start using Hub Orchestrator.</p>
                     )}
                     <a href={remediation?.[0]?.action_route || '/models'} className="text-xs px-3 py-1.5 rounded-sm bg-signal text-white hover:bg-signal-ink transition-colors inline-block">
                       Add Provider →

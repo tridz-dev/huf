@@ -12,7 +12,7 @@ export function ExperimentalBadge({ className, size = 'md' }: ExperimentalBadgeP
       title="Experimental feature"
       aria-label="Experimental feature"
       className={cn(
-        'inline-flex items-center gap-1.5 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel-soft dark:text-steel select-none font-medium',
+        'inline-flex items-center gap-1.5 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel-soft select-none font-medium',
         size === 'sm' ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]',
         className
       )}

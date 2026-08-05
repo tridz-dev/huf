@@ -171,7 +171,7 @@ export function ToolsTab({
                           {tool.description || 'No description available.'}
                         </p>
                         {isShared && (
-                          <div className="flex w-fit items-center text-amber-600 bg-amber-50 px-2 py-0.5 rounded mt-2 text-[11px] font-semibold">
+                          <div className="flex w-fit items-center text-warning bg-warning px-2 py-0.5 rounded mt-2 text-[11px] font-semibold">
                             <Users className="w-3 h-3 mr-1.5" />
                             <span>Used in {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}</span>
                           </div>

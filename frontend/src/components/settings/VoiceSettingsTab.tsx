@@ -86,7 +86,7 @@ function HttpProviderForm({
       </CardHeader>
       {notice && (
         <CardContent className="pt-0 pb-2">
-          <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+          <div className="rounded-md bg-warning border border-warning p-3 text-sm text-warning">
             {notice}
           </div>
         </CardContent>

@@ -63,7 +63,7 @@ export function NavMain({
                           title={item.badge}
                           aria-label={item.badge}
                           role="img"
-                          className="flex items-center text-steel-soft dark:text-steel opacity-70 hover:opacity-100 transition-opacity"
+                          className="flex items-center text-steel-soft opacity-70 hover:opacity-100 transition-opacity"
                         >
                           <FlaskConical className="!size-[12.5px]" strokeWidth={1.5} />
                         </span>

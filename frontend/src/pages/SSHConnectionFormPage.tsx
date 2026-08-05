@@ -267,7 +267,7 @@ export function SSHConnectionFormPage() {
               value={form.watch('display_name') || (isNew ? 'New SSH Connection' : id!)}
               onChange={(name: string) => form.setValue('display_name', name, { shouldDirty: true })}
               placeholder="Display Name"
-              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:uppercase [&_h1]:leading-tight"
+              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"
             />
             <p className="font-mono text-[12px] text-steel mt-1">
               {isNew ? 'Create a new remote SSH target connection' : `ID ${id}`}
@@ -298,7 +298,7 @@ export function SSHConnectionFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px] uppercase">Connection Details</CardTitle>
+              <CardTitle className="font-display font-bold text-[18px]">Connection Details</CardTitle>
               <CardDescription className="font-body text-[13px] text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -465,7 +465,7 @@ export function SSHConnectionFormPage() {
           {!isNew && connectionDoc && (
             <Card className="border-line bg-panel">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-display font-bold text-[18px] uppercase">
+                <CardTitle className="flex items-center gap-2 font-display font-bold text-[18px]">
                   <ShieldCheck className="h-5 w-5 text-steel-soft" strokeWidth={1.6} />
                   Host Key Security & Status
                 </CardTitle>

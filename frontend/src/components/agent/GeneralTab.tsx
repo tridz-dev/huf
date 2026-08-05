@@ -393,7 +393,7 @@ We generally recommend altering this or temperature but not both.`}
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                 <div className="space-y-0.5">
-                  <FormLabel className="text-base">Enable Prompt Caching</FormLabel>
+                  <FormLabel className="text-base">Enable prompt caching</FormLabel>
                   <FormDescription>
                     Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).
                   </FormDescription>
@@ -406,8 +406,8 @@ We generally recommend altering this or temperature but not both.`}
           />
 
           {watchEnablePromptCaching && watchProvider && watchModel && cacheStatus && !cacheStatus.supported && (
-            <Alert className="sm:col-span-2 border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <Alert className="sm:col-span-2 border-warning/50 bg-warning/10 text-warning">
+              <AlertTriangle className="h-4 w-4 text-warning" />
               <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Not Supported</AlertTitle>
               <AlertDescription className="text-xs mt-1 space-y-1">
                 <p>

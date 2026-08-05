@@ -10,8 +10,8 @@ const alertVariants = cva(
       variant: {
         default: 'bg-paper-deep text-ink',
         destructive: 'bg-destructive-tint text-destructive [&>svg]:text-destructive',
-        warning: 'bg-[#FDF3E0] text-[#8A5A00] [&>svg]:text-[#8A5A00]',
-        success: 'bg-[#E8F5EE] text-good [&>svg]:text-good',
+        warning: 'bg-warning-tint text-warning [&>svg]:text-warning',
+        success: 'bg-good-tint text-good [&>svg]:text-good',
       },
     },
     defaultVariants: {

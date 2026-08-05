@@ -458,7 +458,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="use_custom_pricing">Enable Custom Pricing</Label>
+                    <Label htmlFor="use_custom_pricing">Enable custom pricing</Label>
                     <p className="text-xs text-steel-soft">
                       Check this to activate the custom prices below. When unchecked, LiteLLM&apos;s automatic pricing is used regardless of what is entered below.
                     </p>

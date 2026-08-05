@@ -284,7 +284,7 @@ export function PreviewViewPage() {
 					) : (
 						<>
 							{textContent && textContent.trim() && (
-								<div className="prose prose-sm dark:prose-invert max-w-none">
+								<div className="prose prose-sm max-w-none">
 									<Suspense
 										fallback={
 											<div className="animate-pulse rounded bg-paper-deep/50 p-4 text-sm text-steel">

@@ -754,7 +754,7 @@ export function AdvancedTab({
 								render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 										<div className="space-y-0.5 pr-4">
-											<FormLabel className="text-base">Enable Memory Search Tool</FormLabel>
+											<FormLabel className="text-base">Enable memory search tool</FormLabel>
 											<FormDescription>
 												Automatically provide the agent with a tool to search memory records.
 											</FormDescription>
@@ -772,7 +772,7 @@ export function AdvancedTab({
 								render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 										<div className="space-y-0.5 pr-4">
-											<FormLabel className="text-base">Enable Memory Write Tool</FormLabel>
+											<FormLabel className="text-base">Enable memory write tool</FormLabel>
 											<FormDescription>
 												Automatically provide the agent with a tool to save new memory records.
 											</FormDescription>

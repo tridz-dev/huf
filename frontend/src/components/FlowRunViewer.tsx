@@ -131,14 +131,14 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
 
                         {run.status?.startsWith('Waiting') && run.waiting && Object.keys(run.waiting).length > 0 && (
                             <div>
-                                <h3 className="text-sm font-semibold mb-3 text-orange-600">Pending Actions</h3>
-                                <div className="bg-orange-50/50 dark:bg-orange-950/20 p-4 rounded-md border border-orange-200 dark:border-orange-900">
+                                <h3 className="text-sm font-semibold mb-3 text-warning">Pending Actions</h3>
+                                <div className="bg-warning-tint/50 p-4 rounded-md border border-warning/25">
                                     {run.waiting.type === 'approval' ? (
                                         <div className="space-y-4">
                                             <div>
-                                                <h4 className="font-semibold text-orange-800 dark:text-orange-400">{run.waiting.title as string || 'Approval Required'}</h4>
+                                                <h4 className="font-semibold text-warning">{run.waiting.title as string || 'Approval Required'}</h4>
                                                 {(run.waiting.instructions as string) && (
-                                                    <p className="text-sm text-orange-700 dark:text-orange-500 mt-1">{run.waiting.instructions as string}</p>
+                                                    <p className="text-sm text-warning mt-1">{run.waiting.instructions as string}</p>
                                                 )}
                                             </div>
                                             {(run.waiting.context_summary as string) && (
@@ -147,7 +147,7 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                 </div>
                                             )}
                                             <div className="flex items-center gap-3 pt-2">
-                                                <Button size="sm" onClick={() => handleApproval('approved')} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                                                <Button size="sm" onClick={() => handleApproval('approved')} className="bg-good hover:bg-good/90 text-panel gap-2">
                                                     <Check className="w-4 h-4" /> Approve
                                                 </Button>
                                                 <Button size="sm" variant="outline" onClick={() => handleApproval('rejected')} className="text-destructive border-destructive hover:bg-destructive/10 gap-2">

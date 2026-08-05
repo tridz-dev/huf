@@ -98,7 +98,7 @@ export function TableSettingsPanel({
 			    touch these beyond their defaults, so they get less visual weight and sit
 			    below the fields that define what the table actually is. */}
 			<div className="space-y-3 pt-2 border-t border-line">
-				<h4 className="text-xs font-medium text-steel-soft uppercase tracking-wide">
+				<h4 className="text-xs font-medium text-steel-soft tracking-wide">
 					Additional Settings
 				</h4>
 

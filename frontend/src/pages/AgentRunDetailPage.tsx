@@ -327,8 +327,8 @@ function AgentRunDetailPage() {
         </div>
 
         {isSilentDegradation && (
-          <Alert className="border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <Alert className="border-warning/50 bg-warning/10 text-warning">
+            <AlertTriangle className="h-4 w-4 text-warning" />
             <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Skipped</AlertTitle>
             <AlertDescription className="text-xs mt-1">
               Prompt caching was enabled for agent <strong>{run.agent}</strong>, but model <strong>{run.model || 'unknown'}</strong> from provider <strong>{run.provider || 'unknown'}</strong> does not support prompt caching. Caching was silently skipped during execution.
@@ -384,19 +384,19 @@ function AgentRunDetailPage() {
                 <h3 className="text-sm font-semibold text-steel">Tokens & Cost</h3>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between gap-4">
-                    <span className="text-steel">Input Tokens</span>
+                    <span className="text-steel">Input tokens</span>
                     <span className="font-medium">
                       {typeof run.input_tokens === 'number' ? run.input_tokens : 'Not available'}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-steel">Output Tokens</span>
+                    <span className="text-steel">Output tokens</span>
                     <span className="font-medium">
                       {typeof run.output_tokens === 'number' ? run.output_tokens : 'Not available'}
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-steel">Total Tokens</span>
+                    <span className="text-steel">Total tokens</span>
                     <span className="font-medium">
                       {typeof run.input_tokens === 'number' || typeof run.output_tokens === 'number'
                         ? (run.input_tokens || 0) + (run.output_tokens || 0)
@@ -404,7 +404,7 @@ function AgentRunDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-steel">Cached Tokens</span>
+                    <span className="text-steel">Cached tokens</span>
                     <span className="font-medium">
                       {typeof run.cached_tokens === 'number' ? run.cached_tokens : 'Not available'}
                     </span>
@@ -416,7 +416,7 @@ function AgentRunDetailPage() {
                     </span>
                   </div>
                   <div className="flex justify-between gap-4">
-                    <span className="text-steel">Cost Source</span>
+                    <span className="text-steel">Cost source</span>
                     <span className="font-medium">{run.cost_source || 'Not available'}</span>
                   </div>
                 </div>

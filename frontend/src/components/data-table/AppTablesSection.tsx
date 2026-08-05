@@ -41,7 +41,7 @@ export function AppTablesSection() {
 	return (
 		<section className="mt-8 border-t border-line pt-6 space-y-3">
 			<div className="space-y-1">
-				<h2 className="font-display font-bold text-[16px] uppercase text-ink">
+				<h2 className="font-display font-bold text-[16px] text-ink">
 					App Tables
 				</h2>
 				<p className="text-sm font-body text-steel">
