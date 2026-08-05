@@ -40,6 +40,9 @@
 
     /* Shape */
     --r: 2px;
+    --shadow-flat: none;
+    --shadow-raised: none;
+    --shadow-overlay: none;
 
     /* Typography */
     --display: 'Big Shoulders Display', sans-serif;
@@ -154,6 +157,39 @@
     --signal-ink: #BC3E0F;
     --good:       #4E8F5C;
     --coral-soft: #FCECE6;
+  }
+
+  /* Proposal preview only — not registered in the theme picker (src/lib/personalization.ts).
+     Force it for a live check via: document.documentElement.setAttribute('data-theme','apple-quiet') */
+  [data-theme="apple-quiet"] {
+    --paper:      #FBFBFD;
+    --paper-deep: #F4F4F7;
+    --panel:      #FFFFFF;
+    --ink:        #1D1D1F;
+    --ink-soft:   #2A2F36;
+    --steel:      #6E6E73;
+    --steel-soft: #98989D;
+    --line:       #ECECF0;
+    --line-marketing: #ECECF0;
+    --line-dark:  #343A42;
+    --signal:     #7A5AF0;
+    --signal-ink: #5B3FC4;
+    --good:       #1C7C54;
+    --coral-soft: #FDECEA;
+
+    --r: 8px;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 14px;
+    --r-full: 999px;
+    --shadow-flat: none;
+    --shadow-raised: 0 1px 2px rgba(0,0,0,.05);
+    --shadow-overlay: 0 8px 24px -8px rgba(0,0,0,.16);
+
+    --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
   }
 
   @keyframes blink { 50% { opacity: .2; } }
