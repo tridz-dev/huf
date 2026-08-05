@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const SRC = join(ROOT, 'src');
 const STRICT = process.argv.includes('--strict');
+const ALL = process.argv.includes('--all');
 
 // ---------------------------------------------------------------- tokens ---
 // Parsed from tailwind.config.js so this never drifts from the real config.
@@ -65,10 +66,16 @@ const SHARED = [
   'SelectTrigger', 'Checkbox', 'Switch', 'RadioGroupItem', 'Label',
   'TabsList', 'TabsTrigger', 'TableHead', 'TableCell', 'Avatar',
 ];
+// Text alignment / wrapping / truncation are composition, not design-system
+// decisions — `text-right` on a numeric table cell is correct and must not be
+// reported. Only size, weight, transform, tracking and colour count.
+const TEXT_LAYOUT = 'left|center|right|justify|start|end|wrap|nowrap|balance|pretty|ellipsis|clip|top|middle|bottom';
 const OVERRIDE = new RegExp(
   `\\b(?:p|px|py|pt|pb|pl|pr)-|\\brounded|\\bshadow|\\btext-(?:xs|sm|base|lg|xl|\\[)|` +
   `\\bfont-(?:bold|semibold|medium|normal)|\\buppercase\\b|\\btracking-|` +
-  `\\b(?:h|w|size|min-w|min-h)-(?!full\\b|auto\\b)|${COLOR_PREFIX}-`,
+  `\\b(?:h|w|size|min-w|min-h)-(?!full\\b|auto\\b)|` +
+  `\\b(?:bg|border|ring|fill|stroke|divide|outline|accent|caret|decoration|placeholder)-|` +
+  `\\btext-(?!${TEXT_LAYOUT})[a-z]`,
 );
 
 const findings = { undefinedToken: [], rawPalette: [], deadDark: [], override: [] };
@@ -113,8 +120,8 @@ for (const file of walk(SRC)) {
 const report = (title, items, fatal) => {
   if (!items.length) return 0;
   console.log(`\n${fatal ? 'FAIL' : 'warn'}  ${title}: ${items.length}`);
-  for (const l of items.slice(0, 30)) console.log(`      ${l}`);
-  if (items.length > 30) console.log(`      … and ${items.length - 30} more`);
+  for (const l of (ALL ? items : items.slice(0, 30))) console.log(`      ${l}`);
+  if (!ALL && items.length > 30) console.log(`      … and ${items.length - 30} more  (--all to list every one)`);
   return fatal ? items.length : 0;
 };
 

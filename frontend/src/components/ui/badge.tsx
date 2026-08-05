@@ -26,9 +26,16 @@ const badgeVariants = cva(
         'pill-neutral': 'rounded-full border-transparent bg-paper-deep text-steel font-sans normal-case tracking-normal text-[11px] font-medium',
         chip: 'rounded-sm border-transparent bg-paper-deep text-steel font-mono normal-case tracking-normal',
       },
+      // 30 callsites overrode Badge's size, nearly all with text-xs or
+      // text-[10px]. One sanctioned compact step instead of ad hoc values.
+      size: {
+        default: '',
+        sm: 'text-[10px] px-1.5 py-0',
+      },
     },
     defaultVariants: {
       variant: 'default',
+      size: 'default',
     },
   }
 );
@@ -37,9 +44,9 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant, size, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <div className={cn(badgeVariants({ variant, size }), className)} {...props} />
   );
 }
 
