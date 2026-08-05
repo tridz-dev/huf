@@ -19,7 +19,10 @@ const tabsListVariants = cva('gap-0', {
       // bottom border on the shared 1px ink baseline.
       underline:
         'inline-flex items-center justify-start border-b border-ink bg-transparent p-0',
-      pill: 'inline-flex items-center justify-center rounded-lg bg-muted p-1',
+      // Apple/iOS segmented control: a sunken track (bg-paper-deep, the app's
+      // canonical recessed-surface token — see AgentRunDetailPage.tsx,
+      // ToolCard.tsx) framing the raised active segment.
+      pill: 'inline-flex items-center justify-center rounded-lg bg-paper-deep p-1',
     },
     layout: {
       inline: '',
@@ -46,7 +49,14 @@ const tabsTriggerVariants = cva(
       variant: {
         underline:
           'border-b-2 border-transparent px-4 py-2 font-body text-[13px] font-medium text-steel hover:text-ink data-[state=active]:-mb-px data-[state=active]:border-signal data-[state=active]:text-ink',
-        pill: 'rounded-md px-3 py-1 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm',
+        // flex-1: equal-width segments (a no-op inside layout="grid" parents,
+        // which already get equal columns via the `cols` style hook — see
+        // CategoryModal.tsx / ChatListing.tsx — but keeps a bare inline pill
+        // list from shrink-wrapping to each label's width). shadow-md (not
+        // shadow-sm/DEFAULT, both of which map to --shadow-flat: none) is
+        // required for the active segment's "raised" lift to be visible at
+        // all in the apple-quiet theme.
+        pill: 'flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-md',
       },
       size: {
         default: '',

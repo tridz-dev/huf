@@ -42,7 +42,7 @@ export function PageFrame({
                 <div className="space-y-1">
                   {title && (
                     <div className="flex items-center gap-3">
-                      <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-tight">
+                      <h1 className="font-display text-title uppercase text-ink leading-tight">
                         {title}
                       </h1>
                       {badge}

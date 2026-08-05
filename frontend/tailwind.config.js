@@ -123,6 +123,33 @@ export default {
         mono:    'var(--mono)',
         sans:    'var(--body)',
       },
+      fontSize: {
+        // Admin/backend-UI type scale — additive only, does not touch
+        // Tailwind's default text-sm/base/lg/xl scale used throughout the app.
+        display: [
+          'var(--text-display-size)',
+          { letterSpacing: 'var(--text-display-tracking)', fontWeight: 'var(--text-display-weight)' },
+        ],
+        title: [
+          'var(--text-title-size)',
+          { letterSpacing: 'var(--text-title-tracking)', fontWeight: 'var(--text-title-weight)' },
+        ],
+        // Named 'body-text' (not 'body') to avoid ambiguity with the
+        // `body` fontFamily key above (font-body vs text-body-text).
+        'body-text': [
+          'var(--text-body-size)',
+          { fontWeight: 'var(--text-body-weight)' },
+        ],
+        'ui-text': [
+          'var(--text-ui-size)',
+          { fontWeight: 'var(--text-ui-weight)' },
+        ],
+        meta: ['var(--text-meta-size)', {}],
+        eyebrow: [
+          'var(--text-eyebrow-size)',
+          { letterSpacing: 'var(--text-eyebrow-tracking)' },
+        ],
+      },
       keyframes: {
         blink: { '50%': { opacity: '.2' } },
         drop: {

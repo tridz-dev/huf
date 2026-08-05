@@ -66,19 +66,63 @@
     --space-6: 32px;
     --space-7: 48px;
 
-    /* Control sizing */
-    --control-h-sm: 30px;
-    --control-h-md: 34px;
-    --control-h-lg: 38px;
-    --control-px: 14px;
-    --control-px-sm: 10px;
-    --control-px-lg: 28px;
-    --control-py: 7px;
+    /* Control sizing
+       Arithmetic (border-box, worst case = bordered variant e.g. `outline`
+       has 1px border = 2px total height eaten; text-sm line-height 20px,
+       text-xs line-height 16px per default Tailwind config — no fontSize
+       override in tailwind.config.js):
+         sm  (icon-sm too): text-xs 16px line-height, no vertical padding
+             class applied (flex `items-center` centers within fixed
+             height) -> min needed 16 + 2 border = 18px. 32px gives
+             comfortable headroom and clears the ~32px minimum comfortable
+             tap-target guideline.
+         md  (default, icon too): text-sm 20px line-height + control-py
+             (8px * 2 = 16px) + 2px border = 38px needed exactly.
+             Previously 34px height vs a 36px requirement (20 + 14 + 2)
+             caused ~2px overflow — text/padding didn't fit the box,
+             reading as vertically cramped/off-center. Raised height to
+             38px and py to 8px so the stack fits exactly.
+         lg: text-sm 20px line-height, no vertical padding class (flex
+             centers) -> min needed 20 + 2 border = 22px. 44px keeps lg
+             clearly larger than md (was equal to md's old 38px) with
+             generous headroom for a prominent CTA.
+       Horizontal padding scaled to preserve original px/height ratios
+       (px-lg/h-lg was 28/38=0.74, now 32/44=0.73; px/h-md was
+       14/34=0.41, now 16/38=0.42; px-sm/h-sm was 10/30=0.33, now
+       12/32=0.375) so proportions stay consistent across the new
+       heights. */
+    --control-h-sm: 32px;
+    --control-h-md: 38px;
+    --control-h-lg: 44px;
+    --control-px: 16px;
+    --control-px-sm: 12px;
+    --control-px-lg: 32px;
+    --control-py: 8px;
 
     /* Typography */
     --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Type scale */
+    --text-display-size:     28px;
+    --text-display-weight:   600;
+    --text-display-tracking: -0.02em;
+
+    --text-title-size:     20px;
+    --text-title-weight:   590;
+    --text-title-tracking: -0.015em;
+
+    --text-body-size:   15px;
+    --text-body-weight: 400;
+
+    --text-ui-size:   13px;
+    --text-ui-weight: 500;
+
+    --text-meta-size: 11px;
+
+    --text-eyebrow-size:     10px;
+    --text-eyebrow-tracking: 0.07em;
 
     /* shadcn compatibility — mapped to HUF tokens so themes propagate */
     --radius: 8px;
@@ -230,14 +274,14 @@
     --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
 
-    /* Control sizing */
-    --control-h-sm: 30px;
-    --control-h-md: 34px;
-    --control-h-lg: 38px;
-    --control-px: 14px;
-    --control-px-sm: 10px;
-    --control-px-lg: 28px;
-    --control-py: 7px;
+    /* Control sizing — kept in sync with the :root block above. */
+    --control-h-sm: 32px;
+    --control-h-md: 38px;
+    --control-h-lg: 44px;
+    --control-px: 16px;
+    --control-px-sm: 12px;
+    --control-px-lg: 32px;
+    --control-py: 8px;
   }
 
   @keyframes blink { 50% { opacity: .2; } }

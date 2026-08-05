@@ -373,7 +373,7 @@ export function FlowCanvas({
         <MiniMap
           nodeColor={(node) => {
             if (node.type === 'trigger') return 'var(--primary)';
-            if (node.type === 'end') return '#10b981';
+            if (node.type === 'end') return 'var(--good)';
             return 'var(--muted)';
           }}
           className="!bg-background !border-border !bottom-6"

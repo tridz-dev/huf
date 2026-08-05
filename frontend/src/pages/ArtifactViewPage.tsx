@@ -228,7 +228,7 @@ function ArtifactExportStandalone({
     try {
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(containerRef.current, {
-        backgroundColor: '#ffffff',
+        backgroundColor: 'var(--panel)',
         pixelRatio: 2,
       });
       const link = document.createElement('a');
