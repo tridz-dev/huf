@@ -239,7 +239,7 @@ export default function GatewaysPage() {
   }
 
   return (
-    <PageFrame subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
+    <PageFrame>
       {tabBar}
 
       {/* Overview Card */}

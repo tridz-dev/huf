@@ -172,7 +172,6 @@ function DataPage() {
 	return (
 		<PageFrame
 			title="Data"
-			subtitle="Create and manage custom data tables"
 			filters={
 				<div className="flex items-center gap-2">
 					<FilterBar

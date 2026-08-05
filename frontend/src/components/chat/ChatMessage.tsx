@@ -55,10 +55,14 @@ interface ChatMessageProps {
     loadingType?: LoadingType;
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
     scrollToBottomAfterPaint: (instant?: boolean) => void;
+    /** Content of the user turn that produced this assistant message, if known. */
+    precedingUserMessage?: string;
+    /** Re-runs a prior user turn (regenerate / retry). Appends a new turn rather than mutating history. */
+    onRegenerate?: (userContent: string) => void;
 }
 
-export function ChatMessage({ 
-    message, 
+export function ChatMessage({
+    message,
     agentName,
     agentColor,
     showToolExecutionDetails = true,
@@ -66,6 +70,8 @@ export function ChatMessage({
     loadingType = 'default',
     onFeedback,
     scrollToBottomAfterPaint,
+    precedingUserMessage,
+    onRegenerate,
 }: ChatMessageProps) {
     const { user } = useUser();
     const isUser = message.from === 'user';
@@ -77,6 +83,11 @@ export function ChatMessage({
     const runId = message.agentRunId || (
         message.key.startsWith('AR-') || message.key.startsWith('run-') ? message.key : undefined
     );
+
+    const isBusy = status === 'submitted' || status === 'streaming';
+    const handleRegenerate = precedingUserMessage && onRegenerate
+        ? () => onRegenerate(precedingUserMessage)
+        : undefined;
 
     const showLoading = isAssistant && !message.error && (
         ((status === 'submitted' || status === 'streaming') && isEmpty) ||
@@ -170,7 +181,11 @@ export function ChatMessage({
                                 />
                             )}
                             {message.error ? (
-                                <ChatErrorCard error={message.error} />
+                                <ChatErrorCard
+                                    error={message.error}
+                                    onRetry={handleRegenerate}
+                                    retryDisabled={isBusy}
+                                />
                             ) : message.generatedAudio && message.from === 'assistant' ? (
                                 <div className="w-full max-w-md">
                                     <AudioPlayer>
@@ -276,6 +291,8 @@ export function ChatMessage({
                                     onFeedback={onFeedback}
                                     agentMessageId={message.versions[0].id}
                                     agentRunId={runId}
+                                    onRegenerate={handleRegenerate}
+                                    regenerateDisabled={isBusy}
                                 />
                             </div>
                         )}

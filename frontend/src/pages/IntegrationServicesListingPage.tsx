@@ -64,7 +64,6 @@ export function IntegrationServicesListingPage() {
 
   return (
     <PageFrame
-      subtitle="Define integration service catalogs and credential schemas used by Integration Settings"
       filters={
         <FilterBar
           searchPlaceholder="Search services..."

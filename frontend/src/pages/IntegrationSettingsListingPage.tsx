@@ -116,11 +116,6 @@ export function IntegrationSettingsListingPage({
 
   return (
     <PageFrame
-      subtitle={
-        kind === 'channels'
-          ? 'Connect the messaging apps where people talk to your agents'
-          : 'Connect calendars, project tools, developer services, and business systems'
-      }
       filters={
         <FilterBar
           searchPlaceholder={kind === 'channels' ? 'Search channels...' : 'Search integrations...'}

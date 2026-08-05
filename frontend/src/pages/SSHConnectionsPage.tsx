@@ -189,7 +189,6 @@ export function SSHConnectionsPage() {
   return (
     <PageFrame
       title="SSH connections"
-      subtitle="Manage remote SSH host credentials, keys, and connection policies."
       filters={
         <FilterBar
           searchPlaceholder="Search SSH connections..."

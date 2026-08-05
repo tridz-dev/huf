@@ -137,7 +137,6 @@ export function SkillsPage() {
     <PageFrame
       title="Skills"
       badge={<ExperimentalBadge />}
-      subtitle="Manage reusable skill bundles for your agents"
       actions={<Button onClick={() => navigate('/skills/new')}>New skill</Button>}
       filters={
         <FilterBar

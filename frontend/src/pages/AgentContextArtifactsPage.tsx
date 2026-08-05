@@ -86,7 +86,6 @@ function AgentContextArtifactsPage() {
 
   return (
     <PageFrame
-      subtitle="Browse context artifacts stored for agent runs and conversations"
       filters={
         <FilterBar
           filters={[

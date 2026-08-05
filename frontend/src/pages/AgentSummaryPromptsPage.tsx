@@ -161,7 +161,6 @@ export function AgentSummaryPromptsPage() {
 
   return (
     <PageFrame
-      subtitle="Manage shared summary prompt templates for agents"
       filters={
         <FilterBar
           searchPlaceholder="Search summary prompts..."

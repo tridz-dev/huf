@@ -327,6 +327,16 @@ export function ChatMessageList({
         [agentName, chatId]
     );
 
+    // Regenerate/retry: re-runs a prior user turn through the same send path
+    // as ChatInput (StarterPromptGrid uses the same imperative handle). This
+    // always appends a new user + assistant turn rather than mutating or
+    // removing the original messages — there's no endpoint to edit/replace
+    // history in place, and silently discarding a message the user might
+    // still want to see would be unsafe.
+    const handleRegenerate = useCallback((userContent: string) => {
+        chatInputRef.current?.send(userContent);
+    }, []);
+
     // Don't show loading state if we already have messages (e.g., during transition)
     const shouldShowLoading = initialLoading && messages.length === 0;
     const isColdStart = isNewChat && messages.length === 0;
@@ -366,19 +376,32 @@ export function ChatMessageList({
                                     Loading previous messages...
                                 </div>
                             )}
-                            {messages.map((message) => (
-                                <ChatMessageComponent 
-                                    key={message.key} 
-                                    message={message} 
-                                    agentName={agentName}
-                                    agentColor={agentColor}
-                                    showToolExecutionDetails={showToolExecutionDetails}
-                                    status={status}
-                                    loadingType={loadingType}
-                                    onFeedback={handleFeedback}
-                                    scrollToBottomAfterPaint={scrollToBottomAfterPaint}
-                                />
-                            ))}
+                            {messages.map((message, index) => {
+                                let precedingUserMessage: string | undefined;
+                                if (message.from === 'assistant') {
+                                    for (let i = index - 1; i >= 0; i--) {
+                                        if (messages[i].from === 'user') {
+                                            precedingUserMessage = messages[i].versions[0]?.content;
+                                            break;
+                                        }
+                                    }
+                                }
+                                return (
+                                    <ChatMessageComponent
+                                        key={message.key}
+                                        message={message}
+                                        agentName={agentName}
+                                        agentColor={agentColor}
+                                        showToolExecutionDetails={showToolExecutionDetails}
+                                        status={status}
+                                        loadingType={loadingType}
+                                        onFeedback={handleFeedback}
+                                        scrollToBottomAfterPaint={scrollToBottomAfterPaint}
+                                        precedingUserMessage={precedingUserMessage}
+                                        onRegenerate={handleRegenerate}
+                                    />
+                                );
+                            })}
                         </div>
                     )}
                 </div>

@@ -27,7 +27,7 @@ import {
  * (a list means any-of: one matching capability is enough).
  * Items with capability === null are always visible (e.g. Dashboard).
  */
-const dashboardNavItems = [
+export const dashboardNavItems = [
   {
     title: "Hub",
     url: "/",
@@ -46,7 +46,7 @@ const dashboardNavItems = [
  * The "Use" side of the platform: end-user HUF Apps discovered from
  * installed provider apps. Build/Operate/People remain the manage side.
  */
-const useNavItems = [
+export const useNavItems = [
   {
     title: "Apps",
     url: "/apps",
@@ -62,7 +62,7 @@ const useNavItems = [
   },
 ]
 
-const buildNavItems = [
+export const buildNavItems = [
   {
     title: "Agents",
     url: "/agents",
@@ -90,7 +90,7 @@ const buildNavItems = [
  * knowledge stores backed by any vector/FTS backend (RAG). Future source
  * types (Files, Repos, Drives) nest here as additional items.
  */
-const knowNavItems = [
+export const knowNavItems = [
   {
     title: "Tables",
     url: "/data",
@@ -123,7 +123,7 @@ const knowNavItems = [
   },
 ]
 
-const operateNavItems = [
+export const operateNavItems = [
 	{
 		title: "Executions",
 		url: "/executions",
@@ -144,7 +144,7 @@ const operateNavItems = [
  * primary navigation so the longer administration list never pushes the main
  * destinations off-screen.
  */
-const settingsNavGroups = [
+export const settingsNavGroups = [
   {
     label: "General",
     items: [
@@ -186,6 +186,27 @@ const settingsNavGroups = [
   },
 ]
 
+/**
+ * Filters nav items by capability against the current user's granted set.
+ * While permissions are loading, only uncapability-gated items are shown so
+ * the sidebar (or any other nav consumer, e.g. the command palette) doesn't
+ * flash/jump once capabilities resolve.
+ */
+export function filterItemsByCapability<T extends { capability: string | string[] | null }>(
+	items: T[],
+	hasCapability: (capability: string) => boolean,
+	isLoading: boolean,
+) {
+	if (isLoading) {
+		return items.filter((item) => item.capability === null)
+	}
+	return items.filter((item) => {
+		if (item.capability === null) return true
+		const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
+		return caps.some((cap) => hasCapability(cap))
+	})
+}
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
@@ -204,17 +225,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
-	const filterItemsByCapability = <T extends { capability: string | string[] | null }>(items: T[]) => {
-		if (isLoading) {
-			return items.filter((item) => item.capability === null)
-		}
-		return items.filter((item) => {
-			if (item.capability === null) return true
-			const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
-			return caps.some((cap) => hasCapability(cap))
-		})
-	}
-
 	const isPathInItems = (items: { url: string }[]) =>
 		items.some(
 			(item) =>
@@ -223,18 +233,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
 	// While permissions are loading show only uncapability-gated items so the
 	// sidebar doesn't flash/jump once capabilities resolve.
-	const dashboardItems = filterItemsByCapability(dashboardNavItems)
-	const useItems = filterItemsByCapability(useNavItems)
-	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
+	const dashboardItems = filterItemsByCapability(dashboardNavItems, hasCapability, isLoading)
+	const useItems = filterItemsByCapability(useNavItems, hasCapability, isLoading)
+	const buildItems = filterItemsByCapability(buildNavItems, hasCapability, isLoading).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
-	const knowledgeItems = filterItemsByCapability(knowNavItems)
-	const operateItems = filterItemsByCapability(operateNavItems)
+	const knowledgeItems = filterItemsByCapability(knowNavItems, hasCapability, isLoading)
+	const operateItems = filterItemsByCapability(operateNavItems, hasCapability, isLoading)
   const settingsGroups = settingsNavGroups
     .map((group) => ({
       ...group,
       items: filterItemsByCapability(
         group.items as Array<(typeof group.items)[number] & { capability: string | string[] | null }>,
+        hasCapability,
+        isLoading,
       ),
     }))
     .filter((group) => group.items.length > 0)

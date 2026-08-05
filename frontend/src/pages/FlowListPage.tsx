@@ -129,7 +129,6 @@ function FlowListPage() {
     <PageFrame
       title="Flows"
       badge={<ExperimentalBadge />}
-      subtitle="Design and orchestrate agent workflows."
       filters={
         <FilterBar
           searchPlaceholder="Search flows..."

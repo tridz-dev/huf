@@ -151,7 +151,6 @@ function AgentsPage() {
   return (
     <PageFrame
       title="Agents"
-      subtitle="Create and manage your AI agents."
       actions={<Button onClick={() => navigate('/agents/new')}>New agent</Button>}
       filters={
         <FilterBar

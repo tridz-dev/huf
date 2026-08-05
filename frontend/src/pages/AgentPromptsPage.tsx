@@ -162,7 +162,6 @@ export function AgentPromptsPage() {
   return (
     <PageFrame
       title="Prompts"
-      subtitle="Manage shared prompt templates for agents"
       actions={<Button onClick={() => navigate('/prompts/new')}>New prompt</Button>}
       filters={
         <FilterBar

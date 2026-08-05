@@ -310,7 +310,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   return (
     <PageFrame
       title="Models"
-      subtitle="Manage AI models and their capabilities"
       filters={
         <FilterBar
           searchPlaceholder="Search models..."

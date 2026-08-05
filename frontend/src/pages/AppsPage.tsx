@@ -349,7 +349,6 @@ function AppsPage() {
 		<PageFrame
 			title="Apps"
 			badge={<ExperimentalBadge />}
-			subtitle="Launch applications built on HUF"
 			actions={
 				<Button
 					variant="ghost"

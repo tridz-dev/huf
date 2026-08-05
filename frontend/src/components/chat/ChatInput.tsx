@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { CornerDownLeft, Paperclip } from "lucide-react";
+import { CornerDownLeft, Paperclip, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
@@ -68,6 +68,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 }: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // True only while the current turn is actually going over SSE — the only
+    // path with a real in-flight request a "Stop" button can cancel. The
+    // queue-first REST path resolves as a quick ack, not a long stream.
+    const [isStreamingResponse, setIsStreamingResponse] = useState(false);
+    // User-triggered cancellation for the in-flight streaming request. Not
+    // the internal 3s connectivity guard in streamChatApi.ts — that guard
+    // has its own job and is untouched by this.
+    const abortControllerRef = useRef<AbortController | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const isAudioRecordingFlowRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +165,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             updateAssistantReasoning?: (reasoning: string) => void;
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
+            signal?: AbortSignal;
         }) => {
             // Queue-first by default: turns go through the REST path and
             // reconcile from run lifecycle socket events. SSE streaming is the
@@ -188,6 +197,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         onReasoningDelta: useStreaming ? trackReasoningActivity : undefined,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
+                        signal: params.signal,
                     }
                 );
                 const msg = response.message as Record<string, unknown>;
@@ -284,6 +294,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
         setIsSubmitting(true);
         onStatusChange('submitted');
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        const willStream = streamingAvailable && runImmediately;
+        setIsStreamingResponse(willStream);
 
         const userMessageKey = `user-${Date.now()}`;
         const userMessage: MessageType = {
@@ -331,6 +345,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 assistantMessageId,
                 updateAssistantContent,
                 updateAssistantReasoning,
+                signal: controller.signal,
             });
             if (runTimedOutRef.current) {
                 // Hang guard already converted the bubble to an error card.
@@ -383,12 +398,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             });
         } finally {
             setIsSubmitting(false);
+            setIsStreamingResponse(false);
+            abortControllerRef.current = null;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError, runImmediately]);
 
     useImperativeHandle(ref, () => ({
         send: sendTextMessage,
     }));
+
+    const handleStop = useCallback(() => {
+        abortControllerRef.current?.abort();
+    }, []);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -407,6 +428,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
             setIsSubmitting(true);
             onStatusChange('submitted');
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+            setIsStreamingResponse(streamingAvailable && runImmediately);
 
             const userMessageKey = `user-${Date.now()}`;
             const userMessage: MessageType = {
@@ -500,6 +524,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     updateAssistantReasoning,
                     skipUserMessage: true,
                     files: prepareRes.files,
+                    signal: controller.signal,
                 });
                 if (runTimedOutRef.current) {
                     // Hang guard already converted the bubble to an error card.
@@ -569,12 +594,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 });
             } finally {
                 setIsSubmitting(false);
+                setIsStreamingResponse(false);
+                abortControllerRef.current = null;
             }
             return;
         }
 
         await sendTextMessage(message.trim());
-    }, [message, agentName, pendingFile, isSubmitting, sendTextMessage, onStatusChange, chatId, onConversationCreated, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+    }, [message, agentName, pendingFile, isSubmitting, sendTextMessage, onStatusChange, chatId, onConversationCreated, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError, runImmediately]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -934,18 +961,31 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     className="shrink-0 rounded-full"
                                 />
                             )}
-                            <Button
-                                type="submit"
-                                disabled={
-                                    pendingFile?.status === 'uploading' ||
-                                    ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
-                                        isSubmitting)
-                                }
-                                size="icon"
-                                className="shrink-0"
-                            >
-                                <CornerDownLeft/>
-                            </Button>
+                            {isStreamingResponse ? (
+                                <Button
+                                    type="button"
+                                    onClick={handleStop}
+                                    size="icon"
+                                    className="shrink-0"
+                                    aria-label="Stop generating response"
+                                >
+                                    <Square className="size-3.5" fill="currentColor" />
+                                </Button>
+                            ) : (
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        pendingFile?.status === 'uploading' ||
+                                        ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
+                                            isSubmitting)
+                                    }
+                                    size="icon"
+                                    className="shrink-0"
+                                    aria-label="Send message"
+                                >
+                                    <CornerDownLeft/>
+                                </Button>
+                            )}
                         </div>
                 </div>
             </form>

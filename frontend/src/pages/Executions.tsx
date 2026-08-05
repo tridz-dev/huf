@@ -301,7 +301,6 @@ export default function Executions() {
     <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
-      subtitle="Inspect agent runs and their results."
       filters={
         <FilterBar
           searchPlaceholder="Search executions using Agent Name"

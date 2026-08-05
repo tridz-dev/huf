@@ -244,7 +244,6 @@ export default function UsersPage() {
 
   return (
     <PageFrame
-      subtitle="Manage who has access to Huf and what they can do."
       actions={
         <Button onClick={() => setShowInvite(true)}>
           <UserPlus className="h-4 w-4 mr-2" />

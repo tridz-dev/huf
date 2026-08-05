@@ -178,6 +178,30 @@ export function AdvancedTab({
 					)}
 				/>
 
+
+				<FormField
+					control={form.control}
+					name="autonaming_of_conversation_title"
+					render={({ field }) => (
+						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+							<div className="space-y-0.5 pr-4">
+								<FormLabel className="text-base">Autonaming of conversation title</FormLabel>
+								<FormDescription>
+									If enabled, the conversation title will be automatically updated based on the initial context.
+								</FormDescription>
+							</div>
+							<FormControl>
+								<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+							</FormControl>
+						</FormItem>
+					)}
+				/>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Limits"
+				description="Set caps on agent operations and resource usage."
+			>
 				<div className="grid gap-6 sm:grid-cols-2">
 					<FormField
 						control={form.control}
@@ -245,18 +269,23 @@ export function AdvancedTab({
 
 				<FormField
 					control={form.control}
-					name="autonaming_of_conversation_title"
+					name="max_context_chars"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
-							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Autonaming of conversation title</FormLabel>
-								<FormDescription>
-									If enabled, the conversation title will be automatically updated based on the initial context.
-								</FormDescription>
-							</div>
+						<FormItem>
+							<FormLabel>Max context characters</FormLabel>
 							<FormControl>
-								<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								<Input
+									type="number"
+									placeholder="2000"
+									{...field}
+									value={field.value?.toString() || ''}
+									onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
+								/>
 							</FormControl>
+							<FormDescription>
+								Maximum characters allowed for tool results before truncating and applying include_reference context policy.
+							</FormDescription>
+							<FormMessage />
 						</FormItem>
 					)}
 				/>
@@ -561,29 +590,6 @@ export function AdvancedTab({
 						)}
 					/>
 				)}
-
-				<FormField
-					control={form.control}
-					name="max_context_chars"
-					render={({ field }) => (
-						<FormItem>
-							<FormLabel>Max context characters</FormLabel>
-							<FormControl>
-								<Input
-									type="number"
-									placeholder="2000"
-									{...field}
-									value={field.value?.toString() || ''}
-									onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
-								/>
-							</FormControl>
-							<FormDescription>
-								Maximum characters allowed for tool results before truncating and applying include_reference context policy.
-							</FormDescription>
-							<FormMessage />
-						</FormItem>
-					)}
-				/>
 			</FormSettingsSection>
 
 			<FormSettingsSection

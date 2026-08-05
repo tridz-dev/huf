@@ -84,7 +84,6 @@ function KnowledgeSourcesPage() {
 
   return (
     <PageFrame
-      subtitle="Manage knowledge sources for your AI agents"
       filters={
         <FilterBar
           searchPlaceholder="Search knowledge sources..."

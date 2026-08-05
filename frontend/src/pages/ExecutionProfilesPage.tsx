@@ -183,7 +183,6 @@ export function ExecutionProfilesPage() {
   return (
     <PageFrame
       title="Execution profiles"
-      subtitle="Manage sandboxed code execution environments, resource limits, and approval policies."
       filters={
         <FilterBar
           searchPlaceholder="Search execution profiles..."

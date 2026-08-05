@@ -12,7 +12,6 @@ export function SshPage() {
     <PageFrame
       title="SSH execution"
       badge={<ExperimentalBadge />}
-      subtitle="Allow agents to run one-shot remote SSH commands against allowlisted target servers."
     >
       <div className="max-w-4xl space-y-6">
         <Card>

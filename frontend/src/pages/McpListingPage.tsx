@@ -80,7 +80,6 @@ export default function McpListingPage() {
   return (
     <PageFrame
       title="MCP servers"
-      subtitle="Connect Model Context Protocol servers."
       filters={
         <FilterBar
           searchPlaceholder="Search MCP servers..."

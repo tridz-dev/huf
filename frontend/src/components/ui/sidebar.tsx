@@ -139,7 +139,10 @@ export const SidebarProvider = React.forwardRef<
 
     return (
       <SidebarContext.Provider value={contextValue}>
-        <TooltipProvider delayDuration={0}>
+        {/* The collapsed rail hides names, so its tooltips are the only label.
+            The design system asks for them after ~400ms: instant tooltips fire
+            on every pass of the cursor down a 64px rail and become noise. */}
+        <TooltipProvider delayDuration={400}>
           <div
             style={
               {

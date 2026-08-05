@@ -80,7 +80,6 @@ export function AgentSettingsPage() {
   return (
     <PageFrame
       title="Agent settings"
-      subtitle="Global configuration for agents and skills"
       className="max-w-4xl mx-auto"
     >
       <Card>
