@@ -43,9 +43,19 @@ export function NavMain({
           return (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild tooltip={item.title} isActive={isActive}>
-                <NavLink to={item.url} onClick={handleNavClick} className="flex w-full items-center gap-2">
+                {/*
+                  No `w-full` here: SidebarMenuButton's own base class already
+                  sets it, and repeating it via Slot's plain className
+                  concatenation puts a second width declaration after the
+                  collapsed-rail's fixed 38px width, which is exactly the kind
+                  of callsite-beats-component override that keeps the rail from
+                  sizing correctly.
+                */}
+                <NavLink to={item.url} onClick={handleNavClick} className="flex items-center gap-2">
                   {item.icon && <item.icon strokeWidth={1.6} />}
-                  <span className="font-body text-[13.5px]">{item.title}</span>
+                  <span className="font-body text-[13.5px] group-data-[collapsible=icon]:hidden">
+                    {item.title}
+                  </span>
                   {(item.badge || typeof item.count === 'number') && (
                     <div className="ml-auto flex items-center gap-1.5 group-data-[collapsible=icon]:hidden">
                       {item.badge && (
