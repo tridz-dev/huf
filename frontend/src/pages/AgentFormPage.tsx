@@ -806,7 +806,7 @@ export function AgentFormPage() {
         console.error('Error loading execution profiles:', error);
         if (!cancelled) {
           setExecutionProfileOptions([]);
-          toast.error('Failed to load Execution Profiles');
+          toast.error('Failed to load execution profiles');
         }
       } finally {
         if (!cancelled) {

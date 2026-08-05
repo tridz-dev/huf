@@ -86,7 +86,7 @@ export function ExecutionProfileFormPage() {
           max_output_bytes: profile.max_output_bytes ?? 1048576,
         });
       } catch (error) {
-        toast.error('Failed to load Execution Profile', {
+        toast.error('Failed to load execution profile', {
           description: getFrappeErrorMessage(error),
         });
       } finally {
@@ -151,15 +151,15 @@ export function ExecutionProfileFormPage() {
 
       if (isNew) {
         const created = await createExecutionProfile(payload);
-        toast.success('Execution Profile created successfully');
+        toast.success('Execution profile created successfully');
         handleReturnNavigation(created.name || created.profile_name);
       } else {
         const updated = await updateExecutionProfile(id!, payload);
-        toast.success('Execution Profile updated successfully');
+        toast.success('Execution profile updated successfully');
         setProfileDoc(updated);
       }
     } catch (error) {
-      toast.error(isNew ? 'Failed to create Execution Profile' : 'Failed to update Execution Profile', {
+      toast.error(isNew ? 'Failed to create execution profile' : 'Failed to update execution profile', {
         description: getFrappeErrorMessage(error),
       });
     } finally {
@@ -169,15 +169,15 @@ export function ExecutionProfileFormPage() {
 
   const handleDelete = async () => {
     if (!id || isNew) return;
-    if (!confirm('Are you sure you want to delete this Execution Profile?')) return;
+    if (!confirm('Are you sure you want to delete this execution profile?')) return;
 
     setDeleting(true);
     try {
       await deleteExecutionProfile(id);
-      toast.success('Execution Profile deleted');
+      toast.success('Execution profile deleted');
       navigate('/execution-profiles');
     } catch (error) {
-      toast.error('Failed to delete Execution Profile', {
+      toast.error('Failed to delete execution profile', {
         description: getFrappeErrorMessage(error),
       });
     } finally {
@@ -201,7 +201,7 @@ export function ExecutionProfileFormPage() {
           <ShieldCheck className="h-8 w-8 text-steel-soft shrink-0 mt-1" strokeWidth={1.6} />
           <div>
             <InlineEditName
-              value={form.watch('profile_name') || (isNew ? 'New Execution Profile' : id!)}
+              value={form.watch('profile_name') || (isNew ? 'New execution profile' : id!)}
               onChange={(name: string) => form.setValue('profile_name', name, { shouldDirty: true })}
               placeholder="e.g. Sandbox with network access"
               className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"

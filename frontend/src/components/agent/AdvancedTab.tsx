@@ -1049,7 +1049,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Allow code execution</FormLabel>
 									<FormDescription>
-										Explicit second confirmation enabling the Python Code Execution tool for this agent. The tool stays inert until this is checked and an Execution Profile is selected.
+										Explicit second confirmation enabling the Python Code Execution tool for this agent. The tool stays inert until this is checked and an execution profile is selected.
 									</FormDescription>
 								</div>
 								<FormControl>
@@ -1073,10 +1073,10 @@ This includes whether each tool call is completed and its corresponding result.`
 													options={executionProfileComboboxOptions}
 													value={field.value}
 													onValueChange={(v) => field.onChange(v || undefined)}
-													placeholder={loadingExecutionProfiles ? 'Loading profiles...' : 'Select an Execution Profile'}
+													placeholder={loadingExecutionProfiles ? 'Loading profiles...' : 'Select an execution profile'}
 													disabled={loadingExecutionProfiles}
 													searchPlaceholder="Search execution profiles..."
-													emptyText="No enabled Execution Profiles found."
+													emptyText="No enabled execution profiles found."
 													linkTo={linkRoutes.executionProfile}
 												/>
 											</FormControl>
