@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Clock4, PanelLeftClose, Plus, Search, Users } from 'lucide-react';
+import { Clock4, PanelLeftClose, Plus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -826,15 +826,11 @@ function ChatListHeader({
         </div>
       </div>
       <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-steel hover:text-ink"
-        >
-          <Search className="w-4 h-4" />
-          <span className="sr-only">Search conversations</span>
-        </Button>
+        {/* A search control belongs here, but conversation search is not
+            implemented. The button that used to sit here had no onClick while
+            announcing "Search conversations" to screen readers — a control
+            that promises a function it does not have is worse than its
+            absence. Restore it together with the search itself. */}
         {onAgentSelect && (
           <ChatAgentPicker
             value={selectedAgent}
