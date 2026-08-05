@@ -142,7 +142,7 @@ function AppCard({
 			)}
 		>
 			<CardHeader className="pb-3">
-				<CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
+				<CardTitle className="line-clamp-1 flex items-center gap-2 text-body-text font-semibold">
 					<AppIcon app={app} />
 					{app.title}
 				</CardTitle>
@@ -151,12 +151,12 @@ function AppCard({
 				</CardDescription>
 				<CardAction className="top-5 flex items-center gap-1">
 					{isDisabled && (
-						<Badge variant="secondary" className="text-xs">
+						<Badge variant="secondary" size="sm">
 							Disabled
 						</Badge>
 					)}
 					{app.category && (
-						<Badge variant="secondary" className="text-xs">
+						<Badge variant="secondary" size="sm">
 							{app.category}
 						</Badge>
 					)}

@@ -124,7 +124,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
 								placeholder={field.description || ''}
-								className="h-8 text-sm rounded border-line"
+								size="sm" className="border-line"
 							/>
 						) : (field.fieldtype === 'Text' ||
 							field.fieldtype === 'Small Text' ||
@@ -157,7 +157,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								disabled={isReadOnly}
 								min={field.non_negative === 1 ? 0 : undefined}
 								step={field.fieldtype === 'Int' ? 1 : 'any'}
-								className="h-8 text-sm rounded border-line"
+								size="sm" className="border-line"
 							/>
 						) : field.fieldtype === 'Check' ? (
 							<div className="flex items-center gap-2 pt-1">
@@ -177,7 +177,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={(value as string) || ''}
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
-								className="h-8 text-sm rounded border-line"
+								size="sm" className="border-line"
 							/>
 						) : field.fieldtype === 'Time' ? (
 							<Input
@@ -185,7 +185,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={(value as string) || ''}
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
-								className="h-8 text-sm rounded border-line"
+								size="sm" className="border-line"
 							/>
 						) : field.fieldtype === 'Duration' ? (
 							<Input
@@ -194,7 +194,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
 								placeholder="e.g. 1h 30m"
-								className="h-8 text-sm rounded border-line"
+								size="sm" className="border-line"
 							/>
 						) : field.fieldtype === 'Select' ? (
 							<Select
@@ -202,7 +202,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								onValueChange={onChange}
 								disabled={isReadOnly}
 							>
-								<SelectTrigger className="h-8 text-sm rounded border-line">
+								<SelectTrigger size="sm" className="border-line">
 									<SelectValue placeholder="Select..." />
 								</SelectTrigger>
 								<SelectContent className="rounded border-line">
@@ -232,7 +232,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={value !== undefined && value !== null && value !== '' ? String(value) : ''}
 								onChange={(event) => onChange(parseFloat(event.target.value) || 0)}
 								disabled={isReadOnly}
-								className="h-8 text-sm rounded border-line"
+								size="sm" className="border-line"
 							/>
 						) : field.fieldtype === 'Color' ? (
 							<Input

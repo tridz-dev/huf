@@ -60,7 +60,7 @@ function RoleCard({ role }: { role: HufRole }) {
             <div className="text-xs font-medium text-muted-foreground mb-1">{cat.label}</div>
             <div className="flex flex-wrap gap-1">
               {groups[cat.key].map((cap) => (
-                <Badge key={cap} variant="secondary" className="text-xs font-mono">
+                <Badge key={cap} variant="secondary" size="sm" className="font-mono">
                   {cap}
                 </Badge>
               ))}

@@ -108,14 +108,14 @@ export function ToolsTab({
     
     // If MCP server itself is explicitly disabled (not undefined), show "server disabled"
     if (server.mcp_enabled !== undefined && !isEnabled(server.mcp_enabled)) {
-      return <Badge variant="secondary" className="text-xs shrink-0">server disabled</Badge>;
+      return <Badge variant="secondary" size="sm" className="shrink-0">server disabled</Badge>;
     }
     // If MCP server is enabled (or unknown) but agent has it disabled, show "disabled"
     if (!agentEnabled) {
-      return <Badge variant="secondary" className="text-xs shrink-0">disabled</Badge>;
+      return <Badge variant="secondary" size="sm" className="shrink-0">disabled</Badge>;
     }
     // Both enabled - show "connected"
-    return <Badge variant="default" className="text-xs shrink-0">connected</Badge>;
+    return <Badge variant="default" size="sm" className="shrink-0">connected</Badge>;
   };
 
   return (
@@ -272,7 +272,7 @@ export function ToolsTab({
                       <h4 className="font-medium text-sm">{mcp.server_name || mcp.mcp_server}</h4>
                       {getStatusBadge(mcp)}
                       {mcp.tool_count !== undefined && mcp.tool_count > 0 && (
-                        <Badge variant="outline" className="text-xs shrink-0">
+                        <Badge variant="outline" size="sm" className="shrink-0">
                           {mcp.tool_count} tools
                         </Badge>
                       )}

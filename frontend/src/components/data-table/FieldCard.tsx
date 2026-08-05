@@ -107,7 +107,7 @@ export function FieldCard({
 					)}
 				</div>
 				<div className="flex items-center gap-2 mt-0.5">
-					<Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+					<Badge variant="secondary" size="sm" className="px-1.5 py-0 h-4">
 						{field.fieldtype}
 					</Badge>
 					<span className="text-[10px] text-steel">{field.fieldname}</span>

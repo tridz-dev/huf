@@ -87,7 +87,7 @@ export function FieldConfigPanel({
 
 			{properties.includes('label') && (
 				<div className="space-y-1.5">
-					<Label htmlFor="field-label" className="text-xs">
+					<Label htmlFor="field-label" size="sm">
 						Label
 					</Label>
 					<Input
@@ -107,7 +107,7 @@ export function FieldConfigPanel({
 
 			{properties.includes('options') && field.fieldtype === 'Select' && (
 				<div className="space-y-1.5">
-					<Label htmlFor="field-options" className="text-xs">
+					<Label htmlFor="field-options" size="sm">
 						Options (one per line)
 					</Label>
 					<Textarea
@@ -123,7 +123,7 @@ export function FieldConfigPanel({
 
 			{properties.includes('options') && field.fieldtype === 'Link' && (
 				<div className="space-y-1.5">
-					<Label htmlFor="field-link-target" className="text-xs">
+					<Label htmlFor="field-link-target" size="sm">
 						Link Target
 					</Label>
 					<Select
@@ -152,7 +152,7 @@ export function FieldConfigPanel({
 
 					{properties.includes('default') && (
 						<div className="space-y-1">
-							<Label htmlFor="field-default" className="text-xs text-steel">
+							<Label htmlFor="field-default" size="sm" className="text-steel">
 								Default Value
 							</Label>
 							<Input
@@ -167,7 +167,7 @@ export function FieldConfigPanel({
 
 					{properties.includes('description') && (
 						<div className="space-y-1">
-							<Label htmlFor="field-description" className="text-xs text-steel">
+							<Label htmlFor="field-description" size="sm" className="text-steel">
 								Help Text
 							</Label>
 							<Input
@@ -196,7 +196,7 @@ export function FieldConfigPanel({
 									onUpdate({ reqd: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-reqd" className="text-xs font-normal">
+							<Label htmlFor="field-reqd" size="sm" className="font-normal">
 								Required
 							</Label>
 						</div>
@@ -211,7 +211,7 @@ export function FieldConfigPanel({
 									onUpdate({ unique: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-unique" className="text-xs font-normal">
+							<Label htmlFor="field-unique" size="sm" className="font-normal">
 								Unique
 							</Label>
 						</div>
@@ -226,7 +226,7 @@ export function FieldConfigPanel({
 									onUpdate({ read_only: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-read-only" className="text-xs font-normal">
+							<Label htmlFor="field-read-only" size="sm" className="font-normal">
 								Read Only
 							</Label>
 						</div>
@@ -241,7 +241,7 @@ export function FieldConfigPanel({
 									onUpdate({ in_list_view: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-in-list-view" className="text-xs font-normal">
+							<Label htmlFor="field-in-list-view" size="sm" className="font-normal">
 								Show in List View
 							</Label>
 						</div>
@@ -256,7 +256,7 @@ export function FieldConfigPanel({
 									onUpdate({ non_negative: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-non-negative" className="text-xs font-normal">
+							<Label htmlFor="field-non-negative" size="sm" className="font-normal">
 								Non-negative only
 							</Label>
 						</div>

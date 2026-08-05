@@ -229,7 +229,7 @@ export function ExecutionProfileFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px]">General Settings</CardTitle>
+              <CardTitle className="text-subtitle">General Settings</CardTitle>
               <CardDescription className="font-body text-[13px] text-steel">Configure security policy and sandbox behavior</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -337,7 +337,7 @@ export function ExecutionProfileFormPage() {
 
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px]">Resource Limits</CardTitle>
+              <CardTitle className="text-subtitle">Resource Limits</CardTitle>
               <CardDescription className="font-body text-[13px] text-steel">Specify CPU, time, memory, and output boundaries for code runs</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">

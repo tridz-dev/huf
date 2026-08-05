@@ -131,7 +131,7 @@ export function SkillMarketplaceModal({ open, onOpenChange, onSuccess }: SkillMa
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-sm">{skill.title || skill.name}</p>
                   {skill.category && (
-                    <Badge variant="secondary" className="text-[10px]">
+                    <Badge variant="secondary" size="sm">
                       {skill.category}
                     </Badge>
                   )}

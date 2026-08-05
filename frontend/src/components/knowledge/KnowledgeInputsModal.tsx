@@ -361,7 +361,7 @@ export function KnowledgeInputsModal({
                         {getInputPreview(input)}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={getInputStatusVariant(input.status)} className="text-xs">
+                        <Badge variant={getInputStatusVariant(input.status)} size="sm">
                           {input.status}
                         </Badge>
                         {input.chunks_created > 0 && (

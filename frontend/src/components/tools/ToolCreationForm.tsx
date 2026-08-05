@@ -430,11 +430,11 @@ export function ToolCreationForm({
     const visible = key === 'tool_type' ? mode === 'create' : showAutoBadges;
     if (!visible) return null;
     return autoBadges[key] === 'auto' ? (
-      <Badge variant="secondary" className="text-[10px] ml-2 font-normal">
+      <Badge variant="secondary" size="sm" className="ml-2 font-normal">
         Auto
       </Badge>
     ) : (
-      <Badge variant="outline" className="text-[10px] ml-2 font-normal">
+      <Badge variant="outline" size="sm" className="ml-2 font-normal">
         Edited
       </Badge>
     );
@@ -467,7 +467,7 @@ export function ToolCreationForm({
         accessorKey: 'type',
         header: 'Type',
         cell: ({ row }) => (
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" size="sm">
             {row.original.type}
           </Badge>
         ),

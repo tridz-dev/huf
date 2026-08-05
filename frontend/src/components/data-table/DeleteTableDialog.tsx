@@ -50,7 +50,7 @@ export function DeleteTableDialog({
 				</AlertDialogHeader>
 				{requireConfirmation && (
 					<div className="space-y-2 py-2">
-						<Label htmlFor="confirm-delete" className="text-sm">
+						<Label htmlFor="confirm-delete">
 							Type <span className="font-mono font-medium">{tableName}</span> to
 							confirm:
 						</Label>

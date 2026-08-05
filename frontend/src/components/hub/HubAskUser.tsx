@@ -5,6 +5,9 @@ import {
   Home, LayoutDashboard, MessageSquare, CircleHelp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 
 export interface AskUserOption {
   id?: string;
@@ -102,18 +105,22 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
         <div className="mt-2.5 space-y-2">
           {payload.kind === 'yes_no' && (
             <div className="flex gap-2">
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => submit('Yes')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-line text-xs text-ink hover:border-signal hover:text-signal transition-colors"
+                className="h-auto gap-1.5 rounded-sm border-line bg-transparent px-3 py-1.5 text-xs font-normal text-ink hover:border-signal hover:bg-transparent hover:text-signal"
               >
                 <Check className="w-3.5 h-3.5" /> Yes
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => submit('No')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-line text-xs text-ink hover:border-signal hover:text-signal transition-colors"
+                className="h-auto gap-1.5 rounded-sm border-line bg-transparent px-3 py-1.5 text-xs font-normal text-ink hover:border-signal hover:bg-transparent hover:text-signal"
               >
                 <X className="w-3.5 h-3.5" /> No
-              </button>
+              </Button>
             </div>
           )}
 
@@ -124,10 +131,12 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                   const Icon = iconFor(opt.icon);
                   const active = selected.includes(opt.label);
                   return (
-                    <button
+                    <Button
                       key={opt.id ?? opt.label}
+                      type="button"
+                      variant="ghost"
                       onClick={() => toggleOption(opt.label)}
-                      className={`flex items-start gap-2 p-2 rounded-sm border text-left transition-colors ${
+                      className={`flex h-auto w-full items-start justify-start gap-2 rounded-sm border p-2 text-left font-normal transition-colors hover:bg-transparent ${
                         active
                           ? 'border-signal bg-paper-deep'
                           : 'border-line hover:border-steel-soft'
@@ -138,7 +147,7 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                         <span className={`block text-xs font-medium ${active ? 'text-ink' : 'text-steel'}`}>{opt.label}</span>
                         {opt.description && <span className="block text-[11px] text-steel-soft">{opt.description}</span>}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>

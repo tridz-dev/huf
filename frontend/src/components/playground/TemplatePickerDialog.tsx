@@ -102,7 +102,7 @@ export function TemplatePickerDialog({
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-sm font-medium">{prompt.title}</span>
-                    <Badge variant="outline" className="shrink-0 text-xs">
+                    <Badge variant="outline" size="sm" className="shrink-0">
                       {prompt.visibility || 'Private'}
                     </Badge>
                   </div>

@@ -215,7 +215,7 @@ export function TestToolDrawer({
                 <div key={spec.name} className="space-y-1.5">
                   <Label htmlFor={`test-arg-${spec.name}`} className="flex items-center gap-2">
                     <span className="font-mono text-sm">{spec.name}</span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" size="sm">
                       {spec.type}
                     </Badge>
                     {spec.required && <span className="text-destructive">*</span>}
@@ -262,7 +262,7 @@ export function TestToolDrawer({
                 <span className="text-sm font-medium">
                   {result.dryRun ? 'Payload preview' : result.ok ? 'Result' : 'Error'}
                 </span>
-                <Badge variant={result.ok ? 'secondary' : 'destructive'} className="text-[10px]">
+                <Badge variant={result.ok ? 'secondary' : 'destructive'} size="sm">
                   {result.dryRun ? 'dry run' : result.ok ? 'success' : 'failed'}
                 </Badge>
               </div>

@@ -26,6 +26,8 @@ import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
 import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
 import { IntegrationSettingsListingPage } from './IntegrationSettingsListingPage';
@@ -202,19 +204,20 @@ export default function GatewaysPage() {
           { key: 'credentials' as const, label: 'Channel Credentials' },
         ]
       ).map((tab) => (
-        <button
+        <Button
           key={tab.key}
           type="button"
+          variant="ghost"
           onClick={() => setActiveTab(tab.key)}
           className={cn(
-            'px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            'h-auto rounded-none px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors hover:bg-transparent',
             activeTab === tab.key
               ? 'border-primary text-ink'
               : 'border-transparent text-steel hover:text-ink'
           )}
         >
           {tab.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -287,8 +290,8 @@ export default function GatewaysPage() {
         >
           <label className="grid gap-1.5 text-xs font-medium text-ink">
             Gateway Name
-            <input
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            <Input
+              className="h-10 text-sm"
               value={gatewayName}
               onChange={(e) => setGatewayName(e.target.value)}
               placeholder="e.g. Support Inbox on WhatsApp"
@@ -298,19 +301,18 @@ export default function GatewaysPage() {
 
           <label className="grid gap-1.5 text-xs font-medium text-ink">
             Channel Provider
-            <div className="relative">
-              <select
-                className="h-10 w-full rounded-lg border border-input bg-background pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                value={provider}
-                onChange={(e) => setProvider(e.target.value as GatewayProvider)}
-              >
+            <Select value={provider} onValueChange={(v) => setProvider(v as GatewayProvider)}>
+              <SelectTrigger className="h-10 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
                 {uiProviders.map((p) => (
-                  <option key={p} value={p}>
+                  <SelectItem key={p} value={p}>
                     {p}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-            </div>
+              </SelectContent>
+            </Select>
           </label>
 
           <Button type="submit" disabled={creating} className="h-10">
@@ -388,12 +390,14 @@ export default function GatewaysPage() {
                   <p className="text-xs text-steel">{providerNames[editingGateway.provider] || editingGateway.provider}</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setEditingGateway(null)}
-                className="rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink transition-colors"
+                className="h-auto w-auto rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink transition-colors"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
 
             {/* Form Fields */}
@@ -420,8 +424,8 @@ export default function GatewaysPage() {
               {/* Run as user */}
               <label className="grid gap-1 text-xs font-medium text-ink">
                 Run as user
-                <input
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                <Input
+                  className="h-9 text-xs"
                   value={editingGateway.execution_user || ''}
                   onChange={(e) =>
                     setEditingGateway({ ...editingGateway, execution_user: e.target.value })
@@ -442,30 +446,38 @@ export default function GatewaysPage() {
                   <label className="grid gap-1 text-xs font-medium text-ink">
                     Connected Integration
                     {matches.length > 0 ? (
-                      <select
-                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                        value={editingGateway.integration_settings || ''}
-                        onChange={(e) =>
-                          setEditingGateway({ ...editingGateway, integration_settings: e.target.value })
+                      <Select
+                        value={editingGateway.integration_settings || '__none'}
+                        onValueChange={(v) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            integration_settings: v === '__none' ? '' : v,
+                          })
                         }
                       >
-                        <option value="">Choose credentials…</option>
-                        {matches.map((s) => (
-                          <option key={s.name} value={s.name}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-9 text-xs" size="sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Choose credentials…</SelectItem>
+                          {matches.map((s) => (
+                            <SelectItem key={s.name} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <div className="rounded-lg border border-dashed border-line bg-paper p-3 text-[11px] text-steel">
                         No {editingGateway.provider} credentials connected yet.{' '}
-                        <button
+                        <Button
                           type="button"
-                          className="font-medium text-primary hover:underline"
+                          variant="link"
+                          className="h-auto p-0 font-medium text-primary hover:underline"
                           onClick={() => setActiveTab('credentials')}
                         >
                           Add one in Channel Credentials
-                        </button>
+                        </Button>
                         .
                       </div>
                     )}
@@ -479,8 +491,8 @@ export default function GatewaysPage() {
               {/* Description */}
               <label className="grid gap-1 text-xs font-medium text-ink">
                 Description
-                <input
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                <Input
+                  className="h-9 text-xs"
                   value={editingGateway.description || ''}
                   onChange={(e) => setEditingGateway({ ...editingGateway, description: e.target.value })}
                   placeholder="e.g. Primary WhatsApp channel for sales inquiries"
@@ -493,59 +505,77 @@ export default function GatewaysPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <label className="grid gap-1 text-xs font-medium text-ink">
                     Target Type
-                    <select
-                      className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                      value={editingGateway.default_target_type || ''}
-                      onChange={(e) =>
+                    <Select
+                      value={editingGateway.default_target_type || '__none'}
+                      onValueChange={(v) =>
                         setEditingGateway({
                           ...editingGateway,
-                          default_target_type: e.target.value as any,
+                          default_target_type: (v === '__none' ? '' : v) as any,
                         })
                       }
                     >
-                      <option value="">None (Disabled)</option>
-                      <option value="Agent">Agent</option>
-                      <option value="Flow">Flow</option>
-                    </select>
+                      <SelectTrigger className="h-9 text-xs" size="sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None (Disabled)</SelectItem>
+                        <SelectItem value="Agent">Agent</SelectItem>
+                        <SelectItem value="Flow">Flow</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </label>
 
                   {editingGateway.default_target_type === 'Agent' && (
                     <label className="grid gap-1 text-xs font-medium text-ink">
                       Select Agent
-                      <select
-                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                        value={editingGateway.default_agent || ''}
-                        onChange={(e) =>
-                          setEditingGateway({ ...editingGateway, default_agent: e.target.value })
+                      <Select
+                        value={editingGateway.default_agent || '__none'}
+                        onValueChange={(v) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            default_agent: v === '__none' ? '' : v,
+                          })
                         }
                       >
-                        <option value="">Choose Agent…</option>
-                        {agents.map((a) => (
-                          <option key={a.name} value={a.name}>
-                            {a.agent_name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-9 text-xs" size="sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Choose Agent…</SelectItem>
+                          {agents.map((a) => (
+                            <SelectItem key={a.name} value={a.name}>
+                              {a.agent_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
                   )}
 
                   {editingGateway.default_target_type === 'Flow' && (
                     <label className="grid gap-1 text-xs font-medium text-ink">
                       Select Flow
-                      <select
-                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                        value={editingGateway.default_flow || ''}
-                        onChange={(e) =>
-                          setEditingGateway({ ...editingGateway, default_flow: e.target.value })
+                      <Select
+                        value={editingGateway.default_flow || '__none'}
+                        onValueChange={(v) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            default_flow: v === '__none' ? '' : v,
+                          })
                         }
                       >
-                        <option value="">Choose Flow…</option>
-                        {flows.map((f) => (
-                          <option key={f.name} value={f.name}>
-                            {f.title}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger className="h-9 text-xs" size="sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Choose Flow…</SelectItem>
+                          {flows.map((f) => (
+                            <SelectItem key={f.name} value={f.name}>
+                              {f.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
                   )}
                 </div>
@@ -554,21 +584,25 @@ export default function GatewaysPage() {
               {/* Direct Access Policy */}
               <label className="grid gap-1 text-xs font-medium text-ink">
                 Direct Message Security Policy
-                <select
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                <Select
                   value={editingGateway.direct_policy || 'Allow list'}
-                  onChange={(e) =>
+                  onValueChange={(v) =>
                     setEditingGateway({
                       ...editingGateway,
-                      direct_policy: e.target.value as GatewayPolicy,
+                      direct_policy: v as GatewayPolicy,
                     })
                   }
                 >
-                  <option value="Open">Open — Allow anyone to message</option>
-                  <option value="Allow list">Allow list — Require approved Gateway Access Entry</option>
-                  <option value="Pairing">Pairing — Require pairing request approval</option>
-                  <option value="Disabled">Disabled — Reject direct messages</option>
-                </select>
+                  <SelectTrigger className="h-9 text-xs" size="sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Open">Open — Allow anyone to message</SelectItem>
+                    <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
+                    <SelectItem value="Pairing">Pairing — Require pairing request approval</SelectItem>
+                    <SelectItem value="Disabled">Disabled — Reject direct messages</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
 
               {/* Webhook Configuration Section */}
@@ -578,9 +612,9 @@ export default function GatewaysPage() {
                   Copy and paste this Webhook URL into Meta Developer Console or your channel configuration:
                 </p>
                 <div className="flex items-center gap-2">
-                  <input
+                  <Input
                     readOnly
-                    className="h-8 flex-1 rounded-md border border-input bg-background px-2.5 font-mono text-[11px] text-steel selection:bg-primary/20"
+                    className="h-8 flex-1 font-mono text-[11px] text-steel selection:bg-primary/20"
                     value={getWebhookUrl(editingGateway.name)}
                   />
                   <Button

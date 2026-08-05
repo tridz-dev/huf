@@ -605,7 +605,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               {isEditing && (
                 <div className="space-y-3 rounded-md border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <Label className="text-sm">Connection</Label>
+                    <Label>Connection</Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -651,7 +651,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                             <div className="flex flex-wrap items-center gap-1">
                               <span className="font-medium">{model.name}</span>
                               {model.capabilities?.map((cap) => (
-                                <Badge key={cap} variant="secondary" className="text-xs">
+                                <Badge key={cap} variant="secondary" size="sm">
                                   {cap}
                                 </Badge>
                               ))}

@@ -82,7 +82,7 @@ export function ItemCard({
       ) : null}
       <div className="flex flex-col flex-1">
         <CardHeader className="pb-3">
-          <CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
+          <CardTitle className="line-clamp-1 flex items-center gap-2 text-body-text font-semibold">
             {avatarColor && (
               <span
                 className="w-3 h-3 rounded-sm shrink-0 border border-border"
@@ -126,7 +126,7 @@ export function ItemCard({
             {badges.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {badges.map((badge, index) => (
-                  <Badge key={index} variant={badge.variant || 'secondary'} className="text-xs">
+                  <Badge key={index} variant={badge.variant || 'secondary'} size="sm">
                     {badge.label}
                   </Badge>
                 ))}

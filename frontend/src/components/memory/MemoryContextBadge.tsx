@@ -42,7 +42,7 @@ export const MemoryContextBadge: React.FC<MemoryContextBadgeProps> = ({ memoryRe
       if (open) fetchMemories();
     }}>
       <PopoverTrigger asChild>
-        <Badge variant="secondary" className="cursor-pointer gap-1 font-normal text-xs bg-muted/50 hover:bg-muted text-muted-foreground border-0">
+        <Badge variant="secondary" size="sm" className="cursor-pointer gap-1 font-normal bg-muted/50 hover:bg-muted text-muted-foreground border-0">
           <Brain className="h-3 w-3" />
           {memoryRecordNames.length} {memoryRecordNames.length === 1 ? 'memory' : 'memories'}
         </Badge>

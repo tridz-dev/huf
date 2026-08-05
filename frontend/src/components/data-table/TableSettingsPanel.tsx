@@ -67,7 +67,7 @@ export function TableSettingsPanel({
 
 			{/* Primary fields — what the table is */}
 			<div className="space-y-1.5">
-				<Label htmlFor="table-name" className="text-xs">
+				<Label htmlFor="table-name" size="sm">
 					Table Name *
 				</Label>
 				<Input
@@ -81,7 +81,7 @@ export function TableSettingsPanel({
 			</div>
 
 			<div className="space-y-1.5">
-				<Label htmlFor="table-description" className="text-xs">
+				<Label htmlFor="table-description" size="sm">
 					Description
 				</Label>
 				<Textarea
@@ -103,7 +103,7 @@ export function TableSettingsPanel({
 				</h4>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-group" className="text-xs text-steel">
+					<Label htmlFor="table-group" size="sm" className="text-steel">
 						Group
 					</Label>
 					<Input
@@ -128,7 +128,7 @@ export function TableSettingsPanel({
 				</div>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-icon" className="text-xs text-steel">
+					<Label htmlFor="table-icon" size="sm" className="text-steel">
 						Icon
 					</Label>
 					<Select value={icon || '_none'} onValueChange={(v) => onIconChange(v === '_none' ? '' : v)}>
@@ -160,7 +160,7 @@ export function TableSettingsPanel({
 				</div>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-autoname" className="text-xs text-steel">
+					<Label htmlFor="table-autoname" size="sm" className="text-steel">
 						Naming Method
 					</Label>
 					<Select value={autonameMethod} onValueChange={onAutonameMethodChange}>
@@ -177,7 +177,7 @@ export function TableSettingsPanel({
 
 				{autonameMethod === 'By Field' && (
 					<div className="space-y-1">
-						<Label htmlFor="table-title-field" className="text-xs text-steel">
+						<Label htmlFor="table-title-field" size="sm" className="text-steel">
 							Title Field
 						</Label>
 						<Select value={titleField} onValueChange={onTitleFieldChange}>

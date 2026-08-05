@@ -558,11 +558,11 @@ export function NodeSelectionModal({
                               <div className="text-left flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <div className="text-sm font-medium">{agent.agent_name || agent.name}</div>
-                                  <Badge variant={status === 'Active' ? 'default' : 'secondary'} className="text-xs">
+                                  <Badge variant={status === 'Active' ? 'default' : 'secondary'} size="sm">
                                     {status}
                                   </Badge>
                                   {agent.allow_chat === 1 && (
-                                    <Badge variant="outline" className="text-xs">Chat</Badge>
+                                    <Badge variant="outline" size="sm">Chat</Badge>
                                   )}
                                 </div>
                                 <div className="text-xs text-steel-soft line-clamp-1">

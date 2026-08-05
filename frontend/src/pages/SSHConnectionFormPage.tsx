@@ -298,7 +298,7 @@ export function SSHConnectionFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px]">Connection Details</CardTitle>
+              <CardTitle className="text-subtitle">Connection Details</CardTitle>
               <CardDescription className="font-body text-[13px] text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -465,7 +465,7 @@ export function SSHConnectionFormPage() {
           {!isNew && connectionDoc && (
             <Card className="border-line bg-panel">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-display font-bold text-[18px]">
+                <CardTitle className="flex items-center gap-2 text-subtitle">
                   <ShieldCheck className="h-5 w-5 text-steel-soft" strokeWidth={1.6} />
                   Host Key Security & Status
                 </CardTitle>

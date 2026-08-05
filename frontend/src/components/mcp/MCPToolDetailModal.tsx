@@ -48,7 +48,7 @@ export function MCPToolDetailModal({
 
           {/* Tool Name */}
           <div className="space-y-2 flex-shrink-0">
-            <Label className="text-sm font-medium">Tool Name</Label>
+            <Label className="font-medium">Tool Name</Label>
             <div className="p-3 rounded-lg border bg-paper-deep/30">
               <p className="text-sm font-mono">{tool.tool_name}</p>
             </div>
@@ -56,7 +56,7 @@ export function MCPToolDetailModal({
 
           {/* Description */}
           <div className="space-y-2 flex-shrink-0">
-            <Label className="text-sm font-medium">Description</Label>
+            <Label className="font-medium">Description</Label>
             <div className="p-3 rounded-lg border bg-paper-deep/30 min-h-[60px]">
               <p className="text-sm text-steel">
                 {tool.description || 'No description available'}
@@ -66,7 +66,7 @@ export function MCPToolDetailModal({
 
           {/* Parameters (JSON) - Only this section scrolls */}
           <div className="space-y-2 flex-1 min-h-0 flex flex-col">
-            <Label className="text-sm font-medium flex-shrink-0">Parameters</Label>
+            <Label className="font-medium flex-shrink-0">Parameters</Label>
             <div className="rounded-lg border overflow-hidden flex-1 min-h-0 flex flex-col">
               {tool.parameters ? (
                 <div className="flex-1 overflow-y-auto min-h-0">

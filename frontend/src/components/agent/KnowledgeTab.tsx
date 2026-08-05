@@ -71,7 +71,7 @@ export function KnowledgeTab({
                         {ks.mode}
                       </Badge>
                       {ks.priority > 0 && (
-                        <Badge variant="outline" className="text-xs shrink-0">
+                        <Badge variant="outline" size="sm" className="shrink-0">
                           Priority {ks.priority}
                         </Badge>
                       )}

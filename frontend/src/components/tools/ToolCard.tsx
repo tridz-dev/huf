@@ -57,17 +57,17 @@ export function ToolCard({
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <h4 className="font-medium text-sm">{tool.tool_name || tool.name}</h4>
               {tool.types && (
-                <Badge variant="secondary" className="text-[10px] uppercase shrink-0">
+                <Badge variant="secondary" size="sm" className="uppercase shrink-0">
                   {getToolTypeDisplayLabel(tool.types)}
                 </Badge>
               )}
               {toolTypeDisplayName && (
-                <Badge variant="outline" className="text-xs shrink-0">
+                <Badge variant="outline" size="sm" className="shrink-0">
                   {getToolTypeDisplayLabel(toolTypeDisplayName)}
                 </Badge>
               )}
               {isShared && (
-                <Badge variant="secondary" className="text-[10px] flex items-center gap-1 shrink-0">
+                <Badge variant="secondary" size="sm" className="flex items-center gap-1 shrink-0">
                   <Users className="w-3 h-3" />
                   Used by {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}
                 </Badge>
