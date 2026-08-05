@@ -16,10 +16,19 @@
  *   3. DEAD dark:        — darkMode is false, so these can never apply.
  *   4. OVERRIDES         — padding/radius/colour/font/shadow/size passed via
  *      className to a shared UI component (the tab-bar bug's exact shape).
+ *   5. CASING             — Title Case where the house style is sentence
+ *      case. This one has a history: it took FOUR separate sweeps to land
+ *      ("catch bare text", "catch DialogTitle", "catch bare indented JSX
+ *      text nodes"...), each declared done, each blind to a surface the
+ *      others didn't look at. This check covers bare JSX text, Title/menu
+ *      component children, and title/label/placeholder/aria-label props in
+ *      one pass so a fifth sweep is never needed again.
  *
  * Usage:  node scripts/check-design-parity.mjs [--strict]
- * Without --strict, only checks 1–3 fail the build; overrides are reported
- * as warnings, since the ~347 existing ones are being paid down incrementally.
+ * Without --strict, only checks 1–3 fail the build; overrides and casing are
+ * reported as warnings — overrides because the ~347 existing ones are being
+ * paid down incrementally, casing because it is brand new and legacy copy
+ * shouldn't break the build on day one.
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -83,12 +92,98 @@ const OVERRIDE = new RegExp(
   `\\btext-(?!${TEXT_LAYOUT}|${TEXT_SANCTIONED}\\b)[a-z]`,
 );
 
-const findings = { undefinedToken: [], rawPalette: [], deadDark: [], override: [] };
+// ----------------------------------------------------------------- case ---
+// House style: sentence case for every heading, label, button and menu
+// item; uppercase only in mono eyebrows, column heads, group labels, stat
+// labels (those are visually all-caps via CSS, not authored as Title Case
+// text, so they don't show up here). "Title Case" = two or more consecutive
+// Capitalised Words. A single capitalised word is never enough to flag —
+// that's just a normal sentence-case first word or a proper noun.
+//
+// Acronyms/initialisms and product/brand names are exempt. Extend this list
+// rather than loosening the detector when a new one shows up.
+const CASING_ALLOWLIST = new Set([
+  // acronyms / initialisms
+  'API', 'MCP', 'SSH', 'URL', 'JSON', 'LLM', 'AI', 'UI', 'HTTP', 'CSV',
+  'PDF', 'ID', 'VK', 'SMS', 'DocType',
+  // product / brand names (including multi-word ones, matched word-by-word)
+  'OpenAI', 'GitHub', 'Slack', 'WhatsApp', 'Telegram', 'Frappe', 'Claude',
+  'Google', 'Chat', 'Microsoft', 'Teams', 'Postgres', 'Gmail',
+]);
+
+// Strip leading/trailing punctuation/quotes so "Profile," and "(Settings)"
+// compare cleanly against the Capitalised-Word shape.
+const stripEdges = (w) => w.replace(/^[^A-Za-z]+|[^A-Za-z']+$/g, '');
+
+// A "Capitalised Word" is First-cap, rest-lowercase — this structurally
+// excludes ALL-CAPS acronyms (API, SSH) without needing the allowlist, and
+// excludes internal-cap identifiers (DocType) since only single words ever
+// reach that shape and single words are never flagged on their own.
+const isCapitalisedWord = (w) => /^[A-Z][a-z']*$/.test(w);
+
+function isTitleCase(text) {
+  const words = text.split(/\s+/).map(stripEdges).filter(Boolean);
+
+  // Prose gate. The rule governs headings, labels, buttons and menu items —
+  // all of which are SHORT. Body copy and help text are full sentences that
+  // legitimately contain capitalised feature names ("...enabling the Python
+  // Code Execution tool...", "...managed by admins in the Frappe desk."), and
+  // flagging those is not just noise, it is wrong. Anything sentence-shaped —
+  // more than 6 words, or carrying sentence punctuation — is body copy, not a
+  // label, so it is out of scope for this check.
+  if (words.length > 6) return false;
+  if (/[.!?](\s|$)/.test(text.trim().slice(0, -1) + ' ')) return false;
+
+  let run = 0;
+  for (const w of words) {
+    // Allowlisted brand/acronym words neither extend nor bridge a run —
+    // "Google Chat" and "New GitHub Repo" must not trip the detector.
+    if (CASING_ALLOWLIST.has(w)) { run = 0; continue; }
+    if (isCapitalisedWord(w)) {
+      run += 1;
+      if (run >= 2) return true;
+    } else {
+      run = 0;
+    }
+  }
+  return false;
+}
+
+// Component families whose children are user-visible copy: dialog/sheet/card
+// titles (surface 2) and menu items (surface 3). Matched same-line, which
+// covers the common `<CardTitle>Recent Activity</CardTitle>` shape; the
+// multi-line shape (text on its own indented line) is already caught by the
+// bare-JSX-text-node check below, so it isn't duplicated here.
+const TITLE_AND_MENU_TAGS = [
+  'DialogTitle', 'AlertDialogTitle', 'SheetTitle', 'CardTitle',
+  'DropdownMenuItem', 'CommandItem', 'ContextMenuItem', 'MenubarItem',
+];
+const TITLE_TAG_RE = new RegExp(
+  `<(${TITLE_AND_MENU_TAGS.join('|')})(?:\\s[^>]*)?>([^<{]+)</\\1>`, 'g',
+);
+
+// Common string props that carry user-visible copy (surface 4).
+const CASING_PROP_RE = /\b(?:title|label|placeholder|aria-label)="([^"]+)"/g;
+
+// A bare JSX text node: an indented line that is just prose — starts with a
+// capital letter and contains none of the characters that show up in code
+// (tags, braces, assignment, statement punctuation, string quotes). This is
+// deliberately narrow: it's meant to catch `  Manage your account` sitting
+// between tags, not object keys, enum members, or type annotations.
+const BARE_TEXT_RE = /^\s{2,}[A-Z][A-Za-z0-9'’,.:!?&/() -]*$/;
+// `Key: 'Some Value',` is an object property, not a JSX text node — the
+// straight quotes around the value are invisible to BARE_TEXT_RE (it treats
+// `'` as prose apostrophe), so rule it out explicitly.
+const OBJECT_PROPERTY_RE = /:\s*['"][^'"]*['"]\s*,?\s*$/;
+
+const findings = { undefinedToken: [], rawPalette: [], deadDark: [], override: [], titleCase: [] };
 
 for (const file of walk(SRC)) {
   const rel = relative(ROOT, file);
   // These legitimately carry their own palettes.
   const exempt = /shiki|highlight|chart|recharts|cytoscape|reactflow|nodeStyles|monaco|codemirror|mermaid|code-block/i.test(rel);
+  // Test/spec/story files contain fixture copy, not real UI copy.
+  const casingExempt = /\.(test|spec|stories)\.[jt]sx?$/.test(rel);
 
   readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
     const at = `${rel}:${i + 1}`;
@@ -118,6 +213,24 @@ for (const file of walk(SRC)) {
 
     // 3. dead dark: utilities (darkMode is false)
     if (/\bdark:[a-z[]/.test(line) && !rel.endsWith('.css')) findings.deadDark.push(`${at}  ${line.trim().slice(0, 90)}`);
+
+    // 5. Title Case copy, across all three authored surfaces at once.
+    const trimmed = line.trim();
+    const isComment = trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+    if (!casingExempt && !isComment) {
+      // 5a. Dialog/Sheet/Card titles and menu items.
+      for (const m of line.matchAll(TITLE_TAG_RE)) {
+        if (isTitleCase(m[2])) findings.titleCase.push(`${at}  <${m[1]}>${m[2].trim()}</${m[1]}>`);
+      }
+      // 5b. title=/label=/placeholder=/aria-label= props.
+      for (const m of line.matchAll(CASING_PROP_RE)) {
+        if (isTitleCase(m[1])) findings.titleCase.push(`${at}  ${m[0]}`);
+      }
+      // 5c. Bare JSX text nodes.
+      if (BARE_TEXT_RE.test(line) && !OBJECT_PROPERTY_RE.test(trimmed) && isTitleCase(trimmed)) {
+        findings.titleCase.push(`${at}  ${trimmed}`);
+      }
+    }
   });
 }
 
@@ -135,8 +248,10 @@ fatal += report('undefined colour tokens (render as nothing — build will NOT c
 fatal += report('raw Tailwind palette instead of design tokens', findings.rawPalette, true);
 fatal += report('dead dark: classes (darkMode is false)', findings.deadDark, true);
 fatal += report('design-system overrides on shared components', findings.override, STRICT);
+fatal += report('Title Case copy (house style is sentence case)', findings.titleCase, STRICT);
 
-if (!fatal && !findings.override.length) console.log('Design parity: clean.');
-else if (!fatal) console.log(`\nDesign parity: no blocking issues (${findings.override.length} overrides tracked; run with --strict to enforce).`);
+const warnCount = findings.override.length + findings.titleCase.length;
+if (!fatal && !warnCount) console.log('Design parity: clean.');
+else if (!fatal) console.log(`\nDesign parity: no blocking issues (${findings.override.length} overrides, ${findings.titleCase.length} casing tracked; run with --strict to enforce).`);
 
 process.exit(fatal ? 1 : 0);

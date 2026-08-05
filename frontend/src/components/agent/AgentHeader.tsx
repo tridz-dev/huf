@@ -85,13 +85,13 @@ export function AgentHeader({
               value={form.watch('agent_name')}
               onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
               className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-              placeholder="Agent Name"
+              placeholder="e.g. Customer support agent"
             />
           ) : (
             <InlineEditName
               value={form.watch('agent_name')}
               onChange={(value) => form.setValue('agent_name', value, { shouldDirty: true })}
-              placeholder="Agent Name"
+              placeholder="e.g. Customer support agent"
             />
           )}
           <Badge variant={watchDisabled ? 'pill-neutral' : 'pill-success'}>

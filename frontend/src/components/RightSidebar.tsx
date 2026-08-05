@@ -586,7 +586,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'agent-run') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">Agent Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Agent Configuration</Label>
                     <div>
                       <Label htmlFor="agent-name" size="sm">Agent</Label>
                       <Combobox
@@ -632,7 +632,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'tool-call') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">Tool Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Tool Configuration</Label>
                     <div>
                       <Label htmlFor="tool-name" size="sm">Tool</Label>
                       <Combobox
@@ -646,7 +646,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label size="sm" className="font-semibold mb-2 block">Arguments</Label>
+                      <Label size="sm" weight="semibold" className="mb-2 block">Arguments</Label>
                       {loadingToolDetails ? (
                         <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">Loading parameters...</div>
                       ) : !selectedToolDetails ? (
@@ -658,7 +658,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                             return (
                               <div key={param.fieldname}>
                                 <div className="flex justify-between items-center mb-1">
-                                  <Label htmlFor={`arg-${param.fieldname}`} size="sm" className="font-medium">
+                                  <Label htmlFor={`arg-${param.fieldname}`} size="sm">
                                     {param.label || param.fieldname} {param.required ? <span className="text-destructive">*</span> : ''}
                                   </Label>
                                   <div className="flex items-center gap-2">
@@ -713,7 +713,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'router') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">LLM Router Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">LLM Router Configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Connect edges from this node to other nodes. The LLM will use edge labels to decide where to route.
                     </div>
@@ -754,7 +754,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const approverUsers = (config as { approver_users?: string[] | string }).approver_users;
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">Human Approval Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Human Approval Configuration</Label>
                     <div>
                       <Label htmlFor="approval-title" size="sm">Title</Label>
                       <Input
@@ -877,7 +877,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'condition') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">Condition (IF) Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Condition (IF) Configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Evaluates a boolean expression against context. Routes to True or False branch node.
                     </div>
@@ -922,7 +922,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'http-request') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">HTTP Request Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">HTTP Request Configuration</Label>
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <Label htmlFor="http-url" size="sm">URL</Label>
@@ -1021,7 +1021,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const transformations = config.transformations || [];
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">Transform Data Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Transform Data Configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Map, copy, or template data between context variables.
                     </div>
@@ -1110,7 +1110,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'loop') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block font-semibold">Loop Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Loop Configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Iterate over an array in context. Each iteration sets the current item and index.
                     </div>

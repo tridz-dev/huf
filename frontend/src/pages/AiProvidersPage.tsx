@@ -575,7 +575,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                     setFormData({ ...formData, is_local_llm: checked === true })
                   }
                 />
-                <Label htmlFor="is_local_llm" className="font-normal cursor-pointer">
+                <Label htmlFor="is_local_llm" weight="normal" className="cursor-pointer">
                   Is Local LLM (self-hosted endpoint)
                 </Label>
               </div>

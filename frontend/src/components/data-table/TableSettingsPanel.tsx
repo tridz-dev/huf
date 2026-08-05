@@ -103,7 +103,7 @@ export function TableSettingsPanel({
 				</h4>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-group" size="sm" className="text-steel">
+					<Label htmlFor="table-group" size="sm" tone="muted">
 						Group
 					</Label>
 					<Input
@@ -128,7 +128,7 @@ export function TableSettingsPanel({
 				</div>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-icon" size="sm" className="text-steel">
+					<Label htmlFor="table-icon" size="sm" tone="muted">
 						Icon
 					</Label>
 					<Select value={icon || '_none'} onValueChange={(v) => onIconChange(v === '_none' ? '' : v)}>
@@ -160,7 +160,7 @@ export function TableSettingsPanel({
 				</div>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-autoname" size="sm" className="text-steel">
+					<Label htmlFor="table-autoname" size="sm" tone="muted">
 						Naming Method
 					</Label>
 					<Select value={autonameMethod} onValueChange={onAutonameMethodChange}>
@@ -177,7 +177,7 @@ export function TableSettingsPanel({
 
 				{autonameMethod === 'By Field' && (
 					<div className="space-y-1">
-						<Label htmlFor="table-title-field" size="sm" className="text-steel">
+						<Label htmlFor="table-title-field" size="sm" tone="muted">
 							Title Field
 						</Label>
 						<Select value={titleField} onValueChange={onTitleFieldChange}>

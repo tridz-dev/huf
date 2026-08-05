@@ -455,7 +455,7 @@ export default function GatewaysPage() {
                           })
                         }
                       >
-                        <SelectTrigger className="h-9 text-xs" size="sm">
+                        <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -514,7 +514,7 @@ export default function GatewaysPage() {
                         })
                       }
                     >
-                      <SelectTrigger className="h-9 text-xs" size="sm">
+                      <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -537,7 +537,7 @@ export default function GatewaysPage() {
                           })
                         }
                       >
-                        <SelectTrigger className="h-9 text-xs" size="sm">
+                        <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -564,7 +564,7 @@ export default function GatewaysPage() {
                           })
                         }
                       >
-                        <SelectTrigger className="h-9 text-xs" size="sm">
+                        <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -593,7 +593,7 @@ export default function GatewaysPage() {
                     })
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs" size="sm">
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

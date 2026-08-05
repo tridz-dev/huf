@@ -8,7 +8,7 @@ export function ModelsHeaderActions() {
   return (
     <Button variant="display" onClick={onAddModel} size="sm">
       <Plus className="w-4 h-4 mr-2" />
-      Add Model
+      Add model
     </Button>
   );
 }

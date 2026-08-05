@@ -264,7 +264,7 @@ export function AdvancedTab({
 
 			{contextStrategy === 'Summarize' && (
 				<FormSettingsSection
-					title="Summarization Engine"
+					title="Summarization engine"
 					description="Configure how older conversation history is compressed when the context strategy is set to Summarize."
 				>
 					<div className="grid gap-6 sm:grid-cols-2">
@@ -484,7 +484,7 @@ export function AdvancedTab({
 			)}
 
 			<FormSettingsSection
-				title="Conversation Data"
+				title="Conversation data"
 				description="Control agent memory storage, injection into prompts, and tool-result context limits."
 			>
 				<FormField
@@ -587,7 +587,7 @@ export function AdvancedTab({
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Reasoning Configuration"
+				title="Reasoning configuration"
 				description="Configure provider-aware reasoning parameters (e.g. Anthropic extended thinking, OpenAI reasoning effort)."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
@@ -698,7 +698,7 @@ export function AdvancedTab({
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Memory Settings"
+				title="Memory settings"
 				description="Enable long-term, scoped memory for this agent and configure memory policies and automated memory tools."
 			>
 				<FormField
@@ -844,7 +844,7 @@ This includes whether each tool call is completed and its corresponding result.`
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Model Modality Settings"
+				title="Model modality settings"
 				description="Optional: select dedicated models for image generation, audio generation (TTS), and transcription (STT)."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
@@ -959,7 +959,7 @@ This includes whether each tool call is completed and its corresponding result.`
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Document Upload"
+				title="Document upload"
 				description="Let users attach documents or images in chat for this agent."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
@@ -1037,7 +1037,7 @@ This includes whether each tool call is completed and its corresponding result.`
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Code Execution"
+				title="Code execution"
 				description="Allow this agent to run Python code through the sandboxed Code Execution tool."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">

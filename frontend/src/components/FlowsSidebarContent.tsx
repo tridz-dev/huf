@@ -182,7 +182,7 @@ export function FlowsSidebarContent() {
                       disabled
                     >
                       <Plus className="w-3 h-3 mr-1" />
-                      New Data (coming soon)
+                      New data (coming soon)
                     </Button>
                   </div>
                 )}

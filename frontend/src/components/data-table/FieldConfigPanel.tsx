@@ -152,7 +152,7 @@ export function FieldConfigPanel({
 
 					{properties.includes('default') && (
 						<div className="space-y-1">
-							<Label htmlFor="field-default" size="sm" className="text-steel">
+							<Label htmlFor="field-default" size="sm" tone="muted">
 								Default Value
 							</Label>
 							<Input
@@ -167,7 +167,7 @@ export function FieldConfigPanel({
 
 					{properties.includes('description') && (
 						<div className="space-y-1">
-							<Label htmlFor="field-description" size="sm" className="text-steel">
+							<Label htmlFor="field-description" size="sm" tone="muted">
 								Help Text
 							</Label>
 							<Input
@@ -196,7 +196,7 @@ export function FieldConfigPanel({
 									onUpdate({ reqd: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-reqd" size="sm" className="font-normal">
+							<Label htmlFor="field-reqd" size="sm" weight="normal">
 								Required
 							</Label>
 						</div>
@@ -211,7 +211,7 @@ export function FieldConfigPanel({
 									onUpdate({ unique: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-unique" size="sm" className="font-normal">
+							<Label htmlFor="field-unique" size="sm" weight="normal">
 								Unique
 							</Label>
 						</div>
@@ -226,7 +226,7 @@ export function FieldConfigPanel({
 									onUpdate({ read_only: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-read-only" size="sm" className="font-normal">
+							<Label htmlFor="field-read-only" size="sm" weight="normal">
 								Read Only
 							</Label>
 						</div>
@@ -241,7 +241,7 @@ export function FieldConfigPanel({
 									onUpdate({ in_list_view: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-in-list-view" size="sm" className="font-normal">
+							<Label htmlFor="field-in-list-view" size="sm" weight="normal">
 								Show in List View
 							</Label>
 						</div>
@@ -256,7 +256,7 @@ export function FieldConfigPanel({
 									onUpdate({ non_negative: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-non-negative" size="sm" className="font-normal">
+							<Label htmlFor="field-non-negative" size="sm" weight="normal">
 								Non-negative only
 							</Label>
 						</div>

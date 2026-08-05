@@ -7,7 +7,7 @@ export function UsersHeaderActions() {
     <Button asChild variant="outline" size="sm">
       <Link to="/roles">
         <Shield className="w-4 h-4 mr-2" />
-        View Role details
+        View role details
       </Link>
     </Button>
   );
