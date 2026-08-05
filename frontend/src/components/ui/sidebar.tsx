@@ -185,6 +185,15 @@ export const Sidebar = React.forwardRef<
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
+    // Collapsed-to-icon rail sizing, resolved here so both the spacer and the
+    // fixed rail share one source of truth. "floating"/"inset" variants add
+    // their own 1rem of padding, hence the wider value.
+    const collapsedToIcon = state === "collapsed" && collapsible === "icon"
+    const railIconWidth =
+      variant === "floating" || variant === "inset"
+        ? `calc(${SIDEBAR_WIDTH_ICON} + 1rem + 2px)`
+        : SIDEBAR_WIDTH_ICON
+
     if (collapsible === "none") {
       return (
         <div
@@ -233,25 +242,34 @@ export const Sidebar = React.forwardRef<
         data-variant={variant}
         data-side={side}
       >
+        {/*
+          Width is driven from React state via an inline style rather than the
+          upstream `group-data-[collapsible=icon]:w-[…]` utilities. Those
+          utilities generate correct CSS and their selectors demonstrably match
+          the element, yet the collapsed width never won at runtime — even with
+          `!important`, and even after removing every competing class. Rather
+          than keep guessing at that, the collapsed rail now sizes itself from
+          the same `state` the rest of the component already trusts, which is
+          deterministic and cannot be out-specified.
+        */}
         <div
+          style={{ width: collapsedToIcon ? railIconWidth : SIDEBAR_WIDTH }}
           className={cn(
-            "relative w-[--sidebar-width] bg-transparent transition-[width] duration-200 ease-linear",
+            "relative bg-transparent transition-[width] duration-200 ease-linear",
             "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
-              ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]"
           )}
         />
         <div
+          style={{ width: collapsedToIcon ? railIconWidth : SIDEBAR_WIDTH }}
           className={cn(
-            "fixed inset-y-0 z-50 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex",
+            "fixed inset-y-0 z-50 hidden h-svh transition-[left,right,width] duration-200 ease-linear md:flex",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             variant === "floating" || variant === "inset"
-              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              ? "p-2"
+              : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className
           )}
           {...props}
@@ -586,7 +604,19 @@ export const SidebarMenuButton = React.forwardRef<
         data-sidebar="menu-button"
         data-size={size}
         data-active={isActive}
-        className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+        className={cn(
+          sidebarMenuButtonVariants({ variant, size }),
+          className,
+          // Collapsed tile geometry (spec §11: 38x34, 9px radius, 18px icon)
+          // applied from React state and placed LAST so it wins the
+          // tailwind-merge pass. The equivalent
+          // `group-data-[collapsible=icon]:!…` utilities generate valid CSS
+          // whose selectors match this element, but never took effect at
+          // runtime — see PARITY_AUDIT.md. Driving it from `state` removes the
+          // dependency on that unexplained behaviour entirely.
+          state === "collapsed" &&
+            "h-[34px] w-[38px] justify-center gap-0 rounded-[9px] p-0 [&>svg]:size-[18px]",
+        )}
         {...props}
       />
     )
