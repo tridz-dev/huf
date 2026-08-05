@@ -16,33 +16,46 @@
 
 @layer base {
   :root {
-    /* HUF Design System — Themable tokens (default = Winter) */
+    /* HUF Design System — "Apple-quiet" v3.0 is now the sole shipped UI
+       direction. These are no longer "themable defaults" overridden by a
+       runtime picker — the [data-theme="winter/midnight/summer/morning"]
+       blocks below are dead code kept only for reference (the theme
+       switcher in src/lib/personalization.ts no longer applies a
+       data-theme attribute, see applyEffectiveTheme()), not a priority to
+       remove. Do not rely on them. */
 
     /* Surfaces */
-    --paper:      #EEF0EC;
-    --paper-deep: #E2E4DE;
-    --panel:      #FBFCFA;
+    --paper:      #FBFBFD;
+    --paper-deep: #F4F4F7;
+    --panel:      #FFFFFF;
 
     /* Text & lines */
-    --ink:        #15181C;
+    --ink:        #1D1D1F;
     --ink-soft:   #2A2F36;
-    --steel:      #5A636F;
-    --steel-soft: #8A929C;
-    --line:       #DEE1D9;
-    --line-marketing: #C7CCC0;
+    --steel:      #6E6E73;
+    --steel-soft: #98989D;
+    --line:       #ECECF0;
+    --line-marketing: #ECECF0;
     --line-dark:  #343A42;
 
     /* Signal */
-    --signal:     #C6511F;
-    --signal-ink: #9C3F17;
-    --good:       #3F7A4E;
-    --destructive-tint: #FAECE7;
+    --signal:     #7A5AF0;
+    --signal-ink: #5B3FC4;
+    --good:       #1C7C54;
+    --destructive-tint: #FDECEA;
+    --destructive: #B3261E;
+    --destructive-foreground: var(--paper);
 
     /* Shape */
-    --r: 2px;
+    --r: 8px;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 14px;
+    --r-full: 999px;
     --shadow-flat: none;
-    --shadow-raised: none;
-    --shadow-overlay: none;
+    --shadow-raised: 0 1px 2px rgba(0,0,0,.05);
+    --shadow-overlay: 0 8px 24px -8px rgba(0,0,0,.16);
 
     /* Spacing scale */
     --space-1: 4px;
@@ -54,21 +67,21 @@
     --space-7: 48px;
 
     /* Control sizing */
-    --control-h-sm: 32px;
-    --control-h-md: 36px;
-    --control-h-lg: 40px;
-    --control-px: 16px;
-    --control-px-sm: 12px;
-    --control-px-lg: 32px;
-    --control-py: 8px;
+    --control-h-sm: 30px;
+    --control-h-md: 34px;
+    --control-h-lg: 38px;
+    --control-px: 14px;
+    --control-px-sm: 10px;
+    --control-px-lg: 28px;
+    --control-py: 7px;
 
     /* Typography */
-    --display: 'Big Shoulders Display', sans-serif;
-    --body:    'IBM Plex Sans', sans-serif;
-    --mono:    'IBM Plex Mono', monospace;
+    --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
 
     /* shadcn compatibility — mapped to HUF tokens so themes propagate */
-    --radius: 2px;
+    --radius: 8px;
     --background: var(--paper);
     --foreground: var(--ink);
     --card: var(--panel);
