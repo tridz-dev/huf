@@ -55,6 +55,7 @@ const SkillsPage = lazy(() => import('./pages/SkillsPage'));
 const SkillFormPageWrapper = lazy(() => import('./pages/SkillFormPageWrapper'));
 const SshPage = lazy(() => import('./pages/SshPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
+const ArtifactViewPage = lazy(() => import('./pages/ArtifactViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
@@ -636,6 +637,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <PreviewViewPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifact/:artifactId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ArtifactViewPage />
                 </Suspense>
               </ProtectedRoute>
             }
