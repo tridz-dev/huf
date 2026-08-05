@@ -115,11 +115,22 @@
     --text-title-weight:   590;
     --text-title-tracking: -0.015em;
 
+    /* Section/card headers. Added because a parity audit found 6 callsites
+       independently reaching for 18px across a 15px→20px gap — a missing
+       step in the scale, not 6 separate mistakes. */
+    --text-subtitle-size:   18px;
+    --text-subtitle-weight: 590;
+
     --text-body-size:   15px;
     --text-body-weight: 400;
 
     --text-ui-size:   13px;
     --text-ui-weight: 500;
+
+    /* Dense form/table text. Same reasoning: 15+ callsites landed on 12px
+       across the 11px→13px gap. */
+    --text-micro-size:   12px;
+    --text-micro-weight: 500;
 
     --text-meta-size: 11px;
 

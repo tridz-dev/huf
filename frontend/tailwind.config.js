@@ -147,6 +147,18 @@ export default {
           'var(--text-title-size)',
           { letterSpacing: 'var(--text-title-tracking)', fontWeight: 'var(--text-title-weight)' },
         ],
+        // 18px section/card header — added to close the 15px→20px gap that
+        // 6 callsites were independently working around.
+        subtitle: [
+          'var(--text-subtitle-size)',
+          { fontWeight: 'var(--text-subtitle-weight)' },
+        ],
+        // 12px dense form/table text — closes the 11px→13px gap that 15+
+        // callsites were working around.
+        micro: [
+          'var(--text-micro-size)',
+          { fontWeight: 'var(--text-micro-weight)' },
+        ],
         // Named 'body-text' (not 'body') to avoid ambiguity with the
         // `body` fontFamily key above (font-body vs text-body-text).
         'body-text': [
