@@ -136,7 +136,7 @@ export function DocumentPreview({
         srcDoc={html}
         sandbox="allow-same-origin"
         title="Document preview"
-        className="w-full max-w-[820px] rounded-lg border shadow-md bg-white"
+        className="w-full max-w-[820px] rounded-lg border shadow-md bg-panel"
         style={{ aspectRatio: '210 / 297', minHeight: '1000px' }}
       />
     </div>

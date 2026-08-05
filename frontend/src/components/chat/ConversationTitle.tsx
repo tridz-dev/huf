@@ -6,7 +6,7 @@ import { updateConversationTitle } from "@/services/chatApi";
 import { useTypewriterText } from "@/hooks/useTypewriterText";
 
 const conversationTitleVariants = cva(
-    "px-1 w-full font-medium truncate text-zinc-900 bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
+    "px-1 w-full font-medium truncate text-ink bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
     {
         variants:{
             variant:{

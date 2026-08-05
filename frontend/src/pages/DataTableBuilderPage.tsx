@@ -424,7 +424,7 @@ export function DataTableBuilderPage() {
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-white/[.92] backdrop-blur-[12px]">
+			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel/[.92] backdrop-blur-[12px]">
 				{state.isDirty ? (
 					<span className="text-xs text-steel-soft">Unsaved changes</span>
 				) : (

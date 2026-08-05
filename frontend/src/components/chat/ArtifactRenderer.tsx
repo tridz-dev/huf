@@ -205,7 +205,7 @@ export function ArtifactRenderer({
 						<iframe
 							srcDoc={artifact.content}
 							sandbox=""
-							className="w-full h-96 border rounded bg-white"
+							className="w-full h-96 border rounded bg-panel"
 							title={artifact.title || 'HTML Preview'}
 						/>
 						<details className="text-xs">
@@ -223,7 +223,7 @@ export function ArtifactRenderer({
 						<iframe
 							srcDoc={artifact.content}
 							sandbox=""
-							className="flex items-center justify-center p-4 bg-white rounded border"
+							className="flex items-center justify-center p-4 bg-panel rounded border"
 							title={artifact.title || 'SVG Preview'}
 						/>
 						<details className="text-xs">

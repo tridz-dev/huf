@@ -170,7 +170,7 @@ export function CompareView({
             >
               <span
                 className={cn(
-                  'block h-[15px] w-[15px] rounded-full bg-white shadow-sm transition-transform',
+                  'block h-[15px] w-[15px] rounded-full bg-panel shadow-sm transition-transform',
                   diffEnabled ? 'translate-x-[13px]' : 'translate-x-0',
                 )}
               />

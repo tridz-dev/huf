@@ -46,7 +46,7 @@ export function ChatAttachmentCard({
     <div
       className={cn(
         'flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2 max-w-full',
-        status === 'error' ? 'border-destructive' : 'border-zinc-200',
+        status === 'error' ? 'border-destructive' : 'border-line',
         status === 'uploading' && 'opacity-70',
         className
       )}

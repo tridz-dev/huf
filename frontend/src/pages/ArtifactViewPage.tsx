@@ -177,7 +177,7 @@ export function ArtifactViewPage() {
         <div className="mx-auto max-w-4xl space-y-4">
           {/* PDF Preview */}
           {showPdfPreview && pdfPreviewUrl && (
-            <div className="rounded border bg-white">
+            <div className="rounded border bg-panel">
               <iframe
                 src={pdfPreviewUrl}
                 className="w-full border-0 rounded"
