@@ -1763,12 +1763,21 @@ FRAPPE_CLOUD_TOOLS = [
 	},
 ]
 
+def _with_service(tools: list[dict], service: str) -> list[dict]:
+	"""Stamp the owning Integration Service key onto each tool definition.
+
+	Tools are already grouped one list per service in this file, so the
+	association is declared once here instead of repeated on every entry. The
+	key must match an `Integration Service` docname, because that link is what
+	lets the UI tell a user which account a tool needs before they attach it.
+	An entry that already names a service keeps its own value.
+	"""
+	return [{**tool, "service": tool.get("service") or service} for tool in tools]
+
+
 ALL_INTEGRATION_TOOLS = (
+	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
-	+ SLACK_TOOLS
-	+ DISCORD_TOOLS
-	+ TELEGRAM_TOOLS
-	+ GITHUB_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS
 	+ RAVEN_TOOLS
@@ -1776,18 +1785,26 @@ ALL_INTEGRATION_TOOLS = (
 	+ ERPNEXT_CRM_TOOLS
 	+ ERPNEXT_INVENTORY_TOOLS
 	+ ERPNEXT_REPORT_TOOLS
-	+ GMAIL_TOOLS
-	+ GOOGLE_SHEETS_TOOLS
-	+ GOOGLE_CALENDAR_TOOLS
-	+ GOOGLE_MAPS_TOOLS
-	+ GOOGLE_PLACES_TOOLS
-	+ GOOGLE_DRIVE_TOOLS
-	+ GOOGLE_MEET_TOOLS
-	+ SERP_HOTEL_TOOLS
-	+ SERP_REVIEW_TOOLS
-	+ SERP_YOUTUBE_TOOLS
 	+ BUILDER_TOOLS
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS
-	+ FRAPPE_CLOUD_TOOLS
+	# Tools backed by a connectable service. Keys match Integration Service
+	# docnames and the SERVICE_NAME each tool module uses for credentials.
+	+ _with_service(SLACK_TOOLS, "slack")
+	+ _with_service(DISCORD_TOOLS, "discord")
+	+ _with_service(TELEGRAM_TOOLS, "telegram")
+	+ _with_service(GITHUB_TOOLS, "github")
+	+ _with_service(GMAIL_TOOLS, "gmail")
+	+ _with_service(GOOGLE_SHEETS_TOOLS, "google_sheets")
+	+ _with_service(GOOGLE_CALENDAR_TOOLS, "google_calendar")
+	+ _with_service(GOOGLE_MAPS_TOOLS, "google_maps")
+	# Places is part of Google Maps Platform and shares its API key —
+	# `google_places.py` sets SERVICE_NAME = "google_maps".
+	+ _with_service(GOOGLE_PLACES_TOOLS, "google_maps")
+	+ _with_service(GOOGLE_DRIVE_TOOLS, "google_drive")
+	+ _with_service(GOOGLE_MEET_TOOLS, "google_meet")
+	+ _with_service(SERP_HOTEL_TOOLS, "serpapi")
+	+ _with_service(SERP_REVIEW_TOOLS, "serpapi")
+	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
+	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
