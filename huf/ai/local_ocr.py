@@ -1,5 +1,10 @@
+import os
+
 import frappe
 from rapidocr_pdf import RapidOCRPDF
+
+_MAX_LOCAL_OCR_FILE_SIZE = 25 * 1024 * 1024  # 25 MB, matches ocr_engine.py's provider limit
+
 
 def extract_pdf_with_rapidocr(file_path: str) -> str:
     """
@@ -7,6 +12,13 @@ def extract_pdf_with_rapidocr(file_path: str) -> str:
     Handles both text-based and image-based PDFs.
     """
     try:
+        if os.path.getsize(file_path) > _MAX_LOCAL_OCR_FILE_SIZE:
+            frappe.log_error(
+                f"RapidOCR skipped: file exceeds {_MAX_LOCAL_OCR_FILE_SIZE // (1024 * 1024)} MB limit",
+                "Local OCR Error",
+            )
+            return ""
+
         extractor = RapidOCRPDF()
         # The result is typically a list of tuples (page_num, text) or similar.
         # According to rapidocr-pdf docs, extract returns a tuple: (result_list, elapse)

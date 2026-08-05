@@ -417,28 +417,31 @@ async def _process_with_vision_model(
                 import io
 
                 pdf = pdfium.PdfDocument(file_path)
-                total_pages = len(pdf)
-                max_pages = 15
-                for i in range(min(total_pages, max_pages)):
-                    page = pdf[i]
-                    bitmap = page.render(scale=2)  # ~144 DPI
-                    pil_image = bitmap.to_pil()
-                    buffer = io.BytesIO()
-                    pil_image.save(buffer, format="JPEG", quality=85)
-                    b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-                    content_list.append({
-                        "type": "image_url", 
-                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
-                    })
-                if total_pages > max_pages:
-                    content_list.append({
-                        "type": "text",
-                        "text": (
-                            f"\n\n[Note: This PDF has {total_pages} pages. "
-                            f"Only the first {max_pages} pages were processed. "
-                            f"Pages {max_pages + 1}–{total_pages} were omitted.]"
-                        ),
-                    })
+                try:
+                    total_pages = len(pdf)
+                    max_pages = 15
+                    for i in range(min(total_pages, max_pages)):
+                        page = pdf[i]
+                        bitmap = page.render(scale=2)  # ~144 DPI
+                        pil_image = bitmap.to_pil()
+                        buffer = io.BytesIO()
+                        pil_image.save(buffer, format="JPEG", quality=85)
+                        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                        content_list.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                        })
+                    if total_pages > max_pages:
+                        content_list.append({
+                            "type": "text",
+                            "text": (
+                                f"\n\n[Note: This PDF has {total_pages} pages. "
+                                f"Only the first {max_pages} pages were processed. "
+                                f"Pages {max_pages + 1}–{total_pages} were omitted.]"
+                            ),
+                        })
+                finally:
+                    pdf.close()
             except ImportError:
                 # Fallback if pypdfium2 somehow isn't available
                 with open(file_path, "rb") as f:

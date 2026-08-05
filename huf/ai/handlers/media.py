@@ -922,8 +922,18 @@ def process_file_upload(doc, method):
     Background hook for automatically extracting text from uploaded files.
     Enqueues OCR processing so the `huf_ocr_text` custom field is populated
     asynchronously without blocking the upload.
+
+    Skips files we have no extractor for (archives, executables, audio/video,
+    etc.) so every upload doesn't pay for a queue job and a RapidOCR attempt
+    that's guaranteed to fail.
     """
-    from huf.ai.ocr_engine import extract_document_sync
+    from huf.ai.ocr_engine import _has_local_extractor, _is_pdf, _is_image, _mime_type_and_extension, extract_document_sync
+
+    file_path = doc.get_full_path()
+    mime_type, ext = _mime_type_and_extension(file_path, doc.file_type)
+    if not (_is_pdf(mime_type, ext) or _is_image(mime_type, ext) or _has_local_extractor(mime_type, ext)):
+        return
+
     frappe.enqueue(
         extract_document_sync,
         file_id=doc.name,
