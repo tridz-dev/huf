@@ -16,6 +16,41 @@ interface UnifiedHeaderProps {
   breadcrumbs?: BreadcrumbItemType[];
 }
 
+/**
+ * Ancestry-only breadcrumb: renders the chain of ancestors leading up to the
+ * current page, but never the trailing/current-page crumb. Used inside
+ * PageFrame's 52px bar, where the h1 already names the page once — repeating
+ * that name in a breadcrumb would name the page twice. Renders nothing when
+ * there is no real ancestry (a single-item or empty breadcrumb list).
+ */
+export function AncestryCrumb({ breadcrumbs }: { breadcrumbs?: BreadcrumbItemType[] }) {
+  if (!breadcrumbs || breadcrumbs.length < 2) return null;
+  const ancestors = breadcrumbs.slice(0, -1);
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <Breadcrumb>
+        <BreadcrumbList>
+          {ancestors.map((crumb, index) => (
+            <Fragment key={index}>
+              <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
+                {crumb.href ? (
+                  <BreadcrumbLink href={crumb.href} asChild>
+                    <Link to={crumb.href}>{crumb.label}</Link>
+                  </BreadcrumbLink>
+                ) : (
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
+                )}
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block mt-0.5" />
+            </Fragment>
+          ))}
+        </BreadcrumbList>
+      </Breadcrumb>
+    </div>
+  );
+}
+
 export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
   const location = useLocation();
 

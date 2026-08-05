@@ -1,5 +1,6 @@
-import type { ReactNode, RefObject } from 'react';
+import { useLayoutEffect, type ReactNode, type RefObject } from 'react';
 import { cn } from '@/lib/utils';
+import { usePageChrome } from './UnifiedLayout';
 
 interface PageFrameProps {
   /** Page-head title — apple-quiet system font, sentence case h1. Named once, here. */
@@ -44,12 +45,30 @@ export function PageFrame({
   className,
   scrollRef,
 }: PageFrameProps) {
+  const chrome = usePageChrome();
+  // A head bar only exists when there's a title or actions to show — an
+  // empty PageFrame renders no bar at all, so it must not claim the rail
+  // toggle (see UnifiedLayout's PageChromeContext doc comment).
+  const showHeadBar = Boolean(title || actions);
+
+  useLayoutEffect(() => {
+    if (!chrome) return;
+    chrome.setFramed(showHeadBar);
+    return () => chrome.setFramed(false);
+  }, [chrome, showHeadBar]);
+
   return (
     <div ref={scrollRef} className="h-full overflow-auto">
       <div className={cn('flex flex-col', className)}>
-        {(title || actions) && (
+        {showHeadBar && (
           <div className="h-[52px] shrink-0 flex items-center justify-between gap-4 px-6">
             <div className="flex items-center gap-3 min-w-0">
+              {chrome && (
+                <>
+                  {chrome.railToggle}
+                  {chrome.ancestryCrumb}
+                </>
+              )}
               {title && (
                 <h1 className="font-display text-title text-ink leading-none truncate">
                   {title}
