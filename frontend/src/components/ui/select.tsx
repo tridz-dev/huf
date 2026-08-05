@@ -16,7 +16,12 @@ const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
 interface SelectTriggerProps
-  extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  // `size` must be omitted from the inherited props: the underlying button
+  // element already declares an HTML `size` attribute typed as `number`, so a
+  // string union would collide with it. (Interestingly `tsc --noEmit` let this
+  // pass while the build's `tsc -b` caught it — another reason the build is the
+  // real gate.)
+  extends Omit<React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, 'size'> {
   /** Custom icon replacing the default CaretSortIcon. */
   icon?: React.ReactNode;
   /**
