@@ -1,7 +1,7 @@
 """Tests for Gateway Guided Setup and Pairing Tools."""
 
-import unittest
 import frappe
+from frappe.tests import IntegrationTestCase
 from huf.ai.tools.gateway_pairing_tools import (
     setup_gateway,
     list_pairing_requests,
@@ -10,7 +10,7 @@ from huf.ai.tools.gateway_pairing_tools import (
 )
 
 
-class TestGatewayPairingTools(unittest.TestCase):
+class TestGatewayPairingTools(IntegrationTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
@@ -84,7 +84,3 @@ class TestGatewayPairingTools(unittest.TestCase):
         frappe.db.delete("Gateway", {"name": gw_name})
         if integration_settings:
             frappe.db.delete("Integration Settings", {"name": integration_settings})
-
-
-if __name__ == "__main__":
-    unittest.main()
