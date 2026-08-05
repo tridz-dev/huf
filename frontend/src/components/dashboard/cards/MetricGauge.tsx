@@ -12,7 +12,6 @@ export interface MetricGaugeProps {
   period?: string;
   value: string | number;
   unit?: string;
-  flag?: boolean;
   info?: string;
 }
 
@@ -21,7 +20,6 @@ export function MetricGauge({
   period,
   value,
   unit,
-  flag,
   info,
 }: MetricGaugeProps) {
   return (
@@ -52,10 +50,14 @@ export function MetricGauge({
         )}
       </div>
       <div className="mt-4 flex items-baseline">
+        {/* Figures stay ink black — the design system reserves violet for state
+            and selection, and calls out "one dashboard figure is violet for no
+            stated reason" as a defect. A delta may carry semantic colour; the
+            figure itself never does. */}
         <span
           className={cn(
             'font-display font-semibold text-[30px] tracking-[-.02em] leading-none tabular-nums',
-            flag ? 'text-signal-ink' : 'text-ink'
+            'text-ink',
           )}
         >
           {value}

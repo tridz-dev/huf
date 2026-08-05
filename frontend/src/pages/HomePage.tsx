@@ -240,7 +240,6 @@ function HomePage() {
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
       info: 'Total API costs for LLM usage across all agents',
-      flag: true,
     },
   ];
 
@@ -266,7 +265,6 @@ function HomePage() {
               period={metric.period}
               value={metric.value}
               info={metric.info}
-              flag={metric.flag}
             />
           ))}
         </GaugeRow>
