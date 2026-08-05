@@ -1203,7 +1203,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               onClick={() => setShowDeleteConfirm(true)}
             >
               <Trash2 className="w-4 h-4 mr-1" />
-              Delete Node
+              Delete node
             </Button>
           )}
         </div>
@@ -1215,7 +1215,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Node</AlertDialogTitle>
+            <AlertDialogTitle>Delete node</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete this node? Any edges connected to it will also be removed.
             </AlertDialogDescription>

@@ -147,7 +147,7 @@ export function ActionSelectionModal({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[960px] max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add Action</DialogTitle>
+          <DialogTitle>Add action</DialogTitle>
         </DialogHeader>
 
         <div className="relative mb-4">

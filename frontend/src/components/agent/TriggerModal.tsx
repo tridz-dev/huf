@@ -206,7 +206,7 @@ export function TriggerModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-[600px]">
         <DialogScrollHeader>
-          <DialogTitle>Configure Trigger</DialogTitle>
+          <DialogTitle>Configure trigger</DialogTitle>
           <DialogDescription>
             {editingTrigger ? 'Edit trigger configuration' : 'Add a new trigger to this agent'}
           </DialogDescription>

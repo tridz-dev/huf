@@ -138,7 +138,7 @@ export function SkillImportModal({ open, onOpenChange, onSuccess }: SkillImportM
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import Skills</DialogTitle>
+          <DialogTitle>Import skills</DialogTitle>
           <DialogDescription>
             Import skills from a Git repository or a configured common destination.
           </DialogDescription>

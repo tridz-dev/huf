@@ -193,7 +193,7 @@ export function SummaryPromptCategoriesModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="max-w-2xl">
         <DialogScrollHeader>
-          <DialogTitle>Summary Prompt Categories</DialogTitle>
+          <DialogTitle>Summary prompt categories</DialogTitle>
           <DialogDescription>
             Browse, create, and assign categories for agent summary prompts
           </DialogDescription>

@@ -244,7 +244,7 @@ export function BulkImportModal({
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Import Data into {tableName}</DialogTitle>
+					<DialogTitle>Import data into {tableName}</DialogTitle>
 					<DialogDescription>
 						Download the CSV template, fill in your data, then upload and import it.
 					</DialogDescription>

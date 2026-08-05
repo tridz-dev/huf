@@ -265,7 +265,7 @@ export function TriggerConfigModal({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[960px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>Select Trigger</DialogTitle>
+          <DialogTitle>Select trigger</DialogTitle>
         </DialogHeader>
 
         <div className="relative mb-4 flex-shrink-0">

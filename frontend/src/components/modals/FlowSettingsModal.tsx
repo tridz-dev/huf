@@ -120,7 +120,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogScrollContent className="sm:max-w-[425px]">
         <DialogScrollHeader>
-          <DialogTitle>Flow Settings</DialogTitle>
+          <DialogTitle>Flow settings</DialogTitle>
         </DialogScrollHeader>
         <DialogScrollBody className="grid gap-4 py-4">
           <div className="grid gap-2">

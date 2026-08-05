@@ -251,7 +251,7 @@ export function SelectToolsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-5xl">
         <DialogScrollHeader>
-          <DialogTitle>Add Tool</DialogTitle>
+          <DialogTitle>Add tool</DialogTitle>
         </DialogScrollHeader>
 
         {/* Tabs */}

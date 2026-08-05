@@ -226,7 +226,7 @@ export function KnowledgeInputsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="max-w-2xl">
         <DialogScrollHeader>
-          <DialogTitle>Knowledge Inputs</DialogTitle>
+          <DialogTitle>Knowledge inputs</DialogTitle>
           <DialogDescription>
             Manage content inputs for this knowledge source
           </DialogDescription>

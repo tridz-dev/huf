@@ -37,7 +37,7 @@ export function DeleteTableDialog({
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
 			<AlertDialogContent>
 				<AlertDialogHeader>
-					<AlertDialogTitle>Delete Table "{tableName}"?</AlertDialogTitle>
+					<AlertDialogTitle>Delete table "{tableName}"?</AlertDialogTitle>
 					<AlertDialogDescription>
 						This will permanently delete the table and all its data.
 						{recordCount > 0 && (
