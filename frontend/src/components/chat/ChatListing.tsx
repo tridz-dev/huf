@@ -578,20 +578,21 @@ function AgentConversationItem({
               );
             })}
             {hasMore && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={(e) => {
                   e.stopPropagation(); // Prevent accordion from closing
                   loadMore();
                 }}
                 disabled={loadingMore}
                 className={cn(
-                  'w-full text-xs text-steel hover:text-ink py-2 px-2 text-center transition-colors',
+                  'h-auto w-full py-2 px-2 text-center text-xs text-steel hover:bg-transparent hover:text-ink',
                   loadingMore && 'opacity-50 cursor-not-allowed'
                 )}
               >
                 {loadingMore ? 'Loading...' : 'Load More'}
-              </button>
+              </Button>
             )}
           </>
         )}

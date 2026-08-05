@@ -973,9 +973,10 @@ export function ToolCreationForm({
             {/* CONTRACT (Tool Category + Description, collapsed by default) */}
             <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-3">
               <CollapsibleTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="group flex w-full items-center gap-2 rounded border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  variant="outline"
+                  className="group h-auto w-full items-center justify-start gap-2 rounded bg-panel px-3 py-2.5 text-left hover:bg-paper-deep"
                   disabled={loading}
                 >
                   <FileText className="w-4 h-4 text-steel-soft shrink-0" />
@@ -984,7 +985,7 @@ export function ToolCreationForm({
                     <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
                   )}
                   <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
-                </button>
+                </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 rounded-lg border border-line bg-panel p-4">
                 <FormField
@@ -1047,9 +1048,10 @@ export function ToolCreationForm({
             {/* GUARDRAILS (permission + access switches, collapsed by default) */}
             <Collapsible open={guardrailsOpen} onOpenChange={setGuardrailsOpen} className="space-y-3">
               <CollapsibleTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="group flex w-full items-center gap-2 rounded border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  variant="outline"
+                  className="group h-auto w-full items-center justify-start gap-2 rounded bg-panel px-3 py-2.5 text-left hover:bg-paper-deep"
                   disabled={loading}
                 >
                   <ShieldCheck className="w-4 h-4 text-steel-soft shrink-0" />
@@ -1058,7 +1060,7 @@ export function ToolCreationForm({
                     <span className="text-sm text-steel truncate ml-1">— {guardrailsSummary}</span>
                   )}
                   <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
-                </button>
+                </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 rounded-lg border border-line bg-panel p-4">
                 <FormField

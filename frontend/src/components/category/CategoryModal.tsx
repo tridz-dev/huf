@@ -542,23 +542,27 @@ export function CategoryModal({
               {/* Parent */}
               <div className="space-y-1.5">
                 <Label>Parent Category</Label>
-                <select
-                  className="w-full border rounded-md p-2"
-                  value={newCategoryData.parent_category}
-                  onChange={(e) =>
+                <Select
+                  value={newCategoryData.parent_category || '__none'}
+                  onValueChange={(value) =>
                     setNewCategoryData({
                       ...newCategoryData,
-                      parent_category: e.target.value,
+                      parent_category: value === '__none' ? '' : value,
                     })
                   }
                 >
-                  <option value="">None</option>
-                  {localCategories.map((cat) => (
-                    <option key={cat.name} value={cat.name}>
-                      {cat.category_name}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">None</SelectItem>
+                    {localCategories.map((cat) => (
+                      <SelectItem key={cat.name} value={cat.name}>
+                        {cat.category_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Button */}

@@ -143,15 +143,16 @@ export function ResponsePanel({
 
       {runLabel && onRun && (
         <div className="border-t border-line px-3.5 py-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onRun}
             disabled={state.running}
-            className="flex items-center gap-1.5 text-[12px] text-steel transition-colors hover:text-ink disabled:opacity-40"
+            className="h-auto items-center gap-1.5 p-0 text-[12px] text-steel hover:bg-transparent hover:text-ink disabled:opacity-40"
           >
             <Play className="h-3 w-3" strokeWidth={1.8} />
             {runLabel}
-          </button>
+          </Button>
         </div>
       )}
     </div>

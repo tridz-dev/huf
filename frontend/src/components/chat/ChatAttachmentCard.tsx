@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { getFileTypeInfo } from '@/utils/fileTypeUtils';
 
 export interface ChatAttachmentCardProps {
@@ -78,14 +79,16 @@ export function ChatAttachmentCard({
       </div>
 
       {onRemove && status !== 'uploading' && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onRemove}
-          className="shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="h-auto w-auto shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
           aria-label="Remove attachment"
         >
           <X className="size-4" />
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
@@ -83,9 +84,10 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
 
         <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
           <CollapsibleTrigger asChild>
-            <button
+            <Button
               type="button"
-              className="flex w-full items-center justify-between gap-4 rounded-lg border p-4 text-left"
+              variant="outline"
+              className="h-auto w-full items-center justify-between gap-4 rounded-lg p-4 text-left"
             >
               <div className="space-y-0.5">
                 <p className="text-sm font-medium">Advanced</p>
@@ -96,7 +98,7 @@ export function DetailsTab({ form, isNew }: DetailsTabProps) {
               <ChevronDown
                 className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
               />
-            </button>
+            </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="grid gap-6 pt-6">

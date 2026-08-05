@@ -5,6 +5,7 @@ import type { FlowRunDetail } from '../services/flowApi';
 import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 
 interface FlowRunViewerProps {
@@ -164,8 +165,8 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                                 <div className="text-xs text-muted-foreground">
                                                     Optional JSON input to merge into context when resuming:
                                                 </div>
-                                                <textarea
-                                                    className="w-full min-h-[80px] rounded-md border bg-background px-2 py-1 text-xs font-mono"
+                                                <Textarea
+                                                    className="min-h-[80px] text-xs font-mono"
                                                     value={resumePayload}
                                                     onChange={(e) => setResumePayload(e.target.value)}
                                                     placeholder='e.g. { "user_input": "yes" }'

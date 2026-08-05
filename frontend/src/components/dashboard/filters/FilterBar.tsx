@@ -89,15 +89,16 @@ export function FilterBar({
   if (onSearchChange) {
     if (collapsibleSearch && !isSearchExpanded) {
       cells.push(
-        <button
+        <Button
           key="search"
           type="button"
+          variant="ghost"
           aria-label="Open search"
-          className="flex items-center px-3.5 text-steel-soft hover:text-steel"
+          className="h-auto items-center rounded-none px-3.5 text-steel-soft hover:bg-transparent hover:text-steel"
           onClick={handleToggleSearch}
         >
           <Search className="h-4 w-4" />
-        </button>
+        </Button>
       );
     } else {
       cells.push(
@@ -108,14 +109,16 @@ export function FilterBar({
           onSearchSubmit,
           collapsibleSearch,
           collapsibleSearch ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               aria-label="Close search"
-              className="shrink-0 text-steel-soft hover:text-steel"
+              className="h-auto w-auto shrink-0 p-0 text-steel-soft hover:bg-transparent hover:text-steel"
               onClick={handleToggleSearch}
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           ) : undefined
         )
       );

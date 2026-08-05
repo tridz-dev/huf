@@ -10,6 +10,7 @@ import {
   DialogScrollHeader,
 } from '../ui/dialog-scroll';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -134,9 +135,9 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="description">Description (Optional)</Label>
-            <textarea
+            <Textarea
               id="description"
-              className="flex min-h-[80px] w-full rounded border border-input bg-paper px-3 py-2 text-sm ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-[80px]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this flow do?"

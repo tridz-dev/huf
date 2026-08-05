@@ -123,12 +123,13 @@ function GeneralSettingsTab({
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {THEMES.map(({ id, label, preview }) => (
-                <button
+                <Button
                   key={id}
                   type="button"
+                  variant="outline"
                   onClick={() => handleThemeChange(id)}
                   className={cn(
-                    'flex flex-col gap-2 p-3 rounded-lg border-2 text-left transition-all',
+                    'h-auto flex-col items-start gap-2 rounded-lg border-2 p-3 text-left',
                     theme === id
                       ? 'border-ink'
                       : 'border-line hover:border-steel-soft',
@@ -144,7 +145,7 @@ function GeneralSettingsTab({
                     ))}
                   </div>
                   <span className="text-xs font-medium text-ink">{label}</span>
-                </button>
+                </Button>
               ))}
             </div>
 

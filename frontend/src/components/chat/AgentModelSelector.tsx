@@ -167,27 +167,29 @@ export function AgentModelSelector({
 
         {providerOptions.length > 1 && (
           <div className="flex items-center gap-1.5 border-b px-3 py-2 overflow-x-auto no-scrollbar">
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setProviderFilter(null)}
               className={cn(
-                'shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                'h-auto shrink-0 rounded-full px-2.5 py-1 text-xs font-medium',
                 providerFilter === null
-                  ? 'bg-ink text-panel'
+                  ? 'bg-ink text-panel hover:bg-ink hover:text-panel'
                   : 'bg-paper-deep text-steel hover:bg-paper-deep'
               )}
             >
               All
-            </button>
+            </Button>
             {providerOptions.map((p) => (
-              <button
+              <Button
                 key={p.brand}
                 type="button"
+                variant="ghost"
                 onClick={() => setProviderFilter(p.brand)}
                 className={cn(
-                  'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                  'h-auto shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
                   providerFilter === p.brand
-                    ? 'bg-ink text-panel'
+                    ? 'bg-ink text-panel hover:bg-ink hover:text-panel'
                     : 'bg-paper-deep text-steel hover:bg-paper-deep'
                 )}
               >
@@ -197,7 +199,7 @@ export function AgentModelSelector({
                   <span className="size-3.5 shrink-0" aria-hidden />
                 )}
                 {p.label}
-              </button>
+              </Button>
             ))}
           </div>
         )}

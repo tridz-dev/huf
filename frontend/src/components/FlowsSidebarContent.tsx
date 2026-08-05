@@ -69,8 +69,9 @@ export function FlowsSidebarContent() {
   return (
     <>
       <div className="mb-4">
-        <button
-          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-panel hover:text-ink rounded-md transition-colors"
+        <Button
+          variant="ghost"
+          className="h-auto w-full items-center justify-start gap-2 px-2 py-1.5 text-sm font-normal text-sidebar-foreground hover:bg-panel hover:text-ink"
           onClick={() => setFlowsExpanded(!flowsExpanded)}
         >
           {flowsExpanded ? (
@@ -91,7 +92,7 @@ export function FlowsSidebarContent() {
           >
             <Plus className="w-3 h-3" />
           </Button>
-        </button>
+        </Button>
         {flowsExpanded && (
           <div className="ml-6 mt-1 space-y-0.5">
             {Object.entries(groupedFlows).map(([category, categoryFlows]) => (
@@ -102,15 +103,16 @@ export function FlowsSidebarContent() {
                     key={flow.id}
                     className="group flex items-center gap-1"
                   >
-                    <button
-                      className={`flex-1 px-2 py-1.5 text-sm text-sidebar-foreground rounded-md text-left transition-colors ${
+                    <Button
+                      variant="ghost"
+                      className={`h-auto flex-1 justify-start rounded-md px-2 py-1.5 text-sm font-normal text-sidebar-foreground text-left ${
                         activeFlowId === flow.id
                           ? 'bg-panel text-ink border-l-2 border-signal'
                           : 'hover:bg-panel hover:text-ink'
                       }`}
                       onClick={() => setActiveFlow(flow.id)}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex w-full items-center gap-2">
                         <span className="flex-1 truncate">{flow.name}</span>
                         <span
                           className={`h-2 w-2 rounded-full ${
@@ -122,7 +124,7 @@ export function FlowsSidebarContent() {
                           }`}
                         />
                       </div>
-                    </button>
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -158,8 +160,9 @@ export function FlowsSidebarContent() {
       </div>
 
       <div>
-        <button
-          className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-panel hover:text-ink rounded-md transition-colors"
+        <Button
+          variant="ghost"
+          className="h-auto w-full items-center justify-start gap-2 px-2 py-1.5 text-sm font-normal text-sidebar-foreground hover:bg-panel hover:text-ink"
           onClick={() => setTablesExpanded(!tablesExpanded)}
         >
           {tablesExpanded ? (
@@ -169,7 +172,7 @@ export function FlowsSidebarContent() {
           )}
           <Database className="w-4 h-4" />
           <span className="flex-1 text-left">Data</span>
-        </button>
+        </Button>
                 {tablesExpanded && (
                   <div className="ml-6 mt-2">
                     <Button

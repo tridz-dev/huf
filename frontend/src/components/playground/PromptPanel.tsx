@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Loader2, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { PlaygroundConfig } from './types';
@@ -34,12 +35,14 @@ export function PromptPanel({
     <div className={cn('flex min-h-[260px] flex-col rounded border border-line bg-panel', className)}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
         <span className="font-sans text-eyebrow font-medium uppercase text-steel">Prompt</span>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onDraft}
           title="Draft prompt"
           aria-label="Draft prompt"
-          className="text-steel transition-colors hover:text-ink disabled:opacity-40"
+          className="h-auto w-auto p-0 text-steel hover:bg-transparent hover:text-ink disabled:opacity-40"
           disabled={generating}
         >
           {generating ? (
@@ -47,7 +50,7 @@ export function PromptPanel({
           ) : (
             <Pencil className="h-4 w-4" strokeWidth={1.8} />
           )}
-        </button>
+        </Button>
       </div>
 
       <Textarea
@@ -58,18 +61,19 @@ export function PromptPanel({
       />
 
       <div className="border-t border-line px-3.5 py-2.5">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setCriteriaOpen((open) => !open)}
           aria-expanded={criteriaOpen}
-          className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+          className="h-auto items-center gap-1.5 p-0 text-[12.5px] text-steel hover:bg-transparent hover:text-ink"
         >
           <ChevronRight
             className={cn('h-3.5 w-3.5 transition-transform', criteriaOpen && 'rotate-90')}
             strokeWidth={1.8}
           />
           Evaluation criteria
-        </button>
+        </Button>
         {criteriaOpen && (
           <Textarea
             value={config.evaluationCriteria}
