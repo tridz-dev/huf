@@ -2427,7 +2427,7 @@ export function AgentFormPage() {
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="shrink-0 px-3 sm:min-w-[110px]"
+                    className="shrink-0"
                   >
                     {config.label}
                   </TabsTrigger>

@@ -47,8 +47,10 @@ const tabsListVariants = cva('gap-0', {
   variants: {
     variant: {
       // Single underline-style tab vocabulary; apple-quiet system font stack,
-      // sentence case, steel → ink when active, purple signal bottom border on
-      // shared line baseline.
+      // sentence case, steel → ink when active, ink rule on the shared hairline
+      // baseline. Triggers carry no horizontal padding of their own — a
+      // row-style tab bar is spaced by the 22px gap in compoundVariants below,
+      // so labels read as a tight row rather than evenly-distributed buttons.
       underline:
         'inline-flex items-center justify-start border-b border-line bg-transparent p-0',
       // Apple/iOS segmented control: a sunken track (bg-paper-deep, the app's
@@ -71,6 +73,15 @@ const tabsListVariants = cva('gap-0', {
       compact: 'h-8',
     },
   },
+  // Row-style underline bars space their labels with a 22px gap (spec §25).
+  // Deliberately NOT applied to layout="grid" (segments already get equal
+  // columns via `cols`) or to variant="pill" (a segmented control's segments
+  // must touch inside their sunken track).
+  compoundVariants: [
+    { variant: 'underline', layout: 'inline', class: 'gap-[22px]' },
+    { variant: 'underline', layout: 'overflow', class: 'gap-[22px]' },
+    { variant: 'underline', layout: 'scroll', class: 'gap-[22px]' },
+  ],
   defaultVariants: {
     variant: 'underline',
     layout: 'inline',
@@ -83,8 +94,13 @@ const tabsTriggerVariants = cva(
   {
     variants: {
       variant: {
+        // No horizontal padding: the row is spaced by the list's 22px gap, so
+        // each label's hit area ends with the text and the underline sits
+        // exactly under the word (spec §25's agent-page tab row). The active
+        // rule is 1.5px ink — violet is reserved for nav/selection state, the
+        // tab underline in every page mockup is #1d1d1f.
         underline:
-          'border-b-2 border-transparent px-4 py-2 font-body text-[13px] font-medium text-steel hover:text-ink data-[state=active]:-mb-px data-[state=active]:border-signal data-[state=active]:text-ink',
+          'border-b-[1.5px] border-transparent pb-2.5 font-body text-[13px] text-steel hover:text-ink data-[state=active]:-mb-px data-[state=active]:border-ink data-[state=active]:font-[590] data-[state=active]:text-ink',
         // flex-1: equal-width segments (a no-op inside layout="grid" parents,
         // which already get equal columns via the `cols` style hook — see
         // CategoryModal.tsx / ChatListing.tsx — but keeps a bare inline pill

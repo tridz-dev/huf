@@ -445,7 +445,7 @@ export function SkillFormPage() {
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
               <TabsList layout="scroll" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} className="shrink-0 px-3 sm:min-w-[110px]">
+                  <TabsTrigger key={tabKey} value={tabKey} className="shrink-0">
                     {config.label}
                   </TabsTrigger>
                 ))}

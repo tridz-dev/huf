@@ -41,7 +41,7 @@ export function WorkSurfaceFrame({ title, actions, tabs, children }: WorkSurface
         <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
           <TabsList className="bg-paper px-5">
             {tabs.items.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="mr-6 px-1 py-3">
+              <TabsTrigger key={tab.value} value={tab.value} className="pb-3 pt-3">
                 {tab.label}
               </TabsTrigger>
             ))}

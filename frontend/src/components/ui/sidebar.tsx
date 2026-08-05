@@ -433,7 +433,12 @@ export const SidebarGroup = React.forwardRef<
       data-sidebar="group"
       className={cn(
         "relative flex w-full min-w-0 flex-col px-2 py-0.5",
-        "group-data-[collapsible=icon]:mt-1.5 group-data-[collapsible=icon]:pt-1.5 group-data-[collapsible=icon]:first:mt-0 group-data-[collapsible=icon]:first:pt-0.5 group-data-[collapsible=icon]:first:border-t-0 group-data-[collapsible=icon]:border-t group-data-[collapsible=icon]:border-sidebar-border",
+        // Collapsed rail: group labels are hidden, so a centred 26px hairline
+        // separates groups instead of a full-width rule (spec §11). Rendered as
+        // a ::before flex item with 7px margins; suppressed on the first group.
+        "group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0",
+        "group-data-[collapsible=icon]:before:my-[7px] group-data-[collapsible=icon]:before:h-px group-data-[collapsible=icon]:before:w-[26px] group-data-[collapsible=icon]:before:bg-line group-data-[collapsible=icon]:before:content-['']",
+        "group-data-[collapsible=icon]:first:before:hidden",
         className
       )}
       {...props}
@@ -505,7 +510,12 @@ export const SidebarMenu = React.forwardRef<
   <ul
     ref={ref}
     data-sidebar="menu"
-    className={cn("flex w-full min-w-0 flex-col gap-0.5", className)}
+    className={cn(
+      "flex w-full min-w-0 flex-col gap-0.5",
+      // Collapsed rail: 4px between icon tiles, tiles centred in the 64px rail.
+      "group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1",
+      className,
+    )}
     {...props}
   />
 ))
@@ -526,7 +536,7 @@ SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
   // Filled pill shape with raised shadow on active state — calm, integrated appearance
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:shadow-md data-[active=true]:relative data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 data-[active=true]:before:w-[2px] data-[active=true]:before:rounded-full data-[active=true]:before:bg-signal data-[active=true]:before:content-[''] data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:shadow-md data-[active=true]:relative data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 data-[active=true]:before:w-[2px] data-[active=true]:before:rounded-full data-[active=true]:before:bg-signal data-[active=true]:before:content-[''] data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!h-[34px] group-data-[collapsible=icon]:!w-[38px] group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!gap-0 group-data-[collapsible=icon]:!rounded-[9px] group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:[&>svg]:!size-[18px] [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
   {
     variants: {
       variant: {
