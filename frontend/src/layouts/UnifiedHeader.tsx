@@ -63,17 +63,17 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
                 <div className="flex items-center">
                   <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
                     {index === breadcrumbs.length - 1 ? (
-                      <BreadcrumbPage className="font-mono text-[11px] uppercase tracking-widest text-ink">{crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
                     ) : crumb.href ? (
                       <BreadcrumbLink href={crumb.href} asChild>
-                        <Link to={crumb.href} className="font-mono text-[11px] uppercase tracking-widest text-steel hover:text-ink">{crumb.label}</Link>
+                        <Link to={crumb.href}>{crumb.label}</Link>
                       </BreadcrumbLink>
                     ) : (
                       <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
                     )}
                   </BreadcrumbItem>
                 </div>
-                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5 text-steel-soft" />}
+                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5" />}
                 </Fragment>
               ))}
             </BreadcrumbList>

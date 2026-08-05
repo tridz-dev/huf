@@ -2,7 +2,7 @@ import type { ReactNode, RefObject } from 'react';
 import { cn } from '@/lib/utils';
 
 interface PageFrameProps {
-  /** Page-head title — Big Shoulders 700 uppercase h1 (DESIGN.md §6.3). */
+  /** Page-head title — apple-quiet system font, sentence case h1. */
   title?: ReactNode;
   /** Optional pill next to the title (e.g. EXPERIMENTAL). */
   badge?: ReactNode;
@@ -18,9 +18,9 @@ interface PageFrameProps {
 }
 
 /**
- * DESIGN.md §6.9 management-page template (Dashboard, Agents, Executions):
- * page head (Big Shoulders h1 + steel subtitle + optional actions) above the
- * content column. The title lives here, never in the global topbar.
+ * Management-page template (Dashboard, Agents, Executions): page head
+ * (sentence-case h1 + steel subtitle + optional actions) above the content
+ * column. The title lives here, never in the global topbar.
  */
 export function PageFrame({
   title,
@@ -42,7 +42,7 @@ export function PageFrame({
                 <div className="space-y-1">
                   {title && (
                     <div className="flex items-center gap-3">
-                      <h1 className="font-display text-title uppercase text-ink leading-tight">
+                      <h1 className="font-display text-title text-ink leading-tight">
                         {title}
                       </h1>
                       {badge}

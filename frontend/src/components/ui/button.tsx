@@ -5,16 +5,16 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  // HUF: no rounded corners, no shadows, font-body
+  // HUF: commit buttons stay ink black on hover, never violet — font-body
   'inline-flex items-center justify-center whitespace-nowrap rounded text-sm font-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
         // HUF primary: --ink bg, --signal on hover
         default:
-          'bg-ink text-primary-foreground hover:bg-signal',
+          'bg-ink text-primary-foreground hover:bg-ink/90',
         display:
-          'bg-ink text-primary-foreground hover:bg-signal font-display font-bold text-[13px] uppercase tracking-[.06em]',
+          'bg-ink text-primary-foreground hover:bg-ink/90 font-display font-bold text-[13px]',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:

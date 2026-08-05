@@ -8,7 +8,7 @@ export interface WorkSurfaceTab {
 }
 
 interface WorkSurfaceFrameProps {
-  /** Optional Big Shoulders title in the compact topbar (work surfaces only — DESIGN.md §6.9). */
+  /** Optional sentence-case title in the compact topbar (work surfaces only). */
   title?: string;
   /** Right side of the topbar. */
   actions?: ReactNode;
@@ -22,9 +22,9 @@ interface WorkSurfaceFrameProps {
 }
 
 /**
- * DESIGN.md §6.9 work-surface template (Playground, Chat): full-bleed, compact
- * topbar that may carry the Big Shoulders title, optional sentence-case tabs,
- * content fills the remaining height. No page head, no max-width.
+ * Work-surface template (Playground, Chat): full-bleed, compact topbar that
+ * may carry the sentence-case title, optional sentence-case tabs, content
+ * fills the remaining height. No page head, no max-width.
  */
 export function WorkSurfaceFrame({ title, actions, tabs, children }: WorkSurfaceFrameProps) {
   return (
@@ -32,7 +32,7 @@ export function WorkSurfaceFrame({ title, actions, tabs, children }: WorkSurface
       <header className="flex items-center justify-between border-b border-line bg-panel px-5 py-3.5">
         <div className="flex items-center gap-3.5">
           <SidebarTrigger className="-ml-1 text-steel hover:bg-transparent hover:text-ink" />
-          {title && <h1 className="font-display text-title uppercase leading-none">{title}</h1>}
+          {title && <h1 className="font-display text-title leading-none">{title}</h1>}
         </div>
         {actions && <div className="flex items-center gap-2.5">{actions}</div>}
       </header>

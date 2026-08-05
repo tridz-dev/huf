@@ -122,9 +122,10 @@ const GROUPS: FieldTypeGroup[] = [
 interface FieldTypeSelectorProps {
 	onSelect: (type: DataTableFieldType) => void;
 	trigger: React.ReactNode;
+	value?: DataTableFieldType;
 }
 
-export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps) {
+export function FieldTypeSelector({ onSelect, trigger, value }: FieldTypeSelectorProps) {
 	const [open, setOpen] = useState(false);
 
 	const handleSelect = (type: DataTableFieldType) => {
@@ -148,12 +149,15 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 							<div className="grid grid-cols-2 gap-1">
 								{group.types.map((ft) => {
 									const Icon = ICON_MAP[ft.icon] || Type;
+									const isSelected = ft.type === value;
 									return (
 										<Button
 											key={ft.type}
 											variant="ghost"
 											size="sm"
-											className="justify-start gap-2 h-8 text-xs font-normal rounded"
+											className={`justify-start gap-2 h-8 text-xs font-normal rounded ${
+												isSelected ? 'border-[1.5px] border-signal bg-signal/[.06]' : ''
+											}`}
 											onClick={() => handleSelect(ft.type)}
 										>
 											<Icon className="w-3.5 h-3.5 text-steel shrink-0" />

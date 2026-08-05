@@ -25,7 +25,7 @@ export function MCPToolDetailModal({
 }: MCPToolDetailModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-[960px] max-h-[85vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>{tool.tool_name}</DialogTitle>
           <DialogDescription>Tool details and configuration</DialogDescription>

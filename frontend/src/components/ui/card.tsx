@@ -9,7 +9,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      // HUF: --panel bg, 1px --line border, 2px radius (via CSS), no shadow
+      // HUF: --panel bg, 1px --line border, 14px radius (var(--r-lg)), no shadow
       'rounded-lg border border-line bg-panel text-card-foreground',
       className
     )}

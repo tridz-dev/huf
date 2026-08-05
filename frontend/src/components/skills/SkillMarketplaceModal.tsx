@@ -80,7 +80,7 @@ export function SkillMarketplaceModal({ open, onOpenChange, onSuccess }: SkillMa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-[960px] max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Store className="w-5 h-5" />
