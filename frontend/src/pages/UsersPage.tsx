@@ -180,7 +180,7 @@ export default function UsersPage() {
 
   const statusOptions = useMemo(
     () => [
-      { label: 'All Status', value: 'all' },
+      { label: 'All status', value: 'all' },
       { label: 'Active', value: 'active' },
       { label: 'Disabled', value: 'disabled' },
     ],

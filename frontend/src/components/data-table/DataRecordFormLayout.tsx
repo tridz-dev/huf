@@ -273,7 +273,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 										)}
 									</div>
 								) : (
-									<Button type="button" variant="outline" className="rounded border-line bg-panel hover:bg-paper-deep text-ink w-full justify-start h-8 text-sm" onClick={() => fileInputRef.current?.click()} disabled={isReadOnly || isUploading}>
+									<Button type="button" variant="outline" size="sm" className="border-line bg-panel hover:bg-paper-deep text-ink w-full justify-start" onClick={() => fileInputRef.current?.click()} disabled={isReadOnly || isUploading}>
 										{isUploading ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Upload className="size-4 mr-2" />}
 										{isUploading ? 'Uploading...' : 'Select File'}
 									</Button>

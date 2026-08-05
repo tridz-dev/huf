@@ -264,17 +264,17 @@ export function FlowCanvas({
           };
 
           const labelMap: Record<string, string> = {
-            'agent-run': 'Run Agent',
-            'tool-call': 'Call Tool',
-            transform: 'Transform Data',
+            'agent-run': 'Run agent',
+            'tool-call': 'Call tool',
+            transform: 'Transform data',
             router: 'Router',
             loop: 'Loop',
-            'human.approval': 'Human in Loop',
-            code: 'Execute Code',
-            email: 'Send Email',
-            webhook: 'Call Webhook',
-            file: 'File Operations',
-            date: 'Date Utility'
+            'human.approval': 'Human in loop',
+            code: 'Execute code',
+            email: 'Send email',
+            webhook: 'Call webhook',
+            file: 'File operations',
+            date: 'Date utility'
           };
 
           const newNode: Node<FlowNodeData> = {

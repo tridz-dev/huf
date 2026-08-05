@@ -154,15 +154,15 @@ const settingsNavGroups = [
   {
     label: "Intelligence",
     items: [
-      { title: "AI Providers", url: "/providers", icon: Plug, capability: "system.providers.manage" },
+      { title: "AI providers", url: "/providers", icon: Plug, capability: "system.providers.manage" },
       { title: "Models", url: "/models", icon: Layers, capability: "system.providers.manage" },
     ],
   },
   {
     label: "Runtime",
     items: [
-      { title: "Code Execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
-      { title: "SSH Connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
+      { title: "Code execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
+      { title: "SSH connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
     ],
   },
   {
@@ -170,7 +170,7 @@ const settingsNavGroups = [
     items: [
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
-      { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
+      { title: "MCP servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
     ],
   },
   {

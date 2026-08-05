@@ -70,7 +70,7 @@ export function DataListView<TData, TValue>({
                     </span>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="outline" size="sm" className="hidden h-8 lg:flex rounded border-line text-steel hover:bg-paper-deep">
+							<Button variant="outline" size="sm" className="hidden lg:flex border-line text-steel hover:bg-paper-deep">
 								<Settings2 className="mr-2 h-4 w-4" />
 								Columns
 							</Button>

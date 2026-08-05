@@ -6,8 +6,8 @@
 export const mcpAuthTypes = [
   { label: 'None', value: 'none' },
   { label: 'API Key', value: 'api_key' },
-  { label: 'Bearer Token', value: 'bearer_token' },
-  { label: 'Custom Header', value: 'custom_header' },
+  { label: 'Bearer token', value: 'bearer_token' },
+  { label: 'Custom header', value: 'custom_header' },
   { label: 'OAuth 2.1', value: 'oauth' },
 ] as const;
 

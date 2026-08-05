@@ -135,7 +135,7 @@ function KnowledgeSourcesPage() {
                 { label: 'Type', value: knowledgeTypeLabels[source.knowledge_type] ?? source.knowledge_type, icon: Database },
                 { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
                 {
-                  label: 'Last Indexed',
+                  label: 'Last indexed',
                   value: source.last_indexed_at ? formatTimeAgo(source.last_indexed_at) : 'Never',
                   icon: Calendar,
                 },

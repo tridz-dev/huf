@@ -239,7 +239,7 @@ export function AgentFormPage() {
       disabled: false,
     },
     advanced: {
-      label: 'Advanced Settings',
+      label: 'Advanced settings',
       fields: [
        'context_strategy',
         'summary_model',

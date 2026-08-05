@@ -526,7 +526,7 @@ function AgentRunDetailPage() {
         {childRuns.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Agent Orchestration</CardTitle>
+              <CardTitle>Agent orchestration</CardTitle>
               <CardDescription>
                 Child agent runs executed as part of this orchestration.
               </CardDescription>

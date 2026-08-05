@@ -215,28 +215,28 @@ function HomePage() {
   const metricsData = [
     {
       id: 'total-runs',
-      label: 'Total Agent Runs',
+      label: 'Total agent runs',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatNumber(metrics.totalRuns),
       info: 'Total number of agent executions in the last 7 days',
     },
     {
       id: 'success-rate',
-      label: 'Success Rate',
+      label: 'Success rate',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : `${metrics.successRate.toFixed(1)}%`,
       info: 'Percentage of successful agent runs without errors',
     },
     {
       id: 'avg-runtime',
-      label: 'Avg Runtime',
+      label: 'Avg runtime',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatDuration(metrics.avgRuntime),
       info: 'Average execution time across all agent runs',
     },
     {
       id: 'cost',
-      label: 'Total Cost',
+      label: 'Total cost',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
       info: 'Total API costs for LLM usage across all agents',

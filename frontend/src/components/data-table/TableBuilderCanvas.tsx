@@ -51,7 +51,7 @@ export function TableBuilderCanvas({
 						trigger={
 							<Button variant="outline" size="sm">
 								<Plus className="w-4 h-4 mr-2" />
-								Add Field
+								Add field
 							</Button>
 						}
 					/>

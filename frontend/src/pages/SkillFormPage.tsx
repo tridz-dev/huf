@@ -479,7 +479,7 @@ export function SkillFormPage() {
                         <FormItem>
                           <FormLabel>Title</FormLabel>
                           <FormControl>
-                            <Input placeholder="My Skill" {...field} />
+                            <Input placeholder="e.g. Email parser" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

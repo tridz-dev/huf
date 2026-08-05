@@ -455,7 +455,7 @@ export function AgentSummaryPromptFormPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={handleCreateNewVersion}>
                         <Copy className="mr-2 h-4 w-4" />
-                        Create New Version
+                        Create new version
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleForkPrompt}>
                         <GitFork className="mr-2 h-4 w-4" />
@@ -473,7 +473,7 @@ export function AgentSummaryPromptFormPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Summary Prompt Details</CardTitle>
+                <CardTitle>Summary prompt details</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
                 <FormField
@@ -564,7 +564,7 @@ export function AgentSummaryPromptFormPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Prompt Body</CardTitle>
+                <CardTitle>Prompt body</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-xs text-steel-soft mb-3">
@@ -584,7 +584,7 @@ export function AgentSummaryPromptFormPage() {
             {!isNew && docMeta ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>Version Info</CardTitle>
+                  <CardTitle>Version info</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                   <Badge variant="outline">Version {docMeta.version ?? 1}</Badge>

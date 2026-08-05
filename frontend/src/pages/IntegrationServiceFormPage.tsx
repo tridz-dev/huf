@@ -83,7 +83,7 @@ export function IntegrationServiceFormPage() {
         disabled: false,
       },
       credentials: {
-        label: 'Credential Schema',
+        label: 'Credential schema',
         fields: ['required_credentials'],
         default: false,
         disabled: false,

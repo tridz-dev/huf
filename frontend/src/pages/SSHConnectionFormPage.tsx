@@ -298,8 +298,8 @@ export function SSHConnectionFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="text-subtitle">Connection Details</CardTitle>
-              <CardDescription className="font-body text-[13px] text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
+              <CardTitle className="text-subtitle">Connection details</CardTitle>
+              <CardDescription className="font-body text-ui-text text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -467,9 +467,9 @@ export function SSHConnectionFormPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-subtitle">
                   <ShieldCheck className="h-5 w-5 text-steel-soft" strokeWidth={1.6} />
-                  Host Key Security & Status
+                  Host key security & status
                 </CardTitle>
-                <CardDescription className="font-body text-[13px] text-steel">Pinned host key verification prevents MITM attacks</CardDescription>
+                <CardDescription className="font-body text-ui-text text-steel">Pinned host key verification prevents MITM attacks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2 border border-line bg-paper p-4 text-sm">
@@ -527,7 +527,7 @@ export function SSHConnectionFormPage() {
                     className="border-line hover:border-ink hover:bg-paper-deep"
                   >
                     {enrolling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                    Enroll / Update Host Key
+                    Enroll / update host key
                   </Button>
                   <span className="font-body text-xs text-steel">
                     Connects to target server to automatically fetch and pin its public host key fingerprint.

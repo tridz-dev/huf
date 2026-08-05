@@ -15,7 +15,7 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { FlowSettingsModal } from '../components/modals/FlowSettingsModal';
 
 const statusOptions = [
-  { label: 'All Status', value: 'all' },
+  { label: 'All status', value: 'all' },
   { label: 'Active', value: 'active' },
   { label: 'Draft', value: 'draft' },
   { label: 'Paused', value: 'paused' },
@@ -23,7 +23,7 @@ const statusOptions = [
 ];
 
 const categoryOptions = [
-  { label: 'All Categories', value: 'all' },
+  { label: 'All categories', value: 'all' },
   { label: 'Uncategorized', value: 'uncategorized' },
   { label: 'Automation', value: 'automation' },
   { label: 'Integration', value: 'integration' },
@@ -183,7 +183,7 @@ function FlowListPage() {
             actions={[
               {
                 icon: Play,
-                label: 'Run Flow',
+                label: 'Run flow',
                 onClick: () => handleRunFlow(flow.id),
               },
               {

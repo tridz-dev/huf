@@ -26,7 +26,7 @@ export function ExecutionProfileFormPageWrapper() {
   }, [id, isNew]);
 
   const breadcrumbs = [
-    { label: 'Code Execution', href: '/execution-profiles' },
+    { label: 'Code execution', href: '/execution-profiles' },
     { label: profileTitle },
   ];
 

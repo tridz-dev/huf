@@ -91,7 +91,7 @@ export function ExecutionProfilesPage() {
     () => [
       {
         accessorKey: 'profile_name',
-        header: ({ column }) => <SortHeader column={column} label="Profile Name" />,
+        header: ({ column }) => <SortHeader column={column} label="Profile name" />,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-steel-soft shrink-0" strokeWidth={1.6} />
@@ -175,14 +175,14 @@ export function ExecutionProfilesPage() {
   });
 
   const statusOptions = [
-    { label: 'All Status', value: 'all' },
+    { label: 'All status', value: 'all' },
     { label: 'Active', value: 'enabled' },
     { label: 'Disabled', value: 'disabled' },
   ];
 
   return (
     <PageFrame
-      title="Execution Profiles"
+      title="Execution profiles"
       subtitle="Manage sandboxed code execution environments, resource limits, and approval policies."
       filters={
         <FilterBar

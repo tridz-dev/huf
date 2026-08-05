@@ -22,7 +22,7 @@ import { formatTimeAgo } from '../utils/time';
 import type { SkillDoc } from '../types/skill.types';
 
 const skillStatuses = [
-  { label: 'All Statuses', value: 'all' },
+  { label: 'All statuses', value: 'all' },
   { label: 'Active', value: 'Active' },
   { label: 'Draft', value: 'Draft' },
   { label: 'Error', value: 'Error' },
@@ -30,7 +30,7 @@ const skillStatuses = [
 ];
 
 const sourceTypes = [
-  { label: 'All Sources', value: 'all' },
+  { label: 'All sources', value: 'all' },
   { label: 'Local', value: 'Local' },
   { label: 'Git', value: 'Git' },
   { label: 'Common Destination', value: 'Common Destination' },
@@ -211,7 +211,7 @@ export function SkillsPage() {
               },
               {
                 icon: Trash2,
-                label: 'Delete Skill',
+                label: 'Delete skill',
                 variant: 'destructive',
                 onClick: () => setDeleteSkillTarget(skill),
               },

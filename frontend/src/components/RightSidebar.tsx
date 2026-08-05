@@ -1207,7 +1207,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </Button>
           )}
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-accent" onClick={onToggle}>
+        <Button variant="ghost" size="icon-sm" className="hover:bg-accent" onClick={onToggle}>
           <PanelRightClose className="w-4 h-4 text-muted-foreground" />
         </Button>
       </div>

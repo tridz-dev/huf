@@ -147,7 +147,7 @@ function AppCard({
 					<AppIcon app={app} />
 					{app.title}
 				</CardTitle>
-				<CardDescription className="text-steel text-[13px] line-clamp-2 min-h-[2.5rem]">
+				<CardDescription className="text-steel text-ui-text line-clamp-2 min-h-[2.5rem]">
 					{app.description || 'No description'}
 				</CardDescription>
 				<CardAction className="top-5 flex items-center gap-1">
@@ -233,7 +233,7 @@ function AppsHelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>About HUF Apps</DialogTitle>
+					<DialogTitle>About HUF apps</DialogTitle>
 					<DialogDescription>
 						What shows up here, and why.
 					</DialogDescription>
@@ -355,7 +355,7 @@ function AppsPage() {
 					variant="ghost"
 					size="icon"
 					className="h-9 w-9 text-steel-soft hover:text-ink"
-					title="About HUF Apps"
+					title="About HUF apps"
 					onClick={() => setHelpOpen(true)}
 				>
 					<CircleHelp className="w-5 h-5" />

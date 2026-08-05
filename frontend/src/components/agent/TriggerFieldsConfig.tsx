@@ -49,7 +49,7 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
     {
       field: 'doc_event',
       type: 'select',
-      label: 'Doc Event',
+      label: 'Doc event',
       placeholder: 'Select event',
       options: [
         'before_insert',
@@ -82,7 +82,7 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
     {
       field: 'webhook_slug',
       type: 'input',
-      label: 'Webhook Slug',
+      label: 'Webhook slug',
       placeholder: 'e.g. inbound-leads',
       description: 'Identifier for this webhook trigger (stored on the document).',
       required: true,
@@ -90,7 +90,7 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
     {
       field: 'webhook_key',
       type: 'input',
-      label: 'Webhook Key',
+      label: 'Webhook key',
       placeholder: 'Secret key',
       description: 'Secret credential for this webhook (stored on the document).',
       required: true,
@@ -100,14 +100,14 @@ export const triggerFieldsConfig: TriggerTypeConfig = {
     {
       field: 'app_name',
       type: 'input',
-      label: 'App Name',
+      label: 'App name',
       placeholder: 'e.g., Slack',
       required: true,
     },
     {
       field: 'event_name',
       type: 'input',
-      label: 'Event Name',
+      label: 'Event name',
       placeholder: 'e.g., message.posted',
       required: true,
     },

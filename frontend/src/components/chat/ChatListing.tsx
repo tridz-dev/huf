@@ -861,7 +861,7 @@ function ChatListHeader({
 const LIST_TABS = [
   {
     value: 'agent',
-    label: 'By Agent',
+    label: 'By agent',
     icon: Users,
   },
   {

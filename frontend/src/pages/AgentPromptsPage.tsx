@@ -154,7 +154,7 @@ export function AgentPromptsPage() {
   });
 
   const statusOptions = [
-    { label: 'All Status', value: 'all' },
+    { label: 'All status', value: 'all' },
     { label: 'Active', value: 'active' },
     { label: 'Inactive', value: 'inactive' },
   ];

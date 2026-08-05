@@ -416,31 +416,31 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
           <SwitchField
             form={form}
             name="allow_agent_write"
-            label="Allow Agent Write"
+            label="Allow agent write"
             description="Lets the agent itself write memory records (via a tool call), not just users."
           />
           <SwitchField
             form={form}
             name="allow_user_scope_write"
-            label="Allow User Scope Write"
+            label="Allow user scope write"
             description="Permits writing memory records scoped to the current user."
           />
           <SwitchField
             form={form}
             name="allow_role_scope_write"
-            label="Allow Role Scope Write"
+            label="Allow role scope write"
             description="Permits writing memory records scoped to a role, shared across all users with it."
           />
           <SwitchField
             form={form}
             name="allow_agent_scope_write"
-            label="Allow Agent Scope Write"
+            label="Allow agent scope write"
             description="Permits writing memory records scoped to the agent, shared across all its conversations."
           />
           <SwitchField
             form={form}
             name="allow_site_scope_write"
-            label="Allow Site Scope Write"
+            label="Allow site scope write"
             description="Permits writing memory records scoped globally to this site. Use sparingly."
           />
         </CardContent>
@@ -474,7 +474,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                         options={knowledgeSourceOptions}
                         value={field.value}
                         onValueChange={(v) => field.onChange(v || undefined)}
-                        placeholder="Select a Knowledge Source"
+                        placeholder="Select a knowledge source"
                         searchPlaceholder="Search knowledge sources..."
                         emptyText="No knowledge sources found."
                         linkTo={linkRoutes.knowledgeSource}

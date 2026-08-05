@@ -19,7 +19,7 @@ export function SshPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Terminal className="w-5 h-5" />
-              SSH Remote Execution
+              SSH remote execution
             </CardTitle>
             <CardDescription>
               Execute single remote commands on managed hosts via host-key verification and Redis-backed state locks.
@@ -29,7 +29,7 @@ export function SshPage() {
             <div className="rounded-lg border border-line bg-paper-deep p-4 space-y-2">
               <h3 className="font-semibold text-ink flex items-center gap-2">
                 <Shield className="w-4 h-4 text-steel" />
-                Connection Allowlisting & Credentials
+                Connection allowlisting & credentials
               </h3>
               <p>
                 SSH credentials, host-key verification, and connection profiles are configured in Frappe Desk using the <strong>SSH Connection</strong> DocType.

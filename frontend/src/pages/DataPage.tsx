@@ -148,17 +148,17 @@ function DataPage() {
 				menuActions={[
 					{
 						icon: Settings,
-						label: 'Agent Access',
+						label: 'Agent access',
 						onClick: () => setAccessTable(table),
 					},
 					{
 						icon: Pencil,
-						label: 'Edit Table',
+						label: 'Edit table',
 						onClick: () => navigate(`/data/${table.name}/edit`),
 					},
 					{
 						icon: Trash2,
-						label: 'Delete Table',
+						label: 'Delete table',
 						variant: 'destructive',
 						onClick: () => setDeleteTable(table),
 					},

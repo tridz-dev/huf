@@ -150,7 +150,7 @@ export default function Executions() {
   }, []);
 
   const statusOptions = [
-    { label: 'All Status', value: 'all' },
+    { label: 'All status', value: 'all' },
     { label: 'Started', value: 'Started' },
     { label: 'Queued', value: 'Queued' },
     { label: 'Success', value: 'Success' },
@@ -162,7 +162,7 @@ export default function Executions() {
       value: agent.name,
       label: agent.name,
     }));
-    return [{ label: 'All Agents', value: 'all' }, ...items];
+    return [{ label: 'All agents', value: 'all' }, ...items];
   }, [agents]);
 
   const selectedAgentValue = filters.agents || 'all';

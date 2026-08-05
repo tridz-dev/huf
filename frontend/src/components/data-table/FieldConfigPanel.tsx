@@ -130,7 +130,7 @@ export function FieldConfigPanel({
 						value={field.options || ''}
 						onValueChange={(value) => onUpdate({ options: value })}
 					>
-						<SelectTrigger className="h-8 text-sm">
+						<SelectTrigger size="sm">
 							<SelectValue placeholder="Select a table" />
 						</SelectTrigger>
 						<SelectContent>

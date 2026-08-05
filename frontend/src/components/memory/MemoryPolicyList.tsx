@@ -99,7 +99,7 @@ export function MemoryPolicyList() {
           },
         ]}
         primaryAction={{
-          label: 'New Policy',
+          label: 'New policy',
           icon: <Plus className="h-3.5 w-3.5" />,
           onClick: () => navigate('/memory/policies/new'),
         }}
@@ -139,7 +139,7 @@ export function MemoryPolicyList() {
             metadata={[
               { label: 'Agent', value: policy.agent || 'Any', icon: ShieldCheck },
               { label: 'Capture', value: policy.capture_mode, icon: Layers },
-              { label: 'Inject Mode', value: policy.inject_mode, icon: Layers },
+              { label: 'Inject mode', value: policy.inject_mode, icon: Layers },
               {
                 label: 'Auto-promote',
                 value: policy.auto_promote_to_knowledge ? 'Yes' : 'No',

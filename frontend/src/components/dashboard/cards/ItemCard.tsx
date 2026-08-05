@@ -94,7 +94,7 @@ export function ItemCard({
             {title}
           </CardTitle>
           {description && (
-            <CardDescription className="text-steel text-[13px] line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
+            <CardDescription className="text-steel text-ui-text line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
           )}
           {status && (
             <CardAction className="top-5 flex items-center gap-2">

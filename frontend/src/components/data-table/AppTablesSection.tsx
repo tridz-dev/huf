@@ -45,7 +45,7 @@ export function AppTablesSection() {
 					App tables
 				</h2>
 				<p className="text-sm font-body text-steel">
-					Tables exposed by installed HUF Apps.
+					Tables exposed by installed HUF apps.
 				</p>
 			</div>
 			<div className="border border-line divide-y divide-line">

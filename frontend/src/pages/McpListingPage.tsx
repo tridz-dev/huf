@@ -118,7 +118,7 @@ export default function McpListingPage() {
               }}
               metadata={[
                 ...(server.tool_namespace ? [{ label: 'Namespace', value: server.tool_namespace, icon: Tag }] : []),
-                { label: 'Last Sync', value: server.last_sync ? formatTimeAgo(server.last_sync) : 'Never', icon: Calendar },
+                { label: 'Last sync', value: server.last_sync ? formatTimeAgo(server.last_sync) : 'Never', icon: Calendar },
               ]}
               actions={[
                 {

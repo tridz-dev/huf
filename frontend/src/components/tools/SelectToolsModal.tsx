@@ -124,7 +124,7 @@ export function SelectToolsModal({
   // Prepare tool type options for Combobox
   const toolTypeOptions = useMemo(() => {
     const options = [
-      { value: 'all', label: 'All Tool Types' },
+      { value: 'all', label: 'All tool types' },
       ...toolTypes.map((type) => ({
         value: type.name,
         label: getToolTypeDisplayLabel(type.name1 || type.name),

@@ -190,7 +190,7 @@ export function NodeSelectionModal({
     } else if (actionId === 'loop') {
       config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
     } else if (actionId === 'human.approval') {
-      config = { type: 'human.approval', title: 'Approval Required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
+      config = { type: 'human.approval', title: 'Approval required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
     } else if (actionId === 'http-request') {
       config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {

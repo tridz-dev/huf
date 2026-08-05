@@ -201,7 +201,7 @@ export default function GatewaysPage() {
       {(
         [
           { key: 'gateways' as const, label: 'Gateways' },
-          { key: 'credentials' as const, label: 'Channel Credentials' },
+          { key: 'credentials' as const, label: 'Channel credentials' },
         ]
       ).map((tab) => (
         <Button
@@ -359,13 +359,13 @@ export default function GatewaysPage() {
               }}
               metadata={[
                 { label: 'Channel', value: gateway.provider },
-                { label: 'Access Policy', value: gateway.direct_policy || 'Allow list' },
-                { label: 'Route Target', value: target || 'Unassigned' },
+                { label: 'Access policy', value: gateway.direct_policy || 'Allow list' },
+                { label: 'Route target', value: target || 'Unassigned' },
               ]}
               actions={[
                 {
                   icon: Settings,
-                  label: 'Configure Gateway',
+                  label: 'Configure gateway',
                   onClick: () => setEditingGateway(gateway),
                 },
               ]}
@@ -476,7 +476,7 @@ export default function GatewaysPage() {
                           className="h-auto p-0 font-medium text-primary hover:underline"
                           onClick={() => setActiveTab('credentials')}
                         >
-                          Add one in Channel Credentials
+                          Add one in Channel credentials
                         </Button>
                         .
                       </div>
@@ -583,7 +583,7 @@ export default function GatewaysPage() {
 
               {/* Direct Access Policy */}
               <label className="grid gap-1 text-xs font-medium text-ink">
-                Direct Message Security Policy
+                Direct message security policy
                 <Select
                   value={editingGateway.direct_policy || 'Allow list'}
                   onValueChange={(v) =>

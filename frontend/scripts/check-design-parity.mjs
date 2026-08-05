@@ -21,8 +21,10 @@
  *      ("catch bare text", "catch DialogTitle", "catch bare indented JSX
  *      text nodes"...), each declared done, each blind to a surface the
  *      others didn't look at. This check covers bare JSX text, Title/menu
- *      component children, and title/label/placeholder/aria-label props in
- *      one pass so a fifth sweep is never needed again.
+ *      component children, title/label/placeholder/aria-label props, and
+ *      label:/title:/heading: object-literal copy (filter dropdowns, tab
+ *      configs, breadcrumbs, row actions) in one pass so a fifth sweep is
+ *      never needed again.
  *
  * Usage:  node scripts/check-design-parity.mjs [--strict]
  * Without --strict, only checks 1–3 fail the build; overrides and casing are
@@ -121,6 +123,13 @@ const stripEdges = (w) => w.replace(/^[^A-Za-z]+|[^A-Za-z']+$/g, '');
 // reach that shape and single words are never flagged on their own.
 const isCapitalisedWord = (w) => /^[A-Z][a-z']*$/.test(w);
 
+// ...but an acronym is only innocent on its own. "AI Providers", "MCP Servers"
+// and "SSH Connections" are Title Case and were sitting in the sidebar unseen,
+// because the acronym scored nothing and the one following word could never
+// reach a run of 2 by itself. An acronym therefore opens a run without being a
+// violation: acronym-then-Capitalised trips, a lone acronym does not.
+const isAcronym = (w) => /^[A-Z]{2,6}$/.test(w);
+
 function isTitleCase(text) {
   const words = text.split(/\s+/).map(stripEdges).filter(Boolean);
 
@@ -142,6 +151,8 @@ function isTitleCase(text) {
     if (isCapitalisedWord(w)) {
       run += 1;
       if (run >= 2) return true;
+    } else if (isAcronym(w)) {
+      run = Math.max(run, 1);
     } else {
       run = 0;
     }
@@ -165,6 +176,42 @@ const TITLE_TAG_RE = new RegExp(
 // Common string props that carry user-visible copy (surface 4).
 const CASING_PROP_RE = /\b(?:title|label|placeholder|aria-label)="([^"]+)"/g;
 
+// Surface 6: `label:`/`title:`/`heading:` string literals inside object
+// literals — filter dropdown options, tab configs, breadcrumb trails, and
+// row actions are almost universally declared this way (`{ label: 'Channel
+// Credentials' }`, `{ title: 'Microsoft Teams', icon }`), never touching
+// JSX at all, so surfaces 1–4 above never see them. A grep for this shape
+// alone finds ~86 hits across the codebase.
+//
+// Exact-string allowlist: legitimate Title Case because it names a real
+// product/brand, not authored copy. Extend this (not the detector) when a
+// new proper noun shows up — do not loosen isTitleCase to fit it.
+const OBJECT_LITERAL_CASING_ALLOWLIST = new Set([
+  'Google Sheets', 'Google Calendar', 'Google Drive', 'Google Maps',
+  'Google Meet', 'Microsoft Teams', 'Frappe Cloud', 'Frappe File',
+  'OpenRouter', 'Google AI Studio', 'Model Context Protocol',
+  // Already correct sentence case: every capital in it is a proper noun
+  // (Gemini, Google AI Studio). The detector cannot tell that from Title
+  // Case, so it is listed rather than "corrected" into 'Try gemini with...'.
+  'Try Gemini with Google AI Studio',
+]);
+
+// Files whose label/title/heading-shaped strings are not UI copy at all, so
+// the whole file is out of scope for this surface (test fixtures aren't
+// copy; tableIcons.ts mirrors lucide icon identifiers, not labels).
+const OBJECT_LITERAL_CASING_FILE_EXEMPT = [
+  /\.test\.tsx?$/,
+  /(^|\/)src\/data\/tableIcons\.ts$/,
+];
+
+const OBJECT_LITERAL_CASING_RE = /\b(?:label|title|heading):\s*(['"])((?:(?!\1).)+)\1/g;
+// `{ label: 'Common Destination', value: 'Common Destination' }` mirrors a
+// backend enum verbatim — label and value must not diverge, so an exact
+// label===value match on the same line is exempt structurally rather than
+// via the allowlist above (covers e.g. SkillsPage.tsx's 'Common
+// Destination'/'App Provided' and knowledge.ts's 'Frappe File').
+const OBJECT_LITERAL_VALUE_RE = /\bvalue:\s*(['"])((?:(?!\1).)+)\1/g;
+
 // A bare JSX text node: an indented line that is just prose — starts with a
 // capital letter and contains none of the characters that show up in code
 // (tags, braces, assignment, statement punctuation, string quotes). This is
@@ -184,6 +231,8 @@ for (const file of walk(SRC)) {
   const exempt = /shiki|highlight|chart|recharts|cytoscape|reactflow|nodeStyles|monaco|codemirror|mermaid|code-block/i.test(rel);
   // Test/spec/story files contain fixture copy, not real UI copy.
   const casingExempt = /\.(test|spec|stories)\.[jt]sx?$/.test(rel);
+  // Object-literal labels: test fixtures and the icon-identifier table.
+  const objectLiteralExempt = OBJECT_LITERAL_CASING_FILE_EXEMPT.some((re) => re.test(rel));
 
   readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
     const at = `${rel}:${i + 1}`;
@@ -229,6 +278,17 @@ for (const file of walk(SRC)) {
       // 5c. Bare JSX text nodes.
       if (BARE_TEXT_RE.test(line) && !OBJECT_PROPERTY_RE.test(trimmed) && isTitleCase(trimmed)) {
         findings.titleCase.push(`${at}  ${trimmed}`);
+      }
+      // 5d. label:/title:/heading: string literals in object literals —
+      // filter dropdowns, tab configs, breadcrumbs, row actions (surface 6).
+      if (!objectLiteralExempt) {
+        for (const m of line.matchAll(OBJECT_LITERAL_CASING_RE)) {
+          const value = m[2];
+          if (OBJECT_LITERAL_CASING_ALLOWLIST.has(value)) continue;
+          const siblingValues = [...line.matchAll(OBJECT_LITERAL_VALUE_RE)].map((v) => v[2]);
+          if (siblingValues.includes(value)) continue; // mirrors a backend enum verbatim
+          if (isTitleCase(value)) findings.titleCase.push(`${at}  ${m[0]}`);
+        }
       }
     }
   });

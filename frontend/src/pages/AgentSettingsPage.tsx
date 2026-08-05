@@ -79,13 +79,13 @@ export function AgentSettingsPage() {
 
   return (
     <PageFrame
-      title="Agent Settings"
+      title="Agent settings"
       subtitle="Global configuration for agents and skills"
       className="max-w-4xl mx-auto"
     >
       <Card>
         <CardHeader>
-          <CardTitle>Skill Destinations</CardTitle>
+          <CardTitle>Skill destinations</CardTitle>
           <CardDescription>
             Configure common skill sources used by the Skills import modal and marketplace.
             The default <code>huf-skills</code> destination points to the official curated registry.

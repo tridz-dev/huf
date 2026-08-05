@@ -56,7 +56,7 @@ const STARTER_PATHS: Record<StarterPath, {
     providerName: 'OpenRouter',
     providerBrand: 'openrouter',
     modelName: 'openrouter/free',
-    title: 'Try OpenRouter Free',
+    title: 'Try OpenRouter free',
     description: 'Start with a zero-cost router that selects an available free model for each request.',
     caution: 'Best for learning and demos. Free models rotate often, have lower limits, and are not a production reliability tier. Visit openrouter.ai/models?max_price=0 to pick a specific free model.',
     signupUrl: 'https://openrouter.ai/keys',
@@ -576,7 +576,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                   }
                 />
                 <Label htmlFor="is_local_llm" weight="normal" className="cursor-pointer">
-                  Is Local LLM (self-hosted endpoint)
+                  Is local LLM (self-hosted endpoint)
                 </Label>
               </div>
 

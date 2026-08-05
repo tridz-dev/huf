@@ -20,19 +20,19 @@ export { AgentContextArtifactsPage };
 export default AgentContextArtifactsPage;
 
 const ARTIFACT_TYPE_OPTIONS = [
-  { label: 'All Types', value: 'all' },
+  { label: 'All types', value: 'all' },
   { label: 'JSON', value: 'JSON' },
   { label: 'File', value: 'File' },
   { label: 'Text', value: 'Text' },
 ];
 
 const VISIBILITY_OPTIONS = [
-  { label: 'All Visibility', value: 'all' },
-  { label: 'User Visible', value: 'user_visible' },
-  { label: 'Model Visible', value: 'model_visible' },
+  { label: 'All visibility', value: 'all' },
+  { label: 'User visible', value: 'user_visible' },
+  { label: 'Model visible', value: 'model_visible' },
   { label: 'UI Only', value: 'ui_only' },
-  { label: 'Audit Only', value: 'audit_only' },
-  { label: 'Developer Only', value: 'developer_only' },
+  { label: 'Audit only', value: 'audit_only' },
+  { label: 'Developer only', value: 'developer_only' },
 ];
 
 function AgentContextArtifactsPage() {

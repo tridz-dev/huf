@@ -61,9 +61,9 @@ const GROUPS: FieldTypeGroup[] = [
 	{
 		label: 'Text',
 		types: [
-			{ type: 'Data', label: 'Short Text', icon: 'Type' },
-			{ type: 'Small Text', label: 'Medium Text', icon: 'FileText' },
-			{ type: 'Text', label: 'Long Text', icon: 'AlignLeft' },
+			{ type: 'Data', label: 'Short text', icon: 'Type' },
+			{ type: 'Small Text', label: 'Medium text', icon: 'FileText' },
+			{ type: 'Text', label: 'Long text', icon: 'AlignLeft' },
 		],
 	},
 	{
@@ -79,7 +79,7 @@ const GROUPS: FieldTypeGroup[] = [
 		label: 'Date & time',
 		types: [
 			{ type: 'Date', label: 'Date', icon: 'Calendar' },
-			{ type: 'Datetime', label: 'Date & Time', icon: 'CalendarClock' },
+			{ type: 'Datetime', label: 'Date & time', icon: 'CalendarClock' },
 			{ type: 'Time', label: 'Time', icon: 'Clock' },
 			{ type: 'Duration', label: 'Duration', icon: 'Timer' },
 		],

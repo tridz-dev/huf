@@ -108,13 +108,13 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 		onHeaderActionsChange(
 			<div className="flex items-center gap-2">
-				<Button size="sm" onClick={handleAddRecord} className="rounded">
+				<Button size="sm" onClick={handleAddRecord}>
 					<Plus className="w-3.5 h-3.5 mr-1.5" />
-					Add Record
+					Add record
 				</Button>
 				<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
 					<Upload className="w-3.5 h-3.5 mr-1.5" />
-					Import Data
+					Import data
 				</Button>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
@@ -126,7 +126,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
 							<Pencil className="w-3.5 h-3.5 mr-2" />
-							Edit Table
+							Edit table
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
 							<Bot className="w-3.5 h-3.5 mr-2" />
@@ -221,9 +221,9 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 						<p className="text-sm text-steel mb-3">
 							No records in this table yet
 						</p>
-						<Button size="sm" onClick={handleAddRecord} className="rounded">
+						<Button size="sm" onClick={handleAddRecord}>
 							<Plus className="w-3.5 h-3.5 mr-1.5" />
-							Add First Record
+							Add first record
 						</Button>
 					</div>
 				) : (
@@ -248,7 +248,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							{recordsLoading ? (
 								<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
 							) : null}
-							Load More
+							Load more
 						</Button>
 					</div>
 				)}

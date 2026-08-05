@@ -93,7 +93,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
         <SwitchField
           form={form}
           name="approval_required"
-          label="Approval Required"
+          label="Approval required"
           description="New memory records start as pending and must be approved by a user before becoming active. Turn this off to trust captured memory automatically."
         />
 

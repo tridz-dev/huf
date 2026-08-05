@@ -86,7 +86,7 @@ export function ActionSelectionModal({
         config = { type: "loop", max_iterations: 10 };
         break;
       case "human.approval":
-        config = { type: "human.approval", title: "Approval Required", instructions: "", approval_type: "user" };
+        config = { type: "human.approval", title: "Approval required", instructions: "", approval_type: "user" };
         break;
       case "agent-run":
         config = { type: "agent-run" };

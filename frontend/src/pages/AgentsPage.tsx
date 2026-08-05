@@ -14,15 +14,15 @@ import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { resolveProviderBrand } from '@/utils/providerBrands';
 
 const statusOptions = [
-  { label: 'All Status', value: 'all' },
+  { label: 'All status', value: 'all' },
   { label: 'Active', value: 'active' },
   { label: 'Disabled', value: 'disabled' },
 ];
 
 const chatOptions = [
-  { label: 'All Agents', value: 'all' },
-  { label: 'Chat Enabled', value: 'chat' },
-  { label: 'Automation Only', value: 'no_chat' },
+  { label: 'All agents', value: 'all' },
+  { label: 'Chat enabled', value: 'chat' },
+  { label: 'Automation only', value: 'no_chat' },
 ];
 
 function getStatusVariant(status: 'active' | 'disabled') {
@@ -232,7 +232,7 @@ function AgentsPage() {
                 },
                 {
                   icon: Activity,
-                  label: 'View Logs',
+                  label: 'View logs',
                   onClick: () => navigate(`/executions?agents=${encodeURIComponent(agent.name)}`),
                 },
               ]}
