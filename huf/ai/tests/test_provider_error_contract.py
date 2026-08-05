@@ -17,6 +17,7 @@ Covers:
 Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_provider_error_contract
 """
 
+import os
 import unittest
 import asyncio
 from types import SimpleNamespace
@@ -31,6 +32,7 @@ from huf.ai.providers.litellm import (
     _is_transient_litellm_error,
     _normalize_model_name,
     _resolve_api_base,
+    _setup_api_key,
     run,
 )
 
@@ -146,13 +148,44 @@ class TestResolveApiBase(IntegrationTestCase):
         doc = _FakeDoc(is_local_llm=1, url="http://host.docker.internal:11434", port=11434)
         self.assertEqual(_resolve_api_base(doc), "http://host.docker.internal:11434")
 
-    def test_not_local_returns_none(self):
-        doc = _FakeDoc(is_local_llm=0, api_base_url="http://host.docker.internal:11434")
+    def test_not_local_without_api_base_returns_none(self):
+        # A non-local provider falls back to LiteLLM's default endpoint only
+        # when it supplies no explicit api_base_url. An explicit api_base_url
+        # is honoured regardless of is_local_llm — see
+        # test_api_base_url_works_for_non_local_providers, which covers hosted
+        # regional endpoints such as Moonshot CN.
+        doc = _FakeDoc(is_local_llm=0, url="http://ignored", port=1234)
         self.assertIsNone(_resolve_api_base(doc))
 
     def test_local_without_any_url_returns_none(self):
         self.assertIsNone(_resolve_api_base(_FakeDoc(is_local_llm=1)))
         self.assertIsNone(_resolve_api_base(None))
+
+
+class TestGenericProviderSupport(IntegrationTestCase):
+    """Any LiteLLM provider should work, even if it is not in the curated brand catalog."""
+
+    def test_api_base_url_works_for_non_local_providers(self):
+        doc = _FakeDoc(
+            is_local_llm=0,
+            api_base_url="https://api.moonshot.cn/v1",
+        )
+        self.assertEqual(_resolve_api_base(doc), "https://api.moonshot.cn/v1")
+
+    def test_unknown_provider_prefixed_model_passes_through(self):
+        self.assertEqual(
+            _normalize_model_name("foo-bar/baz", "Some New Provider"), "foo-bar/baz"
+        )
+
+    def test_unknown_provider_sets_heuristic_api_key_env_var(self):
+        with patch.dict(os.environ, {}, clear=False):
+            env_key = "FOO_BAR_API_KEY"
+            if env_key in os.environ:
+                del os.environ[env_key]
+            kwargs = {}
+            _setup_api_key("foo-bar", "secret-key", kwargs)
+            self.assertEqual(kwargs.get("api_key"), "secret-key")
+            self.assertEqual(os.environ.get(env_key), "secret-key")
 
 
 class TestNormalizeModelName(IntegrationTestCase):

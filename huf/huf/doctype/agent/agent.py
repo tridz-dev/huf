@@ -121,6 +121,7 @@ class Agent(Document):
 
         self._validate_advanced_models()
         self._validate_skills()
+        self._validate_starter_prompts()
         self._update_mcp_tool_counts()
 
     def _validate_skills(self):
@@ -130,6 +131,15 @@ class Agent(Document):
             if row.skill in seen:
                 frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
             seen.add(row.skill)
+
+    def _validate_starter_prompts(self):
+        """Enforce a maximum of 3 starter prompts and required prompt text."""
+        prompts = self.get("starter_prompts") or []
+        if len(prompts) > 3:
+            frappe.throw(_("A maximum of 3 starter prompts is allowed."), title=_("Starter Prompts"))
+        for row in prompts:
+            if not row.prompt_text:
+                frappe.throw(_("Prompt Text is required for all starter prompts."))
 
     def _validate_system_field_tamper(self):
         """Prevent non-admins from flipping is_system via API/UI."""

@@ -407,6 +407,7 @@ def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
         "meta": "meta-llama",
         "ollama": "ollama_chat",  # chat endpoint required for reasoning models (e.g. gpt-oss) with tools
         "lmstudio": "openai",  # LM Studio exposes an OpenAI-compatible API
+        "moonshot": "moonshot",
     }
 
     prefix = provider_prefix_map.get(provider.lower(), provider.lower())
@@ -429,28 +430,42 @@ def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
         "google": "GEMINI_API_KEY",  # Alternative to api_key param
         "cohere": "COHERE_API_KEY",
         "perplexity": "PERPLEXITY_API_KEY",
+        "moonshot": "MOONSHOT_API_KEY",
     }
 
     if provider_name in env_var_providers:
         # Set environment variable for this request
         os.environ[env_var_providers[provider_name]] = api_key
-    else:
-        # Most providers accept api_key parameter directly
-        completion_kwargs["api_key"] = api_key
+        return
+
+    # For known providers that accept an api_key parameter directly, prefer that.
+    completion_kwargs["api_key"] = api_key
+
+    # Unknown/new providers often expect a PROVIDER_API_KEY environment variable.
+    # Set a heuristic env var as well so users don't have to wait for a code
+    # change to try a new LiteLLM provider; the api_key param remains the primary
+    # mechanism for providers that support it.
+    env_name = f"{provider_name.upper().replace('-', '_')}_API_KEY"
+    os.environ[env_name] = api_key
 
 
 def _resolve_api_base(provider_doc) -> str | None:
-    """Resolve the API base URL for a local/self-hosted provider.
+    """Resolve a custom API base URL for a provider.
 
-    Precedence: `api_base_url` field > `url`+`port` > None. When None is returned
-    LiteLLM falls back to the OLLAMA_API_BASE env var, then its localhost default.
+    Precedence: `api_base_url` field > `url`+`port` > None. When None is
+    returned, LiteLLM uses the provider's default endpoint (or the relevant
+    environment variable). This works for local providers (Ollama, vLLM, etc.)
+    and for hosted providers that offer regional endpoints (e.g. Moonshot CN).
     """
-    if not provider_doc or not provider_doc.get("is_local_llm", 0):
+    if not provider_doc:
         return None
 
     api_base = (provider_doc.get("api_base_url") or "").strip()
     if api_base:
         return api_base
+
+    if not provider_doc.get("is_local_llm", 0):
+        return None
 
     url = (provider_doc.get("url") or "").strip()
     if not url:

@@ -27,7 +27,7 @@ Rules:
 2. After declarations, output JSX only — no imports, functions, or export statements.
 3. Use backticks for template literals: `` [`AED ${value}`, "Label"] `` not [AED ${value}, "Label"].
 4. Use `||` for fallbacks: `colors[x] || "#8884d8"` not `colors[x]  "#8884d8"`.
-5. Allowed layout tags: div, span, p, Card, CardHeader, CardTitle, CardContent.
+5. Allowed layout tags: div, span, p, Card, CardContent. Do NOT use CardHeader or CardTitle — the artifact's own `title` attribute already renders as the visible header, so adding your own duplicates it into a second, nested title bar.
 6. Allowed chart components: BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area.
 7. Prefer a single `fill` on Bar/Pie when possible. Avoid `.map()` for per-item Cell colors unless using a simple one-line arrow: `(entry) => <Cell fill={colors[entry.status] || "#888"} />`.
 8. Put flex layouts on Card (`style={{ display: "flex", gap: 12 }}`) or use div wrappers.

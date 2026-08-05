@@ -221,6 +221,10 @@ doc_events = {
     "File": {
         "after_insert": "huf.ai.handlers.media.process_file_upload",
     },
+    "Agent Message": {
+        "after_insert": "huf.ai.artifact_extraction.on_agent_message_change",
+        "on_update": "huf.ai.artifact_extraction.on_agent_message_change",
+    },
 }
 
 # Scheduled Tasks

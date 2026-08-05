@@ -17,7 +17,6 @@ import {
 	ArtifactClose,
 } from '@/components/ai-elements/artifact';
 import { CodeBlock } from '@/components/ai-elements/code-block';
-import { MessageResponse } from '@/components/ai-elements/message';
 import {
 	CopyIcon,
 	DownloadIcon,
@@ -39,6 +38,19 @@ import { cn } from '@/lib/utils';
 import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
 import { Video } from '@/components/ai-elements/video';
+import { DocumentPreview } from '@/components/chat/DocumentPreview';
+
+/** Ids minted by the client-side parser for transient, unsaved artifacts. */
+const TRANSIENT_ARTIFACT_ID = /^artifact-\d+-\d+$/;
+
+/**
+ * True when an id refers to a durable, server-owned Artifact row rather than a
+ * throwaway id created while parsing message content in the browser. Only
+ * durable artifacts can be fetched by name from the server.
+ */
+function isDurableArtifactId(id: string | undefined): id is string {
+	return Boolean(id) && !TRANSIENT_ARTIFACT_ID.test(id as string);
+}
 
 interface ArtifactRendererProps {
 	artifact: ParsedArtifact;
@@ -243,7 +255,23 @@ export function ArtifactRenderer({
 
 			case 'markdown':
 			case 'document':
-				return <MessageResponse>{artifact.content}</MessageResponse>;
+				// A DURABLE (server-owned) artifact is previewed by name via
+				// get_artifact_html. In chat, most of these objects come from the
+				// client-side parser instead, which mints throwaway ids of the
+				// form `artifact-<timestamp>-<index>` (artifactParser.ts) - those
+				// match no Artifact row. Rather than falling back to raw
+				// <MessageResponse> (which prints an HTML document's <style>
+				// block as literal text, see the bug this fixes), render those
+				// through preview_document_html by sending the content directly.
+				return isDurableArtifactId(artifact.id) ? (
+					<DocumentPreview artifactName={artifact.id} />
+				) : (
+					<DocumentPreview
+						content={artifact.content}
+						language={artifact.language}
+						title={artifact.title}
+					/>
+				);
 
 			case 'jsx':
 			case 'chart':

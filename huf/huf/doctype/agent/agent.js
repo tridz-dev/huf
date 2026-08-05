@@ -43,8 +43,21 @@ function check_caching_support(frm) {
 
 
 
+function toggle_starter_prompt_add(frm) {
+	const grid = frm.fields_dict['starter_prompts']?.grid;
+	if (!grid) return;
+	const rows = frm.doc.starter_prompts || [];
+	const add_btn = grid.wrapper.find('.grid-add-row');
+	if (rows.length >= 3) {
+		add_btn.hide();
+	} else {
+		add_btn.show();
+	}
+}
+
 frappe.ui.form.on("Agent", {
 	refresh(frm) {
+		toggle_starter_prompt_add(frm);
 		if (!frm.is_new()) {
 			frm.add_custom_button(__("Go to Agent Console"), () => {
 				frappe.route_options = {
@@ -117,5 +130,17 @@ frappe.ui.form.on("Agent MCP Server", {
 		} else {
 			frappe.model.set_value(cdt, cdn, "tool_count", 0);
 		}
+	}
+});
+
+frappe.ui.form.on("Agent Starter Prompt", {
+	starter_prompts_add(frm) {
+		toggle_starter_prompt_add(frm);
+	},
+	starter_prompts_remove(frm) {
+		toggle_starter_prompt_add(frm);
+	},
+	prompt_text(frm) {
+		toggle_starter_prompt_add(frm);
 	}
 });
