@@ -9,9 +9,12 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { fetchPaginatedCount } from './utilsApi';
 import { doctype } from '@/data/doctypes';
 import type {
+  AttachServiceToolsPayload,
+  AttachServiceToolsResponse,
   CreateIntegrationServicePayload,
   IntegrationServiceDoc,
   IntegrationSettingsDoc,
+  ServiceTool,
   UpdateIntegrationServicePayload,
 } from '@/types/integration.types';
 
@@ -302,6 +305,35 @@ export async function setupTelegramWebhook(
       method: 'setup_telegram_webhook',
     });
     return (response.message ?? response) as { status?: string };
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function getServiceTools(service: string): Promise<ServiceTool[]> {
+  try {
+    const response = await call.post('huf.ai.tools.integration_utils.get_service_tools', {
+      service,
+    });
+    const result = (response.message ?? response) as { success?: boolean; tools?: ServiceTool[] };
+    return result.tools ?? [];
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function attachServiceTools(
+  payload: AttachServiceToolsPayload,
+): Promise<AttachServiceToolsResponse> {
+  try {
+    const response = await call.post('huf.ai.tools.integration_utils.attach_service_tools', {
+      service: payload.service,
+      tool_names: payload.tool_names,
+      agents: payload.agents,
+    });
+    return (response.message ?? response) as AttachServiceToolsResponse;
   } catch (error) {
     handleFrappeError(error);
     throw error;

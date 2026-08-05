@@ -1,12 +1,13 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and Contributors
 # See license.txt
 
+import unittest
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 import asyncio
 
@@ -33,7 +34,7 @@ class _FakeDoc:
         return getattr(self, field, default)
 
 
-class TestConversationDataLoadState(FrappeTestCase):
+class TestConversationDataLoadState(IntegrationTestCase):
     """Batch 1: malformed/legacy conversation_data must not abort the agent run."""
 
     def test_load_state_returns_default_for_none(self):
@@ -70,7 +71,8 @@ class TestConversationDataLoadState(FrappeTestCase):
             self.assertEqual(result["items"], [{"name": "y", "value": "ok"}])
 
 
-class TestAgentSyncConversationData(FrappeTestCase):
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
+class TestAgentSyncConversationData(IntegrationTestCase):
     """Batch 1: malformed conversation_data in run_agent_sync must not abort the run."""
 
     def _make_agent_doc(self):

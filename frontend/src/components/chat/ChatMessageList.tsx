@@ -2,12 +2,12 @@ import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } fr
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
-import { getAgent } from "@/services/agentApi";
+
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
-import { ChatInput } from './ChatInput';
-import { EmptyChatState } from './EmptyChatState';
+import { ChatInput, type ChatInputHandle } from './ChatInput';
+import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
 import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
@@ -30,68 +30,40 @@ import {
 interface ChatMessageListProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
-    getNewConversationPath?: (agentName: string) => string;
 }
 
-export function ChatMessageList({ 
-    chatId: chatIdProp, 
+export function ChatMessageList({
+    chatId: chatIdProp,
     onConversationCreated,
-    getNewConversationPath,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
     const isNewChat = !chatId;
-    
+
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
     const [loadingType, setLoadingType] = useState<LoadingType>('default');
     const isCreatingConversationRef = useRef(false);
     const newlyCreatedConversationIdRef = useRef<string | null>(null);
-    const [isModelMismatch, setIsModelMismatch] = useState(false);
+    const chatInputRef = useRef<ChatInputHandle>(null);
     const [isTransitioningToNewConversation, setIsTransitioningToNewConversation] = useState(false);
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
     const [runSucceeded, setRunSucceeded] = useState(false);
 
-    const { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb, runImmediately, autonamingOfConversationTitle } = useChatAgentIdentity(chatId, searchParams);
+    const {
+        agentName,
+        agentDisplayName,
+        agentDescription,
+        agentColor,
+        starterPrompts,
+        showToolExecutionDetails,
+        allowFileUpload,
+        maxUploadSizeMb,
+        runImmediately,
+        autonamingOfConversationTitle,
+    } = useChatAgentIdentity(chatId, searchParams);
 
-    // Check for model mismatch between conversation and agent
-    useEffect(() => {
-        if (!chatId || !agentName) {
-            setIsModelMismatch(false);
-            return;
-        }
-
-        let cancelled = false;
-
-        async function checkModelMismatch() {
-            try {
-                const [conversation, agent] = await Promise.all([
-                    getConversation(chatId!),
-                    getAgent(agentName),
-                ]);
-
-                if (cancelled) return;
-
-                if (conversation?.model && agent?.model) {
-                    setIsModelMismatch(conversation.model !== agent.model);
-                } else {
-                    setIsModelMismatch(false);
-                }
-            } catch (error) {
-                console.error('Error checking model mismatch:', error);
-                if (!cancelled) {
-                    setIsModelMismatch(false);
-                }
-            }
-        }
-
-        checkModelMismatch();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [chatId, agentName]);
 
     useEffect(() => {
         if (!chatId) {
@@ -355,19 +327,17 @@ export function ChatMessageList({
         [agentName, chatId]
     );
 
-    if (isNewChat && !agentName) {
-        return (
-            <EmptyChatState />
-        );
-    }
-
     // Don't show loading state if we already have messages (e.g., during transition)
     const shouldShowLoading = initialLoading && messages.length === 0;
+    const isColdStart = isNewChat && messages.length === 0;
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
-                <div className="max-w-4xl mx-auto px-6 py-4 space-y-4">
+                <div className={isColdStart
+                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex items-center justify-center"
+                    : "max-w-4xl mx-auto px-6 py-4 space-y-4"
+                }>
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
@@ -379,10 +349,13 @@ export function ChatMessageList({
                                 <p className="text-xs text-muted-foreground">{messagesError.message || 'An error occurred while fetching messages.'}</p>
                             </div>
                         </div>
-                    ) : messages.length === 0 && !isNewChat ? (
-                        <div className="flex items-center justify-center py-20">
-                            <p className="text-sm text-muted-foreground">No messages yet</p>
-                        </div>
+                    ) : isColdStart ? (
+                        <ColdStartHero
+                            agentName={agentName}
+                            agentDisplayName={agentDisplayName}
+                            agentDescription={agentDescription}
+                            agentColor={agentColor}
+                        />
                     ) : (
                         <div className="mt-2 space-y-8">
                             {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
@@ -411,17 +384,24 @@ export function ChatMessageList({
                 </div>
             </div>
             <div className="max-w-4xl mx-auto w-full shrink-0">
-            <ChatInput 
-                chatId={chatId} 
+            {isColdStart && (
+                <div className="px-6 pb-2">
+                    <StarterPromptGrid
+                        starterPrompts={starterPrompts}
+                        onSendStarter={(text) => chatInputRef.current?.send(text)}
+                    />
+                </div>
+            )}
+            <ChatInput
+                ref={chatInputRef}
+                chatId={chatId}
                 agentName={agentName}
                 onConversationCreated={onConversationCreated}
-                getNewConversationPath={getNewConversationPath}
                 onStatusChange={setStatus}
                 onLoadingTypeChange={setLoadingType}
                 isCreatingConversationRef={isCreatingConversationRef}
                 newlyCreatedConversationIdRef={newlyCreatedConversationIdRef}
                 setMessages={setMessages}
-                isModelMismatch={isModelMismatch}
                 scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                 allowFileUpload={allowFileUpload}
                 maxUploadSizeMb={maxUploadSizeMb}

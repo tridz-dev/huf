@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
+import { ArrowUpDown, FileText, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   ColumnDef,
@@ -9,10 +9,10 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Combobox } from '@/components/ui/combobox';
 import {
   Table,
   TableBody,
@@ -160,23 +160,22 @@ export function AgentSummaryPromptsPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage shared summary prompt templates for agents"
       filters={
         <FilterBar
           searchPlaceholder="Search summary prompts..."
           searchValue={search}
           onSearchChange={setSearch}
-          actions={
-            <div className="w-full sm:w-48">
-              <Combobox
-                options={statusOptions}
-                value={filters.status || 'all'}
-                onValueChange={(value) => setFilter('status', value || 'all')}
-                placeholder="Status"
-              />
-            </div>
-          }
+          filters={[
+            {
+              label: 'Status',
+              value: filters.status || 'all',
+              options: statusOptions,
+              onChange: (value) => setFilter('status', value || 'all'),
+              placeholder: 'All',
+            },
+          ]}
         />
       }
     >
@@ -186,8 +185,15 @@ export function AgentSummaryPromptsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : prompts.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No summary prompts"
+            description="Create a summary prompt template to share across agents."
+            action={{ label: 'New summary prompt', onClick: () => navigate('/summary-prompts/new') }}
+          />
         ) : (
-          <div className="overflow-hidden rounded-none border">
+          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -203,27 +209,19 @@ export function AgentSummaryPromptsPage() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/summary-prompts/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel">No summarization prompts found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/summary-prompts/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -242,7 +240,7 @@ export function AgentSummaryPromptsPage() {
           {total !== undefined ? `Showing all ${total} summary prompts` : 'No more summary prompts to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

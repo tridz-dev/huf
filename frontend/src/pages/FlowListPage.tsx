@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Calendar, Play, Activity, Settings } from 'lucide-react';
-import { PageLayout, FilterBar, GridView, ItemCard } from '../components/dashboard';
+import { Calendar, Play, Activity, Settings, Workflow } from 'lucide-react';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { usePageData } from '../hooks/dashboard/usePageData';
 
@@ -125,7 +126,7 @@ function FlowListPage() {
   };
 
   return (
-    <PageLayout
+    <PageFrame
       title="Flows"
       badge={<ExperimentalBadge />}
       subtitle="Design and orchestrate agent workflows."
@@ -155,6 +156,13 @@ function FlowListPage() {
         items={data}
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={loading}
+        emptyState={
+          <EmptyState
+            icon={Workflow}
+            title="No flows"
+            description="No flows have been created yet."
+          />
+        }
         renderItem={(flow) => (
           <ItemCard
             title={flow.name}
@@ -197,6 +205,6 @@ function FlowListPage() {
           refresh();
         }}
       />
-    </PageLayout>
+    </PageFrame>
   );
 }

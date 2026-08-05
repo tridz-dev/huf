@@ -66,7 +66,13 @@ interface AdvancedTabProps {
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
-	return (model.modalities || '').trim() === required;
+	const items = new Set(
+		(model.modalities || '')
+			.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean),
+	);
+	return items.has(required);
 }
 
 function approvalModeDescription(mode?: string): string {
@@ -577,6 +583,117 @@ export function AdvancedTab({
 						</FormItem>
 					)}
 				/>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Reasoning Configuration"
+				description="Configure provider-aware reasoning parameters (e.g. Anthropic extended thinking, OpenAI reasoning effort)."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="reasoning_mode"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>Reasoning Mode</FormLabel>
+								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Select mode" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="Auto">Auto (Default / Model Native)</SelectItem>
+										<SelectItem value="Off">Off (Force Disable)</SelectItem>
+										<SelectItem value="On">On (Force Enable)</SelectItem>
+									</SelectContent>
+								</Select>
+								<FormDescription>
+									Whether to request reasoning/thinking controls from the LLM provider.
+								</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+
+					<FormField
+						control={form.control}
+						name="reasoning_effort"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>Reasoning Effort</FormLabel>
+								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Select effort" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="Auto">Auto (Default)</SelectItem>
+										<SelectItem value="Low">Low</SelectItem>
+										<SelectItem value="Medium">Medium</SelectItem>
+										<SelectItem value="High">High</SelectItem>
+									</SelectContent>
+								</Select>
+								<FormDescription>
+									Portable effort level (maps to OpenAI reasoning_effort or Anthropic thinking budget).
+								</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('reasoning_mode') === 'On' && (
+						<FormField
+							control={form.control}
+							name="reasoning_budget_tokens"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Reasoning Budget Tokens</FormLabel>
+									<FormControl>
+										<Input
+											type="number"
+											placeholder="1024"
+											{...field}
+											value={field.value?.toString() || ''}
+											onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
+										/>
+									</FormControl>
+									<FormDescription>
+										Explicit token budget for thinking (primarily for Anthropic thinking models).
+									</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					)}
+
+					<FormField
+						control={form.control}
+						name="reasoning_summary"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>Reasoning Summary</FormLabel>
+								<Select onValueChange={field.onChange} value={field.value || 'None'}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Select summary" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="None">None</SelectItem>
+										<SelectItem value="Concise">Concise</SelectItem>
+										<SelectItem value="Detailed">Detailed</SelectItem>
+									</SelectContent>
+								</Select>
+								<FormDescription>
+									Request reasoning summaries (supported by OpenAI Responses API).
+								</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
 			</FormSettingsSection>
 
 			<FormSettingsSection

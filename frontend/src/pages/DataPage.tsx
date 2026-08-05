@@ -5,12 +5,13 @@ import { useState } from 'react';
 import { Database, Settings, Table2, Trash2, Pencil, Layers, List } from 'lucide-react';
 import { TABLE_ICON_MAP } from '@/data/tableIcons';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { PageFrame } from '@/layouts/PageFrame';
 import {
-	PageLayout,
 	FilterBar,
 	GridView,
 	ItemCard,
 	LoadMoreButton,
+	EmptyState,
 } from '../components/dashboard';
 import { DeleteTableDialog } from '../components/data-table/DeleteTableDialog';
 import { TableAgentAccessModal } from '../components/data-table/TableAgentAccessModal';
@@ -169,7 +170,8 @@ function DataPage() {
 	);
 
 	return (
-		<PageLayout
+		<PageFrame
+			title="Data"
 			subtitle="Create and manage custom data tables"
 			filters={
 				<div className="flex items-center gap-2">
@@ -202,13 +204,12 @@ function DataPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={initialLoading}
 					emptyState={
-						<div className="text-center py-12">
-							<Database className="w-12 h-12 text-steel-soft mx-auto mb-4" />
-							<p className="font-body text-steel-soft mb-2">No data tables yet</p>
-							<p className="text-sm text-steel">
-								Create your first table to start managing structured data.
-							</p>
-						</div>
+						<EmptyState
+							icon={Database}
+							title="No data tables"
+							description="Create your first table to start managing structured data."
+							action={{ label: 'New table', onClick: () => navigate('/data/new') }}
+						/>
 					}
 					renderItem={() => <></>}
 					keyExtractor={() => ''}
@@ -269,6 +270,6 @@ function DataPage() {
 				table={accessTable}
 				onSaved={loadAgentCounts}
 			/>
-		</PageLayout>
+		</PageFrame>
 	);
 }

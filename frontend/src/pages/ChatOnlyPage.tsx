@@ -104,9 +104,16 @@ export default function ChatOnlyPage() {
     async function loadResumeChats() {
       const entries = await Promise.all(
         agents.map(async (agent) => {
-          const response = await getConversationsByAgent(agent.name, { limit: 1 });
-          const latestId = response.data[0]?.id;
-          return latestId ? ([agent.name, latestId] as const) : null;
+          try {
+            const response = await getConversationsByAgent(agent.name, { limit: 1 });
+            const latestId = response.data[0]?.id;
+            return latestId ? ([agent.name, latestId] as const) : null;
+          } catch (error) {
+            // One agent's history being inaccessible must not hide the
+            // "continue last chat" action for every other agent.
+            console.error(`Error loading resume chat for agent ${agent.name}:`, error);
+            return null;
+          }
         })
       );
 
@@ -145,11 +152,6 @@ export default function ChatOnlyPage() {
     [navigate]
   );
 
-  const getNewConversationPath = useCallback(
-    (agentName: string) => `/ui/chat?agent=${encodeURIComponent(agentName)}`,
-    []
-  );
-
   const shouldShowSelector = !chatId && (!effectiveAgent || (!loadingAgents && !currentAgent));
 
   return (
@@ -169,7 +171,6 @@ export default function ChatOnlyPage() {
             key={chatId ?? effectiveAgent}
             chatId={chatId}
             onConversationCreated={handleConversationCreated}
-            getNewConversationPath={getNewConversationPath}
           />
         </div>
       )}

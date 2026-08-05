@@ -399,24 +399,29 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
         }
 
     if agent_doc and getattr(agent_doc, "stt_model", None):
-        stt_model_doc = frappe.get_doc("AI Model", agent_doc.stt_model)
-        if not stt_model_doc.provider:
-            raise ValueError(f"STT model '{agent_doc.stt_model}' has no provider linked.")
+        try:
+            stt_model_doc = frappe.get_doc("AI Model", agent_doc.stt_model)
+        except frappe.DoesNotExistError:
+            stt_model_doc = None
 
-        stt_provider_doc = frappe.get_doc("AI Provider", stt_model_doc.provider)
-        api_key = stt_provider_doc.get_password("api_key")
-        if not api_key:
-            raise ValueError(f"API key is not configured for STT provider '{stt_provider_doc.provider_name}'.")
+        if stt_model_doc:
+            if not stt_model_doc.provider:
+                raise ValueError(f"STT model '{agent_doc.stt_model}' has no provider linked.")
 
-        provider_name = stt_provider_doc.provider_name.lower()
-        normalized = _normalize_model_name(stt_model_doc.model_name, stt_model_doc.provider)
-        return {
-            "stt_model":     normalized,
-            "api_key":       api_key,
-            "provider_name": provider_name,
-            "provider_doc":  stt_provider_doc,
-            "source":        "agent_config",
-        }
+            stt_provider_doc = frappe.get_doc("AI Provider", stt_model_doc.provider)
+            api_key = stt_provider_doc.get_password("api_key")
+            if not api_key:
+                raise ValueError(f"API key is not configured for STT provider '{stt_provider_doc.provider_name}'.")
+
+            provider_name = stt_provider_doc.provider_name.lower()
+            normalized = _normalize_model_name(stt_model_doc.model_name, stt_model_doc.provider)
+            return {
+                "stt_model":     normalized,
+                "api_key":       api_key,
+                "provider_name": provider_name,
+                "provider_doc":  stt_provider_doc,
+                "source":        "agent_config",
+            }
 
     if not agent_doc:
         raise ValueError("An agent is required to resolve STT configuration.")

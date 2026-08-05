@@ -87,8 +87,6 @@ CATALOG_CANDIDATES = [
      "source_url": "https://api-docs.deepseek.com/quick_start/pricing",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
     # Moonshot — K2.6 is the current flagship; K2.5 the cheaper tier.
-    # NOTE: "moonshot" is not (yet) an AI Provider.provider_brand option, so
-    # these proposals resolve provider=None until a matching provider exists.
     {"model_name": "kimi-k2.6", "provider_brand": "moonshot", "modalities": "Text, Vision",
      "source_url": "https://platform.moonshot.cn/docs/intro",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
@@ -142,9 +140,9 @@ def _provider_has_key(provider_name) -> bool:
     if not provider_name or not frappe.db.exists("AI Provider", provider_name):
         return False
     try:
-        return bool(frappe.get_doc("AI Provider", provider_name).get_password("api_key"))
-    except frappe.ValidationError:
-        # Frappe raises "Password not found" when no password row exists at all.
+        return bool(frappe.get_doc("AI Provider", provider_name).get_password("api_key", raise_exception=False))
+    except Exception:
+        # Frappe raises AuthenticationError ("Password not found") when no password row exists at all.
         return False
 
 

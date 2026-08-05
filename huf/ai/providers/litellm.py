@@ -30,6 +30,13 @@ from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
+from huf.ai.reasoning import (
+    ReasoningPolicy,
+    ReasoningResolution,
+    detect_model_capabilities,
+    resolve_reasoning,
+    build_reasoning_kwargs,
+)
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -400,6 +407,7 @@ def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
         "meta": "meta-llama",
         "ollama": "ollama_chat",  # chat endpoint required for reasoning models (e.g. gpt-oss) with tools
         "lmstudio": "openai",  # LM Studio exposes an OpenAI-compatible API
+        "moonshot": "moonshot",
     }
 
     prefix = provider_prefix_map.get(provider.lower(), provider.lower())
@@ -422,28 +430,42 @@ def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
         "google": "GEMINI_API_KEY",  # Alternative to api_key param
         "cohere": "COHERE_API_KEY",
         "perplexity": "PERPLEXITY_API_KEY",
+        "moonshot": "MOONSHOT_API_KEY",
     }
 
     if provider_name in env_var_providers:
         # Set environment variable for this request
         os.environ[env_var_providers[provider_name]] = api_key
-    else:
-        # Most providers accept api_key parameter directly
-        completion_kwargs["api_key"] = api_key
+        return
+
+    # For known providers that accept an api_key parameter directly, prefer that.
+    completion_kwargs["api_key"] = api_key
+
+    # Unknown/new providers often expect a PROVIDER_API_KEY environment variable.
+    # Set a heuristic env var as well so users don't have to wait for a code
+    # change to try a new LiteLLM provider; the api_key param remains the primary
+    # mechanism for providers that support it.
+    env_name = f"{provider_name.upper().replace('-', '_')}_API_KEY"
+    os.environ[env_name] = api_key
 
 
 def _resolve_api_base(provider_doc) -> str | None:
-    """Resolve the API base URL for a local/self-hosted provider.
+    """Resolve a custom API base URL for a provider.
 
-    Precedence: `api_base_url` field > `url`+`port` > None. When None is returned
-    LiteLLM falls back to the OLLAMA_API_BASE env var, then its localhost default.
+    Precedence: `api_base_url` field > `url`+`port` > None. When None is
+    returned, LiteLLM uses the provider's default endpoint (or the relevant
+    environment variable). This works for local providers (Ollama, vLLM, etc.)
+    and for hosted providers that offer regional endpoints (e.g. Moonshot CN).
     """
-    if not provider_doc or not provider_doc.get("is_local_llm", 0):
+    if not provider_doc:
         return None
 
     api_base = (provider_doc.get("api_base_url") or "").strip()
     if api_base:
         return api_base
+
+    if not provider_doc.get("is_local_llm", 0):
+        return None
 
     url = (provider_doc.get("url") or "").strip()
     if not url:
@@ -712,6 +734,40 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             provider_name = normalized_model.split("/")[0]
             _setup_api_key(provider_name, api_key, completion_kwargs)
 
+            # Resolve provider-aware reasoning parameters
+            reasoning_policy_data = None
+            if context and context.get("reasoning_policy"):
+                reasoning_policy_data = context["reasoning_policy"]
+            elif agent_doc:
+                reasoning_policy_data = {
+                    "mode": agent_doc.get("reasoning_mode"),
+                    "effort": agent_doc.get("reasoning_effort"),
+                    "budget_tokens": agent_doc.get("reasoning_budget_tokens"),
+                    "summary": agent_doc.get("reasoning_summary"),
+                }
+            elif hasattr(agent, "reasoning_mode"):
+                reasoning_policy_data = {
+                    "mode": getattr(agent, "reasoning_mode", "auto"),
+                    "effort": getattr(agent, "reasoning_effort", "auto"),
+                    "budget_tokens": getattr(agent, "reasoning_budget_tokens", None),
+                    "summary": getattr(agent, "reasoning_summary", "none"),
+                }
+
+            ai_model_doc = None
+            if model:
+                try:
+                    ai_model_doc = frappe.get_doc("AI Model", model)
+                except Exception:
+                    pass
+
+            r_policy = ReasoningPolicy.from_dict(reasoning_policy_data)
+            r_caps = detect_model_capabilities(normalized_model, provider, ai_model_doc=ai_model_doc)
+            r_res = resolve_reasoning(r_policy, r_caps, provider=provider, model_name=normalized_model)
+            if context is not None:
+                context["reasoning_resolution"] = r_res
+
+            completion_kwargs.update(build_reasoning_kwargs(r_res))
+
             capability_cache_key = f"litellm_tool_json_conflict:{provider_name}"
             
             known_conflict = _L1_CAPABILITY_CACHE.get(capability_cache_key)
@@ -924,6 +980,11 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             if hasattr(choice, "tool_calls") and choice.tool_calls:
                 assistant_message["tool_calls"] = choice.tool_calls
 
+            if getattr(choice, "thinking_blocks", None):
+                assistant_message["thinking_blocks"] = choice.thinking_blocks
+            elif getattr(choice, "reasoning_content", None):
+                assistant_message["reasoning_content"] = choice.reasoning_content
+
             messages.append(assistant_message)
 
             # No tool call — return final result
@@ -1097,6 +1158,77 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
     except Exception as e:  # boundary exception handler: external provider/tool boundary
         logger.warning(f"LiteLLM simple completion failed: {e!s}\n{frappe.get_traceback()}")
         return ""
+
+
+async def get_simple_completion_with_usage(
+    model: str,
+    messages: list,
+    provider: str,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> dict:
+    """
+    Like get_simple_completion, but also returns token usage and cost.
+    Bypasses Agent logic for direct LLM access.
+    """
+    result = {"response": "", "input_tokens": 0, "output_tokens": 0, "cost": 0.0}
+    try:
+        litellm.drop_params = True
+
+        provider_doc = frappe.get_doc("AI Provider", provider)
+        api_key = provider_doc.get_password("api_key")
+
+        normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
+        provider_name = normalized_model.split("/")[0]
+
+        completion_kwargs = {
+            "model": normalized_model,
+            "messages": messages,
+            "temperature": 0.3 if temperature is None else temperature,
+            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+        }
+        if max_tokens:
+            completion_kwargs["max_tokens"] = max_tokens
+
+        api_base = _resolve_api_base(provider_doc)
+        if api_base:
+            completion_kwargs["api_base"] = api_base
+
+        _setup_api_key(provider_name, api_key, completion_kwargs)
+
+        try:
+            response = await _litellm_completion_with_retry(**completion_kwargs)
+        except BadRequestError as e:
+            if "unsupported value" in str(e).lower() and "temperature" in str(e).lower():
+                completion_kwargs.pop("temperature", None)
+                response = await _litellm_completion_with_retry(**completion_kwargs)
+            else:
+                raise e
+
+        result["response"] = response.choices[0].message.content
+
+        usage = response.usage
+        result["input_tokens"] = int(getattr(usage, "prompt_tokens", 0) or 0)
+        result["output_tokens"] = int(getattr(usage, "completion_tokens", 0) or 0)
+
+        try:
+            cost, _cost_source = calculate_cost(
+                model_name=model,
+                input_tokens=result["input_tokens"],
+                output_tokens=result["output_tokens"],
+                litellm_response=response,
+            )
+            result["cost"] = round(float(cost), 6)
+        except (ValueError, TypeError, AttributeError, KeyError):
+            # Cost calculation is best-effort; ignore failures.
+            pass
+
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"LiteLLM simple completion failed: {e!s}\n{frappe.get_traceback()}")
+
+    return result
 
 
 async def run_stream(agent, enhanced_prompt, provider, model, context=None):
@@ -1323,6 +1455,40 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         provider_name = normalized_model.split("/")[0]
         _setup_api_key(provider_name, api_key, completion_kwargs)
 
+        # Resolve provider-aware reasoning parameters
+        reasoning_policy_data = None
+        if context and context.get("reasoning_policy"):
+            reasoning_policy_data = context["reasoning_policy"]
+        elif agent_doc:
+            reasoning_policy_data = {
+                "mode": agent_doc.get("reasoning_mode"),
+                "effort": agent_doc.get("reasoning_effort"),
+                "budget_tokens": agent_doc.get("reasoning_budget_tokens"),
+                "summary": agent_doc.get("reasoning_summary"),
+            }
+        elif hasattr(agent, "reasoning_mode"):
+            reasoning_policy_data = {
+                "mode": getattr(agent, "reasoning_mode", "auto"),
+                "effort": getattr(agent, "reasoning_effort", "auto"),
+                "budget_tokens": getattr(agent, "reasoning_budget_tokens", None),
+                "summary": getattr(agent, "reasoning_summary", "none"),
+            }
+
+        ai_model_doc = None
+        if model:
+            try:
+                ai_model_doc = frappe.get_doc("AI Model", model)
+            except Exception:
+                pass
+
+        r_policy = ReasoningPolicy.from_dict(reasoning_policy_data)
+        r_caps = detect_model_capabilities(normalized_model, provider, ai_model_doc=ai_model_doc)
+        r_res = resolve_reasoning(r_policy, r_caps, provider=provider, model_name=normalized_model)
+        if context is not None:
+            context["reasoning_resolution"] = r_res
+
+        completion_kwargs.update(build_reasoning_kwargs(r_res))
+
         if tools and local_overrides.get("supports_tools") is False:
             # Model does not support tool calling — strip tools and continue
             # instead of letting the provider fail with a cryptic 400.
@@ -1358,9 +1524,11 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 # LiteLLM completion() supports streaming when stream=True
                 stream = await _litellm_completion_with_retry(**completion_kwargs)
 
-                # Buffer for tool calls
+                # Buffer for tool calls and thinking blocks
                 current_tool_calls = {}
                 streaming_content = ""
+                accumulated_thinking_blocks = []
+                accumulated_reasoning_content = ""
 
                 # Process streaming chunks
                 stream_usage = None
@@ -1391,6 +1559,26 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             "type": "delta",
                             "content": delta.content,
                             "full_response": full_response,
+                        }
+
+                    # Handle thinking / reasoning deltas
+                    if hasattr(delta, "thinking_blocks") and delta.thinking_blocks:
+                        accumulated_thinking_blocks.extend(delta.thinking_blocks)
+                        for block in delta.thinking_blocks:
+                            block_text = block.get("thinking") if isinstance(block, dict) else getattr(block, "thinking", None)
+                            if block_text:
+                                accumulated_reasoning_content += str(block_text)
+                                yield {
+                                    "type": "reasoning",
+                                    "content": str(block_text),
+                                    "full_reasoning": accumulated_reasoning_content,
+                                }
+                    if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                        accumulated_reasoning_content += str(delta.reasoning_content)
+                        yield {
+                            "type": "reasoning",
+                            "content": str(delta.reasoning_content),
+                            "full_reasoning": accumulated_reasoning_content,
                         }
 
                     # Handle tool call delta
@@ -1625,13 +1813,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                 )
 
                             # Add tool results to messages and continue
-                            messages.append(
-                                {
-                                    "role": "assistant",
-                                    "content": streaming_content,
-                                    "tool_calls": tool_calls_list,
-                                }
-                            )
+                            assistant_msg = {
+                                "role": "assistant",
+                                "content": streaming_content,
+                                "tool_calls": tool_calls_list,
+                            }
+                            if accumulated_thinking_blocks:
+                                assistant_msg["thinking_blocks"] = accumulated_thinking_blocks
+                            if accumulated_reasoning_content:
+                                assistant_msg["reasoning_content"] = accumulated_reasoning_content
+
+                            messages.append(assistant_msg)
                             messages.extend(tool_results)
 
                             # Reset for next round
@@ -1646,28 +1838,28 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     break
 
             except InternalServerError as e:
-                raw_msg = f"OpenAI API server error: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except RateLimitError as e:
-                raw_msg = f"RateLimitError: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except ContextWindowExceededError as e:
-                raw_msg = f"ContextWindowExceededError: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except APIError as e:
-                raw_msg = f"API error: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
             except Exception as e:
                 frappe.log_error(
                     message=f"LiteLLM streaming round error: {str(e)}\n\n{frappe.get_traceback()}",
                     title="LiteLLM Streaming"
                 )
-                raw_msg = f"LiteLLM error: {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg)}
+                raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
 
         # Max rounds reached
@@ -1747,6 +1939,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "full_response": full_response or "Agent stopped after max rounds.",
             "usage": stream_usage,
             "cost": stream_cost,
+            "reasoning_content": accumulated_reasoning_content or None,
         }
 
 

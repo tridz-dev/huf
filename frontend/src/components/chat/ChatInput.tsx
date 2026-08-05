@@ -1,7 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { CornerDownLeft, Plus, Paperclip } from "lucide-react";
+import { CornerDownLeft, Paperclip } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
@@ -17,6 +16,8 @@ import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import type { MessageType } from './types';
+import { cacheReasoning } from './chatMessageList.mappers';
+import { cacheAgentNameForChat } from './useChatAgentIdentity';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -27,17 +28,19 @@ export type LoadingType = 'default' | 'transcribing';
  */
 const RUN_RESPONSE_TIMEOUT_MS = 180_000;
 
+export interface ChatInputHandle {
+    send(text: string): Promise<void>;
+}
+
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
-    getNewConversationPath?: (agentName: string) => string;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
     isCreatingConversationRef: React.MutableRefObject<boolean>;
     newlyCreatedConversationIdRef: React.MutableRefObject<string | null>;
     setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>;
-    isModelMismatch?: boolean;
     scrollToBottomAfterPaint?: (instant?: boolean) => void;
     allowFileUpload?: boolean;
     maxUploadSizeMb?: number | null;
@@ -49,23 +52,20 @@ interface ChatInputProps {
     runImmediately?: boolean;
 }
 
-export function ChatInput({ 
-    chatId, 
+export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
+    chatId,
     agentName,
     onConversationCreated,
-    getNewConversationPath,
     onStatusChange,
     onLoadingTypeChange,
     isCreatingConversationRef,
     newlyCreatedConversationIdRef,
     setMessages,
-    isModelMismatch = false,
     scrollToBottomAfterPaint,
     allowFileUpload = false,
     maxUploadSizeMb,
     runImmediately = false,
-}: ChatInputProps) {
-    const navigate = useNavigate();
+}: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -154,6 +154,7 @@ export function ChatInput({
             conversationId: string | undefined;
             assistantMessageId: string;
             updateAssistantContent: (content: string) => void;
+            updateAssistantReasoning?: (reasoning: string) => void;
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
         }) => {
@@ -168,6 +169,10 @@ export function ChatInput({
                 lastRunActivityRef.current = Date.now();
                 params.updateAssistantContent(content);
             };
+            const trackReasoningActivity = (reasoning: string) => {
+                lastRunActivityRef.current = Date.now();
+                params.updateAssistantReasoning?.(reasoning);
+            };
             try {
                 const response = await sendMessage(
                     {
@@ -180,6 +185,7 @@ export function ChatInput({
                     {
                         useStreaming,
                         onDelta: useStreaming ? trackActivity : undefined,
+                        onReasoningDelta: useStreaming ? trackReasoningActivity : undefined,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
                     }
@@ -236,6 +242,9 @@ export function ChatInput({
                 prev.map((msg) => {
                     if (msg.key !== tempId) return msg;
                     const existingContent = content ?? msg.versions[0]?.content ?? '';
+                    // Cache reasoning so it survives a ChatMessageList remount
+                    // (e.g. new-conversation navigation that resets prev=[]).
+                    if (msg.reasoning) cacheReasoning(realId, msg.reasoning);
                     return {
                         ...msg,
                         key: realId,
@@ -269,6 +278,117 @@ export function ChatInput({
             reader.readAsDataURL(file);
         });
     }, []);
+
+    const sendTextMessage = useCallback(async (text: string) => {
+        if (!text || !agentName) return;
+
+        setIsSubmitting(true);
+        onStatusChange('submitted');
+
+        const userMessageKey = `user-${Date.now()}`;
+        const userMessage: MessageType = {
+            key: userMessageKey,
+            from: 'user',
+            versions: [{ id: userMessageKey, content: text }],
+        };
+        setMessages((prev) => [...prev, userMessage]);
+        setMessage('');
+        if (textareaRef.current) textareaRef.current.focus();
+
+        const assistantMessageId = `assistant-${Date.now()}`;
+        setMessages((prev) => [
+            ...prev,
+            { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
+        ]);
+
+        const updateAssistantContent = (content: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? { ...msg, versions: [{ id: assistantMessageId, content }] }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.key === assistantMessageId
+                        ? { ...msg, reasoning, reasoningStreaming: true }
+                        : msg
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
+
+        let assistantKey = assistantMessageId;
+        try {
+            if (!chatId) isCreatingConversationRef.current = true;
+            const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
+                message: text,
+                conversationId: chatId ?? undefined,
+                assistantMessageId,
+                updateAssistantContent,
+                updateAssistantReasoning,
+            });
+            if (runTimedOutRef.current) {
+                // Hang guard already converted the bubble to an error card.
+                isCreatingConversationRef.current = false;
+                return;
+            }
+            assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === assistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
+            if (queued && agentRunId) {
+                linkUserMessageToRun(userMessageKey, agentRunId);
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
+                            : msg
+                    )
+                );
+            }
+            if (agentMessageId && !queued) {
+                syncAssistantMessageId(assistantKey, agentMessageId);
+            }
+            onStatusChange('ready');
+            if (conversationId && onConversationCreated) {
+                newlyCreatedConversationIdRef.current = conversationId;
+                cacheAgentNameForChat(conversationId, agentName);
+                onConversationCreated(conversationId, agentName);
+                setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
+            } else {
+                isCreatingConversationRef.current = false;
+            }
+            setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
+        } catch (error) {
+            if (streamingAvailable) setStreamingAvailable(false);
+            isCreatingConversationRef.current = false;
+            onStatusChange('error');
+            const errorText = error instanceof Error ? error.message : 'An error occurred';
+            if (!runTimedOutRef.current) {
+                // Replace the pending bubble with an error card (never a fake
+                // assistant bubble or an endless loading state).
+                markAssistantError(assistantKey, errorText);
+            }
+            toast.error('Failed to send message', {
+                description: errorText,
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+
+    useImperativeHandle(ref, () => ({
+        send: sendTextMessage,
+    }));
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -321,6 +441,16 @@ export function ChatInput({
                 );
                 scrollToBottomAfterPaint?.(false);
             };
+            const updateAssistantReasoning = (reasoning: string) => {
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.key === assistantMessageId
+                            ? { ...msg, reasoning, reasoningStreaming: true }
+                            : msg
+                    )
+                );
+                scrollToBottomAfterPaint?.(false);
+            };
             let assistantKey = assistantMessageId;
 
             let runPhase = false;
@@ -367,6 +497,7 @@ export function ChatInput({
                     conversationId: prepareRes.conversation_id ?? chatId ?? undefined,
                     assistantMessageId,
                     updateAssistantContent,
+                    updateAssistantReasoning,
                     skipUserMessage: true,
                     files: prepareRes.files,
                 });
@@ -377,6 +508,13 @@ export function ChatInput({
                 }
 
                 assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        (msg.key === assistantKey || msg.key === assistantMessageId)
+                            ? { ...msg, reasoningStreaming: false }
+                            : msg
+                    )
+                );
                 if (queued && agentRunId) {
                     linkUserMessageToRun(userMessageKey, agentRunId);
                     setMessages((prev) =>
@@ -394,6 +532,7 @@ export function ChatInput({
                 onStatusChange('ready');
                 if (conversationId && onConversationCreated) {
                     newlyCreatedConversationIdRef.current = conversationId;
+                    cacheAgentNameForChat(conversationId, agentName);
                     onConversationCreated(conversationId, agentName);
                     setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
                 } else {
@@ -434,91 +573,8 @@ export function ChatInput({
             return;
         }
 
-        const messageText = message.trim();
-        setIsSubmitting(true);
-        onStatusChange('submitted');
-
-        const userMessageKey = `user-${Date.now()}`;
-        const userMessage: MessageType = {
-            key: userMessageKey,
-            from: 'user',
-            versions: [{ id: userMessageKey, content: messageText }],
-        };
-        setMessages((prev) => [...prev, userMessage]);
-        setMessage('');
-        if (textareaRef.current) textareaRef.current.focus();
-
-        const assistantMessageId = `assistant-${Date.now()}`;
-        setMessages((prev) => [
-            ...prev,
-            { key: assistantMessageId, from: 'assistant' as const, versions: [{ id: assistantMessageId, content: '' }] },
-        ]);
-
-        const updateAssistantContent = (content: string) => {
-            setMessages((prev) =>
-                prev.map((msg) =>
-                    msg.key === assistantMessageId
-                        ? { ...msg, versions: [{ id: assistantMessageId, content }] }
-                        : msg
-                )
-            );
-            scrollToBottomAfterPaint?.(false);
-        };
-
-        let assistantKey = assistantMessageId;
-        try {
-            if (!chatId) isCreatingConversationRef.current = true;
-            const { conversationId, agentMessageId, agentRunId, queued } = await runAgentAndUpdateAssistant({
-                message: messageText,
-                conversationId: chatId ?? undefined,
-                assistantMessageId,
-                updateAssistantContent,
-            });
-            if (runTimedOutRef.current) {
-                // Hang guard already converted the bubble to an error card.
-                isCreatingConversationRef.current = false;
-                return;
-            }
-            assistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
-            if (queued && agentRunId) {
-                linkUserMessageToRun(userMessageKey, agentRunId);
-                setMessages((prev) =>
-                    prev.map((msg) =>
-                        msg.key === assistantMessageId
-                            ? { ...msg, key: agentRunId, runStatus: 'Queued' as const, versions: [{ id: agentRunId, content: '' }] }
-                            : msg
-                    )
-                );
-            }
-            if (agentMessageId && !queued) {
-                syncAssistantMessageId(assistantKey, agentMessageId);
-            }
-            onStatusChange('ready');
-            if (conversationId && onConversationCreated) {
-                newlyCreatedConversationIdRef.current = conversationId;
-                onConversationCreated(conversationId, agentName);
-                setTimeout(() => { isCreatingConversationRef.current = false; }, 500);
-            } else {
-                isCreatingConversationRef.current = false;
-            }
-            setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
-        } catch (error) {
-            if (streamingAvailable) setStreamingAvailable(false);
-            isCreatingConversationRef.current = false;
-            onStatusChange('error');
-            const errorText = error instanceof Error ? error.message : 'An error occurred';
-            if (!runTimedOutRef.current) {
-                // Replace the pending bubble with an error card (never a fake
-                // assistant bubble or an endless loading state).
-                markAssistantError(assistantKey, errorText);
-            }
-            toast.error('Failed to send message', {
-                description: errorText,
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [message, agentName, chatId, pendingFile, onConversationCreated, isSubmitting, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+        await sendTextMessage(message.trim());
+    }, [message, agentName, pendingFile, isSubmitting, sendTextMessage, onStatusChange, chatId, onConversationCreated, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -604,6 +660,14 @@ export function ChatInput({
             );
             scrollToBottomAfterPaint?.(false);
         };
+        const updateAssistantReasoning = (reasoning: string) => {
+            setMessages((prev) =>
+                prev.map((m) =>
+                    m.key === assistantMessageId ? { ...m, reasoning, reasoningStreaming: true } : m
+                )
+            );
+            scrollToBottomAfterPaint?.(false);
+        };
         let currentAssistantKey = assistantMessageId;
         try {
             // The transcribe endpoint already persisted the user message;
@@ -614,6 +678,7 @@ export function ChatInput({
                 conversationId: res?.conversation_id,
                 assistantMessageId,
                 updateAssistantContent,
+                updateAssistantReasoning,
                 skipUserMessage: true,
             });
             if (runTimedOutRef.current) {
@@ -622,6 +687,13 @@ export function ChatInput({
                 return transcript;
             }
             currentAssistantKey = (queued && agentRunId) ? agentRunId : assistantMessageId;
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    (msg.key === currentAssistantKey || msg.key === assistantMessageId)
+                        ? { ...msg, reasoningStreaming: false }
+                        : msg
+                )
+            );
             if (queued && agentRunId) {
                 linkUserMessageToRun(userMessageKey, agentRunId);
                 setMessages((prev) =>
@@ -638,6 +710,7 @@ export function ChatInput({
             onStatusChange('ready');
             if (res?.conversation_id && onConversationCreated) {
                 newlyCreatedConversationIdRef.current = res.conversation_id;
+                cacheAgentNameForChat(res.conversation_id, agentName);
                 onConversationCreated(res.conversation_id, agentName);
             }
             return transcript;
@@ -781,35 +854,8 @@ export function ChatInput({
         adjustTextareaHeight();
     }, [message, adjustTextareaHeight]);
 
-    const handleNewConversation = useCallback(() => {
-        if (agentName) {
-            navigate(getNewConversationPath?.(agentName) ?? `/chat/new?agent=${agentName}`);
-        }
-    }, [navigate, agentName, getNewConversationPath]);
-
     if (!agentName) {
         return null;
-    }
-
-    if (isModelMismatch && chatId) {
-        return (
-            <div className="px-6 pb-6 pt-2">
-                <div className="w-full border border-zinc-200 rounded-xl bg-zinc-50 p-6">
-                    <div className="flex flex-col items-center justify-center gap-4 text-center">
-                        <p className="text-sm text-zinc-600">
-                            Model changed, please start a new conversation
-                        </p>
-                        <Button
-                            onClick={handleNewConversation}
-                            className="gap-2"
-                        >
-                            <Plus className="w-4 h-4" />
-                            New Conversation
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
     }
 
     return (
@@ -830,7 +876,7 @@ export function ChatInput({
                         style={{ 
                             height: `${MIN_HEIGHT}px`
                         }}
-                        disabled={isSubmitting || isModelMismatch}
+                        disabled={isSubmitting}
                     />
                     {pendingFile && (
                         <div className="px-3 pt-2 w-full">
@@ -848,63 +894,62 @@ export function ChatInput({
                         </div>
                     )}
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                        <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
-                            Use
-                            <ShortcutKey>
-                                Shift + Enter
-                            </ShortcutKey>
-                            for new line
-                        </span>
-                        {allowFileUpload && (
-                            <>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
-                                    className="hidden"
-                                    onChange={handleFileSelected}
-                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="secondary"
+                            <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
+                                Use
+                                <ShortcutKey>
+                                    Shift + Enter
+                                </ShortcutKey>
+                                for new line
+                            </span>
+                            {allowFileUpload && (
+                                <>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*,.pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.json,.xml,.html,.htm,audio/*,.webm,.mp3,.wav,.m4a,.ogg,.flac"
+                                        className="hidden"
+                                        onChange={handleFileSelected}
+                                        disabled={isSubmitting || pendingFile?.status === 'uploading'}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="icon"
+                                        className="shrink-0 rounded-full"
+                                        disabled={isSubmitting || pendingFile?.status === 'uploading'}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        aria-label="Attach file"
+                                    >
+                                        <Paperclip className="size-4" />
+                                    </Button>
+                                </>
+                            )}
+                            {!message.trim() && !pendingFile && (
+                                <SpeechInput
+                                    onTranscriptionChange={handleTranscriptionChange}
+                                    onAudioRecorded={handleAudioRecorded}
+                                    preferServerStt={true}
+                                    disabled={isSubmitting}
                                     size="icon"
                                     className="shrink-0 rounded-full"
-                                    disabled={isSubmitting || isModelMismatch || pendingFile?.status === 'uploading'}
-                                    onClick={() => fileInputRef.current?.click()}
-                                    aria-label="Attach file"
-                                >
-                                    <Paperclip className="size-4" />
-                                </Button>
-                            </>
-                        )}
-                        {!message.trim() && !pendingFile && (
-                            <SpeechInput
-                                onTranscriptionChange={handleTranscriptionChange}
-                                onAudioRecorded={handleAudioRecorded}
-                                preferServerStt={true}
-                                disabled={isSubmitting || isModelMismatch}
+                                />
+                            )}
+                            <Button
+                                type="submit"
+                                disabled={
+                                    pendingFile?.status === 'uploading' ||
+                                    ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
+                                        isSubmitting)
+                                }
                                 size="icon"
-                                className="shrink-0 rounded-full"
-                            />
-                        )}
-                        <Button
-                            type="submit"
-                            disabled={
-                                pendingFile?.status === 'uploading' ||
-                                ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
-                                    isSubmitting ||
-                                    isModelMismatch)
-                            }
-                            size="icon"
-                            className="shrink-0"
-                        >
-                            <CornerDownLeft/>
-                        </Button>
-                    </div>
+                                className="shrink-0"
+                            >
+                                <CornerDownLeft/>
+                            </Button>
+                        </div>
                 </div>
             </form>
             <p className="mt-3 text-[10px] text-zinc-400 text-center">AI output can be inaccurate. Double check important info.</p>
         </div>
     );
-}
+});

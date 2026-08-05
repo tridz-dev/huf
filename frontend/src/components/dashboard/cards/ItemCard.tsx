@@ -5,9 +5,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BaseCard } from './BaseCard';
+import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { cn } from '@/lib/utils';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'success' | 'outline';
+
+function badgeVariantToStatusDot(variant?: BadgeVariant): StatusDotVariant {
+  switch (variant) {
+    case 'success':
+    case 'default':
+      return 'ok';
+    case 'destructive':
+      return 'fail';
+    case 'secondary':
+    case 'outline':
+    default:
+      return 'idle';
+  }
+}
 
 interface MetadataItem {
   label: string;
@@ -70,7 +85,7 @@ export function ItemCard({
           <CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
             {avatarColor && (
               <span
-                className="w-3 h-3 rounded-full shrink-0 border border-border"
+                className="w-3 h-3 rounded-sm shrink-0 border border-border"
                 style={{ backgroundColor: avatarColor }}
                 aria-hidden
               />
@@ -82,10 +97,9 @@ export function ItemCard({
             <CardDescription className="text-steel text-[13px] line-clamp-2 min-h-[2.5rem]">{description}</CardDescription>
           )}
           {status && (
-            <CardAction className="top-5">
-              <Badge variant={status.variant || 'default'} className="text-xs">
-                {status.label}
-              </Badge>
+            <CardAction className="top-5 flex items-center gap-2">
+              <StatusDot variant={badgeVariantToStatusDot(status.variant)} />
+              <span className="font-body text-[13px] font-medium text-steel">{status.label}</span>
             </CardAction>
           )}
         </CardHeader>

@@ -2,9 +2,9 @@
 
 ## Instrument / Control-Room Direction
 
-**Status:** v1.1 — derived from marketing redesign (`huf-redesign.html`) and product UI redesign (`huf-dashboard-redesign.html`)
+**Status:** v2.0 (UI v2) — derived from marketing redesign (`huf-redesign.html`), product UI redesign (`huf-dashboard-redesign.html`), and recent UI v2 iterations.
 
-**v1.1 change:** introduces a **product type layer** (§3.1) — the marketing site keeps its loud Big Shoulders / Archivo / Martian Mono voice, but the product UI runs on a calmer, more legible workhorse (IBM Plex Sans + IBM Plex Mono) with display type rationed to a few character moments. This makes the app feel like a tool you live in (Slack / Grafana / Redis dashboard) rather than a poster you read once.
+**v2.0 change:** Transitioned to UI v2 with tighter muted experimental sidebar density, integrated Chat PWA, and dedicated Execution Profiles & Management UI. (Builds upon v1.1 product type layer).
 
 **Core idea:** HUF's real differentiator isn't "AI" — it's *control*: every agent action is recorded, permissioned, and auditable. The visual system should feel like an instrument panel or engineering ledger, not a glowing AI-startup gradient page. Light technical paper, condensed industrial type, hairline rules, and a single signal color used the way a warning lamp is used — sparingly, and always meaningfully.
 
@@ -106,7 +106,7 @@ The dashboard is something people stare at all day. Condensed display caps and a
 - **Button labels** — primary button: Big Shoulders 600 uppercase ~13px with `.06em` tracking (keeps a little character); secondary/ghost button: IBM Plex Sans 600, 13px, sentence or small-caps. Buttons no longer use mono in the product — mono is now data-only.
 - **Mono data** — IBM Plex Mono, 11–12px, **normal letter-spacing** (drop the wide tracking Martian Mono needed), normal case for values, light uppercase only for short status labels.
 
-**Restraint note (still applies, sharpened):** in the product, Big Shoulders appears in exactly four kinds of place — the page `<h1>`, gauge values, panel headers, and the primary button. Everywhere else is IBM Plex Sans (UI) or IBM Plex Mono (data). If you find yourself setting a table cell, a description, or a nav item in Big Shoulders or in mono, stop — that's the slip back toward "designed object."
+**Restraint note (still applies, sharpened):** in the product, Big Shoulders appears in exactly four kinds of place — the page `<h1>`, gauge values, panel headers, and the primary button — plus one sanctioned exception: the compact topbar title on a **work surface** (see §6.9). Everywhere else is IBM Plex Sans (UI) or IBM Plex Mono (data). If you find yourself setting a table cell, a description, or a nav item in Big Shoulders or in mono, stop — that's the slip back toward "designed object."
 
 ---
 
@@ -194,6 +194,7 @@ Same tokens and structural primitives as marketing, but running on the **product
 
 ### 6.1 Sidebar (Instrument Panel)
 - Background `--paper-deep`, 1px right border.
+- **Muted Experimental Sidebar Density:** Tighter vertical rhythm and spacing between items. Inactive items use more subdued text colors (`--steel-soft`) to reduce visual fatigue during extended sessions.
 - Brand block: same wordmark + signal-square mark as marketing nav, plus a mono "AI Platform" sub-label (IBM Plex Mono) — **no colored icon-in-rounded-square logo**.
 - Nav items: plain 1.6px-stroke line icons in `--steel` (→ `--ink` on hover), **IBM Plex Sans** medium 13.5px labels, sentence case.
 - **Active state**: 2px solid signal-orange left edge + `--panel` background + subtle inset border — *not* a gray rounded pill (the most common dashboard-template tell).
@@ -205,6 +206,7 @@ Same tokens and structural primitives as marketing, but running on the **product
 - 60px height, `--panel` background, 1px bottom border.
 - Left: sidebar-toggle icon + breadcrumb in IBM Plex Mono uppercase (`Dashboard`).
 - Right: primary action button — solid ink, signal-orange on hover, **Big Shoulders uppercase label** (character moment) + `+` icon.
+- **Display-type rule:** the global topbar carries the mono breadcrumb, never display type. A **work surface** (§6.9) MAY set its screen title in Big Shoulders inside its own compact topbar — vertical space is the scarce resource there, so the title doubles as the breadcrumb. A **management screen** MAY NOT — its title lives in the page head below the breadcrumb.
 
 ### 6.3 Page Head
 - `<h1>` in Big Shoulders 700, ~34–38px, uppercase — the one big display moment on the screen.
@@ -219,6 +221,7 @@ Same tokens and structural primitives as marketing, but running on the **product
 ### 6.5 Tabs
 - Underline style, **IBM Plex Sans** 13px medium, sentence case, `--steel` default. (Dropping mono+uppercase here is part of making the product feel calmer than the marketing site.)
 - Active tab: `--ink` text + 2px **signal-orange** bottom border, sitting on a shared 1px `--ink` baseline.
+- This is the **single tab vocabulary** for the product, backed by one shared implementation (`ui/tabs`, `underline` variant). The divergent `panel` variant and the mono-uppercase treatment were retired; never hand-roll a tab row.
 
 ### 6.6 Ledger Rows
 - One bordered panel (`--panel`, 1px `--line`) containing a **Big Shoulders** section header ("Active Agents") and stacked rows.
@@ -229,6 +232,34 @@ Same tokens and structural primitives as marketing, but running on the **product
   - `--steel-soft` (gray), static → *Idle*
   - `--good` (green), static → *Healthy*
 - Row hover: background → `--paper-deep`, chevron color → `--ink`. No card lift/shadow on hover.
+
+### 6.7 Execution Management UI
+- **Purpose:** Interface for managing execution profiles (Local Python, SSH, Docker) and SSH Connections.
+- **Layout:** Grid-based cards or list layouts framed as infrastructure configuration.
+- **Typography:** Strong use of **IBM Plex Mono** for environment variables, paths, and server addresses to reinforce the technical/infrastructure context.
+- **Status:** Health and connection status use the standard dot vocabulary (`--good` for healthy connections, `--signal` for pending/failed).
+
+### 6.8 Chat PWA
+- **Control-Room Aesthetic:** The unified Chat PWA avoids typical consumer chat bubbles (no large colored rounded pills).
+- **Message Ledger:** Messages are presented as ledger entries. User inputs and Agent responses are distinct but structured in a single stream with hairline dividers where appropriate.
+- **Mobile Constraints:** Adapts cleanly to mobile dimensions while preserving the technical ledger feel.
+
+### 6.9 Page Composition
+
+Every screen composes from one of two sanctioned templates. Nothing hand-rolls a topbar or a page head. The split is about what is scarce: on a management screen, orientation is scarce (hence breadcrumb + big title); on a work surface, vertical space is scarce (hence compact chrome).
+
+| | **Management page** (`PageFrame`) | **Work surface** (`WorkSurfaceFrame`) |
+|---|---|---|
+| Examples | Dashboard, Agents, Executions, Prompts | Playground, Chat |
+| Chrome | Global topbar: mono breadcrumb only | Own compact topbar: sidebar trigger + title + actions |
+| Title | Big Shoulders h1 in the page head (~34–38px), below the breadcrumb | Big Shoulders ~20px in the compact topbar (the §6.2 exception) |
+| Width | Contained content column (§4), generous padding | Full-bleed, no max-width; content fills remaining height |
+| Permits | Page head (h1 + steel subtitle + optional badge/actions), gauge strip, filter row, §6.5 tabs, ledger/card content | Sentence-case §6.5 tabs, instrument strips, run/prompt benches |
+| Forbids | Display type in the topbar; full-bleed benches | A page head; a breadcrumb (a bench has no parent to go back to); max-width wrapping |
+
+- **Choose a management page** when the user is administering things — lists, grids, settings, inspection. The page head is the one big display moment on the screen (§6.3).
+- **Choose a work surface** when the user is *doing* something live — prompting, comparing, conversing. Chrome compresses to make room for the bench.
+- Both templates share the same tokens, the §6.5 tab row, and the status vocabulary; they differ only in how much chrome the task can afford.
 
 ---
 

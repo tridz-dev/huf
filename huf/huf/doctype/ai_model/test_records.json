@@ -1,0 +1,7 @@
+[
+  {
+    "doctype": "AI Model",
+    "model_name": "_TestModel",
+    "provider": "_TestProvider"
+  }
+]

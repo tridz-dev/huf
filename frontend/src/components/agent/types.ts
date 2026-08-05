@@ -26,6 +26,12 @@ export const agentFormSchema = z.object({
   ).default([]),
 
   prompt_mode: z.enum(["Local", "Template"]).default("Local"),
+  starter_prompts: z.array(
+    z.object({
+      name: z.string().optional(),
+      prompt_text: z.string().min(1, 'Prompt text is required'),
+    })
+  ).max(3, 'A maximum of 3 starter prompts is allowed.').default([]),
   agent_prompt: z.string().optional(),
   prompt_version_locked: z.boolean().optional(),
   template_version_at_attach: z.number().optional(),
@@ -58,6 +64,11 @@ export const agentFormSchema = z.object({
   enable_memory_search_tool: z.boolean().optional(),
   enable_memory_write_tool: z.boolean().optional(),
 
+  reasoning_mode: z.enum(['Auto', 'Off', 'On']).default('Auto').optional(),
+  reasoning_effort: z.enum(['Auto', 'Low', 'Medium', 'High']).default('Auto').optional(),
+  reasoning_budget_tokens: z.number().optional(),
+  reasoning_summary: z.enum(['None', 'Concise', 'Detailed']).default('None').optional(),
+
   agent_color: z
     .string()
     .optional()
@@ -86,11 +97,11 @@ export const agentFormSchema = z.object({
 
   allow_file_upload: z.boolean().optional(),
   enable_ocr: z.boolean().optional(),
-  max_upload_size_mb: z.number().int().positive().optional(),
+  max_upload_size_mb: z.number().int().nonnegative().optional(),
 
   allow_code_execution: z.boolean().optional(),
   execution_profile: z.string().optional(),
-  execution_shared_dir_limit_mb: z.number().int().positive().optional(),
+  execution_shared_dir_limit_mb: z.number().int().nonnegative().optional(),
   allow_ssh: z.boolean().optional(),
   ssh_connections: z.array(z.string()).default([]),
 }).superRefine((values, ctx) => {
@@ -101,7 +112,11 @@ export const agentFormSchema = z.object({
       message: 'Select an Agent Prompt when using Template mode',
     });
   }
-  if (values.summary_prompt_mode === "Template" && !values.summary_prompt_template?.trim()) {
+  if (
+    values.context_strategy === "Summarize" &&
+    values.summary_prompt_mode === "Template" &&
+    !values.summary_prompt_template?.trim()
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["summary_prompt_template"],

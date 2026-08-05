@@ -50,18 +50,19 @@ const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
+const MemoryPolicyFormPageWrapper = lazy(() => import('./pages/MemoryPolicyFormPageWrapper'));
 const SkillsPage = lazy(() => import('./pages/SkillsPage'));
 const SkillFormPageWrapper = lazy(() => import('./pages/SkillFormPageWrapper'));
 const SshPage = lazy(() => import('./pages/SshPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
+const ArtifactViewPage = lazy(() => import('./pages/ArtifactViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
-const ConsolePage = lazy(() => import('./pages/ConsolePage'));
+const PlaygroundPage = lazy(() => import('./pages/PlaygroundPage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
-const ChannelsPageWrapper = lazy(() => import('./pages/ChannelsPageWrapper'));
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
@@ -74,9 +75,11 @@ const IntegrationServiceFormPageWrapper = lazy(
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
+const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
+import { initTheme } from './lib/personalization';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -111,6 +114,10 @@ function AppShell() {
     clearChunkReloadFlag();
   }, []);
 
+  useEffect(() => {
+    initTheme();
+  }, []);
+
   return (
     <SocketProvider>
       <UserProvider>
@@ -131,9 +138,11 @@ function AppShell() {
             path="/"
             element={
               <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <HubSimplePage />
-                </Suspense>
+                <UnifiedLayout hideHeader>
+                  <Suspense fallback={<PageLoader />}>
+                    <HubSimplePage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
@@ -284,17 +293,18 @@ function AppShell() {
             }
           />
           <Route
-            path="/console"
+            path="/playground"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout hideHeader>
                   <Suspense fallback={<PageLoader />}>
-                    <ConsolePage />
+                    <PlaygroundPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
           />
+          <Route path="/console" element={<Navigate to="/playground" replace />} />
           <Route
             path="/data/new"
             element={
@@ -444,6 +454,7 @@ function AppShell() {
             }
           />
           <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
+          <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
             element={
@@ -451,6 +462,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <AgentSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/general"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GeneralSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -491,6 +514,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/memory/policies/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <MemoryPolicyFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/skills"
             element={
               <ProtectedRoute>
@@ -521,16 +554,6 @@ function AppShell() {
                     <SshPage />
                   </Suspense>
                 </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/channels"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <ChannelsPageWrapper />
-                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -614,6 +637,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <PreviewViewPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifact/:artifactId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ArtifactViewPage />
                 </Suspense>
               </ProtectedRoute>
             }

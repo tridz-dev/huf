@@ -12,13 +12,50 @@ from huf.utils import is_frappe_16
 
 logger = frappe.logger("huf")
 
+def _resolve_workspace_link_type():
+	"""Pick a link_type whose target actually resolves for link_to="Huf".
+
+	Frappe validates Desktop Icon.link_to against the doctype named by
+	link_type. "Workspace Sidebar" does not always carry a "Huf" record at
+	after_app_install time (on a fresh site it does not exist yet), which made
+	frappe raise LinkValidationError and abort the whole install. Fall back to
+	"Workspace", which the fixture sync has already created by this point.
+	"""
+	for link_type in ("Workspace Sidebar", "Workspace"):
+		if not frappe.db.table_exists(f"tab{link_type}"):
+			continue
+		if frappe.db.exists(link_type, "Huf"):
+			return link_type
+	return None
+
+
 def setup_desktop_icon_as_workspace(app_name):
 	"""
 	Replace the External App desktop icon with a Workspace Sidebar icon.
 	Runs after Frappe creates desktop icons, so we fix the Huf icon to use Workspace Sidebar.
 	Only applies on Frappe version 16 and above.
+
+	This is cosmetic: any failure here is logged and swallowed rather than
+	aborting `bench install-app huf`.
 	"""
 	if not is_frappe_16() or app_name != "huf":
+		return
+
+	try:
+		_setup_desktop_icon_as_workspace()
+	except Exception:
+		frappe.db.rollback()
+		logger.warning("huf: skipped desktop icon setup", exc_info=True)
+		frappe.log_error(
+			title="Huf: desktop icon setup skipped",
+			message=frappe.get_traceback(with_context=True),
+		)
+
+
+def _setup_desktop_icon_as_workspace():
+	link_type = _resolve_workspace_link_type()
+	if not link_type:
+		logger.warning("huf: no resolvable workspace link target; skipping desktop icon")
 		return
 
 	# Delete the App icon (External type) - we want Workspace Sidebar instead
@@ -38,7 +75,7 @@ def setup_desktop_icon_as_workspace(app_name):
 	)
 	if workspace_icon:
 		doc = frappe.get_doc("Desktop Icon", workspace_icon)
-		doc.link_type = "Workspace Sidebar"
+		doc.link_type = link_type
 		doc.link_to = "Huf"
 		doc.hidden = 0
 		doc.parent_icon = None
@@ -52,7 +89,7 @@ def setup_desktop_icon_as_workspace(app_name):
 			icon = frappe.new_doc("Desktop Icon")
 			icon.label = "Huf"
 			icon.icon_type = "Link"
-			icon.link_type = "Workspace Sidebar"
+			icon.link_type = link_type
 			icon.link_to = "Huf"
 			icon.icon = workspace.get("icon") or "header"
 			icon.standard = 1
@@ -119,8 +156,12 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	create_demo_ai_providers()
 	create_demo_ai_models()
-	setup_desktop_icon_as_workspace("huf")
+	try:
+		setup_desktop_icon_as_workspace("huf")
+	except frappe.LinkValidationError:
+		pass
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
@@ -200,6 +241,7 @@ def create_demo_ai_providers():
         {"doctype": "AI Provider", "provider_name": "Huggingface", "provider_brand": "huggingface", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Cohere", "provider_brand": "cohere", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Perplexity", "provider_brand": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Moonshot", "provider_brand": "moonshot", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Google", "provider_brand": "google", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Anthropic", "provider_brand": "anthropic", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "OpenRouter", "provider_brand": "openrouter", "api_key": ""},
@@ -216,110 +258,196 @@ def create_demo_ai_providers():
             doc.insert(ignore_permissions=True)
 
 def create_demo_ai_models():
-    deprecated_models = (
-        "gemini-2.5-flash",
-        "google/gemini-2.5-flash",
-    )
+    """Seed default AI models with modality metadata.
+
+    Modality values must match the options configured on the AI Model DocType:
+    Text, Image, Text-to-Speech, Transcription, Embeddings, Vision, OCR.
+    """
+
+    deprecated_models = ()
 
     for model_name in deprecated_models:
         if frappe.db.exists("AI Model", model_name):
             frappe.delete_doc("AI Model", model_name, ignore_permissions=True, force=True)
 
+    TEXT = "Text"
+    VISION = "Vision"
+    IMAGE = "Image"
+    TTS = "Text-to-Speech"
+    STT = "Transcription"
+    EMB = "Embeddings"
+
+    def _m(model_name, provider, *modalities):
+        entry = {"doctype": "AI Model", "model_name": model_name, "provider": provider}
+        if modalities:
+            entry["modalities"] = ",".join(modalities)
+        return entry
+
     models = [
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-0528", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v2.5-1210", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl2", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-coder-v5.7b-mqa-base", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3.1-terminus", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-zero", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-lite", "provider": "DeepSeek"},
-        {"doctype": "AI Model", "model_name": "huggingface/meta-llama/Llama-3.2-3B-Instruct", "provider": "Huggingface"},
-        {"doctype": "AI Model", "model_name": "command-a-03-2025", "provider": "Cohere"},
-        {"doctype": "AI Model", "model_name": "sonar-pro", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-reasoning", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-reasoning-pro", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-deep-research", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "gemini-3.5-flash", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-3.1-pro-preview", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-3.1-flash-lite", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-3-flash-preview", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash-lite", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemma-3-27b-it", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemma-3-9b-it", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "nano-banana-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-3.1-flash-image", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "text-embedding-004", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-embedding-001", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-embedding-2", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "claude-fable-5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4.8", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-sonnet-5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-haiku-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "openrouter/free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-v4-pro", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-v4-flash", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3.1", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "z-ai/glm-5.2", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "moonshotai/kimi-k3", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "moonshotai/kimi-k2.7", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "minimax/minimax-m3", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "minimax/minimax-m2.7", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "minimax/minimax-m2", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "microsoft/phi-4", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemma-4-31b-it", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3.7-max", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3.6-plus", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-coder", "provider": "OpenRouter"},
-        # OpenRouter free-tier variants (verified live 2026-07; model_name keeps the
-        # exact ":free" id — that suffix IS the free label and the working route)
-        {"doctype": "AI Model", "model_name": "google/gemma-4-31b-it:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemma-4-26b-a4b-it:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-oss-20b:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-3-super-120b-a12b:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-3-ultra-550b-a55b:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-3-nano-30b-a3b:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-nano-12b-v2-vl:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-nano-9b-v2:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "nvidia/nemotron-3.5-content-safety:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "cohere/north-mini-code:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "poolside/laguna-m.1:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "poolside/laguna-xs-2.1:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "poolside/laguna-s-2.1:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "inclusionai/ling-3.0-flash:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "tencent/hy3:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "gpt-5.6-sol", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.6-terra", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.6-luna", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.5", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.4", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.4-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.4-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.2", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "whisper-1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-3-small", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-3-large", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-ada-002", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-image-2", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "Alternate", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4o-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5", "provider": "OpenAI"},
+        # Hugging Face
+        _m("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
+        # Cohere
+        _m("command-a-03-2025", "Cohere", TEXT),
+        # Perplexity
+        _m("sonar-pro", "Perplexity", TEXT),
+        _m("sonar", "Perplexity", TEXT),
+        _m("sonar-reasoning", "Perplexity", TEXT),
+        _m("sonar-reasoning-pro", "Perplexity", TEXT),
+        _m("sonar-deep-research", "Perplexity", TEXT),
+        # Google Gemini (direct)
+        _m("gemini-3.6-flash", "Google", TEXT, VISION),
+        _m("gemini-3.5-flash", "Google", TEXT, VISION),
+        _m("gemini-3.5-flash-lite", "Google", TEXT, VISION),
+        _m("gemini-3.1-flash-lite", "Google", TEXT, VISION),
+        _m("gemini-3.1-pro-preview", "Google", TEXT, VISION),
+        _m("gemini-3-flash-preview", "Google", TEXT, VISION),
+        _m("gemini-2.5-pro", "Google", TEXT, VISION),
+        _m("gemini-2.5-flash", "Google", TEXT, VISION),
+        _m("gemma-3-27b-it", "Google", TEXT, VISION),
+        _m("gemma-3-9b-it", "Google", TEXT, VISION),
+        _m("nano-banana-pro", "Google", IMAGE),
+        _m("gemini-3.1-flash-image", "Google", IMAGE),
+        _m("gemini-3.1-flash-lite-image", "Google", IMAGE),
+        _m("gemini-2.5-flash-image", "Google", IMAGE),
+        _m("gemini-3.1-flash-tts-preview", "Google", TTS),
+        _m("gemini-2.5-flash-tts-preview", "Google", TTS),
+        _m("gemini-2.5-pro-tts-preview", "Google", TTS),
+        _m("computer-use-preview", "Google", TEXT, VISION),
+        _m("gemini-deep-research-preview", "Google", TEXT),
+        _m("gemini-deep-research-max-preview", "Google", TEXT),
+        _m("text-embedding-004", "Google", EMB),
+        _m("gemini-embedding-001", "Google", EMB),
+        _m("gemini-embedding-2", "Google", EMB),
+        # Anthropic
+        _m("claude-fable-5", "Anthropic", TEXT, VISION),
+        _m("claude-mythos-5", "Anthropic", TEXT, VISION),
+        _m("claude-opus-5", "Anthropic", TEXT, VISION),
+        _m("claude-opus-4.8", "Anthropic", TEXT, VISION),
+        _m("claude-sonnet-5", "Anthropic", TEXT, VISION),
+        _m("claude-haiku-4.5", "Anthropic", TEXT, VISION),
+        # DeepSeek (direct)
+        _m("deepseek-v4-pro", "DeepSeek", TEXT),
+        _m("deepseek-v4-flash", "DeepSeek", TEXT),
+        _m("deepseek-chat-v3.1", "DeepSeek", TEXT),
+        _m("deepseek-chat-v3-0324", "DeepSeek", TEXT),
+        # Moonshot (direct)
+        _m("kimi-k3", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.7", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.6", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.5", "Moonshot", TEXT, VISION),
+        # OpenRouter
+        _m("openrouter/free", "OpenRouter", TEXT),
+        _m("openai/gpt-5", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5-mini", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5-nano", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.5-pro", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4-pro", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4-mini", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4-nano", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.3-codex", "OpenRouter", TEXT),
+        _m("openai/gpt-5.2", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.2-pro", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.1", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-4o-mini", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-4o-mini-tts", "OpenRouter", TTS),
+        _m("openai/gpt-4o-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-4o-mini-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-live-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-realtime-whisper", "OpenRouter", STT),
+        _m("openai/gpt-oss-20b", "OpenRouter", TEXT),
+        _m("openai/gpt-image-2", "OpenRouter", IMAGE),
+        _m("openai/gpt-image-1", "OpenRouter", IMAGE),
+        _m("openai/gpt-image-1-mini", "OpenRouter", IMAGE),
+        _m("openai/chatgpt-image-latest", "OpenRouter", IMAGE),
+        _m("openai/chat-latest", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.3-chat-latest", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.2-chat-latest", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.6-flash", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.5-flash", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.5-flash-lite", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.1-flash-lite", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.1-pro-preview", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3-flash-preview", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-2.5-pro", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-2.5-flash", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-2.5-flash-lite-preview-06-17", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-3-27b-it", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-4-31b-it", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-4-26b-a4b-it", "OpenRouter", TEXT, VISION),
+        _m("anthropic/claude-opus-5", "OpenRouter", TEXT, VISION),
+        _m("anthropic/claude-sonnet-5", "OpenRouter", TEXT, VISION),
+        _m("deepseek/deepseek-v4-pro", "OpenRouter", TEXT),
+        _m("deepseek/deepseek-v4-flash", "OpenRouter", TEXT),
+        _m("deepseek/deepseek-chat-v3-0324", "OpenRouter", TEXT),
+        _m("deepseek/deepseek-chat-v3.1", "OpenRouter", TEXT),
+        _m("z-ai/glm-5.2", "OpenRouter", TEXT),
+        _m("moonshotai/kimi-k3", "OpenRouter", TEXT, VISION),
+        _m("moonshotai/kimi-k2.7", "OpenRouter", TEXT, VISION),
+        _m("minimax/minimax-m3", "OpenRouter", TEXT),
+        _m("minimax/minimax-m2.7", "OpenRouter", TEXT),
+        _m("minimax/minimax-m2", "OpenRouter", TEXT),
+        _m("microsoft/phi-4", "OpenRouter", TEXT),
+        _m("qwen/qwen3.7-max", "OpenRouter", TEXT),
+        _m("qwen/qwen3.6-plus", "OpenRouter", TEXT),
+        _m("qwen/qwen3-vl-235b-a22b-instruct", "OpenRouter", TEXT, VISION),
+        _m("qwen/qwen3-coder", "OpenRouter", TEXT),
+        # OpenRouter free-tier variants
+        _m("google/gemma-4-31b-it:free", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-4-26b-a4b-it:free", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-oss-20b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-super-120b-a12b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-ultra-550b-a55b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-nano-30b-a3b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-nano-12b-v2-vl:free", "OpenRouter", TEXT, VISION),
+        _m("nvidia/nemotron-nano-9b-v2:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3.5-content-safety:free", "OpenRouter", TEXT),
+        _m("cohere/north-mini-code:free", "OpenRouter", TEXT),
+        _m("poolside/laguna-m.1:free", "OpenRouter", TEXT),
+        _m("poolside/laguna-xs-2.1:free", "OpenRouter", TEXT),
+        _m("poolside/laguna-s-2.1:free", "OpenRouter", TEXT),
+        _m("inclusionai/ling-3.0-flash:free", "OpenRouter", TEXT),
+        _m("tencent/hy3:free", "OpenRouter", TEXT),
+        # OpenAI (direct)
+        _m("gpt-5.6-sol", "OpenAI", TEXT, VISION),
+        _m("gpt-5.6-terra", "OpenAI", TEXT, VISION),
+        _m("gpt-5.6-luna", "OpenAI", TEXT, VISION),
+        _m("gpt-5.5", "OpenAI", TEXT, VISION),
+        _m("gpt-5.5-pro", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4-pro", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4-mini", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4-nano", "OpenAI", TEXT, VISION),
+        _m("gpt-5.3-codex", "OpenAI", TEXT),
+        _m("gpt-5.2", "OpenAI", TEXT, VISION),
+        _m("gpt-5.2-pro", "OpenAI", TEXT, VISION),
+        _m("gpt-5.1", "OpenAI", TEXT, VISION),
+        _m("gpt-5", "OpenAI", TEXT, VISION),
+        _m("gpt-5-mini", "OpenAI", TEXT, VISION),
+        _m("gpt-5-nano", "OpenAI", TEXT, VISION),
+        _m("chat-latest", "OpenAI", TEXT, VISION),
+        _m("gpt-5.3-chat-latest", "OpenAI", TEXT, VISION),
+        _m("gpt-5.2-chat-latest", "OpenAI", TEXT, VISION),
+        _m("gpt-4o-mini", "OpenAI", TEXT, VISION),
+        _m("gpt-4o-mini-tts", "OpenAI", TTS),
+        _m("tts-1", "OpenAI", TTS),
+        _m("tts-1-hd", "OpenAI", TTS),
+        _m("whisper-1", "OpenAI", STT),
+        _m("gpt-4o-transcribe", "OpenAI", STT),
+        _m("gpt-4o-mini-transcribe", "OpenAI", STT),
+        _m("gpt-transcribe", "OpenAI", STT),
+        _m("gpt-live-transcribe", "OpenAI", STT),
+        _m("gpt-realtime-whisper", "OpenAI", STT),
+        _m("gpt-image-2", "OpenAI", IMAGE),
+        _m("gpt-image-1", "OpenAI", IMAGE),
+        _m("gpt-image-1-mini", "OpenAI", IMAGE),
+        _m("chatgpt-image-latest", "OpenAI", IMAGE),
+        _m("gpt-oss-20b", "OpenAI", TEXT),
+        _m("text-embedding-3-small", "OpenAI", EMB),
+        _m("text-embedding-3-large", "OpenAI", EMB),
+        _m("text-embedding-ada-002", "OpenAI", EMB),
     ]
 
     for m in models:
@@ -328,6 +456,12 @@ def create_demo_ai_models():
             doc.flags.ignore_mandatory = True
             doc.flags.ignore_validate = True
             doc.insert(ignore_permissions=True)
+        elif m.get("modalities"):
+            existing = frappe.get_doc("AI Model", m["model_name"])
+            if not existing.get("modalities"):
+                existing.modalities = m["modalities"]
+                existing.save(ignore_permissions=True)
+
 
 def create_hub_orchestrator_agent():
 	"""
@@ -1185,10 +1319,10 @@ def create_memory_tools():
 def create_default_memory_policies():
 	"""Create default Memory Policy presets."""
 	presets = [
-		{"policy_name": "Conservative", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
-		{"policy_name": "Conversational", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
-		{"policy_name": "Research", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
-		{"policy_name": "Operational", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+		{"policy_name": "Conservative", "description": "Nothing is captured automatically. Memory is written only via explicit tool calls and always needs human approval before it's used, so it's a safe default for agents handling sensitive or high-stakes conversations.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
+		{"policy_name": "Conversational", "description": "For chat agents that should remember users across sessions with minimal friction. Every run is reviewed in the background and captured facts/preferences are injected into every future conversation automatically, no approval step.", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+		{"policy_name": "Research", "description": "For agents doing extended research or knowledge work. The agent proposes what's worth remembering after each run, retrieval is narrowed to what's relevant to the current turn, and a larger token budget supports longer-running context.", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
+		{"policy_name": "Operational", "description": "For task/ops agents where memory should stay out of the way. Nothing is captured or injected automatically — the agent can write memory via a tool call and pull it back only when it explicitly searches for it.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
 	]
 	for preset in presets:
 		if frappe.db.exists("Memory Policy", preset["policy_name"]):

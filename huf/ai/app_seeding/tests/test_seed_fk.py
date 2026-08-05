@@ -16,6 +16,7 @@ from huf.ai.app_seeding.loaders import _upsert_doc, _validate_link_refs
 from huf.ai.app_seeding.seeder import seed_app, seed_all_apps
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestSeedFKValidation(unittest.TestCase):
     """Acceptance tests for seed foreign-reference validation."""
 

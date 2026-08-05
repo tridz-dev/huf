@@ -47,7 +47,7 @@ export function CredentialsTab({ form, schema, isNew }: CredentialsTabProps) {
               <FormControl>
                 <Input
                   {...field}
-                  type="password"
+                  type={item.secret === false ? 'text' : 'password'}
                   autoComplete="off"
                   placeholder={isNew ? `Enter ${item.label.toLowerCase()}` : '••••••••'}
                   value={field.value ?? ''}

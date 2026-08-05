@@ -1,0 +1,212 @@
+name: Failure Analysis
+
+# Enabled/disabled via a repository variable (Settings → Variables → Actions):
+#   FAILURE_ANALYSIS_ENABLED = true | false   (default: off when absent)
+#
+# Requires one secret when enabled:
+#   ANTHROPIC_API_KEY  — used to call Claude Haiku for the analysis
+
+on:
+  workflow_run:
+    workflows: ['Backend Tests', 'Frontend Tests']
+    types: [completed]
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      vars.FAILURE_ANALYSIS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect failure context
+        uses: actions/github-script@v7
+        id: ctx
+        with:
+          script: |
+            const runId = context.payload.workflow_run.id;
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+            });
+            const failed = jobs.data.jobs.filter(j => j.conclusion === 'failure');
+            const lines = [];
+            for (const job of failed.slice(0, 3)) {
+              lines.push(`Job: ${job.name}`);
+              for (const step of job.steps.filter(s => s.conclusion === 'failure')) {
+                lines.push(`  Failed step: ${step.name}`);
+              }
+            }
+            const summary = lines.join('\n') || 'No failed jobs found.';
+            core.setOutput('summary', summary);
+            core.setOutput('workflow_name', context.payload.workflow_run.name);
+            core.setOutput('run_url', context.payload.workflow_run.html_url);
+            core.setOutput('sha', context.payload.workflow_run.head_sha);
+            core.setOutput('short_sha', context.payload.workflow_run.head_sha.slice(0, 7));
+            core.setOutput('branch', context.payload.workflow_run.head_branch);
+
+      - name: Analyze with Claude
+        id: analysis
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          WORKFLOW: ${{ steps.ctx.outputs.workflow_name }}
+          SHA: ${{ steps.ctx.outputs.sha }}
+          SHORT_SHA: ${{ steps.ctx.outputs.short_sha }}
+          BRANCH: ${{ steps.ctx.outputs.branch }}
+          RUN_URL: ${{ steps.ctx.outputs.run_url }}
+          SUMMARY: ${{ steps.ctx.outputs.summary }}
+        run: |
+          PROMPT="CI failure in the huf Frappe app.
+
+          Workflow: ${WORKFLOW}
+          Branch: ${BRANCH}
+          Commit: ${SHORT_SHA}
+          Run: ${RUN_URL}
+
+          Failed jobs/steps:
+          ${SUMMARY}
+
+          About huf:
+          - Python/Frappe v16 backend with bench run-tests test runner
+          - React/Vite/TypeScript frontend with Vitest unit tests
+          - 'Backend Tests' runs: bench --site test_site run-tests --app huf
+          - 'Frontend Tests' runs: npm run typecheck && npm run test && npm run build
+
+          Common causes by workflow:
+          - Backend Tests / 'Run tests': FrappeTestCase import (use IntegrationTestCase), sys.modules mock clobbering real frappe, missing required field on doctype insert, broken Frappe controller hook
+          - Frontend Tests / 'Typecheck': missing type, wrong import path, broken interface
+          - Frontend Tests / 'Unit tests': broken component test after prop change, missing mock
+          - Frontend Tests / 'Build': missing import, incompatible vite/typescript config
+
+          Respond in this exact format — no preamble, no markdown headings outside the sections below:
+
+          **Root cause:** <1-2 sentences — what most likely broke and why>
+
+          **Suggested fix:** <concrete: a file path + code snippet, or a shell command to run>
+
+          **Verify locally:**
+          \`\`\`bash
+          # paste this to reproduce or fix in your terminal
+          <commands>
+          \`\`\`
+
+          **Investigate with AI CLI tools:**
+          \`\`\`bash
+          # Claude Code
+          claude \"the ${WORKFLOW} CI job failed on huf at step: ${SUMMARY}. Find the root cause and suggest a fix.\"
+
+          # agy (Antigravity)
+          agy \"CI failure in huf: ${WORKFLOW} failed at '${SUMMARY}'. Diagnose and propose a fix.\"
+
+          # Kimi
+          kimi \"huf CI failure — ${WORKFLOW}: ${SUMMARY}. What broke and how do I fix it?\"
+
+          # Codex (OpenAI)
+          codex \"Debug this CI failure in the huf repo: ${WORKFLOW} failed. Failed step: ${SUMMARY}\"
+
+          # OpenCode
+          opencode \"huf CI failure — ${WORKFLOW}: ${SUMMARY}. Find the root cause and fix it.\"
+
+          # Picode
+          pi \"the ${WORKFLOW} CI job failed on huf. Failed step: ${SUMMARY}. What broke and how do I fix it?\"
+
+          # Cursor Agent (opens repo; paste prompt into Agent panel with ⌘I)
+          cursor . --goto huf/huf/doctype/agent/test_agent.py
+          # Agent prompt: CI failure: ${WORKFLOW} failed at step '${SUMMARY}'. Find the root cause and fix it.
+          \`\`\`"
+
+          RESPONSE=$(curl -sf https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d "{
+              \"model\": \"claude-haiku-4-5-20251001\",
+              \"max_tokens\": 700,
+              \"messages\": [{\"role\": \"user\", \"content\": $(echo "$PROMPT" | jq -Rs .)}]
+            }" | jq -r '.content[0].text' 2>/dev/null \
+            || echo "Analysis unavailable — check that the ANTHROPIC_API_KEY secret is set in repo Settings → Secrets → Actions.")
+
+          echo "text<<EOF" >> $GITHUB_OUTPUT
+          echo "$RESPONSE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Open or update GitHub issue
+        uses: actions/github-script@v7
+        env:
+          ANALYSIS: ${{ steps.analysis.outputs.text }}
+        with:
+          script: |
+            const workflow  = context.payload.workflow_run.name;
+            const runUrl    = context.payload.workflow_run.html_url;
+            const sha       = context.payload.workflow_run.head_sha.slice(0, 7);
+            const branch    = context.payload.workflow_run.head_branch;
+            const analysis  = process.env.ANALYSIS;
+            const label     = 'ci-failure';
+
+            // Ensure the label exists
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label,
+                color: 'd93f0b',
+                description: 'Opened automatically when a CI workflow fails on develop',
+              });
+            } catch (_) {}
+
+            const issueBody = [
+              `**Workflow:** [${workflow}](${runUrl})`,
+              `**Branch:** \`${branch}\` @ \`${sha}\``,
+              ``,
+              `## Analysis`,
+              ``,
+              analysis,
+              ``,
+              `---`,
+              `*Auto-opened by the failure-analysis workflow.*`,
+              `*Close this issue once the fix lands on \`develop\`.*`,
+              `*Disable analysis: set repo variable \`FAILURE_ANALYSIS_ENABLED\` to \`false\` in Settings → Variables → Actions.*`,
+            ].join('\n');
+
+            // Reuse an existing open issue for this workflow rather than spamming
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: label,
+              state: 'open',
+            });
+            const existing = open.find(i => i.title.startsWith(`CI failure: ${workflow}`));
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: [
+                  `**New failure** on \`${sha}\` — [run](${runUrl})`,
+                  ``,
+                  analysis,
+                ].join('\n'),
+              });
+              console.log(`Commented on existing issue #${existing.number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `CI failure: ${workflow} (${sha})`,
+                body: issueBody,
+                labels: [label],
+              });
+              console.log(`Opened issue #${issue.number}: ${issue.html_url}`);
+            }

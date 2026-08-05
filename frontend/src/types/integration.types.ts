@@ -3,6 +3,7 @@ export interface CredentialSchemaItem {
   label: string;
   required?: boolean;
   description?: string;
+  secret?: boolean;
 }
 
 export interface IntegrationCredentialRow {
@@ -77,6 +78,26 @@ export type CreateIntegrationServicePayload = Pick<
 
 export type UpdateIntegrationServicePayload = Partial<CreateIntegrationServicePayload>;
 
+export interface ServiceTool {
+  name: string;
+  tool_name: string;
+  description: string;
+  tool_type: string;
+  service: string;
+}
+
+export interface AttachServiceToolsPayload {
+  service: string;
+  tool_names: string[];
+  agents: string[];
+}
+
+export interface AttachServiceToolsResponse {
+  attached_to_agents: number;
+  skipped: number;
+  errors?: string[];
+}
+
 export function serializeRequiredCredentials(schema: CredentialSchemaItem[]): string {
   return JSON.stringify(
     schema.map((item) => ({
@@ -84,6 +105,7 @@ export function serializeRequiredCredentials(schema: CredentialSchemaItem[]): st
       label: item.label,
       ...(item.required !== undefined ? { required: item.required } : {}),
       ...(item.description ? { description: item.description } : {}),
+      ...(item.secret !== undefined ? { secret: item.secret } : {}),
     })),
   );
 }
@@ -115,7 +137,7 @@ export function credentialsToMap(
 
 export function buildCredentialsPayload(
   schema: CredentialSchemaItem[],
-  formValues: Record<string, string>,
+  formValues: Record<string, string | undefined>,
   existingCredentials: IntegrationCredentialRow[] | undefined,
   isNew: boolean,
 ): IntegrationCredentialRow[] {

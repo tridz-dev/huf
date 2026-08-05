@@ -108,6 +108,10 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     run_immediately: agent.run_immediately === 1,
     description: agent.description || '',
     instructions: agent.instructions || '',
+    starter_prompts: (agent.starter_prompts || []).map((row) => ({
+      name: row.name,
+      prompt_text: row.prompt_text || '',
+    })),
     default_plan: agent.default_plan || [],
     prompt_mode: agent.prompt_mode || 'Local',
     agent_prompt: agent.agent_prompt || '',
@@ -144,6 +148,10 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     memory_policy: agent.memory_policy || '',
     enable_memory_search_tool: agent.enable_memory_search_tool !== undefined ? agent.enable_memory_search_tool === 1 : true,
     enable_memory_write_tool: agent.enable_memory_write_tool !== undefined ? agent.enable_memory_write_tool === 1 : true,
+    reasoning_mode: (agent.reasoning_mode as any) || 'Auto',
+    reasoning_effort: (agent.reasoning_effort as any) || 'Auto',
+    reasoning_budget_tokens: agent.reasoning_budget_tokens !== undefined && agent.reasoning_budget_tokens !== null ? agent.reasoning_budget_tokens : undefined,
+    reasoning_summary: (agent.reasoning_summary as any) || 'None',
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
     agent_skill: (agent.agent_skill ?? []) as any,
@@ -154,15 +162,11 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     allow_file_upload: agent.allow_file_upload === 1,
     enable_ocr: agent.enable_ocr === 1,
     max_upload_size_mb:
-      agent.max_upload_size_mb !== undefined && agent.max_upload_size_mb !== null
-        ? agent.max_upload_size_mb
-        : undefined,
+      agent.max_upload_size_mb ? agent.max_upload_size_mb : 25,
     allow_code_execution: agent.allow_code_execution === 1,
     execution_profile: agent.execution_profile || undefined,
     execution_shared_dir_limit_mb:
-      agent.execution_shared_dir_limit_mb !== undefined && agent.execution_shared_dir_limit_mb !== null
-        ? agent.execution_shared_dir_limit_mb
-        : undefined,
+      agent.execution_shared_dir_limit_mb ? agent.execution_shared_dir_limit_mb : undefined,
     allow_ssh: agent.allow_ssh === 1,
     ssh_connections: (agent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
   };
@@ -194,7 +198,7 @@ export function AgentFormPage() {
   const tabConfig = useMemo(() => ({
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'run_immediately', 'description', 'instructions', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
+      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -257,6 +261,10 @@ export function AgentFormPage() {
         'memory_policy',
         'enable_memory_search_tool',
         'enable_memory_write_tool',
+        'reasoning_mode',
+        'reasoning_effort',
+        'reasoning_budget_tokens',
+        'reasoning_summary',
         'agent_color',
         'show_tool_execution_details',
         'image_generation_model',
@@ -387,6 +395,7 @@ export function AgentFormPage() {
         run_immediately: true,
         description: '',
         instructions: '',
+        starter_prompts: [],
         default_plan: [],
         prompt_mode: "Local",
         agent_prompt: '',
@@ -419,6 +428,10 @@ export function AgentFormPage() {
         memory_policy: '',
         enable_memory_search_tool: true,
         enable_memory_write_tool: true,
+        reasoning_mode: 'Auto',
+        reasoning_effort: 'Auto',
+        reasoning_budget_tokens: undefined,
+        reasoning_summary: 'None',
         agent_color: '',
         show_tool_execution_details: false,
         image_generation_model: undefined,
@@ -1176,6 +1189,10 @@ export function AgentFormPage() {
             run_immediately: data.run_immediately === 1,
             description: data.description || '',
             instructions: data.instructions || '',
+            starter_prompts: (data.starter_prompts || []).map((row) => ({
+              name: row.name,
+              prompt_text: row.prompt_text || '',
+            })),
             default_plan: data.default_plan || [],
             prompt_mode: data.prompt_mode || 'Local',
             agent_prompt: data.agent_prompt || '',
@@ -1487,6 +1504,9 @@ export function AgentFormPage() {
         run_immediately: values.run_immediately ? 1 : 0,
         description: values.description || '',
         instructions: values.instructions,
+        starter_prompts: (values.starter_prompts || [])
+          .filter((row) => row.prompt_text?.trim())
+          .map((row) => ({ prompt_text: row.prompt_text.trim() })),
         default_plan: values.default_plan || [],
         prompt_mode: values.prompt_mode || 'Local',
         agent_prompt: values.agent_prompt || '',
@@ -1519,6 +1539,10 @@ export function AgentFormPage() {
         memory_policy: values.memory_policy || undefined,
         enable_memory_search_tool: values.enable_memory_search_tool ? 1 : 0,
         enable_memory_write_tool: values.enable_memory_write_tool ? 1 : 0,
+        reasoning_mode: values.reasoning_mode || 'Auto',
+        reasoning_effort: values.reasoning_effort || 'Auto',
+        reasoning_budget_tokens: values.reasoning_budget_tokens !== undefined ? values.reasoning_budget_tokens : undefined,
+        reasoning_summary: values.reasoning_summary || 'None',
         agent_color: values.agent_color?.trim() || undefined,
         show_tool_execution_details: values.show_tool_execution_details ? 1 : 0,
 
@@ -1587,6 +1611,36 @@ export function AgentFormPage() {
             .map((field) => [field, agentData[field as keyof AgentUpdatePayload]]),
         ) as Partial<AgentDoc>;
 
+        const messages: string[] = [];
+
+        // The Enabled/Disabled toggle sits outside any tab's own fields and
+        // the backend only ever accepts it as part of the "general" section
+        // (huf/ai/agent_config_api.py's AGENT_SECTIONS) - so saving from any
+        // other tab must persist it via its own general-section call instead
+        // of silently dropping it, which is what happened before this fix
+        // (see Tracks/safwan-erooth.AuthDebug/FINDINGS.md, "Bug D").
+        if (disabledChanged && section !== 'general') {
+          const generalRevision = sectionRevisions.general;
+          if (!generalRevision) {
+            toast.error('This section is not ready to save. Reload the agent and try again.');
+            return;
+          }
+          const disabledResult = await updateAgentSection(
+            id,
+            'general',
+            { disabled: agentData.disabled },
+            generalRevision,
+          );
+          setSectionRevisions((current) =>
+            Object.fromEntries(
+              Object.keys(current).map((key) => [key, disabledResult.modified]),
+            ) as Partial<Record<AgentConfigSection, string>>,
+          );
+          setInitialDisabled(values.disabled);
+          form.resetField('disabled', { defaultValue: values.disabled });
+          messages.push(values.disabled ? 'Agent disabled' : 'Agent enabled');
+        }
+
         const result = await updateAgentSection(id, section, sectionPayload, expectedModified);
         const savedAgentId = result.name;
         setSectionRevisions((current) =>
@@ -1614,7 +1668,8 @@ export function AgentFormPage() {
         if (savedAgentId !== id) {
           navigate(`/agents/${encodeURIComponent(savedAgentId)}`, { replace: true });
         }
-        toast.success(`${tabConfig[section].label} saved`);
+        messages.push(`${tabConfig[section].label} saved`);
+        toast.success(messages.join(' · '));
         return;
       }
 
@@ -1637,6 +1692,10 @@ export function AgentFormPage() {
           run_immediately: newAgent.run_immediately === 1,
           description: newAgent.description || '',
           instructions: newAgent.instructions || '',
+          starter_prompts: (newAgent.starter_prompts || []).map((row) => ({
+            name: row.name,
+            prompt_text: row.prompt_text || '',
+          })),
           default_plan: newAgent.default_plan || [],
           prompt_mode: newAgent.prompt_mode || 'Local',
           agent_prompt: newAgent.agent_prompt || '',

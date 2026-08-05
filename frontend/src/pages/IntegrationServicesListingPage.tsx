@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Calendar, KeyRound, Settings, Shield } from 'lucide-react';
+import { Calendar, KeyRound, Puzzle, Settings, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { getIntegrationServicesPaginated } from '@/services/integrationApi';
 import { integrationCategoryFilterOptions } from '@/data/integrations';
@@ -62,7 +63,7 @@ export function IntegrationServicesListingPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Define integration service catalogs and credential schemas used by Integration Settings"
       filters={
         <FilterBar
@@ -93,16 +94,12 @@ export function IntegrationServicesListingPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No integration services found.</p>
-            <button
-              type="button"
-              className="text-sm text-primary hover:underline"
-              onClick={() => navigate('/integration-services/new')}
-            >
-              Create your first service
-            </button>
-          </div>
+          <EmptyState
+            icon={Puzzle}
+            title="No integration services"
+            description="Define a service catalog to describe credentials and connection settings."
+            action={{ label: 'New service', onClick: () => navigate('/integration-services/new') }}
+          />
         }
         renderItem={(service) => {
           const identity = getServiceIdentity(service.service_name);
@@ -161,7 +158,7 @@ export function IntegrationServicesListingPage() {
           {total !== undefined ? `Showing all ${total} services` : 'No more services to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

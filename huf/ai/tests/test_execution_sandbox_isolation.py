@@ -239,9 +239,26 @@ class TestWorkspacePrimitives(unittest.TestCase):
 
 	def test_classify_signal_mappings(self):
 		self.assertEqual(sandbox._classify_signal(-signal.SIGXCPU), ("Killed", True))
-		self.assertEqual(sandbox._classify_signal(-signal.SIGKILL), ("OOM", True))
-		self.assertEqual(sandbox._classify_signal(-signal.SIGSEGV), ("OOM", True))
+		self.assertEqual(sandbox._classify_signal(-signal.SIGKILL, max_memory_mb=64), ("OOM", True))
+		self.assertEqual(sandbox._classify_signal(-signal.SIGSEGV, max_memory_mb=64), ("OOM", True))
+		self.assertEqual(sandbox._classify_signal(-signal.SIGKILL, max_memory_mb=0), ("Killed", True))
 		self.assertEqual(sandbox._classify_signal(-signal.SIGTERM), ("Killed", False))
+
+	def test_allowed_modules_import_policy(self):
+		safe_import_math = sandbox._make_safe_import(["math", "pandas"])
+		# Allowed module should import fine
+		m = safe_import_math("math")
+		self.assertEqual(m.sqrt(16), 4.0)
+
+		# Disallowed module should raise ImportError
+		with self.assertRaises(ImportError) as ctx:
+			safe_import_math("json")
+		self.assertIn("not permitted by execution profile policy", str(ctx.exception))
+
+		# Wildcard allows everything
+		safe_import_all = sandbox._make_safe_import(["*"])
+		m_json = safe_import_all("json")
+		self.assertIsNotNone(m_json.dumps)
 
 	def test_safe_builtins_exclude_escape_hatches(self):
 		builtins = sandbox._safe_builtins()

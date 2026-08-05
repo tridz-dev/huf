@@ -9,6 +9,9 @@
   "model_name",
   "provider",
   "modalities",
+  "capabilities_section",
+  "supports_reasoning",
+  "reasoning_config_override",
   "pricing_section",
   "use_custom_pricing",
   "input_cost_per_1m_tokens",
@@ -33,18 +36,38 @@
    "unique": 1
   },
   {
-   "description": "Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription, document OCR/vision).",
+   "description": "Select one or more supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription, document OCR/vision).",
    "fieldname": "modalities",
    "fieldtype": "Data",
    "in_list_view": 1,
-   "label": "Modalities",
+   "label": "Modality",
    "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR"
   },
   {
+   "description": "Configure internal model reasoning support and overrides.",
+   "fieldname": "capabilities_section",
+   "fieldtype": "Section Break",
+   "label": "Reasoning Capabilities (Optional)"
+  },
+  {
+   "default": "0",
+   "description": "Check to force reasoning support on for this model (overriding automatic LiteLLM detection).",
+   "fieldname": "supports_reasoning",
+   "fieldtype": "Check",
+   "label": "Supports Reasoning"
+  },
+  {
+   "description": "Optional JSON object to override reasoning capabilities (e.g. supports_thinking_blocks, supported_efforts).",
+   "fieldname": "reasoning_config_override",
+   "fieldtype": "Code",
+   "label": "Reasoning Configuration Override (JSON)",
+   "options": "JSON"
+  },
+  {
+   "description": "Enable custom prices to override LiteLLM's automatic pricing lookup. When disabled, LiteLLM's built-in price table is used as fallback. Values are in USD per 1 million tokens.",
    "fieldname": "pricing_section",
    "fieldtype": "Section Break",
-   "label": "Custom Pricing (Optional)",
-   "description": "Enable custom prices to override LiteLLM's automatic pricing lookup. When disabled, LiteLLM's built-in price table is used as fallback. Values are in USD per 1 million tokens."
+   "label": "Pricing"
   },
   {
    "fieldname": "use_custom_pricing",
@@ -81,7 +104,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-06-01 12:20:30.191336",
+ "modified": "2026-08-01 07:27:58.701437",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Model",

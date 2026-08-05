@@ -16,6 +16,7 @@ import type { AgentRunDoc } from '../services/agentRunApi';
 import { getAgents } from '../services/agentApi';
 import { getProviders } from '../services/providerApi';
 import type { AgentDoc, AIProvider } from '../types/agent.types';
+import { settleAll } from '../lib/settleAll';
 
 interface DashboardMetrics {
   totalRuns: number;
@@ -148,46 +149,55 @@ function HomePage() {
   useEffect(() => {
     async function fetchAllData() {
       try {
-        // Fetch all data in parallel
-        const [totalRuns, runsData, agentsData, recentRuns, flowsData, providersData] = await Promise.all([
-          getAgentRunsCountLast7Days(),
-          getAgentRunsForMetrics(),
-          getAgents({
-            status: 'active',
-            limit: 10,
-            page: 1,
-          }),
-          getRecentAgentRuns(),
-          getDashboardActiveFlows(10),
-          getProviders(),
-        ]);
+        // Fetch all data in parallel - one denied widget must not blank the
+        // rest of the dashboard, so each slot is isolated via settleAll.
+        const widgetLabels = ['run count', 'run metrics', 'agents', 'recent runs', 'flows', 'providers'];
+        const [totalRuns, runsData, agentsData, recentRuns, flowsData, providersData] = await settleAll(
+          [
+            getAgentRunsCountLast7Days(),
+            getAgentRunsForMetrics(),
+            getAgents({
+              status: 'active',
+              limit: 10,
+              page: 1,
+            }),
+            getRecentAgentRuns(),
+            getDashboardActiveFlows(10),
+            getProviders(),
+          ],
+          (index, error) => {
+            console.error(`Error fetching dashboard ${widgetLabels[index]}:`, error);
+          },
+        );
 
         // Process metrics
-        const successRate = calculateSuccessRate(runsData);
-        const avgRuntime = calculateAvgRuntime(runsData);
-        const totalCost = calculateTotalCost(runsData);
-
-        setMetrics({
-          totalRuns,
-          successRate,
-          avgRuntime,
-          totalCost,
-        });
+        if (runsData) {
+          setMetrics({
+            totalRuns: totalRuns ?? 0,
+            successRate: calculateSuccessRate(runsData),
+            avgRuntime: calculateAvgRuntime(runsData),
+            totalCost: calculateTotalCost(runsData),
+          });
+        }
 
         // Process agents
-        const agentList = Array.isArray(agentsData) ? agentsData : agentsData.items;
-        const activeAgents = agentList.filter((agent) => agent.disabled === 0);
-        setAgents(activeAgents.slice(0, 10));
+        if (agentsData) {
+          const agentList = Array.isArray(agentsData) ? agentsData : agentsData.items;
+          const activeAgents = agentList.filter((agent) => agent.disabled === 0);
+          setAgents(activeAgents.slice(0, 10));
+        }
 
         // Set agent runs
-        setAgentRuns(recentRuns);
+        if (recentRuns) setAgentRuns(recentRuns);
 
         // Set flows
-        setFlows(flowsData);
+        if (flowsData) setFlows(flowsData);
 
         // Set providers
-        const providerList = Array.isArray(providersData) ? providersData : providersData.items;
-        setProviders(providerList);
+        if (providersData) {
+          const providerList = Array.isArray(providersData) ? providersData : providersData.items;
+          setProviders(providerList);
+        }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -314,7 +324,7 @@ function HomePage() {
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-0">
           <div className="flex items-center justify-between border-b border-ink mb-2">
-            <TabsList variant="panel" className="border-b-0">
+            <TabsList className="border-b-0">
               <TabsTrigger value="agents">Agents</TabsTrigger>
               <TabsTrigger value="flows">Flows</TabsTrigger>
               <TabsTrigger value="executions">Executions</TabsTrigger>

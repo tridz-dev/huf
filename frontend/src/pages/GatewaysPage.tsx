@@ -3,13 +3,15 @@ import {
   Check,
   Copy,
   Link2,
+  Network,
   Plus,
   Settings,
   ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
-import { PageLayout, GridView, ItemCard } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { GridView, ItemCard, EmptyState } from '@/components/dashboard';
 import {
   getGateways,
   updateGateway,
@@ -22,8 +24,24 @@ import {
 } from '@/services/gatewayApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
+import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
+import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
+import { IntegrationSettingsListingPage } from './IntegrationSettingsListingPage';
+import { IntegrationSettingsHeaderActions } from '@/components/integrations/IntegrationSettingsHeaderActions';
+import { getIntegrationSettings } from '@/services/integrationApi';
+import type { IntegrationSettingsDoc } from '@/types/integration.types';
+import { cn } from '@/lib/utils';
+
+const PROVIDER_SERVICE: Partial<Record<GatewayProvider, string>> = {
+  WhatsApp: 'whatsapp',
+  VK: 'vk',
+  WeCom: 'wecom',
+  Telegram: 'telegram',
+};
+
+type GatewaysTab = 'gateways' | 'credentials';
 
 const providerNames: Record<GatewayProvider, string> = {
   WhatsApp: 'WhatsApp Business Number',
@@ -56,7 +74,11 @@ const uiProviders: GatewayProvider[] = [
 ];
 
 export default function GatewaysPage() {
+  const { user } = useUser();
+  const [activeTab, setActiveTab] = useState<GatewaysTab>('gateways');
+  const [catalogOpenKey, setCatalogOpenKey] = useState(0);
   const [gateways, setGateways] = useState<GatewayDoc[]>([]);
+  const [integrationSettings, setIntegrationSettings] = useState<IntegrationSettingsDoc[]>([]);
   const [agents, setAgents] = useState<{ name: string; agent_name: string }[]>([]);
   const [flows, setFlows] = useState<{ name: string; title: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,14 +102,16 @@ export default function GatewaysPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [gwList, agentList, flowList] = await Promise.all([
+      const [gwList, agentList, flowList, settingsResponse] = await Promise.all([
         getGateways(),
         getAvailableAgents(),
         getAvailableFlows(),
+        getIntegrationSettings(),
       ]);
       setGateways(gwList);
       setAgents(agentList);
       setFlows(flowList);
+      setIntegrationSettings(Array.isArray(settingsResponse) ? settingsResponse : settingsResponse.items);
     } catch {
       setError('Could not load gateway configurations.');
     } finally {
@@ -101,19 +125,21 @@ export default function GatewaysPage() {
     setCreating(true);
     setError('');
     try {
+      const requiresIntegration = Boolean(PROVIDER_SERVICE[provider]);
       const created = (await db.createDoc(doctype.Gateway, {
         gateway_name: gatewayName.trim(),
         provider,
-        is_enabled: 1,
+        is_enabled: requiresIntegration ? 0 : 1,
         direct_policy: 'Allow list',
+        execution_user: user?.name,
       })) as GatewayDoc;
       setGateways((current) => [created, ...current]);
       setGatewayName('');
       setShowSetup(false);
       // Open configuration modal immediately for the new gateway
       setEditingGateway(created);
-    } catch {
-      setError('Could not create the gateway. Please ensure the name is unique.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the gateway. Please ensure the name is unique.');
     } finally {
       setCreating(false);
     }
@@ -125,6 +151,8 @@ export default function GatewaysPage() {
     try {
       const updated = await updateGateway(editingGateway.name, {
         is_enabled: editingGateway.is_enabled,
+        execution_user: editingGateway.execution_user || '',
+        integration_settings: editingGateway.integration_settings || '',
         description: editingGateway.description || '',
         direct_policy: editingGateway.direct_policy,
         default_target_type: editingGateway.default_target_type,
@@ -135,8 +163,8 @@ export default function GatewaysPage() {
         prev.map((gw) => (gw.name === updated.name ? { ...gw, ...updated } : gw))
       );
       setEditingGateway(null);
-    } catch {
-      setError('Failed to save gateway configuration.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save gateway configuration.');
     } finally {
       setSaving(false);
     }
@@ -157,7 +185,7 @@ export default function GatewaysPage() {
 
   function getWebhookUrl(gwName: string) {
     const host = window.location.origin;
-    return `${host}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway=${encodeURIComponent(gwName)}`;
+    return `${host}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=${encodeURIComponent(gwName)}`;
   }
 
   function handleCopyWebhook(gwName: string) {
@@ -166,8 +194,51 @@ export default function GatewaysPage() {
     setTimeout(() => setCopiedWebhook(false), 2000);
   }
 
+  const tabBar = (
+    <div className="mb-6 flex items-center gap-1 border-b border-line">
+      {(
+        [
+          { key: 'gateways' as const, label: 'Gateways' },
+          { key: 'credentials' as const, label: 'Channel Credentials' },
+        ]
+      ).map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => setActiveTab(tab.key)}
+          className={cn(
+            'px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            activeTab === tab.key
+              ? 'border-primary text-ink'
+              : 'border-transparent text-steel hover:text-ink'
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (activeTab === 'credentials') {
+    return (
+      <IntegrationSettingsProvider onAddIntegration={() => setCatalogOpenKey((v) => v + 1)}>
+        <div className="flex h-full flex-col">
+          <div className="flex items-end justify-between gap-4 px-6 pt-6">
+            {tabBar}
+            <IntegrationSettingsHeaderActions kind="channels" />
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <IntegrationSettingsListingPage kind="channels" catalogOpenKey={catalogOpenKey} />
+          </div>
+        </div>
+      </IntegrationSettingsProvider>
+    );
+  }
+
   return (
-    <PageLayout subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
+    <PageFrame subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
+      {tabBar}
+
       {/* Overview Card */}
       <div className="mb-6 rounded-xl border border-line bg-panel p-5 shadow-xs">
         <div className="flex gap-4">
@@ -256,16 +327,12 @@ export default function GatewaysPage() {
         loading={loading}
         columns={{ sm: 1, md: 2, lg: 3 }}
         emptyState={
-          <div className="max-w-xl py-12 text-center mx-auto">
-            <div className="mb-3 inline-flex rounded-full bg-panel p-4 text-steel border border-line">
-              <Link2 className="h-8 w-8 text-steel" />
-            </div>
-            <p className="mb-1 font-medium text-ink">No gateways configured yet</p>
-            <p className="text-xs text-steel leading-relaxed">
-              Connect WhatsApp, Facebook Messenger, Instagram Direct, Telegram, or Slack to allow customers and
-              team members to trigger AI Agents directly from messaging apps.
-            </p>
-          </div>
+          <EmptyState
+            icon={Network}
+            title="No gateways"
+            description="Connect WhatsApp, Messenger, Instagram, Telegram, or Slack to let people message your agents."
+            action={{ label: 'Add gateway', onClick: () => setShowSetup(true) }}
+          />
         }
         renderItem={(gateway) => {
           const target =
@@ -349,6 +416,65 @@ export default function GatewaysPage() {
                   <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
                 </label>
               </div>
+
+              {/* Run as user */}
+              <label className="grid gap-1 text-xs font-medium text-ink">
+                Run as user
+                <input
+                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                  value={editingGateway.execution_user || ''}
+                  onChange={(e) =>
+                    setEditingGateway({ ...editingGateway, execution_user: e.target.value })
+                  }
+                  placeholder="e.g. gateway-service@yourcompany.com"
+                />
+                <span className="text-[11px] font-normal text-steel">
+                  Least-privileged user this gateway runs Agents/Flows as. Required while
+                  enabled — never use Administrator.
+                </span>
+              </label>
+
+              {/* Connected Integration (credentials) */}
+              {PROVIDER_SERVICE[editingGateway.provider] && (() => {
+                const requiredService = PROVIDER_SERVICE[editingGateway.provider]!;
+                const matches = integrationSettings.filter((s) => s.service === requiredService);
+                return (
+                  <label className="grid gap-1 text-xs font-medium text-ink">
+                    Connected Integration
+                    {matches.length > 0 ? (
+                      <select
+                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
+                        value={editingGateway.integration_settings || ''}
+                        onChange={(e) =>
+                          setEditingGateway({ ...editingGateway, integration_settings: e.target.value })
+                        }
+                      >
+                        <option value="">Choose credentials…</option>
+                        {matches.map((s) => (
+                          <option key={s.name} value={s.name}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-line bg-paper p-3 text-[11px] text-steel">
+                        No {editingGateway.provider} credentials connected yet.{' '}
+                        <button
+                          type="button"
+                          className="font-medium text-primary hover:underline"
+                          onClick={() => setActiveTab('credentials')}
+                        >
+                          Add one in Channel Credentials
+                        </button>
+                        .
+                      </div>
+                    )}
+                    <span className="text-[11px] font-normal text-steel">
+                      {editingGateway.provider} needs a connected integration before it can be enabled.
+                    </span>
+                  </label>
+                );
+              })()}
 
               {/* Description */}
               <label className="grid gap-1 text-xs font-medium text-ink">
@@ -500,6 +626,6 @@ export default function GatewaysPage() {
           </div>
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

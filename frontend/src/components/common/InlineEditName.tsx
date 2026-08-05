@@ -66,14 +66,9 @@ export function InlineEditName({
     </Button>
   );
 
-  const wrapperClassName = cn(
-    'flex items-center gap-2 w-full max-w-md min-w-0',
-    className
-  );
-
   if (isEditing) {
     return (
-      <div className={wrapperClassName}>
+      <div className={cn('flex items-center gap-2 w-full max-w-md min-w-0', className)}>
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -88,8 +83,8 @@ export function InlineEditName({
   }
 
   return (
-    <div className={wrapperClassName}>
-      <h1 className="text-2xl font-bold flex-1 min-w-0 truncate">
+    <div className={cn('inline-flex items-center gap-2 max-w-md min-w-0', className)}>
+      <h1 className="text-2xl font-bold min-w-0 max-w-full truncate">
         {value || placeholder}
       </h1>
       {editButton}

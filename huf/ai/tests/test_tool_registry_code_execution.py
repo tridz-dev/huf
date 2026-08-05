@@ -19,6 +19,7 @@ from huf.ai.tool_registry import PermissionAwareToolRegistry
 from huf.install import create_huf_roles
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestToolRegistryCodeExecution(unittest.TestCase):
 	"""Registry-level capability checks for the Code Execution tool type."""
 

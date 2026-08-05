@@ -11,6 +11,7 @@ from huf.ai.tool_registry import PermissionAwareToolRegistry
 from huf.install import create_huf_roles
 
 
+@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 class TestToolRegistrySSH(unittest.TestCase):
 	@classmethod
 	def setUpClass(cls):

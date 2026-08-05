@@ -265,7 +265,7 @@ export async function getBulkImportTemplateUrl(
 	exportRecords = false
 ): Promise<BulkImportTemplate> {
 	try {
-		const result = await call.get(
+		const result = await call.post(
 			'huf.huf.doctype.huf_data_table.api.get_bulk_import_template_url',
 			{ table_id: tableId, export_records: exportRecords }
 		);

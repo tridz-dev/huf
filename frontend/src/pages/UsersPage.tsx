@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserPlus, ChevronDown } from 'lucide-react';
+import { UserPlus, ChevronDown, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   getUsers,
@@ -10,10 +10,13 @@ import {
   type HufUser,
   type HufRole,
 } from '@/services/permissionsApi';
+import { settleAll } from '@/lib/settleAll';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { PageLayout, FilterBar } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, EmptyState } from '@/components/dashboard';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -187,9 +190,12 @@ export default function UsersPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [u, r] = await Promise.all([getUsers(), getHufRoles()]);
-      setUsers(u);
-      setRoles(r);
+      const errorLabels = ['users', 'roles'];
+      const [u, r] = await settleAll([getUsers(), getHufRoles()], (index, error) => {
+        toast.error(`Failed to load ${errorLabels[index]}: ${getFrappeErrorMessage(error)}`);
+      });
+      if (u) setUsers(u);
+      if (r) setRoles(r);
     } finally {
       setLoading(false);
     }
@@ -237,9 +243,9 @@ export default function UsersPage() {
   }, [users, search, statusFilter]);
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage who has access to Huf and what they can do."
-      toolbar={
+      actions={
         <Button onClick={() => setShowInvite(true)}>
           <UserPlus className="h-4 w-4 mr-2" />
           Invite user
@@ -264,9 +270,14 @@ export default function UsersPage() {
       {loading ? (
         <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-sm font-body text-steel-soft py-12 text-center">No users found.</div>
+        <EmptyState
+          icon={Users}
+          title="No users"
+          description="Invite a user to give them access to Huf."
+          action={{ label: 'Invite user', onClick: () => setShowInvite(true) }}
+        />
       ) : (
-        <div className="overflow-x-auto rounded-none border">
+        <div className="overflow-x-auto border border-line bg-panel">
           <Table className="w-full min-w-[32rem] table-fixed text-sm">
             <TableHeader className="bg-paper-deep/50">
               <TableRow>
@@ -341,6 +352,6 @@ export default function UsersPage() {
         onClose={() => setShowInvite(false)}
         onInvited={(u) => setUsers((prev) => [u, ...prev])}
       />
-    </PageLayout>
+    </PageFrame>
   );
 }

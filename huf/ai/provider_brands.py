@@ -38,6 +38,19 @@ CHEF_TO_BRAND = {
 	"Together AI": "togetherai",
 	"Meta": "meta",
 	"Ollama": "ollama",
+	"Moonshot": "moonshot",
+	"Moonshot AI": "moonshot",
+	"AI21": "ai21",
+	"Baseten": "baseten",
+	"Cloudflare": "cloudflare-workers-ai",
+	"Clarifai": "clarifai",
+	"Nomic": "nomic",
+	"Replicate": "replicate",
+	"SageMaker": "sagemaker",
+	"Stability AI": "stability-ai",
+	"vLLM": "vllm",
+	"Watsonx": "watsonx",
+	"IBM Watsonx": "watsonx",
 }
 
 

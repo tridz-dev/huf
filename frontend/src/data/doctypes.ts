@@ -30,6 +30,7 @@ export const doctype = {
   "Flow Run": "Flow Run",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
+  "Memory Policy": "Memory Policy",
   Skill: "Skill",
   "Skill Category": "Skill Category",
   "Agent Skill": "Agent Skill",

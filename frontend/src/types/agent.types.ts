@@ -17,6 +17,8 @@ export type AIModel = {
   input_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
   cached_input_cost_per_1m_tokens?: number | null;
+  supports_reasoning?: number;
+  reasoning_config_override?: string;
 };
 
 export type ToolType =
@@ -63,6 +65,7 @@ export type AgentToolFunctionRef = {
   function_path?: string;
   provider_app?: string;
   tool_type?: string; // Link to Agent Tool Type
+  service?: string; // Link to Integration Service that must be connected
 };
 
 export type AgentToolType = {
@@ -120,6 +123,10 @@ export type Agent = {
   allow_chat?: boolean;
   is_system?: boolean;
   persist_conversation?: boolean;
+  reasoning_mode?: "Auto" | "Off" | "On";
+  reasoning_effort?: "Auto" | "Low" | "Medium" | "High";
+  reasoning_budget_tokens?: number;
+  reasoning_summary?: "None" | "Concise" | "Detailed";
   triggers: AgentTrigger[];
   tags?: string[];
   category?: AgentCategory;
@@ -170,6 +177,7 @@ export type AgentRun = {
   total_tokens?: number;
   total_cost?: number;
   latency_ms?: number;
+  reasoning_snapshot?: string;
   created_at: string;
 };
 
@@ -207,6 +215,11 @@ export interface AgentOrchestrationPlanRow {
   status: "pending" | "in_progress" | "done" | "failed";
   instruction: string;
   output_ref: string;
+}
+
+export interface AgentStarterPromptRow {
+  name?: string;
+  prompt_text: string;
 }
 /**
  * Agent document type from Frappe
@@ -247,6 +260,7 @@ export interface AgentDoc {
   doc_event: DocEventType | null;
   description?: string | null;
   instructions: string;
+  starter_prompts?: AgentStarterPromptRow[];
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
   agent_knowledge?: AgentKnowledgeRow[];
   agent_skill?: AgentSkillRow[];
@@ -281,6 +295,10 @@ export interface AgentDoc {
   summary_template_version_at_attach?: number;
   summary_prompt?: string | null;
   history_limit?: number | null; // Maximum number of messages to keep
+  reasoning_mode?: 'Auto' | 'Off' | 'On' | null;
+  reasoning_effort?: 'Auto' | 'Low' | 'Medium' | 'High' | null;
+  reasoning_budget_tokens?: number | null;
+  reasoning_summary?: 'None' | 'Concise' | 'Detailed' | null;
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
   max_context_chars?: number | null; // Maximum characters for tool results before truncation

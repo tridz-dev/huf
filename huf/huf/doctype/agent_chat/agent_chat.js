@@ -453,9 +453,11 @@ function append_message(messagesEl, role, sender, content, ts, customId) {
             "background:#f3f4f6; color:#374151;";
 
     const align = isUser ? "flex-end" : "flex-start";
-    const time = ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "";
     const displayName = isUser ? "You" : (isSystem ? "System" : sender);
     const msgId = customId || ("msg-" + frappe.utils.get_random(6));
+    const safeDisplayName = frappe.utils.escape_html ? frappe.utils.escape_html(displayName) : displayName.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rawMarkdown = frappe.markdown(content || "");
+    const safeContent = frappe.utils.xss_sanitize ? frappe.utils.xss_sanitize(rawMarkdown) : rawMarkdown;
 
     messagesEl.append(`
         <div style="display:flex; justify-content:${align}; margin-bottom:16px;">
@@ -463,7 +465,7 @@ function append_message(messagesEl, role, sender, content, ts, customId) {
 
                 <!-- Chat Bubble -->
                 <div id="${msgId}" style="${bubbleStyle} padding:10px 14px; border-radius:12px; font-size:14px; line-height:1.5;">
-                    <div class="chat-bubble-content">${frappe.markdown(content || "")}</div>
+                    <div class="chat-bubble-content">${safeContent}</div>
                     <button class="copy-msg-btn" data-target="${msgId}" 
                         style="position:absolute; top:6px; padding:6px; right:6px; border:none; background:none; cursor:pointer; color:black; display:none;"
                         title="Copy">
@@ -472,7 +474,7 @@ function append_message(messagesEl, role, sender, content, ts, customId) {
                 </div>
 
                 <div style="margin-bottom:4px; font-size:12px; color:#6b7280; padding:0 8px;  text-align: right;">
-                    <span>${displayName} • ${time}</span>
+                    <span>${safeDisplayName} • ${time}</span>
                 </div>
 
             </div>

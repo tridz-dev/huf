@@ -1,7 +1,5 @@
 import { Cpu, Settings, Loader2, DollarSign } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-import { PageLayout, FilterBar, GridView, LoadMoreButton } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
   getModels,
@@ -37,6 +36,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { AIModel, AIProvider } from '../types/agent.types';
 import { LinkFieldControl } from '../components/ui/link-field-control';
+import { MultiSelectCombobox } from '../components/ui/multi-select-combobox';
 import { linkRoutes } from '../lib/link-routes';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
@@ -47,7 +47,7 @@ interface ModelsPageProps {
 interface ModelFormData {
   model_name: string;
   provider: string;
-  modalities: string;
+  modalities: string[];
   use_custom_pricing: boolean;
   input_cost_per_1m_tokens: string;
   output_cost_per_1m_tokens: string;
@@ -57,7 +57,7 @@ interface ModelFormData {
 const emptyFormData: ModelFormData = {
   model_name: '',
   provider: '',
-  modalities: '',
+  modalities: [],
   use_custom_pricing: false,
   input_cost_per_1m_tokens: '',
   output_cost_per_1m_tokens: '',
@@ -188,7 +188,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       setFormData({
         model_name: details.model_name || '',
         provider: details.provider || '',
-        modalities: details.modalities || '',
+        modalities: details.modalities
+          ? details.modalities.split(',').map((m) => m.trim()).filter(Boolean)
+          : [],
         use_custom_pricing: details.use_custom_pricing === 1,
         input_cost_per_1m_tokens:
           details.input_cost_per_1m_tokens != null ? String(details.input_cost_per_1m_tokens) : '',
@@ -249,7 +251,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     const payload: Record<string, unknown> = {
       model_name: formData.model_name.trim(),
       provider: formData.provider,
-      modalities: formData.modalities,
+      modalities: formData.modalities.join(','),
       use_custom_pricing: formData.use_custom_pricing ? 1 : 0,
     };
 
@@ -306,7 +308,8 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   });
 
   return (
-    <PageLayout
+    <PageFrame
+      title="Models"
       subtitle="Manage AI models and their capabilities"
       filters={
         <FilterBar
@@ -327,57 +330,41 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No models found.</p>
-          </div>
+          <EmptyState
+            icon={Cpu}
+            title="No models"
+            description="Add a model to use with your AI providers."
+            action={{ label: 'Add model', onClick: handleAddModel }}
+          />
         }
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);
+          const modalities = parseModalityBadges(model.modalities);
 
           return (
-            <Card key={model.name} className="h-full flex flex-col">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-none bg-primary/10 flex items-center justify-center">
-                      <Cpu className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{model.model_name}</CardTitle>
-                      <CardDescription className="text-xs">
-                        {resolveProviderName(model.provider, providerMap)}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  {parseModalityBadges(model.modalities).map((modality) => (
-                    <Badge key={modality} variant="secondary" className="text-xs">
-                      {modality}
-                    </Badge>
-                  ))}
-                </div>
-                {model.use_custom_pricing === 1 && (
-                  <div className="flex items-center gap-1.5 text-xs text-steel-soft">
-                    <DollarSign className="w-3 h-3" />
-                    <span>{pricingSummary || 'Custom pricing'}</span>
-                  </div>
-                )}
-              </CardContent>
-              <CardFooter>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1 gap-2"
-                  onClick={() => handleConfigure(model)}
-                >
-                  <Settings className="w-4 h-4" />
-                  Configure
-                </Button>
-              </CardFooter>
-            </Card>
+            <ItemCard
+              key={model.name}
+              title={model.model_name}
+              description={resolveProviderName(model.provider, providerMap)}
+              icon={Cpu}
+              metadata={[
+                { label: 'Provider', value: resolveProviderName(model.provider, providerMap), icon: undefined },
+                ...(pricingSummary ? [{ label: 'Pricing', value: pricingSummary, icon: DollarSign }] : []),
+              ]}
+              badges={modalities.map((modality) => ({
+                label: modality,
+                variant: 'secondary' as const,
+              }))}
+              actions={[
+                {
+                  icon: Settings,
+                  label: 'Configure',
+                  onClick: () => handleConfigure(model),
+                  variant: 'ghost',
+                },
+              ]}
+              onClick={() => handleConfigure(model)}
+            />
           );
         }}
         keyExtractor={(model) => model.name}
@@ -453,23 +440,15 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="modalities">Modality</Label>
-                <Select
-                  value={formData.modalities}
-                  onValueChange={(value) => setFormData({ ...formData, modalities: value })}
-                >
-                  <SelectTrigger id="modalities">
-                    <SelectValue placeholder="Select a modality" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modalityOptions.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <MultiSelectCombobox
+                  options={modalityOptions.map((opt) => ({ value: opt, label: opt }))}
+                  values={formData.modalities}
+                  onValuesChange={(values) => setFormData({ ...formData, modalities: values })}
+                  placeholder="Select modalities"
+                  searchPlaceholder="Search modalities..."
+                />
                 <p className="text-xs text-steel-soft">
-                  Supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).
+                  Select one or more supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription).
                 </p>
               </div>
 
@@ -576,6 +555,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </PageLayout>
+    </PageFrame>
   );
 }

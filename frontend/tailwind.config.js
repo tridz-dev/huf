@@ -26,6 +26,7 @@ export default {
         signal:         'var(--signal)',
         'signal-ink':   'var(--signal-ink)',
         good:           'var(--good)',
+        'coral-soft':   'var(--coral-soft)',
 
         // shadcn compatibility
         background: 'var(--background)',

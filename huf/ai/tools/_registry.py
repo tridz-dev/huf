@@ -191,58 +191,6 @@ TELEGRAM_TOOLS = [
 	},
 ]
 
-WHATSAPP_TOOLS = [
-	{
-		"tool_name": "whatsapp",
-		"description": (
-			"Manage Meta WhatsApp messaging. Actions: "
-			"send_message (to, message), "
-			"send_template (to, template_name, language_code), "
-			"list_messages (to, from, limit), "
-			"get_account_info."
-		),
-		"function_path": "huf.ai.tools.whatsapp.handle_action",
-		"category": "Communication Tools",
-		"parameters": [
-			_action("send_message|send_template|list_messages|get_account_info"),
-			_p("to", description="Recipient phone number with country code (e.g. 15551234567)"),
-			_p("message", description="Message body text"),
-			_p("text", description="Alias for message body text"),
-			_p("template_name", description="Meta approved WhatsApp template name"),
-			_p("language_code", description="Language code for template (default en)"),
-			_p("limit", type="integer", description="Max number of messages to return"),
-			_p("phone_number_id", description="Override Meta WhatsApp Phone Number ID"),
-			_p("access_token", description="Override Meta Access Token"),
-		],
-	},
-]
-
-MESSENGER_TOOLS = [
-	{
-		"tool_name": "messenger",
-		"description": (
-			"Manage Facebook Messenger and Instagram Direct messaging. Actions: "
-			"send_message (recipient_id, message, platform), "
-			"list_conversations (platform, limit), "
-			"list_messages (conversation, limit)."
-		),
-		"function_path": "huf.ai.tools.messenger.handle_action",
-		"category": "Communication Tools",
-		"parameters": [
-			_action("send_message|list_conversations|list_messages"),
-			_p("recipient_id", description="Recipient PSID or IGSID user identifier"),
-			_p("to", description="Alias for recipient_id"),
-			_p("message", description="Message body text"),
-			_p("text", description="Alias for message body text"),
-			_p("platform", description="Channel platform: 'messenger' or 'instagram'"),
-			_p("conversation", description="Messenger Conversation ID for listing messages"),
-			_p("limit", type="integer", description="Max items to list"),
-			_p("page_id", description="Override Facebook Page ID or Instagram Professional ID"),
-			_p("access_token", description="Override Meta Access Token"),
-		],
-	},
-]
-
 
 # ---------------------------------------------------------------------------
 # Developer Tools
@@ -1282,18 +1230,603 @@ BUILDER_TOOLS = [
 ]
 
 
+DOCKER_TOOLS = [
+	{
+		"tool_name": "docker_execution",
+		"description": "Manage Docker containers, images, and Compose deployments with bounded, explicit operations. Compose actions operate on an existing compose file; destructive actions require confirm_destructive=true. Supports local socket, Docker contexts, TLS endpoints, or a Frappe SSH Connection.",
+		"function_path": "huf.ai.tools.docker_execution.handle_action",
+		"category": "Developer Tools",
+		"parameters": [
+			_action("list_containers|list_images|inspect_container|logs|stop_container|start_container|restart_container|remove_container|pull_image|run_container|exec_container|compose_up|compose_ps|compose_logs|compose_config|compose_down"),
+			_p("container", description="Container name or ID"),
+			_p("image", description="Image name"),
+			_p("command", description="Command to execute (for exec_container)"),
+			_p("name", description="Name for new container (for run_container)"),
+			_p("ports", description="Ports to publish (comma separated, e.g. '80:80')"),
+			_p("environment", description="Environment variables (comma separated KEY=VALUE entries)"),
+			_p("volumes", description="Bind mounts (comma separated host:container[:mode] entries)"),
+			_p("network", description="Docker network for a new container"),
+			_p("workdir", description="Working directory for run or exec"),
+			_p("user", description="User for a new container"),
+			_p("memory", description="Memory limit for a new container, e.g. 512m"),
+			_p("cpus", type="number", description="CPU limit for a new container"),
+			_p("auto_remove", type="boolean", description="Remove the container when it exits"),
+			_p("confirm_destructive", type="boolean", description="Required confirmation for stop, restart, or remove"),
+			_p("timeout_seconds", type="integer", description="Maximum operation time, capped at 300 seconds"),
+			_p("compose_file", description="Path to an existing Docker Compose file"),
+			_p("project_dir", description="Compose project directory"),
+			_p("project_name", description="Compose project name"),
+			_p("services", description="Comma-separated Compose service names"),
+			_p("detach", type="boolean", description="Run Compose services in the background (default true)"),
+			_p("build", type="boolean", description="Build images before Compose up"),
+			_p("wait", type="boolean", description="Wait for services to become healthy"),
+			_p("remove_orphans", type="boolean", description="Remove Compose containers not in the file"),
+			_p("remove_volumes", type="boolean", description="Remove named volumes during compose_down"),
+			_p("tail", type="integer", description="Number of log lines to tail"),
+			_p("connection_string", description="Docker daemon URL (unix://, ssh://, tcp://)"),
+			_p("context_name", description="Docker context name"),
+			_p("ssh_connection", description="Frappe SSH Connection doctype name to use for remote docker execution"),
+			_p("tls_verify", type="boolean", description="Enable TLS verification for TCP connections"),
+			_p("tls_ca_cert", description="Path to the CA certificate for a TLS Docker daemon"),
+			_p("tls_cert", description="Path to the client certificate for a TLS Docker daemon"),
+			_p("tls_key", description="Path to the client key for a TLS Docker daemon"),
+		],
+	},
+]
+
+
 # ---------------------------------------------------------------------------
 # Master list
 # ---------------------------------------------------------------------------
 
+FRAPPE_CLOUD_TOOLS = [
+	{
+		"tool_name": "fc_list_benches",
+		"description": "List Frappe Cloud benches with optional filters.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_benches",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("filters", description="Optional filters dict"),
+		],
+	},
+	{
+		"tool_name": "fc_get_bench",
+		"description": "Get details of a Frappe Cloud bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_bench",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+		],
+	},
+	{
+		"tool_name": "fc_create_bench",
+		"description": "Create a new Frappe Cloud bench/release group. Optionally pin it to a dedicated server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_create_bench",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("title", required=True, description="Bench title"),
+			_p("version", description="Frappe version (e.g. Version 16)"),
+			_p("cluster", description="Cluster name (e.g. UAE)"),
+			_p("apps", description="List of apps to add"),
+			_p("server", description="Optional dedicated server name to host the bench on"),
+			_p("saas_app", description="Optional SaaS app name"),
+		],
+	},
+	{
+		"tool_name": "fc_bench_options",
+		"description": "Get available versions, clusters and apps for creating a new Frappe Cloud bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_bench_options",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_archive_bench",
+		"description": "Archive/delete a Frappe Cloud bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_archive_bench",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+		],
+	},
+	{
+		"tool_name": "fc_add_app_to_bench",
+		"description": "Add an app to a Frappe Cloud bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_add_app_to_bench",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+			_p("app", required=True, description="App name"),
+			_p("source", required=True, description="App source identifier"),
+		],
+	},
+	{
+		"tool_name": "fc_list_sites",
+		"description": "List Frappe Cloud sites with optional filters.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_sites",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("filters", description="Optional filters dict"),
+		],
+	},
+	{
+		"tool_name": "fc_site_options",
+		"description": "Get available options for creating a new Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_site_options",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", description="Bench/release group name"),
+		],
+	},
+	{
+		"tool_name": "fc_site_plans",
+		"description": "List available plans for a Frappe Cloud bench/release group.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_site_plans",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", description="Bench/release group name"),
+		],
+	},
+	{
+		"tool_name": "fc_create_site",
+		"description": "Create a new Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_create_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+			_p("apps", description="List of apps to install"),
+			_p("version", description="Frappe version"),
+			_p("domain", description="Domain suffix"),
+			_p("plan", description="Plan name"),
+			_p("bench", description="Bench/release group name"),
+			_p("provider", description="Infrastructure provider"),
+			_p("cluster", description="Cluster name"),
+		],
+	},
+	{
+		"tool_name": "fc_drop_site",
+		"description": "Archive/delete a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_drop_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+			_p("force", description="Force archive even if active"),
+		],
+	},
+	{
+		"tool_name": "fc_backup_site",
+		"description": "Trigger a backup of a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_backup_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+			_p("with_files", description="Include files in backup"),
+		],
+	},
+	{
+		"tool_name": "fc_download_backup",
+		"description": "List downloadable backups for a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_download_backup",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_migrate_site",
+		"description": "Run migrate on a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_migrate_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+			_p("skip_failing_patches", description="Skip failing patches"),
+		],
+	},
+	{
+		"tool_name": "fc_clear_cache",
+		"description": "Clear cache of a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_clear_cache",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_update_site",
+		"description": "Update a Frappe Cloud site (pull latest app versions).",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_update_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+			_p("skip_backups", description="Skip backups before update"),
+		],
+	},
+	{
+		"tool_name": "fc_clone_site",
+		"description": "Clone a Frappe Cloud site into another bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_clone_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("source_site", required=True, description="Source site name"),
+			_p("bench", required=True, description="Target bench name"),
+		],
+	},
+	{
+		"tool_name": "fc_add_app_to_site",
+		"description": "Install an app on a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_add_app_to_site",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+			_p("app", required=True, description="App name"),
+			_p("plan", description="Marketplace plan name"),
+		],
+	},
+	{
+		"tool_name": "fc_get_admin_login_link",
+		"description": "Get an admin login link/session for a Frappe Cloud site.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_admin_login_link",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("site_name", required=True, description="Site name"),
+		],
+	},
+	{
+		"tool_name": "fc_list_webhooks",
+		"description": "List registered Frappe Cloud press webhooks.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_webhooks",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("endpoint", description="Filter by endpoint URL"),
+			_p("limit", description="Max results"),
+		],
+	},
+	{
+		"tool_name": "fc_available_webhook_events",
+		"description": "List available Frappe Cloud webhook event types.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_available_webhook_events",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_add_webhook",
+		"description": "Register a new Frappe Cloud press webhook.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_add_webhook",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("endpoint", required=True, description="Webhook endpoint URL"),
+			_p("secret", required=True, description="Secret token"),
+			_p("events", required=True, description="List of event names"),
+		],
+	},
+	{
+		"tool_name": "fc_update_webhook",
+		"description": "Update an existing Frappe Cloud press webhook.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_update_webhook",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("name", required=True, description="Webhook document name"),
+			_p("endpoint", required=True, description="Webhook endpoint URL"),
+			_p("events", required=True, description="List of event names"),
+			_p("secret", description="Secret token"),
+		],
+	},
+	{
+		"tool_name": "fc_delete_webhook",
+		"description": "Delete a Frappe Cloud press webhook.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_delete_webhook",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("name", required=True, description="Webhook document name"),
+		],
+	},
+	{
+		"tool_name": "fc_list_ssh_keys",
+		"description": "List SSH keys stored in the Frappe Cloud account.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_ssh_keys",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_add_ssh_key",
+		"description": "Add an SSH public key to the Frappe Cloud account.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_add_ssh_key",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("key", required=True, description="SSH public key string"),
+		],
+	},
+	{
+		"tool_name": "fc_mark_ssh_key_default",
+		"description": "Mark an SSH key as default in the Frappe Cloud account.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_mark_ssh_key_default",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("key_name", required=True, description="SSH key document name"),
+		],
+	},
+	{
+		"tool_name": "fc_get_bench_ssh_certificate",
+		"description": "Get the SSH certificate for a Frappe Cloud bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_bench_ssh_certificate",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+		],
+	},
+	{
+		"tool_name": "fc_generate_bench_ssh_certificate",
+		"description": "Generate/regenerate the SSH certificate for a Frappe Cloud bench.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_generate_bench_ssh_certificate",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+		],
+	},
+	{
+		"tool_name": "fc_list_servers",
+		"description": "List Frappe Cloud application and database servers.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_servers",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("filters", description="Optional filters dict, e.g. {\"server_type\": \"App Servers\"}"),
+		],
+	},
+	{
+		"tool_name": "fc_get_server",
+		"description": "Get details of a Frappe Cloud server (App or Database server).",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_server",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+		],
+	},
+	{
+		"tool_name": "fc_get_server_overview",
+		"description": "Get plan and ownership overview for a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_get_server_overview",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+		],
+	},
+	{
+		"tool_name": "fc_server_options",
+		"description": "Return regions and plans available for creating a new Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_server_options",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "fc_server_plans",
+		"description": "List Frappe Cloud server plans for a given server type.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_server_plans",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server_type", description="Server type: Server or Database Server (default: Server)"),
+			_p("cluster", description="Filter plans by cluster"),
+			_p("platform", description="Filter by platform, e.g. x86_64 or arm64"),
+		],
+	},
+	{
+		"tool_name": "fc_create_server",
+		"description": "Create a new Frappe Cloud server. Provide only app_plan for a unified server; provide db_plan as well to create separate app and database servers.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_create_server",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("title", required=True, description="Server title"),
+			_p("cluster", required=True, description="Cluster name"),
+			_p("app_plan", required=True, description="Application server plan name"),
+			_p("db_plan", description="Database server plan name (if omitted, creates a unified server)"),
+			_p("auto_increase_storage", type="boolean", description="Enable auto-increase storage"),
+		],
+	},
+	{
+		"tool_name": "fc_archive_server",
+		"description": "Archive/delete a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_archive_server",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+		],
+	},
+	{
+		"tool_name": "fc_reboot_server",
+		"description": "Reboot a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_reboot_server",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+		],
+	},
+	{
+		"tool_name": "fc_rename_server",
+		"description": "Rename (change the title of) a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_rename_server",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+			_p("title", required=True, description="New server title"),
+		],
+	},
+	{
+		"tool_name": "fc_change_server_plan",
+		"description": "Resize/change the plan of a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_change_server_plan",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+			_p("plan", required=True, description="New server plan name"),
+		],
+	},
+	{
+		"tool_name": "fc_server_usage",
+		"description": "Get current CPU, memory and disk usage for a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_server_usage",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+		],
+	},
+	{
+		"tool_name": "fc_list_server_benches",
+		"description": "List benches (release groups) running on a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_server_benches",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+		],
+	},
+	{
+		"tool_name": "fc_list_server_jobs",
+		"description": "List Agent jobs for a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_server_jobs",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+			_p("limit_page_length", type="integer", description="Max results"),
+		],
+	},
+	{
+		"tool_name": "fc_list_server_plays",
+		"description": "List Ansible plays for a Frappe Cloud server.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_server_plays",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("server", required=True, description="Server name"),
+			_p("limit_page_length", type="integer", description="Max results"),
+		],
+	},
+	{
+		"tool_name": "fc_list_bench_jobs",
+		"description": "List Agent jobs for a Frappe Cloud bench/release group.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_bench_jobs",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("bench", required=True, description="Bench name"),
+			_p("limit_page_length", type="integer", description="Max results"),
+		],
+	},
+	{
+		"tool_name": "fc_list_marketplace_apps",
+		"description": "List apps available on the Frappe Cloud Marketplace.",
+		"function_path": "huf.ai.tools.frappe_cloud.handle_fc_list_marketplace_apps",
+		"category": "Frappe Cloud",
+		"service": "frappe_cloud",
+		"parameters": [
+			_p("filters", description="Optional filters dict"),
+			_p("limit", type="integer", description="Max results"),
+		],
+	},
+]
+
+def _with_service(tools: list[dict], service: str) -> list[dict]:
+	"""Stamp the owning Integration Service key onto each tool definition.
+
+	Tools are already grouped one list per service in this file, so the
+	association is declared once here instead of repeated on every entry. The
+	key must match an `Integration Service` docname, because that link is what
+	lets the UI tell a user which account a tool needs before they attach it.
+	An entry that already names a service keeps its own value.
+	"""
+	return [{**tool, "service": tool.get("service") or service} for tool in tools]
+
+
+DOCUMENT_ARTIFACT_TOOLS = [
+	{
+		"tool_name": "list_document_artifacts",
+		"description": (
+			"List document artifacts (created via <artifact type=\"document\">) in a conversation, "
+			"returning each one's id, title, and creation time. A document artifact's id is not "
+			"known to you at the moment you emit its <artifact> tag - it only exists once that "
+			"message has been saved. Call this tool in a LATER turn to discover the id of a "
+			"document created earlier in the conversation before calling export_artifact or "
+			"redline_artifact on it."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_list_document_artifacts",
+		"category": "Document Tools",
+		"parameters": [
+			_p("conversation_id", required=True, description="The conversation to list document artifacts for"),
+		],
+	},
+	{
+		"tool_name": "export_artifact",
+		"description": (
+			"Export a document artifact (created via <artifact type=\"document\">) as a "
+			"downloadable PDF, DOCX, or HTML file. Only artifacts of type 'document' or "
+			"'markdown' can be exported - their content is treated as markdown source."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_export_artifact",
+		"category": "Document Tools",
+		"parameters": [
+			_p("artifact_id", required=True, description="The id/name of the Artifact to export"),
+			_p("format", required=True, description="One of 'pdf', 'docx', 'html'"),
+		],
+	},
+	{
+		"tool_name": "redline_artifact",
+		"description": (
+			"Apply tracked-changes (Word redlining) edits to a document artifact, producing a "
+			"new derived DOCX with insertions and deletions marked and attributed to an author - "
+			"the original artifact content is not modified. Use this when the user asks for "
+			"suggested edits or a marked-up revision rather than a silent rewrite."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_redline_artifact",
+		"category": "Document Tools",
+		"parameters": [
+			_p("artifact_id", required=True, description="The id/name of the Artifact to redline"),
+			_p("edits", type="json", required=True, description="List of {find, replace} dicts describing the edits to mark as tracked changes"),
+			_p("author", description="Attribution for the tracked changes; defaults to the current user"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
+	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
-	+ SLACK_TOOLS
-	+ DISCORD_TOOLS
-	+ TELEGRAM_TOOLS
-	+ WHATSAPP_TOOLS
-	+ MESSENGER_TOOLS
-	+ GITHUB_TOOLS
 	+ CRM_TOOLS
 	+ HELPDESK_TOOLS
 	+ RAVEN_TOOLS
@@ -1301,16 +1834,27 @@ ALL_INTEGRATION_TOOLS = (
 	+ ERPNEXT_CRM_TOOLS
 	+ ERPNEXT_INVENTORY_TOOLS
 	+ ERPNEXT_REPORT_TOOLS
-	+ GMAIL_TOOLS
-	+ GOOGLE_SHEETS_TOOLS
-	+ GOOGLE_CALENDAR_TOOLS
-	+ GOOGLE_MAPS_TOOLS
-	+ GOOGLE_PLACES_TOOLS
-	+ GOOGLE_DRIVE_TOOLS
-	+ GOOGLE_MEET_TOOLS
-	+ SERP_HOTEL_TOOLS
-	+ SERP_REVIEW_TOOLS
-	+ SERP_YOUTUBE_TOOLS
 	+ BUILDER_TOOLS
 	+ SSH_TOOLS
+	+ DOCKER_TOOLS
+	+ DOCUMENT_ARTIFACT_TOOLS
+	# Tools backed by a connectable service. Keys match Integration Service
+	# docnames and the SERVICE_NAME each tool module uses for credentials.
+	+ _with_service(SLACK_TOOLS, "slack")
+	+ _with_service(DISCORD_TOOLS, "discord")
+	+ _with_service(TELEGRAM_TOOLS, "telegram")
+	+ _with_service(GITHUB_TOOLS, "github")
+	+ _with_service(GMAIL_TOOLS, "gmail")
+	+ _with_service(GOOGLE_SHEETS_TOOLS, "google_sheets")
+	+ _with_service(GOOGLE_CALENDAR_TOOLS, "google_calendar")
+	+ _with_service(GOOGLE_MAPS_TOOLS, "google_maps")
+	# Places is part of Google Maps Platform and shares its API key —
+	# `google_places.py` sets SERVICE_NAME = "google_maps".
+	+ _with_service(GOOGLE_PLACES_TOOLS, "google_maps")
+	+ _with_service(GOOGLE_DRIVE_TOOLS, "google_drive")
+	+ _with_service(GOOGLE_MEET_TOOLS, "google_meet")
+	+ _with_service(SERP_HOTEL_TOOLS, "serpapi")
+	+ _with_service(SERP_REVIEW_TOOLS, "serpapi")
+	+ _with_service(SERP_YOUTUBE_TOOLS, "serpapi")
+	+ FRAPPE_CLOUD_TOOLS  # entries already declare service="frappe_cloud"
 )
