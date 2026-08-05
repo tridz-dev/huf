@@ -276,7 +276,7 @@ export function TriggerModal({
               control={triggerForm.control}
               name="active"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Active</FormLabel>
                     <FormDescription>Enable this trigger</FormDescription>

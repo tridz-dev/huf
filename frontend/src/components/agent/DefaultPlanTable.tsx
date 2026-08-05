@@ -29,7 +29,7 @@ export function DefaultPlanTable({
 }: DefaultPlanTableProps) {
 	return (
 		<>
-			<div className="overflow-hidden rounded-none border">
+			<div className="overflow-hidden rounded-lg border">
 				<div className="max-h-72 overflow-auto">
 					<Table className="table-fixed w-full">
 						<TableHeader className="bg-paper-deep sticky top-0 z-10">

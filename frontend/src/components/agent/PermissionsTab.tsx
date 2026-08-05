@@ -45,7 +45,7 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
             control={form.control}
             name="allow_guest"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Allow Guest API Access</FormLabel>
                   <FormDescription>
@@ -108,7 +108,7 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
           />
 
           {(selectedUsers?.length || selectedRoles?.length) ? (
-            <div className="rounded-none border border-dashed bg-paper-deep/30 p-4 text-sm text-steel">
+            <div className="rounded-lg border border-dashed bg-paper-deep/30 p-4 text-sm text-steel">
               This agent is restricted to {selectedUsers?.length || 0} user(s) and {selectedRoles?.length || 0} role(s),
               in addition to the document owner.
             </div>

@@ -83,7 +83,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="allow_chat"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Allow Chat</FormLabel>
 									<FormDescription>
@@ -120,7 +120,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="persist_conversation"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Persist History</FormLabel>
 									<FormDescription>
@@ -147,7 +147,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="persist_user_history"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Persist per User (Doc/Schedule)</FormLabel>
 									<FormDescription>
@@ -165,7 +165,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="enable_multi_run"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
 									<FormLabel className="text-base">Enable Multi Run</FormLabel>
 									<FormDescription>

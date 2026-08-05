@@ -355,8 +355,8 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                     <Skeleton className="h-4 w-40" />
                   </div>
                   <div className="ml-3 pl-3 border-l border-line space-y-2">
-                    <Skeleton className="h-10 w-full rounded-none" />
-                    <Skeleton className="h-10 w-full rounded-none" />
+                    <Skeleton className="h-10 w-full rounded" />
+                    <Skeleton className="h-10 w-full rounded" />
                   </div>
                 </div>
               ))}
@@ -482,7 +482,7 @@ function AgentConversationItem({
   return (
     <AccordionItem value={agent.name} className="border-b-0">
       <AccordionTrigger
-        className="group gap-2 mb-1 py-1 px-1 hover:bg-paper-deep cursor-pointer select-none rounded-none"
+        className="group gap-2 mb-1 py-1 px-1 hover:bg-paper-deep cursor-pointer select-none rounded-md"
         arrowPosition="left"
       >
         <div className="flex-1 flex gap-x-2 items-center">
@@ -493,7 +493,7 @@ function AgentConversationItem({
             {agent.agent_name}
           </span>
         </div>
-        <span className="text-[10px] min-w-6 text-steel-soft bg-paper-deep px-1.5 py-0.5 rounded-none border border-line ml-auto">
+        <span className="text-[10px] min-w-6 text-steel-soft bg-paper-deep px-1.5 py-0.5 rounded-full border border-line ml-auto">
           {agent.conversationCount}
         </span>
         <Button 
@@ -510,15 +510,15 @@ function AgentConversationItem({
       <AccordionContent className="space-y-0.5 ml-3 pl-3 border-l border-line overflow-hidden transition-all duration-300 opacity-100">
         {initialLoading ? (
           <div className="space-y-2 p-2">
-            <Skeleton className="h-10 w-full rounded-none" />
-            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded" />
+            <Skeleton className="h-10 w-full rounded" />
           </div>
         ) : conversations.length === 0 && agent.conversationCount === 0 ? (
           <div className="p-2 text-xs font-body text-steel-soft">No conversations</div>
         ) : conversations.length === 0 && agent.conversationCount > 0 ? (
           <div className="space-y-2 p-2">
-            <Skeleton className="h-10 w-full rounded-none" />
-            <Skeleton className="h-10 w-full rounded-none" />
+            <Skeleton className="h-10 w-full rounded" />
+            <Skeleton className="h-10 w-full rounded" />
           </div>
         ) : (
           <>
@@ -694,7 +694,7 @@ function RecentsConversationList({
     return (
       <div className="space-y-1">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-none">
+          <div key={`recent-skel-${i}`} className="flex px-2 py-1.5 gap-2 items-center rounded-md">
             <Skeleton className="h-6 w-6 rounded-full shrink-0" />
             <div className="flex-1 space-y-1.5">
               <Skeleton className="h-3 w-2/3" />
@@ -745,7 +745,7 @@ function RecentsConversationList({
                               }
                             }}
                             className={cn(
-                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-none cursor-pointer transition-all',
+                              'group flex w-full text-left px-2 py-1.5 gap-2 items-center rounded-md cursor-pointer transition-all',
                               isSelected
                                 ? 'bg-panel border-l-2 border-signal'
                                 : 'bg-transparent hover:bg-panel'

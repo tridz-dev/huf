@@ -60,7 +60,7 @@ export function ToolsTab({
             control={form.control}
             name="enable_auto_sync"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Auto Sync</FormLabel>
                   <FormDescription>
@@ -100,7 +100,7 @@ export function ToolsTab({
             />
           )}
 
-          <div className="flex items-center justify-between p-4 rounded-none border bg-paper-deep/30">
+          <div className="flex items-center justify-between p-4 rounded-lg border bg-paper-deep/30">
             <div>
               <p className="text-sm font-medium">Last Sync</p>
               <p className="text-sm text-steel">{formatTimeAgo(lastSync)}</p>
@@ -143,7 +143,7 @@ export function ToolsTab({
               </Button>
             </div>
           ) : (
-            <div className="rounded-none border">
+            <div className="rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>

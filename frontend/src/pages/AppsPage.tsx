@@ -107,7 +107,7 @@ function CategoryChip({
 			type="button"
 			onClick={onClick}
 			className={cn(
-				'inline-flex items-center rounded-none border px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide transition-colors',
+				'inline-flex items-center rounded border px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide transition-colors',
 				active
 					? 'border-ink text-ink'
 					: 'border-line bg-paper-deep text-steel hover:text-ink'

@@ -95,7 +95,7 @@ function ResponseBody({ state, diffSegments }: { state: SlotState; diffSegments?
       <p className="whitespace-pre-wrap break-words px-3.5 py-3 text-[13.5px] leading-relaxed">
         {diffSegments.map((segment, index) =>
           segment.changed ? (
-            <span key={index} className="bg-coral-soft">
+            <span key={index} className="bg-destructive-tint">
               {segment.text}
             </span>
           ) : (

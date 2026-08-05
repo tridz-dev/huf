@@ -36,13 +36,31 @@
     --signal:     #C6511F;
     --signal-ink: #9C3F17;
     --good:       #3F7A4E;
-    --coral-soft: #FAECE7;
+    --destructive-tint: #FAECE7;
 
     /* Shape */
     --r: 2px;
     --shadow-flat: none;
     --shadow-raised: none;
     --shadow-overlay: none;
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    /* Control sizing */
+    --control-h-sm: 32px;
+    --control-h-md: 36px;
+    --control-h-lg: 40px;
+    --control-px: 16px;
+    --control-px-sm: 12px;
+    --control-px-lg: 32px;
+    --control-py: 8px;
 
     /* Typography */
     --display: 'Big Shoulders Display', sans-serif;
@@ -65,8 +83,6 @@
     --muted-foreground: var(--steel);
     --accent: var(--paper-deep);
     --accent-foreground: var(--ink);
-    --destructive: #C0392B;
-    --destructive-foreground: var(--paper);
     --border: var(--line);
     --input: var(--line);
     --ring: var(--signal);
@@ -105,7 +121,9 @@
     --signal:     #C6511F;
     --signal-ink: #9C3F17;
     --good:       #3F7A4E;
-    --coral-soft: #FAECE7;
+    --destructive-tint: #FAECE7;
+    --destructive: #C0392B;
+    --destructive-foreground: var(--paper);
   }
 
   [data-theme="midnight"] {
@@ -122,7 +140,9 @@
     --signal:     #FF7A3D;
     --signal-ink: #FF9A63;
     --good:       #5FC97A;
-    --coral-soft: #2E201B;
+    --destructive-tint: #2E201B;
+    --destructive: #FF5A47;
+    --destructive-foreground: var(--paper);
   }
 
   [data-theme="summer"] {
@@ -139,7 +159,9 @@
     --signal:     #FF5A1F;
     --signal-ink: #D6440F;
     --good:       #2E9A4E;
-    --coral-soft: #FFF0E6;
+    --destructive-tint: #FFF0E6;
+    --destructive: #C0392B;
+    --destructive-foreground: var(--paper);
   }
 
   [data-theme="morning"] {
@@ -156,7 +178,9 @@
     --signal:     #E8531F;
     --signal-ink: #BC3E0F;
     --good:       #4E8F5C;
-    --coral-soft: #FCECE6;
+    --destructive-tint: #FCECE6;
+    --destructive: #C0392B;
+    --destructive-foreground: var(--paper);
   }
 
   /* Proposal preview only — not registered in the theme picker (src/lib/personalization.ts).
@@ -175,7 +199,9 @@
     --signal:     #7A5AF0;
     --signal-ink: #5B3FC4;
     --good:       #1C7C54;
-    --coral-soft: #FDECEA;
+    --destructive-tint: #FDECEA;
+    --destructive: #B3261E;
+    --destructive-foreground: var(--paper);
 
     --r: 8px;
     --r-sm: 6px;
@@ -190,6 +216,15 @@
     --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Control sizing */
+    --control-h-sm: 30px;
+    --control-h-md: 34px;
+    --control-h-lg: 38px;
+    --control-px: 14px;
+    --control-px-sm: 10px;
+    --control-px-lg: 28px;
+    --control-py: 7px;
   }
 
   @keyframes blink { 50% { opacity: .2; } }

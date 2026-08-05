@@ -139,7 +139,7 @@ export function ToolsTab({
         </CardHeader>
         <CardContent>
           {selectedTools.length === 0 ? (
-            <div className="text-center py-12 border border-dashed rounded-none bg-paper-deep/20">
+            <div className="text-center py-12 border border-dashed rounded-lg bg-paper-deep/20">
               <p className="font-body text-steel-soft mb-2">No tools configured yet.</p>
               <p className="text-xs font-body text-steel-soft mb-4">Add tools to let this agent query data, run APIs, or call other agents.</p>
               <Button onClick={onAddTools} variant="outline" type="button" disabled={locked}>
@@ -157,10 +157,10 @@ export function ToolsTab({
                 return (
                   <div
                     key={tool.name}
-                    className="group flex flex-col lg:flex-row h-full lg:items-start lg:justify-between gap-3 rounded-none border p-4 hover:bg-paper-deep transition-colors"
+                    className="group flex flex-col lg:flex-row h-full lg:items-start lg:justify-between gap-3 rounded-md border p-4 hover:bg-paper-deep transition-colors"
                   >
                     <div className="flex-1 min-w-0 flex items-start gap-3">
-                      <div className="mt-0.5 rounded-none border bg-paper-deep/30 p-1.5 text-steel">
+                      <div className="mt-0.5 rounded border bg-paper-deep/30 p-1.5 text-steel">
                         <ToolIcon className="w-4 h-4" />
                       </div>
                       <div className="min-w-0 space-y-1 flex-1">
@@ -171,7 +171,7 @@ export function ToolsTab({
                           {tool.description || 'No description available.'}
                         </p>
                         {isShared && (
-                          <div className="flex w-fit items-center text-amber-600 bg-amber-50 px-2 py-0.5 rounded-none mt-2 text-[11px] font-semibold">
+                          <div className="flex w-fit items-center text-amber-600 bg-amber-50 px-2 py-0.5 rounded mt-2 text-[11px] font-semibold">
                             <Users className="w-3 h-3 mr-1.5" />
                             <span>Used in {usedByAgents.length} agent{usedByAgents.length > 1 ? 's' : ''}</span>
                           </div>
@@ -262,7 +262,7 @@ export function ToolsTab({
               {mcpServers.map((mcp) => (
                 <div
                   key={mcp.name}
-                  className="flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-3 rounded-none border p-4 hover:bg-paper-deep transition-colors"
+                  className="flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-3 rounded-md border p-4 hover:bg-paper-deep transition-colors"
                 >
                   <Link 
                     to={`/mcp/${mcp.mcp_server}`}

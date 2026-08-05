@@ -872,7 +872,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         rows={2}
                         onKeyDown={handleKeyDown}
                         placeholder="Type your message..."
-                        className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-none"
+                        className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-sm"
                         style={{ 
                             height: `${MIN_HEIGHT}px`
                         }}

@@ -367,7 +367,7 @@ export function DataTableBuilderPage() {
 			<div className="flex-1 flex overflow-hidden relative">
 				{/* Left: Builder Canvas */}
 				<div className="flex-1 overflow-y-auto p-6 bg-paper">
-					<div className="max-w-2xl mx-auto rounded-none border border-line bg-panel p-6">
+					<div className="max-w-2xl mx-auto rounded-lg border border-line bg-panel p-6">
 						<TableBuilderCanvas
 							fields={state.fields}
 							selectedFieldIndex={state.selectedFieldIndex}
@@ -398,7 +398,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-none bg-panel"
+							className="fixed bottom-20 right-4 z-20 rounded bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />

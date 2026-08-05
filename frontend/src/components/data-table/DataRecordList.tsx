@@ -77,7 +77,7 @@ export function DataRecordList({
 					<Button
 						variant="ghost"
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2 text-xs rounded-none text-steel hover:text-ink hover:bg-paper-deep"
+						className="h-8 px-2 text-xs rounded text-steel hover:text-ink hover:bg-paper-deep"
 					>
 						ID
 						<ArrowUpDown className="ml-1 h-3 w-3" />
@@ -98,7 +98,7 @@ export function DataRecordList({
 					<Button
 						variant="ghost"
 						onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-						className="h-8 px-2 text-xs rounded-none text-steel hover:text-ink hover:bg-paper-deep"
+						className="h-8 px-2 text-xs rounded text-steel hover:text-ink hover:bg-paper-deep"
 					>
 						{field.label}
 						<ArrowUpDown className="ml-1 h-3 w-3" />
@@ -117,7 +117,7 @@ export function DataRecordList({
 				<Button
 					variant="ghost"
 					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2 text-xs rounded-none text-steel hover:text-ink hover:bg-paper-deep"
+					className="h-8 px-2 text-xs rounded text-steel hover:text-ink hover:bg-paper-deep"
 				>
 					Modified
 					<ArrowUpDown className="ml-1 h-3 w-3" />

@@ -54,7 +54,7 @@ export function PromptPanel({
         value={config.prompt}
         onChange={(e) => onConfigChange({ ...config, prompt: e.target.value })}
         placeholder="Type a prompt to send to the agent…"
-        className="min-h-0 flex-1 resize-none rounded-none border-0 px-3.5 py-3 font-sans text-[13.5px] leading-relaxed shadow-none placeholder:text-steel focus-visible:ring-0"
+        className="min-h-0 flex-1 resize-none rounded border-0 px-3.5 py-3 font-sans text-[13.5px] leading-relaxed shadow-sm placeholder:text-steel focus-visible:ring-0"
       />
 
       <div className="border-t border-line px-3.5 py-2.5">
@@ -75,7 +75,7 @@ export function PromptPanel({
             value={config.evaluationCriteria}
             onChange={(e) => onConfigChange({ ...config, evaluationCriteria: e.target.value })}
             placeholder="Describe what a good response must include…"
-            className="mt-2 min-h-[72px] resize-none rounded border-line px-2.5 py-2 text-[12.5px] shadow-none focus-visible:ring-1"
+            className="mt-2 min-h-[72px] resize-none rounded border-line px-2.5 py-2 text-[12.5px] shadow-sm focus-visible:ring-1"
           />
         )}
       </div>

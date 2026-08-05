@@ -391,7 +391,7 @@ We generally recommend altering this or temperature but not both.`}
             control={form.control}
             name="enable_prompt_caching"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Enable Prompt Caching</FormLabel>
                   <FormDescription>
@@ -454,7 +454,7 @@ We generally recommend altering this or temperature but not both.`}
               control={form.control}
               name="cache_system_message"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+                <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Cache System Message</FormLabel>
                     <FormDescription>
@@ -474,7 +474,7 @@ We generally recommend altering this or temperature but not both.`}
               control={form.control}
               name="cache_conversation_history"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+                <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Cache Conversation History</FormLabel>
                     <FormDescription>

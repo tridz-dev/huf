@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
   // HUF: no pill, no fill, mono label — border + text only
-  'inline-flex items-center rounded-none border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  'inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {

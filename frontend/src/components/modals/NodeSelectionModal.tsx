@@ -211,7 +211,7 @@ export function NodeSelectionModal({
 
     if (config.type === 'webhook') {
       return (
-        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-none p-3 bg-paper-deep/20">
+        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-lg p-3 bg-paper-deep/20">
           <div>
             <Label htmlFor="webhook-url">Webhook URL</Label>
             <div className="flex gap-2">
@@ -266,7 +266,7 @@ export function NodeSelectionModal({
             <Label htmlFor="headers">Custom Headers (JSON string)</Label>
             <textarea
               id="headers"
-              className="flex min-h-[60px] w-full rounded-none border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
+              className="flex min-h-[60px] w-full rounded border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
               value={JSON.stringify(config.headers || {}, null, 2)}
               onChange={(e) => {
                 try {
@@ -283,7 +283,7 @@ export function NodeSelectionModal({
             <Label htmlFor="body-template">Expected Body Template (JSON for validation or documentation)</Label>
             <textarea
               id="body-template"
-              className="flex min-h-[100px] w-full rounded-none border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
+              className="flex min-h-[100px] w-full rounded border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
               value={config.body_template || ''}
               onChange={(e) => setTriggerConfig({ ...config, body_template: e.target.value })}
               placeholder='{ "order_id": "123", "amount": 100 }'
@@ -434,7 +434,7 @@ export function NodeSelectionModal({
             return (
               <button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-none border border-line hover:border-ink hover:bg-paper-deep transition-all"
+                className="flex items-center gap-3 p-3 rounded border border-line hover:border-ink hover:bg-paper-deep transition-all"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">

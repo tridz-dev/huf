@@ -111,7 +111,7 @@ export function AgentKnowledgeModal({
           <div className="space-y-2">
             <Label>Knowledge Source *</Label>
             {sourceOptions.length === 0 && onCreateNew ? (
-              <div className="flex flex-col items-center gap-3 rounded-none border border-dashed py-6 text-center">
+              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-6 text-center">
                 <p className="text-sm text-steel">No knowledge sources registered yet</p>
                 <Button type="button" variant="default" size="sm" onClick={onCreateNew}>
                   Register your first knowledge source →

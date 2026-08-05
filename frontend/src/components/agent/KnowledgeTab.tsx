@@ -38,7 +38,7 @@ export function KnowledgeTab({
       </CardHeader>
       <CardContent>
         {knowledgeSources.length === 0 ? (
-          <div className="text-center py-12 border border-dashed rounded-none bg-paper-deep/20">
+          <div className="text-center py-12 border border-dashed rounded-lg bg-paper-deep/20">
             <p className="font-body text-steel-soft mb-2">No knowledge sources linked yet.</p>
             <p className="text-xs text-steel-soft mb-4">
               Link knowledge sources so this agent can retrieve relevant context from indexed documents.
@@ -55,10 +55,10 @@ export function KnowledgeTab({
             {knowledgeSources.map((ks, index) => (
               <div
                 key={ks.name || `ks-${index}`}
-                className="group flex flex-col lg:flex-row h-full lg:items-start lg:justify-between gap-3 rounded-none border p-4 hover:bg-paper-deep transition-colors"
+                className="group flex flex-col lg:flex-row h-full lg:items-start lg:justify-between gap-3 rounded-md border p-4 hover:bg-paper-deep transition-colors"
               >
                 <div className="flex-1 min-w-0 flex items-start gap-3">
-                  <div className="mt-0.5 rounded-none border bg-paper-deep/30 p-1.5 text-steel">
+                  <div className="mt-0.5 rounded border bg-paper-deep/30 p-1.5 text-steel">
                     <BookOpen className="w-4 h-4" />
                   </div>
                   <div className="min-w-0 space-y-1 flex-1">

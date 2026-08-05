@@ -26,7 +26,7 @@ export function SshPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-steel">
-            <div className="rounded-none border border-line bg-paper-deep p-4 space-y-2">
+            <div className="rounded-lg border border-line bg-paper-deep p-4 space-y-2">
               <h3 className="font-semibold text-ink flex items-center gap-2">
                 <Shield className="w-4 h-4 text-steel" />
                 Connection Allowlisting & Credentials
@@ -36,7 +36,7 @@ export function SshPage() {
               </p>
             </div>
 
-            <div className="rounded-none border border-line bg-paper-deep p-4 space-y-2">
+            <div className="rounded-lg border border-line bg-paper-deep p-4 space-y-2">
               <h3 className="font-semibold text-ink flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-steel" />
                 Agent Configuration

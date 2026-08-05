@@ -501,7 +501,7 @@ function AgentRunDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
+              <div className="rounded-lg bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
                 {run.prompt || 'No prompt recorded.'}
               </div>
             </CardContent>
@@ -515,7 +515,7 @@ function AgentRunDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
+              <div className="rounded-lg bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
                 {run.response || 'No response recorded.'}
               </div>
             </CardContent>
@@ -537,7 +537,7 @@ function AgentRunDetailPage() {
                   <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
                 </div>
               ) : (
-                <div className="overflow-hidden rounded-none border">
+                <div className="overflow-hidden rounded-lg border">
                   <Table>
                     <TableHeader>
                       {table.getHeaderGroups().map((headerGroup) => (

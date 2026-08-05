@@ -44,7 +44,7 @@ export function EmptyState({
         <Button
           variant="outline"
           size="sm"
-          className="mt-5 border-line text-ink hover:bg-paper-deep rounded-none"
+          className="mt-5 border-line text-ink hover:bg-paper-deep rounded"
           onClick={action.onClick}
         >
           {action.label}

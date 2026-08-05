@@ -206,7 +206,7 @@ export function TestToolDrawer({
           )}
 
           {argSpecs.length === 0 ? (
-            <div className="text-sm text-steel border border-dashed rounded-none p-4 text-center">
+            <div className="text-sm text-steel border border-dashed rounded p-4 text-center">
               This tool takes no arguments.
             </div>
           ) : (
@@ -266,7 +266,7 @@ export function TestToolDrawer({
                   {result.dryRun ? 'dry run' : result.ok ? 'success' : 'failed'}
                 </Badge>
               </div>
-              <div className="rounded-none border border-line bg-ink p-3 max-h-[40vh] overflow-auto">
+              <div className="rounded-lg border border-line bg-ink p-3 max-h-[40vh] overflow-auto">
                 <pre className="text-xs font-mono text-steel-soft whitespace-pre-wrap">
                   {typeof result.payload === 'string'
                     ? result.payload

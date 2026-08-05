@@ -36,7 +36,7 @@ const divider = <div className="w-px self-stretch bg-line" />;
 
 /** Select trigger restyled to sit flush inside the strip (no box of its own). */
 const flushTriggerClass =
-  'h-auto w-auto min-w-[150px] gap-2 rounded-none border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100';
+  'h-auto w-auto min-w-[150px] gap-2 rounded border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100';
 
 function searchInputCell(
   searchPlaceholder: string,

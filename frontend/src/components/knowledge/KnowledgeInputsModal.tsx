@@ -248,7 +248,7 @@ export function KnowledgeInputsModal({
           </div>
 
           {showCreate && (
-            <div className="rounded-none border p-4 space-y-4">
+            <div className="rounded-lg border p-4 space-y-4">
               <div className="space-y-2">
                 <Label>Input Type</Label>
                 <Select value={inputType} onValueChange={(v) => setInputType(v as KnowledgeInputType)}>
@@ -353,7 +353,7 @@ export function KnowledgeInputsModal({
                 return (
                   <div
                     key={input.name}
-                    className="flex items-center gap-3 rounded-none border p-3"
+                    className="flex items-center gap-3 rounded-md border p-3"
                   >
                     <Icon className="w-4 h-4 text-steel-soft flex-shrink-0" />
                     <div className="flex-1 min-w-0">

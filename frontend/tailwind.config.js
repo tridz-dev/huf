@@ -26,7 +26,7 @@ export default {
         signal:         'var(--signal)',
         'signal-ink':   'var(--signal-ink)',
         good:           'var(--good)',
-        'coral-soft':   'var(--coral-soft)',
+        'destructive-tint': 'var(--destructive-tint)',
 
         // shadcn compatibility
         background: 'var(--background)',
@@ -72,6 +72,29 @@ export default {
           border:               'var(--sidebar-border)',
           ring:                 'var(--sidebar-ring)',
         },
+      },
+      spacing: {
+        'space-1': 'var(--space-1)',
+        'space-2': 'var(--space-2)',
+        'space-3': 'var(--space-3)',
+        'space-4': 'var(--space-4)',
+        'space-5': 'var(--space-5)',
+        'space-6': 'var(--space-6)',
+        'space-7': 'var(--space-7)',
+        'control-px':    'var(--control-px)',
+        'control-px-sm': 'var(--control-px-sm)',
+        'control-px-lg': 'var(--control-px-lg)',
+        'control-py':    'var(--control-py)',
+      },
+      height: {
+        'control-sm': 'var(--control-h-sm)',
+        'control-md': 'var(--control-h-md)',
+        'control-lg': 'var(--control-h-lg)',
+      },
+      width: {
+        'control-sm': 'var(--control-h-sm)',
+        'control-md': 'var(--control-h-md)',
+        'control-lg': 'var(--control-h-lg)',
       },
       borderRadius: {
         DEFAULT: 'var(--r)',

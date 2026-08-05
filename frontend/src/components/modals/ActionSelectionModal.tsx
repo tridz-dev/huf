@@ -121,7 +121,7 @@ export function ActionSelectionModal({
             return (
               <button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-none border border-border hover:border-primary/50 hover:bg-accent transition-all"
+                className="flex items-center gap-3 p-3 rounded border border-border hover:border-primary/50 hover:bg-accent transition-all"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">

@@ -627,7 +627,7 @@ export function AgentPromptFormPage() {
                     Comma-separated tags for search and filtering.
                   </p>
                 </div>
-                <div className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+                <div className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <Label className="text-base">Active</Label>
                     <p className="text-xs text-steel-soft">

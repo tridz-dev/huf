@@ -60,7 +60,7 @@ export function DataListView<TData, TValue>({
 						    placeholder="Filter..."
 						    value={globalFilter ?? ''}
 						    onChange={(e) => setGlobalFilter(e.target.value)}
-						    className="h-8 w-[200px] pl-8 rounded-none border-line bg-panel text-ink"
+						    className="h-8 w-[200px] pl-8 rounded border-line bg-panel text-ink"
 					    />
                     </div>
 				</div>
@@ -70,12 +70,12 @@ export function DataListView<TData, TValue>({
                     </span>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<Button variant="outline" size="sm" className="hidden h-8 lg:flex rounded-none border-line text-steel hover:bg-paper-deep">
+							<Button variant="outline" size="sm" className="hidden h-8 lg:flex rounded border-line text-steel hover:bg-paper-deep">
 								<Settings2 className="mr-2 h-4 w-4" />
 								Columns
 							</Button>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end" className="w-[150px] rounded-none border-line bg-panel">
+						<DropdownMenuContent align="end" className="w-[150px] rounded-lg border-line bg-panel">
 							{table
 								.getAllColumns()
 								.filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
@@ -83,7 +83,7 @@ export function DataListView<TData, TValue>({
 									return (
 										<DropdownMenuCheckboxItem
 											key={column.id}
-											className="capitalize rounded-none text-ink hover:bg-paper-deep focus:bg-paper-deep cursor-pointer"
+											className="capitalize rounded text-ink hover:bg-paper-deep focus:bg-paper-deep cursor-pointer"
 											checked={column.getIsVisible()}
 											onCheckedChange={(value) => column.toggleVisibility(!!value)}
 										>
@@ -96,7 +96,7 @@ export function DataListView<TData, TValue>({
 				</div>
 			</div>
 			{loading || table.getRowModel().rows?.length ? (
-				<div className="rounded-none border border-line bg-panel">
+				<div className="rounded-lg border border-line bg-panel">
 					<Table>
 						<TableHeader>
 							{table.getHeaderGroups().map((headerGroup) => (
@@ -119,7 +119,7 @@ export function DataListView<TData, TValue>({
 									<TableCell colSpan={columns.length} className="h-24 text-center">
 										<div className="space-y-2">
 											{[...Array(5)].map((_, i) => (
-												<div key={i} className="h-12 bg-line rounded-none animate-pulse" />
+												<div key={i} className="h-12 bg-line rounded-md animate-pulse" />
 											))}
 										</div>
 									</TableCell>

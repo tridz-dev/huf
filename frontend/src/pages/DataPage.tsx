@@ -185,12 +185,12 @@ function DataPage() {
 							type="single"
 							value={viewMode}
 							onValueChange={(value) => value && setViewModeOverride(value as 'flat' | 'grouped')}
-							className="rounded-none border border-line"
+							className="rounded border border-line"
 						>
-							<ToggleGroupItem value="flat" aria-label="Simple view" className="rounded-none" title="Simple view">
+							<ToggleGroupItem value="flat" aria-label="Simple view" className="rounded" title="Simple view">
 								<List className="w-4 h-4" />
 							</ToggleGroupItem>
-							<ToggleGroupItem value="grouped" aria-label="Grouped view" className="rounded-none" title="Grouped view">
+							<ToggleGroupItem value="grouped" aria-label="Grouped view" className="rounded" title="Grouped view">
 								<Layers className="w-4 h-4" />
 							</ToggleGroupItem>
 						</ToggleGroup>

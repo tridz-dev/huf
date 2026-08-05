@@ -124,7 +124,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
 								placeholder={field.description || ''}
-								className="h-8 text-sm rounded-none border-line"
+								className="h-8 text-sm rounded border-line"
 							/>
 						) : (field.fieldtype === 'Text' ||
 							field.fieldtype === 'Small Text' ||
@@ -135,7 +135,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								disabled={isReadOnly}
 								placeholder={field.description || ''}
 								rows={field.fieldtype === 'Long Text' ? 6 : 3}
-								className="text-sm rounded-none border-line"
+								className="text-sm rounded border-line"
 							/>
 						) : (field.fieldtype === 'Int' ||
 							field.fieldtype === 'Float' ||
@@ -157,7 +157,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								disabled={isReadOnly}
 								min={field.non_negative === 1 ? 0 : undefined}
 								step={field.fieldtype === 'Int' ? 1 : 'any'}
-								className="h-8 text-sm rounded-none border-line"
+								className="h-8 text-sm rounded border-line"
 							/>
 						) : field.fieldtype === 'Check' ? (
 							<div className="flex items-center gap-2 pt-1">
@@ -165,7 +165,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 									checked={value === 1 || value === true}
 									onCheckedChange={(checked) => onChange(checked ? 1 : 0)}
 									disabled={isReadOnly}
-									className="rounded-none border-line"
+									className="rounded border-line"
 								/>
 								{field.description && (
 									<span className="text-xs text-steel-soft">{field.description}</span>
@@ -177,7 +177,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={(value as string) || ''}
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
-								className="h-8 text-sm rounded-none border-line"
+								className="h-8 text-sm rounded border-line"
 							/>
 						) : field.fieldtype === 'Time' ? (
 							<Input
@@ -185,7 +185,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={(value as string) || ''}
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
-								className="h-8 text-sm rounded-none border-line"
+								className="h-8 text-sm rounded border-line"
 							/>
 						) : field.fieldtype === 'Duration' ? (
 							<Input
@@ -194,7 +194,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
 								placeholder="e.g. 1h 30m"
-								className="h-8 text-sm rounded-none border-line"
+								className="h-8 text-sm rounded border-line"
 							/>
 						) : field.fieldtype === 'Select' ? (
 							<Select
@@ -202,15 +202,15 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								onValueChange={onChange}
 								disabled={isReadOnly}
 							>
-								<SelectTrigger className="h-8 text-sm rounded-none border-line">
+								<SelectTrigger className="h-8 text-sm rounded border-line">
 									<SelectValue placeholder="Select..." />
 								</SelectTrigger>
-								<SelectContent className="rounded-none border-line">
+								<SelectContent className="rounded border-line">
 									{(field.options || '')
 										.split('\n')
 										.filter(Boolean)
 										.map((option) => (
-											<SelectItem key={option} value={option} className="rounded-none">
+											<SelectItem key={option} value={option} className="rounded">
 												{option}
 											</SelectItem>
 										))}
@@ -232,7 +232,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={value !== undefined && value !== null && value !== '' ? String(value) : ''}
 								onChange={(event) => onChange(parseFloat(event.target.value) || 0)}
 								disabled={isReadOnly}
-								className="h-8 text-sm rounded-none border-line"
+								className="h-8 text-sm rounded border-line"
 							/>
 						) : field.fieldtype === 'Color' ? (
 							<Input
@@ -240,7 +240,7 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 								value={(value as string) || undefined}
 								onChange={(event) => onChange(event.target.value)}
 								disabled={isReadOnly}
-								className="h-8 w-16 rounded-none border-line p-1"
+								className="h-8 w-16 rounded border-line p-1"
 							/>
 						) : ((field.fieldtype as string) === 'Attach' || (field.fieldtype as string) === 'Attach Image') ? (
 							<div className="space-y-2">
@@ -253,11 +253,11 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 									accept={(field.fieldtype as string) === 'Attach Image' ? 'image/*' : undefined}
 								/>
 								{value ? (
-									<div className="flex items-center gap-3 border border-line bg-panel p-2 rounded-none">
+									<div className="flex items-center gap-3 border border-line bg-panel p-2 rounded">
 										{(field.fieldtype as string) === 'Attach Image' ? (
-											<img src={value as string} alt="Preview" className="size-10 object-cover border border-line rounded-none" />
+											<img src={value as string} alt="Preview" className="size-10 object-cover border border-line rounded" />
 										) : (
-											<div className="flex size-10 items-center justify-center bg-paper-deep border border-line rounded-none text-steel">
+											<div className="flex size-10 items-center justify-center bg-paper-deep border border-line rounded text-steel">
 												<Paperclip className="size-5" />
 											</div>
 										)}
@@ -267,13 +267,13 @@ export function FieldInput({ field, value, onChange, isEditing = true }: FieldIn
 											</a>
 										</div>
 										{!isReadOnly && (
-											<Button type="button" variant="ghost" size="icon-sm" className="rounded-none text-steel hover:text-ink hover:bg-paper-deep" onClick={() => onChange('')}>
+											<Button type="button" variant="ghost" size="icon-sm" className="rounded text-steel hover:text-ink hover:bg-paper-deep" onClick={() => onChange('')}>
 												<X className="size-4" />
 											</Button>
 										)}
 									</div>
 								) : (
-									<Button type="button" variant="outline" className="rounded-none border-line bg-panel hover:bg-paper-deep text-ink w-full justify-start h-8 text-sm" onClick={() => fileInputRef.current?.click()} disabled={isReadOnly || isUploading}>
+									<Button type="button" variant="outline" className="rounded border-line bg-panel hover:bg-paper-deep text-ink w-full justify-start h-8 text-sm" onClick={() => fileInputRef.current?.click()} disabled={isReadOnly || isUploading}>
 										{isUploading ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Upload className="size-4 mr-2" />}
 										{isUploading ? 'Uploading...' : 'Select File'}
 									</Button>
@@ -324,7 +324,7 @@ function AttachFieldView({ fieldtype, value }: { fieldtype: string; value: unkno
 				<img
 					src={url}
 					alt={getFileName(url)}
-					className="max-h-48 rounded-none border border-line object-contain"
+					className="max-h-48 rounded border border-line object-contain"
 				/>
 			</a>
 		);
@@ -335,7 +335,7 @@ function AttachFieldView({ fieldtype, value }: { fieldtype: string; value: unkno
 			<video
 				src={url}
 				controls
-				className="max-h-64 max-w-full rounded-none border border-line"
+				className="max-h-64 max-w-full rounded border border-line"
 			>
 				Your browser does not support video playback.
 			</video>
@@ -347,7 +347,7 @@ function AttachFieldView({ fieldtype, value }: { fieldtype: string; value: unkno
 			href={url}
 			target="_blank"
 			rel="noreferrer"
-			className="inline-flex items-center gap-2 px-3 py-1.5 rounded-none border border-line bg-panel text-sm text-ink hover:bg-paper-deep"
+			className="inline-flex items-center gap-2 px-3 py-1.5 rounded border border-line bg-panel text-sm text-ink hover:bg-paper-deep"
 		>
 			<FileIcon className="w-4 h-4 text-steel shrink-0" />
 			<span className="truncate max-w-xs">{getFileName(url)}</span>
@@ -362,14 +362,14 @@ export function FieldView({ field, value }: { field: DataTableFieldDef, value: u
     if (field.fieldtype === 'Check') {
         const isChecked = value === 1 || value === true;
         displayValue = isChecked ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-none border border-line bg-paper-deep text-xs font-medium text-ink">Yes</span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded border border-line bg-paper-deep text-xs font-medium text-ink">Yes</span>
         ) : (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-none border border-line bg-panel text-xs font-medium text-steel">No</span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded border border-line bg-panel text-xs font-medium text-steel">No</span>
         );
     } else if (field.fieldtype === 'Select' || field.fieldtype === 'Link') {
         if (value) {
             displayValue = (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-none border border-line bg-paper-deep text-sm font-medium text-ink">
+                <span className="inline-flex items-center px-2 py-0.5 rounded border border-line bg-paper-deep text-sm font-medium text-ink">
                     {String(value)}
                 </span>
             );
@@ -378,7 +378,7 @@ export function FieldView({ field, value }: { field: DataTableFieldDef, value: u
         }
     } else if (field.fieldtype === 'Text' || field.fieldtype === 'Small Text' || field.fieldtype === 'Long Text') {
         displayValue = value ? (
-            <div className="whitespace-pre-wrap text-sm text-ink bg-paper-deep p-3 border border-line rounded-none">
+            <div className="whitespace-pre-wrap text-sm text-ink bg-paper-deep p-3 border border-line rounded">
                 {String(value)}
             </div>
         ) : (
