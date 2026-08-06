@@ -37,27 +37,39 @@ def handle_list_issues(**kwargs) -> str:
 	try:
 		team_key = kwargs.get("team_key")
 		limit = int(kwargs.get("limit") or 20)
-
-		filter_clause = ""
 		variables = {}
-		if team_key:
-			filter_clause = ", filter: { team: { key: { eq: $teamKey } } }"
-			variables["teamKey"] = team_key
 
-		query = f"""
-		query Issues($teamKey: String) {{
-			issues(first: {limit}{filter_clause}) {{
-				nodes {{
-					identifier
-					title
-					state {{ name }}
-					assignee {{ name }}
-					priority
-					url
+		if team_key:
+			query = f"""
+			query Issues($teamKey: String!) {{
+				issues(first: {limit}, filter: {{ team: {{ key: {{ eq: $teamKey }} }} }}) {{
+					nodes {{
+						identifier
+						title
+						state {{ name }}
+						assignee {{ name }}
+						priority
+						url
+					}}
 				}}
 			}}
-		}}
-		"""
+			"""
+			variables["teamKey"] = team_key
+		else:
+			query = f"""
+			query Issues {{
+				issues(first: {limit}) {{
+					nodes {{
+						identifier
+						title
+						state {{ name }}
+						assignee {{ name }}
+						priority
+						url
+					}}
+				}}
+			}}
+			"""
 		data = _make_linear_request(query, variables)
 
 		issues = [
