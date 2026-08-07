@@ -175,9 +175,18 @@ class TestGatewayIngress(unittest.TestCase):
     @patch("huf.ai.gateway_service.frappe")
     def test_pairing_creates_pending_entry_and_never_admits_triggering_message(self, mock_frappe):
         mock_frappe.db.exists.return_value = None
+        # _create_pairing_request checks for an existing pending entry via
+        # frappe.get_all before creating one; a bare MagicMock return value
+        # is truthy and would short-circuit into the "reuse existing" branch
+        # instead of the "create new" branch this test exercises.
+        mock_frappe.get_all.return_value = []
         admitted, reason = gateway_service._admission(gateway(direct_policy="Pairing"), {"sender_id": "42"})
         assert admitted is False
-        assert reason == "Sender pairing approval is required"
+        # The reason now also carries the generated pairing code so the
+        # sender-facing message can quote it; that value comes from a fully
+        # mocked frappe here, so assert the stable prefix rather than an
+        # exact match on the (mocked, nondeterministic) code suffix.
+        assert reason.startswith("Sender pairing approval is required")
         pending = mock_frappe.get_doc.call_args.args[0]
         assert pending["doctype"] == "Gateway Access Entry"
         assert pending["state"] == "Pending"

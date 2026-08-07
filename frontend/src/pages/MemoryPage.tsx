@@ -34,7 +34,7 @@ export default function MemoryPage() {
 
   return (
     <PageFrame
-      title="Memory"
+      title="Intelligence"
       badge={<ExperimentalBadge />}
     >
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">

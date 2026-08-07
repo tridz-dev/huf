@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { PageFrame } from '@/layouts/PageFrame';
+import { ProviderModelTabs } from '@/components/settings/ProviderModelTabs';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
@@ -318,6 +319,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         />
       }
     >
+      <ProviderModelTabs />
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load models</p>

@@ -13,6 +13,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
 import { PageFrame } from '@/layouts/PageFrame';
+import { ProviderModelTabs } from '@/components/settings/ProviderModelTabs';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import {
@@ -416,7 +417,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         />
       }
     >
-      <div className="bg-[#f6f4ff] rounded-lg p-4 space-y-3">
+      <ProviderModelTabs />
+      <div className="border border-line bg-panel p-4 space-y-3">
         <div className="flex items-start gap-3">
           <Sparkles className="h-4 w-4 mt-0.5 text-signal shrink-0" />
           <div>

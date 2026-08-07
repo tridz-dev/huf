@@ -65,6 +65,7 @@ export type AgentToolFunctionRef = {
   function_path?: string;
   provider_app?: string;
   tool_type?: string; // Link to Agent Tool Type
+  service?: string; // Link to Integration Service that must be connected
 };
 
 export type AgentToolType = {

@@ -9,47 +9,19 @@ import frappe
 from frappe import _
 
 
-SERVICE_TOOL_TYPE_MAP = {
-    "frappe_cloud": "Frappe Cloud",
-}
-
-
-def _service_to_tool_type(service: str) -> Optional[str]:
-    """Map an Integration Service key to an Agent Tool Type name."""
-    if not service:
-        return None
-    service = service.lower().strip()
-    if service in SERVICE_TOOL_TYPE_MAP:
-        return SERVICE_TOOL_TYPE_MAP[service]
-    # Fallback: title-case the service key (e.g. "frappe_cloud" -> "Frappe Cloud")
-    return " ".join(part.title() for part in service.replace("-", "_").split("_"))
-
-
-def _get_tool_type_name(service: str) -> str:
-    """Return the Agent Tool Type name for a service, raising if missing."""
-    tool_type = _service_to_tool_type(service)
-    if not tool_type or not frappe.db.exists("Agent Tool Type", tool_type):
-        frappe.throw(_("No tools found for service '{0}'").format(service))
-    return tool_type
-
-
 def _get_tools_for_service(service: str) -> list[dict]:
-    """Return Agent Tool Function docs that belong to the given service."""
-    # Prefer the explicit service field; fall back to tool_type mapping.
-    filters = [["service", "=", service]]
-    tools_by_service = frappe.get_all(
-        "Agent Tool Function",
-        filters=filters,
-        fields=["name", "tool_name", "description", "tool_type", "service"],
-        order_by="tool_name",
-    )
-    if tools_by_service:
-        return tools_by_service
+    """Return Agent Tool Function docs that belong to the given service.
 
-    tool_type = _get_tool_type_name(service)
+    The `service` link is authoritative: it is stamped during tool sync from
+    the per-service lists in `_registry.py`. There is deliberately no
+    tool_type-guessing fallback — the previous one title-cased the service key
+    ("slack" -> Agent Tool Type "Slack") and silently missed, because those
+    tools are typed "Communication Tools". An empty result means the service
+    genuinely has no tools, which the caller should surface as such.
+    """
     return frappe.get_all(
         "Agent Tool Function",
-        filters={"tool_type": tool_type},
+        filters=[["service", "=", service]],
         fields=["name", "tool_name", "description", "tool_type", "service"],
         order_by="tool_name",
     )
