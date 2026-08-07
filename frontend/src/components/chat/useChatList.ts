@@ -56,7 +56,7 @@ export function useChatList(options: UseChatListOptions = {}) {
     }
   }, [refreshKey, reset]);
 
-  // Refresh when route changes (for ChatSidebarContent component)
+  // Refresh when route changes (for the chat rail's history list)
   useEffect(() => {
     if (refreshOnRouteChange) {
       reset();

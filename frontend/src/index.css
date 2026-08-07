@@ -101,6 +101,20 @@
     --control-px-lg: 32px;
     --control-py: 8px;
 
+    /* Chat shell (spec section 28) — chat runs one density step tighter than
+       the rest of the system. These are chat-scoped on purpose: do not use
+       them outside the chat page. */
+    --chat-rail-w:       232px;
+    --chat-row-h:        26px;
+    --chat-row-r:        7px;
+    --chat-header-h:     40px;
+    --chat-footer-h:     44px;
+    --chat-turn-gap:     22px;
+    --chat-measure:      620px;
+    --chat-row-hover:    #F0F0F4;
+    --chat-row-selected: var(--line);
+    --chat-bubble:       #F0F0F4;
+
     /* Typography */
     --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;

@@ -30,6 +30,9 @@ export default {
         'destructive-tint': 'var(--destructive-tint)',
         warning:        'var(--warning)',
         'warning-tint': 'var(--warning-tint)',
+        'chat-row-hover':    'var(--chat-row-hover)',
+        'chat-row-selected': 'var(--chat-row-selected)',
+        'chat-bubble':       'var(--chat-bubble)',
 
         // shadcn compatibility
         background: 'var(--background)',
@@ -98,16 +101,25 @@ export default {
         'control-sm':    'var(--control-px-sm)',
         'control-lg':    'var(--control-px-lg)',
         'control-y':     'var(--control-py)',
+        'chat-turn':     'var(--chat-turn-gap)',
+        'chat-rail':     'var(--chat-rail-w)',
       },
       height: {
         'control-sm': 'var(--control-h-sm)',
         'control-md': 'var(--control-h-md)',
         'control-lg': 'var(--control-h-lg)',
+        'chat-row':    'var(--chat-row-h)',
+        'chat-header': 'var(--chat-header-h)',
+        'chat-footer': 'var(--chat-footer-h)',
       },
       width: {
         'control-sm': 'var(--control-h-sm)',
         'control-md': 'var(--control-h-md)',
         'control-lg': 'var(--control-h-lg)',
+        'chat-rail': 'var(--chat-rail-w)',
+      },
+      maxWidth: {
+        'chat-measure': 'var(--chat-measure)',
       },
       borderRadius: {
         DEFAULT: 'var(--r)',
@@ -119,6 +131,7 @@ export default {
         '2xl':   'var(--r-xl, var(--r))',
         '3xl':   'var(--r-xl, var(--r))',
         none:    '0',
+        'chat-row': 'var(--chat-row-r)',
       },
       boxShadow: {
         DEFAULT: 'var(--shadow-flat, none)',

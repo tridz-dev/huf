@@ -1,9 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import ChatListing from "@/components/chat/ChatListing";
+import { ChatRail } from "@/components/chat/rail/ChatRail";
 import ChatWindow from "@/components/chat/ChatWindowV2";
 import { ArtifactsPanel } from "@/components/chat/ArtifactsPanel";
 import { ArtifactPreviewPane } from "@/components/chat/artifacts/ArtifactPreviewPane";
@@ -106,40 +106,32 @@ function ChatPage() {
             {isMobile ? (
                 sidebarOpen && (
                     <div className="absolute inset-0 z-30 bg-sidebar">
-                        <ChatListing onClose={toggleSidebar} />
+                        <ChatRail onToggleRail={toggleSidebar} />
                     </div>
                 )
             ) : (
                 <div
                     className={cn(
                         "shrink-0 transition-all duration-200 ease-in-out overflow-hidden",
-                        sidebarOpen ? "w-80" : "w-0"
+                        sidebarOpen ? "w-chat-rail" : "w-0"
                     )}
                 >
-                    <div className="w-80 h-full">
-                        <ChatListing />
-                    </div>
+                    <ChatRail onToggleRail={toggleSidebar} />
                 </div>
             )}
 
             {/* Chat window - always full width */}
             <div className="flex-1 min-w-0 min-h-0 h-full relative">
                 {/* Desktop-only floating toggle */}
-                {!isMobile && (
+                {!isMobile && !sidebarOpen && (
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={toggleSidebar}
                         className="absolute top-4 left-4 z-20 h-8 w-8 text-steel hover:text-ink"
                     >
-                        {sidebarOpen ? (
-                            <PanelLeftClose className="h-4 w-4" />
-                        ) : (
-                            <PanelLeftOpen className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">
-                            {sidebarOpen ? "Close sidebar" : "Open sidebar"}
-                        </span>
+                        <PanelLeftOpen className="h-4 w-4" />
+                        <span className="sr-only">Open sidebar</span>
                     </Button>
                 )}
 
