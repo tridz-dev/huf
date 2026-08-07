@@ -45,8 +45,24 @@ def _merge_run_context(args_dict: dict, ctx) -> dict:
     """
     huf_ctx = _frappe_run_context_dict(ctx)
     for key in ("conversation_id", "agent_run_id", "agent_name"):
-        if key in huf_ctx:
-            args_dict.setdefault(key, huf_ctx[key])
+        if key not in huf_ctx:
+            continue
+
+        # A BLANK value counts as absent, not as the LLM's choice.
+        #
+        # This used to be a plain setdefault, which only fills a key that is
+        # missing entirely. Models routinely emit the key with an empty
+        # string for ids they cannot know - observed live: gemini sent
+        # {"conversation_id": ""} to list_document_artifacts, setdefault saw
+        # the key present and kept "", and the tool failed with
+        # "'conversation_id' is required" even though the run context had the
+        # real id the whole time. The agent then told the user the action had
+        # succeeded. Every context-injected tool was exposed to this, not
+        # just the document ones.
+        current = args_dict.get(key)
+        if current is None or (isinstance(current, str) and not current.strip()):
+            args_dict[key] = huf_ctx[key]
+
     return args_dict
 
 

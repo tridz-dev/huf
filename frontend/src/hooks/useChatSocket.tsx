@@ -46,15 +46,22 @@ export type ConversationTitleUpdatedEvent = {
     title: string;
 };
 
-type ChatSocketProps = {   
+export type OpenArtifactPaneEvent = {
+    type: 'open_artifact_pane';
+    conversation_id: string;
+    artifact_id: string;
+};
+
+type ChatSocketProps = {
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
     onNewMessage?: (event: NewAgentMessageEvent) => void;
     onAgentRunStatus?: (event: AgentRunStatusEvent) => void;
     onConversationTitleUpdated?: (event: ConversationTitleUpdatedEvent) => void;
+    onOpenArtifactPane?: (event: OpenArtifactPaneEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onOpenArtifactPane }: ChatSocketProps) {
     const socket = useSocket();
 
     useEffect(() => {
@@ -63,7 +70,7 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
         }
 
         // Listen for conversation-specific events on the shared socket
-        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent) => {
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | OpenArtifactPaneEvent) => {
             console.log("Conversation event received:", data);
 
             // Route to appropriate handler based on event type
@@ -79,6 +86,8 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
                 onAgentRunStatus?.(data as AgentRunStatusEvent);
             } else if (data.type === 'conversation_title_updated') {
                 onConversationTitleUpdated?.(data as ConversationTitleUpdatedEvent);
+            } else if (data.type === 'open_artifact_pane') {
+                onOpenArtifactPane?.(data as OpenArtifactPaneEvent);
             }
         };
 
@@ -89,5 +98,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
             // itself is owned by SocketProvider and stays connected.
             socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onOpenArtifactPane]);
 }

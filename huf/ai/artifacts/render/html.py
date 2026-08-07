@@ -64,6 +64,29 @@ body {
 		padding: 2cm;
 		box-sizing: border-box;
 	}
+
+	/* `position: running(foot)` (components.py) only removes .doc-footer from
+	   the flow in PAGED media. A browser ignores it entirely, so in the
+	   preview iframe the element renders as ordinary in-flow content - and
+	   because _hoist_running_footer() moves it to the very start of the body
+	   (so the PDF repeats it on every page), it lands at the TOP of the
+	   preview. Observed in the artifact pane: a document opened with
+	   "CONFIDENTIAL - PAGE 1 OF 2" as its first line, above the letterhead.
+	   The preview is one continuous scroll with no page boxes, so a per-page
+	   footer has nothing to annotate there; hiding it keeps the preview
+	   honest and leaves the PDF untouched.
+
+	   !important is load-bearing, not laziness: an author's own <style>
+	   block sits in the BODY, after this stylesheet, so at equal specificity
+	   it wins the cascade (this is the same mechanism documented in
+	   components.py). The document that surfaced this set
+	   `.doc-footer { display: flex }`, which beat a plain `display: none`
+	   here and left the footer visible at the top of the preview anyway.
+	   Whether a running element is in flow is structural, not stylistic -
+	   authors style the footer, they do not get to place it. */
+	.doc-footer {
+		display: none !important;
+	}
 }
 
 h1, h2, h3, h4, h5, h6 {
