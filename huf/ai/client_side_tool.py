@@ -4,6 +4,8 @@ import time
 import frappe
 from frappe import _
 
+from huf.ai.transaction import safe_commit
+
 # Bounded wait for the browser to report a result back via
 # ``submit_client_tool_result`` before the agent gives up on this call.
 CLIENT_TOOL_RESULT_TIMEOUT_SECONDS = 30
@@ -19,13 +21,25 @@ def _get_or_create_call(conversation_id, agent_run_id, function_name, call_id, t
     an audit row is created up front (before the frontend has done anything),
     keyed on ``call_id`` so a later result can be correlated back to it.
     """
-    existing_name = frappe.db.get_value("Agent Tool Call", {"call_id": call_id}, "name") if call_id else None
+    existing_name = (
+        frappe.db.get_value(
+            "Agent Tool Call",
+            {"call_id": call_id, "agent_run": agent_run_id, "conversation": conversation_id},
+            "name",
+        )
+        if call_id
+        else None
+    )
 
     if existing_name:
         call = frappe.get_doc("Agent Tool Call", existing_name)
         call.status = "Queued"
         call.error_message = None
         call.save(ignore_permissions=True)
+        # Cross-transaction visibility: the browser's submit_client_tool_result
+        # request runs in a separate transaction and must be able to see this
+        # row (and its reset status) as soon as the realtime event fires.
+        safe_commit()
         return call
 
     call = frappe.get_doc({
@@ -38,6 +52,11 @@ def _get_or_create_call(conversation_id, agent_run_id, function_name, call_id, t
         "call_id": call_id,
     })
     call.insert(ignore_permissions=True)
+    # Cross-transaction visibility: without this commit the row only exists
+    # inside the agent run's still-open transaction, so the frontend's
+    # separate submit_client_tool_result request would find no matching row
+    # ("Tool call not found.") even though it was just created here.
+    safe_commit()
     return call
 
 
@@ -102,6 +121,13 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             }
 
         time.sleep(CLIENT_TOOL_POLL_INTERVAL_SECONDS)
+        # Cross-transaction visibility: this loop runs inside one long-lived
+        # transaction, so under MariaDB's default REPEATABLE READ isolation
+        # every frappe.db.get_value above would keep re-reading the snapshot
+        # taken at transaction start. Committing here (even though nothing
+        # was written) starts a fresh transaction/snapshot so the next
+        # iteration can observe the frontend's committed status update.
+        safe_commit()
 
     return {
         "status": "timeout",
@@ -155,5 +181,10 @@ def submit_client_tool_result(call_id, result=None, error=None):
         )
 
     call.save(ignore_permissions=True)
+    # Cross-transaction visibility: client_side_function polls this row from
+    # a different long-lived transaction/process. Commit immediately rather
+    # than waiting on this request's own teardown so that poller observes
+    # the new status without stalling out the remainder of its timeout.
+    safe_commit()
 
     return {"success": True, "status": call.status}
