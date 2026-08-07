@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+import { getConversationMessages, createAgentRunFeedback, getConversation, submitClientToolResult, type ChatMessage } from "@/services/chatApi";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent } from '@/hooks/useChatSocket';
+import { getClientTool } from '@/lib/clientToolRegistry';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
@@ -187,12 +188,47 @@ export function ChatMessageList({
         });
     }, [chatId]);
 
+    // Socket events are best-effort/at-least-once, so guard against
+    // executing the same frontend tool call more than once.
+    const executedFrontendToolCallIdsRef = useRef<Set<string>>(new Set());
+
+    // Handle backend-initiated client-side ("frontend") tool calls
+    const handleFrontendToolCall = useCallback((event: FrontendToolCallEvent) => {
+        if (event.conversation_id !== chatId) return;
+
+        const callId = event.tool_call_ref ?? event.call_id;
+        if (!callId) return;
+
+        if (executedFrontendToolCallIdsRef.current.has(callId)) return;
+        executedFrontendToolCallIdsRef.current.add(callId);
+
+        const handler = getClientTool(event.function_name);
+        if (!handler) {
+            void submitClientToolResult({
+                callId,
+                error: `No client tool handler registered for "${event.function_name}"`,
+            }).catch(() => undefined);
+            return;
+        }
+
+        void (async () => {
+            try {
+                const result = await handler(event.tool_params ?? {});
+                await submitClientToolResult({ callId, result });
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                await submitClientToolResult({ callId, error: message }).catch(() => undefined);
+            }
+        })();
+    }, [chatId]);
+
     useChatSocket({
         conversationId: chatId,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
         onConversationTitleUpdated: handleConversationTitleUpdated,
+        onFrontendToolCall: handleFrontendToolCall,
     });
 
     useConversationTitlePostSuccessFallback({

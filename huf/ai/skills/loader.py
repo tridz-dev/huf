@@ -104,7 +104,7 @@ def _resolve_tool_function_path(tool_doc) -> Optional[str]:
     if tool_type == "Client Side Tool":
         if not tool_doc.function_name:
             return None
-        return "huf.ai.cilent_side_tool.client_side_function"
+        return "huf.ai.client_side_tool.client_side_function"
 
     return _STANDARD_TOOL_PATHS.get(tool_type)
 

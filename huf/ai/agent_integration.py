@@ -1574,7 +1574,11 @@ def _execute_agent_run(
                          "function": {
                              "name": tool_name,
                              "arguments": tool_args
-                        }
+                        },
+                        # Agent Tool Call docname — the unambiguous key the frontend
+                        # sends back to huf.ai.client_side_tool.submit_client_tool_result.
+                        # ``call_id`` (above) is kept for backward compatibility.
+                        "tool_call_ref": tool_call_id
                     })
 
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"

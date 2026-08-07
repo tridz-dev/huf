@@ -46,15 +46,27 @@ export type ConversationTitleUpdatedEvent = {
     title: string;
 };
 
-type ChatSocketProps = {   
+export type FrontendToolCallEvent = {
+    type: 'frontend_tool_call_initiated';
+    conversation_id: string;
+    agent_run_id: string;
+    message_id: string;
+    call_id?: string;
+    tool_call_ref?: string;
+    function_name: string;
+    tool_params?: Record<string, unknown>;
+};
+
+type ChatSocketProps = {
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
     onNewMessage?: (event: NewAgentMessageEvent) => void;
     onAgentRunStatus?: (event: AgentRunStatusEvent) => void;
     onConversationTitleUpdated?: (event: ConversationTitleUpdatedEvent) => void;
+    onFrontendToolCall?: (event: FrontendToolCallEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall }: ChatSocketProps) {
     const socket = useSocket();
 
     useEffect(() => {
@@ -63,7 +75,7 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
         }
 
         // Listen for conversation-specific events on the shared socket
-        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent) => {
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | FrontendToolCallEvent) => {
             console.log("Conversation event received:", data);
 
             // Route to appropriate handler based on event type
@@ -79,6 +91,8 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
                 onAgentRunStatus?.(data as AgentRunStatusEvent);
             } else if (data.type === 'conversation_title_updated') {
                 onConversationTitleUpdated?.(data as ConversationTitleUpdatedEvent);
+            } else if (data.type === 'frontend_tool_call_initiated') {
+                onFrontendToolCall?.(data as FrontendToolCallEvent);
             }
         };
 
@@ -89,5 +103,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
             // itself is owned by SocketProvider and stays connected.
             socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall]);
 }

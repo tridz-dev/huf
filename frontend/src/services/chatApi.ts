@@ -664,6 +664,34 @@ export async function updateConversationTitle(conversationId:string,title:string
   }
 }
 
+export interface SubmitClientToolResultParams {
+  callId: string;
+  result?: unknown;
+  error?: string;
+}
+
+export interface SubmitClientToolResultResponse {
+  success: boolean;
+}
+
+/**
+ * Submit the result of a browser-executed ("frontend") tool call back to the backend.
+ */
+export async function submitClientToolResult(
+  params: SubmitClientToolResultParams
+): Promise<SubmitClientToolResultResponse> {
+  try {
+    const result = await call.post('huf.ai.client_side_tool.submit_client_tool_result', {
+      call_id: params.callId,
+      result: params.result,
+      error: params.error,
+    });
+    return (result?.message ?? result) as SubmitClientToolResultResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error submitting client tool result');
+  }
+}
+
 export type ForkMode = 'full_history' | 'summary' | 'last_output';
 
 export interface ForkConversationParams {

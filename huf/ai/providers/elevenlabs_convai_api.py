@@ -27,7 +27,7 @@ def _get_settings():
     return agent_id, api_key
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def health():
     agent_id, api_key = _get_settings()
 
@@ -39,7 +39,7 @@ def health():
         },
     }
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 @rate_limit(limit=10, seconds=60)
 def get_signed_url():
     agent_id, api_key = _get_settings()
@@ -77,7 +77,7 @@ def get_signed_url():
     return {"signedUrl": data.get("signed_url")}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 @rate_limit(limit=10, seconds=60)
 def get_agent_id():
     agent_id, _ = _get_settings()
