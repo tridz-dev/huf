@@ -132,7 +132,7 @@ function KnowledgeSourcesPage() {
               variant="create"
               icon={BookOpen}
               title="No knowledge sources"
-              description="No knowledge sources have been added yet."
+              description="Add a source to let agents retrieve knowledge."
               action={{ label: 'New knowledge source', onClick: () => navigate('/knowledge/new') }}
             />
           )

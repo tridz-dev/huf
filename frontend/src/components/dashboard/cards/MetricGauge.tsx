@@ -30,7 +30,7 @@ export function MetricGauge({
             {label}
           </div>
           {period && (
-            <div className="font-mono text-eyebrow text-steel-soft mt-1">
+            <div className="font-mono text-eyebrow uppercase text-steel-soft mt-1">
               {period}
             </div>
           )}
@@ -63,7 +63,7 @@ export function MetricGauge({
           {value}
         </span>
         {unit && (
-          <span className="font-mono text-[13px] text-steel ml-1">{unit}</span>
+          <span className="font-mono text-base text-steel ml-1">{unit}</span>
         )}
       </div>
     </div>

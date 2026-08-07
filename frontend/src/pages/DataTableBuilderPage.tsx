@@ -407,7 +407,7 @@ export function DataTableBuilderPage() {
 							<SheetContent side="right" className="w-full sm:max-w-sm p-4 overflow-y-auto">
 								<SheetHeader>
 									<SheetTitle>
-										{selectedField ? 'Field Settings' : 'Table Settings'}
+										{selectedField ? 'Field settings' : 'Table settings'}
 									</SheetTitle>
 								</SheetHeader>
 								<div className="mt-4">

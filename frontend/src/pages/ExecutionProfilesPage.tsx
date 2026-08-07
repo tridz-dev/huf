@@ -225,7 +225,7 @@ export function ExecutionProfilesPage() {
               variant="create"
               icon={ShieldCheck}
               title="No execution profiles"
-              description="No execution profiles have been configured yet."
+              description="Configure a profile to control where agent code runs."
               action={{ label: 'New execution profile', onClick: () => navigate('/execution-profiles/new') }}
             />
           )

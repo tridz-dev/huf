@@ -34,7 +34,7 @@ export function PromptPanel({
   return (
     <div className={cn('flex min-h-[260px] flex-col rounded border border-line bg-panel', className)}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
-        <span className="font-sans text-eyebrow font-medium uppercase text-steel">Prompt</span>
+        <span className="font-mono text-eyebrow font-medium uppercase text-steel">Prompt</span>
         <Button
           type="button"
           variant="ghost"

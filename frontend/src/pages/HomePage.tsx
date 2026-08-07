@@ -245,7 +245,7 @@ function HomePage() {
   ];
 
   return (
-    <PageFrame title="Dashboard" meta="Monitor your agents, flows, and system performance">
+    <PageFrame title="Dashboard">
       <div className="space-y-6">
         {/* HUF Gauge Strip */}
         <GaugeRow>

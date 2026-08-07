@@ -172,7 +172,7 @@ export function FieldTypeSelector({ onSelect, trigger, value }: FieldTypeSelecto
 											variant="ghost"
 											size="sm"
 											className={`justify-start gap-2 h-[34px] text-xs font-normal rounded ${
-												isSelected ? 'border-[1.5px] border-signal bg-signal/[.06]' : ''
+												isSelected ? 'border-[1.5px] border-signal bg-signal/[.06]' : 'border-[1.5px] border-transparent'
 											}`}
 											onClick={() => handleSelect(ft.type)}
 										>

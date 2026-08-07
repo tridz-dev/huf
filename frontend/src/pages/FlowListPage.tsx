@@ -187,7 +187,7 @@ function FlowListPage() {
               variant="create"
               icon={Workflow}
               title="No flows"
-              description="No flows have been created yet."
+              description="Create flows to automate your tasks."
               action={{ label: 'New flow', onClick: handleNewFlow }}
             />
           )

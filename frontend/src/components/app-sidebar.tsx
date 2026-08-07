@@ -34,12 +34,6 @@ export const dashboardNavItems = [
     icon: Home,
     capability: null,
   },
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: ChartColumnIncreasing,
-    capability: null,
-  },
 ]
 
 /**
@@ -123,6 +117,12 @@ export const libraryNavItems = [
 ]
 
 export const operateNavItems = [
+	{
+		title: "Dashboard",
+		url: "/dashboard",
+		icon: ChartColumnIncreasing,
+		capability: null,
+	},
 	{
 		title: "Executions",
 		url: "/executions",
@@ -266,7 +266,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ) : (
           <>
             {dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
-            {useItems.length > 0 && <NavMain items={useItems} label="Use" />}
+            {useItems.length > 0 && <NavMain items={useItems} />}
             {buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
             {libraryItems.length > 0 && <NavMain items={libraryItems} label="Library" />}
             {operateItems.length > 0 && <NavMain items={operateItems} label="Monitor" />}

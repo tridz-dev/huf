@@ -47,7 +47,7 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 const ROLE_COLOURS: Record<string, string> = {
   'Huf Admin': 'border-destructive/30 text-destructive bg-transparent',
-  'Huf Manager': 'border-signal/30 text-signal bg-transparent',
+  'Huf Manager': 'border-warning/30 text-warning bg-transparent',
   'Huf User': 'border-good/30 text-good bg-transparent',
   'Huf Viewer': 'border-steel text-steel-soft bg-paper-deep',
 };

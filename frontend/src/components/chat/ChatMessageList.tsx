@@ -54,6 +54,7 @@ export function ChatMessageList({
     const {
         agentName,
         agentDisplayName,
+        agentModel,
         agentDescription,
         agentColor,
         starterPrompts,
@@ -419,6 +420,7 @@ export function ChatMessageList({
                 ref={chatInputRef}
                 chatId={chatId}
                 agentName={agentName}
+                agentModel={agentModel}
                 onConversationCreated={onConversationCreated}
                 onStatusChange={setStatus}
                 onLoadingTypeChange={setLoadingType}

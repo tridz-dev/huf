@@ -4,6 +4,7 @@ import { CornerDownLeft, Paperclip, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
 import { ShortcutKey } from "../ui/shortcut-key";
+import { Badge } from "../ui/badge";
 import {
   sendMessage,
   streamingAvailable,
@@ -35,6 +36,8 @@ export interface ChatInputHandle {
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
+    /** Current agent/conversation model, shown as an inline chip next to the keyboard hint. */
+    agentModel?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
@@ -55,6 +58,7 @@ interface ChatInputProps {
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
     chatId,
     agentName,
+    agentModel,
     onConversationCreated,
     onStatusChange,
     onLoadingTypeChange,
@@ -922,12 +926,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     )}
                     <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
                             <span className="flex items-center gap-x-1 text-[10px] text-steel-soft">
-                                Use
+                                Return to send
+                                <span aria-hidden="true">·</span>
                                 <ShortcutKey>
-                                    Shift + Enter
+                                    Shift-Return
                                 </ShortcutKey>
-                                for new line
+                                for a new line
                             </span>
+                            {agentModel && (
+                                <Badge variant="chip" className="shrink-0">
+                                    {agentModel}
+                                </Badge>
+                            )}
                             {allowFileUpload && (
                                 <>
                                     <input

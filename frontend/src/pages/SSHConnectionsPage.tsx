@@ -231,7 +231,7 @@ export function SSHConnectionsPage() {
               variant="create"
               icon={Terminal}
               title="No SSH connections"
-              description="No SSH connections have been configured yet."
+              description="Add a connection to enable remote execution."
               action={{ label: 'New SSH connection', onClick: () => navigate('/ssh-connections/new') }}
             />
           )

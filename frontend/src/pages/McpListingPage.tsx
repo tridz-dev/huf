@@ -112,7 +112,7 @@ export default function McpListingPage() {
               variant="create"
               icon={Server}
               title="No MCP servers"
-              description="No MCP servers have been connected yet."
+              description="Connect a server to expand agent capabilities."
               action={{ label: 'New MCP server', onClick: () => navigate('/mcp/new') }}
             />
           )

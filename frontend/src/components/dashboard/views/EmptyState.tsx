@@ -97,7 +97,7 @@ export function EmptyState({
         </p>
       )}
       {resolvedVariant === 'create' && action && (
-        <Button variant="outline" size="sm" className="mt-5" onClick={action.onClick}>
+        <Button size="sm" className="mt-5" onClick={action.onClick}>
           {action.label}
         </Button>
       )}

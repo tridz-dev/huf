@@ -746,13 +746,13 @@ export function SkillFormPage() {
                         </Select>
                         <Input
                           type="number"
-                          placeholder="Max chunks"
+                          placeholder="e.g. 5"
                           value={ks.max_chunks ?? 5}
                           onChange={(e) => updateKnowledge(index, { max_chunks: Number(e.target.value) })}
                         />
                         <Input
                           type="number"
-                          placeholder="Token budget"
+                          placeholder="e.g. 2000"
                           value={ks.token_budget ?? 2000}
                           onChange={(e) => updateKnowledge(index, { token_budget: Number(e.target.value) })}
                         />

@@ -11,7 +11,7 @@ const labelVariants = cva('leading-none peer-disabled:cursor-not-allowed peer-di
     // `sm` is the dense-panel/inspector label; `eyebrow` is the mono
     // uppercase group label the design system already defines.
     size: {
-      default: 'text-sm',
+      default: 'text-ui-text',
       sm: 'text-xs',
       eyebrow: 'font-mono text-eyebrow uppercase text-steel-soft',
     },

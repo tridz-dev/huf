@@ -59,7 +59,7 @@ export function TableSettingsPanel({
 	return (
 		<div className="space-y-4 relative">
 			<div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4">
-				<h3 className="font-medium text-sm">Table Settings</h3>
+				<h3 className="font-medium text-sm">Table settings</h3>
 				<p className="text-xs text-steel-soft mt-1">
 					Configure your table properties
 				</p>

@@ -418,7 +418,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       }
     >
       <ProviderModelTabs />
-      <div className="border border-line bg-panel p-4 space-y-3">
+      <div className="bg-[color-mix(in_srgb,var(--signal)_6%,white)] rounded-xl p-4 space-y-3">
         <div className="flex items-start gap-3">
           <Sparkles className="h-4 w-4 mt-0.5 text-signal shrink-0" />
           <div>
@@ -502,10 +502,15 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 { label: 'Models', value: `${modelCount}`, icon: undefined },
                 { label: 'Brand', value: resolveProviderBrand(provider.provider_brand, provider.provider_name) || 'other', icon: undefined },
               ]}
-              badges={providerModels.slice(0, 3).map(model => ({
-                label: model.model_name,
-                variant: 'secondary' as const,
-              }))}
+              badges={[
+                ...providerModels.slice(0, 3).map(model => ({
+                  label: model.model_name,
+                  variant: 'secondary' as const,
+                })),
+                ...(providerModels.length > 3
+                  ? [{ label: `+${providerModels.length - 3} more`, variant: 'outline' as const }]
+                  : []),
+              ]}
               actions={[
                 {
                   icon: Settings,
@@ -537,7 +542,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto min-h-[500px]">
           <DialogHeader>
             <DialogTitle>
-              {isEditing ? `Configure ${selectedProvider?.provider_name || 'Provider'}` : 'Add Provider'}
+              {isEditing ? `Configure ${selectedProvider?.provider_name || 'Provider'}` : 'Add provider'}
             </DialogTitle>
             <DialogDescription>
               {isEditing ? 'Update provider configuration settings' : 'Create a new AI provider'}
@@ -553,7 +558,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               {!isEditing && (
                 <div className="space-y-2">
                   <Label htmlFor="provider_name">
-                    Provider Name <span className="text-destructive">*</span>
+                    Provider name <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="provider_name"

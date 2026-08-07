@@ -68,7 +68,7 @@ export function FieldConfigPanel({
 			<div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4 flex items-center justify-between">
 				<div>
 					<h3 className="font-medium text-sm">
-						{isLayout ? field.fieldtype : 'Field Properties'}
+						{isLayout ? field.fieldtype : 'Field properties'}
 					</h3>
 					<p className="text-xs text-steel mt-1">
 						{isLayout ? 'Layout element settings' : field.fieldtype}

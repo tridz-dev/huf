@@ -93,7 +93,7 @@ export function TraceRail({ agentRunId, className }: TraceRailProps) {
   return (
     <div className={cn('flex min-h-[260px] flex-col rounded border border-line bg-panel', className)}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
-        <span className="font-sans text-eyebrow font-medium uppercase text-steel">Trace</span>
+        <span className="font-mono text-eyebrow font-medium uppercase text-steel">Trace</span>
         {loading && <Loader2 className="h-3 w-3 animate-spin text-steel-soft" />}
       </div>
 

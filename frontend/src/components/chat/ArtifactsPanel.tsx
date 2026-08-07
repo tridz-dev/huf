@@ -137,7 +137,7 @@ export function ArtifactsPanel({ conversationId }: ArtifactsPanelProps) {
   }
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col border-l border-line bg-panel">
+    <div className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-panel">
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">Artifacts</h2>
