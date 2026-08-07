@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -147,8 +147,7 @@ const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; u
   {
     items: [
       { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
-      { title: "AI Providers", url: "/providers", icon: Plug, capability: "system.providers.manage" },
-      { title: "Models", url: "/models", icon: Layers, capability: "system.providers.manage" },
+      { title: "AI Providers & Models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
       { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
