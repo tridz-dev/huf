@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -44,7 +44,7 @@ const dashboardNavItems = [
 
 /**
  * The "Use" side of the platform: end-user HUF Apps discovered from
- * installed provider apps. Build/Operate/People remain the manage side.
+ * installed provider apps. Build/Library/Monitor remain the manage side.
  */
 const useNavItems = [
   {
@@ -70,45 +70,14 @@ const buildNavItems = [
     capability: "agent.use",
   },
   {
-    title: "Prompts",
-    url: "/prompts",
-    icon: FileText,
-    capability: "agent.use",
-  },
-  {
     title: "Flows",
     url: "/flows",
     icon: Workflow,
     capability: "flows.use",
     badge: "Experimental",
   },
-]
-
-/**
- * Knowledge surfaces live in a flat "Know" label group, matching Build and
- * Operate: Tables for structured/relational data, Sources for retrieval
- * knowledge stores backed by any vector/FTS backend (RAG). Future source
- * types (Files, Repos, Drives) nest here as additional items.
- */
-const knowNavItems = [
   {
-    title: "Tables",
-    url: "/data",
-    icon: Database,
-    capability: [
-      "data.tables.manage",
-      "data.records.view_own",
-      "data.records.view_all",
-    ],
-  },
-  {
-    title: "Sources",
-    url: "/knowledge",
-    icon: BookOpen,
-    capability: "agent.use",
-  },
-  {
-    title: "Memory",
+    title: "Intelligence",
     url: "/memory",
     icon: Brain,
     capability: "agent.use",
@@ -120,6 +89,36 @@ const knowNavItems = [
     icon: Sparkles,
     capability: "agent.use",
     badge: "Experimental",
+  },
+]
+
+/**
+ * Library surfaces live in a flat "Library" label group: Prompts for reusable
+ * prompt templates, Sources for retrieval knowledge stores backed by any
+ * vector/FTS backend (RAG), Tables for structured/relational data.
+ */
+const libraryNavItems = [
+  {
+    title: "Prompts",
+    url: "/prompts",
+    icon: FileText,
+    capability: "agent.use",
+  },
+  {
+    title: "Sources",
+    url: "/knowledge",
+    icon: BookOpen,
+    capability: "agent.use",
+  },
+  {
+    title: "Tables",
+    url: "/data",
+    icon: Database,
+    capability: [
+      "data.tables.manage",
+      "data.records.view_own",
+      "data.records.view_all",
+    ],
   },
 ]
 
@@ -144,38 +143,17 @@ const operateNavItems = [
  * primary navigation so the longer administration list never pushes the main
  * destinations off-screen.
  */
-const settingsNavGroups = [
+const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; url: string; icon: LucideIcon; capability: string | string[] | null }> }> = [
   {
-    label: "General",
     items: [
       { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
-    ],
-  },
-  {
-    label: "Intelligence",
-    items: [
       { title: "AI Providers", url: "/providers", icon: Plug, capability: "system.providers.manage" },
       { title: "Models", url: "/models", icon: Layers, capability: "system.providers.manage" },
-    ],
-  },
-  {
-    label: "Runtime",
-    items: [
-      { title: "Code Execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
-      { title: "SSH Connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
-    ],
-  },
-  {
-    label: "Connectivity",
-    items: [
+      { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
-      { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
-    ],
-  },
-  {
-    label: "Access",
-    items: [
+      { title: "Code Execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
+      { title: "SSH Connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
       {
         title: "Members",
         url: "/members",
@@ -228,7 +206,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
-	const knowledgeItems = filterItemsByCapability(knowNavItems)
+	const libraryItems = filterItemsByCapability(libraryNavItems)
 	const operateItems = filterItemsByCapability(operateNavItems)
   const settingsGroups = settingsNavGroups
     .map((group) => ({
@@ -269,7 +247,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenuItem>
             </SidebarMenu>
             {settingsGroups.map((group) => (
-              <NavMain key={group.label} items={group.items} label={group.label} />
+              <NavMain key={group.label ?? "settings"} items={group.items} label={group.label} />
             ))}
           </>
         ) : (
@@ -277,8 +255,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             {dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
             {useItems.length > 0 && <NavMain items={useItems} label="Use" />}
             {buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
-            {knowledgeItems.length > 0 && <NavMain items={knowledgeItems} label="Know" />}
-            {operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
+            {libraryItems.length > 0 && <NavMain items={libraryItems} label="Library" />}
+            {operateItems.length > 0 && <NavMain items={operateItems} label="Monitor" />}
           </>
         )}
       </SidebarContent>
