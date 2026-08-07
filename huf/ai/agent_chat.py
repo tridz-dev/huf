@@ -1097,3 +1097,113 @@ def add_message(
         # API boundary: log unexpected failure with traceback, then re-raise.
         frappe.log_error(message=f"add_message API error: {frappe.get_traceback()}", title="Huf API")
         raise
+
+
+VALID_CONVERSATION_STATUSES = ("Active", "Hidden", "Archived", "Trashed")
+
+# Ordered escalation of destructive actions a retention policy may permit.
+_RETENTION_POLICY_ORDER = ("allow_hide", "allow_archive", "allow_trash", "allow_delete")
+
+# Minimum retention policy required to move a conversation into each status.
+_STATUS_REQUIRED_POLICY = {
+    "Hidden": "allow_hide",
+    "Archived": "allow_archive",
+    "Trashed": "allow_trash",
+}
+
+
+def _policy_permits(policy: str, required: str) -> bool:
+    """Check whether `policy` is at least as permissive as `required` on the escalation ladder."""
+    if not policy or policy not in _RETENTION_POLICY_ORDER:
+        return False
+    return _RETENTION_POLICY_ORDER.index(policy) >= _RETENTION_POLICY_ORDER.index(required)
+
+
+@frappe.whitelist()
+def set_conversation_status(conversation: str, status: str):
+    """Transition an Agent Conversation's status, gated by the agent's retention policy."""
+    if status not in VALID_CONVERSATION_STATUSES:
+        frappe.throw(_("Invalid status: {0}").format(status))
+
+    doc = frappe.get_doc("Agent Conversation", conversation)
+
+    required_policy = _STATUS_REQUIRED_POLICY.get(status)
+    if required_policy:
+        agent_policy = frappe.db.get_value("Agent", doc.agent, "conversation_retention_policy")
+        if not _policy_permits(agent_policy, required_policy):
+            raise frappe.PermissionError(
+                _("This agent's retention policy does not allow moving conversations to {0}.").format(status)
+            )
+
+    doc.status = status
+    doc.trashed_at = frappe.utils.now_datetime() if status == "Trashed" else None
+    doc.archived_at = frappe.utils.now_datetime() if status == "Archived" else None
+    doc.save(ignore_permissions=False)
+
+    return {"status": "ok", "conversation": conversation, "new_status": status}
+
+
+@frappe.whitelist()
+def hard_delete_conversation(conversation: str):
+    """Permanently delete an Agent Conversation while preserving its Agent Message/Agent Run audit trail."""
+    agent = frappe.db.get_value("Agent Conversation", conversation, "agent")
+    agent_policy = frappe.db.get_value("Agent", agent, "conversation_retention_policy") if agent else None
+
+    if agent_policy != "allow_delete":
+        raise frappe.PermissionError(
+            _("This agent's retention policy does not allow permanently deleting conversations.")
+        )
+
+    # Audit-log requirement: Agent Message / Agent Run records are never deleted,
+    # only orphaned from the conversation being removed.
+    message_names = frappe.get_all(
+        "Agent Message", filters={"conversation": conversation}, pluck="name"
+    )
+    for message_name in message_names:
+        frappe.db.set_value("Agent Message", message_name, "conversation", None, update_modified=False)
+
+    frappe.delete_doc("Agent Conversation", conversation, ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"status": "ok", "deleted": conversation}
+
+
+def purge_trashed_conversations():
+    """Scheduler entry point: hard-delete Trashed conversations past their agent's retention window."""
+    trashed_conversations = frappe.get_all(
+        "Agent Conversation",
+        filters={"status": "Trashed"},
+        fields=["name", "agent", "trashed_at"],
+    )
+
+    for conv in trashed_conversations:
+        try:
+            if not conv.trashed_at:
+                continue
+
+            trash_retention_days = frappe.db.get_value("Agent", conv.agent, "trash_retention_days")
+            if trash_retention_days is None or trash_retention_days == -1:
+                continue
+
+            age_days = (frappe.utils.now_datetime() - conv.trashed_at).days
+            if age_days >= trash_retention_days:
+                hard_delete_conversation(conv.name)
+        except Exception:  # boundary exception handler: scheduler job
+            frappe.log_error(
+                message=f"purge_trashed_conversations error for {conv.name}: {frappe.get_traceback()}",
+                title="Huf Scheduler",
+            )
+            continue
+
+
+@frappe.whitelist()
+def list_orphaned_messages(limit=100):
+    """Admin-only: list Agent Message records whose conversation link was cleared by a hard-deleted conversation (audit-log retention)."""
+    frappe.only_for("System Manager")
+    return frappe.get_all(
+        "Agent Message",
+        filters={"conversation": ["in", ["", None]]},
+        fields=["name", "content", "kind", "role", "creation", "agent"],
+        order_by="creation desc",
+        limit_page_length=limit,
+    )

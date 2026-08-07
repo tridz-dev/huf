@@ -932,6 +932,44 @@
   {
    "fieldname": "column_break_fl05",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "conversation_lifecycle_section",
+   "fieldtype": "Section Break",
+   "label": "Conversation Lifecycle Policy"
+  },
+  {
+   "fieldname": "conversation_retention_policy",
+   "fieldtype": "Select",
+   "options": "allow_hide\nallow_archive\nallow_trash\nallow_delete",
+   "default": "allow_trash",
+   "label": "Conversation Retention Policy",
+   "description": "Maximum destructive action a user may take on their own conversations with this agent."
+  },
+  {
+   "fieldname": "trash_retention_days",
+   "fieldtype": "Int",
+   "default": "30",
+   "label": "Trash Retention (days)",
+   "description": "Days before trashed conversations are auto-purged. 0 = purge immediately, -1 = never auto-purge."
+  },
+  {
+   "fieldname": "column_break_lifecycle",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "message_retention_days",
+   "fieldtype": "Int",
+   "default": "-1",
+   "label": "Message Retention (days)",
+   "description": "-1 = retain forever."
+  },
+  {
+   "fieldname": "auto_archive_after_days",
+   "fieldtype": "Int",
+   "default": "0",
+   "label": "Auto-Archive After (days)",
+   "description": "0 = disabled."
   }
  ],
  "grid_page_length": 50,

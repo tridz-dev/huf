@@ -253,6 +253,7 @@ scheduler_events = {
         "huf.ai.knowledge.maintenance.optimize_indexes",
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
+        "huf.ai.agent_chat.purge_trashed_conversations",
     ],
     "cron": {
         "*/1 * * * *": [
