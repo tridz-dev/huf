@@ -1119,6 +1119,48 @@ def _policy_permits(policy: str, required: str) -> bool:
     return _RETENTION_POLICY_ORDER.index(policy) >= _RETENTION_POLICY_ORDER.index(required)
 
 
+def _assert_owns_conversation(conv_owner: str):
+    """Only the conversation's owner or a System Manager may change its lifecycle state."""
+    if conv_owner != frappe.session.user and "System Manager" not in frappe.get_roles():
+        raise frappe.PermissionError(_("You do not have permission to manage this conversation."))
+
+
+def _effective_policy(policy: str | None) -> str:
+    """Doctype Select default only applies to new docs — rows created before this policy
+    field existed have no value in the DB. Treat missing/unrecognized policy as the same
+    'allow_trash' default declared on the Agent doctype, rather than silently denying every
+    lifecycle action for pre-existing agents."""
+    if policy in _RETENTION_POLICY_ORDER:
+        return policy
+    return "allow_trash"
+
+
+def _orphan_conversation_links(conversation: str):
+    """Clear every Link field across the schema that points at this Agent Conversation,
+    instead of deleting the referencing records — preserves Agent Message/Agent Run/etc.
+    as an audit trail and avoids frappe.exceptions.LinkExistsError on delete_doc."""
+    link_fields = frappe.get_all(
+        "DocField",
+        filters={"fieldtype": "Link", "options": "Agent Conversation"},
+        fields=["parent as doctype", "fieldname"],
+    )
+    link_fields += frappe.get_all(
+        "Custom Field",
+        filters={"fieldtype": "Link", "options": "Agent Conversation"},
+        fields=["dt as doctype", "fieldname"],
+    )
+    for link in link_fields:
+        if link.doctype == "Agent Conversation":
+            continue
+        meta = frappe.get_meta(link.doctype)
+        if meta.istable:
+            # Child tables are deleted along with their parent document; nothing to orphan.
+            continue
+        record_names = frappe.get_all(link.doctype, filters={link.fieldname: conversation}, pluck="name")
+        for record_name in record_names:
+            frappe.db.set_value(link.doctype, record_name, link.fieldname, None, update_modified=False)
+
+
 @frappe.whitelist()
 def set_conversation_status(conversation: str, status: str):
     """Transition an Agent Conversation's status, gated by the agent's retention policy."""
@@ -1126,10 +1168,13 @@ def set_conversation_status(conversation: str, status: str):
         frappe.throw(_("Invalid status: {0}").format(status))
 
     doc = frappe.get_doc("Agent Conversation", conversation)
+    _assert_owns_conversation(doc.owner)
 
     required_policy = _STATUS_REQUIRED_POLICY.get(status)
     if required_policy:
-        agent_policy = frappe.db.get_value("Agent", doc.agent, "conversation_retention_policy")
+        agent_policy = _effective_policy(
+            frappe.db.get_value("Agent", doc.agent, "conversation_retention_policy")
+        )
         if not _policy_permits(agent_policy, required_policy):
             raise frappe.PermissionError(
                 _("This agent's retention policy does not allow moving conversations to {0}.").format(status)
@@ -1145,22 +1190,21 @@ def set_conversation_status(conversation: str, status: str):
 
 @frappe.whitelist()
 def hard_delete_conversation(conversation: str):
-    """Permanently delete an Agent Conversation while preserving its Agent Message/Agent Run audit trail."""
-    agent = frappe.db.get_value("Agent Conversation", conversation, "agent")
-    agent_policy = frappe.db.get_value("Agent", agent, "conversation_retention_policy") if agent else None
+    """Permanently delete an Agent Conversation while preserving its Agent Message/Agent Run
+    (and every other linked doctype's) audit trail — only the links to this conversation are
+    cleared, never the records themselves."""
+    conv = frappe.get_doc("Agent Conversation", conversation)
+    _assert_owns_conversation(conv.owner)
 
+    agent_policy = _effective_policy(
+        frappe.db.get_value("Agent", conv.agent, "conversation_retention_policy") if conv.agent else None
+    )
     if agent_policy != "allow_delete":
         raise frappe.PermissionError(
             _("This agent's retention policy does not allow permanently deleting conversations.")
         )
 
-    # Audit-log requirement: Agent Message / Agent Run records are never deleted,
-    # only orphaned from the conversation being removed.
-    message_names = frappe.get_all(
-        "Agent Message", filters={"conversation": conversation}, pluck="name"
-    )
-    for message_name in message_names:
-        frappe.db.set_value("Agent Message", message_name, "conversation", None, update_modified=False)
+    _orphan_conversation_links(conversation)
 
     frappe.delete_doc("Agent Conversation", conversation, ignore_permissions=True)
     frappe.db.commit()

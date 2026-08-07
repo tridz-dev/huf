@@ -6,6 +6,10 @@
  "field_order": [
   "overview_tab",
   "title",
+  "status",
+  "pinned",
+  "trashed_at",
+  "archived_at",
   "agent",
   "model",
   "column_break_9v4t",

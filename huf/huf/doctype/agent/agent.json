@@ -84,6 +84,12 @@
   "autonaming_of_conversation_title",
   "enable_conversation_data",
   "column_break_fl05",
+  "conversation_lifecycle_section",
+  "conversation_retention_policy",
+  "trash_retention_days",
+  "column_break_lifecycle",
+  "message_retention_days",
+  "auto_archive_after_days",
   "inject_conversation_data",
   "conversation_data_api_permission",
   "memory_section",
@@ -575,7 +581,6 @@
    "fieldtype": "Check",
    "label": "Enable Multi Run"
   },
-
   {
    "depends_on": "eval:!doc.disabled",
    "description": "Configure prompt caching to reduce costs by caching repeated prompt content",
