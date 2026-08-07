@@ -47,6 +47,15 @@ dependencies = [
     "serpapi",
     "youtube-transcript-api",
     "paramiko>=3.4.0",
+    # HTML sanitization for document artifact rendering
+    # (huf.ai.artifacts.render.html). bleach.css_sanitizer.CSSSanitizer needs
+    # tinycss2, pinned here at the version weasyprint (below) also needs —
+    # depend on it directly rather than via bleach's "css" extra, which pins
+    # an older tinycss2 and would downgrade it.
+    "bleach>=6.0",
+    "tinycss2>=1.5.0",
+    # PDF export for document artifacts (huf.ai.artifacts.render.pdf/safety).
+    "weasyprint>=68.0",
 ]
 
 [build-system]

@@ -49,6 +49,8 @@
   "copied_from_summary_prompt",
   "instruction_section",
   "instructions",
+  "starter_prompts_section",
+  "starter_prompts",
   "tools_and_mcp_tab",
   "agent_tool",
   "mcp_servers_section",
@@ -235,6 +237,18 @@
    "fieldname": "instructions",
    "fieldtype": "Code",
    "label": "Instructions"
+  },
+  {
+   "fieldname": "starter_prompts_section",
+   "fieldtype": "Section Break",
+   "label": "Starter Prompts"
+  },
+  {
+   "description": "Up to 3 starter prompts shown to users when starting a chat with this agent.",
+   "fieldname": "starter_prompts",
+   "fieldtype": "Table",
+   "label": "Starter Prompts",
+   "options": "Agent Starter Prompt"
   },
   {
    "default": "1",

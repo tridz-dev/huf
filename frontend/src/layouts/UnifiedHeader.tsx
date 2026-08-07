@@ -25,7 +25,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/agents')) return 'Agent';
     if (path.startsWith('/flows')) return 'Flows';
     if (path.startsWith('/data')) return 'Data';
-    if (path.startsWith('/providers')) return 'AI Providers';
+    if (path.startsWith('/providers')) return 'AI Providers & Models';
     if (path.startsWith('/integration-services')) return 'Integration Catalog';
     if (path.startsWith('/integrations')) return 'Integrations';
     if (path.startsWith('/gateways')) return 'Gateways';
@@ -42,11 +42,11 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/members')) return 'Members';
     if (path.startsWith('/users')) return 'Users';
     if (path.startsWith('/roles')) return 'Roles';
-    if (path.startsWith('/models')) return 'Models';
+    if (path.startsWith('/models')) return 'AI Providers & Models';
     if (path.startsWith('/execution-profiles')) return 'Code Execution';
     if (path.startsWith('/ssh-connections')) return 'SSH Connections';
     if (path.startsWith('/apps')) return 'Apps';
-    if (path.startsWith('/memory')) return 'Memory';
+    if (path.startsWith('/memory')) return 'Intelligence';
     if (path.startsWith('/skills')) return 'Skills';
     if (path.startsWith('/ssh')) return 'SSH Execution';
     return 'HufAI';

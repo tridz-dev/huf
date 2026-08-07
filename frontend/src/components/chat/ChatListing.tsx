@@ -18,7 +18,7 @@ import { useChatList } from './useChatList';
 import ChatAvatar from './ChatAvatar';
 import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
-import { AgentModelSelector } from './AgentModelSelector';
+import { ChatAgentPicker } from './ChatAgentPicker';
 import { Button } from '../ui/button';
 import { SidebarTrigger } from '../ui/sidebar';
 // import { DEFAULT_AGENT_COLOR } from '@/data/color';
@@ -815,7 +815,7 @@ function ChatListHeader({
       </div>
       <div className="flex items-center gap-1">
         {onAgentSelect && (
-          <AgentModelSelector
+          <ChatAgentPicker
             value={selectedAgent}
             onValueChange={handleAgentChange}
           />
