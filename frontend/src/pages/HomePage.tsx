@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, ChevronRight, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { PageFrame } from '../layouts/PageFrame';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { useNavigate } from 'react-router-dom';
@@ -244,18 +245,8 @@ function HomePage() {
   ];
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 space-y-6">
-        {/* HUF Page head */}
-        <div>
-          <h1 className="font-display font-bold text-[36px] text-ink leading-none tracking-tight">
-            Dashboard
-          </h1>
-          <p className="font-body text-steel text-[14.5px] mt-1">
-            Monitor your agents, flows, and system performance
-          </p>
-        </div>
-
+    <PageFrame title="Dashboard" meta="Monitor your agents, flows, and system performance">
+      <div className="space-y-6">
         {/* HUF Gauge Strip */}
         <GaugeRow>
           {metricsData.map((metric) => (
@@ -358,6 +349,6 @@ function HomePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </PageFrame>
   );
 }

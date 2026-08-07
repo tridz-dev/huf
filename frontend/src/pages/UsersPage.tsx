@@ -170,7 +170,18 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
 // Main page
 // ---------------------------------------------------------------------------
 
-export default function UsersPage() {
+interface UsersPageProps {
+  /**
+   * True when rendered inside MembersPage's own PageFrame (the People/Roles
+   * switcher already owns the page's single head bar there) — skip this
+   * page's own PageFrame so /members never shows two head bars / two
+   * titles, and render the search/status/invite toolbar as a plain row
+   * instead.
+   */
+  embedded?: boolean;
+}
+
+export default function UsersPage({ embedded = false }: UsersPageProps) {
   const [users, setUsers] = useState<HufUser[]>([]);
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,30 +253,32 @@ export default function UsersPage() {
     });
   }, [users, search, statusFilter]);
 
-  return (
-    <PageFrame
-      actions={
-        <Button onClick={() => setShowInvite(true)}>
-          <UserPlus className="h-4 w-4 mr-2" />
-          Invite user
-        </Button>
-      }
-      filters={
-        <FilterBar
-          searchPlaceholder="Search users..."
-          searchValue={search}
-          onSearchChange={setSearch}
-          filters={[
-            {
-              label: 'Status',
-              value: statusFilter,
-              options: statusOptions,
-              onChange: (value) => setStatusFilter(value as UserStatusFilter),
-            },
-          ]}
-        />
-      }
-    >
+  const inviteAction = (
+    <Button onClick={() => setShowInvite(true)}>
+      <UserPlus className="h-4 w-4 mr-2" />
+      Invite user
+    </Button>
+  );
+
+  const toolbar = (
+    <FilterBar
+      searchPlaceholder="Search users..."
+      searchValue={search}
+      onSearchChange={setSearch}
+      filters={[
+        {
+          label: 'Status',
+          value: statusFilter,
+          options: statusOptions,
+          onChange: (value) => setStatusFilter(value as UserStatusFilter),
+        },
+      ]}
+      actions={embedded ? inviteAction : undefined}
+    />
+  );
+
+  const body = (
+    <>
       {loading ? (
         <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
@@ -371,6 +384,21 @@ export default function UsersPage() {
         onClose={() => setShowInvite(false)}
         onInvited={(u) => setUsers((prev) => [u, ...prev])}
       />
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-4">
+        {toolbar}
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <PageFrame actions={inviteAction} filters={toolbar}>
+      {body}
     </PageFrame>
   );
 }
