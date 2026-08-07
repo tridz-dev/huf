@@ -8,7 +8,7 @@ import json
 import frappe
 import requests
 
-from huf.ai.tools.credentials import get_credential, require_credential, update_last_error
+from huf.ai.tools.credentials import require_credential, update_last_error
 
 logger = frappe.logger("huf")
 
@@ -21,6 +21,23 @@ def _get_jira_config():
 	email = require_credential(SERVICE_NAME, "email")
 	api_token = require_credential(SERVICE_NAME, "api_token")
 	return base_url, (email, api_token)
+
+
+def _format_jira_error(response: requests.Response) -> str:
+	try:
+		payload = response.json()
+	except ValueError:
+		return response.text or f"HTTP {response.status_code}"
+
+	if isinstance(payload, dict):
+		messages = payload.get("errorMessages") or []
+		errors = payload.get("errors") or {}
+		parts = [str(message) for message in messages if message]
+		parts.extend(f"{key}: {value}" for key, value in errors.items() if value)
+		if parts:
+			return "; ".join(parts)
+
+	return response.text or f"HTTP {response.status_code}"
 
 
 def _make_jira_request(method: str, path: str, json_data=None, params=None):
@@ -36,7 +53,9 @@ def _make_jira_request(method: str, path: str, json_data=None, params=None):
 		params=params,
 		timeout=30,
 	)
-	response.raise_for_status()
+	if not response.ok:
+		raise ValueError(f"Jira API error ({response.status_code}): {_format_jira_error(response)}")
+
 	return response.json() if response.text else {}
 
 
@@ -49,6 +68,47 @@ def _adf_text(text: str) -> dict:
 	}
 
 
+def _normalize_issue(issue: dict, base_url: str) -> dict:
+	fields = issue.get("fields", {})
+	return {
+		"key": issue.get("key"),
+		"summary": fields.get("summary"),
+		"status": (fields.get("status") or {}).get("name"),
+		"issue_type": (fields.get("issuetype") or {}).get("name"),
+		"assignee": (fields.get("assignee") or {}).get("displayName"),
+		"priority": (fields.get("priority") or {}).get("name"),
+		"url": f"{base_url}/browse/{issue.get('key')}" if issue.get("key") else None,
+	}
+
+
+def handle_list_projects(**kwargs) -> str:
+	"""List Jira projects visible to the configured credentials."""
+	try:
+		max_results = int(kwargs.get("max_results") or 50)
+		data = _make_jira_request(
+			"GET",
+			"project/search",
+			params={"maxResults": max_results},
+		)
+
+		projects = [
+			{
+				"key": project.get("key"),
+				"name": project.get("name"),
+				"project_type": project.get("projectTypeKey"),
+				"style": project.get("style"),
+			}
+			for project in data.get("values", [])
+		]
+
+		return json.dumps({"success": True, "count": len(projects), "results": projects})
+	except Exception as e:
+		error_msg = f"Jira List Projects Error: {e!s}"
+		logger.warning(error_msg)
+		update_last_error(SERVICE_NAME, error_msg)
+		return json.dumps({"success": False, "error": str(e)}, default=str)
+
+
 def handle_search_issues(**kwargs) -> str:
 	"""Search Jira issues using JQL."""
 	try:
@@ -57,30 +117,18 @@ def handle_search_issues(**kwargs) -> str:
 			return json.dumps({"success": False, "error": "jql is required"}, default=str)
 
 		max_results = int(kwargs.get("max_results") or 20)
+		base_url, _auth = _get_jira_config()
 		data = _make_jira_request(
-			"GET",
-			"search",
-			params={
+			"POST",
+			"search/jql",
+			json_data={
 				"jql": jql,
 				"maxResults": max_results,
-				"fields": "summary,status,issuetype,assignee,priority",
+				"fields": ["summary", "status", "issuetype", "assignee", "priority"],
 			},
 		)
 
-		issues = []
-		for issue in data.get("issues", []):
-			fields = issue.get("fields", {})
-			issues.append(
-				{
-					"key": issue.get("key"),
-					"summary": fields.get("summary"),
-					"status": (fields.get("status") or {}).get("name"),
-					"issue_type": (fields.get("issuetype") or {}).get("name"),
-					"assignee": ((fields.get("assignee") or {}).get("displayName")),
-					"priority": (fields.get("priority") or {}).get("name"),
-					"url": f"{require_credential(SERVICE_NAME, 'base_url').rstrip('/')}/browse/{issue.get('key')}",
-				}
-			)
+		issues = [_normalize_issue(issue, base_url) for issue in data.get("issues", [])]
 
 		return json.dumps({"success": True, "count": len(issues), "results": issues})
 	except Exception as e:

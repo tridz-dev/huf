@@ -18,14 +18,10 @@ MODULE = "huf.ai.tools.jira"
 
 def _mock_response(payload=None, status_code=200):
 	resp = MagicMock()
+	resp.ok = status_code < 400
 	resp.status_code = status_code
 	resp.json.return_value = payload if payload is not None else {}
 	resp.text = json.dumps(payload or {})
-	resp.raise_for_status = MagicMock()
-	if status_code >= 400:
-		import requests
-
-		resp.raise_for_status.side_effect = requests.HTTPError(f"{status_code} error")
 	return resp
 
 
@@ -35,6 +31,23 @@ def _result(raw):
 
 def _fake_credential(service, key):
 	return {"base_url": "https://example.atlassian.net", "email": "bot@example.com", "api_token": "tok-123"}[key]
+
+
+class TestListProjects(unittest.TestCase):
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", side_effect=_fake_credential)
+	@patch(f"{MODULE}.requests.request")
+	def test_list_projects(self, mock_request, _cred, _err):
+		mock_request.return_value = _mock_response(
+			{"values": [{"key": "ABC", "name": "Alpha", "projectTypeKey": "software", "style": "classic"}]}
+		)
+
+		out = _result(jira.handle_list_projects())
+
+		self.assertTrue(out["success"])
+		self.assertEqual(out["results"][0]["key"], "ABC")
+		kwargs = mock_request.call_args.kwargs
+		self.assertEqual(kwargs["params"]["maxResults"], 50)
 
 
 class TestSearchIssues(unittest.TestCase):
@@ -70,7 +83,9 @@ class TestSearchIssues(unittest.TestCase):
 		self.assertIn("ABC-1", issue["url"])
 
 		kwargs = mock_request.call_args.kwargs
-		self.assertEqual(kwargs["params"]["jql"], "project = ABC")
+		self.assertEqual(kwargs["json"]["jql"], "project = ABC")
+		self.assertEqual(mock_request.call_args.args[0], "POST")
+		self.assertIn("search/jql", mock_request.call_args.args[1])
 
 	def test_requires_jql(self):
 		out = _result(jira.handle_search_issues())
@@ -162,11 +177,15 @@ class TestErrorHandling(unittest.TestCase):
 	@patch(f"{MODULE}.require_credential", side_effect=_fake_credential)
 	@patch(f"{MODULE}.requests.request")
 	def test_http_error_returns_envelope(self, mock_request, _cred, mock_err):
-		mock_request.return_value = _mock_response({"errorMessages": ["not found"]}, status_code=404)
+		mock_request.return_value = _mock_response(
+			{"errorMessages": ["Issue does not exist"], "errors": {}},
+			status_code=404,
+		)
 
 		out = _result(jira.handle_get_issue(issue_key="ABC-999"))
 
 		self.assertFalse(out["success"])
+		self.assertIn("Issue does not exist", out["error"])
 		mock_err.assert_called_once()
 
 	@patch(f"{MODULE}.update_last_error")
@@ -180,6 +199,7 @@ class TestErrorHandling(unittest.TestCase):
 class TestRegistry(unittest.TestCase):
 	def test_all_tools_registered(self):
 		expected = {
+			"jira_list_projects": "handle_list_projects",
 			"jira_search_issues": "handle_search_issues",
 			"jira_get_issue": "handle_get_issue",
 			"jira_create_issue": "handle_create_issue",

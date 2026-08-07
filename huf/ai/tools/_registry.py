@@ -256,12 +256,27 @@ GITHUB_TOOLS = [
 
 JIRA_TOOLS = [
 	{
+		"tool_name": "jira_list_projects",
+		"description": (
+			"List Jira projects visible to the connected account. Use this before "
+			"jira_create_issue to pick a valid project_key. Requires JIRA_BASE_URL, "
+			"JIRA_EMAIL, JIRA_API_TOKEN."
+		),
+		"function_path": "huf.ai.tools.jira.handle_list_projects",
+		"category": "Project Management Tools",
+		"parameters": [_p("max_results", type="int", description="Max projects to return (default 50)")],
+	},
+	{
 		"tool_name": "jira_search_issues",
-		"description": "Search Jira issues using JQL (Jira Query Language). Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN.",
+		"description": (
+			"Search Jira issues using JQL (Jira Query Language). Requires bounded JQL "
+			"(include a filter such as project = ABC). Requires JIRA_BASE_URL, JIRA_EMAIL, "
+			"JIRA_API_TOKEN."
+		),
 		"function_path": "huf.ai.tools.jira.handle_search_issues",
 		"category": "Project Management Tools",
 		"parameters": [
-			_p("jql", required=True, description="JQL query, e.g. 'project = ABC AND status = \"In Progress\"'"),
+			_p("jql", required=True, description="Bounded JQL query, e.g. 'project = ABC AND status = \"In Progress\"'"),
 			_p("max_results", type="int", description="Max issues to return (default 20)"),
 		],
 	},
@@ -274,11 +289,18 @@ JIRA_TOOLS = [
 	},
 	{
 		"tool_name": "jira_create_issue",
-		"description": "Create a Jira issue. Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN.",
+		"description": (
+			"Create a Jira issue. Requires JIRA_BASE_URL, JIRA_EMAIL, JIRA_API_TOKEN. "
+			"Call jira_list_projects first (or ask the user) to obtain a valid project_key."
+		),
 		"function_path": "huf.ai.tools.jira.handle_create_issue",
 		"category": "Project Management Tools",
 		"parameters": [
-			_p("project_key", required=True, description="Project key, e.g. 'ABC'"),
+			_p(
+				"project_key",
+				required=True,
+				description="Jira project key from jira_list_projects (e.g. 'ABC'). Do not guess.",
+			),
 			_p("summary", required=True, description="Issue summary/title"),
 			_p("issue_type", description="Issue type name, e.g. 'Task', 'Bug', 'Story' (default 'Task')"),
 			_p("description", description="Issue description text"),
