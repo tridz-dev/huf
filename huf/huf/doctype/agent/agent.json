@@ -56,6 +56,10 @@
   "voice_engine",
   "voice_config",
   "voice_greeting",
+  "embed_tab",
+  "embed_enabled",
+  "publishable_key",
+  "allowed_origins",
   "audio_generation_section",
   "tts_model",
   "column_break_dq1z",
@@ -289,6 +293,34 @@
    "fieldname": "voice_greeting",
    "fieldtype": "Small Text",
    "label": "Greeting"
+  },
+  {
+   "fieldname": "embed_tab",
+   "fieldtype": "Tab Break",
+   "label": "Embed"
+  },
+  {
+   "default": "0",
+   "description": "Allow this agent to be embedded on external websites using a publishable key.",
+   "fieldname": "embed_enabled",
+   "fieldtype": "Check",
+   "label": "Enable Embedding"
+  },
+  {
+   "depends_on": "eval:doc.embed_enabled",
+   "description": "Auto-generated. Safe to expose in client-side code — scoped to this agent only.",
+   "fieldname": "publishable_key",
+   "fieldtype": "Data",
+   "label": "Publishable Key",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "depends_on": "eval:doc.embed_enabled",
+   "description": "One origin per line, e.g. https://example.com — requests from any other origin will be rejected.",
+   "fieldname": "allowed_origins",
+   "fieldtype": "Small Text",
+   "label": "Allowed Origins"
   },
   {
    "default": "1",

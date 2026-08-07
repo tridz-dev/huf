@@ -123,6 +123,16 @@ class Agent(Document):
         self._validate_skills()
         self._validate_starter_prompts()
         self._update_mcp_tool_counts()
+        self._ensure_publishable_key()
+
+    def _ensure_publishable_key(self):
+        """Auto-generate a publishable key when embedding is enabled.
+
+        Runs on every validate() so it self-heals if the key is ever cleared
+        while embed_enabled stays on. Never regenerates an existing key.
+        """
+        if self.embed_enabled and not self.publishable_key:
+            self.publishable_key = f"pk_{frappe.generate_hash(length=32)}"
 
     def _validate_skills(self):
         """Prevent duplicate skills from being attached to an agent."""

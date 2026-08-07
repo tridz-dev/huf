@@ -93,6 +93,15 @@ class VoiceEngine(ABC):
 		"""
 		raise NotImplementedError
 
-	def declare_client_tools(self, agent_doc) -> list[dict[str, Any]]:
-		"""Return client-side tool declarations this engine wants exposed."""
+	def declare_client_tools(self, agent_doc, user_ref: Any = None) -> list[dict[str, Any]]:
+		"""Return client-side tool declarations this engine wants exposed.
+
+		``user_ref`` mirrors ``start_session``'s contract: implementations
+		resolving the allowed tool set per-caller (e.g. via a permission-aware
+		registry) should use ``user_ref`` rather than reading
+		``frappe.session.user`` directly, so this also works for
+		publishable-key/server-secret sessions where there is no session user.
+		Defaulting to ``None`` keeps this backward compatible; callers that
+		don't yet have a caller identity to pass may omit it.
+		"""
 		return []

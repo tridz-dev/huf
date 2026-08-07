@@ -12,8 +12,10 @@ from frappe import _
 from huf.ai.voice.engines.base import VoiceEngine
 
 # Built-in engine registry. Hooked engines are merged on top per request.
-# Engines land in later phases; start empty.
-_BUILTIN_ENGINES: dict[str, str] = {}
+_BUILTIN_ENGINES: dict[str, str] = {
+	"elevenlabs_convai": "huf.ai.voice.engines.elevenlabs.ElevenLabsConvaiEngine",
+	"litellm_realtime": "huf.ai.voice.engines.litellm_realtime.LitellmRealtimeEngine",
+}
 
 
 def _discover_engines() -> dict[str, str]:

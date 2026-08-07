@@ -8,8 +8,10 @@ see the comment on that function.
 
 from __future__ import annotations
 
+import hmac
 import json
 from typing import Any
+from urllib.parse import urlsplit
 
 import frappe
 from frappe import _
@@ -167,3 +169,100 @@ def send_to_session(agent: str, session_id: str, kind: str, text: str) -> None:
 	engine_key, _config = _get_agent_voice_config(agent_doc)
 	engine = get_engine(engine_key)
 	engine.send_to_session(session_id, kind=kind, text=text)
+
+
+def _origin_allowed(origin: str, allowed_origins: str | None) -> bool:
+	"""Check ``origin`` against newline-separated ``allowed_origins``.
+
+	Compares parsed ``(scheme, netloc)`` tuples exactly - never a substring
+	check, which would let e.g. "evil-example.com" pass an allowlist entry of
+	"example.com".
+	"""
+	if not origin or not allowed_origins:
+		return False
+
+	origin_parts = urlsplit(origin)
+	origin_key = (origin_parts.scheme.lower(), origin_parts.netloc.lower())
+
+	for line in allowed_origins.splitlines():
+		candidate = line.strip()
+		if not candidate:
+			continue
+		candidate_parts = urlsplit(candidate)
+		candidate_key = (candidate_parts.scheme.lower(), candidate_parts.netloc.lower())
+		if candidate_key == origin_key:
+			return True
+
+	return False
+
+
+def ensure_publishable_key(doc, method=None) -> None:
+	"""``doc_events`` fallback for auto-generating ``publishable_key``.
+
+	Not currently wired into ``hooks.py`` - the Agent controller's own
+	``validate()`` handles this directly (see ``Agent._ensure_publishable_key``
+	in ``huf/huf/doctype/agent/agent.py``). Kept here, unused, only in case a
+	future controller-less doctype needs the same behavior via ``doc_events``.
+	"""
+	if getattr(doc, "embed_enabled", None) and not getattr(doc, "publishable_key", None):
+		doc.publishable_key = f"pk_{frappe.generate_hash(length=32)}"
+
+
+@frappe.whitelist(allow_guest=True, methods=["POST"])
+def start_public_session(publishable_key, agent) -> dict[str, Any]:
+	"""Mint a voice session for an unauthenticated embedded caller.
+
+	Scoped by publishable_key (per-Agent, never site-wide) + Origin header
+	allowlist, NOT by frappe.session.user (which is Guest here). This is
+	the Mode A (publishable-key) counterpart to start_session()'s
+	session-user-authenticated Mode.
+
+	Deliberately takes NO ``config`` parameter: a publishable key is public
+	by design (it ships in third-party page source), so accepting a
+	caller-supplied engine config here would let anyone holding it point a
+	session at an arbitrary AI Model/ElevenLabs agent_id of their choosing,
+	riding on this Agent's own provider credentials. The engine config is
+	always the Agent's own ``voice_config``, exactly as ``start_session``
+	uses it - never something the browser supplies.
+
+	NOTE - cross-origin preflight: Frappe answers a bare OPTIONS request at
+	the WSGI dispatch layer, before whitelisted-method routing, using the
+	site-wide ``allow_cors`` config rather than this function's own Origin
+	allowlist. A site that wants to actually serve embedded callers from
+	browsers must additionally configure ``allow_cors`` (see site_config.json)
+	to include the same origins configured in this Agent's
+	``allowed_origins`` - the check in this function is a second, per-Agent
+	gate on top of that, not a replacement for it. Documented in TESTING.md.
+	"""
+	try:
+		agent_doc = frappe.get_doc("Agent", agent)
+	except frappe.DoesNotExistError:
+		# Same PermissionError as every other rejection in this function, so an
+		# unauthenticated caller can't use the response to enumerate valid
+		# Agent docnames.
+		frappe.throw(_("Not permitted to start a session for Agent '{0}'").format(agent), frappe.PermissionError)
+
+	stored_key = getattr(agent_doc, "publishable_key", None) or ""
+	key_matches = bool(stored_key) and hmac.compare_digest(stored_key, publishable_key or "")
+
+	if not agent_doc.embed_enabled or not key_matches:
+		frappe.throw(_("Not permitted to start a session for Agent '{0}'").format(agent), frappe.PermissionError)
+
+	origin = frappe.get_request_header("Origin")
+	if not _origin_allowed(origin, getattr(agent_doc, "allowed_origins", None)):
+		frappe.throw(_("Origin not permitted for Agent '{0}'").format(agent), frappe.PermissionError)
+
+	# Reflect the validated origin (never "*") so browsers permit this
+	# fetch() response to be read cross-origin. frappe.local.response is the
+	# JSON payload dict, not the HTTP response - the actual werkzeug Headers
+	# object that process_response() merges into the outgoing response is
+	# frappe.local.response_headers (see frappe/app.py process_response()
+	# and e.g. frappe/desk/reportview.py's use of the same object).
+	frappe.local.response_headers["Access-Control-Allow-Origin"] = origin
+	frappe.local.response_headers["Vary"] = "Origin"
+
+	_, config = _get_agent_voice_config(agent_doc)
+
+	# Identifies the source as an embed session without propagating the
+	# publishable key itself into engine-layer session records or logs.
+	return _mint_session(agent_doc, config, user_ref=f"embed:{agent_doc.name}")
