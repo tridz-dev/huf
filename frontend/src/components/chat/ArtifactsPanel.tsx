@@ -37,7 +37,9 @@ const ARTIFACT_TYPE_ICONS: Record<string, LucideIcon> = {
   text: FileText,
 };
 
-function getArtifactIcon(artifactType: string): LucideIcon {
+/** Exported for reuse by `OutputsCard`, which shows the same per-type icon
+ * mapping in its transcript-embedded outputs list. */
+export function getArtifactIcon(artifactType: string): LucideIcon {
   return ARTIFACT_TYPE_ICONS[artifactType] ?? FileText;
 }
 

@@ -8,6 +8,9 @@ import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type Agen
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
+import { OutputsCard } from './OutputsCard';
+import type { ArtifactPaneTarget } from './useArtifactPane';
+import type { ArtifactListItem } from '@/services/artifactPanelApi';
 import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
@@ -30,11 +33,20 @@ import {
 interface ChatMessageListProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
+    /** Conversation artifacts, fetched once by ChatPageV2's shared
+     * `useConversationArtifacts` and passed down for the end-of-transcript
+     * Outputs card (spec section 28.2) — not re-fetched here. */
+    artifacts?: ArtifactListItem[];
+    onOpenArtifact?: (target: ArtifactPaneTarget) => void;
+    activeArtifactName?: string;
 }
 
 export function ChatMessageList({
     chatId: chatIdProp,
     onConversationCreated,
+    artifacts,
+    onOpenArtifact,
+    activeArtifactName,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -346,8 +358,8 @@ export function ChatMessageList({
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
                 <div className={isColdStart
-                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex items-center justify-center"
-                    : "max-w-4xl mx-auto px-6 py-4 space-y-4"
+                    ? "max-w-4xl mx-auto px-[26px] py-5 h-full flex items-center justify-center"
+                    : "max-w-4xl mx-auto px-[26px] py-5"
                 }>
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
@@ -368,7 +380,7 @@ export function ChatMessageList({
                             agentColor={agentColor}
                         />
                     ) : (
-                        <div className="mt-2 space-y-8">
+                        <div className="flex flex-col gap-chat-turn">
                             {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
                                 <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
                             )}
@@ -391,8 +403,7 @@ export function ChatMessageList({
                                     <ChatMessageComponent
                                         key={message.key}
                                         message={message}
-                                        agentName={agentName}
-                                        agentColor={agentColor}
+                                        agentModel={agentModel ?? undefined}
                                         showToolExecutionDetails={showToolExecutionDetails}
                                         status={status}
                                         loadingType={loadingType}
@@ -403,6 +414,13 @@ export function ChatMessageList({
                                     />
                                 );
                             })}
+                            {artifacts && artifacts.length > 0 && onOpenArtifact && (
+                                <OutputsCard
+                                    artifacts={artifacts}
+                                    onOpenArtifact={onOpenArtifact}
+                                    activeArtifactName={activeArtifactName}
+                                />
+                            )}
                         </div>
                     )}
                 </div>

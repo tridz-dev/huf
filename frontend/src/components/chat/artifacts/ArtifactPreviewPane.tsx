@@ -89,7 +89,7 @@ export function ArtifactPreviewPane({
 
   return (
     <div
-      className="relative flex h-full shrink-0 flex-col border-l border-line bg-panel"
+      className="relative flex h-full shrink-0 flex-col border-l border-line bg-paper"
       style={{ width }}
     >
       <div
@@ -97,49 +97,48 @@ export function ArtifactPreviewPane({
         onMouseDown={handleMouseDown}
       />
 
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-3">
-        <div className="min-w-0 flex-1">
-          {documentArtifacts.length > 1 ? (
-            <Select
-              value={artifact.name}
-              onValueChange={(name) => {
-                const next = documentArtifacts.find((a) => a.name === name);
-                if (next) {
-                  onSelectArtifact({
-                    name: next.name,
-                    title: next.title,
-                    artifact_type: next.artifact_type,
-                  });
-                }
-              }}
-            >
-              <SelectTrigger className="h-8 border-none bg-transparent px-0 text-sm font-semibold shadow-none focus:ring-0">
-                <SelectValue placeholder="Document preview">
-                  {artifact.title || 'Document preview'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {documentArtifacts.map((a) => (
-                  <SelectItem key={a.name} value={a.name}>
-                    {a.title || a.artifact_type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <h2 className="truncate text-sm font-semibold">
-              {artifact.title || 'Document preview'}
-            </h2>
-          )}
-          <p className="truncate text-xs capitalize text-muted-foreground">
-            {artifact.artifact_type}
-          </p>
-        </div>
+      <div className="flex h-chat-header flex-none items-center gap-2.5 border-b border-line px-3.5">
+        {documentArtifacts.length > 1 ? (
+          <Select
+            value={artifact.name}
+            onValueChange={(name) => {
+              const next = documentArtifacts.find((a) => a.name === name);
+              if (next) {
+                onSelectArtifact({
+                  name: next.name,
+                  title: next.title,
+                  artifact_type: next.artifact_type,
+                });
+              }
+            }}
+          >
+            <SelectTrigger className="h-auto min-w-0 flex-none max-w-[60%] border-none bg-transparent p-0 text-[13px] font-medium shadow-none focus:ring-0">
+              <SelectValue placeholder="Document preview">
+                <span className="truncate">{artifact.title || 'Document preview'}</span>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {documentArtifacts.map((a) => (
+                <SelectItem key={a.name} value={a.name}>
+                  {a.title || a.artifact_type}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <h2 className="min-w-0 flex-none max-w-[60%] truncate text-[13px] font-medium">
+            {artifact.title || 'Document preview'}
+          </h2>
+        )}
+        <span className="font-mono text-[11px] uppercase text-steel-soft">
+          {artifact.artifact_type}
+        </span>
+        <span className="flex-1" />
         <button
           type="button"
           onClick={onClose}
           aria-label="Close preview"
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="text-steel hover:text-ink"
         >
           <X className="size-4" />
         </button>
