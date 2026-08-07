@@ -13,7 +13,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from huf.ai.knowledge.indexer import process_knowledge_input
-from huf.ai.tools.credentials import require_credential
+from huf.ai.tools.s3 import _get_client as _get_s3_client
 
 BATCH_SIZE = 50
 
@@ -116,7 +116,13 @@ def process_batch(ingestion_job: str, item_names: list) -> None:
 						"external_checksum": item.external_checksum,
 						"ingestion_job": ingestion_job,
 					}
-				).insert(ignore_permissions=True)
+				)
+				# Bulk ingestion calls process_knowledge_input() directly below
+				# (we're already inside a background worker); skip_auto_index
+				# stops Knowledge Input's own after_insert hook from also
+				# enqueuing it, which would otherwise index every document twice.
+				knowledge_input.flags.skip_auto_index = True
+				knowledge_input.insert(ignore_permissions=True)
 
 				process_knowledge_input(knowledge_input.name, skip_lock=False)
 
@@ -124,12 +130,20 @@ def process_batch(ingestion_job: str, item_names: list) -> None:
 				item.db_set("knowledge_input", knowledge_input.name, update_modified=False)
 				succeeded += 1
 
+				# Commit this item's work now. Batches share one long-lived
+				# transaction otherwise, so a later item's rollback (below)
+				# would silently discard every earlier item's File/Knowledge
+				# Input inserts in the same batch even though they'd already
+				# been reported as Succeeded.
+				frappe.db.commit()
+
 			except Exception as e:
 				frappe.db.rollback()
 				item.db_set("status", "Failed", update_modified=False)
 				item.db_set("error_message", str(e)[:500], update_modified=False)
 				failed += 1
 				frappe.log_error(f"Bulk Ingestion Item Error: {item.name}", frappe.get_traceback())
+				frappe.db.commit()
 
 	finally:
 		if ssh_client is not None:
@@ -187,22 +201,6 @@ def _fetch_local_file(job, item, tmpdir: str, sftp) -> str:
 		return local_path
 
 	frappe.throw(f"Unsupported source_kind for bulk ingestion: {job.source_kind}")
-
-
-def _get_s3_client():
-	"""Build a boto3 S3 client the same way huf.ai.tools.s3._get_client() does."""
-	import boto3
-
-	access_key_id = require_credential("aws_s3", "access_key_id")
-	secret_access_key = require_credential("aws_s3", "secret_access_key")
-	region = require_credential("aws_s3", "region")
-
-	return boto3.client(
-		"s3",
-		aws_access_key_id=access_key_id,
-		aws_secret_access_key=secret_access_key,
-		region_name=region,
-	)
 
 
 def _cleanup_tmpdir(tmpdir: str) -> None:

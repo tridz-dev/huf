@@ -9,9 +9,21 @@ import zipfile
 import frappe
 
 
+def _check_write_access(knowledge_source: str):
+	"""Bulk-importing into a Knowledge Source should require the same
+	permission as editing it directly -- Ingestion Job itself is inserted
+	with ignore_permissions=True throughout this module (it's a
+	system-managed job record, not something users create directly), so this
+	is the actual permission gate for these endpoints.
+	"""
+	frappe.has_permission("Knowledge Source", doc=knowledge_source, ptype="write", throw=True)
+
+
 @frappe.whitelist()
 def start_upload_import(knowledge_source: str, files: str):
 	"""Start an ingestion job from files already uploaded via Frappe's file upload."""
+	_check_write_access(knowledge_source)
+
 	if isinstance(files, str):
 		files = json.loads(files)
 
@@ -44,6 +56,8 @@ def start_upload_import(knowledge_source: str, files: str):
 @frappe.whitelist()
 def start_directory_import(knowledge_source: str, directory_path: str):
 	"""Start an ingestion job from a directory already reachable on the server."""
+	_check_write_access(knowledge_source)
+
 	job = frappe.new_doc("Ingestion Job")
 	job.knowledge_source = knowledge_source
 	job.source_kind = "Directory"
@@ -57,6 +71,8 @@ def start_directory_import(knowledge_source: str, directory_path: str):
 @frappe.whitelist()
 def start_s3_import(knowledge_source: str, bucket: str, prefix: str = ""):
 	"""Start an ingestion job from an S3 bucket/prefix."""
+	_check_write_access(knowledge_source)
+
 	job = frappe.new_doc("Ingestion Job")
 	job.knowledge_source = knowledge_source
 	job.source_kind = "S3"
@@ -71,6 +87,8 @@ def start_s3_import(knowledge_source: str, bucket: str, prefix: str = ""):
 @frappe.whitelist()
 def start_sftp_import(knowledge_source: str, sftp_connection: str, root_path: str):
 	"""Start an ingestion job from an SFTP connection."""
+	_check_write_access(knowledge_source)
+
 	job = frappe.new_doc("Ingestion Job")
 	job.knowledge_source = knowledge_source
 	job.source_kind = "SFTP"
@@ -88,6 +106,7 @@ def get_job_progress(ingestion_job: str):
 	from huf.huf.doctype.ingestion_job.ingestion_job import get_progress as _get_progress
 
 	doc = frappe.get_doc("Ingestion Job", ingestion_job)
+	frappe.has_permission("Knowledge Source", doc=doc.knowledge_source, ptype="read", throw=True)
 	progress = _get_progress(ingestion_job)
 
 	failed_items = [row for row in doc.items if row.status == "Failed"][:50]
