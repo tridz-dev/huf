@@ -1,9 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { PanelLeftOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import { ChatRail } from "@/components/chat/rail/ChatRail";
+import { ChatShellFrame } from "@/components/chat/rail/ChatShellFrame";
 import ChatWindow from "@/components/chat/ChatWindowV2";
 import { ArtifactPreviewPane } from "@/components/chat/artifacts/ArtifactPreviewPane";
 import { useArtifactPane } from "@/components/chat/useArtifactPane";
@@ -101,72 +98,43 @@ function ChatPage() {
         [navigate]
     );
 
+    // The artifact pane renders as a third column, a sibling of the rail
+    // and the chat window - passed to ChatShellFrame as `rightPane` so the
+    // shared shell doesn't swallow it into the middle flex area. Produced
+    // files surface inline via the transcript's Outputs card (see
+    // OutputsCard.tsx, spec section 28.2) instead of a permanent right-hand
+    // list. Hidden on mobile to avoid crowding the chat window.
     return (
-        <section className="flex h-full overflow-hidden relative">
-            {/* Sidebar - overlay on mobile, inline on desktop */}
-            {isMobile ? (
-                sidebarOpen && (
-                    <div className="absolute inset-0 z-30 bg-sidebar">
-                        <ChatRail onToggleRail={toggleSidebar} />
-                    </div>
-                )
-            ) : (
-                <div
-                    className={cn(
-                        "shrink-0 transition-all duration-200 ease-in-out overflow-hidden",
-                        sidebarOpen ? "w-chat-rail" : "w-0"
-                    )}
-                >
-                    <ChatRail onToggleRail={toggleSidebar} />
-                </div>
-            )}
-
-            {/* Chat window - always full width */}
-            <div className="flex-1 min-w-0 min-h-0 h-full relative">
-                {/* Desktop-only floating toggle */}
-                {!isMobile && !sidebarOpen && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleSidebar}
-                        className="absolute top-4 left-4 z-20 h-8 w-8 text-steel hover:text-ink"
-                    >
-                        <PanelLeftOpen className="h-4 w-4" />
-                        <span className="sr-only">Open sidebar</span>
-                    </Button>
-                )}
-
-                <ChatWindow
-                    chatId={chatId}
-                    onConversationCreated={handleConversationCreated}
-                    onToggleSidebar={isMobile ? toggleSidebar : undefined}
-                    artifactPaneOpen={artifactPane.isOpen}
-                    onToggleArtifactPane={
-                        !isMobile && (artifactPane.isOpen || conversationArtifacts.length > 0)
-                            ? handleToggleArtifactPane
-                            : undefined
-                    }
-                    artifacts={conversationArtifacts}
-                    onOpenArtifact={artifactPane.open}
-                    activeArtifactName={artifactPane.currentArtifact?.name}
-                />
-            </div>
-
-            {/* Right-side region: only the preview pane renders here now -
-                produced files surface inline via the transcript's Outputs
-                card (see OutputsCard.tsx, spec section 28.2) instead of a
-                permanent right-hand list. Hidden on mobile to avoid crowding
-                the chat window. */}
-            {!isMobile && artifactPane.isOpen && (
-                <ArtifactPreviewPane
-                    artifact={artifactPane.currentArtifact}
-                    onClose={artifactPane.close}
-                    width={artifactPane.width}
-                    onWidthChange={artifactPane.setWidth}
-                    artifacts={conversationArtifacts}
-                    onSelectArtifact={artifactPane.open}
-                />
-            )}
-        </section>
+        <ChatShellFrame
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={toggleSidebar}
+            rightPane={
+                !isMobile && artifactPane.isOpen ? (
+                    <ArtifactPreviewPane
+                        artifact={artifactPane.currentArtifact}
+                        onClose={artifactPane.close}
+                        width={artifactPane.width}
+                        onWidthChange={artifactPane.setWidth}
+                        artifacts={conversationArtifacts}
+                        onSelectArtifact={artifactPane.open}
+                    />
+                ) : null
+            }
+        >
+            <ChatWindow
+                chatId={chatId}
+                onConversationCreated={handleConversationCreated}
+                onToggleSidebar={isMobile ? toggleSidebar : undefined}
+                artifactPaneOpen={artifactPane.isOpen}
+                onToggleArtifactPane={
+                    !isMobile && (artifactPane.isOpen || conversationArtifacts.length > 0)
+                        ? handleToggleArtifactPane
+                        : undefined
+                }
+                artifacts={conversationArtifacts}
+                onOpenArtifact={artifactPane.open}
+                activeArtifactName={artifactPane.currentArtifact?.name}
+            />
+        </ChatShellFrame>
     );
 }
