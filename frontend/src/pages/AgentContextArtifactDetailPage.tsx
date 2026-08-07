@@ -154,7 +154,7 @@ function AgentContextArtifactDetailPage() {
                 <div className="text-sm font-body text-steel-soft">No file attached.</div>
               )
             ) : (
-              <pre className="rounded-none bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[420px] overflow-auto">
+              <pre className="rounded-lg bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[420px] overflow-auto">
                 {formatJson(artifact.payload_json) || 'No payload recorded.'}
               </pre>
             )}

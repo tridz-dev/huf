@@ -86,7 +86,7 @@ export function ExecutionProfileFormPage() {
           max_output_bytes: profile.max_output_bytes ?? 1048576,
         });
       } catch (error) {
-        toast.error('Failed to load Execution Profile', {
+        toast.error('Failed to load execution profile', {
           description: getFrappeErrorMessage(error),
         });
       } finally {
@@ -151,15 +151,15 @@ export function ExecutionProfileFormPage() {
 
       if (isNew) {
         const created = await createExecutionProfile(payload);
-        toast.success('Execution Profile created successfully');
+        toast.success('Execution profile created successfully');
         handleReturnNavigation(created.name || created.profile_name);
       } else {
         const updated = await updateExecutionProfile(id!, payload);
-        toast.success('Execution Profile updated successfully');
+        toast.success('Execution profile updated successfully');
         setProfileDoc(updated);
       }
     } catch (error) {
-      toast.error(isNew ? 'Failed to create Execution Profile' : 'Failed to update Execution Profile', {
+      toast.error(isNew ? 'Failed to create execution profile' : 'Failed to update execution profile', {
         description: getFrappeErrorMessage(error),
       });
     } finally {
@@ -169,15 +169,15 @@ export function ExecutionProfileFormPage() {
 
   const handleDelete = async () => {
     if (!id || isNew) return;
-    if (!confirm('Are you sure you want to delete this Execution Profile?')) return;
+    if (!confirm('Are you sure you want to delete this execution profile?')) return;
 
     setDeleting(true);
     try {
       await deleteExecutionProfile(id);
-      toast.success('Execution Profile deleted');
+      toast.success('Execution profile deleted');
       navigate('/execution-profiles');
     } catch (error) {
-      toast.error('Failed to delete Execution Profile', {
+      toast.error('Failed to delete execution profile', {
         description: getFrappeErrorMessage(error),
       });
     } finally {
@@ -201,10 +201,10 @@ export function ExecutionProfileFormPage() {
           <ShieldCheck className="h-8 w-8 text-steel-soft shrink-0 mt-1" strokeWidth={1.6} />
           <div>
             <InlineEditName
-              value={form.watch('profile_name') || (isNew ? 'New Execution Profile' : id!)}
+              value={form.watch('profile_name') || (isNew ? 'New execution profile' : id!)}
               onChange={(name: string) => form.setValue('profile_name', name, { shouldDirty: true })}
-              placeholder="Profile Name"
-              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:uppercase [&_h1]:leading-tight"
+              placeholder="e.g. Sandbox with network access"
+              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"
             />
             <p className="font-mono text-[12px] text-steel mt-1">
               {isNew ? 'Create a new sandboxed execution profile' : `ID ${id}`}
@@ -229,8 +229,8 @@ export function ExecutionProfileFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px] uppercase">General Settings</CardTitle>
-              <CardDescription className="font-body text-[13px] text-steel">Configure security policy and sandbox behavior</CardDescription>
+              <CardTitle className="text-subtitle">General settings</CardTitle>
+              <CardDescription className="font-body text-ui-text text-steel">Configure security policy and sandbox behavior</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -238,7 +238,7 @@ export function ExecutionProfileFormPage() {
                 name="profile_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Profile Name</FormLabel>
+                    <FormLabel>Profile name</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Standard Sandbox" {...field} />
                     </FormControl>
@@ -254,7 +254,7 @@ export function ExecutionProfileFormPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between border border-line bg-paper p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Disable Profile</FormLabel>
+                      <FormLabel className="text-base">Disable profile</FormLabel>
                       <FormDescription>Disabled profiles cannot be selected or used for code execution.</FormDescription>
                     </div>
                     <FormControl>
@@ -270,7 +270,7 @@ export function ExecutionProfileFormPage() {
                   name="approval_mode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Approval Mode</FormLabel>
+                      <FormLabel>Approval mode</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -294,7 +294,7 @@ export function ExecutionProfileFormPage() {
                   name="filesystem_policy"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Filesystem Policy</FormLabel>
+                      <FormLabel>Filesystem policy</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -319,7 +319,7 @@ export function ExecutionProfileFormPage() {
                 name="allowed_modules"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Allowed Python Modules</FormLabel>
+                    <FormLabel>Allowed python modules</FormLabel>
                     <FormControl>
                       <Textarea
                         placeholder='["math", "json", "re", "datetime"]'
@@ -337,8 +337,8 @@ export function ExecutionProfileFormPage() {
 
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px] uppercase">Resource Limits</CardTitle>
-              <CardDescription className="font-body text-[13px] text-steel">Specify CPU, time, memory, and output boundaries for code runs</CardDescription>
+              <CardTitle className="text-subtitle">Resource limits</CardTitle>
+              <CardDescription className="font-body text-ui-text text-steel">Specify CPU, time, memory, and output boundaries for code runs</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
               <FormField
@@ -346,7 +346,7 @@ export function ExecutionProfileFormPage() {
                 name="max_wall_time_s"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max Wall Time (Seconds)</FormLabel>
+                    <FormLabel>Max wall time (seconds)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
@@ -361,7 +361,7 @@ export function ExecutionProfileFormPage() {
                 name="max_cpu_seconds"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max CPU Time (Seconds)</FormLabel>
+                    <FormLabel>Max CPU time (seconds)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
@@ -376,7 +376,7 @@ export function ExecutionProfileFormPage() {
                 name="max_memory_mb"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max Memory (MB)</FormLabel>
+                    <FormLabel>Max memory (MB)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>
@@ -391,7 +391,7 @@ export function ExecutionProfileFormPage() {
                 name="max_output_bytes"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Max Output (Bytes)</FormLabel>
+                    <FormLabel>Max output (bytes)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} />
                     </FormControl>

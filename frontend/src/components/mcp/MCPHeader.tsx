@@ -57,13 +57,13 @@ export function MCPHeader({
               value={form.watch('server_name') || ''}
               onChange={(e) => form.setValue('server_name', e.target.value, { shouldDirty: true })}
               className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-              placeholder="MCP Server Name"
+              placeholder="MCP server name"
             />
           ) : (
             <InlineEditName
               value={form.watch('server_name') || ''}
               onChange={(value) => form.setValue('server_name', value, { shouldDirty: true })}
-              placeholder="MCP Server Name"
+              placeholder="MCP server name"
             />
           )}
           <Badge variant={watchEnabled ? 'success' : 'secondary'}>
@@ -74,7 +74,7 @@ export function MCPHeader({
           )}
           <Badge variant="outline">
             <Server className="w-3 h-3 mr-1" />
-            MCP Server
+            MCP server
           </Badge>
         </div>
       </div>

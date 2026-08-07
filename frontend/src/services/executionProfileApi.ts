@@ -108,7 +108,7 @@ export async function getExecutionProfiles(
       total,
     };
   } catch (error) {
-    handleFrappeError(error, 'Error fetching Execution Profiles');
+    handleFrappeError(error, 'Error fetching execution profiles');
     throw error;
   }
 }

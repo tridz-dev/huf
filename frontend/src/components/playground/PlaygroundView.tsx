@@ -3,6 +3,7 @@ import { ConfigStrip } from './ConfigStrip';
 import { PromptPanel } from './PromptPanel';
 import { ResponsePanel } from './ResponsePanel';
 import { RunLedger, type RunLedgerProps } from './RunLedger';
+import { TraceRail } from './TraceRail';
 import type { PlaygroundConfig, SlotState } from './types';
 
 interface PlaygroundViewProps {
@@ -30,7 +31,7 @@ export function PlaygroundView({
         <ConfigStrip agents={agents} providers={providers} config={config} onChange={onConfigChange} />
       </div>
 
-      <div className="grid min-h-[340px] flex-1 grid-cols-1 gap-4 p-5 lg:grid-cols-2">
+      <div className="grid min-h-[340px] flex-1 grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_1fr_280px]">
         <PromptPanel
           config={config}
           onConfigChange={onConfigChange}
@@ -39,6 +40,7 @@ export function PlaygroundView({
           className="h-full"
         />
         <ResponsePanel title="Response" state={slot} className="h-full" />
+        <TraceRail agentRunId={slot.result?.agentRunId} className="h-full" />
       </div>
 
       <div className="px-5 pb-[18px]">

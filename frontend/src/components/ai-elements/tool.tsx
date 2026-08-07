@@ -53,15 +53,15 @@ const getStatusBadge = (status: ExtendedToolState) => {
   const icons: Record<ExtendedToolState, ReactNode> = {
     "input-streaming": <CircleIcon className="size-4" />,
     "input-available": <ClockIcon className="size-4 animate-pulse" />,
-    "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
-    "approval-responded": <CheckCircleIcon className="size-4 text-blue-600" />,
-    "output-available": <CheckCircleIcon className="size-4 text-green-600" />,
-    "output-error": <XCircleIcon className="size-4 text-red-600" />,
-    "output-denied": <XCircleIcon className="size-4 text-orange-600" />,
+    "approval-requested": <ClockIcon className="size-4 text-warning" />,
+    "approval-responded": <CheckCircleIcon className="size-4 text-signal" />,
+    "output-available": <CheckCircleIcon className="size-4 text-good" />,
+    "output-error": <XCircleIcon className="size-4 text-destructive" />,
+    "output-denied": <XCircleIcon className="size-4 text-warning" />,
   };
 
   return (
-    <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
+    <Badge size="sm" className="gap-1.5 rounded-full" variant="secondary">
       {icons[status]}
       {labels[status]}
     </Badge>

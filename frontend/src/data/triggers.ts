@@ -19,7 +19,7 @@ export const triggerOptions: TriggerOption[] = [
   },
   {
     id: 'human-input',
-    name: 'Human Input',
+    name: 'Human input',
     description: 'Wait for human approval or input',
     icon: 'UserCheck',
     category: 'highlight',

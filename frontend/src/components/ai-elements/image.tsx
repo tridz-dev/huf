@@ -99,7 +99,7 @@ export const Image = ({
           <Button
             variant="secondary"
             size="icon-sm"
-            className="bg-white backdrop-blur-sm shadow-md"
+            className="bg-panel backdrop-blur-sm shadow-md"
             onClick={handleDownload}
             title="Download image"
           >

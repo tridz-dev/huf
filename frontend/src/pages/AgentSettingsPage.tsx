@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Settings } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { getAgentSettings, updateAgentSettings } from '@/services/agentSettingsApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { PageFrame } from '@/layouts/PageFrame';
 
 const DEFAULT_DESTINATIONS = {
   'huf-skills': {
@@ -77,50 +78,43 @@ export function AgentSettingsPage() {
   }
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 space-y-6 max-w-4xl mx-auto">
-        <div className="flex items-center gap-3">
-          <Settings className="w-6 h-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-2xl font-bold">Agent Settings</h1>
-            <p className="text-sm text-muted-foreground">Global configuration for agents and skills</p>
+    <PageFrame
+      title="Agent settings"
+      className="max-w-4xl mx-auto"
+    >
+      <Card>
+        <CardHeader>
+          <CardTitle>Skill destinations</CardTitle>
+          <CardDescription>
+            Configure common skill sources used by the Skills import modal and marketplace.
+            The default <code>huf-skills</code> destination points to the official curated registry.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="skill_destinations">Destinations JSON</Label>
+            <Textarea
+              id="skill_destinations"
+              value={jsonValue}
+              onChange={(e) => setJsonValue(e.target.value)}
+              className="min-h-[280px] font-mono text-sm"
+              placeholder='{"my-skills": {"repo_url": "https://github.com/org/repo", "path": "skills", "ref": "main"}}'
+            />
+            <p className="text-xs text-muted-foreground">
+              Enter a JSON object keyed by destination name. Each value must include{' '}
+              <code>repo_url</code>, optionally <code>path</code> and <code>ref</code>.
+            </p>
           </div>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Skill Destinations</CardTitle>
-            <CardDescription>
-              Configure common skill sources used by the Skills import modal and marketplace.
-              The default <code>huf-skills</code> destination points to the official curated registry.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="skill_destinations">Destinations JSON</Label>
-              <Textarea
-                id="skill_destinations"
-                value={jsonValue}
-                onChange={(e) => setJsonValue(e.target.value)}
-                className="min-h-[280px] font-mono text-sm"
-                placeholder='{"my-skills": {"repo_url": "https://github.com/org/repo", "path": "skills", "ref": "main"}}'
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter a JSON object keyed by destination name. Each value must include{' '}
-                <code>repo_url</code>, optionally <code>path</code> and <code>ref</code>.
-              </p>
-            </div>
-            <div className="flex justify-end">
-              <Button onClick={handleSave} disabled={saving}>
-                {saving && <span className="mr-2 animate-spin">⟳</span>}
-                <Save className="w-4 h-4 mr-2" />
-                Save Destinations
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving && <span className="mr-2 animate-spin">⟳</span>}
+              <Save className="w-4 h-4 mr-2" />
+              Save destinations
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </PageFrame>
   );
 }
 

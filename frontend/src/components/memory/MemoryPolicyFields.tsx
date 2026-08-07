@@ -58,7 +58,7 @@ function SwitchField({
       control={form.control}
       name={name}
       render={({ field }) => (
-        <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
           <div className="space-y-0.5 pr-4">
             <FormLabel className="text-base">{label}</FormLabel>
             <FormDescription>{description}</FormDescription>
@@ -100,7 +100,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="policy_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Policy Name</FormLabel>
+                  <FormLabel>Policy name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. support-agent-memory" {...field} />
                   </FormControl>
@@ -150,7 +150,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="scope_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Scope Type</FormLabel>
+                  <FormLabel>Scope type</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -180,7 +180,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="scope_key"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Scope Key</FormLabel>
+                <FormLabel>Scope key</FormLabel>
                 <FormControl>
                   <Input placeholder="Leave empty to use runtime context" {...field} />
                 </FormControl>
@@ -207,7 +207,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="capture_mode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Capture Mode</FormLabel>
+                  <FormLabel>Capture mode</FormLabel>
                   <Select value={field.value} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger>
@@ -237,7 +237,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="learning_agent"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Learning Agent</FormLabel>
+                  <FormLabel>Learning agent</FormLabel>
                   <FormControl>
                     <Combobox
                       options={agentOptions}
@@ -262,7 +262,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
           <SwitchField
             form={form}
             name="approval_required"
-            label="Approval Required"
+            label="Approval required"
             description="New memory records start as pending and must be approved by a user before becoming active. Turn this off to trust captured memory automatically."
           />
 
@@ -271,7 +271,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="default_status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Default Status</FormLabel>
+                <FormLabel>Default status</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -299,7 +299,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="allowed_record_types"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Allowed Record Types</FormLabel>
+                <FormLabel>Allowed record types</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder={'One record type per line, e.g.\nfact\npreference\ninstruction'}
@@ -331,7 +331,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="inject_mode"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Inject Mode</FormLabel>
+                <FormLabel>Inject mode</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -363,7 +363,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="max_records"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Max Records</FormLabel>
+                  <FormLabel>Max records</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -385,7 +385,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
               name="token_budget"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Token Budget</FormLabel>
+                  <FormLabel>Token budget</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -407,7 +407,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
 
       <Card>
         <CardHeader>
-          <CardTitle>Write Permissions</CardTitle>
+          <CardTitle>Write permissions</CardTitle>
           <CardDescription>
             Control which scopes this policy is allowed to write memory records into.
           </CardDescription>
@@ -416,31 +416,31 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
           <SwitchField
             form={form}
             name="allow_agent_write"
-            label="Allow Agent Write"
+            label="Allow agent write"
             description="Lets the agent itself write memory records (via a tool call), not just users."
           />
           <SwitchField
             form={form}
             name="allow_user_scope_write"
-            label="Allow User Scope Write"
+            label="Allow user scope write"
             description="Permits writing memory records scoped to the current user."
           />
           <SwitchField
             form={form}
             name="allow_role_scope_write"
-            label="Allow Role Scope Write"
+            label="Allow role scope write"
             description="Permits writing memory records scoped to a role, shared across all users with it."
           />
           <SwitchField
             form={form}
             name="allow_agent_scope_write"
-            label="Allow Agent Scope Write"
+            label="Allow agent scope write"
             description="Permits writing memory records scoped to the agent, shared across all its conversations."
           />
           <SwitchField
             form={form}
             name="allow_site_scope_write"
-            label="Allow Site Scope Write"
+            label="Allow site scope write"
             description="Permits writing memory records scoped globally to this site. Use sparingly."
           />
         </CardContent>
@@ -448,7 +448,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
 
       <Card>
         <CardHeader>
-          <CardTitle>Knowledge Projection</CardTitle>
+          <CardTitle>Knowledge projection</CardTitle>
           <CardDescription>
             Optionally promote high-confidence memories into a permanent Knowledge Source.
           </CardDescription>
@@ -457,7 +457,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
           <SwitchField
             form={form}
             name="auto_promote_to_knowledge"
-            label="Auto Promote to Knowledge"
+            label="Auto promote to knowledge"
             description="Automatically copies memory records that clear the confidence and importance thresholds below into a Knowledge Source, making them retrievable outside the memory system."
           />
 
@@ -468,13 +468,13 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                 name="knowledge_source"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Knowledge Source</FormLabel>
+                    <FormLabel>Knowledge source</FormLabel>
                     <FormControl>
                       <Combobox
                         options={knowledgeSourceOptions}
                         value={field.value}
                         onValueChange={(v) => field.onChange(v || undefined)}
-                        placeholder="Select a Knowledge Source"
+                        placeholder="Select a knowledge source"
                         searchPlaceholder="Search knowledge sources..."
                         emptyText="No knowledge sources found."
                         linkTo={linkRoutes.knowledgeSource}
@@ -495,7 +495,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                   name="promotion_min_confidence"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min Confidence</FormLabel>
+                      <FormLabel>Min confidence</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -519,7 +519,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
                   name="promotion_min_importance"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Min Importance</FormLabel>
+                      <FormLabel>Min importance</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -554,7 +554,7 @@ export function MemoryPolicyFields({ form, isNew, agents, knowledgeSources }: Me
             name="ttl_days"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>TTL Days</FormLabel>
+                <FormLabel>TTL days</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

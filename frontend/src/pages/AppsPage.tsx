@@ -103,18 +103,19 @@ function CategoryChip({
 	onClick: () => void;
 }) {
 	return (
-		<button
+		<Button
 			type="button"
+			variant="outline"
 			onClick={onClick}
 			className={cn(
-				'inline-flex items-center rounded-none border px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide transition-colors',
+				'h-auto items-center px-2 py-1 font-mono text-[10.5px] uppercase tracking-wide',
 				active
 					? 'border-ink text-ink'
 					: 'border-line bg-paper-deep text-steel hover:text-ink'
 			)}
 		>
 			{label}
-		</button>
+		</Button>
 	);
 }
 
@@ -142,21 +143,21 @@ function AppCard({
 			)}
 		>
 			<CardHeader className="pb-3">
-				<CardTitle className="font-body font-semibold text-[15px] line-clamp-1 flex items-center gap-2">
+				<CardTitle className="line-clamp-1 flex items-center gap-2 text-body-text font-semibold">
 					<AppIcon app={app} />
 					{app.title}
 				</CardTitle>
-				<CardDescription className="text-steel text-[13px] line-clamp-2 min-h-[2.5rem]">
+				<CardDescription className="text-steel text-ui-text line-clamp-2 min-h-[2.5rem]">
 					{app.description || 'No description'}
 				</CardDescription>
 				<CardAction className="top-5 flex items-center gap-1">
 					{isDisabled && (
-						<Badge variant="secondary" className="text-xs">
+						<Badge variant="secondary" size="sm">
 							Disabled
 						</Badge>
 					)}
 					{app.category && (
-						<Badge variant="secondary" className="text-xs">
+						<Badge variant="secondary" size="sm">
 							{app.category}
 						</Badge>
 					)}
@@ -232,7 +233,7 @@ function AppsHelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>About HUF Apps</DialogTitle>
+					<DialogTitle>About HUF apps</DialogTitle>
 					<DialogDescription>
 						What shows up here, and why.
 					</DialogDescription>
@@ -348,13 +349,12 @@ function AppsPage() {
 		<PageFrame
 			title="Apps"
 			badge={<ExperimentalBadge />}
-			subtitle="Launch applications built on HUF"
 			actions={
 				<Button
 					variant="ghost"
 					size="icon"
 					className="h-9 w-9 text-steel-soft hover:text-ink"
-					title="About HUF Apps"
+					title="About HUF apps"
 					onClick={() => setHelpOpen(true)}
 				>
 					<CircleHelp className="w-5 h-5" />
@@ -402,15 +402,28 @@ function AppsPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={loading}
 					emptyState={
-						<EmptyState
-							icon={AppWindow}
-							title={apps.length > 0 ? 'No apps match your filters' : 'No apps available yet'}
-							description={
-								apps.length > 0
-									? 'Try a different search or category.'
-									: 'Installed apps that depend on HUF will appear here.'
-							}
-						/>
+						apps.length > 0 ? (
+							<EmptyState
+								variant="no-results"
+								icon={AppWindow}
+								title="No apps found"
+								filterTerm={search}
+								secondaryAction={{
+									label: 'Clear filters',
+									onClick: () => {
+										setSearch('');
+										setCategory('All');
+									},
+								}}
+							/>
+						) : (
+							<EmptyState
+								variant="passive"
+								icon={AppWindow}
+								title="No apps available yet"
+								description="Installed apps that depend on HUF will appear here."
+							/>
+						)
 					}
 					renderItem={(app) => <AppCard app={app} onToggleEnabled={handleToggleEnabled} />}
 					keyExtractor={(app) => app.app_id}

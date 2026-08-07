@@ -211,7 +211,7 @@ export function BulkImportModal({
 		return (
 			<div className="rounded-md border p-3 space-y-2">
 				<div className="flex items-center gap-4 text-sm">
-					<span className="flex items-center gap-1.5 text-green-600">
+					<span className="flex items-center gap-1.5 text-good">
 						<CheckCircle2 className="w-4 h-4" />
 						{importStatus.success} imported
 					</span>
@@ -244,7 +244,7 @@ export function BulkImportModal({
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle>Import Data into {tableName}</DialogTitle>
+					<DialogTitle>Import data into {tableName}</DialogTitle>
 					<DialogDescription>
 						Download the CSV template, fill in your data, then upload and import it.
 					</DialogDescription>
@@ -265,7 +265,7 @@ export function BulkImportModal({
 							) : (
 								<Download className="w-3.5 h-3.5 mr-1.5" />
 							)}
-							Download CSV Template
+							Download CSV template
 						</Button>
 					</div>
 
@@ -295,7 +295,7 @@ export function BulkImportModal({
 									<FileText className="w-6 h-6 text-steel-soft" />
 									<p className="text-sm">{selectedFile.name}</p>
 									{uploadedFileUrl ? (
-										<p className="text-xs text-green-600 flex items-center gap-1">
+										<p className="text-xs text-good flex items-center gap-1">
 											<CheckCircle2 className="w-3.5 h-3.5" />
 											Uploaded, ready to import
 										</p>
@@ -332,7 +332,7 @@ export function BulkImportModal({
 						</div>
 					)}
 					{importFinished && importStatus?.status === 'Partial Success' && (
-						<p className="flex items-center gap-1.5 text-xs text-amber-600">
+						<p className="flex items-center gap-1.5 text-xs text-warning">
 							<AlertTriangle className="w-3.5 h-3.5" />
 							Some rows failed to import. Review the errors below.
 						</p>
@@ -351,7 +351,7 @@ export function BulkImportModal({
 						{importing && !importFinished ? (
 							<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
 						) : null}
-						Start Import
+						Start import
 					</Button>
 				</DialogFooter>
 			</DialogContent>

@@ -31,7 +31,7 @@ export function ToolTemplateCard({ template, onClick }: ToolTemplateCardProps) {
       <CardContent className="flex flex-col items-start p-5">
         <div
           className={cn(
-            'h-10 w-10 rounded-none bg-paper-deep/30 text-muted-foreground',
+            'h-10 w-10 rounded bg-paper-deep/30 text-muted-foreground',
             'flex items-center justify-center mb-4',
             'group-hover:text-ink transition-colors'
           )}

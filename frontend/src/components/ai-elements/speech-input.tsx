@@ -352,7 +352,7 @@ export const SpeechInput = ({
       {isListening &&
         [0, 1, 2].map((index) => (
           <div
-            className="absolute inset-0 animate-ping rounded-full border-2 border-red-400/30"
+            className="absolute inset-0 animate-ping rounded-full border-2 border-destructive/30"
             key={index}
             style={{
               animationDelay: `${index * 0.3}s`,
@@ -385,7 +385,7 @@ export const SpeechInput = ({
         {!(isProcessing || isListening) && <MicIcon className="size-4" />}
       </Button>
       {mode === "speech-recognition" && !isListening && (
-        <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-zinc-400">
+        <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-steel-soft">
           local
         </span>
       )}

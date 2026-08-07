@@ -79,8 +79,7 @@ export default function McpListingPage() {
 
   return (
     <PageFrame
-      title="MCP Servers"
-      subtitle="Connect Model Context Protocol servers."
+      title="MCP servers"
       filters={
         <FilterBar
           searchPlaceholder="Search MCP servers..."
@@ -100,11 +99,23 @@ export default function McpListingPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Server}
-            title="No MCP servers"
-            description="No MCP servers have been connected yet."
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Server}
+              title="No MCP servers found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Server}
+              title="No MCP servers"
+              description="Connect a server to expand agent capabilities."
+              action={{ label: 'New MCP server', onClick: () => navigate('/mcp/new') }}
+            />
+          )
         }
         renderItem={(server) => {
           const status = getMcpStatus(server);
@@ -118,7 +129,7 @@ export default function McpListingPage() {
               }}
               metadata={[
                 ...(server.tool_namespace ? [{ label: 'Namespace', value: server.tool_namespace, icon: Tag }] : []),
-                { label: 'Last Sync', value: server.last_sync ? formatTimeAgo(server.last_sync) : 'Never', icon: Calendar },
+                { label: 'Last sync', value: server.last_sync ? formatTimeAgo(server.last_sync) : 'Never', icon: Calendar },
               ]}
               actions={[
                 {

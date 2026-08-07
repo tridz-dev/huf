@@ -206,7 +206,7 @@ export function TriggerModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-[600px]">
         <DialogScrollHeader>
-          <DialogTitle>Configure Trigger</DialogTitle>
+          <DialogTitle>Configure trigger</DialogTitle>
           <DialogDescription>
             {editingTrigger ? 'Edit trigger configuration' : 'Add a new trigger to this agent'}
           </DialogDescription>
@@ -225,7 +225,7 @@ export function TriggerModal({
                 name="trigger_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Trigger Name</FormLabel>
+                    <FormLabel>Trigger name</FormLabel>
                     <FormControl>
                       <Input placeholder="Enter trigger name" {...field} />
                     </FormControl>
@@ -239,7 +239,7 @@ export function TriggerModal({
             {/* Trigger Name Display - Read-only when editing */}
             {editingTrigger && (
               <FormItem>
-                <FormLabel>Trigger Name</FormLabel>
+                <FormLabel>Trigger name</FormLabel>
                 <FormControl>
                   <Input value={editingTrigger.trigger_name} disabled />
                 </FormControl>
@@ -252,7 +252,7 @@ export function TriggerModal({
               name="trigger_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Trigger Type</FormLabel>
+                  <FormLabel>Trigger type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -276,7 +276,7 @@ export function TriggerModal({
               control={triggerForm.control}
               name="active"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
                   <div className="space-y-0.5">
                     <FormLabel className="text-base">Active</FormLabel>
                     <FormDescription>Enable this trigger</FormDescription>

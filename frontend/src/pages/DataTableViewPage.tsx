@@ -108,17 +108,17 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 		onHeaderActionsChange(
 			<div className="flex items-center gap-2">
-				<Button size="sm" onClick={handleAddRecord} className="rounded-none">
+				<Button size="sm" onClick={handleAddRecord}>
 					<Plus className="w-3.5 h-3.5 mr-1.5" />
-					Add Record
+					Add record
 				</Button>
 				<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
 					<Upload className="w-3.5 h-3.5 mr-1.5" />
-					Import Data
+					Import data
 				</Button>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="outline" size="sm" className="w-8 px-0 rounded-none border-line text-steel hover:bg-paper-deep hover:text-ink">
+						<Button variant="outline" size="sm" className="w-8 px-0 rounded border-line text-steel hover:bg-paper-deep hover:text-ink">
 							<MoreVertical className="h-4 w-4" />
 							<span className="sr-only">Open menu</span>
 						</Button>
@@ -126,7 +126,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 					<DropdownMenuContent align="end">
 						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
 							<Pencil className="w-3.5 h-3.5 mr-2" />
-							Edit Table
+							Edit table
 						</DropdownMenuItem>
 						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
 							<Bot className="w-3.5 h-3.5 mr-2" />
@@ -206,7 +206,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 						<Button
 							variant="ghost"
 							size="icon"
-							className="h-8 w-8 rounded-none border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
+							className="h-8 w-8 rounded border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
 							onClick={() => loadRecords(true)}
 						>
 							<RefreshCcw className="w-3.5 h-3.5" />
@@ -216,14 +216,14 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 				{/* Records table */}
 				{records.length === 0 && !recordsLoading ? (
-					<div className="flex flex-col items-center justify-center py-16 border border-dashed border-line bg-panel rounded-none">
+					<div className="flex flex-col items-center justify-center py-16 border border-dashed border-line bg-panel rounded-lg">
 						<Database className="w-10 h-10 text-steel-soft mb-3" />
 						<p className="text-sm text-steel mb-3">
 							No records in this table yet
 						</p>
-						<Button size="sm" onClick={handleAddRecord} className="rounded-none">
+						<Button size="sm" onClick={handleAddRecord}>
 							<Plus className="w-3.5 h-3.5 mr-1.5" />
-							Add First Record
+							Add first record
 						</Button>
 					</div>
 				) : (
@@ -243,12 +243,12 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							size="sm"
 							onClick={() => loadRecords(false)}
 							disabled={recordsLoading}
-                            className="rounded-none border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
+                            className="rounded border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
 						>
 							{recordsLoading ? (
 								<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
 							) : null}
-							Load More
+							Load more
 						</Button>
 					</div>
 				)}

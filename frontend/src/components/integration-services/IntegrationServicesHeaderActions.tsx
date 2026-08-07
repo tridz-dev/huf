@@ -14,7 +14,7 @@ export function IntegrationServicesHeaderActions() {
       </Button>
       <Button variant="display" onClick={onAddService} size="sm">
         <Plus className="w-4 h-4 mr-2" />
-        Add Service
+        Add service
       </Button>
     </div>
   );

@@ -86,7 +86,7 @@ export function ActionSelectionModal({
         config = { type: "loop", max_iterations: 10 };
         break;
       case "human.approval":
-        config = { type: "human.approval", title: "Approval Required", instructions: "", approval_type: "user" };
+        config = { type: "human.approval", title: "Approval required", instructions: "", approval_type: "user" };
         break;
       case "agent-run":
         config = { type: "agent-run" };
@@ -119,9 +119,10 @@ export function ActionSelectionModal({
           {actions.map((action) => {
             const Icon = iconMap[action.icon || "FileText"];
             return (
-              <button
+              <Button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-none border border-border hover:border-primary/50 hover:bg-accent transition-all"
+                variant="outline"
+                className="h-auto items-center justify-start gap-3 p-3 hover:border-primary/50 hover:bg-accent"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -135,7 +136,7 @@ export function ActionSelectionModal({
                     </div>
                   )}
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -145,9 +146,9 @@ export function ActionSelectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[960px] max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Add Action</DialogTitle>
+          <DialogTitle>Add action</DialogTitle>
         </DialogHeader>
 
         <div className="relative mb-4">

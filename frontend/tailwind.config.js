@@ -26,7 +26,10 @@ export default {
         signal:         'var(--signal)',
         'signal-ink':   'var(--signal-ink)',
         good:           'var(--good)',
-        'coral-soft':   'var(--coral-soft)',
+        'good-tint':    'var(--good-tint)',
+        'destructive-tint': 'var(--destructive-tint)',
+        warning:        'var(--warning)',
+        'warning-tint': 'var(--warning-tint)',
 
         // shadcn compatibility
         background: 'var(--background)',
@@ -73,32 +76,104 @@ export default {
           ring:                 'var(--sidebar-ring)',
         },
       },
+      spacing: {
+        'space-1': 'var(--space-1)',
+        'space-2': 'var(--space-2)',
+        'space-3': 'var(--space-3)',
+        'space-4': 'var(--space-4)',
+        'space-5': 'var(--space-5)',
+        'space-6': 'var(--space-6)',
+        'space-7': 'var(--space-7)',
+        // NOTE: Tailwind's px-{key}/py-{key} utilities both look up the
+        // *same* `spacing` theme namespace, keyed only by what follows the
+        // axis prefix — so `px-control` and `py-control` would collide on
+        // one shared key/value if both used the literal key "control".
+        // Horizontal and vertical control padding differ (16px vs 8px), so
+        // they need distinct key names: 'control' (→ px-control) vs
+        // 'control-y' (→ py-control-y). Do not name these back to
+        // 'control-px'/'control-py' — that produces classes px-control-px /
+        // py-control-py, which don't match what button.tsx actually uses
+        // (px-control / py-control-y), silently generating no CSS at all.
+        'control':       'var(--control-px)',
+        'control-sm':    'var(--control-px-sm)',
+        'control-lg':    'var(--control-px-lg)',
+        'control-y':     'var(--control-py)',
+      },
+      height: {
+        'control-sm': 'var(--control-h-sm)',
+        'control-md': 'var(--control-h-md)',
+        'control-lg': 'var(--control-h-lg)',
+      },
+      width: {
+        'control-sm': 'var(--control-h-sm)',
+        'control-md': 'var(--control-h-md)',
+        'control-lg': 'var(--control-h-lg)',
+      },
       borderRadius: {
-        DEFAULT: '2px',
-        lg:      '2px',
-        md:      '2px',
-        sm:      '2px',
-        full:    '2px',
-        xl:      '2px',
-        '2xl':   '2px',
-        '3xl':   '2px',
+        DEFAULT: 'var(--r)',
+        lg:      'var(--r-lg, var(--r))',
+        md:      'var(--r-md, var(--r))',
+        sm:      'var(--r-sm, var(--r))',
+        full:    'var(--r-full, var(--r))',
+        xl:      'var(--r-xl, var(--r))',
+        '2xl':   'var(--r-xl, var(--r))',
+        '3xl':   'var(--r-xl, var(--r))',
         none:    '0',
       },
       boxShadow: {
-        DEFAULT: 'none',
-        sm:      'none',
-        md:      'none',
-        lg:      'none',
-        xl:      'none',
-        '2xl':   'none',
+        DEFAULT: 'var(--shadow-flat, none)',
+        sm:      'var(--shadow-flat, none)',
+        md:      'var(--shadow-raised, none)',
+        lg:      'var(--shadow-overlay, none)',
+        xl:      'var(--shadow-overlay, none)',
+        '2xl':   'var(--shadow-overlay, none)',
         inner:   'none',
         none:    'none',
       },
       fontFamily: {
-        display: ['Big Shoulders Display', 'sans-serif'],
-        body:    ['IBM Plex Sans', 'sans-serif'],
-        mono:    ['IBM Plex Mono', 'monospace'],
-        sans:    ['IBM Plex Sans', 'sans-serif'],
+        display: 'var(--display)',
+        body:    'var(--body)',
+        mono:    'var(--mono)',
+        sans:    'var(--body)',
+      },
+      fontSize: {
+        // Admin/backend-UI type scale — additive only, does not touch
+        // Tailwind's default text-sm/base/lg/xl scale used throughout the app.
+        display: [
+          'var(--text-display-size)',
+          { letterSpacing: 'var(--text-display-tracking)', fontWeight: 'var(--text-display-weight)' },
+        ],
+        title: [
+          'var(--text-title-size)',
+          { letterSpacing: 'var(--text-title-tracking)', fontWeight: 'var(--text-title-weight)' },
+        ],
+        // 18px section/card header — added to close the 15px→20px gap that
+        // 6 callsites were independently working around.
+        subtitle: [
+          'var(--text-subtitle-size)',
+          { fontWeight: 'var(--text-subtitle-weight)' },
+        ],
+        // 12px dense form/table text — closes the 11px→13px gap that 15+
+        // callsites were working around.
+        micro: [
+          'var(--text-micro-size)',
+          { fontWeight: 'var(--text-micro-weight)' },
+        ],
+        // Named 'body-text' (not 'body') to avoid ambiguity with the
+        // `body` fontFamily key above (font-body vs text-body-text).
+        'body-text': [
+          'var(--text-body-size)',
+          { fontWeight: 'var(--text-body-weight)' },
+        ],
+        'ui-text': [
+          'var(--text-ui-size)',
+          { fontWeight: 'var(--text-ui-weight)' },
+        ],
+        meta: ['var(--text-meta-size)', {}],
+        eyebrow: [
+          'var(--text-eyebrow-size)',
+          { letterSpacing: 'var(--text-eyebrow-tracking)' },
+        ],
       },
       keyframes: {
         blink: { '50%': { opacity: '.2' } },

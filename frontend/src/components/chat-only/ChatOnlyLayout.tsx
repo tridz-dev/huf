@@ -10,10 +10,10 @@ interface ChatOnlyLayoutProps {
 
 export function ChatOnlyLayout({ agents, currentAgentName, children }: ChatOnlyLayoutProps) {
   return (
-    <div className="flex h-[100svh] min-h-0 flex-col overflow-hidden bg-zinc-50 text-zinc-950">
+    <div className="flex h-[100svh] min-h-0 flex-col overflow-hidden bg-paper-deep text-ink">
       <ChatHeader agents={agents} currentAgentName={currentAgentName} />
       <main className="min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto h-full w-full max-w-5xl bg-white shadow-sm md:my-4 md:h-[calc(100%-2rem)] md:overflow-hidden md:rounded-xl md:border md:border-zinc-200">
+        <div className="mx-auto h-full w-full max-w-5xl bg-panel shadow-sm md:my-4 md:h-[calc(100%-2rem)] md:overflow-hidden md:rounded-xl md:border md:border-line">
           {children}
         </div>
       </main>

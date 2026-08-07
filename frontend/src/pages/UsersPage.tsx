@@ -47,7 +47,7 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 const ROLE_COLOURS: Record<string, string> = {
   'Huf Admin': 'border-destructive/30 text-destructive bg-transparent',
-  'Huf Manager': 'border-signal/30 text-signal bg-transparent',
+  'Huf Manager': 'border-warning/30 text-warning bg-transparent',
   'Huf User': 'border-good/30 text-good bg-transparent',
   'Huf Viewer': 'border-steel text-steel-soft bg-paper-deep',
 };
@@ -170,7 +170,18 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
 // Main page
 // ---------------------------------------------------------------------------
 
-export default function UsersPage() {
+interface UsersPageProps {
+  /**
+   * True when rendered inside MembersPage's own PageFrame (the People/Roles
+   * switcher already owns the page's single head bar there) — skip this
+   * page's own PageFrame so /members never shows two head bars / two
+   * titles, and render the search/status/invite toolbar as a plain row
+   * instead.
+   */
+  embedded?: boolean;
+}
+
+export default function UsersPage({ embedded = false }: UsersPageProps) {
   const [users, setUsers] = useState<HufUser[]>([]);
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -180,7 +191,7 @@ export default function UsersPage() {
 
   const statusOptions = useMemo(
     () => [
-      { label: 'All Status', value: 'all' },
+      { label: 'All status', value: 'all' },
       { label: 'Active', value: 'active' },
       { label: 'Disabled', value: 'disabled' },
     ],
@@ -242,40 +253,58 @@ export default function UsersPage() {
     });
   }, [users, search, statusFilter]);
 
-  return (
-    <PageFrame
-      subtitle="Manage who has access to Huf and what they can do."
-      actions={
-        <Button onClick={() => setShowInvite(true)}>
-          <UserPlus className="h-4 w-4 mr-2" />
-          Invite user
-        </Button>
-      }
-      filters={
-        <FilterBar
-          searchPlaceholder="Search users..."
-          searchValue={search}
-          onSearchChange={setSearch}
-          filters={[
-            {
-              label: 'Status',
-              value: statusFilter,
-              options: statusOptions,
-              onChange: (value) => setStatusFilter(value as UserStatusFilter),
-            },
-          ]}
-        />
-      }
-    >
+  const inviteAction = (
+    <Button onClick={() => setShowInvite(true)}>
+      <UserPlus className="h-4 w-4 mr-2" />
+      Invite user
+    </Button>
+  );
+
+  const toolbar = (
+    <FilterBar
+      searchPlaceholder="Search users..."
+      searchValue={search}
+      onSearchChange={setSearch}
+      filters={[
+        {
+          label: 'Status',
+          value: statusFilter,
+          options: statusOptions,
+          onChange: (value) => setStatusFilter(value as UserStatusFilter),
+        },
+      ]}
+      actions={embedded ? inviteAction : undefined}
+    />
+  );
+
+  const body = (
+    <>
       {loading ? (
         <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No users"
-          description="Invite a user to give them access to Huf."
-          action={{ label: 'Invite user', onClick: () => setShowInvite(true) }}
-        />
+        search || statusFilter !== 'all' ? (
+          <EmptyState
+            variant="no-results"
+            icon={Users}
+            title="No users found"
+            filterTerm={search}
+            secondaryAction={{
+              label: 'Clear filters',
+              onClick: () => {
+                setSearch('');
+                setStatusFilter('all');
+              },
+            }}
+          />
+        ) : (
+          <EmptyState
+            variant="create"
+            icon={Users}
+            title="No users"
+            description="Invite a user to give them access to Huf."
+            action={{ label: 'Invite user', onClick: () => setShowInvite(true) }}
+          />
+        )
       ) : (
         <div className="overflow-x-auto border border-line bg-panel">
           <Table className="w-full min-w-[32rem] table-fixed text-sm">
@@ -310,10 +339,13 @@ export default function UsersPage() {
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="ml-auto flex items-center gap-1 hover:opacity-80">
+                        <Button
+                          variant="ghost"
+                          className="ml-auto flex h-auto items-center gap-1 p-0 hover:bg-transparent hover:opacity-80"
+                        >
                           <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
                           <ChevronDown className="h-3 w-3 shrink-0 text-steel-soft" />
-                        </button>
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         {roles.map((r) => (
@@ -352,6 +384,21 @@ export default function UsersPage() {
         onClose={() => setShowInvite(false)}
         onInvited={(u) => setUsers((prev) => [u, ...prev])}
       />
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-4">
+        {toolbar}
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <PageFrame actions={inviteAction} filters={toolbar}>
+      {body}
     </PageFrame>
   );
 }

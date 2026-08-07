@@ -55,10 +55,14 @@ interface ChatMessageProps {
     loadingType?: LoadingType;
     onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
     scrollToBottomAfterPaint: (instant?: boolean) => void;
+    /** Content of the user turn that produced this assistant message, if known. */
+    precedingUserMessage?: string;
+    /** Re-runs a prior user turn (regenerate / retry). Appends a new turn rather than mutating history. */
+    onRegenerate?: (userContent: string) => void;
 }
 
-export function ChatMessage({ 
-    message, 
+export function ChatMessage({
+    message,
     agentName,
     agentColor,
     showToolExecutionDetails = true,
@@ -66,6 +70,8 @@ export function ChatMessage({
     loadingType = 'default',
     onFeedback,
     scrollToBottomAfterPaint,
+    precedingUserMessage,
+    onRegenerate,
 }: ChatMessageProps) {
     const { user } = useUser();
     const isUser = message.from === 'user';
@@ -77,6 +83,11 @@ export function ChatMessage({
     const runId = message.agentRunId || (
         message.key.startsWith('AR-') || message.key.startsWith('run-') ? message.key : undefined
     );
+
+    const isBusy = status === 'submitted' || status === 'streaming';
+    const handleRegenerate = precedingUserMessage && onRegenerate
+        ? () => onRegenerate(precedingUserMessage)
+        : undefined;
 
     const showLoading = isAssistant && !message.error && (
         ((status === 'submitted' || status === 'streaming') && isEmpty) ||
@@ -109,11 +120,11 @@ export function ChatMessage({
             </ChatAvatar>
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-zinc-900">
+                    <span className="text-sm font-medium text-ink">
                         {isUser ? "You" : agentName}
                     </span>
                     {timeDisplay && (
-                        <span className="text-xs text-zinc-400">
+                        <span className="text-xs text-steel-soft">
                             {timeDisplay}
                         </span>
                     )}
@@ -170,7 +181,11 @@ export function ChatMessage({
                                 />
                             )}
                             {message.error ? (
-                                <ChatErrorCard error={message.error} />
+                                <ChatErrorCard
+                                    error={message.error}
+                                    onRetry={handleRegenerate}
+                                    retryDisabled={isBusy}
+                                />
                             ) : message.generatedAudio && message.from === 'assistant' ? (
                                 <div className="w-full max-w-md">
                                     <AudioPlayer>
@@ -199,12 +214,12 @@ export function ChatMessage({
                                         </AudioPlayerControlBar>
                                     </AudioPlayer>
                                     {message.versions[0]?.content && (
-                                        <details className="text-sm rounded-lg border border-black/10 dark:border-white/10 group [&_summary::-webkit-details-marker]:hidden">
-                                            <summary className="font-medium cursor-pointer select-none p-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors rounded-lg group-open:rounded-b-none list-none flex items-center justify-between opacity-80">
+                                        <details className="text-sm rounded-lg border border-line group [&_summary::-webkit-details-marker]:hidden">
+                                            <summary className="font-medium cursor-pointer select-none p-3 hover:bg-paper-deep transition-colors rounded-lg group-open:rounded-b-none list-none flex items-center justify-between opacity-80">
                                                 <span>Transcript</span>
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-open:rotate-180 opacity-50"><polyline points="6 9 12 15 18 9"></polyline></svg>
                                             </summary>
-                                            <div className="p-3 pt-0 border-t border-black/10 dark:border-white/10 mt-2 opacity-90">
+                                            <div className="p-3 pt-0 border-t border-line mt-2 opacity-90">
                                                 <MessageContentWithArtifacts
                                                     content={message.versions[0].content}
                                                     messageId={message.versions[0]?.id ?? message.key}
@@ -276,6 +291,8 @@ export function ChatMessage({
                                     onFeedback={onFeedback}
                                     agentMessageId={message.versions[0].id}
                                     agentRunId={runId}
+                                    onRegenerate={handleRegenerate}
+                                    regenerateDisabled={isBusy}
                                 />
                             </div>
                         )}

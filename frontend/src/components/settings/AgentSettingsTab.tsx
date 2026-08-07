@@ -98,7 +98,7 @@ function AgentSettingsTab() {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Default Provider</Label>
+              <Label>Default provider</Label>
               <Select
                 value={defaultProvider || ''}
                 onValueChange={(v) => {
@@ -120,7 +120,7 @@ function AgentSettingsTab() {
             </div>
 
             <div className="space-y-2">
-              <Label>Default Model</Label>
+              <Label>Default model</Label>
               <Select
                 value={defaultModel || ''}
                 onValueChange={(v) => setDefaultModel(v || undefined)}
