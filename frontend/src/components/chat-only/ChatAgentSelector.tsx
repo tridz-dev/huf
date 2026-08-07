@@ -74,10 +74,10 @@ export function ChatAgentSelector({
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <MessageSquarePlus className="size-5" />
           </div>
-          <h1 className="text-xl font-semibold text-zinc-950">
+          <h1 className="text-xl font-semibold text-ink">
             {firstName ? `Hi ${firstName}, choose an assistant` : "Choose an assistant"}
           </h1>
-          <p className="text-sm text-zinc-500">Start a focused chat with one of your available Huf agents.</p>
+          <p className="text-sm text-steel">Start a focused chat with one of your available Huf agents.</p>
         </div>
 
         <div className="space-y-2">
@@ -98,15 +98,15 @@ export function ChatAgentSelector({
                     {getInitials(agent.agent_name || agent.name)}
                   </ChatAvatar>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-zinc-900">
+                    <span className="block truncate text-sm font-semibold text-ink">
                       {agent.agent_name || agent.name}
                     </span>
                     {agent.description ? (
-                      <span className="block truncate text-xs font-normal text-zinc-500">
+                      <span className="block truncate text-xs font-normal text-steel">
                         {agent.description}
                       </span>
                     ) : (
-                      <span className="block truncate text-xs font-normal text-zinc-500">
+                      <span className="block truncate text-xs font-normal text-steel">
                         {agent.model || "Chat agent"}
                       </span>
                     )}
@@ -117,7 +117,7 @@ export function ChatAgentSelector({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="shrink-0 gap-1.5 text-xs text-zinc-500 hover:text-zinc-900"
+                    className="shrink-0 gap-1.5 text-xs text-steel hover:text-ink"
                     onClick={() => onResumeChat(resumeChatId)}
                   >
                     <History className="size-3.5" />
@@ -146,11 +146,11 @@ function CenteredState({
   return (
     <div className="flex h-full items-center justify-center px-5 text-center">
       <div className="max-w-sm space-y-3">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-zinc-100 text-zinc-500">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-paper-deep text-steel">
           {icon}
         </div>
-        <h1 className="text-lg font-semibold text-zinc-950">{title}</h1>
-        <p className="text-sm leading-6 text-zinc-500">{description}</p>
+        <h1 className="text-lg font-semibold text-ink">{title}</h1>
+        <p className="text-sm leading-6 text-steel">{description}</p>
       </div>
     </div>
   );

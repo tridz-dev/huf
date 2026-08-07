@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Loader2, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { PlaygroundConfig } from './types';
@@ -33,13 +34,15 @@ export function PromptPanel({
   return (
     <div className={cn('flex min-h-[260px] flex-col rounded border border-line bg-panel', className)}>
       <div className="flex items-center justify-between border-b border-line px-3.5 py-2.5">
-        <span className="font-sans text-[12px] font-medium uppercase tracking-[.06em] text-steel">Prompt</span>
-        <button
+        <span className="font-mono text-eyebrow font-medium uppercase text-steel">Prompt</span>
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onDraft}
           title="Draft prompt"
           aria-label="Draft prompt"
-          className="text-steel transition-colors hover:text-ink disabled:opacity-40"
+          className="h-auto w-auto p-0 text-steel hover:bg-transparent hover:text-ink disabled:opacity-40"
           disabled={generating}
         >
           {generating ? (
@@ -47,35 +50,36 @@ export function PromptPanel({
           ) : (
             <Pencil className="h-4 w-4" strokeWidth={1.8} />
           )}
-        </button>
+        </Button>
       </div>
 
       <Textarea
         value={config.prompt}
         onChange={(e) => onConfigChange({ ...config, prompt: e.target.value })}
         placeholder="Type a prompt to send to the agent…"
-        className="min-h-0 flex-1 resize-none rounded-none border-0 px-3.5 py-3 font-sans text-[13.5px] leading-relaxed shadow-none placeholder:text-steel focus-visible:ring-0"
+        className="min-h-0 flex-1 resize-none rounded border-0 px-3.5 py-3 font-sans text-[13.5px] leading-relaxed shadow-sm placeholder:text-steel focus-visible:ring-0"
       />
 
       <div className="border-t border-line px-3.5 py-2.5">
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setCriteriaOpen((open) => !open)}
           aria-expanded={criteriaOpen}
-          className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+          className="h-auto items-center gap-1.5 p-0 text-[12.5px] text-steel hover:bg-transparent hover:text-ink"
         >
           <ChevronRight
             className={cn('h-3.5 w-3.5 transition-transform', criteriaOpen && 'rotate-90')}
             strokeWidth={1.8}
           />
           Evaluation criteria
-        </button>
+        </Button>
         {criteriaOpen && (
           <Textarea
             value={config.evaluationCriteria}
             onChange={(e) => onConfigChange({ ...config, evaluationCriteria: e.target.value })}
             placeholder="Describe what a good response must include…"
-            className="mt-2 min-h-[72px] resize-none rounded border-line px-2.5 py-2 text-[12.5px] shadow-none focus-visible:ring-1"
+            className="mt-2 min-h-[72px] resize-none rounded border-line px-2.5 py-2 text-[12.5px] shadow-sm focus-visible:ring-1"
           />
         )}
       </div>

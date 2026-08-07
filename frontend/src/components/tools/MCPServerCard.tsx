@@ -46,9 +46,9 @@ export function MCPServerCard({
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h4 className="font-medium text-sm">{server.server_name || server.name}</h4>
           {server.enabled === 1 ? (
-            <Badge variant="default" className="text-xs shrink-0">enabled</Badge>
+            <Badge variant="default" size="sm" className="shrink-0">enabled</Badge>
           ) : (
-            <Badge variant="secondary" className="text-xs shrink-0">disabled</Badge>
+            <Badge variant="secondary" size="sm" className="shrink-0">disabled</Badge>
           )}
         </div>
         {server.description && (

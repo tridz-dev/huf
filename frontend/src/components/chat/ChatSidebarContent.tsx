@@ -96,7 +96,7 @@ export function ChatSidebarContent() {
           onClick={handleNewChat}
         >
           <Plus className="h-4 w-4" />
-          New Chat
+          New chat
         </Button>
       </div>
       <SidebarGroupLabel>Conversations</SidebarGroupLabel>

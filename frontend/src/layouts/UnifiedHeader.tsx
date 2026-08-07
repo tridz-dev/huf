@@ -5,15 +5,51 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
-// import { ApprovalsBell } from '../components/ApprovalsBell';  // TEMP disabled: see flow_api.py get_pending_approvals
+import { ApprovalsBell } from '../components/ApprovalsBell';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItemType[];
+}
+
+/**
+ * Ancestry-only breadcrumb: renders the chain of ancestors leading up to the
+ * current page, but never the trailing/current-page crumb. Used both inside
+ * PageFrame's 52px bar and by the standalone 60px topbar (via UnifiedHeader
+ * below) — in both places the page itself already names the current record
+ * once (an h1, InlineEditName, or similar), so repeating that name in the
+ * breadcrumb would name the page twice. Renders nothing when there is no
+ * real ancestry (a single-item or empty breadcrumb list).
+ */
+export function AncestryCrumb({ breadcrumbs }: { breadcrumbs?: BreadcrumbItemType[] }) {
+  if (!breadcrumbs || breadcrumbs.length < 2) return null;
+  const ancestors = breadcrumbs.slice(0, -1);
+
+  return (
+    <div className="flex items-center gap-2 shrink-0">
+      <Breadcrumb>
+        <BreadcrumbList>
+          {ancestors.map((crumb, index) => (
+            <Fragment key={index}>
+              <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
+                {crumb.href ? (
+                  <BreadcrumbLink href={crumb.href} asChild>
+                    <Link to={crumb.href}>{crumb.label}</Link>
+                  </BreadcrumbLink>
+                ) : (
+                  <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
+                )}
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block mt-0.5" />
+            </Fragment>
+          ))}
+        </BreadcrumbList>
+      </Breadcrumb>
+    </div>
+  );
 }
 
 export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
@@ -25,8 +61,8 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/agents')) return 'Agent';
     if (path.startsWith('/flows')) return 'Flows';
     if (path.startsWith('/data')) return 'Data';
-    if (path.startsWith('/providers')) return 'AI Providers';
-    if (path.startsWith('/integration-services')) return 'Integration Catalog';
+    if (path.startsWith('/providers')) return 'AI providers & models';
+    if (path.startsWith('/integration-services')) return 'Integration catalog';
     if (path.startsWith('/integrations')) return 'Integrations';
     if (path.startsWith('/gateways')) return 'Gateways';
     if (path.startsWith('/settings')) return 'Settings';
@@ -36,48 +72,30 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/chat')) return 'Chat';
     if (path.startsWith('/executions')) return 'Executions';
     if (path.startsWith('/knowledge')) return 'Knowledge';
-    if (path.startsWith('/mcp')) return 'MCP Servers';
+    if (path.startsWith('/mcp')) return 'MCP servers';
     if (path.startsWith('/prompts')) return 'Prompts';
     if (path.startsWith('/summary-prompts')) return 'Prompts';
     if (path.startsWith('/members')) return 'Members';
     if (path.startsWith('/users')) return 'Users';
     if (path.startsWith('/roles')) return 'Roles';
-    if (path.startsWith('/models')) return 'Models';
-    if (path.startsWith('/execution-profiles')) return 'Code Execution';
-    if (path.startsWith('/ssh-connections')) return 'SSH Connections';
+    if (path.startsWith('/models')) return 'AI providers & models';
+    if (path.startsWith('/execution-profiles')) return 'Code execution';
+    if (path.startsWith('/ssh-connections')) return 'SSH connections';
     if (path.startsWith('/apps')) return 'Apps';
-    if (path.startsWith('/memory')) return 'Memory';
+    if (path.startsWith('/memory')) return 'Intelligence';
     if (path.startsWith('/skills')) return 'Skills';
-    if (path.startsWith('/ssh')) return 'SSH Execution';
+    if (path.startsWith('/ssh')) return 'SSH execution';
     return 'HufAI';
   };
+
+  const ancestryCrumb = <AncestryCrumb breadcrumbs={breadcrumbs} />;
+  const hasAncestry = !!breadcrumbs && breadcrumbs.length >= 2;
 
   return (
     <div className="flex items-center justify-between flex-1">
       <div className="flex items-center gap-2">
-        {breadcrumbs && breadcrumbs.length > 0 ? (
-          <Breadcrumb>
-            <BreadcrumbList>
-              {breadcrumbs.map((crumb, index) => (
-                <Fragment key={index}>
-                <div className="flex items-center">
-                  <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
-                    {index === breadcrumbs.length - 1 ? (
-                      <BreadcrumbPage className="font-mono text-[11px] uppercase tracking-widest text-ink">{crumb.label}</BreadcrumbPage>
-                    ) : crumb.href ? (
-                      <BreadcrumbLink href={crumb.href} asChild>
-                        <Link to={crumb.href} className="font-mono text-[11px] uppercase tracking-widest text-steel hover:text-ink">{crumb.label}</Link>
-                      </BreadcrumbLink>
-                    ) : (
-                      <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
-                    )}
-                  </BreadcrumbItem>
-                </div>
-                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5 text-steel-soft" />}
-                </Fragment>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
+        {hasAncestry ? (
+          ancestryCrumb
         ) : (
           <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{getPageTitle()}</span>
         )}
@@ -94,7 +112,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
       </div> */}
 
       <div className="flex items-center gap-2">
-        {/* <ApprovalsBell />  TEMP disabled: get_pending_approvals returns 403 even for Admin */}
+        <ApprovalsBell />
         {actions}
       </div>
     </div>

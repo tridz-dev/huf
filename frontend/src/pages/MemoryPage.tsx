@@ -34,9 +34,8 @@ export default function MemoryPage() {
 
   return (
     <PageFrame
-      title="Memory"
+      title="Intelligence"
       badge={<ExperimentalBadge />}
-      subtitle="Facts, preferences, and context your AI agents have learned from conversations."
     >
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>

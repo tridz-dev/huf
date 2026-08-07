@@ -4,7 +4,7 @@ export const actionOptions: ActionOption[] = [
   // ─── AI & Agents ────────────────────────────────────────────────────
   {
     id: 'agent-run',
-    name: 'Run Agent',
+    name: 'Run agent',
     description: 'Execute a HUF AI agent',
     icon: 'Bot',
     category: 'agent'
@@ -13,7 +13,7 @@ export const actionOptions: ActionOption[] = [
   // ─── Tools ──────────────────────────────────────────────────────────
   {
     id: 'tool-call',
-    name: 'Call Tool',
+    name: 'Call tool',
     description: 'Execute a tool function',
     icon: 'Wrench',
     category: 'tool'
@@ -52,14 +52,14 @@ export const actionOptions: ActionOption[] = [
   // ─── Transform ──────────────────────────────────────────────────────
   {
     id: 'transform',
-    name: 'Transform Data',
+    name: 'Transform data',
     description: 'Map and transform data fields',
     icon: 'Repeat',
     category: 'transform'
   },
   {
     id: 'code',
-    name: 'Execute Code',
+    name: 'Execute code',
     description: 'Run custom code snippet',
     icon: 'Code',
     category: 'transform'
@@ -68,28 +68,28 @@ export const actionOptions: ActionOption[] = [
   // ─── Utilities ──────────────────────────────────────────────────────
   {
     id: 'email',
-    name: 'Send Email',
+    name: 'Send email',
     description: 'Send an email notification',
     icon: 'Mail',
     category: 'utility'
   },
   {
     id: 'webhook',
-    name: 'Call Webhook',
+    name: 'Call webhook',
     description: 'Make an HTTP request',
     icon: 'Webhook',
     category: 'utility'
   },
   {
     id: 'file',
-    name: 'File Operations',
+    name: 'File operations',
     description: 'Read, write, or delete files',
     icon: 'FileText',
     category: 'utility'
   },
   {
     id: 'date',
-    name: 'Date Utility',
+    name: 'Date utility',
     description: 'Format and manipulate dates',
     icon: 'Calendar',
     category: 'utility'

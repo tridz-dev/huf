@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "node node_modules/typescript/bin/tsc -b && node node_modules/vite/bin/vite.js build --base=/assets/huf/frontend/ && node scripts/copy-html-entry.mjs",
     "lint": "eslint .",
+    "check:design": "node scripts/check-design-parity.mjs",
+    "check:design:strict": "node scripts/check-design-parity.mjs --strict",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run --config vitest.config.ts",

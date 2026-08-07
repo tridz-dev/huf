@@ -45,7 +45,7 @@ function McpDetailsPageWrapper() {
     ...(fromAgent
       ? [{ label: agentLabel, href: `/agents/${fromAgent}#tools` }]
       : []),
-    { label: 'MCP Servers', href: '/mcp' },
+    { label: 'MCP servers', href: '/mcp' },
     { label: serverName },
   ];
 

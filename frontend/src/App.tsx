@@ -24,6 +24,7 @@ import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
+import { CommandPalette } from './components/CommandPalette';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AppsPage = lazy(() => import('./pages/AppsPage'));
@@ -698,6 +699,7 @@ function AppShell() {
             </AnimatePresence>
           </Suspense>
           <Toaster />
+          <CommandPalette />
         </PermissionsProvider>
       </UserProvider>
     </SocketProvider>

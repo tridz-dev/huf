@@ -1,4 +1,5 @@
 import { Play } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { StatusDot } from '@/components/dashboard';
 import { cn } from '@/lib/utils';
 import type { DiffSegment } from './wordDiff';
@@ -93,15 +94,23 @@ function ResponseBody({ state, diffSegments }: { state: SlotState; diffSegments?
   if (diffSegments) {
     return (
       <p className="whitespace-pre-wrap break-words px-3.5 py-3 text-[13.5px] leading-relaxed">
-        {diffSegments.map((segment, index) =>
-          segment.changed ? (
-            <span key={index} className="bg-coral-soft">
-              {segment.text}
-            </span>
-          ) : (
-            <span key={index}>{segment.text}</span>
-          ),
-        )}
+        {diffSegments.map((segment, index) => {
+          if (segment.type === 'added') {
+            return (
+              <span key={index} className="bg-good-tint">
+                {segment.text}
+              </span>
+            );
+          }
+          if (segment.type === 'removed') {
+            return (
+              <span key={index} className="bg-destructive-tint">
+                {segment.text}
+              </span>
+            );
+          }
+          return <span key={index}>{segment.text}</span>;
+        })}
       </p>
     );
   }
@@ -124,7 +133,7 @@ export function ResponsePanel({
   return (
     <div className={cn('flex min-h-[260px] flex-col rounded border border-line bg-panel', className)}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
-        <span className="flex-none font-sans text-[12px] font-medium uppercase tracking-[.06em] text-steel">{title}</span>
+        <span className="flex-none font-mono text-eyebrow font-medium uppercase text-steel">{title}</span>
         <StatusReadout state={state} />
       </div>
 
@@ -134,15 +143,16 @@ export function ResponsePanel({
 
       {runLabel && onRun && (
         <div className="border-t border-line px-3.5 py-2">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onRun}
             disabled={state.running}
-            className="flex items-center gap-1.5 text-[12px] text-steel transition-colors hover:text-ink disabled:opacity-40"
+            className="h-auto items-center gap-1.5 p-0 text-[12px] text-steel hover:bg-transparent hover:text-ink disabled:opacity-40"
           >
             <Play className="h-3 w-3" strokeWidth={1.8} />
             {runLabel}
-          </button>
+          </Button>
         </div>
       )}
     </div>

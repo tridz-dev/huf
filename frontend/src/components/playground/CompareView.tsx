@@ -1,13 +1,8 @@
 import { useMemo, useState } from 'react';
-import {
-  ArrowLeftRight,
-  ArrowRightLeft,
-  Copy,
-  GitCompare,
-  Pencil,
-} from 'lucide-react';
+import { ArrowRightLeft, Copy, GitCompare, Pencil } from 'lucide-react';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { ConfigStrip } from './ConfigStrip';
 import { PromptPanel } from './PromptPanel';
 import { ResponsePanel } from './ResponsePanel';
@@ -40,6 +35,7 @@ interface EditableLabelProps {
 function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(label);
+  const isColumnA = glyph === 'A';
 
   const commit = () => {
     const trimmed = draft.trim();
@@ -49,7 +45,14 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
 
   return (
     <div className="mb-2 flex items-center gap-2">
-      <span className="font-sans text-[12px] font-medium uppercase tracking-[.06em] text-steel">{glyph}</span>
+      <span
+        className={cn(
+          'inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] text-[11px] font-medium text-white',
+          isColumnA ? 'bg-ink' : 'bg-signal',
+        )}
+      >
+        {glyph}
+      </span>
       {editing ? (
         <input
           autoFocus
@@ -67,17 +70,18 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
           className="w-32 border-b border-dashed border-ink bg-transparent text-[12.5px] text-ink outline-none"
         />
       ) : (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => {
             setDraft(label);
             setEditing(true);
           }}
-          className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+          className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
         >
           <span className="border-b border-dashed border-line">{label}</span>
           <Pencil className="h-3 w-3 text-steel-soft" strokeWidth={1.8} />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -131,45 +135,52 @@ export function CompareView({
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       {/* Control row */}
       <div className="flex items-center justify-between px-5 pt-3">
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[.08em] text-steel-soft">
-          <ArrowLeftRight className="h-3.5 w-3.5" strokeWidth={1.8} />
-          Comparing two configurations
+        <div className="flex items-center gap-2 font-mono text-eyebrow uppercase text-steel-soft">
+          Two configurations
         </div>
         <div className="flex items-center gap-4">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={handleCopyAtoB}
-            className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
           >
             <Copy className="h-3.5 w-3.5" strokeWidth={1.8} />
             Copy A → B
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={handleSwap}
-            className="flex items-center gap-1.5 text-[12.5px] text-steel transition-colors hover:text-ink"
+            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
           >
             <ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
             Swap
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             role="switch"
             aria-checked={diffEnabled}
             onClick={() => setDiffEnabled((on) => !on)}
-            className="flex items-center gap-1.5 text-[12.5px] text-ink"
+            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-ink hover:bg-transparent"
           >
             <GitCompare className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />
             Diff responses
-            <span className="relative inline-block h-[14px] w-[26px] rounded border border-ink">
+            <span
+              className={cn(
+                'relative inline-flex h-[19px] w-[32px] shrink-0 items-center rounded-full p-[2px] transition-colors',
+                diffEnabled ? 'bg-signal' : 'bg-steel-soft',
+              )}
+            >
               <span
                 className={cn(
-                  'absolute top-[1px] h-[10px] w-[11px] transition-all',
-                  diffEnabled ? 'right-[1px] bg-signal' : 'left-[1px] bg-steel-soft',
+                  'block h-[15px] w-[15px] rounded-full bg-panel shadow-sm transition-transform',
+                  diffEnabled ? 'translate-x-[13px]' : 'translate-x-0',
                 )}
               />
             </span>
-          </button>
+          </Button>
         </div>
       </div>
 

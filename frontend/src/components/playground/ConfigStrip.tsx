@@ -36,7 +36,7 @@ function Cell({
 }) {
   return (
     <div className={cn('px-4 py-3', className)}>
-      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-[.1em] text-steel-soft">
+      <div className="mb-1.5 font-mono text-eyebrow uppercase text-steel-soft">
         {label}
       </div>
       {children}

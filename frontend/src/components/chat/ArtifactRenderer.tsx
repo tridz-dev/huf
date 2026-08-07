@@ -17,6 +17,7 @@ import {
 	ArtifactClose,
 } from '@/components/ai-elements/artifact';
 import { CodeBlock } from '@/components/ai-elements/code-block';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
 	CopyIcon,
 	DownloadIcon,
@@ -107,6 +108,7 @@ export function ArtifactRenderer({
 }: ArtifactRendererProps) {
 	const [isFullscreen, setIsFullscreen] = useState(false);
 	const [isCopied, setIsCopied] = useState(false);
+	const [view, setView] = useState<'preview' | 'source'>('preview');
 
 	const handleCopy = useCallback(async () => {
 		try {
@@ -187,7 +189,18 @@ export function ArtifactRenderer({
 		window.open(`/huf/view/${messageId}`, '_blank', 'noopener');
 	}, [messageId, previewContent, artifact]);
 
+	const renderSource = () => (
+		<CodeBlock
+			code={artifact.content}
+			language={normalizeLanguage(artifact.language)}
+			showLineNumbers
+		/>
+	);
+
 	const renderContent = () => {
+		if (view === 'source') {
+			return renderSource();
+		}
 		switch (artifact.type) {
 			case 'code':
 			case 'react-component':
@@ -205,12 +218,12 @@ export function ArtifactRenderer({
 						<iframe
 							srcDoc={artifact.content}
 							sandbox=""
-							className="w-full h-96 border rounded bg-white"
+							className="w-full h-96 border rounded bg-panel"
 							title={artifact.title || 'HTML Preview'}
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="html" />
 						</details>
@@ -223,12 +236,12 @@ export function ArtifactRenderer({
 						<iframe
 							srcDoc={artifact.content}
 							sandbox=""
-							className="flex items-center justify-center p-4 bg-white rounded border"
+							className="flex items-center justify-center p-4 bg-panel rounded border"
 							title={artifact.title || 'SVG Preview'}
 						/>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="xml" />
 						</details>
@@ -241,7 +254,7 @@ export function ArtifactRenderer({
 						<Mermaid chart={artifact.content} />
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="mermaid" />
 						</details>
@@ -287,7 +300,7 @@ export function ArtifactRenderer({
 						</JSXPreview>
 						<details className="text-xs">
 							<summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-								View Source
+								View source
 							</summary>
 							<CodeBlock code={artifact.content} language="jsx" />
 						</details>
@@ -328,6 +341,15 @@ export function ArtifactRenderer({
 					</div>
 				</div>
 				<ArtifactActions>
+					<Tabs
+						value={view}
+						onValueChange={(value) => setView(value as 'preview' | 'source')}
+					>
+						<TabsList variant="pill" size="compact">
+							<TabsTrigger value="preview">Preview</TabsTrigger>
+							<TabsTrigger value="source">Source</TabsTrigger>
+						</TabsList>
+					</Tabs>
 					{messageId && (artifact.type === 'jsx' || artifact.type === 'chart') && (
 						<ArtifactAction
 							icon={ExternalLinkIcon}

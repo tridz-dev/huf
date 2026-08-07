@@ -16,19 +16,33 @@ const SelectGroup = SelectPrimitive.Group;
 const SelectValue = SelectPrimitive.Value;
 
 interface SelectTriggerProps
-  extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger> {
+  // `size` must be omitted from the inherited props: the underlying button
+  // element already declares an HTML `size` attribute typed as `number`, so a
+  // string union would collide with it. (Interestingly `tsc --noEmit` let this
+  // pass while the build's `tsc -b` caught it — another reason the build is the
+  // real gate.)
+  extends Omit<React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, 'size'> {
   /** Custom icon replacing the default CaretSortIcon. */
   icon?: React.ReactNode;
+  /**
+   * `sm` is the dense toolbar/inspector trigger. Added because 10 callsites
+   * were overriding the trigger's height, most with `h-7 text-xs` — a missing
+   * size rather than ten separate corrections.
+   */
+  size?: 'default' | 'sm';
 }
 
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   SelectTriggerProps
->(({ className, children, icon, ...props }, ref) => (
+>(({ className, children, icon, size = 'default', ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      'flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      'flex w-full items-center justify-between whitespace-nowrap rounded border border-input bg-transparent ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:border-signal focus:ring-[3px] focus:ring-signal/[.14] disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1',
+      size === 'sm'
+        ? 'h-control-sm px-control-sm py-0 text-micro'
+        : 'h-control-md px-control py-control-y text-ui-text',
       className
     )}
     {...props}
@@ -127,7 +141,7 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+      'relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-8 text-ui-text outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
       className
     )}
     {...props}

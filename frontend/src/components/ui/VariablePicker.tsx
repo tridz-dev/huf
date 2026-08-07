@@ -42,7 +42,7 @@ export function VariablePicker({ onSelect }: VariablePickerProps) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 font-mono" title="Insert Variable">
+                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2 font-mono" title="Insert variable">
                     {'{x}'} Variables
                 </Button>
             </DropdownMenuTrigger>

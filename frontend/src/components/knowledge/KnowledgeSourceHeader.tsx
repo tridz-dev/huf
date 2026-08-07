@@ -56,13 +56,13 @@ export function KnowledgeSourceHeader({
               value={form.watch('source_name')}
               onChange={(e) => form.setValue('source_name', e.target.value, { shouldDirty: true })}
               className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-              placeholder="Source Name"
+              placeholder="e.g. Product documentation"
             />
           ) : (
             <InlineEditName
               value={form.watch('source_name')}
               onChange={(value) => form.setValue('source_name', value, { shouldDirty: true })}
-              placeholder="Source Name"
+              placeholder="e.g. Product documentation"
             />
           )}
           <Badge variant={watchDisabled ? 'secondary' : 'default'}>
@@ -99,7 +99,7 @@ export function KnowledgeSourceHeader({
             type="button"
           >
             <Database className="w-4 h-4 mr-2" />
-            Knowledge Inputs
+            Knowledge inputs
           </Button>
         )}
         {!isNew && (

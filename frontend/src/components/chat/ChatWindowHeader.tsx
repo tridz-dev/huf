@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { PanelLeftOpen, SquareAsterisk } from "lucide-react";
+import { Check, ChevronDown, PanelLeftOpen, SquareAsterisk } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { getConversation } from "@/services/chatApi";
-import { getAgent } from "@/services/agentApi";
+import { getAgent, getChatAgents, type ChatAgentItem } from "@/services/agentApi";
 import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
@@ -127,7 +128,7 @@ export function ChatWindowHeader({
                     )}
                     <ChatAvatar variant="chat_ai">?</ChatAvatar>
                     <div className="flex flex-col">
-                        <span className="font-semibold text-sm text-ink">No agent selected</span>
+                        <AgentSwitcher currentAgentName={null} triggerLabel="No agent selected" />
                         <span className="text-xs text-steel">Select an agent to start chatting</span>
                     </div>
                 </div>
@@ -155,7 +156,7 @@ export function ChatWindowHeader({
                 </ChatAvatar>
                 <div className="flex flex-col">
                     <div className="flex gap-x-2 items-center">
-                        <span className="font-semibold text-sm text-ink">{agent.agent_name}</span>
+                        <AgentSwitcher currentAgentName={agent.name} triggerLabel={agent.agent_name} />
                         {(conversationModel || agent.model) && (
                             <Badge variant="outline" className="shrink-0">
                                 {conversationModel || agent.model}
@@ -186,5 +187,106 @@ export function ChatWindowHeader({
                 </Link>
             </div>
         </header>
+    );
+}
+
+interface AgentSwitcherProps {
+    /** Name (doctype id) of the agent currently active in this chat window,
+     * or null when no conversation/agent has been resolved yet. */
+    currentAgentName: string | null;
+    triggerLabel: string;
+}
+
+/**
+ * Clickable agent name in the chat header. Opens a popover listing the
+ * agents available for chat (same `getChatAgents` source as the sidebar's
+ * "new chat" picker and the chat-only header) so the user can switch
+ * without leaving the conversation view.
+ *
+ * Picking an agent starts a new chat with that agent rather than mutating
+ * the open conversation — conversations are pinned to the agent they were
+ * created with (see `useChatAgentIdentity`, which only reads `?agent=` for
+ * chats that do not yet have a chatId), so switching mid-conversation has
+ * no existing "continue with a different agent" semantics to preserve.
+ */
+function AgentSwitcher({ currentAgentName, triggerLabel }: AgentSwitcherProps) {
+    const navigate = useNavigate();
+    const [open, setOpen] = useState(false);
+    const [agents, setAgents] = useState<ChatAgentItem[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!open) return;
+
+        let cancelled = false;
+        setLoading(true);
+
+        getChatAgents()
+            .then((data) => {
+                if (!cancelled) setAgents(data);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
+    const handleSelect = (agentName: string) => {
+        setOpen(false);
+        navigate(`/chat?agent=${encodeURIComponent(agentName)}`);
+    };
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className="flex items-center gap-1 rounded-md -mx-1 px-1 text-sm font-semibold text-ink hover:bg-paper-deep"
+                >
+                    <span className="truncate max-w-[200px]">{triggerLabel}</span>
+                    <ChevronDown className="w-3.5 h-3.5 shrink-0 text-steel-soft" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-1">
+                <div className="px-2 py-1.5 text-xs font-normal text-steel">Assistants</div>
+                {loading ? (
+                    <div className="px-2 py-3 text-center text-sm text-steel">Loading agents...</div>
+                ) : agents.length === 0 ? (
+                    <div className="px-2 py-3 text-center text-sm text-steel">No chat agents available.</div>
+                ) : (
+                    <div className="max-h-80 overflow-y-auto">
+                        {agents.map((agentItem) => (
+                            <button
+                                key={agentItem.name}
+                                type="button"
+                                onClick={() => handleSelect(agentItem.name)}
+                                className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left hover:bg-paper-deep"
+                            >
+                                <ChatAvatar
+                                    variant="listing_ai"
+                                    color={agentItem.agent_color || DEFAULT_AGENT_COLOR}
+                                >
+                                    {getInitials(agentItem.agent_name || agentItem.name)}
+                                </ChatAvatar>
+                                <span className="min-w-0 flex-1">
+                                    <span className="block truncate text-sm text-ink">
+                                        {agentItem.agent_name || agentItem.name}
+                                    </span>
+                                    <span className="block truncate text-xs text-steel">
+                                        {agentItem.description || agentItem.model || "Chat agent"}
+                                    </span>
+                                </span>
+                                {agentItem.name === currentAgentName && (
+                                    <Check className="size-4 shrink-0 text-primary" />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </PopoverContent>
+        </Popover>
     );
 }

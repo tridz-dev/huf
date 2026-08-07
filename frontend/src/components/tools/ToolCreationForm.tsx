@@ -68,7 +68,7 @@ function SectionHeader({ icon: Icon, title }: { icon?: LucideIcon; title: ReactN
   return (
     <div className="flex items-center gap-2">
       {Icon ? <Icon className="w-4 h-4 text-steel-soft shrink-0" /> : null}
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-steel">{title}</h3>
+      <h3 className="font-mono text-eyebrow uppercase text-steel">{title}</h3>
     </div>
   );
 }
@@ -430,11 +430,11 @@ export function ToolCreationForm({
     const visible = key === 'tool_type' ? mode === 'create' : showAutoBadges;
     if (!visible) return null;
     return autoBadges[key] === 'auto' ? (
-      <Badge variant="secondary" className="text-[10px] ml-2 font-normal">
+      <Badge variant="secondary" size="sm" className="ml-2 font-normal">
         Auto
       </Badge>
     ) : (
-      <Badge variant="outline" className="text-[10px] ml-2 font-normal">
+      <Badge variant="outline" size="sm" className="ml-2 font-normal">
         Edited
       </Badge>
     );
@@ -467,7 +467,7 @@ export function ToolCreationForm({
         accessorKey: 'type',
         header: 'Type',
         cell: ({ row }) => (
-          <Badge variant="outline" className="text-[10px]">
+          <Badge variant="outline" size="sm">
             {row.original.type}
           </Badge>
         ),
@@ -528,10 +528,10 @@ export function ToolCreationForm({
           className="shrink-0"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Tool Settings
+          Back to tool settings
         </Button>
 
-        <div className="rounded-none border bg-paper px-3 py-2 text-sm font-medium">
+        <div className="rounded border bg-paper px-3 py-2 text-sm font-medium">
           Edit Parameter {editingParameterIndex + 1}
         </div>
 
@@ -546,7 +546,7 @@ export function ToolCreationForm({
             }}
           />
         ) : (
-          <div className="text-sm text-steel rounded-none border p-4">
+          <div className="text-sm text-steel rounded border p-4">
             Parameter not found.
           </div>
         )}
@@ -559,7 +559,7 @@ export function ToolCreationForm({
       {editingParameterIndex !== null ? renderParameterEditorView() : (
         <div className="space-y-8 pb-2">
       {/* CORE CONFIGURATION Section */}
-      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
+      <div className="space-y-4 rounded-lg border border-line bg-panel p-4">
         <SectionHeader icon={Settings} title="Core configuration" />
 
         <FormField
@@ -591,7 +591,7 @@ export function ToolCreationForm({
       </div>
 
       {/* OPERATION DETAILS Section */}
-      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
+      <div className="space-y-4 rounded-lg border border-line bg-panel p-4">
         <SectionHeader icon={Zap} title="Operation details" />
 
         <FormField
@@ -687,7 +687,7 @@ export function ToolCreationForm({
             name="function_path"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Function Path</FormLabel>
+                <FormLabel>Function path</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app.api.my_function"
@@ -708,7 +708,7 @@ export function ToolCreationForm({
             name="function_name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Function Name</FormLabel>
+                <FormLabel>Function name</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="e.g., myClientFunction"
@@ -729,7 +729,7 @@ export function ToolCreationForm({
             name="provider_app"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Provider App</FormLabel>
+                <FormLabel>Provider app</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app"
@@ -773,7 +773,7 @@ export function ToolCreationForm({
             control={form.control}
             name="pass_parameters_as_json"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
                 <div className="space-y-0.5">
                   <FormLabel>Pass parameters as JSON</FormLabel>
                 </div>
@@ -792,9 +792,9 @@ export function ToolCreationForm({
 
       {/* HTTP Headers Section (for GET/POST) */}
       {selectedType && shouldShowField('http_headers', selectedType) && (
-        <div className="space-y-4 rounded-none border border-line bg-panel p-4">
+        <div className="space-y-4 rounded-lg border border-line bg-panel p-4">
           <div className="flex items-center justify-between">
-            <SectionHeader title="HTTP Headers" />
+            <SectionHeader title="HTTP headers" />
             <Button
               type="button"
               variant="outline"
@@ -803,11 +803,11 @@ export function ToolCreationForm({
               disabled={loading}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add Header
+              Add header
             </Button>
           </div>
           {httpHeaders.length === 0 ? (
-            <div className="text-sm font-body text-steel text-center py-4 border border-dashed rounded-none">
+            <div className="text-sm font-body text-steel text-center py-4 border border-dashed rounded">
               No headers added. Click "Add Header" to add one.
             </div>
           ) : (
@@ -827,7 +827,7 @@ export function ToolCreationForm({
       )}
 
       {/* Parameters Section */}
-      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
+      <div className="space-y-4 rounded-lg border border-line bg-panel p-4">
         <div className="flex items-center justify-between">
           <SectionHeader title={<>Parameters{renderAutoBadge('parameters')}</>} />
           <div className="flex items-center gap-2">
@@ -839,7 +839,7 @@ export function ToolCreationForm({
                 onClick={() => setShowFieldSelector(true)}
                 disabled={loading}
               >
-                Select Fields from DocType
+                Select fields from DocType
               </Button>
             )}
             {selectedType === 'Custom Function' && (
@@ -875,17 +875,17 @@ export function ToolCreationForm({
               disabled={loading}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add Parameter
+              Add parameter
             </Button>
           </div>
         </div>
 
         {parameters.length === 0 ? (
-          <div className="text-sm font-body text-steel text-center py-4 border border-dashed rounded-none">
+          <div className="text-sm font-body text-steel text-center py-4 border border-dashed rounded">
             No parameters added. Click "Add Parameter" to add one.
           </div>
         ) : (
-          <div className="rounded-none border overflow-hidden">
+          <div className="rounded-lg border overflow-hidden">
             <Table>
               <TableHeader>
                 {parameterTable.getHeaderGroups().map((headerGroup) => (
@@ -916,7 +916,7 @@ export function ToolCreationForm({
         )}
 
         {showParamsPreview && (
-          <div className="rounded-none border border-line bg-ink p-4">
+          <div className="rounded-lg border border-line bg-ink p-4">
             <p className="text-xs uppercase tracking-wide text-steel-soft mb-2 font-mono">Parameters JSON schema preview</p>
             <pre className="text-xs overflow-x-auto font-mono text-steel-soft">{JSON.stringify(parameterSchema, null, 2)}</pre>
           </div>
@@ -973,20 +973,21 @@ export function ToolCreationForm({
             {/* CONTRACT (Tool Category + Description, collapsed by default) */}
             <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-3">
               <CollapsibleTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  variant="outline"
+                  className="group h-auto w-full items-center justify-start gap-2 rounded bg-panel px-3 py-2.5 text-left hover:bg-paper-deep"
                   disabled={loading}
                 >
                   <FileText className="w-4 h-4 text-steel-soft shrink-0" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Details</h3>
+                  <h3 className="font-mono text-eyebrow uppercase text-steel shrink-0">Details</h3>
                   {!contractOpen && (
                     <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
                   )}
                   <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
-                </button>
+                </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4 rounded-none border border-line bg-panel p-4">
+              <CollapsibleContent className="space-y-4 rounded-lg border border-line bg-panel p-4">
                 <FormField
                   control={form.control}
                   name="tool_type"
@@ -1047,27 +1048,28 @@ export function ToolCreationForm({
             {/* GUARDRAILS (permission + access switches, collapsed by default) */}
             <Collapsible open={guardrailsOpen} onOpenChange={setGuardrailsOpen} className="space-y-3">
               <CollapsibleTrigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  variant="outline"
+                  className="group h-auto w-full items-center justify-start gap-2 rounded bg-panel px-3 py-2.5 text-left hover:bg-paper-deep"
                   disabled={loading}
                 >
                   <ShieldCheck className="w-4 h-4 text-steel-soft shrink-0" />
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Guardrails</h3>
+                  <h3 className="font-mono text-eyebrow uppercase text-steel shrink-0">Guardrails</h3>
                   {!guardrailsOpen && (
                     <span className="text-sm text-steel truncate ml-1">— {guardrailsSummary}</span>
                   )}
                   <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
-                </button>
+                </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-4 rounded-none border border-line bg-panel p-4">
+              <CollapsibleContent className="space-y-4 rounded-lg border border-line bg-panel p-4">
                 <FormField
                   control={form.control}
                   name="required_permission"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>
-                        Required Permission
+                        Required permission
                         {renderAutoBadge('required_permission')}
                       </FormLabel>
                       <Select
@@ -1102,10 +1104,10 @@ export function ToolCreationForm({
                   control={form.control}
                   name="is_read_only"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                    <FormItem className="flex flex-row items-center justify-between rounded border p-4">
                       <div className="space-y-0.5">
                         <FormLabel>
-                          Read Only
+                          Read only
                           {renderAutoBadge('is_read_only')}
                         </FormLabel>
                         <p className="text-sm text-steel">
@@ -1130,7 +1132,7 @@ export function ToolCreationForm({
                   control={form.control}
                   name="allowed_for_guest"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                    <FormItem className="flex flex-row items-center justify-between rounded border p-4">
                       <div className="space-y-0.5">
                         <FormLabel>Allowed for Guest</FormLabel>
                         <p className="text-sm text-steel">
@@ -1151,7 +1153,7 @@ export function ToolCreationForm({
             </Collapsible>
 
             <div className="flex items-center justify-between gap-2">
-              <SectionHeader icon={Braces} title="Function Definition" />
+              <SectionHeader icon={Braces} title="Function definition" />
               <Button
                 type="button"
                 variant="outline"
@@ -1166,7 +1168,7 @@ export function ToolCreationForm({
             <p className="text-xs text-steel">
               Live schema generated from your current settings — this is what the AI receives.
             </p>
-            <div className="rounded-none border border-line bg-ink p-4 max-h-[70vh] overflow-auto">
+            <div className="rounded-lg border border-line bg-ink p-4 max-h-[70vh] overflow-auto">
               <pre className="text-xs font-mono text-steel-soft whitespace-pre-wrap break-words">
                 {JSON.stringify(functionDefinition, null, 2)}
               </pre>

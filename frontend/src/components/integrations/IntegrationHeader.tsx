@@ -35,7 +35,7 @@ export function IntegrationHeader({
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold capitalize">
+          <h1 className="font-display text-title text-ink capitalize">
             {isNew ? `New ${service.replace(/_/g, ' ')} Integration` : title}
           </h1>
           {!isNew && (

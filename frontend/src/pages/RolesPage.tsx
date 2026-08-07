@@ -60,7 +60,7 @@ function RoleCard({ role }: { role: HufRole }) {
             <div className="text-xs font-medium text-muted-foreground mb-1">{cat.label}</div>
             <div className="flex flex-wrap gap-1">
               {groups[cat.key].map((cap) => (
-                <Badge key={cap} variant="secondary" className="text-xs font-mono">
+                <Badge key={cap} variant="secondary" size="sm" className="font-mono">
                   {cap}
                 </Badge>
               ))}
@@ -80,7 +80,16 @@ function RoleCard({ role }: { role: HufRole }) {
 // Page
 // ---------------------------------------------------------------------------
 
-export default function RolesPage() {
+interface RolesPageProps {
+  /**
+   * True when rendered inside MembersPage's own PageFrame (the People/Roles
+   * switcher already owns the page's single head bar there) — skip this
+   * page's own title/scroll wrapper so /members never shows two titles.
+   */
+  embedded?: boolean;
+}
+
+export default function RolesPage({ embedded = false }: RolesPageProps) {
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -90,11 +99,25 @@ export default function RolesPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const grid = loading ? (
+    <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
+  ) : (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {roles.map((role) => (
+        <RoleCard key={role.role_name} role={role} />
+      ))}
+    </div>
+  );
+
+  if (embedded) {
+    return grid;
+  }
+
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 max-w-5xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
+          <h1 className="font-display text-title text-ink flex items-center gap-2">
             <ShieldCheck className="h-6 w-6" />
             Roles
           </h1>
@@ -103,15 +126,7 @@ export default function RolesPage() {
           </p>
         </div>
 
-        {loading ? (
-          <div className="text-sm text-muted-foreground py-12 text-center">Loading…</div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {roles.map((role) => (
-              <RoleCard key={role.role_name} role={role} />
-            ))}
-          </div>
-        )}
+        {grid}
       </div>
     </div>
   );

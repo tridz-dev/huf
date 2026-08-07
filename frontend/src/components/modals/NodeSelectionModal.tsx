@@ -11,6 +11,7 @@ import {
 } from '../ui/dialog-scroll';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -189,7 +190,7 @@ export function NodeSelectionModal({
     } else if (actionId === 'loop') {
       config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
     } else if (actionId === 'human.approval') {
-      config = { type: 'human.approval', title: 'Approval Required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
+      config = { type: 'human.approval', title: 'Approval required', instructions: '', approval_type: 'role', store_decision_in_context: 'approval' };
     } else if (actionId === 'http-request') {
       config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {
@@ -211,7 +212,7 @@ export function NodeSelectionModal({
 
     if (config.type === 'webhook') {
       return (
-        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-none p-3 bg-paper-deep/20">
+        <div className="space-y-4 mt-4 overflow-y-auto max-h-[300px] pr-2 border rounded-lg p-3 bg-paper-deep/20">
           <div>
             <Label htmlFor="webhook-url">Webhook URL</Label>
             <div className="flex gap-2">
@@ -235,7 +236,7 @@ export function NodeSelectionModal({
             <p className="text-[10px] text-steel-soft mt-1">This is your endpoint. Send data here to trigger this flow.</p>
           </div>
           <div>
-            <Label htmlFor="method">HTTP Method</Label>
+            <Label htmlFor="method">HTTP method</Label>
             <Select
               value={config.method || 'POST'}
               onValueChange={(value) =>
@@ -254,7 +255,7 @@ export function NodeSelectionModal({
             </Select>
           </div>
           <div>
-            <Label htmlFor="api-key">Security — API Key (Optional)</Label>
+            <Label htmlFor="api-key">Security — API key (optional)</Label>
             <Input
               id="api-key"
               value={config.apiKey || ''}
@@ -263,10 +264,10 @@ export function NodeSelectionModal({
             />
           </div>
           <div>
-            <Label htmlFor="headers">Custom Headers (JSON string)</Label>
-            <textarea
+            <Label htmlFor="headers">Custom headers (JSON string)</Label>
+            <Textarea
               id="headers"
-              className="flex min-h-[60px] w-full rounded-none border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
+              className="bg-paper font-mono text-xs"
               value={JSON.stringify(config.headers || {}, null, 2)}
               onChange={(e) => {
                 try {
@@ -281,9 +282,9 @@ export function NodeSelectionModal({
           </div>
           <div>
             <Label htmlFor="body-template">Expected Body Template (JSON for validation or documentation)</Label>
-            <textarea
+            <Textarea
               id="body-template"
-              className="flex min-h-[100px] w-full rounded-none border border-input bg-paper px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-ring"
+              className="min-h-[100px] bg-paper font-mono text-xs"
               value={config.body_template || ''}
               onChange={(e) => setTriggerConfig({ ...config, body_template: e.target.value })}
               placeholder='{ "order_id": "123", "amount": 100 }'
@@ -297,7 +298,7 @@ export function NodeSelectionModal({
       return (
         <div className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="interval-type">Schedule Type</Label>
+            <Label htmlFor="interval-type">Schedule type</Label>
             <Select
               value={config.intervalType}
               onValueChange={(value) =>
@@ -311,7 +312,7 @@ export function NodeSelectionModal({
                 <SelectItem value="minutes">Minutes</SelectItem>
                 <SelectItem value="hours">Hours</SelectItem>
                 <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (Cron)</SelectItem>
+                <SelectItem value="custom">Custom (cron)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -331,7 +332,7 @@ export function NodeSelectionModal({
           )}
           {config.intervalType === 'custom' && (
             <div>
-              <Label htmlFor="cron">Cron Expression</Label>
+              <Label htmlFor="cron">Cron expression</Label>
               <Input
                 id="cron"
                 value={config.cronExpression || ''}
@@ -355,7 +356,7 @@ export function NodeSelectionModal({
       return (
         <div className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="doctype">Document Type</Label>
+            <Label htmlFor="doctype">Document type</Label>
             <Combobox
               options={comboboxOptions}
               value={config.doctype || ''}
@@ -367,7 +368,7 @@ export function NodeSelectionModal({
             />
           </div>
           <div>
-            <Label htmlFor="event">Event Type</Label>
+            <Label htmlFor="event">Event type</Label>
             <Select
               value={config.event}
               onValueChange={(value) =>
@@ -381,9 +382,9 @@ export function NodeSelectionModal({
                 <SelectItem value="save">Save</SelectItem>
                 <SelectItem value="update">Update</SelectItem>
                 <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before Save</SelectItem>
-                <SelectItem value="before-update">Before Update</SelectItem>
-                <SelectItem value="before-delete">Before Delete</SelectItem>
+                <SelectItem value="before-save">Before save</SelectItem>
+                <SelectItem value="before-update">Before update</SelectItem>
+                <SelectItem value="before-delete">Before delete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -432,9 +433,11 @@ export function NodeSelectionModal({
             const isValidComponent = Icon && (typeof Icon === 'function' || (typeof Icon === 'object' && '$$typeof' in Icon));
 
             return (
-              <button
+              <Button
                 key={action.id}
-                className="flex items-center gap-3 p-3 rounded-none border border-line hover:border-ink hover:bg-paper-deep transition-all"
+                type="button"
+                variant="ghost"
+                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -448,7 +451,7 @@ export function NodeSelectionModal({
                     </div>
                   )}
                 </div>
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -492,7 +495,7 @@ export function NodeSelectionModal({
             <Tabs value={triggerSubTab} onValueChange={(v) => { setTriggerSubTab(v as TriggerSubTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
               <TabsList layout="grid" cols={2} className="flex-shrink-0">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
-                <TabsTrigger value="ai-agents">AI & Agents</TabsTrigger>
+                <TabsTrigger value="ai-agents">AI & agents</TabsTrigger>
               </TabsList>
 
               <div className="flex-1 overflow-y-auto mt-4 scrollbar-hidden">
@@ -512,7 +515,7 @@ export function NodeSelectionModal({
                     ) : (
                       <div>
                         <h3 className="text-sm font-medium mb-3 text-steel">
-                          Available Agents
+                          Available agents
                         </h3>
                         <div className="space-y-2">
                           {agents.filter((agent) => {
@@ -529,10 +532,12 @@ export function NodeSelectionModal({
                             const summary = agent.description?.slice(0, 120) || 'No description';
 
                             return (
-                            <button
+                            <Button
                               key={agent.name}
-                              className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === agent.name
-                                ? 'border-signal bg-panel'
+                              type="button"
+                              variant="ghost"
+                              className={`flex h-auto w-full items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === agent.name
+                                ? 'border-signal bg-panel hover:bg-panel'
                                 : 'border-line hover:border-ink hover:bg-paper-deep'
                                 }`}
                               onClick={() => {
@@ -558,11 +563,11 @@ export function NodeSelectionModal({
                               <div className="text-left flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <div className="text-sm font-medium">{agent.agent_name || agent.name}</div>
-                                  <Badge variant={status === 'Active' ? 'default' : 'secondary'} className="text-xs">
+                                  <Badge variant={status === 'Active' ? 'default' : 'secondary'} size="sm">
                                     {status}
                                   </Badge>
                                   {agent.allow_chat === 1 && (
-                                    <Badge variant="outline" className="text-xs">Chat</Badge>
+                                    <Badge variant="outline" size="sm">Chat</Badge>
                                   )}
                                 </div>
                                 <div className="text-xs text-steel-soft line-clamp-1">
@@ -573,7 +578,7 @@ export function NodeSelectionModal({
                                   {agent.prompt_mode === 'Template' ? ' • Template' : ''}
                                 </div>
                               </div>
-                            </button>
+                            </Button>
                           );
                           })}
                         </div>
@@ -590,10 +595,12 @@ export function NodeSelectionModal({
                             {highlightTriggers.map((trigger) => {
                               const Icon = iconMap[trigger.icon || 'Webhook'];
                               return (
-                                <button
+                                <Button
                                   key={trigger.id}
-                                  className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${selectedItem === trigger.id
-                                    ? 'border-signal bg-panel'
+                                  type="button"
+                                  variant="ghost"
+                                  className={`flex h-auto items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
+                                    ? 'border-signal bg-panel hover:bg-panel'
                                     : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
@@ -604,7 +611,7 @@ export function NodeSelectionModal({
                                   <div className="text-left flex-1 min-w-0">
                                     <div className="text-sm font-medium">{trigger.name}</div>
                                   </div>
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
@@ -620,10 +627,12 @@ export function NodeSelectionModal({
                             {popularTriggers.map((trigger) => {
                               const Icon = iconMap[trigger.icon || 'Webhook'];
                               return (
-                                <button
+                                <Button
                                   key={trigger.id}
-                                  className={`flex items-center gap-3 p-3 rounded-lg border w-full transition-all ${selectedItem === trigger.id
-                                    ? 'border-signal bg-panel'
+                                  type="button"
+                                  variant="ghost"
+                                  className={`flex h-auto w-full items-center justify-start gap-3 rounded-lg border p-3 font-normal ${selectedItem === trigger.id
+                                    ? 'border-signal bg-panel hover:bg-panel'
                                     : 'border-line hover:border-ink hover:bg-paper-deep'
                                     }`}
                                   onClick={() => handleSelectTrigger(trigger.id)}
@@ -639,7 +648,7 @@ export function NodeSelectionModal({
                                       </div>
                                     )}
                                   </div>
-                                </button>
+                                </Button>
                               );
                             })}
                           </div>
@@ -671,7 +680,7 @@ export function NodeSelectionModal({
           </Button>
           {mainTab === 'triggers' && (
             <Button onClick={handleSaveTrigger} disabled={!selectedItem}>
-              Save Configuration
+              Save configuration
             </Button>
           )}
         </DialogScrollFooter>

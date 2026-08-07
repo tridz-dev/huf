@@ -3,12 +3,15 @@
  *
  * Tokenizes on whitespace boundaries (keeping the whitespace tokens so the
  * original text can be reassembled verbatim), then runs an LCS over the token
- * sequences. Tokens outside the LCS are marked `changed` on their side.
+ * sequences. Tokens outside the LCS are marked `added` (present in B only) or
+ * `removed` (present in A only) on their respective side.
  */
+
+export type DiffSegmentType = 'unchanged' | 'added' | 'removed';
 
 export interface DiffSegment {
   text: string;
-  changed: boolean;
+  type: DiffSegmentType;
 }
 
 export interface WordDiff {
@@ -23,13 +26,13 @@ function tokenize(text: string): string[] {
   return text.split(/(\s+)/).filter((t) => t.length > 0);
 }
 
-function pushSegment(segments: DiffSegment[], text: string, changed: boolean) {
+function pushSegment(segments: DiffSegment[], text: string, type: DiffSegmentType) {
   if (!text) return;
   const last = segments[segments.length - 1];
-  if (last && last.changed === changed) {
+  if (last && last.type === type) {
     last.text += text;
   } else {
-    segments.push({ text, changed });
+    segments.push({ text, type });
   }
 }
 
@@ -39,8 +42,8 @@ export function wordDiff(textA: string, textB: string): WordDiff {
 
   if (tokensA.length > MAX_TOKENS || tokensB.length > MAX_TOKENS) {
     return {
-      a: [{ text: textA, changed: true }],
-      b: [{ text: textB, changed: true }],
+      a: [{ text: textA, type: 'removed' }],
+      b: [{ text: textB, type: 'added' }],
     };
   }
 
@@ -65,20 +68,20 @@ export function wordDiff(textA: string, textB: string): WordDiff {
   let j = 0;
   while (i < rows && j < cols) {
     if (tokensA[i] === tokensB[j]) {
-      pushSegment(a, tokensA[i], false);
-      pushSegment(b, tokensB[j], false);
+      pushSegment(a, tokensA[i], 'unchanged');
+      pushSegment(b, tokensB[j], 'unchanged');
       i++;
       j++;
     } else if (lengths[(i + 1) * stride + j] >= lengths[i * stride + (j + 1)]) {
-      pushSegment(a, tokensA[i], true);
+      pushSegment(a, tokensA[i], 'removed');
       i++;
     } else {
-      pushSegment(b, tokensB[j], true);
+      pushSegment(b, tokensB[j], 'added');
       j++;
     }
   }
-  while (i < rows) pushSegment(a, tokensA[i++], true);
-  while (j < cols) pushSegment(b, tokensB[j++], true);
+  while (i < rows) pushSegment(a, tokensA[i++], 'removed');
+  while (j < cols) pushSegment(b, tokensB[j++], 'added');
 
   return { a, b };
 }

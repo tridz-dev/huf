@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { History, Loader2 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
 import { IconRailButton } from '@/components/IconRail';
 import { getConversationsByAgent, ChatListItem } from '@/services/chatApi';
 import { formatTimeAgo } from '@/utils/time';
@@ -52,17 +53,18 @@ export function HubRecentChats({ onSelect }: HubRecentChatsProps) {
         ) : (
           <div className="max-h-80 overflow-y-auto">
             {chats.map(chat => (
-              <button
+              <Button
                 key={chat.id}
+                variant="ghost"
                 onClick={() => {
                   setOpen(false);
                   onSelect(chat.id);
                 }}
-                className="w-full px-3 py-2 text-left rounded-md hover:bg-paper-deep transition-colors group"
+                className="group h-auto w-full flex-col items-start rounded-md px-3 py-2 text-left"
               >
                 <p className="text-sm text-ink truncate">{chat.title}</p>
                 <p className="text-xs text-steel-soft mt-0.5">{formatTimeAgo(chat.timestamp)}</p>
-              </button>
+              </Button>
             ))}
           </div>
         )}

@@ -8,7 +8,7 @@ export function AiProvidersHeaderActions() {
   return (
     <Button variant="display" onClick={onAddProvider} size="sm">
       <Plus className="w-4 h-4 mr-2" />
-      Add Provider
+      Add provider
     </Button>
   );
 }

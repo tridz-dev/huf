@@ -1807,6 +1807,23 @@ DOCUMENT_ARTIFACT_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "show_artifact",
+		"description": (
+			"Open a document artifact (created via <artifact type=\"document\">) in the user's "
+			"right-side preview pane, without requiring the user to click anything. Use this "
+			"right after producing or updating a document the user should see immediately, or "
+			"when returning to a document created earlier in the conversation. As with "
+			"export_artifact and redline_artifact, this only works for artifacts that ALREADY "
+			"exist - a document's id is not known until the message that created it is saved, so "
+			"call list_document_artifacts first if you don't already know the id."
+		),
+		"function_path": "huf.ai.tools.document_artifact.handle_show_artifact",
+		"category": "Document Tools",
+		"parameters": [
+			_p("artifact_id", required=True, description="The id/name of the Artifact to open in the preview pane"),
+		],
+	},
+	{
 		"tool_name": "redline_artifact",
 		"description": (
 			"Apply tracked-changes (Word redlining) edits to a document artifact, producing a "

@@ -138,7 +138,7 @@ export function LinkFieldInput({ targetDoctype, value, onChange, disabled }: Lin
         value={value || ''}
         disabled
         placeholder="No target table selected"
-        className="h-8 text-sm bg-panel border-line text-steel rounded-none"
+        className="h-8 text-sm bg-panel border-line text-steel rounded"
       />
     );
   }
