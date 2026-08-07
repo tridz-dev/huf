@@ -410,13 +410,63 @@ TRELLO_TOOLS = [
 
 NOTION_TOOLS = [
 	{
+		"tool_name": "notion_search",
+		"description": (
+			"Search Notion pages and databases by title. Use this to find page/database IDs "
+			"before calling other Notion tools. Requires NOTION_API_KEY."
+		),
+		"function_path": "huf.ai.tools.notion.handle_search",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("query", description="Text to search for in page/database titles"),
+			_p("object_type", description="Limit results to 'page' or 'database'"),
+			_p("page_size", type="int", description="Max results to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "notion_list_databases",
+		"description": (
+			"List Notion databases the integration can access. Call this first to discover "
+			"valid database_id values. Requires NOTION_API_KEY."
+		),
+		"function_path": "huf.ai.tools.notion.handle_list_databases",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("query", description="Optional title filter"),
+			_p("page_size", type="int", description="Max results to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "notion_get_database",
+		"description": (
+			"Get a Notion database schema (property names, types, and select/status options). "
+			"Requires NOTION_API_KEY; defaults to NOTION_DATABASE_ID if database_id is omitted."
+		),
+		"function_path": "huf.ai.tools.notion.handle_get_database",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("database_id", description="Notion database ID (defaults to NOTION_DATABASE_ID credential)"),
+		],
+	},
+	{
 		"tool_name": "notion_query_database",
-		"description": "Query a Notion database, optionally with a filter/sort payload. Requires NOTION_API_KEY; defaults to NOTION_DATABASE_ID if database_id is omitted.",
+		"description": (
+			"Query rows in a Notion database. Use notion_get_database first to learn property names. "
+			"Requires NOTION_API_KEY; defaults to NOTION_DATABASE_ID if database_id is omitted."
+		),
 		"function_path": "huf.ai.tools.notion.handle_query_database",
 		"category": "Project Management Tools",
 		"parameters": [
 			_p("database_id", description="Notion database ID (defaults to NOTION_DATABASE_ID credential)"),
 			_p("page_size", type="int", description="Max results to return (default 20)"),
+			_p(
+				"filter",
+				description='Optional Notion filter JSON, e.g. {"property":"Status","status":{"equals":"Done"}}',
+			),
+			_p(
+				"sorts",
+				description='Optional sort JSON array, e.g. [{"property":"Due","direction":"ascending"}]',
+			),
 		],
 	},
 	{
@@ -427,14 +477,59 @@ NOTION_TOOLS = [
 		"parameters": [_p("page_id", required=True, description="Notion page ID")],
 	},
 	{
+		"tool_name": "notion_get_page_content",
+		"description": (
+			"Read the body content of a Notion page as plain text (paragraphs, headings, lists). "
+			"Requires NOTION_API_KEY."
+		),
+		"function_path": "huf.ai.tools.notion.handle_get_page_content",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("page_id", required=True, description="Notion page ID"),
+			_p("page_size", type="int", description="Max blocks to return (default 50)"),
+		],
+	},
+	{
 		"tool_name": "notion_create_page",
-		"description": "Create a page (row) in a Notion database with a title property. Requires NOTION_API_KEY; defaults to NOTION_DATABASE_ID if database_id is omitted.",
+		"description": (
+			"Create a page (row) in a Notion database. Call notion_list_databases or notion_get_database "
+			"first to get database_id and property names. Requires NOTION_API_KEY."
+		),
 		"function_path": "huf.ai.tools.notion.handle_create_page",
 		"category": "Project Management Tools",
 		"parameters": [
 			_p("title", required=True, description="Title for the new page"),
 			_p("database_id", description="Notion database ID (defaults to NOTION_DATABASE_ID credential)"),
+			_p("title_property", description="Name of the title property column (default 'Name')"),
+			_p(
+				"properties",
+				description="Optional extra property values as Notion JSON, merged into the create payload",
+			),
 		],
+	},
+	{
+		"tool_name": "notion_update_page",
+		"description": (
+			"Update properties on an existing Notion page. Pass properties as Notion API JSON. "
+			"Requires NOTION_API_KEY."
+		),
+		"function_path": "huf.ai.tools.notion.handle_update_page",
+		"category": "Project Management Tools",
+		"parameters": [
+			_p("page_id", required=True, description="Notion page ID"),
+			_p(
+				"properties",
+				required=True,
+				description='Property updates as JSON, e.g. {"Status":{"status":{"name":"Done"}}}',
+			),
+		],
+	},
+	{
+		"tool_name": "notion_archive_page",
+		"description": "Archive (soft-delete) a Notion page. Requires NOTION_API_KEY.",
+		"function_path": "huf.ai.tools.notion.handle_archive_page",
+		"category": "Project Management Tools",
+		"parameters": [_p("page_id", required=True, description="Notion page ID")],
 	},
 ]
 
