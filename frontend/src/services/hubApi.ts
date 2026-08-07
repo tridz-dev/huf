@@ -43,6 +43,21 @@ export interface ModelCatalogProposal {
   already_exists?: boolean;
 }
 
+export interface HubSecretTarget {
+  type: 'provider_api_key' | 'integration_credential';
+  provider_name?: string;
+  integration_settings?: string;
+  credential_key?: string;
+}
+
+export interface HubSecretRequest {
+  request_id: string;
+  conversation_id?: string | null;
+  target: HubSecretTarget;
+  target_label: string;
+  expires_in: number;
+}
+
 // ---------------------------------------------------------------------------
 // Hub readiness / provider introspection
 // ---------------------------------------------------------------------------
@@ -79,5 +94,17 @@ export async function getModelCatalogProposals(): Promise<ModelCatalogProposal[]
 export async function approveModelProposals(modelNames: string[]): Promise<void> {
   await call.post('huf.ai.hub_api.approve_model_proposals', {
     model_names: modelNames,
+  });
+}
+
+export async function submitHubSecret(
+  requestId: string,
+  secret: string,
+  conversationId?: string,
+): Promise<void> {
+  await call.post('huf.ai.hub_secret.submit_hub_secret', {
+    request_id: requestId,
+    secret,
+    conversation_id: conversationId,
   });
 }

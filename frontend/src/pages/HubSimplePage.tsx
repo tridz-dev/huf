@@ -8,7 +8,7 @@ import { HubConversationView } from '@/components/hub/HubConversationView';
 import { AutoGrowTextarea } from '@/components/hub/AutoGrowTextarea';
 import { HubRecentChats } from '@/components/hub/HubRecentChats';
 import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
-import { getHubReadiness, HubReadiness } from '@/services/hubApi';
+import { getHubReadiness, HubReadiness, submitHubSecret } from '@/services/hubApi';
 import { getConversationMessages } from '@/services/chatApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
 import {
@@ -332,6 +332,8 @@ export default function HubSimplePage() {
                 onNewChat={handleNewChat}
                 onHome={handleGoHome}
                 onSendText={sendText}
+                onSubmitSecure={submitHubSecret}
+                conversationId={conversationId}
                 isStreaming={isStreaming}
                 remediation={readiness?.remediation}
               />

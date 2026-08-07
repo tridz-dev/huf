@@ -13,9 +13,10 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.hub_secret import create_secret_request
 from huf.ai.tools.builder import _as_bool, _require_builder_capability
 
-ASK_USER_KINDS = ("yes_no", "single_choice", "multi_choice", "input", "textarea")
+ASK_USER_KINDS = ("yes_no", "single_choice", "multi_choice", "input", "textarea", "password")
 
 # Kinds that require a non-empty options list.
 _CHOICE_KINDS = ("single_choice", "multi_choice")
@@ -93,12 +94,16 @@ def ask_user(
 	allow_free_text: bool = True,
 	suggested_answers=None,
 	note: str | None = None,
+	secure_target=None,
+	conversation_id=None,
+	agent_name=None,
 ) -> dict:
 	"""Build a validated ask-user block for the hub chat to render.
 
 	Read-only: returns a cleaned payload plus the fenced block to include
 	verbatim in the assistant reply. kind must be one of
-	yes_no|single_choice|multi_choice|input|textarea. Choice kinds require
+	yes_no|single_choice|multi_choice|input|textarea|password. Password requires
+	secure_target as an approved provider or integration destination. Choice kinds require
 	options as [{id, label, icon?, description?}]; icon names outside the
 	curated lucide allowlist are dropped with a warning.
 	"""
@@ -112,6 +117,10 @@ def ask_user(
 		frappe.throw(
 			_("'kind' must be one of: {0}.").format(", ".join(ASK_USER_KINDS))
 		)
+	if kind == "password" and secure_target is None:
+		frappe.throw(_("kind 'password' requires an approved secure_target."))
+	if kind != "password" and secure_target is not None:
+		frappe.throw(_("secure_target can only be used with kind 'password'."))
 
 	cleaned_options, invalid_icons = _clean_options(_parse_options(options))
 	if kind in _CHOICE_KINDS and not cleaned_options:
@@ -121,11 +130,16 @@ def ask_user(
 		"question": question,
 		"kind": kind,
 		"options": cleaned_options,
-		"allow_free_text": _as_bool(allow_free_text),
+		"allow_free_text": False if kind == "password" else _as_bool(allow_free_text),
 	}
 
-	answers = _parse_options(suggested_answers)
-	payload["suggested_answers"] = [str(answer) for answer in answers if answer]
+	if kind != "password":
+		answers = _parse_options(suggested_answers)
+		payload["suggested_answers"] = [str(answer) for answer in answers if answer]
+	else:
+		payload["secure_request"] = create_secret_request(
+			secure_target, conversation_id=conversation_id, agent_name=agent_name
+		)
 
 	if note:
 		payload["note"] = str(note)
