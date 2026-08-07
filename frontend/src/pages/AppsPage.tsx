@@ -402,15 +402,28 @@ function AppsPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={loading}
 					emptyState={
-						<EmptyState
-							icon={AppWindow}
-							title={apps.length > 0 ? 'No apps match your filters' : 'No apps available yet'}
-							description={
-								apps.length > 0
-									? 'Try a different search or category.'
-									: 'Installed apps that depend on HUF will appear here.'
-							}
-						/>
+						apps.length > 0 ? (
+							<EmptyState
+								variant="no-results"
+								icon={AppWindow}
+								title="No apps found"
+								filterTerm={search}
+								secondaryAction={{
+									label: 'Clear filters',
+									onClick: () => {
+										setSearch('');
+										setCategory('All');
+									},
+								}}
+							/>
+						) : (
+							<EmptyState
+								variant="passive"
+								icon={AppWindow}
+								title="No apps available yet"
+								description="Installed apps that depend on HUF will appear here."
+							/>
+						)
 					}
 					renderItem={(app) => <AppCard app={app} onToggleEnabled={handleToggleEnabled} />}
 					keyExtractor={(app) => app.app_id}

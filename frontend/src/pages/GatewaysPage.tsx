@@ -330,6 +330,7 @@ export default function GatewaysPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         emptyState={
           <EmptyState
+            variant="create"
             icon={Network}
             title="No gateways"
             description="Connect WhatsApp, Messenger, Instagram, Telegram, or Slack to let people message your agents."

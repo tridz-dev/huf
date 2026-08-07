@@ -203,12 +203,23 @@ function DataPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={initialLoading}
 					emptyState={
-						<EmptyState
-							icon={Database}
-							title="No data tables"
-							description="Create your first table to start managing structured data."
-							action={{ label: 'New table', onClick: () => navigate('/data/new') }}
-						/>
+						search ? (
+							<EmptyState
+								variant="no-results"
+								icon={Database}
+								title="No data tables found"
+								filterTerm={search}
+								secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+							/>
+						) : (
+							<EmptyState
+								variant="create"
+								icon={Database}
+								title="No data tables"
+								description="Create your first table to start managing structured data."
+								action={{ label: 'New table', onClick: () => navigate('/data/new') }}
+							/>
+						)
 					}
 					renderItem={() => <></>}
 					keyExtractor={() => ''}

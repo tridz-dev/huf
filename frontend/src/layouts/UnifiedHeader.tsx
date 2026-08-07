@@ -5,11 +5,10 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
-// import { ApprovalsBell } from '../components/ApprovalsBell';  // TEMP disabled: see flow_api.py get_pending_approvals
+import { ApprovalsBell } from '../components/ApprovalsBell';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -18,10 +17,12 @@ interface UnifiedHeaderProps {
 
 /**
  * Ancestry-only breadcrumb: renders the chain of ancestors leading up to the
- * current page, but never the trailing/current-page crumb. Used inside
- * PageFrame's 52px bar, where the h1 already names the page once — repeating
- * that name in a breadcrumb would name the page twice. Renders nothing when
- * there is no real ancestry (a single-item or empty breadcrumb list).
+ * current page, but never the trailing/current-page crumb. Used both inside
+ * PageFrame's 52px bar and by the standalone 60px topbar (via UnifiedHeader
+ * below) — in both places the page itself already names the current record
+ * once (an h1, InlineEditName, or similar), so repeating that name in the
+ * breadcrumb would name the page twice. Renders nothing when there is no
+ * real ancestry (a single-item or empty breadcrumb list).
  */
 export function AncestryCrumb({ breadcrumbs }: { breadcrumbs?: BreadcrumbItemType[] }) {
   if (!breadcrumbs || breadcrumbs.length < 2) return null;
@@ -87,32 +88,14 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     return 'HufAI';
   };
 
+  const ancestryCrumb = <AncestryCrumb breadcrumbs={breadcrumbs} />;
+  const hasAncestry = !!breadcrumbs && breadcrumbs.length >= 2;
+
   return (
     <div className="flex items-center justify-between flex-1">
       <div className="flex items-center gap-2">
-        {breadcrumbs && breadcrumbs.length > 0 ? (
-          <Breadcrumb>
-            <BreadcrumbList>
-              {breadcrumbs.map((crumb, index) => (
-                <Fragment key={index}>
-                <div className="flex items-center">
-                  <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
-                    {index === breadcrumbs.length - 1 ? (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                    ) : crumb.href ? (
-                      <BreadcrumbLink href={crumb.href} asChild>
-                        <Link to={crumb.href}>{crumb.label}</Link>
-                      </BreadcrumbLink>
-                    ) : (
-                      <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
-                    )}
-                  </BreadcrumbItem>
-                </div>
-                {index < breadcrumbs.length - 1 && <BreadcrumbSeparator className="hidden md:block mt-0.5" />}
-                </Fragment>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
+        {hasAncestry ? (
+          ancestryCrumb
         ) : (
           <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{getPageTitle()}</span>
         )}
@@ -129,7 +112,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
       </div> */}
 
       <div className="flex items-center gap-2">
-        {/* <ApprovalsBell />  TEMP disabled: get_pending_approvals returns 403 even for Admin */}
+        <ApprovalsBell />
         {actions}
       </div>
     </div>

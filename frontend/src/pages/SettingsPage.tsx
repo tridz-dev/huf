@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentSettingsTab } from '@/components/settings/AgentSettingsTab';
 import { VoiceSettingsTab } from '@/components/settings/VoiceSettingsTab';
+import { PageFrame } from '@/layouts/PageFrame';
 
 export { SettingsPage };
 export default SettingsPage;
@@ -24,30 +25,27 @@ function SettingsPage() {
   };
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        <div>
-          <h1 className="font-display text-title text-ink">Settings</h1>
-          <p className="text-sm text-steel">
-            Defaults and provider configuration shared across agents.
-          </p>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
+    <Tabs value={activeTab} onValueChange={handleTabChange}>
+      <PageFrame
+        title="Settings"
+        meta="Defaults and provider configuration shared across agents"
+        filters={
           <TabsList>
             <TabsTrigger value="agent">Agent defaults</TabsTrigger>
             <TabsTrigger value="voice">Voice / STT</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="agent" className="mt-4">
+        }
+      >
+        <div className="max-w-4xl mx-auto">
+          <TabsContent value="agent" className="mt-0">
             <AgentSettingsTab />
           </TabsContent>
 
-          <TabsContent value="voice" className="mt-4">
+          <TabsContent value="voice" className="mt-0">
             <VoiceSettingsTab />
           </TabsContent>
-        </Tabs>
-      </div>
-    </div>
+        </div>
+      </PageFrame>
+    </Tabs>
   );
 }

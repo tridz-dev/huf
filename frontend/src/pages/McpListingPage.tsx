@@ -99,11 +99,23 @@ export default function McpListingPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Server}
-            title="No MCP servers"
-            description="No MCP servers have been connected yet."
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Server}
+              title="No MCP servers found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Server}
+              title="No MCP servers"
+              description="No MCP servers have been connected yet."
+              action={{ label: 'New MCP server', onClick: () => navigate('/mcp/new') }}
+            />
+          )
         }
         renderItem={(server) => {
           const status = getMcpStatus(server);

@@ -93,12 +93,29 @@ export function IntegrationServicesListingPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Puzzle}
-            title="No integration services"
-            description="Define a service catalog to describe credentials and connection settings."
-            action={{ label: 'New service', onClick: () => navigate('/integration-services/new') }}
-          />
+          search || categoryFilter !== 'all' ? (
+            <EmptyState
+              variant="no-results"
+              icon={Puzzle}
+              title="No integration services found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('category', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Puzzle}
+              title="No integration services"
+              description="Define a service catalog to describe credentials and connection settings."
+              action={{ label: 'New service', onClick: () => navigate('/integration-services/new') }}
+            />
+          )
         }
         renderItem={(service) => {
           const identity = getServiceIdentity(service.service_name);

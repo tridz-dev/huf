@@ -113,12 +113,29 @@ function KnowledgeSourcesPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={BookOpen}
-            title="No knowledge sources"
-            description="No knowledge sources have been added yet."
-            action={{ label: 'New knowledge source', onClick: () => navigate('/knowledge/new') }}
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={BookOpen}
+              title="No knowledge sources found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={BookOpen}
+              title="No knowledge sources"
+              description="No knowledge sources have been added yet."
+              action={{ label: 'New knowledge source', onClick: () => navigate('/knowledge/new') }}
+            />
+          )
         }
         renderItem={(source) => {
           const statusLabel = getStatusLabel(source);

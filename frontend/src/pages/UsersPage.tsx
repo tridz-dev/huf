@@ -269,12 +269,29 @@ export default function UsersPage() {
       {loading ? (
         <div className="text-sm font-body text-steel-soft py-12 text-center">Loading…</div>
       ) : filteredUsers.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No users"
-          description="Invite a user to give them access to Huf."
-          action={{ label: 'Invite user', onClick: () => setShowInvite(true) }}
-        />
+        search || statusFilter !== 'all' ? (
+          <EmptyState
+            variant="no-results"
+            icon={Users}
+            title="No users found"
+            filterTerm={search}
+            secondaryAction={{
+              label: 'Clear filters',
+              onClick: () => {
+                setSearch('');
+                setStatusFilter('all');
+              },
+            }}
+          />
+        ) : (
+          <EmptyState
+            variant="create"
+            icon={Users}
+            title="No users"
+            description="Invite a user to give them access to Huf."
+            action={{ label: 'Invite user', onClick: () => setShowInvite(true) }}
+          />
+        )
       ) : (
         <div className="overflow-x-auto border border-line bg-panel">
           <Table className="w-full min-w-[32rem] table-fixed text-sm">

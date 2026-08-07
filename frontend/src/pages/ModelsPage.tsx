@@ -329,12 +329,23 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Cpu}
-            title="No models"
-            description="Add a model to use with your AI providers."
-            action={{ label: 'Add model', onClick: handleAddModel }}
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Cpu}
+              title="No models found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Cpu}
+              title="No models"
+              description="Add a model to use with your AI providers."
+              action={{ label: 'Add model', onClick: handleAddModel }}
+            />
+          )
         }
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);

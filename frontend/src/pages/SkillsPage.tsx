@@ -173,12 +173,32 @@ export function SkillsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Sparkles}
-            title="No skills"
-            description="Create a skill to get started."
-            action={{ label: 'New skill', onClick: () => navigate('/skills/new') }}
-          />
+          search ||
+          (filters.status && filters.status !== 'all') ||
+          (filters.source_type && filters.source_type !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Sparkles}
+              title="No skills found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                  setFilter('source_type', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Sparkles}
+              title="No skills"
+              description="Create a skill to get started."
+              action={{ label: 'New skill', onClick: () => navigate('/skills/new') }}
+            />
+          )
         }
         renderItem={(skill) => (
           <ItemCard

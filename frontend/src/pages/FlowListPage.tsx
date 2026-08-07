@@ -47,7 +47,7 @@ export default FlowListPage;
 
 function FlowListPage() {
   const navigate = useNavigate();
-  const { setActiveFlow } = useFlowContext();
+  const { setActiveFlow, createFlow } = useFlowContext();
   const [showSettings, setShowSettings] = useState(false);
 
   // Memoize fetchFn with NO dependencies to prevent ANY re-renders
@@ -125,6 +125,24 @@ function FlowListPage() {
     }
   };
 
+  const handleNewFlow = async () => {
+    try {
+      const newFlow = await createFlow('New Flow', 'Uncategorized');
+      navigate(`/flows/${newFlow.id}`);
+    } catch (err) {
+      toast.error('Failed to create flow', {
+        description: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  };
+
+  const isFiltered =
+    !!search || (filters.status && filters.status !== 'all') || (filters.category && filters.category !== 'all');
+  const handleClearFilters = () => {
+    setSearch('');
+    setFilters({});
+  };
+
   return (
     <PageFrame
       title="Flows"
@@ -156,11 +174,23 @@ function FlowListPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={loading}
         emptyState={
-          <EmptyState
-            icon={Workflow}
-            title="No flows"
-            description="No flows have been created yet."
-          />
+          isFiltered ? (
+            <EmptyState
+              variant="no-results"
+              icon={Workflow}
+              title="No flows found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear filters', onClick: handleClearFilters }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Workflow}
+              title="No flows"
+              description="No flows have been created yet."
+              action={{ label: 'New flow', onClick: handleNewFlow }}
+            />
+          )
         }
         renderItem={(flow) => (
           <ItemCard

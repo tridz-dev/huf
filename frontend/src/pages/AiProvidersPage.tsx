@@ -462,12 +462,23 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Cloud}
-            title="No providers"
-            description="Add an AI provider to connect models and start building agents."
-            action={{ label: 'Add provider', onClick: handleAddProvider }}
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Cloud}
+              title="No providers found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Cloud}
+              title="No providers"
+              description="Add an AI provider to connect models and start building agents."
+              action={{ label: 'Add provider', onClick: handleAddProvider }}
+            />
+          )
         }
         renderItem={(provider) => {
           const providerModels = models.filter(m => m.provider === provider.name);

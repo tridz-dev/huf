@@ -147,19 +147,36 @@ export function IntegrationSettingsListingPage({
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Link}
-            title={kind === 'channels' ? 'No channels' : 'No integrations'}
-            description={
-              kind === 'channels'
-                ? 'No messaging channels have been connected yet.'
-                : 'No integrations have been connected yet.'
-            }
-            action={{
-              label: kind === 'channels' ? 'Add channel' : 'Add integration',
-              onClick: () => setCatalogOpen(true),
-            }}
-          />
+          search || categoryFilter !== 'all' ? (
+            <EmptyState
+              variant="no-results"
+              icon={Link}
+              title={kind === 'channels' ? 'No channels found' : 'No integrations found'}
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setCategoryFilter('all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Link}
+              title={kind === 'channels' ? 'No channels' : 'No integrations'}
+              description={
+                kind === 'channels'
+                  ? 'No messaging channels have been connected yet.'
+                  : 'No integrations have been connected yet.'
+              }
+              action={{
+                label: kind === 'channels' ? 'Add channel' : 'Add integration',
+                onClick: () => setCatalogOpen(true),
+              }}
+            />
+          )
         }
         renderItem={(setting) => {
           const category = serviceCategoryMap.get(setting.service);

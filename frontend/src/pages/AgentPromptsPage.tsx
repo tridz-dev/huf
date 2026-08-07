@@ -187,12 +187,29 @@ export function AgentPromptsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : prompts.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No prompts"
-            description="Create a prompt template to share across agents."
-            action={{ label: 'New prompt', onClick: () => navigate('/prompts/new') }}
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={FileText}
+              title="No prompts found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={FileText}
+              title="No prompts"
+              description="Create a prompt template to share across agents."
+              action={{ label: 'New prompt', onClick: () => navigate('/prompts/new') }}
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

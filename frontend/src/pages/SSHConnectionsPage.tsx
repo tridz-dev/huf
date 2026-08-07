@@ -212,11 +212,29 @@ export function SSHConnectionsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : connections.length === 0 ? (
-          <EmptyState
-            icon={Terminal}
-            title="No SSH connections"
-            description="No SSH connections have been configured yet."
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Terminal}
+              title="No SSH connections found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Terminal}
+              title="No SSH connections"
+              description="No SSH connections have been configured yet."
+              action={{ label: 'New SSH connection', onClick: () => navigate('/ssh-connections/new') }}
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

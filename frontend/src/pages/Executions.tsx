@@ -350,11 +350,30 @@ export default function Executions() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : runs.length === 0 ? (
-          <EmptyState
-            icon={Activity}
-            title="No executions"
-            description="No agent runs have been recorded yet."
-          />
+          !!search || (filters.status && filters.status !== 'all') || (filters.agents && filters.agents !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Activity}
+              title="No executions found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                  setFilter('agents', 'all');
+                  updateSearchParams({ q: '', status: 'all', agents: 'all' });
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="passive"
+              icon={Activity}
+              title="No executions"
+              description="No agent runs have been recorded yet."
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

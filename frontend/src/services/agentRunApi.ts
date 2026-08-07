@@ -23,6 +23,65 @@ export interface AgentRunDoc {
 }
 
 /**
+ * One child Agent Run — a step within a parent run's execution trace
+ * (sub-agent spawn or orchestration step). See `parent_run` / `is_child`
+ * / `sequence` on the Agent Run doctype.
+ */
+export interface AgentRunStep {
+  name: string;
+  sequence?: number | null;
+  agent?: string | null;
+  run_kind?: string | null;
+  status?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost?: number | null;
+  error_code?: string | null;
+  error_message?: string | null;
+}
+
+/**
+ * Fetch the child runs (trace steps) of a parent Agent Run, in execution
+ * order. Returns an empty array — never a fabricated step — when the run
+ * has no children, which is the common case for a direct (non-orchestrated)
+ * run.
+ */
+export async function getChildRuns(parentRunId: string): Promise<AgentRunStep[]> {
+  if (!parentRunId) return [];
+  try {
+    const rows = await db.getDocList(doctype['Agent Run'], {
+      fields: [
+        'name',
+        'sequence',
+        'agent',
+        'run_kind',
+        'status',
+        'start_time',
+        'end_time',
+        'provider',
+        'model',
+        'input_tokens',
+        'output_tokens',
+        'cost',
+        'error_code',
+        'error_message',
+      ],
+      filters: [['parent_run', '=', parentRunId]] as Filter<Record<string, unknown>>[],
+      orderBy: { field: 'sequence', order: 'asc' },
+      limit: 500,
+    });
+    return rows as AgentRunStep[];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching run trace');
+    return [];
+  }
+}
+
+/**
  * Pagination parameters for fetching agent runs
  */
 export interface GetAgentRunsParams {

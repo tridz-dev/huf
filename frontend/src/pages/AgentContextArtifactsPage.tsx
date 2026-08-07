@@ -117,11 +117,29 @@ function AgentContextArtifactsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : artifacts.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No artifacts"
-            description="No context artifacts have been stored yet."
-          />
+          (filters.artifact_type && filters.artifact_type !== 'all') ||
+          (filters.visibility && filters.visibility !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={FileText}
+              title="No artifacts found"
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setFilter('artifact_type', 'all');
+                  setFilter('visibility', 'all');
+                  updateSearchParams({ type: 'all', visibility: 'all' });
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="passive"
+              icon={FileText}
+              title="No artifacts"
+              description="No context artifacts have been stored yet."
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

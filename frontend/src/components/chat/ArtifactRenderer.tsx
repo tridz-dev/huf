@@ -17,6 +17,7 @@ import {
 	ArtifactClose,
 } from '@/components/ai-elements/artifact';
 import { CodeBlock } from '@/components/ai-elements/code-block';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
 	CopyIcon,
 	DownloadIcon,
@@ -107,6 +108,7 @@ export function ArtifactRenderer({
 }: ArtifactRendererProps) {
 	const [isFullscreen, setIsFullscreen] = useState(false);
 	const [isCopied, setIsCopied] = useState(false);
+	const [view, setView] = useState<'preview' | 'source'>('preview');
 
 	const handleCopy = useCallback(async () => {
 		try {
@@ -187,7 +189,18 @@ export function ArtifactRenderer({
 		window.open(`/huf/view/${messageId}`, '_blank', 'noopener');
 	}, [messageId, previewContent, artifact]);
 
+	const renderSource = () => (
+		<CodeBlock
+			code={artifact.content}
+			language={normalizeLanguage(artifact.language)}
+			showLineNumbers
+		/>
+	);
+
 	const renderContent = () => {
+		if (view === 'source') {
+			return renderSource();
+		}
 		switch (artifact.type) {
 			case 'code':
 			case 'react-component':
@@ -328,6 +341,15 @@ export function ArtifactRenderer({
 					</div>
 				</div>
 				<ArtifactActions>
+					<Tabs
+						value={view}
+						onValueChange={(value) => setView(value as 'preview' | 'source')}
+					>
+						<TabsList variant="pill" size="compact">
+							<TabsTrigger value="preview">Preview</TabsTrigger>
+							<TabsTrigger value="source">Source</TabsTrigger>
+						</TabsList>
+					</Tabs>
 					{messageId && (artifact.type === 'jsx' || artifact.type === 'chart') && (
 						<ArtifactAction
 							icon={ExternalLinkIcon}

@@ -185,12 +185,30 @@ function AgentsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Users}
-            title="No agents"
-            description="Create an agent to get started."
-            action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
-          />
+          search || (filters.status && filters.status !== 'all') || (filters.chat && filters.chat !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Users}
+              title="No agents found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                  setFilter('chat', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Users}
+              title="No agents"
+              description="Create an agent to get started."
+              action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
+            />
+          )
         }
         renderItem={(agent) => {
           const status = getStatusLabel(agent);

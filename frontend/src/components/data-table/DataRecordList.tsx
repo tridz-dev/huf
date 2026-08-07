@@ -140,7 +140,13 @@ export function DataRecordList({
 			loading={loading}
 			onRowClick={onRowClick}
 			emptyState={
+			// The caller (DataTableViewPage) intercepts the zero-record case before
+			// this component ever renders, showing its own "Add first record" empty
+			// state instead. This is a fallback for any other future caller, so it
+			// stays passive rather than guessing at a create handler this component
+			// was never given.
 			<EmptyState
+				variant="passive"
 				icon={FileText}
 				title="No records"
 				description="This table doesn't have any records yet."
