@@ -28,7 +28,10 @@ export function ColdStartHero({
             >
                 {getInitials(displayName)}
             </ChatAvatar>
-            <div className="flex flex-col gap-px">
+            {/* min-w-0 is load-bearing: a flex child defaults to min-width:auto, so
+                without it this column grows to the description's intrinsic width and
+                overflows the 620px measure instead of letting `truncate` clip. */}
+            <div className="flex min-w-0 flex-col gap-px">
                 <div className="text-[17px] font-semibold tracking-[-0.015em]">{displayName}</div>
                 {agentDescription && (
                     <div className="truncate text-[12px] text-steel">{agentDescription}</div>
