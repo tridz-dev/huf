@@ -446,11 +446,31 @@ ZENDESK_TOOLS = [
 
 CALCOM_TOOLS = [
 	{
+		"tool_name": "calcom_list_event_types",
+		"description": (
+			"List Cal.com event types for the connected account. Use this before "
+			"calcom_create_booking to pick a valid event_type_id. Requires CALCOM_API_KEY."
+		),
+		"function_path": "huf.ai.tools.calcom.handle_list_event_types",
+		"category": "Scheduling Tools",
+		"parameters": [
+			_p(
+				"username",
+				description="Optional Cal.com username to filter event types (defaults to the authenticated account)",
+			)
+		],
+	},
+	{
 		"tool_name": "calcom_list_bookings",
 		"description": "List Cal.com bookings. Requires CALCOM_API_KEY.",
 		"function_path": "huf.ai.tools.calcom.handle_list_bookings",
 		"category": "Scheduling Tools",
-		"parameters": [_p("status", description="Filter by status: upcoming, past, cancelled")],
+		"parameters": [
+			_p(
+				"status",
+				description="Filter by status: upcoming, recurring, past, cancelled, or unconfirmed",
+			)
+		],
 	},
 	{
 		"tool_name": "calcom_get_booking",
@@ -461,11 +481,23 @@ CALCOM_TOOLS = [
 	},
 	{
 		"tool_name": "calcom_create_booking",
-		"description": "Create a Cal.com booking for an event type. Requires CALCOM_API_KEY.",
+		"description": (
+			"Create a Cal.com booking for an event type. Requires CALCOM_API_KEY. "
+			"Call calcom_list_event_types first (or ask the user) to obtain a valid "
+			"numeric event_type_id."
+		),
 		"function_path": "huf.ai.tools.calcom.handle_create_booking",
 		"category": "Scheduling Tools",
 		"parameters": [
-			_p("event_type_id", required=True, type="int", description="Cal.com event type ID"),
+			_p(
+				"event_type_id",
+				required=True,
+				type="int",
+				description=(
+					"Numeric Cal.com event type ID from calcom_list_event_types (or ask the user). "
+					"Do not use slugs like '30min'."
+				),
+			),
 			_p("start", required=True, description="ISO 8601 start time, e.g. '2026-08-10T15:00:00Z'"),
 			_p("attendee_name", required=True, description="Attendee full name"),
 			_p("attendee_email", required=True, description="Attendee email address"),

@@ -13,8 +13,10 @@ from huf.ai.tools._registry import ALL_INTEGRATION_TOOLS, CALCOM_TOOLS
 MODULE = "huf.ai.tools.calcom"
 
 
-def _mock_response(payload):
+def _mock_response(payload, status_code=200):
 	resp = MagicMock()
+	resp.ok = status_code < 400
+	resp.status_code = status_code
 	resp.json.return_value = payload
 	resp.text = json.dumps(payload)
 	resp.raise_for_status = MagicMock()
@@ -25,6 +27,37 @@ def _result(raw):
 	return json.loads(raw)
 
 
+class TestListEventTypes(unittest.TestCase):
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="cal_live_key")
+	@patch(f"{MODULE}.requests.request")
+	def test_lists_event_types(self, mock_request, _cred, _err):
+		mock_request.return_value = _mock_response(
+			{
+				"status": "success",
+				"data": [
+					{
+						"id": 6590907,
+						"title": "15 min meeting",
+						"slug": "15min",
+						"description": "",
+						"lengthInMinutes": 15,
+						"bookingUrl": "https://cal.com/fero-pod-anhzwm/15min",
+						"hidden": False,
+					}
+				],
+			}
+		)
+
+		out = _result(calcom.handle_list_event_types())
+
+		self.assertTrue(out["success"])
+		self.assertEqual(out["results"][0]["id"], 6590907)
+		self.assertEqual(out["results"][0]["duration_minutes"], 15)
+		headers = mock_request.call_args.kwargs["headers"]
+		self.assertEqual(headers["cal-api-version"], calcom.EVENT_TYPES_API_VERSION)
+
+
 class TestListBookings(unittest.TestCase):
 	@patch(f"{MODULE}.update_last_error")
 	@patch(f"{MODULE}.require_credential", return_value="cal_live_key")
@@ -32,16 +65,17 @@ class TestListBookings(unittest.TestCase):
 	def test_lists_bookings(self, mock_request, _cred, _err):
 		mock_request.return_value = _mock_response(
 			{
-				"bookings": [
+				"status": "success",
+				"data": [
 					{
 						"uid": "b1",
 						"title": "1:1",
-						"startTime": "2026-08-10T15:00:00Z",
-						"endTime": "2026-08-10T15:30:00Z",
+						"start": "2026-08-10T15:00:00Z",
+						"end": "2026-08-10T15:30:00Z",
 						"status": "accepted",
 						"attendees": [{"email": "a@example.com"}],
 					}
-				]
+				],
 			}
 		)
 
@@ -50,9 +84,17 @@ class TestListBookings(unittest.TestCase):
 		self.assertTrue(out["success"])
 		self.assertEqual(out["results"][0]["uid"], "b1")
 
-		params = mock_request.call_args.kwargs["params"]
-		self.assertEqual(params["apiKey"], "cal_live_key")
-		self.assertEqual(params["status"], "upcoming")
+		headers = mock_request.call_args.kwargs["headers"]
+		self.assertEqual(headers["Authorization"], "Bearer cal_live_key")
+		self.assertEqual(headers["cal-api-version"], calcom.LIST_BOOKINGS_API_VERSION)
+		self.assertEqual(mock_request.call_args.kwargs["params"]["status"], "upcoming")
+
+	@patch(f"{MODULE}.update_last_error")
+	@patch(f"{MODULE}.require_credential", return_value="cal_live_key")
+	def test_rejects_invalid_status(self, _cred, _err):
+		out = _result(calcom.handle_list_bookings(status="accepted"))
+		self.assertFalse(out["success"])
+		self.assertIn("status must be one of", out["error"])
 
 
 class TestGetBooking(unittest.TestCase):
@@ -62,15 +104,16 @@ class TestGetBooking(unittest.TestCase):
 	def test_get_booking(self, mock_request, _cred, _err):
 		mock_request.return_value = _mock_response(
 			{
-				"booking": {
+				"status": "success",
+				"data": {
 					"uid": "b1",
 					"title": "1:1",
 					"description": "sync",
-					"startTime": "2026-08-10T15:00:00Z",
-					"endTime": "2026-08-10T15:30:00Z",
+					"start": "2026-08-10T15:00:00Z",
+					"end": "2026-08-10T15:30:00Z",
 					"status": "accepted",
 					"attendees": [{"email": "a@example.com"}],
-				}
+				},
 			}
 		)
 
@@ -78,6 +121,8 @@ class TestGetBooking(unittest.TestCase):
 
 		self.assertTrue(out["success"])
 		self.assertEqual(out["results"]["attendees"], ["a@example.com"])
+		headers = mock_request.call_args.kwargs["headers"]
+		self.assertEqual(headers["cal-api-version"], calcom.BOOKING_API_VERSION)
 
 	def test_requires_booking_uid(self):
 		out = _result(calcom.handle_get_booking())
@@ -91,7 +136,15 @@ class TestCreateBooking(unittest.TestCase):
 	@patch(f"{MODULE}.requests.request")
 	def test_creates_booking(self, mock_request, _cred, _err):
 		mock_request.return_value = _mock_response(
-			{"booking": {"uid": "b2", "title": "New", "startTime": "2026-08-10T15:00:00Z", "status": "accepted"}}
+			{
+				"status": "success",
+				"data": {
+					"uid": "b2",
+					"title": "New",
+					"start": "2026-08-10T15:00:00Z",
+					"status": "accepted",
+				},
+			}
 		)
 
 		out = _result(
@@ -108,18 +161,39 @@ class TestCreateBooking(unittest.TestCase):
 
 		body = mock_request.call_args.kwargs["json"]
 		self.assertEqual(body["eventTypeId"], 42)
-		self.assertEqual(body["responses"], {"name": "Jane", "email": "jane@example.com"})
-		self.assertEqual(body["timeZone"], "UTC")
+		self.assertEqual(
+			body["attendee"],
+			{
+				"name": "Jane",
+				"email": "jane@example.com",
+				"timeZone": "UTC",
+				"language": "en",
+			},
+		)
 
 	def test_requires_all_fields(self):
 		out = _result(calcom.handle_create_booking(event_type_id=42))
 		self.assertFalse(out["success"])
 		self.assertIn("start", out["error"])
 
+	@patch(f"{MODULE}.update_last_error")
+	def test_rejects_non_numeric_event_type_id(self, _err):
+		out = _result(
+			calcom.handle_create_booking(
+				event_type_id="default",
+				start="2026-08-10T15:00:00Z",
+				attendee_name="Jane",
+				attendee_email="jane@example.com",
+			)
+		)
+		self.assertFalse(out["success"])
+		self.assertIn("event_type_id must be a numeric", out["error"])
+
 
 class TestRegistry(unittest.TestCase):
 	def test_all_tools_registered(self):
 		expected = {
+			"calcom_list_event_types": "handle_list_event_types",
 			"calcom_list_bookings": "handle_list_bookings",
 			"calcom_get_booking": "handle_get_booking",
 			"calcom_create_booking": "handle_create_booking",
