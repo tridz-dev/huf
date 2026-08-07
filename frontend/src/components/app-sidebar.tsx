@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Plug, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, Layers, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -44,7 +44,7 @@ const dashboardNavItems = [
 
 /**
  * The "Use" side of the platform: end-user HUF Apps discovered from
- * installed provider apps. Build/Operate/People remain the manage side.
+ * installed provider apps. Build/Library/Monitor remain the manage side.
  */
 const useNavItems = [
   {
@@ -143,7 +143,7 @@ const operateNavItems = [
  * primary navigation so the longer administration list never pushes the main
  * destinations off-screen.
  */
-const settingsNavGroups = [
+const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; url: string; icon: LucideIcon; capability: string | string[] | null }> }> = [
   {
     items: [
       { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
