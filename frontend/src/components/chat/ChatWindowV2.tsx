@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-import { useSidebar } from "../ui/sidebar";
 import { ChatWindowHeader } from "./ChatWindowHeader";
 import { ChatMessageList } from "./ChatMessageList";
 import type { ArtifactPaneTarget } from "./useArtifactPane";
@@ -26,14 +24,6 @@ export default function ChatWindow({
     onOpenArtifact,
     activeArtifactName,
 }: ChatWindowProps) {
-    const { setOpen } = useSidebar();
-
-    // Close app sidebar once on mount so chat gets full width
-    useEffect(() => {
-        setOpen(false);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     return (
         <div className="w-full h-full flex flex-col overflow-hidden bg-background">
             <ChatWindowHeader

@@ -401,7 +401,7 @@ function AppShell() {
             path="/chat"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatPage />
                   </Suspense>
@@ -413,7 +413,7 @@ function AppShell() {
             path="/chat/projects"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatProjectsPage />
                   </Suspense>
@@ -425,7 +425,7 @@ function AppShell() {
             path="/chat/artifacts"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatArtifactsPage />
                   </Suspense>
@@ -437,7 +437,7 @@ function AppShell() {
             path="/chat/scheduled"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatScheduledPage />
                   </Suspense>
@@ -449,7 +449,7 @@ function AppShell() {
             path="/chat/:chatId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatPage />
                   </Suspense>
