@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, ChevronDown, MoreVertical, PanelLeftOpen, PanelRight, Pencil, Settings } from "lucide-react";
+import {
+    ArrowLeft,
+    Check,
+    ChevronDown,
+    MoreVertical,
+    PanelLeft,
+    PanelLeftOpen,
+    Pencil,
+    Plus,
+    Search,
+    Settings,
+} from "lucide-react";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
     DropdownMenu,
@@ -11,6 +21,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { getInitials } from "@/utils/getInitials";
 import { getConversation } from "@/services/chatApi";
 import { getAgent, getChatAgents, type ChatAgentItem } from "@/services/agentApi";
@@ -28,6 +39,13 @@ interface ChatWindowHeaderProps {
     /** Toggles the artifact preview pane. The toggle button only renders when
      * this is provided, so the control is never present-but-inert. */
     onToggleArtifactPane?: () => void;
+    /** Whether the left rail is collapsed. When true, the header gains a
+     * leading icon cluster (expand rail, Dashboard, New, divider) in place
+     * of the plain sidebar-open button (spec 28.5). */
+    railCollapsed?: boolean;
+    /** Expands the collapsed rail. Only meaningful when `railCollapsed` is
+     * true; supplied by the component that owns the rail's collapse state. */
+    onExpandRail?: () => void;
 }
 
 export function ChatWindowHeader({
@@ -35,6 +53,8 @@ export function ChatWindowHeader({
     onToggleSidebar,
     artifactPaneOpen,
     onToggleArtifactPane,
+    railCollapsed,
+    onExpandRail,
 }: ChatWindowHeaderProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -136,20 +156,32 @@ export function ChatWindowHeader({
     const model = conversationModel || agent?.model;
     const showConversationData = !!chatId && agent?.enable_conversation_data === 1;
 
+    // Spec 28.1 uses `padding: 0 16px`; the collapsed-rail row (28.5) is
+    // `0 14px`. The extra icon cluster only appears when collapsed, so the
+    // tighter padding is scoped to that state alone.
+    const headerClassName = cn(
+        "flex h-chat-header flex-none items-center gap-2.5 border-b border-paper-deep bg-panel",
+        railCollapsed ? "px-[14px]" : "px-4",
+    );
+
     if (!agent) {
         return (
-            <header className="flex h-chat-header flex-none items-center gap-2.5 border-b border-paper-deep bg-panel px-4">
-                {showOpenSidebarBtn && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-steel hover:text-ink"
-                        onClick={onToggleSidebar}
-                    >
-                        <PanelLeftOpen className="w-4 h-4" />
-                        <span className="sr-only">Open conversations</span>
-                    </Button>
+            <header className={headerClassName}>
+                {railCollapsed ? (
+                    <CollapsedRailCluster onExpandRail={onExpandRail} navigate={navigate} />
+                ) : (
+                    showOpenSidebarBtn && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-steel hover:text-ink"
+                            onClick={onToggleSidebar}
+                        >
+                            <PanelLeftOpen className="w-4 h-4" />
+                            <span className="sr-only">Open conversations</span>
+                        </Button>
+                    )
                 )}
                 <AgentSwitcher currentAgentName={null} open={switcherOpen} onOpenChange={setSwitcherOpen}>
                     <button
@@ -166,19 +198,38 @@ export function ChatWindowHeader({
         );
     }
 
+    // Spec 28.2: with the artifact pane open, the header simplifies down to
+    // the title, a flex spacer, and the artifact toggle — the picker
+    // chevron, model text, and overflow dots all drop out.
+    if (artifactPaneOpen) {
+        return (
+            <header className={headerClassName}>
+                <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
+                    {conversationTitle || agent.agent_name}
+                </span>
+                <span className="flex-1" />
+                <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
+            </header>
+        );
+    }
+
     return (
-        <header className="flex h-chat-header flex-none items-center gap-2.5 border-b border-paper-deep bg-panel px-4">
-            {showOpenSidebarBtn && (
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-steel hover:text-ink"
-                    onClick={onToggleSidebar}
-                >
-                    <PanelLeftOpen className="w-4 h-4" />
-                    <span className="sr-only">Open conversations</span>
-                </Button>
+        <header className={headerClassName}>
+            {railCollapsed ? (
+                <CollapsedRailCluster onExpandRail={onExpandRail} navigate={navigate} />
+            ) : (
+                showOpenSidebarBtn && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-steel hover:text-ink"
+                        onClick={onToggleSidebar}
+                    >
+                        <PanelLeftOpen className="w-4 h-4" />
+                        <span className="sr-only">Open conversations</span>
+                    </Button>
+                )
             )}
 
             {/* Spec 28.4: the title chevron opens the picker itself, not a two-item
@@ -213,9 +264,12 @@ export function ChatWindowHeader({
                         <span className="sr-only">Conversation actions</span>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onSelect={() => navigate(`/agents/${agent.name}`)}>
-                        <Settings className="mr-2 size-4" />
+                <DropdownMenuContent align="end" className="w-[230px] px-0 py-[5px]">
+                    <DropdownMenuItem
+                        onSelect={() => navigate(`/agents/${agent.name}`)}
+                        className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                    >
+                        <Settings className="size-[15px]" />
                         Agent settings
                     </DropdownMenuItem>
                     {chatId && (
@@ -227,8 +281,9 @@ export function ChatWindowHeader({
                                     })
                                 );
                             }}
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
                         >
-                            <Pencil className="mr-2 size-4" />
+                            <Pencil className="size-[15px]" />
                             Rename
                         </DropdownMenuItem>
                     )}
@@ -238,6 +293,7 @@ export function ChatWindowHeader({
                                 // Let the menu finish closing before opening the sheet.
                                 setTimeout(() => setDataPanelOpen(true), 0);
                             }}
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
                         >
                             Conversation data
                         </DropdownMenuItem>
@@ -257,6 +313,50 @@ export function ChatWindowHeader({
 
             <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
         </header>
+    );
+}
+
+interface CollapsedRailClusterProps {
+    onExpandRail?: () => void;
+    navigate: ReturnType<typeof useNavigate>;
+}
+
+/**
+ * Spec 28.5: leading icon cluster shown as the first item in the 40px header
+ * row when the rail is collapsed — expand rail, Dashboard, New, then a
+ * divider before the rest of the header. The spec's prose also lists a
+ * Search icon here; it is deliberately omitted because conversation search
+ * does not exist in this product yet.
+ */
+function CollapsedRailCluster({ onExpandRail, navigate }: CollapsedRailClusterProps) {
+    return (
+        <>
+            <button
+                type="button"
+                onClick={onExpandRail}
+                className="flex-none text-steel hover:text-ink"
+            >
+                <PanelLeft className="size-[17px]" />
+                <span className="sr-only">Expand sidebar</span>
+            </button>
+            <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="flex-none text-steel hover:text-ink"
+            >
+                <ArrowLeft className="size-[17px]" />
+                <span className="sr-only">Dashboard</span>
+            </button>
+            <button
+                type="button"
+                onClick={() => navigate('/chat/new')}
+                className="flex-none text-steel hover:text-ink"
+            >
+                <Plus className="size-[17px]" />
+                <span className="sr-only">New chat</span>
+            </button>
+            <span className="h-4 w-px bg-line" />
+        </>
     );
 }
 
@@ -282,7 +382,30 @@ function ArtifactPaneToggle({ open, onToggle }: ArtifactPaneToggleProps) {
             className={open ? "h-8 w-8 text-ink hover:text-ink" : "h-8 w-8 text-steel hover:text-ink"}
             onClick={onToggle}
         >
-            <PanelRight className={open ? "size-[17px] fill-current" : "size-[17px]"} />
+            {/* Lucide's PanelRight is a stroke-only outline: its <rect> carries no
+                fill attribute, so `fill-current` floods the WHOLE square and the
+                glyph stops reading as a panel at all. The spec's filled variant
+                fills only the right column, so that column is drawn explicitly. */}
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-[17px]"
+                aria-hidden="true"
+            >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <path d="M15 3v18" />
+                {open && (
+                    <path
+                        d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4z"
+                        fill="currentColor"
+                        stroke="none"
+                    />
+                )}
+            </svg>
             <span className="sr-only">{open ? "Hide artifacts" : "Show artifacts"}</span>
         </Button>
     );
@@ -400,20 +523,27 @@ function AgentSwitcher({
     return (
         <Popover open={open} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>{children}</PopoverTrigger>
-            <PopoverContent align="start" className="w-72 p-1.5">
-                <Input
-                    size="sm"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search agents"
-                    className="mb-1 h-7 text-[13px]"
-                />
+            <PopoverContent
+                align="start"
+                className="w-[300px] rounded-[12px] border-input p-0 shadow-lg"
+            >
+                <div className="border-b border-[#f4f4f7] p-2">
+                    <div className="flex h-7 items-center gap-[7px] rounded-lg bg-[#f4f4f7] px-[9px]">
+                        <Search className="size-[14px] shrink-0 text-steel-soft" />
+                        <input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Search agents"
+                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-[#98989d]"
+                        />
+                    </div>
+                </div>
                 {loading ? (
-                    <div className="px-2 py-3 text-center text-[13px] text-steel">Loading agents...</div>
+                    <div className="px-3 py-3 text-center text-[13px] text-steel">Loading agents...</div>
                 ) : groups.length === 0 ? (
-                    <div className="px-2 py-3 text-center text-[13px] text-steel">No chat agents available.</div>
+                    <div className="px-3 py-3 text-center text-[13px] text-steel">No chat agents available.</div>
                 ) : (
-                    <div className="max-h-80 overflow-y-auto">
+                    <div className="max-h-80 overflow-y-auto pt-1 pb-1.5">
                         {groups.map((group, groupIndex) => (
                             <div key={group.provider}>
                                 <div
@@ -434,13 +564,13 @@ function AgentSwitcher({
                                             type="button"
                                             onClick={() => handleSelect(agentItem.name)}
                                             className={
-                                                (isCurrent ? "bg-paper-deep " : "hover:bg-paper ") +
+                                                (isCurrent ? "bg-paper-deep " : "hover:bg-[#f9f9fb] ") +
                                                 (hasModel ? "" : "opacity-55 ") +
                                                 "flex h-[34px] items-center gap-[9px] px-3 text-left"
                                             }
                                         >
                                             <span
-                                                className="flex h-5 w-5 flex-none items-center justify-center rounded-md text-[9px] text-white"
+                                                className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px] text-[9px] text-white"
                                                 style={{ backgroundColor: agentItem.agent_color || DEFAULT_AGENT_COLOR }}
                                             >
                                                 {getInitials(agentItem.agent_name || agentItem.name)}

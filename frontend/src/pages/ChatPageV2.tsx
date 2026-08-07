@@ -125,6 +125,8 @@ function ChatPage() {
                 chatId={chatId}
                 onConversationCreated={handleConversationCreated}
                 onToggleSidebar={isMobile ? toggleSidebar : undefined}
+                railCollapsed={!sidebarOpen}
+                onExpandRail={toggleSidebar}
                 artifactPaneOpen={artifactPane.isOpen}
                 onToggleArtifactPane={
                     !isMobile && (artifactPane.isOpen || conversationArtifacts.length > 0)

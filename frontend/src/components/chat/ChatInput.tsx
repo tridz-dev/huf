@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { ArrowUp, Paperclip, Square } from "lucide-react";
+import { ArrowUp, Plus, Square } from "lucide-react";
 import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
 import {
   sendMessage,
   streamingAvailable,
@@ -14,6 +13,7 @@ import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
+import { cn } from "@/lib/utils";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
@@ -51,6 +51,11 @@ interface ChatInputProps {
      * queue-first.
      */
     runImmediately?: boolean;
+    /** Spec 28.2 — ARTIFACT OPEN: when the artifact pane is open, the
+     * composer collapses to a single-line box (no control row, no
+     * disclaimer). Sending still works via Return; the attach/mic/send
+     * controls are simply out of view until the pane is closed again. */
+    artifactPaneOpen?: boolean;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
@@ -67,6 +72,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     allowFileUpload = false,
     maxUploadSizeMb,
     runImmediately = false,
+    artifactPaneOpen = false,
 }: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -890,8 +896,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     return (
         <div className="flex-none px-[26px] pb-4">
             <form onSubmit={handleSubmit}>
-                <div className="rounded-chat-bubble border border-input bg-panel">
-                    <Textarea
+                <div className={cn(
+                    "rounded-chat-bubble border border-input bg-panel",
+                    artifactPaneOpen && "px-[12px] py-[10px]"
+                )}>
+                    <textarea
                         ref={textareaRef}
                         value={message}
                         onChange={(e) => {
@@ -901,7 +910,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         rows={2}
                         onKeyDown={handleKeyDown}
                         placeholder="Write a message…"
-                        className="w-full min-h-[60px] max-h-[200px] resize-none px-[13px] pb-1 pt-[11px] text-[13px] border-none shadow-none focus-visible:ring-0"
+                        className={cn(
+                            "flex w-full min-h-[60px] max-h-[200px] resize-none rounded bg-transparent text-[13px] text-ui-text placeholder:text-steel-soft border-none shadow-none outline-none focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
+                            artifactPaneOpen ? "p-0" : "px-[13px] pb-1 pt-[11px]"
+                        )}
                         style={{
                             height: `${MIN_HEIGHT}px`
                         }}
@@ -922,6 +934,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             />
                         </div>
                     )}
+                    {!artifactPaneOpen && (
                     <div className="flex items-center gap-2.5 px-2.5 pb-2 pt-1.5">
                             {allowFileUpload && (
                                 <>
@@ -933,17 +946,15 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                         onChange={handleFileSelected}
                                         disabled={isSubmitting || pendingFile?.status === 'uploading'}
                                     />
-                                    <Button
+                                    <button
                                         type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="shrink-0 text-steel"
+                                        className="shrink-0 text-steel disabled:pointer-events-none disabled:opacity-50"
                                         disabled={isSubmitting || pendingFile?.status === 'uploading'}
                                         onClick={() => fileInputRef.current?.click()}
                                         aria-label="Attach file"
                                     >
-                                        <Paperclip className="size-[17px]" />
-                                    </Button>
+                                        <Plus className="size-[17px]" />
+                                    </button>
                                 </>
                             )}
                             <span className="flex-1" />
@@ -964,8 +975,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                 <Button
                                     type="button"
                                     onClick={handleStop}
-                                    size="icon"
-                                    className="shrink-0 size-[26px] rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
                                     aria-label="Stop generating response"
                                 >
                                     <Square className="size-3.5" fill="currentColor" />
@@ -978,19 +988,21 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                         ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
                                             isSubmitting)
                                     }
-                                    size="icon"
-                                    className="shrink-0 size-[26px] rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
                                     aria-label="Send message"
                                 >
                                     <ArrowUp className="size-[15px]" />
                                 </Button>
                             )}
                         </div>
+                    )}
                 </div>
             </form>
-            <div className="mt-[7px] text-center text-[11px] text-steel-soft">
-                AI output can be inaccurate. Double check important info.
-            </div>
+            {!artifactPaneOpen && (
+                <div className="mt-[7px] text-center text-[11px] text-steel-soft">
+                    AI output can be inaccurate. Double check important info.
+                </div>
+            )}
         </div>
     );
 });

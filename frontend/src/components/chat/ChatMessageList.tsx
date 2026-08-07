@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } fr
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
@@ -39,6 +40,12 @@ interface ChatMessageListProps {
     artifacts?: ArtifactListItem[];
     onOpenArtifact?: (target: ArtifactPaneTarget) => void;
     activeArtifactName?: string;
+    /** Whether the artifact pane is open (spec 28.2 — ARTIFACT OPEN). The
+     * centre column tightens its padding/turn-gap and ChatInput collapses to
+     * a single-line composer when this is true. Sourced from ChatPageV2's
+     * `useArtifactPane`, threaded down through ChatWindowV2 — not
+     * re-derived here. */
+    artifactPaneOpen?: boolean;
 }
 
 export function ChatMessageList({
@@ -47,6 +54,7 @@ export function ChatMessageList({
     artifacts,
     onOpenArtifact,
     activeArtifactName,
+    artifactPaneOpen,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
@@ -357,10 +365,15 @@ export function ChatMessageList({
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
-                <div className={isColdStart
-                    ? "max-w-4xl mx-auto flex flex-col px-[26px] py-[28px]"
-                    : "max-w-4xl mx-auto px-[26px] py-5"
-                }>
+                <div className={cn(
+                    "flex justify-center",
+                    artifactPaneOpen ? "py-[18px]" : (isColdStart ? "py-7" : "py-5")
+                )}>
+                <div className={cn(
+                    "w-full max-w-chat-wide",
+                    artifactPaneOpen ? "px-[22px]" : "px-[26px]",
+                    isColdStart && "flex flex-col"
+                )}>
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
@@ -386,7 +399,7 @@ export function ChatMessageList({
                             />
                         </div>
                     ) : (
-                        <div className="flex flex-col gap-chat-turn">
+                        <div className={cn("flex flex-col", artifactPaneOpen ? "gap-[12px]" : "gap-chat-turn")}>
                             {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
                                 <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
                             )}
@@ -430,6 +443,7 @@ export function ChatMessageList({
                         </div>
                     )}
                 </div>
+                </div>
             </div>
             <div className="max-w-4xl mx-auto w-full shrink-0">
             <ChatInput
@@ -447,6 +461,7 @@ export function ChatMessageList({
                 allowFileUpload={allowFileUpload}
                 maxUploadSizeMb={maxUploadSizeMb}
                 runImmediately={runImmediately}
+                artifactPaneOpen={artifactPaneOpen}
             />
             </div>
         </div>

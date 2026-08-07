@@ -120,6 +120,7 @@ export default {
       },
       maxWidth: {
         'chat-measure': 'var(--chat-measure)',
+        'chat-wide': 'var(--chat-wide)',
       },
       borderRadius: {
         DEFAULT: 'var(--r)',

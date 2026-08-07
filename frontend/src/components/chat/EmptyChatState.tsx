@@ -31,7 +31,7 @@ export function ColdStartHero({
             <div className="flex flex-col gap-px">
                 <div className="text-[17px] font-semibold tracking-[-0.015em]">{displayName}</div>
                 {agentDescription && (
-                    <div className="text-[12px] text-steel">{agentDescription}</div>
+                    <div className="truncate text-[12px] text-steel">{agentDescription}</div>
                 )}
             </div>
         </div>

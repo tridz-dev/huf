@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { BarChart2 } from 'lucide-react';
+import { BarChart2, BrainIcon, ChevronDownIcon } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import type { ToolUIPart } from 'ai';
 import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
@@ -136,7 +137,15 @@ export function ChatMessage({
                                     defaultOpen={false}
                                     className="border-l-2 border-line pl-[9px]"
                                 >
-                                    <ReasoningTrigger className="text-[12px] text-steel" />
+                                    <ReasoningTrigger className="gap-[7px] text-[12px] text-steel data-[state=open]:[&_.reasoning-chevron]:rotate-180">
+                                        <BrainIcon className="size-[14px]" />
+                                        {message.reasoningStreaming ? (
+                                            <Shimmer duration={1}>Thinking...</Shimmer>
+                                        ) : (
+                                            <p>Thought for a few seconds</p>
+                                        )}
+                                        <ChevronDownIcon className="reasoning-chevron size-[13px] transition-transform" />
+                                    </ReasoningTrigger>
                                     <ReasoningContent>{message.reasoning}</ReasoningContent>
                                 </Reasoning>
                             )}

@@ -62,8 +62,14 @@ export function ChatShellFrame({
       )}
 
       <div className="flex-1 min-w-0 min-h-0 h-full relative">
-        {/* Desktop-only floating toggle */}
-        {!isMobile && !sidebarOpen && (
+        {/* Uncontrolled callers (the Projects/Artifacts/Scheduled placeholder
+            pages) render no header of their own, so there is no "first item
+            in the 40px header row" to host the expand control per spec 28.5.
+            Controlled callers (ChatPageV2) supply railCollapsed/onExpandRail
+            to ChatWindowHeader instead - this floating fallback is only for
+            the header-less routes, so a collapsed rail there is never a dead
+            end. */}
+        {!isMobile && !sidebarOpen && !isControlled && (
           <Button
             variant="ghost"
             size="icon"
