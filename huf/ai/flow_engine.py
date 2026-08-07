@@ -176,7 +176,10 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 	# Clear waiting state
+	was_waiting_approval = flow_run.status == "Waiting Approval"
 	flow_run.db_set({"waiting": None, "status": "Running"})
+	if was_waiting_approval:
+		_close_pending_approvals_for_flow_run(flow_run, status="Expired")
 	commit_if_background()
 
 	# Continue execution
@@ -200,7 +203,22 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 
 	# Verify current user has approval permissions
 	waiting = json.loads(flow_run.waiting) if flow_run.waiting else {}
-	_verify_approval_permission(waiting)
+	pending_approval_name = waiting.get("pending_approval")
+
+	if pending_approval_name:
+		pending_approval = frappe.get_doc("Pending Approval", pending_approval_name)
+		if not pending_approval._user_can_see(frappe.session.user):
+			frappe.throw(
+				_("You are not authorized to approve this flow run"),
+				frappe.PermissionError,
+			)
+		# Record decision on the Pending Approval document.
+		pending_approval._record_decision(
+			"Approved" if decision == "approved" else "Rejected", comment
+		)
+	else:
+		# Fallback for in-flight approvals created before the Pending Approval DocType existed.
+		_verify_approval_permission(waiting)
 
 	# Store decision in context
 	ctx = _load_context(flow_run)
@@ -782,6 +800,11 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 		"store_decision_in_context": config.get("store_decision_in_context", "approval"),
 	}
 
+	# Create a Pending Approval record for the universal approval inbox.
+	# We store its name in waiting_data so approve/reject can close it.
+	pending_approval = _create_pending_approval_for_flow_run(flow_run, node, config, waiting_data)
+	waiting_data["pending_approval"] = pending_approval.name
+
 	flow_run.db_set(
 		{
 			"status": "Waiting Approval",
@@ -794,6 +817,83 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	_send_approval_notifications(flow_run, node, config, waiting_data)
 
 	return {"status": "waiting_approval"}
+
+
+def _create_pending_approval_for_flow_run(flow_run, node: dict, config: dict, waiting_data: dict):
+	"""Create a Pending Approval document for a Flow Run approval node."""
+	approval_type = waiting_data.get("approval_type", "role")
+	raw_approver_users = waiting_data.get("approver_users", [])
+	if isinstance(raw_approver_users, str):
+		raw_approver_users = [u.strip() for u in raw_approver_users.split(",") if u.strip()]
+
+	approver_user = None
+	approver_users_str = None
+	if approval_type == "user" and raw_approver_users:
+		approver_user = raw_approver_users[0]
+	elif approval_type == "users":
+		approver_users_str = ", ".join(str(u).strip() for u in raw_approver_users if str(u).strip())
+
+	pa = frappe.get_doc(
+		{
+			"doctype": "Pending Approval",
+			"reference_doctype": "Flow Run",
+			"reference_name": flow_run.name,
+			"reference_link": f"/huf/flows/{flow_run.flow_id}?run={flow_run.name}",
+			"feature": "flow",
+			"flow_id": flow_run.flow_id,
+			"current_node_id": node.get("id"),
+			"title": waiting_data.get("title", "Approval Required"),
+			"instructions": waiting_data.get("instructions", ""),
+			"requester": flow_run.owner,
+			"approval_type": approval_type,
+			"approver_role": waiting_data.get("approver_role") if approval_type == "role" else None,
+			"approver_user": approver_user,
+			"approver_users": approver_users_str,
+			"status": "Pending",
+			"level": 1,
+			"payload": json.dumps(
+				{
+					"node_id": node.get("id"),
+					"context_summary": waiting_data.get("context_summary", ""),
+					"reference_doctype": waiting_data.get("reference_doctype", ""),
+					"reference_name": waiting_data.get("reference_name", ""),
+					"store_decision_in_context": waiting_data.get("store_decision_in_context", "approval"),
+				},
+				default=str,
+			),
+		}
+	)
+	pa.insert(ignore_permissions=True)
+	commit_if_background()
+	return pa
+
+
+def _close_pending_approvals_for_flow_run(flow_run, status: str = "Expired"):
+	"""Mark all still-pending Pending Approval records for a Flow Run as closed."""
+	try:
+		pending = frappe.get_all(
+			"Pending Approval",
+			filters={
+				"reference_doctype": "Flow Run",
+				"reference_name": flow_run.name,
+				"status": "Pending",
+			},
+			pluck="name",
+		)
+		for name in pending:
+			frappe.get_doc("Pending Approval", name).db_set(
+				{
+					"status": status,
+					"actioned_by": frappe.session.user,
+					"actioned_at": now_datetime(),
+				},
+				update_modified=False,
+			)
+		if pending:
+			commit_if_background()
+	except Exception:
+		# Cleanup is best-effort.
+		frappe.log_error(frappe.get_traceback(), "Close Pending Approval Error")
 
 
 def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_data: dict):
@@ -1443,6 +1543,7 @@ def _complete_flow_run(flow_run):
 			"completed_at": now_datetime(),
 		}
 	)
+	_close_pending_approvals_for_flow_run(flow_run, status="Expired")
 	commit_if_background()
 
 
@@ -1455,6 +1556,7 @@ def _fail_flow_run(flow_run, error_msg: str):
 			"completed_at": now_datetime(),
 		}
 	)
+	_close_pending_approvals_for_flow_run(flow_run, status="Expired")
 	commit_if_background()
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 

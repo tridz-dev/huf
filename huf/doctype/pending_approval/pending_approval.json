@@ -1,0 +1,211 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-02 09:45:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "reference_section",
+  "reference_doctype",
+  "reference_name",
+  "reference_link",
+  "feature",
+  "flow_id",
+  "current_node_id",
+  "approval_section",
+  "title",
+  "instructions",
+  "requester",
+  "approval_type",
+  "approver_role",
+  "approver_user",
+  "approver_users",
+  "level",
+  "due_date",
+  "payload",
+  "decision_section",
+  "status",
+  "actioned_by",
+  "actioned_at",
+  "comment"
+ ],
+ "fields": [
+  {
+   "fieldname": "reference_section",
+   "fieldtype": "Section Break",
+   "label": "Reference"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Reference DocType"
+  },
+  {
+   "fieldname": "reference_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Reference Name"
+  },
+  {
+   "fieldname": "reference_link",
+   "fieldtype": "Data",
+   "label": "Reference Link"
+  },
+  {
+   "fieldname": "feature",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Feature",
+   "description": "E.g. flow, agent, mcp. Used to group approvals by source feature."
+  },
+  {
+   "fieldname": "flow_id",
+   "fieldtype": "Data",
+   "label": "Flow ID",
+   "description": "For flow approvals: the Flow Definition ID."
+  },
+  {
+   "fieldname": "current_node_id",
+   "fieldtype": "Data",
+   "label": "Current Node ID",
+   "description": "For flow approvals: the node that is waiting."
+  },
+  {
+   "fieldname": "approval_section",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title"
+  },
+  {
+   "fieldname": "instructions",
+   "fieldtype": "Text",
+   "label": "Instructions"
+  },
+  {
+   "fieldname": "requester",
+   "fieldtype": "Link",
+   "label": "Requester",
+   "options": "User"
+  },
+  {
+   "default": "role",
+   "fieldname": "approval_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Approval Type",
+   "options": "role\nuser\nusers"
+  },
+  {
+   "fieldname": "approver_role",
+   "fieldtype": "Link",
+   "label": "Approver Role",
+   "options": "Role"
+  },
+  {
+   "fieldname": "approver_user",
+   "fieldtype": "Link",
+   "label": "Approver User",
+   "options": "User"
+  },
+  {
+   "description": "Comma-separated list of user IDs for multi-user approvals.",
+   "fieldname": "approver_users",
+   "fieldtype": "Data",
+   "label": "Approver Users"
+  },
+  {
+   "default": "1",
+   "fieldname": "level",
+   "fieldtype": "Int",
+   "label": "Level",
+   "description": "For future multi-level approval chains."
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Datetime",
+   "label": "Due Date"
+  },
+  {
+   "fieldname": "payload",
+   "fieldtype": "JSON",
+   "label": "Payload",
+   "description": "Opaque context needed by the source feature."
+  },
+  {
+   "fieldname": "decision_section",
+   "fieldtype": "Section Break",
+   "label": "Decision"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nApproved\nRejected\nExpired",
+   "reqd": 1
+  },
+  {
+   "fieldname": "actioned_by",
+   "fieldtype": "Link",
+   "label": "Actioned By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "actioned_at",
+   "fieldtype": "Datetime",
+   "label": "Actioned At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "comment",
+   "fieldtype": "Text",
+   "label": "Comment"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-02 09:45:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Pending Approval",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 0,
+   "print": 1,
+   "read": 1,
+   "report": 0,
+   "role": "All",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
