@@ -28,7 +28,7 @@ function MemoryPolicyFormPageWrapper() {
   }, [id, isNew]);
 
   const breadcrumbs = [
-    { label: 'Memory', href: '/memory' },
+    { label: 'Intelligence', href: '/memory' },
     { label: 'Policies', href: '/memory#policies' },
     { label: policyLabel },
   ];

@@ -46,7 +46,7 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/execution-profiles')) return 'Code Execution';
     if (path.startsWith('/ssh-connections')) return 'SSH Connections';
     if (path.startsWith('/apps')) return 'Apps';
-    if (path.startsWith('/memory')) return 'Memory';
+    if (path.startsWith('/memory')) return 'Intelligence';
     if (path.startsWith('/skills')) return 'Skills';
     if (path.startsWith('/ssh')) return 'SSH Execution';
     return 'HufAI';
