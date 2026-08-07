@@ -17,10 +17,10 @@ import { getAgent, getChatAgents, type ChatAgentItem } from "@/services/agentApi
 import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
+import { DEFAULT_COLD_START_AGENT } from "./useChatAgentIdentity";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
-    sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
     /** Whether the right-docked artifact preview pane is currently open. Drives
      * the toggle glyph's fill state (spec section 28). */
@@ -88,7 +88,7 @@ export function ChatWindowHeader({
                         return;
                     }
                 } else {
-                    agentName = searchParams.get('agent');
+                    agentName = searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT;
                 }
 
                 if (agentName) {

@@ -155,6 +155,45 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
     };
   }, [applyTitleUpdate]);
 
+  // Both this rail (handleForked, above) and ChatPageV2 (on first-message conversation
+  // creation) dispatch huf:conversation-created. Without this listener a brand-new or
+  // forked conversation never appears in Recents until a full page reload, since
+  // ChatRailHistory mounts with refreshOnRouteChange: false.
+  const applyConversationCreated = useCallback(
+    async (detail: { conversationId: string; agentName?: string }) => {
+      const { conversationId, agentName } = detail;
+
+      try {
+        const conversationDoc = await getConversation(conversationId);
+        if (!conversationDoc) return;
+
+        const conversationItem: ChatListItem = {
+          id: conversationId,
+          title: conversationDoc.title || 'Untitled Chat',
+          agent: conversationDoc.agent || agentName || '',
+          timestamp: conversationDoc.last_activity || conversationDoc.modified,
+        };
+
+        addItemRef.current?.(conversationItem);
+      } catch (error) {
+        console.error('Error adding new conversation to list:', error);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const handleConversationCreated = (event: Event) => {
+      const customEvent = event as CustomEvent<{ conversationId: string; agentName?: string }>;
+      void applyConversationCreated(customEvent.detail);
+    };
+
+    window.addEventListener('huf:conversation-created', handleConversationCreated);
+    return () => {
+      window.removeEventListener('huf:conversation-created', handleConversationCreated);
+    };
+  }, [applyConversationCreated]);
+
   return (
     <>
       <aside className={cn('flex h-full w-chat-rail flex-none flex-col border-r border-line bg-paper', className)}>

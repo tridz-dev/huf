@@ -890,7 +890,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     return (
         <div className="flex-none px-[26px] pb-4">
             <form onSubmit={handleSubmit}>
-                <div className="rounded-xl border border-input bg-panel">
+                <div className="rounded-chat-bubble border border-input bg-panel">
                     <Textarea
                         ref={textareaRef}
                         value={message}
@@ -965,7 +965,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     type="button"
                                     onClick={handleStop}
                                     size="icon"
-                                    className="shrink-0 size-[26px] rounded-lg bg-ink hover:bg-ink/90 text-white"
+                                    className="shrink-0 size-[26px] rounded-chat-send bg-ink hover:bg-ink/90 text-white"
                                     aria-label="Stop generating response"
                                 >
                                     <Square className="size-3.5" fill="currentColor" />
@@ -979,7 +979,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                             isSubmitting)
                                     }
                                     size="icon"
-                                    className="shrink-0 size-[26px] rounded-lg bg-ink hover:bg-ink/90 text-white"
+                                    className="shrink-0 size-[26px] rounded-chat-send bg-ink hover:bg-ink/90 text-white"
                                     aria-label="Send message"
                                 >
                                     <ArrowUp className="size-[15px]" />

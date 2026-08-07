@@ -8,7 +8,6 @@ import type { ArtifactListItem } from "@/services/artifactPanelApi";
 interface ChatWindowProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
-    sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
     artifactPaneOpen?: boolean;
     onToggleArtifactPane?: () => void;
@@ -20,7 +19,6 @@ interface ChatWindowProps {
 export default function ChatWindow({
     chatId: chatIdProp,
     onConversationCreated,
-    sidebarOpen,
     onToggleSidebar,
     artifactPaneOpen,
     onToggleArtifactPane,
@@ -40,7 +38,6 @@ export default function ChatWindow({
         <div className="w-full h-full flex flex-col overflow-hidden bg-background">
             <ChatWindowHeader
                 chatId={chatIdProp}
-                sidebarOpen={sidebarOpen}
                 onToggleSidebar={onToggleSidebar}
                 artifactPaneOpen={artifactPaneOpen}
                 onToggleArtifactPane={onToggleArtifactPane}

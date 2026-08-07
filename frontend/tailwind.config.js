@@ -131,7 +131,9 @@ export default {
         '2xl':   'var(--r-xl, var(--r))',
         '3xl':   'var(--r-xl, var(--r))',
         none:    '0',
-        'chat-row': 'var(--chat-row-r)',
+        'chat-row':    'var(--chat-row-r)',
+        'chat-bubble': 'var(--chat-bubble-r)',
+        'chat-send':   'var(--chat-send-r)',
       },
       boxShadow: {
         DEFAULT: 'var(--shadow-flat, none)',

@@ -32,6 +32,7 @@ function ChatPage() {
     // triggered server-side instead of by the user.
     const handleOpenArtifactPane = useCallback(
         async (event: OpenArtifactPaneEvent) => {
+            if (isMobile) return;
             if (event.conversation_id !== chatId) return;
 
             const known = conversationArtifacts.find((a) => a.name === event.artifact_id);
@@ -48,7 +49,7 @@ function ChatPage() {
                 artifactPane.open({ name: found.name, title: found.title, artifact_type: found.artifact_type });
             }
         },
-        [chatId, conversationArtifacts, refetchArtifacts, artifactPane.open]
+        [isMobile, chatId, conversationArtifacts, refetchArtifacts, artifactPane.open]
     );
 
     useChatSocket({
@@ -138,11 +139,10 @@ function ChatPage() {
                 <ChatWindow
                     chatId={chatId}
                     onConversationCreated={handleConversationCreated}
-                    sidebarOpen={sidebarOpen}
                     onToggleSidebar={isMobile ? toggleSidebar : undefined}
                     artifactPaneOpen={artifactPane.isOpen}
                     onToggleArtifactPane={
-                        artifactPane.isOpen || conversationArtifacts.length > 0
+                        !isMobile && (artifactPane.isOpen || conversationArtifacts.length > 0)
                             ? handleToggleArtifactPane
                             : undefined
                     }

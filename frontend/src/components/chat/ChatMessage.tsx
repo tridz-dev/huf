@@ -12,7 +12,6 @@ import { CopyButton } from './CopyButton';
 import { Image } from '@/components/ai-elements/image';
 import { Video } from '@/components/ai-elements/video';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatTime } from './utils';
 import type { MessageType } from './types';
 import { MessageContentWithArtifacts } from './MessageContentWithArtifacts';
 import { ChatAttachmentCard } from './ChatAttachmentCard';
@@ -71,8 +70,6 @@ export function ChatMessage({
     const isUser = message.from === 'user';
     const isAssistant = message.from === 'assistant';
     const isEmpty = !message.versions[0]?.content || message.versions[0].content.trim() === '';
-    const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
-    const timeDisplay = timestamp ? formatTime(timestamp) : '';
     const runId = message.agentRunId || (
         message.key.startsWith('AR-') || message.key.startsWith('run-') ? message.key : undefined
     );
@@ -129,7 +126,7 @@ export function ChatMessage({
                         <MessageContent
                             className={cn(
                                 isUser
-                                    ? "!ml-0 !rounded-xl !bg-chat-bubble !px-3 !py-[7px] text-[13px] leading-[1.55]"
+                                    ? "!ml-0 !rounded-chat-bubble !bg-chat-bubble !px-3 !py-[7px] text-[13px] leading-[1.55]"
                                     : "w-full max-w-chat-measure text-[13px] leading-[1.65]"
                             )}
                         >
@@ -281,11 +278,9 @@ export function ChatMessage({
                                         <span className="text-[11px] font-medium">Cache metrics</span>
                                     </Link>
                                 )}
-                                {(agentModel || timeDisplay) && (
+                                {agentModel && (
                                     <span className="font-mono text-[11px] text-steel-soft">
                                         {agentModel}
-                                        {agentModel && timeDisplay ? ' · ' : ''}
-                                        {timeDisplay}
                                     </span>
                                 )}
                             </div>

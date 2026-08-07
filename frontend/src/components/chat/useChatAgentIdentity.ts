@@ -4,7 +4,7 @@ import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
 import type { AgentStarterPromptRow } from '@/types/agent.types';
 
-const DEFAULT_COLD_START_AGENT = 'Hub Orchestrator';
+export const DEFAULT_COLD_START_AGENT = 'Hub Orchestrator';
 
 // Pre-populate the agent name for a new chatId so ChatInput never flashes
 // invisible while `getConversation` is in-flight after a new-conversation

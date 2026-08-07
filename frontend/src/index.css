@@ -103,7 +103,10 @@
 
     /* Chat shell (spec section 28) — chat runs one density step tighter than
        the rest of the system. These are chat-scoped on purpose: do not use
-       them outside the chat page. */
+       them outside the chat page.
+       --chat-row-hover and --chat-bubble derive from --paper-deep (not a
+       hardcoded fill) so they track the active theme, the same reason
+       --chat-row-selected derives from --line rather than a hex literal. */
     --chat-rail-w:       232px;
     --chat-row-h:        26px;
     --chat-row-r:        7px;
@@ -111,9 +114,11 @@
     --chat-footer-h:     44px;
     --chat-turn-gap:     22px;
     --chat-measure:      620px;
-    --chat-row-hover:    #F0F0F4;
+    --chat-row-hover:    var(--paper-deep);
     --chat-row-selected: var(--line);
-    --chat-bubble:       #F0F0F4;
+    --chat-bubble:       var(--paper-deep);
+    --chat-bubble-r:     12px;
+    --chat-send-r:       8px;
 
     /* Typography */
     --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
