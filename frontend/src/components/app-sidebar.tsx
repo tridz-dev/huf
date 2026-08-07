@@ -279,7 +279,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsMode(true)}>
                 <Settings strokeWidth={1.6} />
-                <span className="font-body text-[13.5px]">Settings</span>
+                <span className="font-body text-[13.5px] group-data-[collapsible=icon]:hidden">Settings</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

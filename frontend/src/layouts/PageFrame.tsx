@@ -84,7 +84,7 @@ export function PageFrame({
         )}
 
         {filters && (
-          <div className="h-10 shrink-0 flex items-center border-b border-line px-6">
+          <div className="h-10 shrink-0 flex items-stretch border-b border-line px-6">
             {filters}
           </div>
         )}
