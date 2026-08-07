@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { CornerDownLeft, Paperclip, Square } from "lucide-react";
+import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import { ShortcutKey } from "../ui/shortcut-key";
-import { Badge } from "../ui/badge";
 import {
   sendMessage,
   streamingAvailable,
@@ -890,9 +888,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     }
 
     return (
-        <div className="px-6 pb-6 pt-2">
-            <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-                <div className="w-full border border-input rounded-lg shadow-md focus-within:ring-1 focus-within:ring-ring transition-all">
+        <div className="flex-none px-[26px] pb-4">
+            <form onSubmit={handleSubmit}>
+                <div className="rounded-xl border border-input bg-panel">
                     <Textarea
                         ref={textareaRef}
                         value={message}
@@ -902,9 +900,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         }}
                         rows={2}
                         onKeyDown={handleKeyDown}
-                        placeholder="Type your message..."
-                        className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-sm"
-                        style={{ 
+                        placeholder="Write a message…"
+                        className="w-full min-h-[60px] max-h-[200px] resize-none px-[13px] pb-1 pt-[11px] text-[13px] border-none shadow-none focus-visible:ring-0"
+                        style={{
                             height: `${MIN_HEIGHT}px`
                         }}
                         disabled={isSubmitting}
@@ -924,20 +922,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             />
                         </div>
                     )}
-                    <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                            <span className="flex items-center gap-x-1 text-[10px] text-steel-soft">
-                                Return to send
-                                <span aria-hidden="true">·</span>
-                                <ShortcutKey>
-                                    Shift-Return
-                                </ShortcutKey>
-                                for a new line
-                            </span>
-                            {agentModel && (
-                                <Badge variant="chip" className="shrink-0">
-                                    {agentModel}
-                                </Badge>
-                            )}
+                    <div className="flex items-center gap-2.5 px-2.5 pb-2 pt-1.5">
                             {allowFileUpload && (
                                 <>
                                     <input
@@ -950,16 +935,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     />
                                     <Button
                                         type="button"
-                                        variant="secondary"
+                                        variant="ghost"
                                         size="icon"
-                                        className="shrink-0 rounded-full"
+                                        className="shrink-0 text-steel"
                                         disabled={isSubmitting || pendingFile?.status === 'uploading'}
                                         onClick={() => fileInputRef.current?.click()}
                                         aria-label="Attach file"
                                     >
-                                        <Paperclip className="size-4" />
+                                        <Paperclip className="size-[17px]" />
                                     </Button>
                                 </>
+                            )}
+                            <span className="flex-1" />
+                            {agentModel && (
+                                <span className="text-[12px] text-steel">{agentModel}</span>
                             )}
                             {!message.trim() && !pendingFile && (
                                 <SpeechInput
@@ -976,7 +965,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     type="button"
                                     onClick={handleStop}
                                     size="icon"
-                                    className="shrink-0"
+                                    className="shrink-0 size-[26px] rounded-lg bg-ink hover:bg-ink/90 text-white"
                                     aria-label="Stop generating response"
                                 >
                                     <Square className="size-3.5" fill="currentColor" />
@@ -990,16 +979,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                             isSubmitting)
                                     }
                                     size="icon"
-                                    className="shrink-0"
+                                    className="shrink-0 size-[26px] rounded-lg bg-ink hover:bg-ink/90 text-white"
                                     aria-label="Send message"
                                 >
-                                    <CornerDownLeft/>
+                                    <ArrowUp className="size-[15px]" />
                                 </Button>
                             )}
                         </div>
                 </div>
             </form>
-            <p className="mt-3 text-[10px] text-steel-soft text-center">AI output can be inaccurate. Double check important info.</p>
+            <div className="mt-[7px] text-center text-[11px] text-steel-soft">
+                AI output can be inaccurate. Double check important info.
+            </div>
         </div>
     );
 });

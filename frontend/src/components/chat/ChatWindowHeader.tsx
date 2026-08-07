@@ -1,10 +1,15 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, ChevronDown, PanelLeftOpen, SquareAsterisk } from "lucide-react";
+import { Check, ChevronDown, PanelLeftOpen, PanelRight } from "lucide-react";
 import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../ui/popover";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { getConversation } from "@/services/chatApi";
@@ -17,30 +22,44 @@ interface ChatWindowHeaderProps {
     chatId?: string | null;
     sidebarOpen?: boolean;
     onToggleSidebar?: () => void;
+    /** Whether the right-docked artifact preview pane is currently open. Drives
+     * the toggle glyph's fill state (spec section 28). */
+    artifactPaneOpen?: boolean;
+    /** Toggles the artifact preview pane. The toggle button only renders when
+     * this is provided, so the control is never present-but-inert. */
+    onToggleArtifactPane?: () => void;
 }
 
 export function ChatWindowHeader({
     chatId: chatIdProp,
     onToggleSidebar,
+    artifactPaneOpen,
+    onToggleArtifactPane,
 }: ChatWindowHeaderProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
-    
+
     const [agent, setAgent] = useState<AgentDoc | null>(null);
     const [conversationModel, setConversationModel] = useState<string | null>(null);
+    const [conversationTitle, setConversationTitle] = useState<string | null>(null);
+    const [switcherOpen, setSwitcherOpen] = useState(false);
+    const [dataPanelOpen, setDataPanelOpen] = useState(false);
 
     useEffect(() => {
         let cancelled = false;
 
         if (!chatId) {
             setConversationModel(null);
+            setConversationTitle(null);
         }
 
         async function fetchAgentData() {
             try {
                 let agentName: string | null = null;
                 let model: string | null = null;
+                let title: string | null = null;
 
                 if (chatId) {
                     try {
@@ -51,8 +70,12 @@ export function ChatWindowHeader({
                         if (conversation?.model) {
                             model = conversation.model;
                         }
+                        if (conversation?.title) {
+                            title = conversation.title;
+                        }
                         if (!cancelled) {
                             setConversationModel(model);
+                            setConversationTitle(title);
                         }
                     } catch (error) {
                         console.error('Error fetching conversation:', error);
@@ -110,35 +133,12 @@ export function ChatWindowHeader({
 
     const showOpenSidebarBtn = !!onToggleSidebar;
 
+    const model = conversationModel || agent?.model;
+    const showConversationData = !!chatId && agent?.enable_conversation_data === 1;
+
     if (!agent) {
         return (
-            <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-line flex items-center justify-between bg-panel sticky top-0 z-10">
-                <div className="flex gap-x-3 items-center">
-                    {showOpenSidebarBtn && (
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-steel hover:text-ink"
-                            onClick={onToggleSidebar}
-                        >
-                            <PanelLeftOpen className="w-4 h-4" />
-                            <span className="sr-only">Open conversations</span>
-                        </Button>
-                    )}
-                    <ChatAvatar variant="chat_ai">?</ChatAvatar>
-                    <div className="flex flex-col">
-                        <AgentSwitcher currentAgentName={null} triggerLabel="No agent selected" />
-                        <span className="text-xs text-steel">Select an agent to start chatting</span>
-                    </div>
-                </div>
-            </header>
-        );
-    }
-
-    return (
-        <header className="h-16 pl-4 md:pl-14 pr-6 border-b border-line flex items-center justify-between bg-panel sticky top-0 z-10">
-            <div className="flex gap-x-3 items-center">
+            <header className="flex h-chat-header flex-none items-center gap-2.5 border-b border-paper-deep bg-panel px-4">
                 {showOpenSidebarBtn && (
                     <Button
                         type="button"
@@ -151,42 +151,118 @@ export function ChatWindowHeader({
                         <span className="sr-only">Open conversations</span>
                     </Button>
                 )}
-                <ChatAvatar variant="chat_ai" color={agent.agent_color || DEFAULT_AGENT_COLOR}>
-                    {getInitials(agent.agent_name)}
-                </ChatAvatar>
-                <div className="flex flex-col">
-                    <div className="flex gap-x-2 items-center">
-                        <AgentSwitcher currentAgentName={agent.name} triggerLabel={agent.agent_name} />
-                        {(conversationModel || agent.model) && (
-                            <Badge variant="outline" className="shrink-0">
-                                {conversationModel || agent.model}
-                            </Badge>
-                        )}
-                    </div>
-                    {agent.description && (
-                        <span className="text-xs text-steel max-w-[200px] truncate">
-                            {agent.description}
-                        </span>
-                    )}
+                <AgentSwitcher currentAgentName={null} triggerLabel="No agent selected" />
+                <span className="flex-1" />
+                <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
+            </header>
+        );
+    }
+
+    return (
+        <header className="flex h-chat-header flex-none items-center gap-2.5 border-b border-paper-deep bg-panel px-4">
+            {showOpenSidebarBtn && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-steel hover:text-ink"
+                    onClick={onToggleSidebar}
+                >
+                    <PanelLeftOpen className="w-4 h-4" />
+                    <span className="sr-only">Open conversations</span>
+                </Button>
+            )}
+
+            {/* The switcher popover has no trigger of its own here — it anchors to the
+                title button and is opened by the "Switch agent" menu item below. */}
+            <AgentSwitcher
+                currentAgentName={agent.name}
+                open={switcherOpen}
+                onOpenChange={setSwitcherOpen}
+            >
+                <div className="flex min-w-0 items-center">
+                    <DropdownMenu modal={false}>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                type="button"
+                                className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-deep"
+                            >
+                                <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
+                                    {conversationTitle || agent.agent_name}
+                                </span>
+                                <ChevronDown className="size-[14px] shrink-0 text-steel-soft" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuItem onSelect={() => navigate(`/agents/${agent.name}`)}>
+                                Open agent
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => {
+                                    // Let the menu finish closing before handing focus over.
+                                    setTimeout(() => setSwitcherOpen(true), 0);
+                                }}
+                            >
+                                Switch agent
+                            </DropdownMenuItem>
+                            {showConversationData && (
+                                <DropdownMenuItem
+                                    onSelect={() => {
+                                        setTimeout(() => setDataPanelOpen(true), 0);
+                                    }}
+                                >
+                                    Conversation data
+                                </DropdownMenuItem>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
-            </div>
-            <div className="flex items-center gap-2">
-                {chatId && agent.enable_conversation_data === 1 && (
-                    <ConversationDataPanel
-                        conversationId={chatId}
-                        canWrite={agent.conversation_data_api_permission === 'Write'}
-                    />
-                )}
-                <Link to={`/agents/${agent.name}`}>
-                    <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
-                        <div>
-                            <SquareAsterisk className="w-4 h-4" />
-                            <span>Open Agent</span>
-                        </div>
-                    </Button>
-                </Link>
-            </div>
+            </AgentSwitcher>
+
+            {model && <span className="font-mono text-[11px] text-steel-soft">{model}</span>}
+
+            <span className="flex-1" />
+
+            {/* Rendered outside the dropdown: a Sheet must not live inside DropdownMenuContent. */}
+            {showConversationData && chatId && (
+                <ConversationDataPanel
+                    conversationId={chatId}
+                    canWrite={agent.conversation_data_api_permission === 'Write'}
+                    open={dataPanelOpen}
+                    onOpenChange={setDataPanelOpen}
+                />
+            )}
+
+            <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
         </header>
+    );
+}
+
+interface ArtifactPaneToggleProps {
+    open?: boolean;
+    onToggle?: () => void;
+}
+
+/**
+ * The artifact pane toggle glyph (spec section 28): a plain `PanelRight`
+ * outline when closed, filled with full-contrast ink when open. Never a
+ * vertical "Artifact" tab. Rendered only when `onToggle` is provided, so an
+ * agent/conversation with no artifacts never shows an inert control.
+ */
+function ArtifactPaneToggle({ open, onToggle }: ArtifactPaneToggleProps) {
+    if (!onToggle) return null;
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={open ? "h-8 w-8 text-ink hover:text-ink" : "h-8 w-8 text-steel hover:text-ink"}
+            onClick={onToggle}
+        >
+            <PanelRight className={open ? "size-[17px] fill-current" : "size-[17px]"} />
+            <span className="sr-only">{open ? "Hide artifacts" : "Show artifacts"}</span>
+        </Button>
     );
 }
 
@@ -194,7 +270,14 @@ interface AgentSwitcherProps {
     /** Name (doctype id) of the agent currently active in this chat window,
      * or null when no conversation/agent has been resolved yet. */
     currentAgentName: string | null;
-    triggerLabel: string;
+    /** Label for the switcher's own trigger button. Omit to render no trigger — the
+     * popover then anchors to `children` and is opened via `open`/`onOpenChange`. */
+    triggerLabel?: string;
+    /** Controlled open state, for callers that open the switcher from elsewhere. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    /** Anchor element, used when there is no `triggerLabel`. */
+    children?: ReactNode;
 }
 
 /**
@@ -209,9 +292,20 @@ interface AgentSwitcherProps {
  * chats that do not yet have a chatId), so switching mid-conversation has
  * no existing "continue with a different agent" semantics to preserve.
  */
-function AgentSwitcher({ currentAgentName, triggerLabel }: AgentSwitcherProps) {
+function AgentSwitcher({
+    currentAgentName,
+    triggerLabel,
+    open: openProp,
+    onOpenChange,
+    children,
+}: AgentSwitcherProps) {
     const navigate = useNavigate();
-    const [open, setOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const open = openProp ?? internalOpen;
+    const setOpen = (next: boolean) => {
+        if (openProp === undefined) setInternalOpen(next);
+        onOpenChange?.(next);
+    };
     const [agents, setAgents] = useState<ChatAgentItem[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -241,15 +335,19 @@ function AgentSwitcher({ currentAgentName, triggerLabel }: AgentSwitcherProps) {
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <button
-                    type="button"
-                    className="flex items-center gap-1 rounded-md -mx-1 px-1 text-sm font-semibold text-ink hover:bg-paper-deep"
-                >
-                    <span className="truncate max-w-[200px]">{triggerLabel}</span>
-                    <ChevronDown className="w-3.5 h-3.5 shrink-0 text-steel-soft" />
-                </button>
-            </PopoverTrigger>
+            {triggerLabel !== undefined ? (
+                <PopoverTrigger asChild>
+                    <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-md -mx-1 px-1 text-sm font-semibold text-ink hover:bg-paper-deep"
+                    >
+                        <span className="truncate max-w-[200px]">{triggerLabel}</span>
+                        <ChevronDown className="w-3.5 h-3.5 shrink-0 text-steel-soft" />
+                    </button>
+                </PopoverTrigger>
+            ) : (
+                <PopoverAnchor asChild>{children}</PopoverAnchor>
+            )}
             <PopoverContent align="start" className="w-72 p-1">
                 <div className="px-2 py-1.5 text-xs font-normal text-steel">Assistants</div>
                 {loading ? (

@@ -1,10 +1,6 @@
 import { Link } from 'react-router-dom';
 import { BarChart2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
-import ChatAvatar from "./ChatAvatar";
-import { getInitials } from "@/utils/getInitials";
-import { useUser } from "@/contexts/UserContext";
-import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
@@ -48,8 +44,8 @@ function resolveVideoSrc(src: string): string {
 
 interface ChatMessageProps {
     message: MessageType;
-    agentName: string;
-    agentColor: string | null;
+    /** Model name shown in the assistant action row, e.g. "gpt-4-turbo". */
+    agentModel?: string;
     showToolExecutionDetails?: boolean;
     status: 'submitted' | 'streaming' | 'ready' | 'error';
     loadingType?: LoadingType;
@@ -63,8 +59,7 @@ interface ChatMessageProps {
 
 export function ChatMessage({
     message,
-    agentName,
-    agentColor,
+    agentModel,
     showToolExecutionDetails = true,
     status,
     loadingType = 'default',
@@ -73,13 +68,11 @@ export function ChatMessage({
     precedingUserMessage,
     onRegenerate,
 }: ChatMessageProps) {
-    const { user } = useUser();
     const isUser = message.from === 'user';
     const isAssistant = message.from === 'assistant';
     const isEmpty = !message.versions[0]?.content || message.versions[0].content.trim() === '';
     const timestamp = message.versions[0]?.id ? undefined : undefined; // We'll get timestamp from message if available
     const timeDisplay = timestamp ? formatTime(timestamp) : '';
-    const userInitials = user?.full_name ? getInitials(user.full_name) : 'You';
     const runId = message.agentRunId || (
         message.key.startsWith('AR-') || message.key.startsWith('run-') ? message.key : undefined
     );
@@ -111,43 +104,10 @@ export function ChatMessage({
     }
 
     return (
-        <div className={cn("flex gap-3 group relative", isUser ? "flex-row" : "flex-row")}>
-            <ChatAvatar 
-                variant={isUser ? "chat_user" : "chat_ai"}
-                color={!isUser ? (agentColor || DEFAULT_AGENT_COLOR) : undefined}
-            >
-                {isUser ? userInitials : getInitials(agentName)}
-            </ChatAvatar>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-ink">
-                        {isUser ? "You" : agentName}
-                    </span>
-                    {timeDisplay && (
-                        <span className="text-xs text-steel-soft">
-                            {timeDisplay}
-                        </span>
-                    )}
-                    {message.injected_memories && message.injected_memories.length > 0 && (
-                        <MemoryContextBadge memoryRecordNames={message.injected_memories} />
-                    )}
-                    {!isUser && runId && (
-                        <Link
-                            to={`/executions/${runId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto group/analytics"
-                            title="View context & cache metrics (/executions/:runId)"
-                            aria-label="View context & cache metrics"
-                        >
-                            <BarChart2 className="h-3.5 w-3.5 text-muted-foreground group-hover/analytics:text-foreground" />
-                            <span className="text-[11px] font-medium">Cache metrics</span>
-                        </Link>
-                    )}
-                </div>
-                
-                {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
-                    message.tools.map((tool, toolIndex) => (
+        <div className={cn("flex flex-col group relative", isUser ? "self-end" : "self-start w-full")}>
+            {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
+                <div className="flex w-full max-w-chat-measure flex-col gap-2">
+                    {message.tools.map((tool, toolIndex) => (
                         <Tool key={`${message.key}-tool-${toolIndex}`}>
                             <ToolHeader
                                 title={tool.name}
@@ -162,13 +122,24 @@ export function ChatMessage({
                                 />
                             </ToolContent>
                         </Tool>
-                    ))
-                ) : (
-                    <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
-                        <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
+                    ))}
+                </div>
+            ) : (
+                    <Message from={message.from} className={cn(isUser && "!ml-0 max-w-[68%]", !isUser && "!max-w-full")}>
+                        <MessageContent
+                            className={cn(
+                                isUser
+                                    ? "!ml-0 !rounded-xl !bg-chat-bubble !px-3 !py-[7px] text-[13px] leading-[1.55]"
+                                    : "w-full max-w-chat-measure text-[13px] leading-[1.65]"
+                            )}
+                        >
                             {isAssistant && message.reasoning && (
-                                <Reasoning isStreaming={!!message.reasoningStreaming} defaultOpen={false}>
-                                    <ReasoningTrigger />
+                                <Reasoning
+                                    isStreaming={!!message.reasoningStreaming}
+                                    defaultOpen={false}
+                                    className="border-l-2 border-line pl-[9px]"
+                                >
+                                    <ReasoningTrigger className="text-[12px] text-steel" />
                                     <ReasoningContent>{message.reasoning}</ReasoningContent>
                                 </Reasoning>
                             )}
@@ -285,7 +256,7 @@ export function ChatMessage({
                         </MessageContent>
                         {/* Actions for assistant messages */}
                         {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
-                            <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                            <div className="flex flex-wrap items-center gap-[14px]">
                                 <MessageActions
                                     content={message.versions[0].content}
                                     onFeedback={onFeedback}
@@ -294,17 +265,42 @@ export function ChatMessage({
                                     onRegenerate={handleRegenerate}
                                     regenerateDisabled={isBusy}
                                 />
+                                {message.injected_memories && message.injected_memories.length > 0 && (
+                                    <MemoryContextBadge memoryRecordNames={message.injected_memories} />
+                                )}
+                                {runId && (
+                                    <Link
+                                        to={`/executions/${runId}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-xs text-steel-soft hover:text-foreground transition-colors group/analytics"
+                                        title="View context & cache metrics (/executions/:runId)"
+                                        aria-label="View context & cache metrics"
+                                    >
+                                        <BarChart2 className="h-3.5 w-3.5 text-steel-soft group-hover/analytics:text-foreground" />
+                                        <span className="text-[11px] font-medium">Cache metrics</span>
+                                    </Link>
+                                )}
+                                {(agentModel || timeDisplay) && (
+                                    <span className="font-mono text-[11px] text-steel-soft">
+                                        {agentModel}
+                                        {agentModel && timeDisplay ? ' · ' : ''}
+                                        {timeDisplay}
+                                    </span>
+                                )}
                             </div>
                         )}
                         {/* Actions for user messages */}
                         {message.from === 'user' && message.versions[0]?.content && (
                             <div className="opacity-0 transition-opacity group-hover:opacity-100 flex items-center gap-2 text-muted-foreground">
                                 <CopyButton content={message.versions[0].content} />
+                                {message.injected_memories && message.injected_memories.length > 0 && (
+                                    <MemoryContextBadge memoryRecordNames={message.injected_memories} />
+                                )}
                             </div>
                         )}
                     </Message>
-                )}
-            </div>
+            )}
         </div>
     );
 }
