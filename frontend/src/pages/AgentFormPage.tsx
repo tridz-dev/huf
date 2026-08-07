@@ -208,6 +208,12 @@ export function AgentFormPage() {
       default: false,
       disabled: false,
     },
+    voice: {
+      label: 'Voice',
+      fields: ['voice_enabled', 'voice_engine', 'voice_config', 'voice_greeting', 'tts_model', 'tts_voice', 'stt_model'],
+      default: false,
+      disabled: false,
+    },
     triggers: {
       label: 'Triggers',
       fields: [], // Triggers tab doesn't have form fields
@@ -268,9 +274,6 @@ export function AgentFormPage() {
         'agent_color',
         'show_tool_execution_details',
         'image_generation_model',
-        'tts_model',
-        'tts_voice',
-        'stt_model',
         'allow_file_upload',
         'enable_ocr',
         'max_upload_size_mb',
@@ -1603,6 +1606,7 @@ export function AgentFormPage() {
           knowledge: ['agent_knowledge'],
           skills: ['agent_skill'],
           permissions: tabConfig.permissions.fields,
+          voice: tabConfig.voice.fields,
           advanced: tabConfig.advanced.fields,
         };
         const sectionPayload = Object.fromEntries(
@@ -2458,6 +2462,13 @@ export function AgentFormPage() {
 
               <TabsContent value="behavior" className="space-y-4">
                 <BehaviorTab form={form} locked={systemLocked} />
+              </TabsContent>
+
+              <TabsContent value="voice" className="space-y-4">
+                <div className="rounded-none border border-dashed p-6 text-sm text-steel-soft">
+                  Voice configuration is coming soon. This tab will let you enable voice mode and
+                  choose the speech and transcription models for this agent.
+                </div>
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">

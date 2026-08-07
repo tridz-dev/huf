@@ -98,8 +98,13 @@ def _get_engine_registry() -> dict[str, str]:
 	return frappe.local.huf_voice_engine_registry
 
 
-def get_engine(engine_key: str) -> VoiceEngine:
-	"""Get an instantiated engine by key."""
+def get_engine_class(engine_key: str) -> type[VoiceEngine]:
+	"""Resolve an engine's class by key, without instantiating it.
+
+	Use this when only the class-level metadata (``key``/``label``/``kind``) or
+	``get_config_schema()`` is needed — constructing an engine may be expensive,
+	and an engine is free to require constructor arguments.
+	"""
 	engines = _get_engine_registry()
 
 	if engine_key not in engines:
@@ -115,7 +120,12 @@ def get_engine(engine_key: str) -> VoiceEngine:
 			)
 		)
 
-	return engine_class()
+	return engine_class
+
+
+def get_engine(engine_key: str) -> VoiceEngine:
+	"""Get an instantiated engine by key."""
+	return get_engine_class(engine_key)()
 
 
 def supported_engines() -> list[str]:

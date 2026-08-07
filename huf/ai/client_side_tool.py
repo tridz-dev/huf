@@ -160,6 +160,13 @@ def submit_client_tool_result(call_id, result=None, error=None):
             frappe.PermissionError,
         )
 
+    # A late or replayed submit (e.g. a retrying browser) must not clobber a
+    # result the agent has already consumed. Once the row is Completed/Failed
+    # it is terminal — report that the result was already recorded instead of
+    # overwriting it or raising, since a duplicate submit is not an error.
+    if call.status in ("Completed", "Failed"):
+        return {"status": "already_recorded", "success": True, "call_status": call.status}
+
     if isinstance(result, str):
         try:
             result = json.loads(result)

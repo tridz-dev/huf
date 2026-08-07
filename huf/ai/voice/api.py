@@ -14,7 +14,7 @@ from typing import Any
 import frappe
 from frappe import _
 
-from huf.ai.voice import get_engine, supported_engines
+from huf.ai.voice import get_engine, get_engine_class, supported_engines
 from huf.ai.voice.engines.base import VoiceEngine
 
 
@@ -77,7 +77,9 @@ def list_engines() -> list[dict[str, Any]]:
 	"""Return ``{key, label, kind}`` for every discovered voice engine."""
 	engines = []
 	for engine_key in supported_engines():
-		engine_class = type(get_engine(engine_key))
+		# Class-level metadata only — never instantiate just to read it, since an
+		# engine is free to require constructor arguments.
+		engine_class = get_engine_class(engine_key)
 		engines.append(
 			{
 				"key": engine_class.key,
@@ -91,8 +93,9 @@ def list_engines() -> list[dict[str, Any]]:
 @frappe.whitelist()
 def get_config_schema(engine: str) -> list[dict[str, Any]]:
 	"""Return the config schema for a given voice engine key."""
-	engine_class = get_engine(engine)
-	return engine_class.get_config_schema()
+	# get_config_schema is a classmethod — resolve the class rather than
+	# constructing an engine we would immediately discard.
+	return get_engine_class(engine).get_config_schema()
 
 
 @frappe.whitelist()

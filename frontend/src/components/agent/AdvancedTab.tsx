@@ -18,20 +18,9 @@ import { FormSettingsSection } from './FormSettingsSection';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import {
 	MODEL_MODALITY_IMAGE,
-	MODEL_MODALITY_TTS,
-	MODEL_MODALITY_STT,
 	IMAGE_MODEL_LABEL,
 	IMAGE_MODEL_PLACEHOLDER,
 	IMAGE_MODEL_DESCRIPTION,
-	TTS_MODEL_LABEL,
-	TTS_MODEL_PLACEHOLDER,
-	TTS_MODEL_DESCRIPTION,
-	TTS_VOICE_LABEL,
-	TTS_VOICE_PLACEHOLDER,
-	TTS_VOICE_DESCRIPTION,
-	STT_MODEL_LABEL,
-	STT_MODEL_PLACEHOLDER,
-	STT_MODEL_DESCRIPTION,
 } from '@/data/ai';
 
 export interface ExecutionProfileOption {
@@ -112,8 +101,6 @@ export function AdvancedTab({
 	loadingMemoryPolicies = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
-	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
-	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
 	const contextStrategy = form.watch('context_strategy');
 	const summaryPromptMode = form.watch('summary_prompt_mode');
 	const enableConversationData = form.watch('enable_conversation_data');
@@ -844,7 +831,7 @@ This includes whether each tool call is completed and its corresponding result.`
 
 			<FormSettingsSection
 				title="Model Modality Settings"
-				description="Optional: select dedicated models for image generation, audio generation (TTS), and transcription (STT)."
+				description="Optional: select a dedicated model for image generation."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
 					<FormField
@@ -873,83 +860,6 @@ This includes whether each tool call is completed and its corresponding result.`
 									</LinkFieldControl>
 								</FormControl>
 								<FormDescription>{IMAGE_MODEL_DESCRIPTION}</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-
-					<FormField
-						control={form.control}
-						name="tts_model"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{TTS_MODEL_LABEL}</FormLabel>
-								<FormControl>
-									<LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
-										<Select
-											onValueChange={(v) => field.onChange(v || undefined)}
-											value={field.value || ''}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder={TTS_MODEL_PLACEHOLDER} />
-											</SelectTrigger>
-											<SelectContent>
-												{ttsModels.map((m) => (
-													<SelectItem key={m.name} value={m.name}>
-														{m.model_name || m.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</LinkFieldControl>
-								</FormControl>
-								<FormDescription>{TTS_MODEL_DESCRIPTION}</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-
-					<FormField
-						control={form.control}
-						name="tts_voice"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{TTS_VOICE_LABEL}</FormLabel>
-								<FormControl>
-									<Input placeholder={TTS_VOICE_PLACEHOLDER} {...field} value={field.value || ''} />
-								</FormControl>
-								<FormDescription>{TTS_VOICE_DESCRIPTION}</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-
-					<FormField
-						control={form.control}
-						name="stt_model"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{STT_MODEL_LABEL}</FormLabel>
-								<FormControl>
-									<LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
-										<Select
-											onValueChange={(v) => field.onChange(v || undefined)}
-											value={field.value || ''}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder={STT_MODEL_PLACEHOLDER} />
-											</SelectTrigger>
-											<SelectContent>
-												{sttModels.map((m) => (
-													<SelectItem key={m.name} value={m.name}>
-														{m.model_name || m.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</LinkFieldControl>
-								</FormControl>
-								<FormDescription>{STT_MODEL_DESCRIPTION}</FormDescription>
 								<FormMessage />
 							</FormItem>
 						)}
