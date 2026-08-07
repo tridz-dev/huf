@@ -1,0 +1,222 @@
+{
+	"actions": [],
+	"allow_rename": 1,
+	"autoname": "hash",
+	"creation": "2026-08-07 00:00:00.000000",
+	"doctype": "DocType",
+	"engine": "InnoDB",
+	"field_order": [
+		"knowledge_source",
+		"source_kind",
+		"status",
+		"column_break_1",
+		"total_discovered",
+		"pending",
+		"processing",
+		"succeeded",
+		"failed",
+		"skipped",
+		"timing_section",
+		"started_at",
+		"finished_at",
+		"error_message",
+		"sync_cursor",
+		"source_config_section",
+		"s3_bucket",
+		"s3_prefix",
+		"directory_path",
+		"sftp_connection",
+		"sftp_root_path",
+		"items"
+	],
+	"fields": [
+		{
+			"fieldname": "knowledge_source",
+			"fieldtype": "Link",
+			"label": "Knowledge Source",
+			"options": "Knowledge Source",
+			"reqd": 1
+		},
+		{
+			"fieldname": "source_kind",
+			"fieldtype": "Select",
+			"label": "Source Kind",
+			"options": "Upload\nDirectory\nS3\nSFTP\nGoogle Drive",
+			"reqd": 1
+		},
+		{
+			"default": "Queued",
+			"fieldname": "status",
+			"fieldtype": "Select",
+			"label": "Status",
+			"options": "Queued\nScanning\nProcessing\nCompleted\nCompleted with Errors\nFailed",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_1",
+			"fieldtype": "Column Break"
+		},
+		{
+			"default": "0",
+			"fieldname": "total_discovered",
+			"fieldtype": "Int",
+			"label": "Total Discovered",
+			"read_only": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "pending",
+			"fieldtype": "Int",
+			"label": "Pending",
+			"read_only": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "processing",
+			"fieldtype": "Int",
+			"label": "Processing",
+			"read_only": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "succeeded",
+			"fieldtype": "Int",
+			"label": "Succeeded",
+			"read_only": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "failed",
+			"fieldtype": "Int",
+			"label": "Failed",
+			"read_only": 1
+		},
+		{
+			"default": "0",
+			"fieldname": "skipped",
+			"fieldtype": "Int",
+			"label": "Skipped",
+			"read_only": 1
+		},
+		{
+			"fieldname": "timing_section",
+			"fieldtype": "Section Break",
+			"label": "Timing"
+		},
+		{
+			"fieldname": "started_at",
+			"fieldtype": "Datetime",
+			"label": "Started At",
+			"read_only": 1
+		},
+		{
+			"fieldname": "finished_at",
+			"fieldtype": "Datetime",
+			"label": "Finished At",
+			"read_only": 1
+		},
+		{
+			"fieldname": "error_message",
+			"fieldtype": "Small Text",
+			"label": "Error Message",
+			"read_only": 1
+		},
+		{
+			"fieldname": "sync_cursor",
+			"fieldtype": "Long Text",
+			"label": "Sync Cursor",
+			"read_only": 1,
+			"hidden": 1
+		},
+		{
+			"fieldname": "source_config_section",
+			"fieldtype": "Section Break",
+			"label": "Source Configuration"
+		},
+		{
+			"fieldname": "s3_bucket",
+			"fieldtype": "Data",
+			"label": "S3 Bucket",
+			"depends_on": "eval:doc.source_kind=='S3'"
+		},
+		{
+			"fieldname": "s3_prefix",
+			"fieldtype": "Data",
+			"label": "S3 Prefix",
+			"depends_on": "eval:doc.source_kind=='S3'"
+		},
+		{
+			"fieldname": "directory_path",
+			"fieldtype": "Data",
+			"label": "Directory Path",
+			"depends_on": "eval:doc.source_kind=='Directory'"
+		},
+		{
+			"fieldname": "sftp_connection",
+			"fieldtype": "Link",
+			"label": "SFTP Connection",
+			"options": "SSH Connection",
+			"depends_on": "eval:doc.source_kind=='SFTP'"
+		},
+		{
+			"fieldname": "sftp_root_path",
+			"fieldtype": "Data",
+			"label": "SFTP Root Path",
+			"depends_on": "eval:doc.source_kind=='SFTP'"
+		},
+		{
+			"fieldname": "items",
+			"fieldtype": "Table",
+			"label": "Items",
+			"options": "Ingestion Job Item"
+		}
+	],
+	"index_web_pages_for_search": 1,
+	"links": [],
+	"modified": "2026-08-07 00:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Huf",
+	"name": "Ingestion Job",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"create": 1,
+			"delete": 1,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "System Manager",
+			"share": 1,
+			"write": 1
+		},
+		{
+			"create": 1,
+			"delete": 0,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "Huf Manager",
+			"share": 1,
+			"write": 1
+		},
+		{
+			"create": 1,
+			"delete": 0,
+			"email": 1,
+			"export": 1,
+			"print": 1,
+			"read": 1,
+			"report": 1,
+			"role": "Huf User",
+			"share": 1,
+			"write": 1
+		}
+	],
+	"sort_field": "modified",
+	"sort_order": "DESC",
+	"states": []
+}

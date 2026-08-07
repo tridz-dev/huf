@@ -15,6 +15,9 @@
   "status_section",
   "status",
   "source_hash",
+  "external_source_path",
+  "external_checksum",
+  "ingestion_job",
   "chunks_created",
   "character_count",
   "processed_at",
@@ -77,6 +80,25 @@
    "fieldname": "source_hash",
    "fieldtype": "Data",
    "label": "Source Hash",
+   "read_only": 1
+  },
+  {
+   "fieldname": "external_source_path",
+   "fieldtype": "Data",
+   "label": "External Source Path",
+   "read_only": 1
+  },
+  {
+   "fieldname": "external_checksum",
+   "fieldtype": "Data",
+   "label": "External Checksum",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ingestion_job",
+   "fieldtype": "Link",
+   "options": "Ingestion Job",
+   "label": "Ingestion Job",
    "read_only": 1
   },
   {

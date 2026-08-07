@@ -730,6 +730,48 @@ GOOGLE_DRIVE_TOOLS = [
 ]
 
 
+S3_TOOLS = [
+	{
+		"tool_name": "s3_list_buckets",
+		"description": "List S3 buckets accessible with the configured AWS credentials.",
+		"function_path": "huf.ai.tools.s3.handle_list_buckets",
+		"category": "Cloud",
+		"parameters": [],
+	},
+	{
+		"tool_name": "s3_list_objects",
+		"description": "List objects in an S3 bucket, optionally filtered by prefix.",
+		"function_path": "huf.ai.tools.s3.handle_list_objects",
+		"category": "Cloud",
+		"parameters": [
+			_p("bucket", required=True, description="S3 bucket name"),
+			_p("prefix", description="Optional key prefix to filter by"),
+			_p("limit", type="integer", description="Max objects (default 50)"),
+		],
+	},
+	{
+		"tool_name": "s3_get_object_metadata",
+		"description": "Get metadata (size, type, last modified) of an S3 object.",
+		"function_path": "huf.ai.tools.s3.handle_get_object_metadata",
+		"category": "Cloud",
+		"parameters": [
+			_p("bucket", required=True, description="S3 bucket name"),
+			_p("key", required=True, description="Object key"),
+		],
+	},
+	{
+		"tool_name": "s3_search_objects",
+		"description": "Search for objects in an S3 bucket by key/name substring.",
+		"function_path": "huf.ai.tools.s3.handle_search_objects",
+		"category": "Cloud",
+		"parameters": [
+			_p("bucket", required=True, description="S3 bucket name"),
+			_p("query", required=True, description="Substring to search for in object keys"),
+		],
+	},
+]
+
+
 GOOGLE_MEET_TOOLS = [
 	{
 		"tool_name": "google_meet_create_space",
@@ -1852,6 +1894,7 @@ ALL_INTEGRATION_TOOLS = (
 	# `google_places.py` sets SERVICE_NAME = "google_maps".
 	+ _with_service(GOOGLE_PLACES_TOOLS, "google_maps")
 	+ _with_service(GOOGLE_DRIVE_TOOLS, "google_drive")
+	+ _with_service(S3_TOOLS, "aws_s3")
 	+ _with_service(GOOGLE_MEET_TOOLS, "google_meet")
 	+ _with_service(SERP_HOTEL_TOOLS, "serpapi")
 	+ _with_service(SERP_REVIEW_TOOLS, "serpapi")

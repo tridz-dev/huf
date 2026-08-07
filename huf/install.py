@@ -1100,6 +1100,16 @@ def register_integration_services():
 				{"key": "api_key", "label": "SerpApi API Key", "required": True}
 			]
 		},
+		{
+			"service_name": "aws_s3",
+			"category": "Cloud",
+			"description": "Amazon S3 object storage -- list, read, and search objects in a bucket",
+			"required_credentials": [
+				{"key": "access_key_id", "label": "AWS Access Key ID", "required": True},
+				{"key": "secret_access_key", "label": "AWS Secret Access Key", "required": True},
+				{"key": "region", "label": "AWS Region", "required": True}
+			]
+		},
 	]
 	
 	# Create or update each service

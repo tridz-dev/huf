@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Calendar, Settings, Database, BookOpen } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Calendar, Settings, Database, BookOpen, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
@@ -9,6 +9,7 @@ import { getKnowledgeSources } from '../services/knowledgeApi';
 import { formatTimeAgo } from '../utils/time';
 import { knowledgeSourceFilterStatuses, knowledgeTypeLabels } from '../data/knowledge';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
+import { KnowledgeBulkImportModal } from '../components/knowledge/KnowledgeBulkImportModal';
 
 function getStatusVariant(source: KnowledgeSourceDoc): 'default' | 'secondary' | 'destructive' | 'success' | 'outline' {
   if (source.disabled === 1) return 'secondary';
@@ -35,6 +36,8 @@ export default KnowledgeSourcesPage;
 
 function KnowledgeSourcesPage() {
   const navigate = useNavigate();
+  const [bulkImportTarget, setBulkImportTarget] = useState<string | null>(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   const {
     items: sources,
@@ -101,6 +104,11 @@ function KnowledgeSourcesPage() {
         />
       }
     >
+      <KnowledgeBulkImportModal
+        knowledgeSource={bulkImportTarget ?? ''}
+        open={bulkImportOpen}
+        onOpenChange={setBulkImportOpen}
+      />
       {error && !initialLoading && (
         <div className="text-center py-12">
           <p className="text-destructive mb-4">Failed to load knowledge sources</p>
@@ -145,6 +153,14 @@ function KnowledgeSourcesPage() {
                   icon: Settings,
                   label: 'Configure',
                   onClick: () => navigate(`/knowledge/${source.name}`),
+                },
+                {
+                  icon: Upload,
+                  label: 'Bulk Import',
+                  onClick: () => {
+                    setBulkImportTarget(source.name);
+                    setBulkImportOpen(true);
+                  },
                 },
               ]}
               onClick={() => navigate(`/knowledge/${source.name}`)}

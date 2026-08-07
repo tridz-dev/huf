@@ -1,0 +1,1 @@
+"""Bulk ingestion orchestration: scan external sources (upload, directory, S3, SFTP) and batch-process discovered documents through the existing single-document knowledge ingestion pipeline (huf.ai.knowledge.indexer.process_knowledge_input)."""
