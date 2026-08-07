@@ -1,16 +1,16 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, ChevronDown, PanelLeftOpen, PanelRight } from "lucide-react";
+import { Check, ChevronDown, MoreVertical, PanelLeftOpen, PanelRight, Pencil, Settings } from "lucide-react";
 import { Button } from "../ui/button";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Input } from "../ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { getConversation } from "@/services/chatApi";
 import { getAgent, getChatAgents, type ChatAgentItem } from "@/services/agentApi";
@@ -151,7 +151,15 @@ export function ChatWindowHeader({
                         <span className="sr-only">Open conversations</span>
                     </Button>
                 )}
-                <AgentSwitcher currentAgentName={null} triggerLabel="No agent selected" />
+                <AgentSwitcher currentAgentName={null} open={switcherOpen} onOpenChange={setSwitcherOpen}>
+                    <button
+                        type="button"
+                        className="flex items-center gap-1 rounded-md -mx-1 px-1 text-sm font-semibold text-ink hover:bg-paper-deep"
+                    >
+                        <span className="truncate max-w-[200px]">No agent selected</span>
+                        <ChevronDown className="w-3.5 h-3.5 shrink-0 text-steel-soft" />
+                    </button>
+                </AgentSwitcher>
                 <span className="flex-1" />
                 <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
             </header>
@@ -173,55 +181,69 @@ export function ChatWindowHeader({
                 </Button>
             )}
 
-            {/* The switcher popover has no trigger of its own here — it anchors to the
-                title button and is opened by the "Switch agent" menu item below. */}
-            <AgentSwitcher
-                currentAgentName={agent.name}
-                open={switcherOpen}
-                onOpenChange={setSwitcherOpen}
-            >
-                <div className="flex min-w-0 items-center">
-                    <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                            <button
-                                type="button"
-                                className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-deep"
-                            >
-                                <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
-                                    {conversationTitle || agent.agent_name}
-                                </span>
-                                <ChevronDown className="size-[14px] shrink-0 text-steel-soft" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                            <DropdownMenuItem onSelect={() => navigate(`/agents/${agent.name}`)}>
-                                Open agent
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={() => {
-                                    // Let the menu finish closing before handing focus over.
-                                    setTimeout(() => setSwitcherOpen(true), 0);
-                                }}
-                            >
-                                Switch agent
-                            </DropdownMenuItem>
-                            {showConversationData && (
-                                <DropdownMenuItem
-                                    onSelect={() => {
-                                        setTimeout(() => setDataPanelOpen(true), 0);
-                                    }}
-                                >
-                                    Conversation data
-                                </DropdownMenuItem>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
+            {/* Spec 28.4: the title chevron opens the picker itself, not a two-item
+                menu. Switching stays in the conversation; settings navigates away —
+                those two different outcomes never share a menu (see the overflow
+                menu below for the navigate-away actions). */}
+            <AgentSwitcher currentAgentName={agent.name} open={switcherOpen} onOpenChange={setSwitcherOpen}>
+                <button
+                    type="button"
+                    className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-deep"
+                >
+                    <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
+                        {conversationTitle || agent.agent_name}
+                    </span>
+                    <ChevronDown className="size-[14px] shrink-0 text-steel-soft" />
+                </button>
             </AgentSwitcher>
 
             {model && <span className="font-mono text-[11px] text-steel-soft">{model}</span>}
 
             <span className="flex-1" />
+
+            <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-steel hover:text-ink"
+                    >
+                        <MoreVertical className="size-4" />
+                        <span className="sr-only">Conversation actions</span>
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onSelect={() => navigate(`/agents/${agent.name}`)}>
+                        <Settings className="mr-2 size-4" />
+                        Agent settings
+                    </DropdownMenuItem>
+                    {chatId && (
+                        <DropdownMenuItem
+                            onSelect={() => {
+                                window.dispatchEvent(
+                                    new CustomEvent('huf:conversation-rename-request', {
+                                        detail: { conversationId: chatId },
+                                    })
+                                );
+                            }}
+                        >
+                            <Pencil className="mr-2 size-4" />
+                            Rename
+                        </DropdownMenuItem>
+                    )}
+                    {showConversationData && (
+                        <DropdownMenuItem
+                            onSelect={() => {
+                                // Let the menu finish closing before opening the sheet.
+                                setTimeout(() => setDataPanelOpen(true), 0);
+                            }}
+                        >
+                            Conversation data
+                        </DropdownMenuItem>
+                    )}
+                </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Rendered outside the dropdown: a Sheet must not live inside DropdownMenuContent. */}
             {showConversationData && chatId && (
@@ -270,14 +292,44 @@ interface AgentSwitcherProps {
     /** Name (doctype id) of the agent currently active in this chat window,
      * or null when no conversation/agent has been resolved yet. */
     currentAgentName: string | null;
-    /** Label for the switcher's own trigger button. Omit to render no trigger — the
-     * popover then anchors to `children` and is opened via `open`/`onOpenChange`. */
-    triggerLabel?: string;
-    /** Controlled open state, for callers that open the switcher from elsewhere. */
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
-    /** Anchor element, used when there is no `triggerLabel`. */
-    children?: ReactNode;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    /** Trigger element the popover anchors to and opens from (wrapped `asChild`). */
+    children: ReactNode;
+}
+
+/** Local-provider name match. There is no "is local" flag on the provider
+ * doctype, so this is a heuristic on the provider's display name. */
+const LOCAL_PROVIDER_PATTERN = /ollama|local|lm ?studio/i;
+
+interface AgentProviderGroup {
+    provider: string;
+    agents: ChatAgentItem[];
+}
+
+/** Groups agents by provider, local providers first (see
+ * `LOCAL_PROVIDER_PATTERN`), then the rest alphabetically. */
+function groupAgentsByProvider(agents: ChatAgentItem[]): AgentProviderGroup[] {
+    const byProvider = new Map<string, ChatAgentItem[]>();
+    for (const agentItem of agents) {
+        const provider = agentItem.provider || "Other";
+        const bucket = byProvider.get(provider);
+        if (bucket) {
+            bucket.push(agentItem);
+        } else {
+            byProvider.set(provider, [agentItem]);
+        }
+    }
+
+    const providers = Array.from(byProvider.keys());
+    providers.sort((a, b) => {
+        const aLocal = LOCAL_PROVIDER_PATTERN.test(a);
+        const bLocal = LOCAL_PROVIDER_PATTERN.test(b);
+        if (aLocal !== bLocal) return aLocal ? -1 : 1;
+        return a.localeCompare(b);
+    });
+
+    return providers.map((provider) => ({ provider, agents: byProvider.get(provider) ?? [] }));
 }
 
 /**
@@ -294,20 +346,14 @@ interface AgentSwitcherProps {
  */
 function AgentSwitcher({
     currentAgentName,
-    triggerLabel,
-    open: openProp,
+    open,
     onOpenChange,
     children,
 }: AgentSwitcherProps) {
     const navigate = useNavigate();
-    const [internalOpen, setInternalOpen] = useState(false);
-    const open = openProp ?? internalOpen;
-    const setOpen = (next: boolean) => {
-        if (openProp === undefined) setInternalOpen(next);
-        onOpenChange?.(next);
-    };
     const [agents, setAgents] = useState<ChatAgentItem[]>([]);
     const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState("");
 
     useEffect(() => {
         if (!open) return;
@@ -328,59 +374,88 @@ function AgentSwitcher({
         };
     }, [open]);
 
+    // Reset the search box each time the picker opens rather than leaving a
+    // stale query behind from the last time it was used.
+    useEffect(() => {
+        if (open) setSearch("");
+    }, [open]);
+
     const handleSelect = (agentName: string) => {
-        setOpen(false);
+        onOpenChange(false);
         navigate(`/chat?agent=${encodeURIComponent(agentName)}`);
     };
 
+    const filteredAgents = useMemo(() => {
+        const query = search.trim().toLowerCase();
+        if (!query) return agents;
+        return agents.filter((agentItem) => {
+            const name = (agentItem.agent_name || agentItem.name).toLowerCase();
+            const model = (agentItem.model || "").toLowerCase();
+            return name.includes(query) || model.includes(query);
+        });
+    }, [agents, search]);
+
+    const groups = useMemo(() => groupAgentsByProvider(filteredAgents), [filteredAgents]);
+
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            {triggerLabel !== undefined ? (
-                <PopoverTrigger asChild>
-                    <button
-                        type="button"
-                        className="flex items-center gap-1 rounded-md -mx-1 px-1 text-sm font-semibold text-ink hover:bg-paper-deep"
-                    >
-                        <span className="truncate max-w-[200px]">{triggerLabel}</span>
-                        <ChevronDown className="w-3.5 h-3.5 shrink-0 text-steel-soft" />
-                    </button>
-                </PopoverTrigger>
-            ) : (
-                <PopoverAnchor asChild>{children}</PopoverAnchor>
-            )}
-            <PopoverContent align="start" className="w-72 p-1">
-                <div className="px-2 py-1.5 text-xs font-normal text-steel">Assistants</div>
+        <Popover open={open} onOpenChange={onOpenChange}>
+            <PopoverTrigger asChild>{children}</PopoverTrigger>
+            <PopoverContent align="start" className="w-72 p-1.5">
+                <Input
+                    size="sm"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search agents"
+                    className="mb-1 h-7 text-[13px]"
+                />
                 {loading ? (
-                    <div className="px-2 py-3 text-center text-sm text-steel">Loading agents...</div>
-                ) : agents.length === 0 ? (
-                    <div className="px-2 py-3 text-center text-sm text-steel">No chat agents available.</div>
+                    <div className="px-2 py-3 text-center text-[13px] text-steel">Loading agents...</div>
+                ) : groups.length === 0 ? (
+                    <div className="px-2 py-3 text-center text-[13px] text-steel">No chat agents available.</div>
                 ) : (
                     <div className="max-h-80 overflow-y-auto">
-                        {agents.map((agentItem) => (
-                            <button
-                                key={agentItem.name}
-                                type="button"
-                                onClick={() => handleSelect(agentItem.name)}
-                                className="flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left hover:bg-paper-deep"
-                            >
-                                <ChatAvatar
-                                    variant="listing_ai"
-                                    color={agentItem.agent_color || DEFAULT_AGENT_COLOR}
+                        {groups.map((group, groupIndex) => (
+                            <div key={group.provider}>
+                                <div
+                                    className={
+                                        groupIndex > 0
+                                            ? "mt-1 flex h-[22px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.04em] text-steel-soft"
+                                            : "flex h-[22px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.04em] text-steel-soft"
+                                    }
                                 >
-                                    {getInitials(agentItem.agent_name || agentItem.name)}
-                                </ChatAvatar>
-                                <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-sm text-ink">
-                                        {agentItem.agent_name || agentItem.name}
-                                    </span>
-                                    <span className="block truncate text-xs text-steel">
-                                        {agentItem.description || agentItem.model || "Chat agent"}
-                                    </span>
-                                </span>
-                                {agentItem.name === currentAgentName && (
-                                    <Check className="size-4 shrink-0 text-primary" />
-                                )}
-                            </button>
+                                    {group.provider}
+                                </div>
+                                {group.agents.map((agentItem) => {
+                                    const isCurrent = agentItem.name === currentAgentName;
+                                    const hasModel = !!agentItem.model;
+                                    return (
+                                        <button
+                                            key={agentItem.name}
+                                            type="button"
+                                            onClick={() => handleSelect(agentItem.name)}
+                                            className={
+                                                (isCurrent ? "bg-paper-deep " : "hover:bg-paper ") +
+                                                (hasModel ? "" : "opacity-55 ") +
+                                                "flex h-[34px] items-center gap-[9px] px-3 text-left"
+                                            }
+                                        >
+                                            <span
+                                                className="flex h-5 w-5 flex-none items-center justify-center rounded-md text-[9px] text-white"
+                                                style={{ backgroundColor: agentItem.agent_color || DEFAULT_AGENT_COLOR }}
+                                            >
+                                                {getInitials(agentItem.agent_name || agentItem.name)}
+                                            </span>
+                                            <span className="min-w-0 flex-1 truncate text-[13px]">
+                                                {agentItem.agent_name || agentItem.name}
+                                                {agentItem.model && (
+                                                    <span className="font-mono text-[11px] text-steel-soft"> {agentItem.model}</span>
+                                                )}
+                                            </span>
+                                            {isCurrent && <Check className="size-[15px] shrink-0 text-ink" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         ))}
                     </div>
                 )}

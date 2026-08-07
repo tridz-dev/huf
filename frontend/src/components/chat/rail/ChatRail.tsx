@@ -194,6 +194,20 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
     };
   }, [applyConversationCreated]);
 
+  // The header's overflow menu cannot reach handleRename (and the row's
+  // ConversationTitle ref) directly, so it dispatches this event instead.
+  useEffect(() => {
+    const handleRenameRequest = (event: Event) => {
+      const customEvent = event as CustomEvent<{ conversationId: string }>;
+      handleRename(customEvent.detail.conversationId);
+    };
+
+    window.addEventListener('huf:conversation-rename-request', handleRenameRequest);
+    return () => {
+      window.removeEventListener('huf:conversation-rename-request', handleRenameRequest);
+    };
+  }, [handleRename]);
+
   return (
     <>
       <aside className={cn('flex h-full w-chat-rail flex-none flex-col border-r border-line bg-paper', className)}>
