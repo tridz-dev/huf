@@ -528,7 +528,9 @@ function AgentSwitcher({
                 className="w-[300px] rounded-[12px] border-input p-0 shadow-lg"
             >
                 <div className="border-b border-[#f4f4f7] p-2">
-                    <div className="flex h-7 items-center gap-[7px] rounded-lg bg-[#f4f4f7] px-[9px]">
+                    {/* 8px, not rounded-lg: --r-lg is 14px here, which reads as a pill
+                        at 28px tall. Spec 28.4 draws a rounded rectangle. */}
+                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-[#f4f4f7] px-[9px]">
                         <Search className="size-[14px] shrink-0 text-steel-soft" />
                         <input
                             value={search}
