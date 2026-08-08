@@ -10,9 +10,9 @@ import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Search, Webhook, Clock, Mail, MessageSquare, FileText, Calendar, Database, Sheet } from 'lucide-react';
+import { Search, Webhook, Clock, Mail, MessageSquare, FileText, Calendar, Database, Sheet, type LucideIcon } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
-import { TriggerConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
+import { TriggerConfig, ScheduleIntervalType, DocEventType, AppTriggerIntegration } from '../../types/flow.types';
 import { ModalTab } from '../../types/modal.types';
 
 interface TriggerConfigModalProps {
@@ -22,7 +22,7 @@ interface TriggerConfigModalProps {
   initialConfig?: TriggerConfig;
 }
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
   Webhook,
   Clock,
   Mail,
@@ -64,7 +64,7 @@ export function TriggerConfigModal({
       setConfig({
         type: 'webhook',
         url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
-        apiKey: Math.random().toString(36).substring(2, 15),
+        apiKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
         method: 'POST'
       });
     } else if (triggerId === 'schedule') {
@@ -82,7 +82,7 @@ export function TriggerConfigModal({
     } else if (triggerId.includes('gmail') || triggerId.includes('slack')) {
       setConfig({
         type: 'app-trigger',
-        integration: triggerId as any,
+        integration: triggerId as AppTriggerIntegration,
         event: 'new_message'
       });
     } else {
@@ -125,7 +125,7 @@ export function TriggerConfigModal({
             <Select
               value={config.method}
               onValueChange={(value) =>
-                setConfig({ ...config, method: value as any })
+                setConfig({ ...config, method: value as 'GET' | 'POST' | 'PUT' | 'DELETE' })
               }
             >
               <SelectTrigger id="method">

@@ -10,7 +10,7 @@ import { JSXPreviewRenderer } from './JSXPreviewRenderer';
 import { hasArtifacts } from '@/utils/artifactParser';
 import { hasWebPreviews } from '@/utils/webPreviewParser';
 import { hasJSXPreviews } from '@/utils/jsxPreviewParser';
-import { parseMessagePreviewContent } from '@/utils/messageContentParser';
+import { parseMessagePreviewContent, unwrapJsonWrappedAnswer } from '@/utils/messageContentParser';
 import { decodeHtmlEntities } from '@/utils/decodeHtmlEntities';
 
 interface MessageContentWithArtifactsProps {
@@ -20,7 +20,7 @@ interface MessageContentWithArtifactsProps {
 }
 
 export function MessageContentWithArtifacts({ content, messageId }: MessageContentWithArtifactsProps) {
-	const decodedContent = decodeHtmlEntities(content);
+	const decodedContent = unwrapJsonWrappedAnswer(decodeHtmlEntities(content));
 
 	const contentHasArtifacts = hasArtifacts(decodedContent);
 	const contentHasWebPreviews = hasWebPreviews(decodedContent);
@@ -29,12 +29,12 @@ export function MessageContentWithArtifacts({ content, messageId }: MessageConte
 	if (!contentHasArtifacts && !contentHasWebPreviews && !contentHasJSXPreviews) {
 		return (
 			<div className="min-w-0 max-w-full overflow-x-auto">
-				<MessageResponse>{content}</MessageResponse>
+				<MessageResponse>{decodedContent}</MessageResponse>
 			</div>
 		);
 	}
 
-	const parsed = parseMessagePreviewContent(content);
+	const parsed = parseMessagePreviewContent(decodedContent);
 	const { textContent, jsxPreviews, webPreviews, artifacts } = parsed;
 
 	return (

@@ -1,4 +1,5 @@
-import { db } from '@/lib/frappe-sdk';
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
+import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -93,13 +94,15 @@ export async function getProviders(
     // Backward compatibility: if no params, return array (old API)
     if (!params) {
       const providers = await db.getDocList(doctype['AI Provider'], {
-        fields: ['name', 'provider_name', 'provider_brand'],
+        fields: ['name', 'provider_name', 'provider_brand', 'is_local_llm', 'api_base_url'],
         limit: 1000,
       });
-      return providers.map((p: any) => ({
-        name: p.name,
-        provider_name: p.provider_name || p.name,
-        provider_brand: p.provider_brand,
+      return providers.map((p: Record<string, unknown>) => ({
+        name: p.name as string,
+        provider_name: (p.provider_name as string) || (p.name as string),
+        provider_brand: p.provider_brand as string | undefined,
+        is_local_llm: p.is_local_llm as number | undefined,
+        api_base_url: p.api_base_url as string | undefined,
       })) as AIProvider[];
     }
 
@@ -111,7 +114,7 @@ export async function getProviders(
     } = params;
 
     // Build filters
-    const filters: Array<[string, string, unknown]> = [];
+    const filters: Filter<Record<string, unknown>>[] = [];
 
     // Build search filters if provided
     if (search && search.trim()) {
@@ -120,17 +123,19 @@ export async function getProviders(
 
     // Fetch data
     const providers = await db.getDocList(doctype['AI Provider'], {
-      fields: ['name', 'provider_name', 'provider_brand'],
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      fields: ['name', 'provider_name', 'provider_brand', 'is_local_llm', 'api_base_url'],
+      filters: filters.length > 0 ? filters : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
       orderBy: { field: 'modified', order: 'desc' },
     });
 
-    const mappedProviders = providers.map((p: any) => ({
-      name: p.name,
-      provider_name: p.provider_name || p.name,
-      provider_brand: p.provider_brand,
+    const mappedProviders = providers.map((p: Record<string, unknown>) => ({
+      name: p.name as string,
+      provider_name: (p.provider_name as string) || (p.name as string),
+      provider_brand: p.provider_brand as string | undefined,
+      is_local_llm: p.is_local_llm as number | undefined,
+      api_base_url: p.api_base_url as string | undefined,
     })) as AIProvider[];
 
     const hasMore = mappedProviders.length > limit;
@@ -166,6 +171,8 @@ export interface AIProviderDoc {
   provider_name: string;
   api_key?: string;
   provider_brand?: string;
+  is_local_llm?: number;
+  api_base_url?: string;
 }
 
 /**
@@ -206,6 +213,38 @@ export async function updateProvider(name: string, data: Partial<AIProviderDoc>)
 }
 
 /**
+ * Result of probing a single linked AI Model on a provider
+ */
+export interface ProviderConnectionModelResult {
+  name: string;
+  ok: boolean;
+  capabilities: string[];
+  error: string | null;
+}
+
+/**
+ * Result of the Test Connection probe for a provider
+ */
+export interface ProviderConnectionTestResult {
+  provider: { ok: boolean; error: string | null };
+  models: ProviderConnectionModelResult[];
+}
+
+/**
+ * Probe a provider endpoint and its linked AI Models (Test Connection)
+ */
+export async function testProviderConnection(providerName: string): Promise<ProviderConnectionTestResult> {
+  try {
+    const response = (await call.post('huf.ai.local_runtime.test_provider_connection', {
+      provider_name: providerName,
+    })) as { message?: ProviderConnectionTestResult };
+    return response?.message as ProviderConnectionTestResult;
+  } catch (error) {
+    handleFrappeError(error, `Error testing connection for provider ${providerName}`);
+  }
+}
+
+/**
  * Fetch AI Models from Frappe
  * Supports pagination, search, and provider filtering
  */
@@ -236,7 +275,7 @@ export async function getModels(
     } = params;
 
     // Build filters
-    const filters: Array<[string, string, unknown]> = [];
+    const filters: Filter<Record<string, unknown>>[] = [];
 
     if (search && search.trim()) {
       filters.push(['model_name', 'like', `%${search.trim()}%`]);
@@ -249,7 +288,7 @@ export async function getModels(
     // Fetch data
     const models = await db.getDocList(doctype['AI Model'], {
       fields: MODEL_LIST_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? filters : undefined,
       limit: limit + 1,
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'modified', order: 'desc' },
@@ -339,7 +378,9 @@ export async function updateModel(name: string, data: Partial<AIModelDoc>): Prom
 export async function getModalityOptions(): Promise<string[]> {
   try {
     const docType = await db.getDoc('DocType', doctype['AI Model']);
-    const modalitiesField = (docType as any).fields.find((f: any) => f.fieldname === 'modalities');
+    const modalitiesField = (docType as { fields?: Array<{ fieldname?: string; options?: string }> }).fields?.find(
+      (f) => f.fieldname === 'modalities'
+    );
     if (modalitiesField && modalitiesField.options) {
       return modalitiesField.options.split('\n').filter((opt: string) => opt.trim().length > 0);
     }

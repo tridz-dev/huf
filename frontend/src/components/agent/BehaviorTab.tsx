@@ -16,6 +16,8 @@ import { DefaultPlanTable } from './DefaultPlanTable'
 
 interface BehaviorTabProps {
 	form: UseFormReturn<AgentFormValues>
+	/** True when protected fields must be read-only (system agent + non-admin). */
+	locked?: boolean
 }
 
 function createPlanRow(stepIndex: number): AgentOrchestrationPlanRow {
@@ -27,7 +29,7 @@ function createPlanRow(stepIndex: number): AgentOrchestrationPlanRow {
 	}
 }
 
-export function BehaviorTab({ form }: BehaviorTabProps) {
+export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 	const persistConversationEnabled = form.watch('persist_conversation')
 	const enableMultiRun = form.watch('enable_multi_run')
 	const defaultPlan = form.watch('default_plan') || []
@@ -87,11 +89,16 @@ export function BehaviorTab({ form }: BehaviorTabProps) {
 									<FormDescription>
 										If checked, this agent can be interacted with in the Agent Chat window.
 									</FormDescription>
+									{!field.value && (
+										<p className="text-xs font-medium text-amber-600">
+											Chat and streaming are disabled for this agent.
+										</p>
+									)}
 								</div>
 								<FormControl>
 									<Switch
 										checked={field.value}
-										disabled={enableMultiRun}
+										disabled={enableMultiRun || locked}
 										onCheckedChange={(checked) => {
 											if (enableMultiRun) {
 												toast.warning('Chat is not available for multi run agents right now.')

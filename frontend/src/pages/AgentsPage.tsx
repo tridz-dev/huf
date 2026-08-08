@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
-import { Calendar, Activity, Settings, Zap, Server } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
+import { Calendar, Activity, Settings, Zap, Server, Lock, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
+import { usePermissions } from '../contexts/PermissionsContext';
 import { getAgents } from '../services/agentApi';
 import { formatTimeAgo } from '../utils/time';
 import type { AgentDoc } from '../types/agent.types';
@@ -38,8 +40,19 @@ function getStatusLabel(agent: AgentDoc): 'active' | 'disabled' {
 }
 
 function getAgentBadges(agent: AgentDoc) {
-  const badges: Array<{ label: string; variant?: 'default' | 'secondary' | 'outline' }> = [];
+  const badges: Array<{ label: ReactNode; variant?: 'default' | 'secondary' | 'outline' }> = [];
 
+  if (agent.is_system === 1) {
+    badges.push({
+      label: (
+        <span className="inline-flex items-center gap-1">
+          <Lock className="w-3 h-3" />
+          System
+        </span>
+      ),
+      variant: 'secondary',
+    });
+  }
   if (agent.allow_chat === 1) {
     badges.push({ label: 'Chat', variant: 'default' });
   }
@@ -64,6 +77,9 @@ export default AgentsPage;
 
 function AgentsPage() {
   const navigate = useNavigate();
+  const { hufRole } = usePermissions();
+  // Backend maps Administrator / System Manager to the "Huf Admin" Huf role.
+  const isAdmin = hufRole === 'Huf Admin';
 
   const {
     items: agents,
@@ -99,15 +115,19 @@ function AgentsPage() {
       });
 
       if (Array.isArray(response)) {
+        // Defense in depth: backend already excludes system agents for
+        // non-admins via permission_query_conditions; filter client-side too.
+        const items = isAdmin ? response : response.filter((agent) => agent.is_system !== 1);
         return {
-          data: response,
+          data: items,
           hasMore: false,
-          total: response.length,
+          total: items.length,
         };
       }
 
+      const items = isAdmin ? response.items : response.items.filter((agent) => agent.is_system !== 1);
       return {
-        data: response.items,
+        data: items,
         hasMore: response.hasMore,
         total: response.total,
       };
@@ -128,7 +148,7 @@ function AgentsPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       title="Agents"
       subtitle="Create and manage your AI agents."
       filters={
@@ -164,9 +184,12 @@ function AgentsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel mb-4">No agents found.</p>
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No agents"
+            description="Create an agent to get started."
+            action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
+          />
         }
         renderItem={(agent) => {
           const status = getStatusLabel(agent);
@@ -228,6 +251,6 @@ function AgentsPage() {
           {total !== undefined ? `Showing all ${total} agents` : 'No more agents to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

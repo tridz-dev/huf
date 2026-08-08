@@ -18,13 +18,18 @@ import { useChatList } from './useChatList';
 import ChatAvatar from './ChatAvatar';
 import { getInitials } from '@/utils/getInitials';
 import { toDate, startOfDay } from '@/utils/time';
-import { AgentModelSelector } from './AgentModelSelector';
+import { ChatAgentPicker } from './ChatAgentPicker';
 import { Button } from '../ui/button';
 import { SidebarTrigger } from '../ui/sidebar';
 // import { DEFAULT_AGENT_COLOR } from '@/data/color';
 import { getAgent } from '@/services/agentApi';
 import ConversationTitle, { type ConversationTitleRef } from './ConversationTitle';
 import ConversationMenu from './ConversationMenu';
+import { ForkConversationDialog } from './ForkConversationDialog';
+import {
+  type ConversationTitleUpdatedDetail,
+  useConversationTitleSwitchFallback,
+} from './useConversationTitleFallback';
 
 function getRecentBucketLabel(ts?: string): string {
   const d = toDate(ts);
@@ -60,6 +65,15 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
   });
 
   const [activeTab, setActiveTab] = useState('recents');
+  const [animatingConversationId, setAnimatingConversationId] = useState<string | null>(null);
+  const [selectedConversationTitle, setSelectedConversationTitle] = useState<string | null>(null);
+  const [selectedAutonamingEnabled, setSelectedAutonamingEnabled] = useState(false);
+
+  // Fork dialog state
+  const [forkDialogOpen, setForkDialogOpen] = useState(false);
+  const [forkDialogConversationId, setForkDialogConversationId] = useState<string | null>(null);
+  const [forkDialogTitle, setForkDialogTitle] = useState<string>('');
+  const [forkDialogAgentName, setForkDialogAgentName] = useState<string>('');
 
   // Ref map to store refs for each conversation title
   const titleRefs = useRef<Map<string, ConversationTitleRef>>(new Map());
@@ -75,6 +89,23 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
       titleRef.activateInput();
     }
   }, []);
+
+  // Callback to handle fork action
+  const handleFork = useCallback((conversationId: string, title: string, agentName: string) => {
+    setForkDialogConversationId(conversationId);
+    setForkDialogTitle(title || 'Untitled Chat');
+    setForkDialogAgentName(agentName);
+    setForkDialogOpen(true);
+  }, []);
+
+  const handleForked = useCallback((newConversationId: string, agentName: string) => {
+    navigate(`/chat/${newConversationId}`);
+    window.dispatchEvent(
+      new CustomEvent('huf:conversation-created', {
+        detail: { conversationId: newConversationId, agentName },
+      })
+    );
+  }, [navigate]);
 
   // Fetch agents with counts on mount
   useEffect(() => {
@@ -108,6 +139,104 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedChatId) {
+      setSelectedConversationTitle(null);
+      setSelectedAutonamingEnabled(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const conversationId = selectedChatId;
+
+    async function loadSelectedConversation() {
+      try {
+        const conversationDoc = await getConversation(conversationId);
+        if (cancelled || !conversationDoc) return;
+
+        setSelectedConversationTitle(conversationDoc.title ?? null);
+
+        if (conversationDoc.agent) {
+          const agentData = await getAgent(conversationDoc.agent);
+          if (!cancelled) {
+            setSelectedAutonamingEnabled(agentData.autonaming_of_conversation_title !== 0);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading selected conversation:', error);
+      }
+    }
+
+    void loadSelectedConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedChatId]);
+
+  useConversationTitleSwitchFallback({
+    conversationId: selectedChatId,
+    currentTitle: selectedConversationTitle,
+    autonamingEnabled: selectedAutonamingEnabled,
+  });
+
+  const applyTitleUpdate = useCallback(async (detail: ConversationTitleUpdatedDetail) => {
+    const { conversationId, title, animate } = detail;
+
+    if (animate && conversationId === selectedChatId) {
+      setAnimatingConversationId(conversationId);
+      const duration = Math.max(title.length * 35 + 200, 500);
+      window.setTimeout(() => {
+        setAnimatingConversationId((current) => (current === conversationId ? null : current));
+      }, duration);
+    }
+
+    if (conversationId === selectedChatId) {
+      setSelectedConversationTitle(title);
+    }
+
+    try {
+      const conversationDoc = await getConversation(conversationId);
+      if (!conversationDoc) return;
+
+      const conversationItem: ChatListItem = {
+        id: conversationId,
+        title,
+        agent: conversationDoc.agent || '',
+        timestamp: conversationDoc.last_activity || conversationDoc.modified,
+        timestampLabel: conversationDoc.last_activity || conversationDoc.modified
+          ? formatTimeAgo(conversationDoc.last_activity || conversationDoc.modified)
+          : undefined,
+      };
+
+      if (recentsAddItemRef.current) {
+        recentsAddItemRef.current(conversationItem);
+      }
+
+      const agentName = conversationDoc.agent;
+      if (agentName && agentAddItemRefs.current.has(agentName)) {
+        const agentAddItem = agentAddItemRefs.current.get(agentName);
+        agentAddItem?.(conversationItem);
+      }
+    } catch (error) {
+      console.error('Error updating conversation title in list:', error);
+    }
+  }, [selectedChatId]);
+
+  // Listen for conversation title updates
+  useEffect(() => {
+    const handleTitleUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent<ConversationTitleUpdatedDetail>;
+      void applyTitleUpdate(customEvent.detail);
+    };
+
+    window.addEventListener('huf:conversation-title-updated', handleTitleUpdated);
+    return () => {
+      window.removeEventListener('huf:conversation-title-updated', handleTitleUpdated);
+    };
+  }, [applyTitleUpdate]);
 
   // Listen for new conversation events
   useEffect(() => {
@@ -248,7 +377,9 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
                   selectedChatId={selectedChatId}
                   isOpen={openAgents.includes(agent.name)}
                   onRename={handleRename}
+                  onFork={handleFork}
                   titleRefs={titleRefs}
+                  animatingConversationId={animatingConversationId}
                   onAddItemReady={(addItem: (item: ChatListItem) => void) => {
                     agentAddItemRefs.current.set(agent.name, addItem);
                   }}
@@ -263,7 +394,9 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
             selectedChatId={selectedChatId}
             isActive={activeTab === 'recents'}
             onRename={handleRename}
+            onFork={handleFork}
             titleRefs={titleRefs}
+            animatingConversationId={animatingConversationId}
             onAddItemReady={(addItem) => {
               recentsAddItemRef.current = addItem;
             }}
@@ -271,6 +404,14 @@ export default function ChatListing({ onClose }: { onClose?: () => void }) {
         </TabsContent>
         </Tabs>
       </div>
+      <ForkConversationDialog
+        conversationId={forkDialogConversationId || ''}
+        conversationTitle={forkDialogTitle}
+        agentName={forkDialogAgentName}
+        open={forkDialogOpen}
+        onOpenChange={setForkDialogOpen}
+        onForked={handleForked}
+      />
     </div>
   );
 }
@@ -281,14 +422,18 @@ function AgentConversationItem({
   selectedChatId,
   isOpen,
   onRename,
+  onFork,
   titleRefs,
+  animatingConversationId,
   onAddItemReady,
 }: {
   agent: AgentWithCount;
   selectedChatId: string | null;
   isOpen: boolean;
   onRename: (conversationId: string) => void;
+  onFork: (conversationId: string, title: string, agentName: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const navigate = useNavigate();
@@ -380,7 +525,11 @@ function AgentConversationItem({
             {conversations.map((chat) => {
               const isSelected = selectedChatId === chat.id;
               return (
-                <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
+                <ConversationMenu
+                  key={chat.id}
+                  onRename={() => onRename(chat.id)}
+                  onFork={() => onFork(chat.id, chat.title, agent.name)}
+                >
                   <Link
                     to={`/chat/${chat.id}`}
                     onClick={(e) => {
@@ -389,8 +538,8 @@ function AgentConversationItem({
                       const target = e.target as HTMLElement;
                       const isFromMenu = target.closest('[data-radix-portal]') || 
                                         target.closest('[role="menuitem"]') ||
-                                        (e.nativeEvent as any).composedPath?.().some((el: any) => 
-                                          el?.getAttribute?.('role') === 'menuitem'
+                                        e.nativeEvent.composedPath?.().some((el) =>
+                                          (el as HTMLElement | null)?.getAttribute?.('role') === 'menuitem'
                                         );
                       if (isFromMenu) {
                         e.preventDefault();
@@ -412,6 +561,7 @@ function AgentConversationItem({
                       variant="agent_list"
                       value={chat.title}
                       conversationId={chat.id}
+                      animate={animatingConversationId === chat.id}
                     />
                     <p className="ps-1 text-[10px] text-steel-soft truncate mt-0.5 group-hover:text-steel">
                       {chat.timestampLabel ?? ''}
@@ -447,13 +597,17 @@ function RecentsConversationList({
   selectedChatId,
   isActive,
   onRename,
+  onFork,
   titleRefs,
+  animatingConversationId,
   onAddItemReady,
 }: {
   selectedChatId: string | null;
   isActive: boolean;
   onRename: (conversationId: string) => void;
+  onFork: (conversationId: string, title: string, agentName: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
+  animatingConversationId: string | null;
   onAddItemReady: (addItem: (item: ChatListItem) => void) => void;
 }) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -569,7 +723,11 @@ function RecentsConversationList({
                     {items.map((chat) => {
                       const isSelected = selectedChatId === chat.id;
                       return (
-                        <ConversationMenu key={chat.id} onRename={() => onRename(chat.id)}>
+                        <ConversationMenu
+                          key={chat.id}
+                          onRename={() => onRename(chat.id)}
+                          onFork={() => onFork(chat.id, chat.title, chat.agent)}
+                        >
                           <Link
                             to={`/chat/${chat.id}`}
                             onClick={(e) => {
@@ -578,8 +736,8 @@ function RecentsConversationList({
                               const target = e.target as HTMLElement;
                               const isFromMenu = target.closest('[data-radix-portal]') || 
                                                 target.closest('[role="menuitem"]') ||
-                                                (e.nativeEvent as any).composedPath?.().some((el: any) => 
-                                                  el?.getAttribute?.('role') === 'menuitem'
+                                                e.nativeEvent.composedPath?.().some((el) =>
+                                                  (el as HTMLElement | null)?.getAttribute?.('role') === 'menuitem'
                                                 );
                               if (isFromMenu) {
                                 e.preventDefault();
@@ -608,6 +766,7 @@ function RecentsConversationList({
                                 variant="recents_list"
                                 value={chat.title}
                                 conversationId={chat.id}
+                                animate={animatingConversationId === chat.id}
                               />
                               <p className="ps-1 text-xs truncate text-steel">{chat.agent}</p>
                             </div>
@@ -656,7 +815,7 @@ function ChatListHeader({
       </div>
       <div className="flex items-center gap-1">
         {onAgentSelect && (
-          <AgentModelSelector
+          <ChatAgentPicker
             value={selectedAgent}
             onValueChange={handleAgentChange}
           />

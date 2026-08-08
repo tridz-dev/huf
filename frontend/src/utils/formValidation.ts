@@ -1,4 +1,4 @@
-import { UseFormReturn, FieldErrors } from 'react-hook-form';
+import { UseFormReturn, FieldErrors, FieldValues } from 'react-hook-form';
 import { toast } from 'sonner';
 import type React from 'react';
 
@@ -19,7 +19,7 @@ export interface TabFieldMapping {
  * @param tabLabels - Optional object mapping tab names to display labels
  * @returns Array of tab names that have errors
  */
-export function checkHiddenTabErrors<T extends Record<string, any>>(
+export function checkHiddenTabErrors<T extends FieldValues>(
   form: UseFormReturn<T>,
   activeTab: string,
   tabFieldMapping: TabFieldMapping,
@@ -66,18 +66,18 @@ export function checkHiddenTabErrors<T extends Record<string, any>>(
 /**
  * Helper function to get nested error from field path (e.g., "user.name")
  */
-function getNestedError(errors: FieldErrors<any>, fieldPath: string): any {
+function getNestedError(errors: FieldErrors, fieldPath: string): unknown {
   const parts = fieldPath.split('.');
-  let current: any = errors;
-  
+  let current: unknown = errors;
+
   for (const part of parts) {
     if (current && typeof current === 'object' && part in current) {
-      current = current[part];
+      current = (current as Record<string, unknown>)[part];
     } else {
       return undefined;
     }
   }
-  
+
   return current;
 }
 
@@ -92,7 +92,7 @@ function getNestedError(errors: FieldErrors<any>, fieldPath: string): any {
  * @param onSubmit - The callback function to execute when form is valid
  * @returns A function that can be used as form submit handler or button onClick handler
  */
-export function createFormSubmitHandler<T extends Record<string, any>>(
+export function createFormSubmitHandler<T extends FieldValues>(
   form: UseFormReturn<T>,
   activeTab: string,
   tabFieldMapping: TabFieldMapping,

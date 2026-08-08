@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -13,6 +14,12 @@ export interface AgentRunDoc {
   start_time?: string | null;
   end_time?: string | null;
   status?: string;
+  cached_tokens?: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost?: number | null;
+  cost_source?: string | null;
+  is_child?: number | boolean;
 }
 
 /**
@@ -48,7 +55,7 @@ export async function getAgentRuns(
     // Backward compatibility: if no params, return simple array
     if (!params) {
       const runs = await db.getDocList(doctype['Agent Run'], {
-        fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child'],
+        fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child', 'cached_tokens'],
         limit: 1000,
         orderBy: { field: 'creation', order: 'desc' },
       });
@@ -86,8 +93,8 @@ export async function getAgentRuns(
 
     // Fetch data
     const runs = await db.getDocList(doctype['Agent Run'], {
-      fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child'],
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      fields: ['name', 'agent', 'start_time', 'end_time', 'status', 'is_child', 'cached_tokens'],
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }),
       orderBy: { field: 'creation', order: 'desc' },

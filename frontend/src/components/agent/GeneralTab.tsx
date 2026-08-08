@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,6 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { AlertTriangle, Plus, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { UseFormReturn } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
@@ -13,6 +17,7 @@ import { InstructionsTextarea } from './InstructionsTextarea';
 import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateSection';
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
+import { checkCacheableModels, type CacheableModelsResponse } from '@/services/agentApi';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -24,6 +29,8 @@ interface GeneralTabProps {
   promptOptions: AgentPromptOption[];
   loadingPrompts: boolean;
   showAddNewPrompt?: boolean;
+  /** True when protected fields must be read-only (system agent + non-admin). */
+  locked?: boolean;
 }
 
 export function GeneralTab({
@@ -36,9 +43,29 @@ export function GeneralTab({
   promptOptions,
   loadingPrompts,
   showAddNewPrompt = true,
+  locked = false,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
+  const watchModel = form.watch('model');
   const promptMode = form.watch('prompt_mode');
+
+  const [cacheStatus, setCacheStatus] = useState<CacheableModelsResponse | null>(null);
+
+  useEffect(() => {
+    if (!watchEnablePromptCaching || !watchProvider || !watchModel) {
+      setCacheStatus(null);
+      return;
+    }
+    let cancelled = false;
+    checkCacheableModels(watchProvider, watchModel).then((res) => {
+      if (!cancelled) {
+        setCacheStatus(res);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [watchEnablePromptCaching, watchProvider, watchModel]);
 
   return (
     <div className="space-y-6">
@@ -105,6 +132,7 @@ export function GeneralTab({
                         form.setValue('model', '');
                       }}
                       value={field.value || undefined}
+                      disabled={locked}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select provider" />
@@ -133,7 +161,7 @@ export function GeneralTab({
                 <FormLabel>Model</FormLabel>
                 <FormControl>
                   <LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel} disabled={!watchProvider}>
-                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider}>
+                    <Select onValueChange={field.onChange} value={field.value || undefined} disabled={!watchProvider || locked}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select model" />
                       </SelectTrigger>
@@ -190,6 +218,24 @@ We generally recommend altering this or temperature but not both.`}
               </FormItem>
             )}
           />
+
+          <FormField
+            control={form.control}
+            name="run_immediately"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5 pr-4">
+                  <FormLabel className="text-base">Run Immediately</FormLabel>
+                  <FormDescription>
+                    When enabled, agent runs execute synchronously and return a direct response. When disabled (default), runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require an immediate response.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </CardContent>
       </Card>
 
@@ -205,7 +251,7 @@ We generally recommend altering this or temperature but not both.`}
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
                 <FormLabel>Prompt Mode</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select prompt mode" />
@@ -247,6 +293,7 @@ We generally recommend altering this or temperature but not both.`}
                     onOptimizePrompt={onOptimizePrompt}
                     showOptimize={true}
                     showExpand={true}
+                    disabled={locked}
                   />
                   <FormDescription>
                     The system prompt or instructions that define the agent&apos;s personality, goals, and constraints. This is the core logic of the agent.
@@ -263,8 +310,74 @@ We generally recommend altering this or temperature but not both.`}
           promptOptions={promptOptions}
           loadingPrompts={loadingPrompts}
           showAddNew={showAddNewPrompt}
+          locked={locked}
         />
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Starter Prompts</CardTitle>
+          <CardDescription>
+            Up to 3 starter prompts shown to users when starting a chat with this agent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {form.watch('starter_prompts')?.map((_row, index) => (
+            <div key={index} className="flex items-start gap-2">
+              <FormField
+                control={form.control}
+                name={`starter_prompts.${index}.prompt_text`}
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormControl>
+                      <Textarea
+                        placeholder="Enter a starter prompt"
+                        className="min-h-[60px] resize-y"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const current = form.getValues('starter_prompts') || [];
+                  form.setValue(
+                    'starter_prompts',
+                    current.filter((_r, i) => i !== index),
+                    { shouldDirty: true }
+                  );
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {(form.watch('starter_prompts') || []).length < 3 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const current = form.getValues('starter_prompts') || [];
+                if (current.length >= 3) return;
+                form.setValue(
+                  'starter_prompts',
+                  [...current, { prompt_text: '' }],
+                  { shouldDirty: true }
+                );
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add starter prompt
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -291,6 +404,23 @@ We generally recommend altering this or temperature but not both.`}
               </FormItem>
             )}
           />
+
+          {watchEnablePromptCaching && watchProvider && watchModel && cacheStatus && !cacheStatus.supported && (
+            <Alert className="sm:col-span-2 border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Not Supported</AlertTitle>
+              <AlertDescription className="text-xs mt-1 space-y-1">
+                <p>
+                  The selected model <strong>{watchModel}</strong> does not support prompt caching for provider <strong>{watchProvider}</strong>. Prompt caching will be silently skipped during execution.
+                </p>
+                {cacheStatus.alternatives.length > 0 && (
+                  <p className="text-steel-soft">
+                    Supported alternative models for {watchProvider}: {cacheStatus.alternatives.slice(0, 5).join(', ')}
+                  </p>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
 
           {watchEnablePromptCaching && (
             <FormField

@@ -89,6 +89,12 @@ export const FIELD_TYPE_GROUPS: FieldTypeGroup[] = [
 		label: 'Layout',
 		types: [
 			{
+				type: 'Tab Break',
+				label: 'Tab',
+				icon: 'Folder',
+				description: 'Group fields into a tab',
+			},
+			{
 				type: 'Section Break',
 				label: 'Section',
 				icon: 'Minus',
@@ -160,8 +166,12 @@ export const FIELD_PROPERTIES: Record<string, string[]> = {
 	Rating: ['label', 'read_only', 'description', 'in_list_view'],
 	Color: ['label', 'reqd', 'read_only', 'description', 'in_list_view'],
 	Phone: ['label', 'reqd', 'unique', 'read_only', 'default', 'description', 'in_list_view'],
+	// Frappe does not permit `in_list_view` on Attach/Attach Image fields.
+	Attach: ['label', 'reqd', 'read_only', 'description'],
+	'Attach Image': ['label', 'reqd', 'read_only', 'description'],
+	'Tab Break': ['label'],
 	'Section Break': ['label'],
 	'Column Break': [],
 };
 
-export const LAYOUT_FIELD_TYPES: DataTableFieldType[] = ['Section Break', 'Column Break'];
+export const LAYOUT_FIELD_TYPES: DataTableFieldType[] = ['Tab Break', 'Section Break', 'Column Break'];

@@ -6,9 +6,14 @@ huf.patches.v1.migrate_provider_brand
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 
+huf.patches.v1.add_agent_run_sequence_index
+huf.patches.v1.add_agent_run_analytics_indexes
 huf.patches.add_tool_types
 huf.patches.setup_desktop_icon_as_workspace
 huf.patches.v1.update_image_tool
 huf.patches.v1.update_agent_background_color
 huf.patches.v1.repair_tool_call_messages
 huf.patches.v1.fix_agent_message_status
+huf.patches.v1.sync_data_table_permissions
+huf.patches.v1.add_frappe_cloud_service
+huf.patches.v1.backfill_tool_service_links

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Save, Trash2, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,7 @@ interface IntegrationHeaderProps {
   deleting?: boolean;
   onSave: () => void;
   onDelete?: () => void;
+  children?: ReactNode;
 }
 
 export function IntegrationHeader({
@@ -27,6 +29,7 @@ export function IntegrationHeader({
   deleting = false,
   onSave,
   onDelete,
+  children,
 }: IntegrationHeaderProps) {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -50,6 +53,7 @@ export function IntegrationHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        {children}
         {!isNew && onDelete && (
           <Button
             variant="outline"

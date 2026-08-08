@@ -1,4 +1,4 @@
-import { type LucideIcon } from "lucide-react"
+import { FlaskConical, type LucideIcon } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 
 import {
@@ -19,6 +19,7 @@ export function NavMain({
     url: string
     icon?: LucideIcon
     count?: number
+    badge?: string
   }[]
   label?: string
 }) {
@@ -45,10 +46,24 @@ export function NavMain({
                 <NavLink to={item.url} onClick={handleNavClick} className="flex w-full items-center gap-2">
                   {item.icon && <item.icon strokeWidth={1.6} />}
                   <span className="font-body text-[13.5px]">{item.title}</span>
-                  {typeof item.count === 'number' && (
-                    <span className="ml-auto font-mono text-[10.5px] text-steel-soft group-data-[collapsible=icon]:hidden">
-                      {item.count}
-                    </span>
+                  {(item.badge || typeof item.count === 'number') && (
+                    <div className="ml-auto flex items-center gap-1.5 group-data-[collapsible=icon]:hidden">
+                      {item.badge && (
+                        <span
+                          title={item.badge}
+                          aria-label={item.badge}
+                          role="img"
+                          className="flex items-center text-steel-soft dark:text-steel opacity-70 hover:opacity-100 transition-opacity"
+                        >
+                          <FlaskConical className="!size-[12.5px]" strokeWidth={1.5} />
+                        </span>
+                      )}
+                      {typeof item.count === 'number' && (
+                        <span className="font-mono text-[10.5px] text-steel-soft">
+                          {item.count}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </NavLink>
               </SidebarMenuButton>

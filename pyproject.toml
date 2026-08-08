@@ -10,20 +10,52 @@ dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
     "openai-agents",
-    "litellm>=1.0.0,!=1.82.7,!=1.82.8",
+    # Upper-bounded below 1.83.8: from ~1.83.8 onward litellm's own PyPI
+    # metadata restricts installs to Python <3.14, and 1.90+ builds a Rust
+    # extension (litellm-rust) whose PyO3 build caps at Python 3.13 — both
+    # break under frappe v16's Python 3.14 requirement. Revisit this ceiling
+    # once litellm ships a Python 3.14-compatible release.
+    # Lower-bound 1.74.7 ensures Moonshot AI and other newer providers are
+    # available in the bundled LiteLLM provider registry.
+    "litellm>=1.74.7,!=1.82.7,!=1.82.8,<1.83.8",
     "llama-index-core>=0.10.0",
     "sqlite-vec",
     "pysqlite3-binary; platform_machine == 'x86_64' and python_version < '3.14'",
     "httpx>=0.24.0",
     "chromadb",
     "llama-index-vector-stores-chroma",
+    "llama-index-vector-stores-postgres",
+    "llama-index-vector-stores-weaviate",
+    "llama-index-vector-stores-pinecone",
+    "redisvl>=0.5",
+    "zvec>=0.2.1",
+    "llama-index-vector-stores-faiss",
+    "faiss-cpu",
+    "psycopg[binary]>=3.1.0",
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "tabulate",
     "pypdf",
     "python-docx",
+    "markdown",
     "openpyxl",
     "python-pptx",
     "beautifulsoup4",
     "aiohttp",
     "pypdfium2>=4.26.0",
+    "serpapi",
+    "youtube-transcript-api",
+    "paramiko>=3.4.0",
+    # HTML sanitization for document artifact rendering
+    # (huf.ai.artifacts.render.html). bleach.css_sanitizer.CSSSanitizer needs
+    # tinycss2, pinned here at the version weasyprint (below) also needs —
+    # depend on it directly rather than via bleach's "css" extra, which pins
+    # an older tinycss2 and would downgrade it.
+    "bleach>=6.0",
+    "tinycss2>=1.5.0",
+    # PDF export for document artifacts (huf.ai.artifacts.render.pdf/safety).
+    "weasyprint>=68.0",
 ]
 
 [build-system]
@@ -47,6 +79,9 @@ select = [
     "UP",
     "B",
     "RUF",
+    "BLE",
+    "S",
+    "TRY",
 ]
 ignore = [
     "B017", # assertRaises(Exception) - should be more specific

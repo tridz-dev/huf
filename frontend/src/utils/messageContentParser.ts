@@ -16,8 +16,38 @@ export interface ParsedMessageContent {
 	artifacts: ParsedArtifact[];
 }
 
+const JSON_WRAPPER_ANSWER_KEYS = new Set(['answer', 'condensed_answer', 'response']);
+
+/**
+ * Some local models (e.g. gemma) wrap final answers in a single-key JSON
+ * object (`{"answer": "..."}`), mimicking the tool-result shape. Unwrap it
+ * for display only; stored content is unchanged.
+ */
+export function unwrapJsonWrappedAnswer(content: string): string {
+	const trimmed = (content || '').trim();
+	if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
+		return content;
+	}
+	try {
+		const parsed: unknown = JSON.parse(trimmed);
+		if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+			const keys = Object.keys(parsed);
+			if (
+				keys.length === 1 &&
+				JSON_WRAPPER_ANSWER_KEYS.has(keys[0]) &&
+				typeof (parsed as Record<string, unknown>)[keys[0]] === 'string'
+			) {
+				return (parsed as Record<string, string>)[keys[0]];
+			}
+		}
+	} catch {
+		// Not JSON — render as-is.
+	}
+	return content;
+}
+
 export function parseMessagePreviewContent(content: string): ParsedMessageContent {
-	const decoded = decodeHtmlEntities(content || '');
+	const decoded = unwrapJsonWrappedAnswer(decodeHtmlEntities(content || ''));
 
 	let remaining = decoded;
 	const jsxPreviews: ParsedJSXPreview[] = [];

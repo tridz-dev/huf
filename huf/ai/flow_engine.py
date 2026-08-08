@@ -26,6 +26,7 @@ from huf.ai.flow_orchestrator import (
 	parse_decision,
 )
 from huf.ai.flow_tool_executor import execute as execute_tool
+from huf.ai.transaction import commit_if_background
 from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
 from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
@@ -107,8 +108,16 @@ def create_flow_run(
 			"started_at": now_datetime(),
 		}
 	)
-	flow_run.insert(ignore_permissions=True)
-	frappe.db.commit()
+	# Authenticated callers are already verified by the public API.
+	# Webhook triggers run as Guest after HMAC validation, so the internal
+	# Flow Run record must be created on behalf of the system.
+	if frappe.session.user == "Guest":
+		flow_run.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Flow Run", "create", doc=flow_run):
+			frappe.throw(_("Not permitted to create Flow Run"), frappe.PermissionError)
+		flow_run.insert()
+	commit_if_background()
 
 	return flow_run
 
@@ -138,7 +147,7 @@ def run_flow(flow_run_name: str):
 
 	# Update status to Running
 	flow_run.db_set({"status": "Running", "last_error": ""})
-	frappe.db.commit()
+	commit_if_background()
 
 	try:
 		_execute_loop(flow_run, nodes_map, edges_list, settings)
@@ -168,7 +177,7 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 
 	# Clear waiting state
 	flow_run.db_set({"waiting": None, "status": "Running"})
-	frappe.db.commit()
+	commit_if_background()
 
 	# Continue execution
 	run_flow(flow_run_name)
@@ -218,15 +227,24 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			next_node = edge.get("to")
 			break
 
-	if not next_node:
+	if not next_node and decision == "approved":
 		next_node = _evaluate_edges(flow_run, current_node, {"status": "success"}, edges_list)
 
 	if not next_node:
+		if decision == "rejected":
+			# Rejection without an explicit 'rejected' edge must not route like approval
+			flow_run.db_set("waiting", None)
+			_fail_flow_run(
+				flow_run,
+				f"Approval rejected by {frappe.session.user}" + (f": {comment}" if comment else ""),
+			)
+			_clear_flow_notifications(flow_run)
+			return
 		# No outgoing edges — approval was the final step, complete the flow gracefully
 		outgoing = [e for e in edges_list if e.get("from") == current_node]
 		if not outgoing:
 			flow_run.db_set({"waiting": None, "status": "Running"})
-			frappe.db.commit()
+			commit_if_background()
 			_complete_flow_run(flow_run)
 			return
 		_fail_flow_run(flow_run, f"No edge found for outcome '{decision}' from node '{current_node}'")
@@ -235,7 +253,7 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	# Move to the next node and resume
 	flow_run.db_set({"current_node_id": next_node, "waiting": None, "status": "Running"})
 	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-	frappe.db.commit()
+	commit_if_background()
 
 	_clear_flow_notifications(flow_run)
 
@@ -298,7 +316,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 		# Update hop count and completed list
 		completed_nodes.append(node_id)
 		flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-		frappe.db.commit()
+		# No explicit commit here; the node executor or completion/failure handler
+		# will commit the updated state in one go.
 
 		# Check for end node
 		if node.get("type") == "end":
@@ -325,6 +344,15 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
 			if not next_node_id:
 				_fail_flow_run(flow_run, "Condition node did not resolve a branch")
+				return
+
+		elif node.get("type") == "loop":
+			# Loop executor returns next_node_id (body node or done node)
+			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
+			if not next_node_id:
+				# No done_node configured — loop finished, complete gracefully
+				_complete_flow_run(flow_run)
+				_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
 				return
 
 		elif node.get("type") == "human.approval":
@@ -356,7 +384,8 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 
 		# Move to next node
 		flow_run.db_set("current_node_id", next_node_id)
-		frappe.db.commit()
+		# No explicit commit here; the next node executor or completion/failure
+		# handler will persist the updated cursor in one go.
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +453,7 @@ def _exec_trigger_schedule(flow_run, node: dict, config: dict, settings: dict) -
 	# Merge with existing context
 	ctx["_schedule_trigger"] = schedule_info
 	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	frappe.db.commit()
+	commit_if_background()
 	
 	return {
 		"status": "success",
@@ -468,7 +497,7 @@ def _exec_trigger_doc_event(flow_run, node: dict, config: dict, settings: dict) 
 	
 	# Persist updated context
 	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	frappe.db.commit()
+	commit_if_background()
 	
 	return {
 		"status": "success",
@@ -511,6 +540,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			flow_run_id=flow_run.name,
 			flow_node_id=node.get("id"),
 			run_kind="agent",
+			now=True,
 		)
 
 		# Update last_agent_run
@@ -524,7 +554,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			ctx[save_key] = result.get("response", "")
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
-		frappe.db.commit()
+		commit_if_background()
 
 		return {
 			"status": "success" if result.get("success") else "failed",
@@ -571,17 +601,60 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		node=node,
 		run_kind="tool",
 		prompt=f"Tool: {tool_name}\nArgs: {json.dumps(args, default=str)}",
+		agent_name=config.get("agent_name") or config.get("agent"),
 	)
+
+	# Check MCP tool info
+	is_mcp_tool = 0
+	mcp_server = None
+	mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
+	if mcp_tool_entry:
+		is_mcp_tool = 1
+		mcp_server = mcp_tool_entry
+
+	from uuid import uuid4
+	tool_call_id = f"call_{uuid4().hex[:12]}"
+
+	# Create Agent Tool Call audit record
+	tool_call_doc = frappe.get_doc({
+		"doctype": "Agent Tool Call",
+		"agent_run": run_doc.name,
+		"conversation": getattr(flow_run, "conversation", None),
+		"tool": tool_name,
+		"is_mcp_tool": is_mcp_tool,
+		"mcp_server": mcp_server,
+		"tool_args": json.dumps(args, default=str) if args else None,
+		"status": "Started",
+		"call_id": tool_call_id,
+	})
+	tool_call_doc.insert(ignore_permissions=True)
 
 	try:
 		result = execute_tool(tool_name, args)
+		is_success = result.get("success", False) if isinstance(result, dict) else bool(result)
+		tool_result = result.get("result", result) if isinstance(result, dict) else result
+		error_msg = result.get("error", "") if isinstance(result, dict) else ""
+
+		# Format result for JSON field
+		if isinstance(tool_result, (dict, list)):
+			formatted_result = tool_result
+		else:
+			formatted_result = {"output": str(tool_result)} if tool_result is not None else None
+
+		# Update Agent Tool Call record
+		tool_call_doc.update({
+			"status": "Completed" if is_success else "Failed",
+			"tool_result": formatted_result,
+			"error_message": error_msg or None,
+		})
+		tool_call_doc.save(ignore_permissions=True)
 
 		# Update the agent run
 		run_doc.db_set(
 			{
-				"status": "Success" if result.get("success") else "Failed",
+				"status": "Success" if is_success else "Failed",
 				"response": json.dumps(result, default=str),
-				"error_message": result.get("error", ""),
+				"error_message": error_msg,
 				"end_time": now_datetime(),
 			}
 		)
@@ -594,7 +667,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			ctx[save_key] = result.get("result", result)
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
-		frappe.db.commit()
+		commit_if_background()
 
 		return {
 			"status": "success" if result.get("success") else "failed",
@@ -602,8 +675,13 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": result.get("error"),
 		}
 	except Exception as e:
+		try:
+			tool_call_doc.update({"status": "Failed", "error_message": str(e)})
+			tool_call_doc.save(ignore_permissions=True)
+		except Exception:
+			pass
 		run_doc.db_set({"status": "Failed", "error_message": str(e), "end_time": now_datetime()})
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "failed", "error": str(e)}
 
 
@@ -648,6 +726,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 			flow_run_id=flow_run.name,
 			flow_node_id=node.get("id"),
 			run_kind="orchestrator",
+			now=True,
 		)
 
 		if not result.get("success"):
@@ -662,7 +741,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
-		frappe.db.commit()
+		commit_if_background()
 
 		return {
 			"status": "success",
@@ -709,7 +788,7 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 			"waiting": json.dumps(waiting_data),
 		}
 	)
-	frappe.db.commit()
+	commit_if_background()
 
 	# Send notifications to approvers
 	_send_approval_notifications(flow_run, node, config, waiting_data)
@@ -755,7 +834,7 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 					},
 					pluck="name"
 				)
-	elif approval_type == "users":
+	elif approval_type in ("user", "users"):
 		approver_users = waiting_data.get("approver_users", [])
 		if isinstance(approver_users, str):
 			# Handle comma-separated string
@@ -856,7 +935,7 @@ def _clear_flow_notifications(flow_run):
 			1,
 			update_modified=False
 		)
-		frappe.db.commit()
+		commit_if_background()
 	except Exception:
 		# Cleanup is best-effort
 		pass
@@ -909,7 +988,11 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 
 		try:
 			result_data = resp.json()
-		except Exception:
+		except (json.JSONDecodeError, TypeError):
+			frappe.log_error(
+				frappe.get_traceback(),
+				"HTTP response JSON parse failed — falling back to text"
+			)
 			result_data = resp.text
 
 		result = {
@@ -926,7 +1009,7 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 			ctx[save_key] = result
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
-		frappe.db.commit()
+		commit_if_background()
 
 		is_success = 200 <= resp.status_code < 400
 		return {
@@ -1020,7 +1103,7 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			results[target] = f"Error: {str(e)}"
 
 	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	frappe.db.commit()
+	commit_if_background()
 
 	return {"status": "success", "result": results}
 
@@ -1068,7 +1151,7 @@ def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		ctx.pop(item_key, None)
 		ctx.pop(index_key, None)
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "success", "result": "max_iterations reached", "next_node_id": done_node}
 
 	if current_index < len(items):
@@ -1076,14 +1159,14 @@ def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		ctx[item_key] = items[current_index]
 		ctx[index_key] = current_index + 1
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "success", "result": items[current_index], "next_node_id": loop_node}
 	else:
 		# Iteration complete - clean up loop variables
 		ctx.pop(item_key, None)
 		ctx.pop(index_key, None)
 		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		frappe.db.commit()
+		commit_if_background()
 		return {"status": "success", "result": "iteration_complete", "next_node_id": done_node}
 
 
@@ -1205,6 +1288,7 @@ def _call_orchestrator(
 			flow_run_id=flow_run.name,
 			flow_node_id=current_node_id,
 			run_kind="orchestrator",
+			now=True,
 		)
 
 		if not result.get("success"):
@@ -1219,7 +1303,7 @@ def _call_orchestrator(
 			flow_run.db_set("context_json", json.dumps(ctx, default=str))
 
 		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
-		frappe.db.commit()
+		commit_if_background()
 
 		return decision["next_node_id"]
 
@@ -1262,11 +1346,26 @@ def _build_agent_prompt(config: dict, context: dict) -> str:
 	return json.dumps(context, indent=2, default=str)
 
 
-def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = "") -> "frappe.Document":
+def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = "", agent_name: str = None) -> "frappe.Document":
 	"""Create an Agent Run document linked to a flow run."""
+	if not agent_name and node:
+		config = node.get("config") or node.get("data", {}).get("config") or {}
+		agent_name = config.get("agent_name") or config.get("agent")
+	if not agent_name and getattr(flow_run, "last_agent_run", None):
+		agent_name = frappe.db.get_value("Agent Run", flow_run.last_agent_run, "agent")
+	if not agent_name and getattr(flow_run, "flow_id", None):
+		try:
+			flow_def = frappe.db.get_value("Flow Definition", flow_run.flow_id, "definition_json")
+			if flow_def:
+				flow_data = json.loads(flow_def) if isinstance(flow_def, str) else flow_def
+				agent_name = flow_data.get("agent") or flow_data.get("agent_name")
+		except Exception:
+			pass
+
 	run_doc = frappe.get_doc(
 		{
 			"doctype": "Agent Run",
+			"agent": agent_name or None,
 			"status": "Started",
 			"prompt": prompt,
 			"flow_run": flow_run.name,
@@ -1276,8 +1375,16 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 			"start_time": now_datetime(),
 		}
 	)
-	run_doc.insert(ignore_permissions=True)
-	frappe.db.commit()
+	# Agent Run records are internal execution logs. Authenticated users
+	# create them through normal permission checks; Guest/webhook paths are
+	# allowed because the engine is acting on behalf of the system.
+	if frappe.session.user == "Guest":
+		run_doc.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Agent Run", "create", doc=run_doc):
+			frappe.throw(_("Not permitted to create Agent Run"), frappe.PermissionError)
+		run_doc.insert()
+	commit_if_background()
 	return run_doc
 
 
@@ -1293,8 +1400,15 @@ def _create_flow_conversation(flow_id: str, entry_node_id: str) -> "frappe.Docum
 			"is_active": 1,
 		}
 	)
-	conv.insert(ignore_permissions=True)
-	frappe.db.commit()
+	# Flow conversations are created by the engine. Authenticated callers
+	# use standard permissions; Guest/webhook triggers rely on the system.
+	if frappe.session.user == "Guest":
+		conv.insert(ignore_permissions=True)
+	else:
+		if not frappe.has_permission("Agent Conversation", "create", doc=conv):
+			frappe.throw(_("Not permitted to create Agent Conversation"), frappe.PermissionError)
+		conv.insert()
+	commit_if_background()
 	return conv
 
 
@@ -1303,7 +1417,7 @@ def _verify_approval_permission(waiting: dict):
 	approval_type = waiting.get("approval_type", "role")
 	user = frappe.session.user
 
-	if approval_type == "user":
+	if approval_type in ("user", "users"):
 		approver_users = waiting.get("approver_users", [])
 		if approver_users and user not in approver_users:
 			frappe.throw(
@@ -1329,7 +1443,7 @@ def _complete_flow_run(flow_run):
 			"completed_at": now_datetime(),
 		}
 	)
-	frappe.db.commit()
+	commit_if_background()
 
 
 def _fail_flow_run(flow_run, error_msg: str):
@@ -1341,7 +1455,7 @@ def _fail_flow_run(flow_run, error_msg: str):
 			"completed_at": now_datetime(),
 		}
 	)
-	frappe.db.commit()
+	commit_if_background()
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 
 

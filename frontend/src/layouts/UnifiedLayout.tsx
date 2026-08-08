@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { AppSidebar } from '../components/app-sidebar';
 import { UnifiedHeader } from './UnifiedHeader';
 import {
@@ -8,6 +8,7 @@ import {
   SidebarTrigger,
 } from '../components/ui/sidebar';
 import { Separator } from '../components/ui/separator';
+import { ShortcutsHelpProvider } from '../components/shortcuts/ShortcutsHelpContext';
 
 export interface BreadcrumbItem {
   label: string;
@@ -23,23 +24,28 @@ interface UnifiedLayoutProps {
 }
 
 export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs }: UnifiedLayoutProps) {
+  const location = useLocation();
+  const defaultOpen = location.pathname !== '/';
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset className="h-svh max-h-svh overflow-hidden">
-        {!hideHeader && (
-          <header className="flex h-[60px] shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px] border-b border-line bg-panel">
-            <div className="flex items-center gap-2 px-4 w-full">
-              <SidebarTrigger className="-ml-1 text-steel hover:text-ink" />
-              <Separator orientation="vertical" className="mr-2 h-4 bg-line" />
-              <UnifiedHeader actions={headerActions} breadcrumbs={breadcrumbs} />
-            </div>
-          </header>
-        )}
-        <main className="flex-1 overflow-hidden flex flex-col min-h-0">
-          {children || <Outlet />}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    <ShortcutsHelpProvider>
+      <SidebarProvider defaultOpen={defaultOpen}>
+        <AppSidebar />
+        <SidebarInset className="h-svh max-h-svh overflow-hidden">
+          {!hideHeader && (
+            <header className="flex h-[60px] shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px] border-b border-line bg-panel">
+              <div className="flex items-center gap-2 px-4 w-full">
+                <SidebarTrigger className="-ml-1 text-steel hover:text-ink" />
+                <Separator orientation="vertical" className="mr-2 h-4 bg-line" />
+                <UnifiedHeader actions={headerActions} breadcrumbs={breadcrumbs} />
+              </div>
+            </header>
+          )}
+          <main className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {children || <Outlet />}
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </ShortcutsHelpProvider>
   );
 }

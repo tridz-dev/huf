@@ -584,6 +584,19 @@ class AgentToolFunction(Document):
 				"additionalProperties": False
 			}
 
+		elif self.types == "Perplexity Search":
+			params = {
+				"type": "object",
+				"properties": {
+					"query": {
+						"type": "string",
+						"description": "The search query string."
+					}
+				},
+				"required": ["query"],
+				"additionalProperties": False
+			}
+
 		else:
 			params = self.build_params_json_from_table()
 

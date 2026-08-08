@@ -23,5 +23,16 @@
   { "id": "deepinfra", "label": "DeepInfra" },
   { "id": "google-vertex", "label": "Google Vertex" },
   { "id": "nvidia", "label": "NVIDIA" },
+  { "id": "moonshot", "label": "Moonshot AI" },
+  { "id": "ai21", "label": "AI21" },
+  { "id": "baseten", "label": "Baseten" },
+  { "id": "cloudflare-workers-ai", "label": "Cloudflare Workers AI" },
+  { "id": "clarifai", "label": "Clarifai" },
+  { "id": "nomic", "label": "Nomic" },
+  { "id": "replicate", "label": "Replicate" },
+  { "id": "sagemaker", "label": "AWS SageMaker" },
+  { "id": "stability-ai", "label": "Stability AI" },
+  { "id": "vllm", "label": "vLLM" },
+  { "id": "watsonx", "label": "IBM Watsonx" },
   { "id": "other", "label": "Other / Custom" }
 ]

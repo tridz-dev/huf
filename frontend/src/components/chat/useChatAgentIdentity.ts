@@ -2,6 +2,22 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 
 import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
+import type { AgentStarterPromptRow } from '@/types/agent.types';
+
+const DEFAULT_COLD_START_AGENT = 'Hub Orchestrator';
+
+// Pre-populate the agent name for a new chatId so ChatInput never flashes
+// invisible while `getConversation` is in-flight after a new-conversation
+// navigation (ChatInput returns null when agentName is empty).
+const _agentNameCache = new Map<string, string>();
+export function cacheAgentNameForChat(chatId: string, agentName: string): void {
+  _agentNameCache.set(chatId, agentName);
+}
+function consumeAgentNameCache(chatId: string): string {
+  const name = _agentNameCache.get(chatId);
+  if (name !== undefined) _agentNameCache.delete(chatId);
+  return name ?? '';
+}
 
 /** localStorage key for cross-tab sync of the tool-execution-details toggle */
 function toolDetailsKey(agent: string): string {
@@ -18,11 +34,21 @@ export function writeToolDetailsSetting(agent: string, enabled: boolean): void {
 }
 
 export function useChatAgentIdentity(chatId: string | null, searchParams: URLSearchParams) {
-  const [agentName, setAgentName] = useState<string>('');
+  const [agentName, setAgentName] = useState<string>(() =>
+    chatId
+      ? consumeAgentNameCache(chatId)
+      : (searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT)
+  );
+  const [agentDisplayName, setAgentDisplayName] = useState<string>('');
+  const [agentModel, setAgentModel] = useState<string | null>(null);
   const [agentColor, setAgentColor] = useState<string | null>(null);
+  const [agentDescription, setAgentDescription] = useState<string>('');
+  const [starterPrompts, setStarterPrompts] = useState<AgentStarterPromptRow[]>([]);
   const [showToolExecutionDetails, setShowToolExecutionDetails] = useState<boolean>(true);
   const [allowFileUpload, setAllowFileUpload] = useState<boolean>(false);
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState<number | null>(null);
+  const [runImmediately, setRunImmediately] = useState<boolean>(false);
+  const [autonamingOfConversationTitle, setAutonamingOfConversationTitle] = useState<boolean>(true);
   const agentNameRef = useRef<string>('');
 
   // Keep ref in sync so async callbacks see the latest value
@@ -48,18 +74,30 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         try {
           const agentData = await getAgent(conversation.agent);
           if (!cancelled) {
+            setAgentDisplayName(agentData.agent_name || conversation.agent);
+            setAgentModel(agentData.model || null);
             setAgentColor(agentData.agent_color || null);
+            setAgentDescription(agentData.description || '');
+            setStarterPrompts(agentData.starter_prompts || []);
             applyToolDetails(conversation.agent, agentData.show_tool_execution_details);
             setAllowFileUpload(agentData.allow_file_upload === 1);
             setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
+            setRunImmediately(agentData.run_immediately === 1);
+            setAutonamingOfConversationTitle(agentData.autonaming_of_conversation_title !== 0);
           }
         } catch (error) {
           console.error('Failed to load agent color', error);
           if (!cancelled) {
+            setAgentDisplayName('');
+            setAgentModel(null);
             setAgentColor(null);
+            setAgentDescription('');
+            setStarterPrompts([]);
             setShowToolExecutionDetails(true);
             setAllowFileUpload(false);
             setMaxUploadSizeMb(null);
+            setRunImmediately(false);
+            setAutonamingOfConversationTitle(true);
           }
         }
       } catch (error) {
@@ -68,34 +106,36 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     }
 
     async function loadFromQueryParam() {
-      const agentFromQuery = searchParams.get('agent') ?? '';
+      const agentFromQuery = searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT;
       if (!cancelled) setAgentName(agentFromQuery);
-
-      if (!agentFromQuery) {
-        if (!cancelled) {
-          setAgentColor(null);
-          setShowToolExecutionDetails(true);
-          setAllowFileUpload(false);
-          setMaxUploadSizeMb(null);
-        }
-        return;
-      }
 
       try {
         const agentData = await getAgent(agentFromQuery);
         if (!cancelled) {
+          setAgentDisplayName(agentData.agent_name || agentFromQuery);
+          setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
+          setAgentDescription(agentData.description || '');
+          setStarterPrompts(agentData.starter_prompts || []);
           applyToolDetails(agentFromQuery, agentData.show_tool_execution_details);
           setAllowFileUpload(agentData.allow_file_upload === 1);
           setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
+          setRunImmediately(agentData.run_immediately === 1);
+          setAutonamingOfConversationTitle(agentData.autonaming_of_conversation_title !== 0);
         }
       } catch (error) {
         console.error('Failed to load agent color', error);
         if (!cancelled) {
+          setAgentDisplayName('');
+          setAgentModel(null);
           setAgentColor(null);
+          setAgentDescription('');
+          setStarterPrompts([]);
           setShowToolExecutionDetails(true);
           setAllowFileUpload(false);
           setMaxUploadSizeMb(null);
+          setRunImmediately(false);
+          setAutonamingOfConversationTitle(true);
         }
       }
     }
@@ -140,9 +180,16 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       getAgent(currentAgent)
         .then((agentData) => {
           if (cancelled) return;
+          setAgentDisplayName(agentData.agent_name || currentAgent);
+          setAgentModel(agentData.model || null);
+          setAgentColor(agentData.agent_color || null);
+          setAgentDescription(agentData.description || '');
+          setStarterPrompts(agentData.starter_prompts || []);
           applyToolDetails(currentAgent, agentData.show_tool_execution_details);
           setAllowFileUpload(agentData.allow_file_upload === 1);
           setMaxUploadSizeMb(agentData.max_upload_size_mb ?? null);
+          setRunImmediately(agentData.run_immediately === 1);
+          setAutonamingOfConversationTitle(agentData.autonaming_of_conversation_title !== 0);
         })
         .catch(() => {
           // Non-critical – keep existing value
@@ -156,5 +203,17 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
     };
   }, [agentName, applyToolDetails]);
 
-  return { agentName, agentColor, showToolExecutionDetails, allowFileUpload, maxUploadSizeMb };
+  return {
+    agentName,
+    agentDisplayName,
+    agentModel,
+    agentColor,
+    agentDescription,
+    starterPrompts,
+    showToolExecutionDetails,
+    allowFileUpload,
+    maxUploadSizeMb,
+    runImmediately,
+    autonamingOfConversationTitle,
+  };
 }

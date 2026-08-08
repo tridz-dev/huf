@@ -2,6 +2,7 @@ import { GripVertical, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 
 interface FieldCardProps {
@@ -25,7 +26,7 @@ export function FieldCard({
 	onDragOver,
 	onDrop,
 }: FieldCardProps) {
-	const isLayout = field.fieldtype === 'Section Break' || field.fieldtype === 'Column Break';
+	const isLayout = LAYOUT_FIELD_TYPES.includes(field.fieldtype);
 
 	if (isLayout) {
 		return (
@@ -36,26 +37,33 @@ export function FieldCard({
 				onDrop={(e) => onDrop(e, index)}
 				onClick={onSelect}
 				className={cn(
-					'group flex items-center gap-2 px-3 py-2 rounded-md border border-dashed cursor-pointer transition-colors',
+					'group flex items-center gap-2 px-3 py-2 rounded-none border border-dashed cursor-pointer transition-colors',
 					isSelected
-						? 'border-primary bg-primary/5'
-						: 'border-muted-foreground/30 hover:border-muted-foreground/50'
+						? 'border-line-dark bg-paper-deep'
+						: 'border-steel/30 hover:border-steel/50'
 				)}
 			>
-				<GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" />
+				<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
 				<div className="flex items-center gap-2 flex-1 min-w-0">
-					{field.fieldtype === 'Section Break' ? (
+					{field.fieldtype === 'Tab Break' ? (
 						<>
-							<span className="text-xs text-muted-foreground">---</span>
-							<span className="text-sm text-muted-foreground">
+							<span className="text-xs text-steel">▭</span>
+							<span className="text-sm text-steel">
+								{field.label || 'Tab Break'}
+							</span>
+						</>
+					) : field.fieldtype === 'Section Break' ? (
+						<>
+							<span className="text-xs text-steel">---</span>
+							<span className="text-sm text-steel">
 								{field.label || 'Section Break'}
 							</span>
-							<span className="text-xs text-muted-foreground">---</span>
+							<span className="text-xs text-steel">---</span>
 						</>
 					) : (
 						<>
-							<span className="text-xs text-muted-foreground">|</span>
-							<span className="text-sm text-muted-foreground">
+							<span className="text-xs text-steel">|</span>
+							<span className="text-sm text-steel">
 								{field.label || 'Column Break'}
 							</span>
 						</>
@@ -84,13 +92,13 @@ export function FieldCard({
 			onDrop={(e) => onDrop(e, index)}
 			onClick={onSelect}
 			className={cn(
-				'group flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors',
+				'group flex items-center gap-3 px-3 py-2.5 rounded-none border cursor-pointer transition-colors',
 				isSelected
-					? 'border-primary bg-primary/5 shadow-sm'
-					: 'border-border hover:border-muted-foreground/50'
+					? 'border-line-dark bg-paper-deep text-ink font-medium '
+					: 'border-line hover:border-steel/50'
 			)}
 		>
-			<GripVertical className="w-4 h-4 text-muted-foreground cursor-grab shrink-0" />
+			<GripVertical className="w-4 h-4 text-steel cursor-grab shrink-0" />
 			<div className="flex-1 min-w-0">
 				<div className="flex items-center gap-2">
 					<span className="text-sm font-medium truncate">{field.label || 'Untitled'}</span>
@@ -102,7 +110,7 @@ export function FieldCard({
 					<Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
 						{field.fieldtype}
 					</Badge>
-					<span className="text-[10px] text-muted-foreground">{field.fieldname}</span>
+					<span className="text-[10px] text-steel">{field.fieldname}</span>
 				</div>
 			</div>
 			<Button

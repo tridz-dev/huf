@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
+import { ArrowUpDown, FileText, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   ColumnDef,
@@ -9,10 +9,10 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import { FilterBar, LoadMoreButton, PageLayout } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Combobox } from '@/components/ui/combobox';
 import {
   Table,
   TableBody,
@@ -28,6 +28,7 @@ import {
   type GetAgentPromptsParams,
 } from '@/services/agentPromptApi';
 import { formatTimeAgo } from '@/utils/time';
+import { PromptLibraryTabs } from '@/components/agent/PromptLibraryTabs';
 
 function getStatusVariant(enabled: 0 | 1): 'success' | 'secondary' {
   return enabled === 1 ? 'success' : 'secondary';
@@ -159,33 +160,40 @@ export function AgentPromptsPage() {
   ];
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Manage shared prompt templates for agents"
       filters={
         <FilterBar
           searchPlaceholder="Search prompts..."
           searchValue={search}
           onSearchChange={setSearch}
-          actions={
-            <div className="w-full sm:w-48">
-              <Combobox
-                options={statusOptions}
-                value={filters.status || 'all'}
-                onValueChange={(value) => setFilter('status', value || 'all')}
-                placeholder="Status"
-              />
-            </div>
-          }
+          filters={[
+            {
+              label: 'Status',
+              value: filters.status || 'all',
+              options: statusOptions,
+              onChange: (value) => setFilter('status', value || 'all'),
+              placeholder: 'All',
+            },
+          ]}
         />
       }
     >
+      <PromptLibraryTabs />
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : prompts.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No prompts"
+            description="Create a prompt template to share across agents."
+            action={{ label: 'New prompt', onClick: () => navigate('/prompts/new') }}
+          />
         ) : (
-          <div className="overflow-hidden rounded-none border">
+          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -201,27 +209,19 @@ export function AgentPromptsPage() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/prompts/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel">No Agent Prompts found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/prompts/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -240,7 +240,7 @@ export function AgentPromptsPage() {
           {total !== undefined ? `Showing all ${total} prompts` : 'No more prompts to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }
 

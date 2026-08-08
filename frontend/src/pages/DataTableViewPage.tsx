@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Database, RefreshCcw, MoreVertical, Upload, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { FilterBar } from '@/components/dashboard/filters/FilterBar';
 import { DataRecordList } from '@/components/data-table/DataRecordList';
 import { DeleteTableDialog } from '@/components/data-table/DeleteTableDialog';
+import { BulkImportModal } from '@/components/data-table/BulkImportModal';
+import { TableAgentAccessModal } from '@/components/data-table/TableAgentAccessModal';
 import {
 	getTableSchema,
 	getTableRecords,
 	deleteDataTable,
 } from '@/services/dataTableApi';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef, DataTableSchema } from '@/types/dataTable.types';
 
 export interface DataTableViewPageProps {
@@ -32,14 +35,16 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+	const [importModalOpen, setImportModalOpen] = useState(false);
+	const [agentAccessOpen, setAgentAccessOpen] = useState(false);
 
 	const loadSchema = useCallback(async () => {
 		if (!tableId) return;
 		try {
 			const s = await getTableSchema(tableId);
 			setSchema(s);
-		} catch (err: any) {
-			toast.error('Failed to load table', { description: err.message });
+		} catch (err) {
+			toast.error('Failed to load table', { description: err instanceof Error ? err.message : 'An error occurred.' });
 			navigate('/data');
 		} finally {
 			setLoading(false);
@@ -55,6 +60,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				const result = await getTableRecords(schema.doctype_name, {
 					limit: 20,
 					start,
+					search: search || undefined,
 				});
 				if (reset) {
 					setRecords(result.items);
@@ -64,13 +70,13 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 					setPage((p) => p + 1);
 				}
 				setHasMore(result.hasMore);
-			} catch (err: any) {
-				toast.error('Failed to load records', { description: err.message });
+			} catch (err) {
+				toast.error('Failed to load records', { description: err instanceof Error ? err.message : 'An error occurred.' });
 			} finally {
 				setRecordsLoading(false);
 			}
 		},
-		[schema, page]
+		[schema, page, search]
 	);
 
 	useEffect(() => {
@@ -102,13 +108,17 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 
 		onHeaderActionsChange(
 			<div className="flex items-center gap-2">
-				<Button size="sm" onClick={handleAddRecord}>
+				<Button size="sm" onClick={handleAddRecord} className="rounded-none">
 					<Plus className="w-3.5 h-3.5 mr-1.5" />
 					Add Record
 				</Button>
+				<Button size="sm" variant="outline" onClick={() => setImportModalOpen(true)}>
+					<Upload className="w-3.5 h-3.5 mr-1.5" />
+					Import Data
+				</Button>
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="outline" size="sm" className="w-8 px-0">
+						<Button variant="outline" size="sm" className="w-8 px-0 rounded-none border-line text-steel hover:bg-paper-deep hover:text-ink">
 							<MoreVertical className="h-4 w-4" />
 							<span className="sr-only">Open menu</span>
 						</Button>
@@ -117,6 +127,10 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 						<DropdownMenuItem onClick={() => navigate(`/data/${tableId}/edit`)}>
 							<Pencil className="w-3.5 h-3.5 mr-2" />
 							Edit Table
+						</DropdownMenuItem>
+						<DropdownMenuItem onClick={() => setAgentAccessOpen(true)}>
+							<Bot className="w-3.5 h-3.5 mr-2" />
+							Add to agent…
 						</DropdownMenuItem>
 						<DropdownMenuItem
 							onClick={() => setDeleteDialogOpen(true)}
@@ -142,8 +156,8 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				`Table deleted (${result.deleted_records} record${result.deleted_records !== 1 ? 's' : ''} removed)`
 			);
 			navigate('/data');
-		} catch (err: any) {
-			toast.error('Failed to delete table', { description: err.message });
+		} catch (err) {
+			toast.error('Failed to delete table', { description: err instanceof Error ? err.message : 'An error occurred.' });
 		} finally {
 			setDeleting(false);
 			setDeleteDialogOpen(false);
@@ -159,8 +173,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 	}
 
 	const dataFields = schema.fields.filter(
-		(f: DataTableFieldDef) =>
-			f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+		(f: DataTableFieldDef) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 	);
 	const recordCount = records.length;
 
@@ -184,33 +197,31 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				</div>
 
 				{/* Search + Refresh */}
-				<div className="flex items-center gap-4">
-					<div className="flex-1">
-						<Input
-							placeholder="Search records..."
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-							className="h-8 text-sm max-w-sm"
-						/>
-					</div>
-					<Button
-						variant="ghost"
-						size="icon"
-						className="h-8 w-8"
-						onClick={() => loadRecords(true)}
-					>
-						<RefreshCcw className="w-3.5 h-3.5" />
-					</Button>
-				</div>
+				<FilterBar
+					searchPlaceholder="Search records..."
+					searchValue={search}
+					onSearchChange={setSearch}
+					onSearchSubmit={() => loadRecords(true)}
+					actions={
+						<Button
+							variant="ghost"
+							size="icon"
+							className="h-8 w-8 rounded-none border border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
+							onClick={() => loadRecords(true)}
+						>
+							<RefreshCcw className="w-3.5 h-3.5" />
+						</Button>
+					}
+				/>
 
 				{/* Records table */}
 				{records.length === 0 && !recordsLoading ? (
-					<div className="flex flex-col items-center justify-center py-16 border border-dashed rounded-none">
+					<div className="flex flex-col items-center justify-center py-16 border border-dashed border-line bg-panel rounded-none">
 						<Database className="w-10 h-10 text-steel-soft mb-3" />
 						<p className="text-sm text-steel mb-3">
 							No records in this table yet
 						</p>
-						<Button size="sm" onClick={handleAddRecord}>
+						<Button size="sm" onClick={handleAddRecord} className="rounded-none">
 							<Plus className="w-3.5 h-3.5 mr-1.5" />
 							Add First Record
 						</Button>
@@ -232,6 +243,7 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 							size="sm"
 							onClick={() => loadRecords(false)}
 							disabled={recordsLoading}
+                            className="rounded-none border-line bg-panel text-steel hover:bg-paper-deep hover:text-ink"
 						>
 							{recordsLoading ? (
 								<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -250,6 +262,23 @@ export function DataTableViewPage({ onHeaderActionsChange }: DataTableViewPagePr
 				recordCount={recordCount}
 				onConfirm={handleDeleteTable}
 				loading={deleting}
+			/>
+
+			{/* Bulk Import Modal */}
+			{tableId && (
+				<BulkImportModal
+					open={importModalOpen}
+					onOpenChange={setImportModalOpen}
+					tableId={tableId}
+					tableName={schema.table_name}
+					onImportComplete={() => loadRecords(true)}
+				/>
+			)}
+
+			<TableAgentAccessModal
+				open={agentAccessOpen}
+				onOpenChange={setAgentAccessOpen}
+				table={schema}
 			/>
 		</div>
 	);

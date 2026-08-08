@@ -13,7 +13,7 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import run_agent_stream
+from huf.ai.agent_integration import _has_queued_runs, _resolve_effective_model, run_agent_stream
 
 
 class AgentStreamRenderer(BaseRenderer):
@@ -49,7 +49,7 @@ class AgentStreamRenderer(BaseRenderer):
 		if agent_name:
 			try:
 				agent_name = urllib.parse.unquote(agent_name)
-			except Exception:
+			except (ValueError, TypeError):
 				pass
 			return self._render_agent_stream(agent_name)
 			
@@ -58,37 +58,51 @@ class AgentStreamRenderer(BaseRenderer):
 		else:
 			return self._render_error("Invalid path format. Expected: /huf/stream/<agent_name>")
 
+	def _sse_error_response(self, error_message: str):
+		"""Return a single-event SSE error response (same chunk shape the stream uses for errors)."""
+		def error_generator() -> Generator[str, None, None]:
+			error_data = {"type": "error", "error": error_message}
+			yield f"data: {json.dumps(error_data)}\n\n"
+
+		return Response(
+			error_generator(),
+			mimetype="text/event-stream",
+			headers={
+				"Cache-Control": "no-cache",
+				"Connection": "keep-alive",
+				"X-Accel-Buffering": "no",
+			},
+		)
+
 	def _render_agent_stream(self, agent_name: str):
 		"""Generate SSE stream for agent response."""
-		# Get prompt from query parameters or request body
-		prompt = frappe.form_dict.get("prompt") or frappe.form_dict.get("message", "")
-		
-		# Optional Overrides
-		provider = frappe.form_dict.get("provider")
-		model = frappe.form_dict.get("model")
-		prompt_template = frappe.form_dict.get("prompt_template")
-		prompt_version = frappe.form_dict.get("prompt_version")
-		prompt_cache_options = frappe.form_dict.get("prompt_cache_options")
-		
-		if not prompt:
-			# Try to get from POST body
+		# Parse the JSON body once (if present) and merge it with form_dict so
+		# overrides from the POST body are picked up reliably.
+		body = {}
+		if frappe.request.method == "POST":
 			try:
-				if frappe.request.method == "POST":
-					body = frappe.request.get_json(force=True) or {}
-					prompt = body.get("prompt") or body.get("message", "")
-					if not provider: provider = body.get("provider")
-					if not model: model = body.get("model")
-					if not prompt_template: prompt_template = body.get("prompt_template")
-					if not prompt_version: prompt_version = body.get("prompt_version")
-					if not prompt_cache_options: prompt_cache_options = body.get("prompt_cache_options")
-			except Exception:
+				body = frappe.request.get_json(force=True) or {}
+			except (json.JSONDecodeError, TypeError, ValueError):
 				pass
-		
+
+		def _get_param(key: str, default=None):
+			return frappe.form_dict.get(key) or body.get(key) or default
+
+		# Get prompt from query parameters or request body
+		prompt = _get_param("prompt") or _get_param("message", "")
+
+		# Optional Overrides
+		provider = _get_param("provider")
+		model = _get_param("model") or _get_param("model_override")
+		prompt_template = _get_param("prompt_template")
+		prompt_version = _get_param("prompt_version")
+		prompt_cache_options = _get_param("prompt_cache_options")
+
 		if not prompt:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": "Prompt parameter required"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -98,20 +112,30 @@ class AgentStreamRenderer(BaseRenderer):
 					"X-Accel-Buffering": "no",
 				},
 			)
-		
+
 		# Get agent configuration
 		try:
 			agent_doc = frappe.get_doc("Agent", agent_name)
+			if not model:
+				model = agent_doc.model
+			# If a model override was supplied but no explicit provider, resolve
+			# the provider from the override model so the right API key/base URL
+			# is used for cross-provider switches.
+			if model and model != agent_doc.model:
+				try:
+					resolved_provider, _, _ = _resolve_effective_model(
+						agent_doc, model=model, provider=provider
+					)
+					provider = resolved_provider
+				except Exception:
+					pass
 			if not provider:
 				provider = agent_doc.provider
-			if not model:
-				model_doc = frappe.get_doc("AI Model", agent_doc.model)
-				model = model_doc.model_name
 		except frappe.DoesNotExistError:
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -122,10 +146,11 @@ class AgentStreamRenderer(BaseRenderer):
 				},
 			)
 		except Exception as e:
+			frappe.log_error(frappe.get_traceback(), "Agent Stream Renderer Error")
 			def error_generator() -> Generator[str, None, None]:
 				error_data = {"type": "error", "error": f"Error loading agent: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
-			
+
 			return Response(
 				error_generator(),
 				mimetype="text/event-stream",
@@ -135,28 +160,37 @@ class AgentStreamRenderer(BaseRenderer):
 					"X-Accel-Buffering": "no",
 				},
 			)
-		
+
+		# Queue-first policy: streaming is a direct-execution compatibility path,
+		# allowed only when the agent opts in via the 'Run Immediately' policy.
+		if not getattr(agent_doc, "run_immediately", 0):
+			return self._sse_error_response(
+				"Streaming requires the agent's 'Run Immediately' policy. "
+				"This agent runs queue-first; use the standard chat API instead."
+			)
+
 		# Get optional parameters
-		channel_id = frappe.form_dict.get("channel_id", "sse_stream")
-		external_id = frappe.form_dict.get("external_id") or frappe.session.user
-		
-		conversation_id = frappe.form_dict.get("conversation_id") or frappe.form_dict.get("conversation")
-		create_new = frappe.form_dict.get("create_new", False)
-		skip_user_message = frappe.form_dict.get("skip_user_message", False)
-		files = None
-		try:
-			if frappe.request.method == "POST":
-				body = frappe.request.get_json(force=True) or {}
-				if not conversation_id:
-					conversation_id = body.get("conversation_id") or body.get("conversation")
-				create_new = body.get("create_new", create_new)
-				skip_user_message = body.get("skip_user_message", skip_user_message)
-				files = body.get("files")
-		except Exception:
-			pass
+		channel_id = _get_param("channel_id", "sse_stream")
+		external_id = _get_param("external_id") or frappe.session.user
+
+		conversation_id = _get_param("conversation_id") or _get_param("conversation")
+		create_new = bool(_get_param("create_new", False))
+		skip_user_message = bool(_get_param("skip_user_message", False))
+		files = body.get("files")
 
 		create_new = bool(create_new)
 		skip_user_message = bool(skip_user_message)
+
+		# Queue-ordering parity with run_agent_sync's direct path: a direct
+		# stream must not jump ahead of queued runs for the same conversation.
+		# If no conversation id is available here the stream starts a brand-new
+		# conversation, which by definition has no queued runs — skip the check.
+		stream_conversation_id = None if create_new else conversation_id
+		if stream_conversation_id and _has_queued_runs(stream_conversation_id):
+			return self._sse_error_response(
+				"This conversation has queued runs pending. "
+				"Wait for them to complete before using the direct-execution override."
+			)
 		
 		# Create async generator wrapper
 		def stream_generator() -> Generator[str, None, None]:
@@ -206,10 +240,12 @@ class AgentStreamRenderer(BaseRenderer):
 					except StopAsyncIteration:
 						break
 					except Exception as e:
+						frappe.log_error(frappe.get_traceback(), "Agent Stream Chunk Error")
 						error_data = {"type": "error", "error": str(e)}
 						yield f"data: {json.dumps(error_data)}\n\n"
 						break
 			except Exception as e:
+				frappe.log_error(frappe.get_traceback(), "Agent Stream Setup Error")
 				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
@@ -223,7 +259,7 @@ class AgentStreamRenderer(BaseRenderer):
 						if pending:
 							loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
 						loop.close()
-					except Exception:
+					except (RuntimeError, ValueError, TypeError, AttributeError, KeyError):
 						pass
 					finally:
 						asyncio.set_event_loop(None)

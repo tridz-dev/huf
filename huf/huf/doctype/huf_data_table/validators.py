@@ -19,11 +19,14 @@ ALLOWED_FIELD_TYPES = {
 	"Rating",
 	"Color",
 	"Phone",
+	"Attach",
+	"Attach Image",
+	"Tab Break",
 	"Section Break",
 	"Column Break",
 }
 
-LAYOUT_FIELD_TYPES = {"Section Break", "Column Break"}
+LAYOUT_FIELD_TYPES = {"Tab Break", "Section Break", "Column Break"}
 
 RESERVED_FIELDNAMES = {
 	"name",

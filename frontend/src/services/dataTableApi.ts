@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -6,6 +7,8 @@ import type {
 	DataTableFieldDef,
 	DataTableSchema,
 	HufDataTable,
+	TableAgentAccess,
+	TableAgentAction,
 } from '@/types/dataTable.types';
 
 /**
@@ -19,9 +22,25 @@ const DATA_TABLE_LIST_FIELDS = [
 	'icon',
 	'field_count',
 	'is_active',
+	'table_group',
 	'creation',
 	'modified',
 ];
+
+/**
+ * frappe-js-sdk getDocList filter shape, spelled out with plain string field
+ * names (the SDK does not re-export its Filter type at the package root, and
+ * its Filter<T> is keyed to a specific document type which dynamic HUF table
+ * doctypes don't have). Mirrors Filter<T> from the SDK's db/types.
+ */
+type DocListFilters = Array<
+	| [
+			string,
+			'=' | '>' | '<' | '>=' | '<=' | '<>' | 'like' | '!=' | 'Timespan',
+			string | number | boolean | Date | null,
+	  ]
+	| [string, 'in' | 'not in' | 'between', Array<string | number | boolean | Date | null>]
+>;
 
 /**
  * Pagination params for data tables listing
@@ -56,14 +75,14 @@ export async function getDataTables(
 			search,
 		} = params || {};
 
-		const filters: Array<[string, string, unknown]> = [];
+		const filters: DocListFilters = [];
 		if (search && search.trim()) {
 			filters.push(['table_name', 'like', `%${search.trim()}%`]);
 		}
 
 		const tables = await db.getDocList(doctype['Huf Data Table'], {
 			fields: DATA_TABLE_LIST_FIELDS,
-			filters: filters.length > 0 ? (filters as any) : undefined,
+			filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
 			limit: limit + 1,
 			...(start > 0 && { limit_start: start }),
 			orderBy: { field: 'modified', order: 'desc' },
@@ -96,6 +115,26 @@ export async function getDataTables(
 		return { items, hasMore, total };
 	} catch (error) {
 		handleFrappeError(error, 'Error fetching data tables');
+	}
+}
+
+/**
+ * Get the distinct set of group names already in use across data tables, so the
+ * table settings form can suggest reusing an existing group instead of retyping it.
+ */
+export async function getTableGroups(): Promise<string[]> {
+	try {
+		const tables = await db.getDocList(doctype['Huf Data Table'], {
+			fields: ['table_group'],
+			limit: 200,
+		});
+		const names = new Set<string>();
+		for (const t of tables as Array<{ table_group?: string }>) {
+			if (t.table_group && t.table_group.trim()) names.add(t.table_group.trim());
+		}
+		return Array.from(names).sort((a, b) => a.localeCompare(b));
+	} catch {
+		return [];
 	}
 }
 
@@ -137,6 +176,7 @@ export async function createDataTable(data: {
 	icon?: string;
 	autoname_method?: string;
 	title_field?: string;
+	table_group?: string;
 }): Promise<{ name: string; table_name: string; doctype_name: string }> {
 	try {
 		const result = await call.post('huf.huf.doctype.huf_data_table.api.create_data_table', data);
@@ -155,6 +195,7 @@ export async function updateDataTable(
 		fields?: DataTableFieldDef[];
 		description?: string;
 		icon?: string;
+		table_group?: string;
 	}
 ): Promise<void> {
 	try {
@@ -175,6 +216,118 @@ export async function deleteDataTable(name: string): Promise<{ deleted_records: 
 		return result.message.data;
 	} catch (error) {
 		handleFrappeError(error, 'Error deleting data table');
+	}
+}
+
+export async function getTableAgentAccess(table: string): Promise<TableAgentAccess[]> {
+	try {
+		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_table_agent_access', { table });
+		return (result.message ?? []) as TableAgentAccess[];
+	} catch (error) {
+		handleFrappeError(error, 'Error fetching agent access');
+	}
+}
+
+export async function setTableAgentAccess(
+	table: string,
+	agent: string,
+	actions: TableAgentAction[]
+): Promise<TableAgentAccess> {
+	try {
+		const result = await call.post('huf.huf.doctype.huf_data_table.api.set_table_agent_access', { table, agent, actions });
+		return result.message as TableAgentAccess;
+	} catch (error) {
+		handleFrappeError(error, 'Error updating agent access');
+	}
+}
+
+export async function getTableAgentAccessCounts(): Promise<Record<string, number>> {
+	try {
+		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_tables_agent_counts');
+		return (result.message ?? {}) as Record<string, number>;
+	} catch {
+		return {};
+	}
+}
+
+// ─── Bulk Import (wraps Frappe Data Import via HUF backend bridge) ───
+
+export interface BulkImportTemplate {
+	file_url: string;
+	file_name: string;
+}
+
+/**
+ * Generate a CSV import template for a table and get its download URL
+ */
+export async function getBulkImportTemplateUrl(
+	tableId: string,
+	exportRecords = false
+): Promise<BulkImportTemplate> {
+	try {
+		const result = await call.post(
+			'huf.huf.doctype.huf_data_table.api.get_bulk_import_template_url',
+			{ table_id: tableId, export_records: exportRecords }
+		);
+		return result.message.data as BulkImportTemplate;
+	} catch (error) {
+		handleFrappeError(error, 'Error generating import template');
+	}
+}
+
+export interface StartBulkImportResult {
+	import_name: string;
+	status: string;
+	enqueued: boolean;
+}
+
+/**
+ * Create a Data Import for an uploaded CSV file and enqueue the import
+ */
+export async function startTableBulkImport(
+	tableId: string,
+	fileUrl: string
+): Promise<StartBulkImportResult> {
+	try {
+		const result = await call.post(
+			'huf.huf.doctype.huf_data_table.api.start_table_bulk_import',
+			{ table_id: tableId, file_url: fileUrl }
+		);
+		return result.message.data as StartBulkImportResult;
+	} catch (error) {
+		handleFrappeError(error, 'Error starting bulk import');
+	}
+}
+
+export interface BulkImportRowError {
+	row_indexes: string;
+	messages: string;
+	exception: string;
+}
+
+export interface BulkImportStatus {
+	import_name: string;
+	status: string;
+	success: number;
+	failed: number;
+	total: number;
+	errors: BulkImportRowError[];
+}
+
+/**
+ * Poll the status of a running/completed bulk import
+ */
+export async function getTableBulkImportStatus(
+	importName: string
+): Promise<BulkImportStatus> {
+	try {
+		const result = await call.get(
+			'huf.huf.doctype.huf_data_table.api.get_table_bulk_import_status',
+			{ import_name: importName }
+		);
+		return result.message.data as BulkImportStatus;
+	} catch (error) {
+		handleFrappeError(error, 'Error fetching import status');
 	}
 }
 
@@ -207,25 +360,24 @@ export async function getTableRecords(
 	params?: {
 		fields?: string[];
 		filters?: Array<[string, string, unknown]>;
+		search?: string;
 		limit?: number;
 		start?: number;
 		orderBy?: { field: string; order: 'asc' | 'desc' };
 	}
 ): Promise<{ items: Record<string, unknown>[]; hasMore: boolean }> {
 	try {
-		const limit = params?.limit || 20;
-		const records = await db.getDocList(doctypeName, {
-			fields: params?.fields || ['*'],
-			filters: params?.filters as any,
-			limit: limit + 1,
-			...(params?.start && { limit_start: params.start }),
-			orderBy: params?.orderBy || { field: 'modified', order: 'desc' },
+		const result = await call.get('huf.huf.doctype.huf_data_table.api.get_table_records', {
+			doctype_name: doctypeName,
+			fields: params?.fields ? JSON.stringify(params.fields) : undefined,
+			filters: params?.filters ? JSON.stringify(params.filters) : undefined,
+			search: params?.search,
+			limit: params?.limit || 20,
+			start: params?.start || 0,
+			order_by: params?.orderBy ? `${params.orderBy.field} ${params.orderBy.order}` : 'modified desc',
 		});
-
-		const hasMore = records.length > limit;
-		const items = hasMore ? records.slice(0, limit) : records;
-
-		return { items: items as Record<string, unknown>[], hasMore };
+		
+		return result.message as { items: Record<string, unknown>[]; hasMore: boolean };
 	} catch (error) {
 		handleFrappeError(error, 'Error fetching records');
 	}

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { CheckIcon, Plus } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { CheckIcon, ChevronDown, Plus } from 'lucide-react';
 import {
   ModelSelector,
   ModelSelectorContent,
@@ -11,10 +11,10 @@ import {
   ModelSelectorName,
   ModelSelectorTrigger,
 } from '@/components/ai-elements/model-selector';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
-import { getAgentModels, type AgentModelItem } from '@/services/agentApi';
+import { getAIModels, type AIModelItem } from '@/services/agentApi';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { isKnownBrand } from '@/utils/providerBrands';
 
@@ -23,56 +23,67 @@ interface AgentModelSelectorProps {
   onValueChange: (value: string) => void;
   disabled?: boolean;
   showLabel?: boolean;
+  variant?: 'icon' | 'pill';
+  currentLabel?: string;
+  currentModel?: string | null;
 }
 
-export function AgentModelSelector({ value, onValueChange, disabled, showLabel = false }: AgentModelSelectorProps) {
+export function AgentModelSelector({
+  value,
+  onValueChange,
+  disabled,
+  showLabel = false,
+  variant = 'icon',
+  currentLabel,
+  currentModel,
+}: AgentModelSelectorProps) {
   const [open, setOpen] = useState(false);
-  const isInitialAutoSelectRef = useRef(true);
+  const [aiModels, setAiModels] = useState<AIModelItem[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelSearch, setModelSearch] = useState('');
+  const [providerFilter, setProviderFilter] = useState<string | null>(null);
 
-  const {
-    items: agentModels,
-    initialLoading: modelsLoading,
-    search: modelSearch,
-    setSearch: setModelSearch,
-  } = useInfiniteScroll<
-    { page?: number; limit?: number; start?: number; search?: string },
-    AgentModelItem
-  >({
-    fetchFn: async (params) => {
-      const response = await getAgentModels({
-        page: params.page,
-        limit: params.limit,
-        start: params.start,
-        search: params.search,
-      });
-      return {
-        data: response.items,
-        hasMore: response.hasMore,
-        total: response.total,
-      };
-    },
-    initialParams: {},
-    pageSize: 20,
-    debounceMs: 300,
-    autoLoad: true,
-    autoLoadMore: false,
-  });
-
+  // Load the model catalog as soon as the selector mounts so the pill can
+  // display the selected override even when the popover is closed.
   useEffect(() => {
-    if (agentModels.length > 0 && !value && isInitialAutoSelectRef.current) {
-      isInitialAutoSelectRef.current = false;
-    } else if (agentModels.length > 0 && value) {
-      isInitialAutoSelectRef.current = false;
-    }
-  }, [agentModels, value]);
+    let cancelled = false;
+    setModelsLoading(true);
+    getAIModels()
+      .then((models) => {
+        if (!cancelled) setAiModels(models);
+      })
+      .finally(() => {
+        if (!cancelled) setModelsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
       setModelSearch('');
+      setProviderFilter(null);
     }
-  }, [open, setModelSearch]);
+  }, [open]);
 
-  const groupedModels = agentModels.reduce(
+  const filteredModels = useMemo(() => {
+    let models = aiModels;
+    if (providerFilter) {
+      models = models.filter((m) => m.providerBrand === providerFilter);
+    }
+    const q = modelSearch.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.modelName.toLowerCase().includes(q) ||
+        m.providerBrandLabel.toLowerCase().includes(q) ||
+        m.modalities?.some((mod) => mod.toLowerCase().includes(q))
+    );
+  }, [aiModels, modelSearch, providerFilter]);
+
+  const groupedModels = filteredModels.reduce(
     (acc, model) => {
       const groupLabel = model.providerBrandLabel || 'Other';
       if (!acc[groupLabel]) {
@@ -81,25 +92,70 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
       acc[groupLabel].push(model);
       return acc;
     },
-    {} as Record<string, AgentModelItem[]>
+    {} as Record<string, AIModelItem[]>
   );
+
+  const selectedModel = useMemo(
+    () => aiModels.find((m) => m.id === value),
+    [aiModels, value]
+  );
+
+  const providerOptions = useMemo(() => {
+    const map = new Map<string, { brand: string; label: string }>();
+    aiModels.forEach((m) => {
+      if (!map.has(m.providerBrand)) {
+        map.set(m.providerBrand, { brand: m.providerBrand, label: m.providerBrandLabel });
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [aiModels]);
+
+  const triggerLabel = currentLabel ?? selectedModel?.name ?? 'Select Model';
+  const triggerModel = selectedModel?.modelName ?? currentModel;
 
   return (
     <ModelSelector onOpenChange={setOpen} open={open}>
       <ModelSelectorTrigger asChild>
-        <Button
-          size={showLabel ? 'default' : 'icon'}
-          variant={showLabel ? 'outline' : 'ghost'}
-          disabled={disabled}
-          className={cn(
-            'text-steel hover:bg-paper-deep hover:text-ink',
-            showLabel && 'gap-2',
-            disabled && 'disabled:opacity-100'
-          )}
-        >
-          <Plus className={showLabel ? 'w-4 h-4' : 'w-5 h-5'} />
-          {showLabel && <span>Select Agent</span>}
-        </Button>
+        {variant === 'pill' ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={disabled}
+            data-testid="agent-model-selector-trigger"
+            className={cn(
+              'h-auto gap-1.5 rounded-md border px-2 py-1 text-xs font-normal text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900',
+              disabled && 'disabled:opacity-100'
+            )}
+          >
+            <span className="relative flex size-5 shrink-0 items-center justify-center">
+              {selectedModel && isKnownBrand(selectedModel.providerBrand) ? (
+                <ProviderBrandIcon brand={selectedModel.providerBrand} size="sm" />
+              ) : (
+                <span className="size-3.5 shrink-0" aria-hidden />
+              )}
+            </span>
+            <span className="max-w-[12rem] truncate">{triggerLabel}</span>
+            {triggerModel ? (
+              <span className="text-muted-foreground truncate max-w-[8rem]">· {triggerModel}</span>
+            ) : null}
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </Button>
+        ) : (
+          <Button
+            size={showLabel ? 'default' : 'icon'}
+            variant={showLabel ? 'outline' : 'ghost'}
+            disabled={disabled}
+            className={cn(
+              'text-steel hover:bg-paper-deep hover:text-ink',
+              showLabel && 'gap-2',
+              disabled && 'disabled:opacity-100'
+            )}
+          >
+            <Plus className={showLabel ? 'w-4 h-4' : 'w-5 h-5'} />
+            {showLabel && <span>Select Model</span>}
+          </Button>
+        )}
       </ModelSelectorTrigger>
 
       <ModelSelectorContent shouldFilter={false} className="min-h-[40%]">
@@ -108,61 +164,103 @@ export function AgentModelSelector({ value, onValueChange, disabled, showLabel =
           searchValue={modelSearch}
           onSearchChange={setModelSearch}
         />
+
+        {providerOptions.length > 1 && (
+          <div className="flex items-center gap-1.5 border-b px-3 py-2 overflow-x-auto no-scrollbar">
+            <button
+              type="button"
+              onClick={() => setProviderFilter(null)}
+              className={cn(
+                'shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                providerFilter === null
+                  ? 'bg-zinc-900 text-white'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+              )}
+            >
+              All
+            </button>
+            {providerOptions.map((p) => (
+              <button
+                key={p.brand}
+                type="button"
+                onClick={() => setProviderFilter(p.brand)}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+                  providerFilter === p.brand
+                    ? 'bg-zinc-900 text-white'
+                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                )}
+              >
+                {isKnownBrand(p.brand) ? (
+                  <ProviderBrandIcon brand={p.brand} size="sm" />
+                ) : (
+                  <span className="size-3.5 shrink-0" aria-hidden />
+                )}
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <ModelSelectorList>
           {modelsLoading ? (
             <div className="p-4 text-center text-sm text-muted-foreground">
               Loading models...
             </div>
-          ) : agentModels.length === 0 ? (
+          ) : filteredModels.length === 0 ? (
             <ModelSelectorEmpty>No models found.</ModelSelectorEmpty>
           ) : (
             Object.entries(groupedModels).map(([groupLabel, models]) => (
               <ModelSelectorGroup key={groupLabel} heading={groupLabel}>
-                {models.map((model) => (
-                  <ModelSelectorItem
-                    key={model.id}
-                    className="gap-3 px-3 py-2.5"
-                    onSelect={() => {
-                      onValueChange(model.id);
-                      setOpen(false);
-                    }}
-                    value={model.id}
-                  >
-                    <div className="relative flex size-8 shrink-0 items-center justify-center">
-                      {isKnownBrand(model.providerBrand) ? (
-                        <ProviderBrandIcon brand={model.providerBrand} size="sm" />
-                      ) : model.agent_color ? (
-                        <span
-                          className="size-4 rounded-full border border-border"
-                          style={{ backgroundColor: model.agent_color }}
-                          aria-hidden
-                        />
+                {models.map((model) => {
+                  const modalities = model.modalities?.length
+                    ? model.modalities
+                    : ['Text'];
+                  return (
+                    <ModelSelectorItem
+                      key={model.id}
+                      className="gap-3 px-3 py-2.5"
+                      data-testid="agent-model-item"
+                      onSelect={() => {
+                        onValueChange(model.id);
+                        setOpen(false);
+                      }}
+                      value={model.id}
+                    >
+                      <div className="relative flex size-8 shrink-0 items-center justify-center">
+                        {isKnownBrand(model.providerBrand) ? (
+                          <ProviderBrandIcon brand={model.providerBrand} size="sm" />
+                        ) : (
+                          <span className="size-4 shrink-0" aria-hidden />
+                        )}
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <ModelSelectorName>{model.name}</ModelSelectorName>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {model.modelName ? (
+                            <span className="text-xs text-muted-foreground truncate">{model.modelName}</span>
+                          ) : null}
+                          {modalities.slice(0, 3).map((modality) => (
+                            <Badge
+                              key={modality}
+                              variant="outline"
+                              className="text-[10px] px-1 py-0 h-auto font-normal shrink-0"
+                            >
+                              {modality}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+
+                      {value === model.id ? (
+                        <CheckIcon className="ml-auto size-4 shrink-0" />
                       ) : (
-                        <span className="size-4 shrink-0" aria-hidden />
+                        <div className="ml-auto size-4 shrink-0" />
                       )}
-                      {model.agent_color && isKnownBrand(model.providerBrand) ? (
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border border-background ring-1 ring-border"
-                          style={{ backgroundColor: model.agent_color }}
-                          aria-hidden
-                        />
-                      ) : null}
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <ModelSelectorName>{model.name}</ModelSelectorName>
-                      {model.model ? (
-                        <span className="text-xs text-muted-foreground truncate">{model.model}</span>
-                      ) : null}
-                    </div>
-
-                    {value === model.id ? (
-                      <CheckIcon className="ml-auto size-4 shrink-0" />
-                    ) : (
-                      <div className="ml-auto size-4 shrink-0" />
-                    )}
-                  </ModelSelectorItem>
-                ))}
+                    </ModelSelectorItem>
+                  );
+                })}
               </ModelSelectorGroup>
             ))
           )}

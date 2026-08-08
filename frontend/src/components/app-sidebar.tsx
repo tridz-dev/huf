@@ -1,6 +1,6 @@
 import * as React from "react"
-import { Home, Bot, Workflow, Database, Plug, MessageSquare, Zap, Server, ScrollText, Users, BookOpen, Cpu, Link2, Boxes, Terminal, Settings, ChevronRight, Shield } from "lucide-react"
-import { NavLink, useLocation } from "react-router-dom"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -8,34 +8,57 @@ import { AppSidebarHeader } from "@/components/app-sidebar-header"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { fetchDocCountQuiet } from "@/services/utilsApi"
 import { doctype } from "@/data/doctypes"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { ShortcutKey } from "@/components/ui/shortcut-key"
+import { useShortcutsHelp } from "@/components/shortcuts/ShortcutsHelpContext"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
+  SidebarHeader,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar"
 
 /**
- * Each nav item may declare an optional `capability` string.
- * If present the item is hidden from users who don't have that capability.
+ * Each nav item may declare an optional `capability` string or list.
+ * If present the item is hidden from users who don't have that capability
+ * (a list means any-of: one matching capability is enough).
  * Items with capability === null are always visible (e.g. Dashboard).
  */
 const dashboardNavItems = [
   {
-    title: "Dashboard",
+    title: "Hub",
     url: "/",
     icon: Home,
     capability: null,
+  },
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: ChartColumnIncreasing,
+    capability: null,
+  },
+]
+
+/**
+ * The "Use" side of the platform: end-user HUF Apps discovered from
+ * installed provider apps. Build/Library/Monitor remain the manage side.
+ */
+const useNavItems = [
+  {
+    title: "Apps",
+    url: "/apps",
+    icon: LayoutGrid,
+    capability: "agent.use",
+    badge: "Experimental",
+  },
+  {
+    title: "Chat",
+    url: "/chat",
+    icon: MessageSquare,
+    capability: "chat.use",
   },
 ]
 
@@ -43,13 +66,7 @@ const buildNavItems = [
   {
     title: "Agents",
     url: "/agents",
-    icon: Bot,
-    capability: "agent.use",
-  },
-  {
-    title: "Agent Prompts",
-    url: "/prompts",
-    icon: ScrollText,
+    icon: SquareAsterisk,
     capability: "agent.use",
   },
   {
@@ -57,112 +74,100 @@ const buildNavItems = [
     url: "/flows",
     icon: Workflow,
     capability: "flows.use",
+    badge: "Experimental",
   },
   {
-    title: "Data",
-    url: "/data",
-    icon: Database,
-    capability: "agent.view_all",
+    title: "Intelligence",
+    url: "/memory",
+    icon: Brain,
+    capability: "agent.use",
+    badge: "Experimental",
   },
   {
-    title: "Knowledge",
+    title: "Skills",
+    url: "/skills",
+    icon: Sparkles,
+    capability: "agent.use",
+    badge: "Experimental",
+  },
+]
+
+/**
+ * Library surfaces live in a flat "Library" label group: Prompts for reusable
+ * prompt templates, Sources for retrieval knowledge stores backed by any
+ * vector/FTS backend (RAG), Tables for structured/relational data.
+ */
+const libraryNavItems = [
+  {
+    title: "Prompts",
+    url: "/prompts",
+    icon: FileText,
+    capability: "agent.use",
+  },
+  {
+    title: "Sources",
     url: "/knowledge",
     icon: BookOpen,
     capability: "agent.use",
+  },
+  {
+    title: "Tables",
+    url: "/data",
+    icon: Database,
+    capability: [
+      "data.tables.manage",
+      "data.records.view_own",
+      "data.records.view_all",
+    ],
   },
 ]
 
 const operateNavItems = [
 	{
-		title: "Chat",
-		url: "/chat",
-		icon: MessageSquare,
-		capability: "chat.use",
-	},
-	{
 		title: "Executions",
 		url: "/executions",
 		icon: Zap,
 		capability: "agent.use",
+		badge: "Experimental",
 	},
 	{
-		title: "Artifacts",
-		url: "/artifacts",
-		icon: Boxes,
-		capability: "agent.view_all",
+		title: "Playground",
+		url: "/playground",
+		icon: Terminal,
+		capability: "agent.use",
 	},
-]
-
-const peopleNavItems = [
-  {
-    title: "Users",
-    url: "/users",
-    icon: Users,
-    capability: "users.manage",
-  },
 ]
 
 /**
- * Settings-adjacent pages are grouped under a single collapsible sidebar
- * entry instead of each getting a top-level item, to keep the primary nav
- * short. Same capability-gating rules as allNavItems.
+ * Settings is a second-level rail, not an accordion. Opening it replaces the
+ * primary navigation so the longer administration list never pushes the main
+ * destinations off-screen.
  */
-const settingsNavItems = [
+const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; url: string; icon: LucideIcon; capability: string | string[] | null }> }> = [
   {
-    title: "AI Providers",
-    url: "/providers",
-    icon: Plug,
-    capability: "system.providers.manage",
-  },
-  {
-    title: "Models",
-    url: "/models",
-    icon: Cpu,
-    capability: "system.providers.manage",
-	},
-	{
-		title: "Agent Summary Prompts",
-		url: "/summary-prompts",
-		icon: ScrollText,
-		capability: "agent.use",
-  },
-  {
-    title: "Console",
-    url: "/console",
-    icon: Terminal,
-    capability: "agent.use",
-  },
-  {
-    title: "Integrations",
-    url: "/integrations",
-    icon: Link2,
-    capability: "system.integrations.manage",
-  },
-  {
-    title: "Integration Services",
-    url: "/integration-services",
-    icon: Boxes,
-    capability: "system.integrations.manage",
-  },
-  {
-    title: "MCP Servers",
-    url: "/mcp",
-    icon: Server,
-    capability: "system.mcp.manage",
-  },
-  {
-    title: "Roles",
-    url: "/roles",
-    icon: Shield,
-    capability: "roles.manage",
+    items: [
+      { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
+      { title: "AI Providers & Models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
+      { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
+      { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
+      { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
+      { title: "Code Execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
+      { title: "SSH Connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
+      {
+        title: "Members",
+        url: "/members",
+        icon: Users,
+        capability: ["users.manage", "roles.manage"],
+      },
+    ],
   },
 ]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
   const { hasCapability, isLoading } = usePermissions()
-  const { state: sidebarState, isMobile, setOpen } = useSidebar()
   const [agentCount, setAgentCount] = React.useState<number | undefined>(undefined)
+  const { setOpen: setShortcutsHelpOpen } = useShortcutsHelp()
 
   React.useEffect(() => {
     let cancelled = false
@@ -176,44 +181,49 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
-	const filterItemsByCapability = <T extends { capability: string | null }>(items: T[]) => {
+	const filterItemsByCapability = <T extends { capability: string | string[] | null }>(items: T[]) => {
 		if (isLoading) {
 			return items.filter((item) => item.capability === null)
 		}
-		return items.filter(
-			(item) => item.capability === null || (item.capability && hasCapability(item.capability)),
-		)
+		return items.filter((item) => {
+			if (item.capability === null) return true
+			const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
+			return caps.some((cap) => hasCapability(cap))
+		})
 	}
+
+	const isPathInItems = (items: { url: string }[]) =>
+		items.some(
+			(item) =>
+				location.pathname === item.url || location.pathname.startsWith(item.url + "/"),
+		)
 
 	// While permissions are loading show only uncapability-gated items so the
 	// sidebar doesn't flash/jump once capabilities resolve.
 	const dashboardItems = filterItemsByCapability(dashboardNavItems)
+	const useItems = filterItemsByCapability(useNavItems)
 	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
+	const libraryItems = filterItemsByCapability(libraryNavItems)
 	const operateItems = filterItemsByCapability(operateNavItems)
-	const peopleItems = filterItemsByCapability(peopleNavItems)
-  const settingsItems = isLoading
-    ? []
-    : settingsNavItems.filter((item) => item.capability === null || hasCapability(item.capability))
-  const isSettingsActive = settingsItems.some((item) => location.pathname.startsWith(item.url))
-  const [isSettingsOpen, setIsSettingsOpen] = React.useState(isSettingsActive)
+  const settingsGroups = settingsNavGroups
+    .map((group) => ({
+      ...group,
+      items: filterItemsByCapability(
+        group.items as Array<(typeof group.items)[number] & { capability: string | string[] | null }>,
+      ),
+    }))
+    .filter((group) => group.items.length > 0)
+  const settingsItems = settingsGroups.flatMap((group) => group.items)
+  const settingsActive = isPathInItems(settingsItems)
+  const [settingsMode, setSettingsMode] = React.useState(settingsActive)
 
   React.useEffect(() => {
-    if (isSettingsActive) {
-      setIsSettingsOpen(true)
+    if (settingsActive) {
+      setSettingsMode(true)
     }
-  }, [isSettingsActive])
-
-  const handleSettingsClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    // In icon-collapsed desktop mode, open sidebar first so the submenu
-    // becomes visible immediately instead of appearing unresponsive.
-    if (!isMobile && sidebarState === "collapsed") {
-      event.preventDefault()
-      setOpen(true)
-      setIsSettingsOpen(true)
-    }
-  }
+  }, [settingsActive])
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -221,54 +231,68 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <AppSidebarHeader />
       </SidebarHeader>
       <SidebarContent>
-			{dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
-			{buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
-			{operateItems.length > 0 && <NavMain items={operateItems} label="Operate" />}
-			{peopleItems.length > 0 && <NavMain items={peopleItems} label="People" />}
-        {settingsItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarMenu>
-              <Collapsible
-                open={isSettingsOpen}
-                onOpenChange={setIsSettingsOpen}
-                className="group/settings"
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Settings"
-                      isActive={isSettingsActive}
-                      onClick={handleSettingsClick}
-                    >
-                      <Settings />
-                      <span>Settings</span>
-                      <ChevronRight className="ml-auto transition-transform group-data-[state=open]/settings:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {settingsItems.map((item) => {
-                        const isActive = location.pathname.startsWith(item.url)
-                        return (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild isActive={isActive}>
-                              <NavLink to={item.url}>
-                                <item.icon />
-                                <span>{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        )
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+        {settingsMode ? (
+          <>
+            <SidebarMenu className="px-2">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Back to main navigation"
+                  onClick={() => setSettingsMode(false)}
+                  className="font-medium"
+                >
+                  <ArrowLeft strokeWidth={1.6} />
+                  <span className="font-body text-[13.5px]">Settings</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
-          </SidebarGroup>
+            {settingsGroups.map((group) => (
+              <NavMain key={group.label ?? "settings"} items={group.items} label={group.label} />
+            ))}
+          </>
+        ) : (
+          <>
+            {dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
+            {useItems.length > 0 && <NavMain items={useItems} label="Use" />}
+            {buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
+            {libraryItems.length > 0 && <NavMain items={libraryItems} label="Library" />}
+            {operateItems.length > 0 && <NavMain items={operateItems} label="Monitor" />}
+          </>
         )}
       </SidebarContent>
       <SidebarFooter className="p-0 mb-1 mt-2 border-t border-sidebar-border">
+        {!settingsMode && settingsItems.length > 0 && (
+          <SidebarMenu className="px-2 pt-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsMode(true)}>
+                <Settings strokeWidth={1.6} />
+                <span className="font-body text-[13.5px]">Settings</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
+        {!settingsMode && (
+          <SidebarMenu className="px-2">
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Keyboard shortcuts"
+                onClick={() => setShortcutsHelpOpen(true)}
+                className="group/shortcut-hint group-data-[collapsible=icon]:justify-center"
+              >
+                <Keyboard strokeWidth={1.6} />
+                <span className="font-body text-[13.5px] flex-1 group-data-[collapsible=icon]:hidden">
+                  Keyboard shortcuts
+                </span>
+                <ShortcutKey
+                  size="sm"
+                  hoverOnly="shortcut-hint"
+                  className="group-data-[collapsible=icon]:hidden"
+                >
+                  ?
+                </ShortcutKey>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        )}
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

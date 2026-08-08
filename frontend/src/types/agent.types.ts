@@ -2,6 +2,10 @@ export type AIProvider = {
   name: string;
   provider_name: string;
   provider_brand?: string;
+  /** 1 when this is a self-hosted/local endpoint (Ollama, LM Studio, ...). */
+  is_local_llm?: number;
+  /** Base URL for local endpoints, e.g. http://host.docker.internal:11434 */
+  api_base_url?: string;
 };
 
 export type AIModel = {
@@ -13,6 +17,8 @@ export type AIModel = {
   input_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
   cached_input_cost_per_1m_tokens?: number | null;
+  supports_reasoning?: number;
+  reasoning_config_override?: string;
 };
 
 export type ToolType =
@@ -41,6 +47,13 @@ export type ToolType =
   | "Get Conversation Data"
   | "Set Conversation Data"
   | "Load Conversation Data"
+  | "Perplexity Search"
+  | "Code Execution"
+  | "Transcription"
+  /**
+   * @deprecated Legacy value kept for backward compatibility with saved docs.
+   * New tools should use "Transcription" (displayed as "Audio Transcription").
+   */
   | "Speech to Text";
 
 export type AgentToolFunctionRef = {
@@ -52,6 +65,7 @@ export type AgentToolFunctionRef = {
   function_path?: string;
   provider_app?: string;
   tool_type?: string; // Link to Agent Tool Type
+  service?: string; // Link to Integration Service that must be connected
 };
 
 export type AgentToolType = {
@@ -107,7 +121,12 @@ export type Agent = {
   top_p?: number;
   disabled?: boolean;
   allow_chat?: boolean;
+  is_system?: boolean;
   persist_conversation?: boolean;
+  reasoning_mode?: "Auto" | "Off" | "On";
+  reasoning_effort?: "Auto" | "Low" | "Medium" | "High";
+  reasoning_budget_tokens?: number;
+  reasoning_summary?: "None" | "Concise" | "Detailed";
   triggers: AgentTrigger[];
   tags?: string[];
   category?: AgentCategory;
@@ -158,6 +177,7 @@ export type AgentRun = {
   total_tokens?: number;
   total_cost?: number;
   latency_ms?: number;
+  reasoning_snapshot?: string;
   created_at: string;
 };
 
@@ -179,12 +199,27 @@ export interface AgentKnowledgeRow {
   description?: string;
 }
 
+export interface AgentSkillRow {
+  name?: string;
+  skill: string;
+  skill_name?: string;
+  mode: 'Mandatory' | 'Optional';
+  auto_load?: 0 | 1 | boolean;
+  priority?: number;
+  description?: string;
+}
+
 export interface AgentOrchestrationPlanRow {
   name?: string;
   step_index: number;
   status: "pending" | "in_progress" | "done" | "failed";
   instruction: string;
   output_ref: string;
+}
+
+export interface AgentStarterPromptRow {
+  name?: string;
+  prompt_text: string;
 }
 /**
  * Agent document type from Frappe
@@ -225,8 +260,10 @@ export interface AgentDoc {
   doc_event: DocEventType | null;
   description?: string | null;
   instructions: string;
+  starter_prompts?: AgentStarterPromptRow[];
   agent_tool: AgentToolFunctionRef[]; // Array of agent tool references
   agent_knowledge?: AgentKnowledgeRow[];
+  agent_skill?: AgentSkillRow[];
   agent_mcp_server?: Array<{
     mcp_server: string;
     enabled: 0 | 1;
@@ -236,6 +273,7 @@ export interface AgentDoc {
   agent_color?: string | null; // Hex color code for agent background
   show_tool_execution_details?: 0 | 1; // 0 or 1
   allow_guest?: number; // 0 or 1
+  is_system?: number; // 0 or 1 — system agents are locked and hidden from non-admins
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];
   default_plan: AgentOrchestrationPlanRow[];
@@ -257,6 +295,10 @@ export interface AgentDoc {
   summary_template_version_at_attach?: number;
   summary_prompt?: string | null;
   history_limit?: number | null; // Maximum number of messages to keep
+  reasoning_mode?: 'Auto' | 'Off' | 'On' | null;
+  reasoning_effort?: 'Auto' | 'Low' | 'Medium' | 'High' | null;
+  reasoning_budget_tokens?: number | null;
+  reasoning_summary?: 'None' | 'Concise' | 'Detailed' | null;
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
   max_context_chars?: number | null; // Maximum characters for tool results before truncation
@@ -264,6 +306,10 @@ export interface AgentDoc {
   inject_conversation_data?: number; // 0 or 1
   conversation_data_api_permission?: '' | 'Read' | 'Write';
   autonaming_of_conversation_title?: number; // 0 or 1
+  enable_memory?: number; // 0 or 1
+  memory_policy?: string | null;
+  enable_memory_search_tool?: number; // 0 or 1
+  enable_memory_write_tool?: number; // 0 or 1
 
   // Advanced model overrides
   image_generation_model?: string | null;
@@ -273,4 +319,18 @@ export interface AgentDoc {
   allow_file_upload?: 0 | 1;
   enable_ocr?: 0 | 1;
   max_upload_size_mb?: number | null;
+  allow_code_execution?: 0 | 1;
+  execution_profile?: string | null; // Link to Execution Profile
+  execution_shared_dir_limit_mb?: number | null;
+
+  // Execution policy (advanced): run turns directly instead of queue-first
+  run_immediately?: 0 | 1;
+  allow_ssh?: 0 | 1;
+  ssh_connections?: Array<{
+    name?: string;
+    ssh_connection: string;
+    host?: string;
+    username?: string;
+    enabled?: 0 | 1 | boolean;
+  }>;
 }

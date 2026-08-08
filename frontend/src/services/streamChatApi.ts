@@ -20,9 +20,11 @@ export function setStreamingAvailable(value: boolean): void {
 }
 
 export interface StreamChunk {
-  type: 'delta' | 'tool_call' | 'complete' | 'error';
+  type: 'delta' | 'reasoning' | 'tool_call' | 'complete' | 'error';
   content?: string;
   full_response?: string;
+  full_reasoning?: string;
+  reasoning_content?: string;
   response?: string;
   conversation_id?: string;
   success?: boolean;
@@ -34,8 +36,12 @@ export interface StreamChunk {
   tool_call?: { function?: { name?: string } };
 }
 
+type FrappeWindow = Window & {
+  csrf_token?: string;
+};
+
 function getCsrfToken(): string {
-  return (window as any).csrf_token || '';
+  return (window as FrappeWindow).csrf_token || '';
 }
 
 /**
@@ -76,6 +82,7 @@ export interface StreamAgentParams {
   conversationId?: string;
   skipUserMessage?: boolean;
   files?: StreamAgentFile[];
+  modelOverride?: string;
 }
 
 /**
@@ -84,7 +91,7 @@ export interface StreamAgentParams {
 export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
-  const { agentName, message, conversationId, skipUserMessage, files } = params;
+  const { agentName, message, conversationId, skipUserMessage, files, modelOverride } = params;
   const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
@@ -101,6 +108,9 @@ export async function* streamAgentResponse(
   }
   if (files?.length) {
     body.files = files;
+  }
+  if (modelOverride) {
+    body.model_override = modelOverride;
   }
 
   const res = await fetch(url, {
@@ -161,6 +171,7 @@ export type ChatResult = NewConversationResponse | SendMessageResponse;
 export interface SendMessageOptions {
   useStreaming: boolean;
   onDelta?: (text: string) => void;
+  onReasoningDelta?: (text: string) => void;
   skipUserMessage?: boolean;
   files?: StreamAgentFile[];
 }
@@ -175,10 +186,11 @@ export async function sendMessage(
     conversationId?: string;
     skipUserMessage?: boolean;
     files?: StreamAgentFile[];
+    modelOverride?: string;
   },
   options: SendMessageOptions
 ): Promise<ChatResult> {
-  const { useStreaming, onDelta, skipUserMessage, files } = options;
+  const { useStreaming, onDelta, onReasoningDelta, skipUserMessage, files } = options;
   const streamSkip = params.skipUserMessage ?? skipUserMessage;
   const streamFiles = params.files ?? files;
 
@@ -190,9 +202,13 @@ export async function sendMessage(
       conversationId: params.conversationId,
       skipUserMessage: streamSkip,
       files: streamFiles,
+      modelOverride: params.modelOverride,
     })) {
       if (chunk.type === 'delta' && onDelta && chunk.full_response !== undefined) {
         onDelta(chunk.full_response);
+      }
+      if (chunk.type === 'reasoning' && onReasoningDelta && chunk.full_reasoning !== undefined) {
+        onReasoningDelta(chunk.full_reasoning);
       }
       if (chunk.type === 'complete') {
         lastComplete = chunk;
@@ -216,6 +232,7 @@ export async function sendMessage(
     const runShape = {
       success: data.success ?? true,
       response: data.response ?? data.full_response ?? '',
+      error: data.error ?? null,
       conversation_id: data.conversation_id,
       agent_run_id: data.agent_run_id,
       agent_message_id: data.agent_message_id,
@@ -227,8 +244,11 @@ export async function sendMessage(
     if (params.conversationId) {
       return {
         message: {
-          success: true,
+          success: runShape.success,
+          queued: false,
+          status: runShape.success ? 'Success' : 'Failed',
           response: runShape.response,
+          error: runShape.error ?? undefined,
           conversation_id: data.conversation_id ?? '',
           agent_run_id: data.agent_run_id ?? '',
           agent_message_id: data.agent_message_id ?? '',
@@ -241,7 +261,9 @@ export async function sendMessage(
 
     return {
       message: {
-        success: true,
+        success: runShape.success,
+        queued: false,
+        status: runShape.success ? 'Success' : 'Failed',
         conversation_id: data.conversation_id ?? '',
         agent_message_id: data.agent_message_id ?? '',
         run: runShape,
@@ -253,11 +275,17 @@ export async function sendMessage(
     return sendMessageToConversation({
       conversation: params.conversationId,
       message: params.message,
+      skip_user_message: streamSkip,
+      files: streamFiles,
+      modelOverride: params.modelOverride,
     }) as Promise<SendMessageResponse>;
   }
 
   return newConversation({
     agent: params.agent,
     message: params.message,
+    skip_user_message: streamSkip,
+    files: streamFiles,
+    modelOverride: params.modelOverride,
   }) as Promise<NewConversationResponse>;
 }

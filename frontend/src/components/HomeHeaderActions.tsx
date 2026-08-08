@@ -20,23 +20,25 @@ export function HomeHeaderActions() {
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="display" size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          New
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={handleNewFlow}>
-          <Workflow className="w-4 h-4 mr-2" />
-          Open Flows
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleNewAgent}>
-          <Bot className="w-4 h-4 mr-2" />
-          Open Agents
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="flex items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="display" size="sm">
+            <Plus className="w-4 h-4 mr-2" />
+            New
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleNewFlow}>
+            <Workflow className="w-4 h-4 mr-2" />
+            Open Flows
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={handleNewAgent}>
+            <Bot className="w-4 h-4 mr-2" />
+            Open Agents
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }

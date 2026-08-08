@@ -49,7 +49,7 @@ export async function highlightCode(code: string, language: string) {
   const grammar = Prism.languages[language] || Prism.languages.javascript || Prism.languages.markup;
   try {
     return Prism.highlight(code, grammar, language);
-  } catch (e) {
+  } catch {
     // Escape the raw code so it is rendered as text, not HTML.
     return escapeHtml(code);
   }
@@ -64,6 +64,10 @@ export const CodeBlock = ({
   ...props
 }: CodeBlockProps) => {
   const [html, setHtml] = useState<string>("");
+
+  // showLineNumbers is accepted for API parity but not yet implemented;
+  // it is stripped here so it does not leak onto the DOM element.
+  void showLineNumbers;
 
   useEffect(() => {
     highlightCode(code, language).then((highlighted) => setHtml(highlighted));

@@ -63,6 +63,15 @@ repos:
                 huf/public/js/lib/.*
             )$
 
+  - repo: local
+    hooks:
+      - id: check-explicit-frappe-commits
+        name: Check for explicit frappe.db.commit()
+        entry: python scripts/check_explicit_commits.py
+        language: system
+        files: '^huf/.*\.py$'
+        pass_filenames: true
+
 ci:
     autoupdate_schedule: weekly
     skip: []

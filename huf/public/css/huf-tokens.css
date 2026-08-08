@@ -1,0 +1,194 @@
+/*
+ * HUF Design Tokens — "Instrument / Control-Room" design system
+ * ==============================================================
+ * Purpose: let independent provider apps (separate Frappe apps with their
+ * own frontends) adopt the HUF look with a single stylesheet.
+ *
+ * Usage:
+ *   <link rel="stylesheet" href="/assets/huf/css/huf-tokens.css">
+ *
+ * Notes:
+ * - Dependency-free: no Tailwind, no JS, no build step.
+ * - Fonts are referenced by name only; load them yourself if desired:
+ *     Big Shoulders Display (display), IBM Plex Sans (body), IBM Plex Mono (mono)
+ *     e.g. via Google Fonts, with system fallbacks already in the stacks below.
+ * - Everything is scoped to `.huf-*` classes — no global resets, so it will
+ *   not fight your app's own styles. Set font-family/background/colors on
+ *   your root container with the opt-in `.huf-root` class.
+ * - The HUF design system is light-mode only by design, so there are
+ *   intentionally no `prefers-color-scheme: dark` overrides here.
+ */
+
+:root {
+  /* Surfaces */
+  --huf-paper:      #F2F3EF;  /* app background            */
+  --huf-paper-deep: #E9EBE4;  /* recessed / secondary fill */
+  --huf-panel:      #FBFCFA;  /* cards, popovers           */
+
+  /* Text & lines */
+  --huf-ink:        #15181C;  /* primary text / primary button */
+  --huf-ink-soft:   #2A2F36;  /* secondary text */
+  --huf-steel:      #5A636F;  /* muted text      */
+  --huf-steel-soft: #8A929C;  /* placeholder     */
+  --huf-line:       #D7DACF;  /* borders, inputs */
+  --huf-line-dark:  #343A42;  /* borders on dark surfaces */
+
+  /* Signal (accent) & status */
+  --huf-accent:      #E8531F; /* signal orange — hover, focus ring, highlights */
+  --huf-on-accent: #ffffff;
+  --huf-accent-ink:  #BC3E0F; /* signal text on light surfaces */
+  --huf-success:     #3F7A4E;
+  --huf-warning:     #E8531F; /* warnings use the signal color */
+  --huf-danger:      #C0392B;
+
+  /* Shape — the HUF look is squared: 2px everywhere, no shadows */
+  --huf-radius:    2px;
+  --huf-radius-sm: 0px;
+
+  /* Typography */
+  --huf-font:         'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
+  --huf-font-display: 'Big Shoulders Display', 'IBM Plex Sans', sans-serif;
+  --huf-font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+/* ------------------------------------------------------------------ */
+/* Opt-in root: applies HUF background, ink and body font to a scope.  */
+/* Put this on your app's root container (NOT applied to body globally).*/
+/* ------------------------------------------------------------------ */
+.huf-root {
+  background-color: var(--huf-paper);
+  color: var(--huf-ink);
+  font-family: var(--huf-font);
+}
+
+/* ------------------------------------------------------------------ */
+/* Components — styled purely from the tokens above.                   */
+/* ------------------------------------------------------------------ */
+
+/* Card: --panel bg, 1px --line border, 2px radius, no shadow */
+.huf-card {
+  background: var(--huf-panel);
+  color: var(--huf-ink);
+  border: 1px solid var(--huf-line);
+  border-radius: var(--huf-radius);
+  box-shadow: none;
+  padding: 1.5rem; /* p-6 rhythm */
+}
+
+/* Button base: square, no shadow, body font, medium weight */
+.huf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;              /* h-9 */
+  padding: 0.5rem 1rem;         /* px-4 py-2 */
+  font-family: var(--huf-font);
+  font-size: 0.875rem;          /* text-sm */
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  border: 1px solid var(--huf-line);
+  border-radius: var(--huf-radius);
+  background: var(--huf-panel);
+  color: var(--huf-ink);
+  box-shadow: none;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.huf-btn:hover {
+  background: var(--huf-paper-deep);
+}
+.huf-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--huf-accent); /* ring-1 ring-signal */
+}
+.huf-btn:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Primary button: ink background, signal orange on hover */
+.huf-btn-primary {
+  background: var(--huf-ink);
+  border-color: var(--huf-ink);
+  color: var(--huf-paper);
+}
+.huf-btn-primary:hover {
+  background: var(--huf-accent);
+  border-color: var(--huf-accent);
+  color: var(--huf-paper);
+}
+
+/* Badge: no pill, no fill — mono uppercase label, border + text only */
+.huf-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;     /* px-2 py-0.5 */
+  font-family: var(--huf-font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  border: 1px solid var(--huf-line);
+  border-radius: var(--huf-radius-sm);
+  background: var(--huf-paper-deep);
+  color: var(--huf-steel);
+}
+.huf-badge-success {
+  border-color: color-mix(in srgb, var(--huf-success) 40%, transparent);
+  background: transparent;
+  color: var(--huf-success);
+}
+.huf-badge-warning {
+  border-color: color-mix(in srgb, var(--huf-accent-ink) 40%, transparent);
+  background: transparent;
+  color: var(--huf-accent-ink);
+}
+.huf-badge-danger {
+  border-color: color-mix(in srgb, var(--huf-danger) 40%, transparent);
+  background: transparent;
+  color: var(--huf-danger);
+}
+
+/* Input: 1px --line border, transparent bg, signal focus ring */
+.huf-input {
+  display: flex;
+  width: 100%;
+  height: 2.25rem;              /* h-9 */
+  padding: 0.25rem 0.75rem;     /* px-3 py-1 */
+  font-family: var(--huf-font);
+  font-size: 0.875rem;
+  color: var(--huf-ink);
+  background: transparent;
+  border: 1px solid var(--huf-line);
+  border-radius: var(--huf-radius);
+  box-shadow: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.huf-input::placeholder {
+  color: var(--huf-steel);
+}
+.huf-input:focus-visible {
+  outline: none;
+  border-color: var(--huf-accent);
+  box-shadow: 0 0 0 1px var(--huf-accent);
+}
+.huf-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Title: display font, tight, semibold */
+.huf-title {
+  font-family: var(--huf-font-display);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--huf-ink);
+  margin: 0 0 0.5rem;
+}
+
+/* Muted helper text */
+.huf-muted {
+  color: var(--huf-steel);
+  font-size: 0.875rem;
+}

@@ -60,6 +60,8 @@ add_to_apps_screen = [
 # Home Pages
 # ----------
 website_route_rules = [
+    {"from_route": "/huf/sw.js", "to_route": "huf/sw.js"},
+    {"from_route": "/huf/manifest.json", "to_route": "huf/manifest.json"},
     {"from_route": "/huf/stream/ping", "to_route": "huf/stream/ping"},
     {"from_route": "/huf/stream/<path:agent_name>", "to_route": "huf/stream"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"},
@@ -67,10 +69,11 @@ website_route_rules = [
     # Docs routes must come before the catch-all /huf route
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
     {
-        "from_route": "/huf/docs/<path:app_path>", 
+        "from_route": "/huf/docs/<path:app_path>",
         "to_route": "huf/docs/<path:app_path>"
     },
     {"from_route": "/mcp-oauth-callback", "to_route": "mcp_oauth_callback"},
+    {"from_route": "/huf", "to_route": "huf"},
     {"from_route": "/huf/<path:app_path>", "to_route": "huf"},
 ]
 
@@ -110,15 +113,22 @@ page_renderer = [
 after_install = "huf.install.after_install"
 after_app_install = [
     "huf.install.setup_desktop_icon_as_workspace",
-    "huf.ai.app_seeding.seeder.on_app_installed"
+    "huf.ai.app_seeding.seeder.on_app_installed",
+    "huf.ai.skills.hooks.sync_app_skills",
 ]
-after_migrate = "huf.install.after_migrate"
+after_migrate = [
+    "huf.install.after_migrate",
+    "huf.ai.skills.hooks.sync_app_skills",
+]
 
 # Uninstallation
 # ------------
 
 # before_uninstall = "huf.uninstall.before_uninstall"
-after_uninstall = "huf.ai.tool_registry.sync_app_tools"
+after_uninstall = [
+    "huf.ai.tool_registry.sync_app_tools",
+    "huf.ai.skills.hooks.sync_app_skills",
+]
 
 # Integration Setup
 # ------------------
@@ -134,7 +144,7 @@ after_uninstall = "huf.ai.tool_registry.sync_app_tools"
 # Name of the app being uninstalled is passed as an argument
 
 # before_app_uninstall = "huf.utils.before_app_uninstall"
-# after_app_uninstall = "huf.utils.after_app_uninstall"
+after_app_uninstall = "huf.ai.app_seeding.apps_loader.on_app_uninstalled"
 
 # Desk Notifications
 # ------------------
@@ -194,6 +204,9 @@ doc_events = {
         "on_update": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
         "on_trash": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
     },
+    "AI Provider": {
+        "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
+    },
     "Knowledge Source": {
         "after_insert": "huf.ai.knowledge.hooks.on_knowledge_source_created",
         "on_update": "huf.ai.knowledge.hooks.on_knowledge_source_updated",
@@ -201,6 +214,13 @@ doc_events = {
     },
     "Knowledge Input": {
         "on_trash": "huf.ai.knowledge.hooks.on_knowledge_input_deleted",
+    },
+    "Communication": {
+        "after_insert": "huf.ai.gateway_adapters.email.on_communication_inserted",
+    },
+    "Agent Message": {
+        "after_insert": "huf.ai.artifact_extraction.on_agent_message_change",
+        "on_update": "huf.ai.artifact_extraction.on_agent_message_change",
     },
 }
 
@@ -231,10 +251,16 @@ scheduler_events = {
     "daily": [
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
         "huf.ai.knowledge.maintenance.optimize_indexes",
+        # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
+        "huf.ai.memory_tools.expire_stale_memory_records",
     ],
     "cron": {
         "*/1 * * * *": [
-            "huf.ai.orchestration.scheduler.process_orchestrations"
+            "huf.ai.orchestration.scheduler.process_orchestrations",
+            "huf.ai.agent_integration.recover_stalled_agent_runs",
+        ],
+        "*/5 * * * *": [
+            "huf.ai.agent_run_analytics.refresh_rollups",
         ]
     },
     "hourly": [
@@ -340,3 +366,13 @@ to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
 
 # Register integration tools from _registry
 huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
+
+# Knowledge Backends Hook
+# -----------------------
+# Register additional knowledge backends with the hook-based backend
+# registry (see huf.ai.knowledge.backends). Built-in backends
+# (sqlite_fts, sqlite_vec, chroma, pgvector, zvec, weaviate, faiss, pinecone) cannot be overridden.
+
+huf_knowledge_backends = {
+    "redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
+}

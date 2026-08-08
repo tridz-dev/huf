@@ -172,7 +172,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setActiveFlowState(prev => {
         if (!prev) return prev;
         const nodes = prev.nodes.map(n =>
-          n.id === data.node_id ? { ...n, data: { ...n.data, status: (data.status === 'success' ? 'success' : 'error') as any } } : n
+          n.id === data.node_id ? { ...n, data: { ...n.data, status: data.status === 'success' ? ('success' as const) : ('error' as const) } } : n
         );
         return { ...prev, nodes };
       });
@@ -183,7 +183,7 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setActiveFlowState(prev => {
         if (!prev) return prev;
         const nodes = prev.nodes.map(n =>
-          n.id === data.node_id ? { ...n, data: { ...n.data, status: 'waiting' as any } } : n
+          n.id === data.node_id ? { ...n, data: { ...n.data, status: 'waiting' as const } } : n
         );
         return { ...prev, nodes };
       });

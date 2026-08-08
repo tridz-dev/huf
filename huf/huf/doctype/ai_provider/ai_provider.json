@@ -9,6 +9,7 @@
   "is_local_llm",
   "url",
   "port",
+  "api_base_url",
   "provider_name",
   "api_key",
   "provider_brand"
@@ -27,13 +28,13 @@
    "fieldtype": "Password",
    "label": "API Key",
    "length": 200,
-   "reqd": 1
+   "reqd": 0
   },
   {
    "fieldname": "provider_brand",
    "fieldtype": "Select",
    "label": "Provider Brand",
-   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nother",
+   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nmoonshot\nai21\nbaseten\ncloudflare-workers-ai\nclarifai\nnomic\nreplicate\nsagemaker\nstability-ai\nvllm\nwatsonx\nother",
    "reqd": 1
   },
   {
@@ -46,20 +47,25 @@
    "depends_on": "eval:doc.is_local_llm == 1;",
    "fieldname": "url",
    "fieldtype": "Data",
-   "label": "URL",
-   "mandatory_depends_on": "eval:doc.is_local_llm == 1;"
+   "label": "URL"
   },
   {
    "depends_on": "eval:doc.is_local_llm == 1",
    "fieldname": "port",
    "fieldtype": "Int",
    "label": "PORT"
+  },
+  {
+   "description": "e.g. http://host.docker.internal:11434 for Ollama, or https://api.moonshot.cn/v1 for Moonshot China",
+   "fieldname": "api_base_url",
+   "fieldtype": "Data",
+   "label": "API Base URL"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-11 12:23:24.111361",
+ "modified": "2026-07-26 13:40:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Provider",

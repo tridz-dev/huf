@@ -27,7 +27,7 @@ function AgentPromptFormPageWrapper() {
     }
   }, [id, isNew]);
 
-  const breadcrumbs = [{ label: 'Agent Prompts', href: '/prompts' }, { label: promptTitle }];
+  const breadcrumbs = [{ label: 'Prompts', href: '/prompts' }, { label: promptTitle }];
 
   return (
     <UnifiedLayout breadcrumbs={breadcrumbs}>

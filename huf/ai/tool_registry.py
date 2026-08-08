@@ -5,6 +5,9 @@ from datetime import datetime
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
+from huf.ai.transaction import commit_if_background
+
+logger = frappe.logger("huf")
 
 TOOL_DOCTYPE = "Agent Tool Function"
 CACHE_DOCTYPE = "Agent Settings"  # Singleton for caching
@@ -23,7 +26,8 @@ class PermissionAwareToolRegistry:
         "Delete Multiple Documents": {"permission": "delete"},
         "Submit Document": {"permission": "submit"},
         "Cancel Document": {"permission": "cancel"},
-        "Attach File to Document": {"permission": "create"} 
+        "Attach File to Document": {"permission": "create"},
+        "Builder": {"permission": "write"}
     }
     
     MUTATING_TOOL_TYPES = {
@@ -32,7 +36,7 @@ class PermissionAwareToolRegistry:
         "Delete Document", "Delete Multiple Documents",
         "Submit Document", "Cancel Document",
         "Set Value", "POST", "Run Agent",
-        "Attach File to Document"
+        "Attach File to Document", "Builder"
     }
 
     @classmethod
@@ -47,11 +51,16 @@ class PermissionAwareToolRegistry:
             try:
                 tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
                 
-                if cls._can_use_tool(tool_doc, user):
+                if (
+                    cls._can_use_tool(tool_doc, user)
+                    and cls._allows_code_execution(tool_doc, agent_doc, user)
+                    and cls._allows_ssh_execution(tool_doc, agent_doc, user)
+                    and cls._allows_docker_execution(tool_doc, user)
+                ):
                     all_tools.append(tool_doc)
 
-            except Exception as e:
-                frappe.log_error(f"Error checking tool permission for {tool_link.tool}: {e}", "Tool Registry")
+            except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError) as e:
+                logger.warning(f"Error checking tool permission for {tool_link.tool}: {e!s}")
         
         return all_tools
     
@@ -94,6 +103,85 @@ class PermissionAwareToolRegistry:
                      
         return True
 
+    @classmethod
+    def _allows_code_execution(cls, tool_doc, agent_doc, user: str) -> bool:
+        """Additional gate for tools of type 'Code Execution'.
+
+        A Code Execution tool is only returned when ALL of:
+          (a) the acting user holds the ``code_execution.run`` capability;
+          (b) the agent has ``allow_code_execution`` enabled;
+          (c) the agent references an Execution Profile that is not disabled.
+        Tools of any other type pass straight through this gate.
+        """
+        if tool_doc.types != "Code Execution":
+            return True
+
+        from huf.permissions import has_capability
+
+        # (a) acting user must be allowed to run code at all.
+        if not has_capability(user, "code_execution.run"):
+            return False
+
+        # (b) the agent must have code execution enabled.
+        if not getattr(agent_doc, "allow_code_execution", None):
+            return False
+
+        # (c) the agent must reference an enabled Execution Profile.
+        profile_name = getattr(agent_doc, "execution_profile", None)
+        if not profile_name:
+            return False
+
+        disabled = frappe.db.get_value("Execution Profile", profile_name, "disabled")
+        if disabled is None or disabled:
+            return False
+
+        return True
+
+    @classmethod
+    def _allows_ssh_execution(cls, tool_doc, agent_doc, user: str) -> bool:
+        """Additional gate for the app-provided SSH execution tool."""
+        function_path = (getattr(tool_doc, "function_path", None) or "").strip()
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        is_ssh_tool = (
+            function_path == "huf.ai.tools.ssh_execution.run_ssh_command"
+            or tool_name == "run_ssh_command"
+        )
+        if not is_ssh_tool:
+            return True
+
+        from huf.permissions import has_capability
+
+        if not has_capability(user, "ssh.run"):
+            return False
+
+        if not getattr(agent_doc, "allow_ssh", None):
+            return False
+
+        connections = getattr(agent_doc, "ssh_connections", None) or []
+        if not connections:
+            return False
+
+        for row in connections:
+            connection_name = getattr(row, "ssh_connection", None)
+            if not connection_name:
+                continue
+            enabled = frappe.db.get_value("SSH Connection", connection_name, "enabled")
+            if enabled:
+                return True
+        return False
+
+    @classmethod
+    def _allows_docker_execution(cls, tool_doc, user: str) -> bool:
+        """Require the dedicated capability before exposing Docker control."""
+        function_path = (getattr(tool_doc, "function_path", None) or "").strip()
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        if function_path != "huf.ai.tools.docker_execution.handle_action" and tool_name != "docker_execution":
+            return True
+
+        from huf.permissions import has_capability
+
+        return has_capability(user, "docker.run")
+
 def _get_app_modified_time(app_name):
     """
     Get modification time of app's hooks.py file as proxy for app changes.
@@ -110,7 +198,8 @@ def _get_app_modified_time(app_name):
         if os.path.exists(hooks_path):
             mtime = os.path.getmtime(hooks_path)
             return datetime.fromtimestamp(mtime)
-    except Exception:
+    except (OSError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError, ValueError):
+        # Cache probe is best-effort; fail silently
         pass
     return None
 
@@ -126,8 +215,8 @@ def _get_cached_scans():
             settings = frappe.get_single(CACHE_DOCTYPE)
             if hasattr(settings, "last_app_scans") and settings.last_app_scans:
                 return json.loads(settings.last_app_scans)
-    except Exception:
-        # DocType might not exist yet, fail silently
+    except (json.JSONDecodeError, frappe.DoesNotExistError, frappe.ValidationError, AttributeError, TypeError):
+        # Cache may not exist yet; fail silently
         pass
     return {}
 
@@ -156,8 +245,8 @@ def _update_cached_scans(apps_scanned):
         
         settings.last_app_scans = json.dumps(cache)
         settings.save(ignore_permissions=True)
-    except Exception:
-        # Cache update is non-critical, fail silently
+    except (frappe.DoesNotExistError, frappe.ValidationError, TypeError, ValueError, json.JSONDecodeError):
+        # Cache update is non-critical; fail silently
         pass
 
 def _get_apps_to_scan():
@@ -183,7 +272,7 @@ def _get_apps_to_scan():
                 last_scan = datetime.fromisoformat(last_scan_str)
                 if app_modified > last_scan:
                     apps_to_scan.append(app)
-            except Exception:
+            except ValueError:
                 # If cache is invalid, scan the app
                 apps_to_scan.append(app)
     
@@ -197,7 +286,7 @@ def _normalize_hook_tools(hook_value):
     if isinstance(hook_value, str):
         try:
             hook_value = frappe.get_attr(hook_value)
-        except Exception:
+        except (ImportError, AttributeError):
             return normalized
 
     if isinstance(hook_value, dict):
@@ -268,6 +357,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
     try:
         tools_by_app = get_tools_by_app(apps_to_scan, use_cache=cache_enabled)
     except Exception as e:
+        # Catastrophic sync failure: cannot read hooks at all.
         frappe.log_error(f"Failed to get tools from apps: {str(e)}", "Tool Sync Error")
         return {
             "synced_apps": [],
@@ -284,9 +374,9 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             for d in tools:
                 if d:  # Skip None/empty tools
                     tools_to_process.append((app, d))
-        except Exception as e:
+        except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, AttributeError, TypeError) as e:
             errors.append(f"App '{app}': Failed to process tools list: {str(e)}")
-            frappe.log_error(f"Failed to process tools for app '{app}': {str(e)}", "Tool Sync Error")
+            logger.warning(f"Failed to process tools for app '{app}': {e!s}")
             continue
 
     # Ensure all tool types exist
@@ -299,7 +389,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 tool_type_doc.insert(ignore_permissions=True)
         except Exception as e:
             errors.append(f"Failed to create Tool Type '{category}': {str(e)}")
-    frappe.db.commit()
+    commit_if_background()
     # BATCH 2: Validate all functions first (before any DB operations)
     validated_tools = []
     validation_cache = {}  # function_path -> bool
@@ -338,9 +428,9 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                 validated_tools.append((app, d))
             else:
                 errors.append(f"App '{app}': Tool '{tool_name}': Function '{func_path}' is not callable")
-        except Exception as e:
+        except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, AttributeError, TypeError) as e:
             errors.append(f"App '{app}': Error processing tool: {str(e)}")
-            frappe.log_error(f"Error processing tool in app '{app}': {str(e)}", "Tool Sync Error")
+            logger.warning(f"Error processing tool in app '{app}': {e!s}")
             continue
     
     # BATCH 3: Get all existing tools in one query
@@ -358,7 +448,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             existing_tools = {t.tool_name: t.name for t in existing_docs}
     except Exception as e:
         errors.append(f"Failed to fetch existing tools: {str(e)}")
-        frappe.log_error(f"Failed to fetch existing tools: {str(e)}", "Tool Sync Error")
+        logger.warning(f"Failed to fetch existing tools: {e!s}")
     
     # BATCH 4: Prepare bulk operations (with error handling)
     to_create = []
@@ -392,6 +482,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                     for p in parameters
                 ],
                 "provider_app": app,
+                "service": d.get("service", ""),
             }
             
             if tool_name in existing_tools:
@@ -399,9 +490,9 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             else:
                 payload["doctype"] = "Agent Tool Function"
                 to_create.append(payload)
-        except Exception as e:
+        except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, AttributeError, TypeError) as e:
             errors.append(f"App '{app}': Failed to prepare tool '{d.get('tool_name', 'unknown')}': {str(e)}")
-            frappe.log_error(f"Failed to prepare tool in app '{app}': {str(e)}", "Tool Sync Error")
+            logger.warning(f"Failed to prepare tool in app '{app}': {e!s}")
             continue
     
     # BATCH 5: Execute database operations (with per-tool error handling)
@@ -415,7 +506,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             tool_name = payload.get("tool_name", "unknown")
             error_msg = f"Failed to update tool '{tool_name}': {str(e)}"
             errors.append(error_msg)
-            frappe.log_error(error_msg[:140], "Tool Sync Error")
+            logger.warning(error_msg[:140])
             continue
     
     for payload in to_create:
@@ -426,7 +517,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
             tool_name = payload.get("tool_name", "unknown")
             error_msg = f"Failed to create tool '{tool_name}': {str(e)}"
             errors.append(error_msg)
-            frappe.log_error(error_msg[:140], "Tool Sync Error")
+            logger.warning(error_msg[:140])
             continue
 
     # Only cleanup orphaned tools if scanning all apps (not incremental)
@@ -443,17 +534,16 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                         frappe.delete_doc("Agent Tool Function", t.name, ignore_permissions=True, force=True)
                     except Exception as e:
                         errors.append(f"Failed to delete orphaned tool '{t.tool_name}': {str(e)}")
-                        frappe.log_error(f"Failed to delete orphaned tool '{t.tool_name}': {str(e)}", "Tool Sync Error")
+                        logger.warning(f"Failed to delete orphaned tool '{t.tool_name}': {e!s}")
         except Exception as e:
             errors.append(f"Failed to cleanup orphaned tools: {str(e)}")
-            frappe.log_error(f"Failed to cleanup orphaned tools: {str(e)}", "Tool Sync Error")
+            logger.warning(f"Failed to cleanup orphaned tools: {e!s}")
     
     # Log summary of errors if any
     if errors:
-        frappe.log_error(
+        logger.warning(
             f"Tool sync completed with {len(errors)} error(s). Synced {synced_count} tools successfully.\n"
-            f"Errors:\n" + "\n".join(errors[:20]),  # Limit to first 20 errors
-            "Tool Sync Errors"
+            f"Errors:\n" + "\n".join(errors[:20])  # Limit to first 20 errors
         )
     
     return {
@@ -463,21 +553,19 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
         "error_count": len(errors)
     }
 
-def sync_app_tools(app_name):
+def sync_app_tools(app_name=None):
     """
-    Sync tools for a specific app (called from after_app_install hook).
+    Sync tools for a specific app (called from after_app_install / after_app_uninstall hooks).
     
     Args:
         app_name: Name of the app to sync tools for
     """
+    if not app_name:
+        return
     try:
         result = sync_discovered_tools(apps_to_scan=[app_name])
-        frappe.log_error(
-            f"Synced tools for app '{app_name}': {result.get('total_tools', 0)} tools",
-            "Tool Sync"
-        )
-    except Exception as e:
-        frappe.log_error(
-            f"Failed to sync tools for app '{app_name}': {str(e)}",
-            "Tool Sync Error"
-        )
+        logger.info(f"Synced tools for app '{app_name}': {result.get('total_tools', 0)} tools")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Failed to sync tools for app '{app_name}': {e!s}")

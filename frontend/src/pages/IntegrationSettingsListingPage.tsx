@@ -1,28 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Settings, Star, Users } from 'lucide-react';
+import { AlertCircle, Bot, Link, Settings, Star, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '@/components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import {
   getIntegrationSettings,
   getIntegrationServices,
 } from '@/services/integrationApi';
+import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
+import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
 
 interface IntegrationSettingsListingPageProps {
   catalogOpenKey?: number;
+  kind?: 'channels' | 'integrations';
 }
 
 export function IntegrationSettingsListingPage({
   catalogOpenKey,
+  kind = 'integrations',
 }: IntegrationSettingsListingPageProps) {
   const navigate = useNavigate();
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [services, setServices] = useState<IntegrationServiceDoc[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [addToAgentOpen, setAddToAgentOpen] = useState(false);
+  const [selectedSetting, setSelectedSetting] = useState<IntegrationSettingsDoc | null>(null);
 
   useEffect(() => {
     getIntegrationServices().then(setServices).catch(() => {
@@ -91,11 +98,13 @@ export function IntegrationSettingsListingPage({
   });
 
   const settings = useMemo(() => {
-    if (categoryFilter === 'all') return allSettings;
-    return allSettings.filter(
-      (item) => serviceCategoryMap.get(item.service) === categoryFilter,
-    );
-  }, [allSettings, categoryFilter, serviceCategoryMap]);
+    const byKind = allSettings.filter((item) => {
+      const isMessaging = messagingServiceNames.has(item.service.toLowerCase());
+      return kind === 'channels' ? isMessaging : !isMessaging;
+    });
+    if (categoryFilter === 'all') return byKind;
+    return byKind.filter((item) => serviceCategoryMap.get(item.service) === categoryFilter);
+  }, [allSettings, categoryFilter, kind, serviceCategoryMap]);
 
   useEffect(() => {
     if (error) {
@@ -106,11 +115,15 @@ export function IntegrationSettingsListingPage({
   }, [error]);
 
   return (
-    <PageLayout
-      subtitle="Connect external services like Slack, Telegram, GitHub, and Google Workspace"
+    <PageFrame
+      subtitle={
+        kind === 'channels'
+          ? 'Connect the messaging apps where people talk to your agents'
+          : 'Connect calendars, project tools, developer services, and business systems'
+      }
       filters={
         <FilterBar
-          searchPlaceholder="Search integrations..."
+          searchPlaceholder={kind === 'channels' ? 'Search channels...' : 'Search integrations...'}
           searchValue={search}
           onSearchChange={setSearch}
           filters={[
@@ -125,7 +138,7 @@ export function IntegrationSettingsListingPage({
         />
       }
     >
-      <ServiceCatalogModal open={catalogOpen} onOpenChange={setCatalogOpen} />
+      <ServiceCatalogModal open={catalogOpen} onOpenChange={setCatalogOpen} kind={kind} />
 
       {error && !initialLoading && (
         <div className="text-center py-12">
@@ -139,19 +152,23 @@ export function IntegrationSettingsListingPage({
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No integrations configured yet.</p>
-            <button
-              type="button"
-              className="text-sm text-primary hover:underline"
-              onClick={() => setCatalogOpen(true)}
-            >
-              Add your first integration
-            </button>
-          </div>
+          <EmptyState
+            icon={Link}
+            title={kind === 'channels' ? 'No channels' : 'No integrations'}
+            description={
+              kind === 'channels'
+                ? 'No messaging channels have been connected yet.'
+                : 'No integrations have been connected yet.'
+            }
+            action={{
+              label: kind === 'channels' ? 'Add channel' : 'Add integration',
+              onClick: () => setCatalogOpen(true),
+            }}
+          />
         }
         renderItem={(setting) => {
           const category = serviceCategoryMap.get(setting.service);
+          const identity = getServiceIdentity(setting.service);
           const metadata = [
             ...(category ? [{ label: 'Category', value: category }] : []),
             ...(setting.is_default ? [{ label: 'Default', value: 'Yes', icon: Star }] : []),
@@ -166,7 +183,8 @@ export function IntegrationSettingsListingPage({
           return (
             <ItemCard
               title={setting.name}
-              description={`${setting.service.replace(/_/g, ' ')} integration`}
+              description={`${identity.title} ${kind === 'channels' ? 'channel' : 'integration'}`}
+              icon={identity.icon}
               status={{
                 label: setting.is_active ? 'active' : 'inactive',
                 variant: setting.is_active ? 'default' : 'secondary',
@@ -174,12 +192,20 @@ export function IntegrationSettingsListingPage({
               metadata={metadata}
               actions={[
                 {
+                  icon: Bot,
+                  label: 'Add to Agent',
+                  onClick: () => {
+                    setSelectedSetting(setting);
+                    setAddToAgentOpen(true);
+                  },
+                },
+                {
                   icon: Settings,
                   label: 'Configure',
                   onClick: () => navigate(`/integrations/${encodeURIComponent(setting.name)}`),
                 },
               ]}
-              onClick={() => navigate(`/integrations/${encodeURIComponent(setting.name)}`)}
+              onClick={() => navigate(`/integrations/${encodeURIComponent(setting.name)}`)} 
             />
           );
         }}
@@ -205,7 +231,17 @@ export function IntegrationSettingsListingPage({
           {settings.length} integration{settings.length !== 1 ? 's' : ''} in this category
         </div>
       )}
-    </PageLayout>
+
+      <AddIntegrationToAgentModal
+        open={addToAgentOpen}
+        onOpenChange={(open) => {
+          setAddToAgentOpen(open);
+          if (!open) setSelectedSetting(null);
+        }}
+        service={selectedSetting?.service || ''}
+        integrationName={selectedSetting?.name}
+      />
+    </PageFrame>
   );
 }
 

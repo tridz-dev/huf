@@ -1,0 +1,136 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-08-04 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "artifact_type",
+  "language",
+  "column_break_source",
+  "conversation",
+  "message",
+  "agent",
+  "message_index",
+  "section_break_content",
+  "content",
+  "section_break_meta",
+  "content_hash",
+  "size_bytes"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Title"
+  },
+  {
+   "fieldname": "artifact_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Artifact Type",
+   "options": "code\ndocument\nmarkdown\nhtml\nsvg\nmermaid\nchart\njsx\nvideo\nimage\nweb-preview\ntext",
+   "reqd": 1
+  },
+  {
+   "fieldname": "language",
+   "fieldtype": "Data",
+   "label": "Language"
+  },
+  {
+   "fieldname": "column_break_source",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Conversation",
+   "options": "Agent Conversation",
+   "reqd": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Link",
+   "label": "Source Message",
+   "options": "Agent Message",
+   "search_index": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent"
+  },
+  {
+   "description": "Ordinal position of this artifact within its source message. Together with the message this identifies the artifact for idempotent re-parsing.",
+   "fieldname": "message_index",
+   "fieldtype": "Int",
+   "label": "Index In Message"
+  },
+  {
+   "fieldname": "section_break_content",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Code",
+   "label": "Content"
+  },
+  {
+   "fieldname": "section_break_meta",
+   "fieldtype": "Section Break",
+   "label": "Metadata"
+  },
+  {
+   "description": "SHA-256 of the artifact content. Used to detect unchanged artifacts on message re-parse.",
+   "fieldname": "content_hash",
+   "fieldtype": "Data",
+   "label": "Content Hash",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "size_bytes",
+   "fieldtype": "Int",
+   "label": "Size (bytes)",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-04 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Artifact",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

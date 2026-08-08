@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
 import { createTableRecord, updateTableRecord } from '@/services/dataTableApi';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef } from '@/types/dataTable.types';
 import { buildFormLayout, FieldInput, initFormData } from './DataRecordFormLayout';
 
@@ -63,9 +64,9 @@ export function DataRecordForm({
 			}
 			onSaved();
 			onOpenChange(false);
-		} catch (err: any) {
+		} catch (err) {
 			toast.error(isEdit ? 'Failed to update record' : 'Failed to create record', {
-				description: err.message,
+				description: err instanceof Error ? err.message : undefined,
 			});
 		} finally {
 			setSaving(false);
@@ -73,7 +74,7 @@ export function DataRecordForm({
 	};
 
 	const dataFields = fields.filter(
-		(field) => field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break'
+		(field) => !LAYOUT_FIELD_TYPES.includes(field.fieldtype)
 	);
 	const sections = buildFormLayout(fields);
 

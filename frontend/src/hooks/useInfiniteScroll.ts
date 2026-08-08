@@ -379,18 +379,16 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
   const addItem = useCallback((item: TItem) => {
     setItems((prev) => {
       // Check if item already exists to avoid duplicates
-      const itemId = (item as any).id || (item as any).name;
+      const getItemId = (it: TItem) =>
+        (it as { id?: unknown; name?: unknown }).id || (it as { id?: unknown; name?: unknown }).name;
+      const itemId = getItemId(item);
       if (itemId) {
-        const exists = prev.some((existingItem: any) => {
-          const existingId = (existingItem as any).id || (existingItem as any).name;
-          return existingId === itemId;
-        });
+        const exists = prev.some((existingItem) => getItemId(existingItem) === itemId);
         if (exists) {
           // Update existing item if it exists
-          return prev.map((existingItem: any) => {
-            const existingId = (existingItem as any).id || (existingItem as any).name;
-            return existingId === itemId ? item : existingItem;
-          });
+          return prev.map((existingItem) =>
+            getItemId(existingItem) === itemId ? item : existingItem
+          );
         }
       }
       // Prepend new item to the beginning
@@ -549,7 +547,7 @@ export function useInfiniteScroll<TParams extends PaginationParams, TItem>({
     if (autoLoad && isEnabled && !error) {
       reset();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [debouncedSearch, debouncedFilters, autoLoad, isEnabled, reset, error]);
 
   // Reload when initial params change or component mounts

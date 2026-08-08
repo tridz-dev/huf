@@ -24,6 +24,16 @@ The application is built on the Frappe Framework (Python) and uses the standard 
     -   `frontend/src/pages/`: Page components for different application views.
 -   `.github/workflows/`: CI definitions for tests and linting.
 
+## Workspace & Worktree Rule
+
+If you are starting work from the shared agent workspace at `/Users/safwan/Code/Huf/workspace/`, **do not edit this `huf/` checkout directly**. The `workspace/AGENTS.md` treats the symlinked `huf/` as a read-only reference.
+
+- Create a track under `workspace/Tracks/<name>/` (or use an existing track).
+- Add a git worktree of the `huf` repo inside that track.
+- Make all code changes in the worktree, not in the main checkout.
+
+This keeps the source checkout clean, prevents unrelated local changes from leaking into PRs, and ensures the workspace worktree rules are followed. If you are already inside a dedicated worktree, this rule does not apply and you may edit normally.
+
 ## Security Considerations
 -   Do not commit secrets or API keys. The `AI Provider` DocType stores API keys in the database using the `Password` field type, which encrypts the value.
 -   Custom functions exposed to agents via `Agent Tool Function` must be carefully designed. They are executed with the permissions of the user running the agent. Always validate inputs and perform permission checks inside custom tool functions.
@@ -1058,7 +1068,8 @@ This file contains the main logic for creating and running agents.
     -   `create_agent(self)`: Constructs an `Agent` object from the `agents` SDK, passing the instructions, model, tools, and model_settings (temperature, top_p) from the Agent DocType.
 -   **Method: `run_agent_sync(...)`**
     -   This is the main whitelisted Frappe API endpoint for running an agent.
-    -   It orchestrates the entire process:
+    -   **Queue-first by default** (see `docs/queue-first-agent-runs.md`): it persists an `Agent Run` (status `Queued`, per-conversation `sequence`), returns a queued acknowledgement, and a single-flight per-conversation drainer executes runs in FIFO order, publishing `agent_run_status` lifecycle events (`Queued`/`Started`/`Success`/`Failed`). Clients can poll `get_agent_run_status`. Direct inline execution requires `now=true` or the Agent's advanced `run_immediately` policy, participates in the same conversation lock (re-check under lock, heartbeat, drain wake on release), and must never be invoked from code that may hold the lock (e.g. sub-agent completion hooks).
+    -   When executing (worker or direct), it orchestrates the entire process:
         1.  Initializes `ConversationManager` to handle the conversation history.
         2.  Creates or retrieves the `Agent Conversation` document.
         3.  Adds the user's new message to the conversation.
@@ -2084,6 +2095,10 @@ Existing Agent Run with additional flow linkage fields.
 
 Edges are sorted by priority (descending); first match wins.
 
+**Approval routing**: On `human.approval`, the engine follows the edge whose `meta.outcome` matches the decision (`approved`/`rejected`). An approval falls back to the success path when no matching edge exists; a rejection without an explicit `meta.outcome=rejected` edge FAILS the run instead of falling through the success path.
+
+**Loop routing**: `loop` nodes route to their body or done node via the `next_node_id` returned by the loop executor; without a done node the flow completes gracefully when the loop finishes.
+
 ### Execution Modes
 
 **Normal Mode**: Engine follows edges deterministically. Agents run only when `agent.run` nodes are hit.
@@ -2126,7 +2141,8 @@ Registered via `huf_tools` hook so agents can interact with flows:
 ### Security
 
 - **Expression edges**: AST-based restricted evaluator; no imports, no function calls, no attribute access
-- **Human approval**: User/role verification before approve/reject
+- **Human approval**: User/role verification before approve/reject (`approval_type` `user` and `users` are treated as synonyms)
+- **Permissions**: Huf Manager has `create` on Flow Run (requires `bench migrate` on deploy to apply); agent tool handlers (`run_flow`, `get_flow_run`, `resume_flow_run`, `approve_flow_run`) enforce the same permission checks and approver-identity verification as the REST endpoints
 - **Hop limit**: Safety guard against infinite loops (default 100)
 
 ## Subsystems and Advanced Architectures
@@ -2190,7 +2206,22 @@ HUF integrates prompt caching to save token costs on supported models:
 - **Model Check**: Checks model support by checking the LiteLLM pricing metadata for the field `cache_read_input_token_cost`.
 - **Toggle**: Users can toggle `enable_prompt_caching` in `Agent` settings to automatically apply prompt caching block headers on supported providers (Anthropic, Deepseek, OpenAI, Bedrock).
 
+## Known Incomplete Features / TODO
+
+The Gateways feature (channel inbound adapters) is merged into `develop` but is not yet
+user-ready. The UI navigation and Flow Run trigger are temporarily disabled while the
+provider adapters and connection forms are finished. See:
+
+- `docs/gateway-todo.md` — detailed shame list and restoration checklist.
+- `#473-followup` comments in `frontend/src/services/gatewayApi.ts`,
+  `frontend/src/pages/GatewaysPage.tsx`, `frontend/src/components/app-sidebar.tsx`,
+  `frontend/src/App.tsx`, `huf/huf/doctype/flow_run/flow_run.json`, and
+  `huf/ai/gateway_service.py`.
+
 ## Development and Coding Guidelines
 
 ### Frontend TypeScript Strictness
 The frontend project enforces strict TypeScript rules. Unused variables, unresolved imports, and unused functions will cause build failures (e.g., `error TS6133`). Always proactively remove unused variables, functions, and imports, especially after code refactorings, to ensure the frontend build succeeds without errors.
+
+### User-Facing Copy
+All labels, placeholders, empty states, and error messages shown to end users must read as plain product copy, not implementation detail. Never leak internal mechanics into UI text — e.g. write "Search records..." not "Search API records...", "Filter..." not "Filter columns locally...". If unsure whether a string is user-facing, write it assuming the reader has never heard of Frappe, DocTypes, REST, or SSE.

@@ -12,6 +12,7 @@
 		"title_field_name",
 		"details_section",
 		"description",
+		"table_group",
 		"icon",
 		"column_break_details",
 		"field_count",
@@ -62,6 +63,11 @@
 			"label": "Description"
 		},
 		{
+			"fieldname": "table_group",
+			"fieldtype": "Data",
+			"label": "Table Group"
+		},
+		{
 			"fieldname": "icon",
 			"fieldtype": "Data",
 			"label": "Icon"
@@ -109,6 +115,30 @@
 			"role": "System Manager",
 			"share": 1,
 			"write": 1
+		},
+		{
+			"create": 1,
+			"delete": 1,
+			"email": 1,
+			"print": 1,
+			"read": 1,
+			"role": "Huf Manager",
+			"share": 1,
+			"write": 1
+		},
+		{
+			"email": 1,
+			"print": 1,
+			"read": 1,
+			"role": "Huf User",
+			"share": 1
+		},
+		{
+			"email": 1,
+			"print": 1,
+			"read": 1,
+			"role": "Huf Viewer",
+			"share": 1
 		}
 	],
 	"row_format": "Dynamic",

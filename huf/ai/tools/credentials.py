@@ -4,8 +4,8 @@
 # TODO: Gmail OAuth2 stub - gmail.py only retrieves a static access token,
 #       no refresh-token flow is implemented yet. (gmail.py:15-19)
 # TODO: Optional deps (boto3, docker, duckduckgo-search, yfinance,
-#       pytube/pytubefix, youtube-transcript-api) are imported with
-#       ImportError fallbacks but not declared in pyproject.toml (by design).
+#       pytube/pytubefix) are imported with ImportError fallbacks but not
+#       declared in pyproject.toml (by design).
 # TODO: Some tool handlers use explicit positional params before **kwargs
 #       (discord, github, gmail, jira, slack, telegram). Works in practice
 #       since Frappe calls with kwargs, but is inconsistent with other tools.
@@ -16,6 +16,8 @@
 
 import os
 import frappe
+
+from huf.ai.transaction import commit_if_background
 
 
 def require_credential(service: str, key: str) -> str:
@@ -103,6 +105,7 @@ def _get_alt_env_names(service: str, key: str) -> list:
 			"GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN",
 			"GOOGLE_MAPS_API_KEY"
 		],
+		"google_maps": ["GOOGLE_MAPS_API_KEY", "PLACE_API_KEY", "GOOGLE_PLACES_API_KEY"],
 		"aws": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"],
 		"baidu": ["BAIDU_API_KEY"],
 		"brave": ["BRAVE_API_KEY"],
@@ -113,7 +116,7 @@ def _get_alt_env_names(service: str, key: str) -> list:
 		"notion": ["NOTION_API_KEY", "NOTION_DATABASE_ID"],
 		"openweather": ["OPENWEATHER_API_KEY"],
 		"reddit": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
-		"serpapi": ["SERP_API_KEY"],
+		"serpapi": ["SERP_API_KEY", "SERPAPI_API_KEY"],
 		"serper": ["SERPER_API_KEY"],
 		"shopify": ["SHOPIFY_SHOP_NAME", "SHOPIFY_ACCESS_TOKEN"],
 		"tavily": ["TAVILY_API_KEY"],
@@ -171,8 +174,13 @@ def update_last_error(service: str, error: str):
 		if settings:
 			doc = frappe.get_doc("Integration Settings", settings[0].name)
 			doc.last_error = error[:140]  # Truncate to field length
-			doc.save(ignore_permissions=True)
-			frappe.db.commit()
+			if frappe.has_permission("Integration Settings", "write", doc=doc):
+				doc.save()
+				commit_if_background()
+			else:
+				frappe.logger("huf").error(
+					f"Not permitted to persist last_error on Integration Settings {doc.name}: {doc.last_error}"
+				)
 	except Exception:
 		# Silently fail - don't break tool execution for logging errors
 		pass

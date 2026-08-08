@@ -14,6 +14,8 @@ import {
 import { getAgentSettings, updateAgentSettings, type AgentSettingsDoc } from '@/services/agentSettingsApi';
 import { getProviders, getModels } from '@/services/providerApi';
 import type { AIProvider, AIModel } from '@/types/agent.types';
+import { settleAll } from '@/lib/settleAll';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export { AgentSettingsTab };
 export default AgentSettingsTab;
@@ -29,8 +31,16 @@ function AgentSettingsTab() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [providersRes, settings] = await Promise.all([getProviders(), getAgentSettings()]);
-      setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      const errorLabels = ['providers', 'agent settings'];
+      const [providersRes, settings] = await settleAll(
+        [getProviders(), getAgentSettings()],
+        (index, error) => {
+          toast.error(`Failed to load ${errorLabels[index]}: ${getFrappeErrorMessage(error)}`);
+        },
+      );
+      if (providersRes) {
+        setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      }
       setDefaultProvider(settings?.default_provider || undefined);
       setDefaultModel(settings?.default_model || undefined);
       setLoading(false);
@@ -52,7 +62,7 @@ function AgentSettingsTab() {
     }
     setSaving(true);
     try {
-      const data: AgentSettingsDoc = {
+      const data: Partial<AgentSettingsDoc> = {
         default_provider: defaultProvider || undefined,
         default_model: defaultModel || undefined,
       };

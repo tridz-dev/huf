@@ -34,7 +34,7 @@
     {
       "id": "platform_utility",
       "name": "Platform Utility",
-      "description": "Built-in capabilities like Speech-to-Text, Canvas operations, or Conversation data management.",
+      "description": "Built-in capabilities like Audio Transcription, Canvas operations, or Conversation data management.",
       "icon": "cpu",
       "toolTypes": [
         "Get Report Result",
@@ -43,6 +43,15 @@
         "Get Conversation Data",
         "Set Conversation Data",
         "Load Conversation Data"
+      ]
+    },
+    {
+      "id": "web_search",
+      "name": "Web Search",
+      "description": "Search the web for live information via Perplexity AI.",
+      "icon": "search",
+      "toolTypes": [
+        "Perplexity Search"
       ]
     },
     {

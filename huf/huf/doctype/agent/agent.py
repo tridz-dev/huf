@@ -31,18 +31,19 @@ def get_permission_query_conditions(user):
     # 2. OR User is in the 'Agent User' table
     # 3. OR User has a role that is in the 'Agent Role' table
     # 4. OR (CRITICAL) If BOTH tables are empty, allow access (Public)
-    
+    # 5. AND the agent is not a system agent (hidden from non-System-Managers)
+
     conditions = f"""
         (
             `tabAgent`.owner = '{user}'
             OR
             `tabAgent`.name IN (
-                SELECT parent FROM `tabAgent User` 
+                SELECT parent FROM `tabAgent User`
                 WHERE user = '{user}'
             )
             OR
             `tabAgent`.name IN (
-                SELECT parent FROM `tabAgent Role` 
+                SELECT parent FROM `tabAgent Role`
                 WHERE role IN ('{user_roles_str}')
             )
             OR
@@ -52,6 +53,7 @@ def get_permission_query_conditions(user):
                 NOT EXISTS (SELECT 1 FROM `tabAgent Role` WHERE parent = `tabAgent`.name)
             )
         )
+        AND `tabAgent`.is_system = 0
     """
     return conditions
 
@@ -63,14 +65,11 @@ def _check_model_supports_caching(model_name: str, provider_name: str) -> bool:
 def _get_cacheable_models_for_provider(
     provider_doc_name: str, provider_name: str, exclude_model: str = None
 ) -> list:
-    try:
-        all_models = frappe.get_all(
-            "AI Model",
-            filters={"provider": provider_doc_name},
-            fields=["name", "model_name"],
-        )
-    except Exception:
-        return []
+    all_models = frappe.get_all(
+        "AI Model",
+        filters={"provider": provider_doc_name},
+        fields=["name", "model_name"],
+    )
 
     cacheable = []
     for m in all_models:
@@ -110,6 +109,8 @@ class Agent(Document):
     def validate(self):
         self._validate_prompt()
         self._validate_summary_prompt()
+        self._validate_system_field_tamper()
+        self._validate_system_agent_immutability()
 
         if self.allow_chat == 1 and self.persist_conversation == 0:
             frappe.throw(_("An agent cannot be allowed in Agent Chat when persistent conversation is off."))
@@ -119,7 +120,92 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_skills()
+        self._validate_starter_prompts()
         self._update_mcp_tool_counts()
+
+    def _validate_skills(self):
+        """Prevent duplicate skills from being attached to an agent."""
+        seen = set()
+        for row in self.get("agent_skill", []):
+            if row.skill in seen:
+                frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
+            seen.add(row.skill)
+
+    def _validate_starter_prompts(self):
+        """Enforce a maximum of 3 starter prompts and required prompt text."""
+        prompts = self.get("starter_prompts") or []
+        if len(prompts) > 3:
+            frappe.throw(_("A maximum of 3 starter prompts is allowed."), title=_("Starter Prompts"))
+        for row in prompts:
+            if not row.prompt_text:
+                frappe.throw(_("Prompt Text is required for all starter prompts."))
+
+    def _validate_system_field_tamper(self):
+        """Prevent non-admins from flipping is_system via API/UI."""
+        if self.is_new():
+            return
+
+        if not self.has_value_changed("is_system"):
+            return
+
+        if (
+            frappe.flags.in_seeding
+            or frappe.flags.in_install
+            or frappe.flags.in_migrate
+            or "System Manager" in frappe.get_roles()
+        ):
+            return
+
+        frappe.throw(
+            _("Only System Managers can change the system-agent flag."),
+            title=_("System Agent Protected"),
+        )
+
+    def _validate_system_agent_immutability(self):
+        """Lock protected fields on system agents for non-admins.
+
+        System agents (is_system=1) may only be modified by System Managers
+        or by install/migrate/seeding code. Protected fields cover the
+        agent's identity and behavior: prompts, provider/model, tools, and
+        activation flags.
+        """
+        if not self.is_system or self.is_new():
+            return
+
+        if (
+            frappe.flags.in_seeding
+            or frappe.flags.in_install
+            or frappe.flags.in_migrate
+            or "System Manager" in frappe.get_roles()
+        ):
+            return
+
+        protected_fields = (
+            "instructions",
+            "agent_prompt",
+            "prompt_mode",
+            "provider",
+            "model",
+            "disabled",
+            "allow_chat",
+        )
+        changed = [field for field in protected_fields if self.has_value_changed(field)]
+
+        before = self.get_doc_before_save()
+        if before:
+            current_tools = [row.as_dict() for row in self.get("agent_tool") or []]
+            previous_tools = [row.as_dict() for row in before.get("agent_tool") or []]
+            if frappe.as_json(current_tools) != frappe.as_json(previous_tools):
+                changed.append("agent_tool")
+
+        if changed:
+            frappe.throw(
+                _("Only System Managers can modify {0} on a system agent.").format(
+                    ", ".join(changed)
+                ),
+                title=_("System Agent Protected"),
+            )
 
     def _update_mcp_tool_counts(self):
         """Populate each agent_mcp_server row's tool_count from its linked MCP Server.
@@ -131,14 +217,14 @@ class Agent(Document):
         for row in self.agent_mcp_server:
             if not row.mcp_server:
                 continue
-            try:
-                mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
-                if mcp_doc.available_tools:
+            mcp_doc = frappe.get_doc("MCP Server", row.mcp_server)
+            if mcp_doc.available_tools:
+                try:
                     tools = json.loads(mcp_doc.available_tools)
-                    row.tool_count = len(tools) if isinstance(tools, list) else 0
-                else:
-                    row.tool_count = 0
-            except Exception:
+                except json.JSONDecodeError:
+                    tools = None
+                row.tool_count = len(tools) if isinstance(tools, list) else 0
+            else:
                 row.tool_count = 0
 
     def _validate_advanced_models(self):
@@ -177,19 +263,12 @@ class Agent(Document):
     def _validate_prompt_caching(self):
         if not self.model:
             frappe.throw(_("A model must be selected before enabling prompt caching."))
-        try:
-            model_doc = frappe.get_doc("AI Model", self.model)
-            model_name = model_doc.model_name or model_doc.name
-            provider_name = (
-                frappe.db.get_value("AI Provider", self.provider, "provider_name")
-                or self.provider
-            )
-        except Exception as e:
-            frappe.log_error(
-                f"Error loading model/provider for caching validation: {e}",
-                "Agent Prompt Caching Validation",
-            )
-            return
+        model_doc = frappe.get_doc("AI Model", self.model)
+        model_name = model_doc.model_name or model_doc.name
+        provider_name = (
+            frappe.db.get_value("AI Provider", self.provider, "provider_name")
+            or self.provider
+        )
         if _check_model_supports_caching(model_name, provider_name):
             return  
         alternatives = _get_cacheable_models_for_provider(
@@ -284,8 +363,19 @@ class Agent(Document):
             self.generate_default_plan()
         
     def on_trash(self):
+        if self.is_system and not (
+            frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_uninstall
+        ):
+            frappe.throw(_("System agents cannot be deleted."), title=_("System Agent Protected"))
+
         clear_doc_event_agents_cache()
-    
+
+    def before_rename(self, old_name: str, new_name: str, merge: bool = False):
+        if self.is_system and not (
+            frappe.flags.in_install or frappe.flags.in_migrate or frappe.flags.in_uninstall
+        ):
+            frappe.throw(_("System agents cannot be renamed."), title=_("System Agent Protected"))
+
     def generate_default_plan(self):
         """
         Generates the default plan using run_agent_sync directly.
@@ -318,7 +408,8 @@ class Agent(Document):
                 prompt=planning_prompt,
                 provider=self.provider,
                 model=self.model,
-                channel_id="orchestration_planning"
+                channel_id="orchestration_planning",
+                now=True
             )
             
             planning_run_id = result.get("agent_run_id")
@@ -341,8 +432,8 @@ class Agent(Document):
                 self.flags.ignore_recursion = False
             
             return planning_run_id, steps
-                
-        except Exception as e:
+
+        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
             frappe.log_error(f"Plan Generation Failed: {str(e)}", "Agent Plan Error")
             return None
 
@@ -382,8 +473,8 @@ class Agent(Document):
                         parent_run_id=planning_run_id,
                         override_plan=steps
                     )
-                
-            except Exception as e:
+
+            except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
                 frappe.log_error(f"Multi-Run Setup Failed: {str(e)}", "Agent Creation Error")
 
     

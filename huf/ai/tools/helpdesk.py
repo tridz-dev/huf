@@ -5,6 +5,7 @@ Uses direct Frappe DocType APIs – no external HTTP calls.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 
 
 def _helpdesk_installed():
@@ -79,8 +80,10 @@ def _handle_get_tickets(**kwargs) -> str:
         )
 
         return json.dumps({"success": True, "count": len(tickets), "results": tickets}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Get Tickets Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Get Tickets Error: {e}")
         return _error(str(e))
 
 
@@ -108,8 +111,10 @@ def _handle_get_ticket(**kwargs) -> str:
         result = doc.as_dict()
         result["comments"] = comments
         return json.dumps({"success": True, "results": result}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Get Ticket Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Get Ticket Error: {e}")
         return _error(str(e))
 
 
@@ -132,11 +137,13 @@ def _handle_create_ticket(**kwargs) -> str:
         doc.agent_group = kwargs.get("team", "")
         doc.raised_by = kwargs.get("raised_by") or kwargs.get("email", frappe.session.user)
         doc.contact = kwargs.get("contact", "")
-        doc.insert(ignore_permissions=True)
+        doc.insert()
 
         return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Create Ticket Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Create Ticket Error: {e}")
         return _error(str(e))
 
 
@@ -169,7 +176,7 @@ def _handle_update_ticket(**kwargs) -> str:
         if "resolution_details" in kwargs:
             doc.resolution_details = kwargs["resolution_details"]
 
-        doc.save(ignore_permissions=True)
+        doc.save()
 
         assigned_to = kwargs.get("assigned_to")
         if assigned_to:
@@ -178,8 +185,10 @@ def _handle_update_ticket(**kwargs) -> str:
             doc.assign_agent(assigned_to)
 
         return json.dumps({"success": True, "results": {"name": doc.name, "subject": doc.subject}}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Update Ticket Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Update Ticket Error: {e}")
         return _error(str(e))
 
 
@@ -200,11 +209,13 @@ def _handle_add_comment(**kwargs) -> str:
         comment.reference_ticket = ticket_id
         comment.content = content
         comment.commented_by = kwargs.get("commented_by", frappe.session.user)
-        comment.insert(ignore_permissions=True)
+        comment.insert()
 
         return json.dumps({"success": True, "results": {"name": comment.name}}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Add Comment Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Add Comment Error: {e}")
         return _error(str(e))
 
 
@@ -243,8 +254,10 @@ def _handle_get_agents(**kwargs) -> str:
             order_by="modified desc",
         )
         return json.dumps({"success": True, "count": len(agents), "results": agents}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Get Agents Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Get Agents Error: {e}")
         return _error(str(e))
 
 
@@ -272,8 +285,10 @@ def _handle_get_teams(**kwargs) -> str:
             order_by="modified desc",
         )
         return json.dumps({"success": True, "count": len(teams), "results": teams}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Get Teams Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Get Teams Error: {e}")
         return _error(str(e))
 
 
@@ -296,8 +311,10 @@ def _handle_assign_ticket(**kwargs) -> str:
         doc.assign_agent(agent_id)
 
         return json.dumps({"success": True, "results": {"name": doc.name, "assigned_to": agent_id}}, default=str)
-    except Exception as e:
-        frappe.log_error(f"Helpdesk Assign Ticket Error: {e}", "Helpdesk Tool")
+    except (frappe.DoesNotExistError, frappe.ValidationError, ValueError, KeyError, TypeError, AttributeError) as e:
+        logger.warning(f"Validation/Operation warning: {e!s}")
+    except Exception as e:  # boundary exception handler: external provider/tool boundary
+        logger.warning(f"Helpdesk Assign Ticket Error: {e}")
         return _error(str(e))
 
 

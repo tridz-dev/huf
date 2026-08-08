@@ -1,0 +1,115 @@
+name: Backend Tests
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend · bench run-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Frappe v16 requires Python 3.14 (see pyproject.toml dependency notes).
+      # Older interpreters fail to even parse frappe's PEP 695 `type X = ...`
+      # aliases during the editable install.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      # Node 24: bench init runs `yarn install` for frappe's own frontend even
+      # with --skip-assets, and frappe-framework's package.json declares
+      # engines.node ">=24".
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install bench
+        run: pip install frappe-bench
+
+      # --skip-redis-config-generation is required here: without it, `bench
+      # init` shells out to a local `redis-server --version` to auto-detect
+      # config, which doesn't exist on this runner (exit 127) and aborts init
+      # entirely. Skip generation, then point cache/queue/socketio at the
+      # redis service container explicitly. Doing this — rather than leaving
+      # frappe's un-backed dev-port defaults in place — is what fixed an
+      # 11-test setUpClass failure cluster (ConnectionRefusedError on
+      # 127.0.0.1:13000) that looked like a fixture bug but was a missing
+      # service.
+      - name: Init bench
+        run: |
+          bench init --skip-redis-config-generation --skip-assets --python "$(which python)" frappe-bench
+          cd frappe-bench
+          bench set-mariadb-host 127.0.0.1
+          bench set-config -g db_password root
+          bench set-config -g redis_cache "redis://127.0.0.1:6379/0"
+          bench set-config -g redis_queue "redis://127.0.0.1:6379/1"
+          bench set-config -g redis_socketio "redis://127.0.0.1:6379/2"
+
+      # --skip-assets: backend tests need no built frontend, and bench would
+      # otherwise run `yarn install --check-files` against frontend/, which
+      # fails on this repo's stale yarn.lock.
+      - name: Get huf app
+        working-directory: frappe-bench
+        run: bench get-app --skip-assets huf "${{ github.workspace }}"
+
+      - name: New site
+        working-directory: frappe-bench
+        run: |
+          bench new-site test_site --mariadb-root-password root --admin-password admin --no-mariadb-socket
+          bench --site test_site install-app huf
+
+      # Full failure detail, captured to a file rather than relying on the
+      # Actions log: the console reporter dumps whole embedding vectors on
+      # some knowledge tests, which overruns the log's line-length limit and
+      # truncates every traceback after the first. --junit-xml-output needs
+      # the optional xmlrunner dependency, which frappe-bench does not pull
+      # in by default, so a plain tee is more reliable here.
+      - name: Run tests
+        working-directory: frappe-bench
+        # pipefail: `| tee` would otherwise report tee's exit code (always 0),
+        # masking a failing test suite as a passing step.
+        run: |
+          set -o pipefail
+          bench --site test_site run-tests --app huf 2>&1 | tee test-output.log
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-results
+          path: frappe-bench/test-output.log
+          retention-days: 14
+          if-no-files-found: warn

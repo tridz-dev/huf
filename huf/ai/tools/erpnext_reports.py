@@ -5,6 +5,7 @@ Uses frappe.desk.query_report.run – read-only analytical tools.
 
 import json
 import frappe
+logger = frappe.logger("huf")
 
 
 def _erpnext_installed():
@@ -137,7 +138,7 @@ def handle_run_report(**kwargs) -> str:
             "count": len(result.get("result", [])),
         }, default=str)
     except Exception as e:
-        frappe.log_error(f"ERPNext Report Error [{report_name}]: {e}", "ERPNext Reports Tool")
+        logger.warning(f"ERPNext Report Error [{report_name}]: {e}")
         return _error(str(e))
 
 

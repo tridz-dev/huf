@@ -29,7 +29,7 @@ export const createToolFormSchema = (availableToolTypes: ToolType[]) => {
     tool_name: z.string().min(1, 'Tool name is required').max(128, 'Tool name must be at most 128 characters'),
     tool_type: z.string().min(1, 'Tool category is required'),
     types: toolTypesEnum,
-    description: z.string().min(1, 'Description is required'),
+    description: z.string(),
     reference_doctype: z.string().optional(),
     agent: z.string().optional(),
     function_path: z.string().optional(),
@@ -308,6 +308,342 @@ export function buildParametersFromSelectedFields(
   return params;
 }
 
+// ---------------------------------------------------------------------------
+// Document Operation auto-derivation
+// ---------------------------------------------------------------------------
+
+/** Verbs that operate on a reference DocType and support auto-derivation. */
+export const DOCUMENT_OPERATION_TYPES: ToolType[] = [
+  'Get Document',
+  'Get Multiple Documents',
+  'Get List',
+  'Create Document',
+  'Create Multiple Documents',
+  'Update Document',
+  'Update Multiple Documents',
+  'Delete Document',
+  'Delete Multiple Documents',
+  'Submit Document',
+  'Cancel Document',
+  'Get Amended Document',
+];
+
+export const isDocumentOperationType = (types?: string | null): boolean =>
+  !!types && (DOCUMENT_OPERATION_TYPES as string[]).includes(types);
+
+export const READ_ONLY_OPERATION_TYPES: ToolType[] = [
+  'Get Document',
+  'Get Multiple Documents',
+  'Get List',
+  'Get Amended Document',
+];
+
+/** "Sales Order" -> "sales_order" */
+export function slugifyDoctypeName(doctype: string): string {
+  return doctype
+    .trim()
+    .replace(/['"]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+}
+
+const OPERATION_VERB_PREFIX: Record<string, string> = {
+  'Get Document': 'get',
+  'Get Multiple Documents': 'get_multiple',
+  'Get List': 'get_list',
+  'Create Document': 'create',
+  'Create Multiple Documents': 'create_multiple',
+  'Update Document': 'update',
+  'Update Multiple Documents': 'update_multiple',
+  'Delete Document': 'delete',
+  'Delete Multiple Documents': 'delete_multiple',
+  'Submit Document': 'submit',
+  'Cancel Document': 'cancel',
+  'Get Amended Document': 'get_amended',
+};
+
+const OPERATION_DESCRIPTION: Record<string, string> = {
+  'Get Document': 'Fetch a single {dt} document by its ID (or matching field filters).',
+  'Get Multiple Documents': 'Fetch multiple {dt} documents by their IDs.',
+  'Get List': 'Fetch a list of {dt} documents, optionally filtered by field values.',
+  'Create Document': 'Create a new {dt} document.',
+  'Create Multiple Documents': 'Create multiple {dt} documents in one call.',
+  'Update Document': 'Update fields on an existing {dt} document.',
+  'Update Multiple Documents': 'Update multiple {dt} documents in one call.',
+  'Delete Document': 'Delete a {dt} document by its ID.',
+  'Delete Multiple Documents': 'Delete multiple {dt} documents by their IDs.',
+  'Submit Document': 'Submit a {dt} document by its ID.',
+  'Cancel Document': 'Cancel a submitted {dt} document by its ID.',
+  'Get Amended Document': 'Get the amended version of a cancelled {dt} document.',
+};
+
+const OPERATION_PERMISSION: Record<string, 'read' | 'write' | 'create' | 'delete' | 'submit' | 'cancel'> = {
+  'Get Document': 'read',
+  'Get Multiple Documents': 'read',
+  'Get List': 'read',
+  'Create Document': 'create',
+  'Create Multiple Documents': 'create',
+  'Update Document': 'write',
+  'Update Multiple Documents': 'write',
+  'Delete Document': 'delete',
+  'Delete Multiple Documents': 'delete',
+  'Submit Document': 'submit',
+  'Cancel Document': 'cancel',
+  'Get Amended Document': 'read',
+};
+
+export interface DocumentOperationDefaults {
+  toolName: string;
+  description: string;
+  isReadOnly: boolean;
+  requiredPermission: 'read' | 'write' | 'create' | 'delete' | 'submit' | 'cancel';
+  defaultParameters: ParameterData[];
+}
+
+const makeParam = (
+  fieldname: string,
+  type: ParameterData['type'],
+  required: boolean,
+  description: string,
+  label?: string
+): ParameterData => ({
+  label: label || fieldname,
+  fieldname,
+  type,
+  required,
+  description,
+  options: '',
+  child_table_name: '',
+});
+
+/**
+ * Derive sensible defaults for a Document Operation tool once verb + DocType
+ * are known. Default parameters mirror what the backend handler for each verb
+ * expects; verbs whose schema is fully auto-generated server-side
+ * (e.g. Get List's filters/fields/limit wrapper) get no table rows so the
+ * saved parameters table does not conflict with the generated schema.
+ */
+export function deriveDocumentOperationDefaults(
+  verb: ToolType,
+  doctype: string
+): DocumentOperationDefaults | null {
+  if (!isDocumentOperationType(verb) || !doctype) return null;
+
+  const slug = slugifyDoctypeName(doctype);
+  const prefix = OPERATION_VERB_PREFIX[verb] || 'tool';
+  const description = (OPERATION_DESCRIPTION[verb] || '{verb} operation on {dt} documents.')
+    .replace('{dt}', doctype)
+    .replace('{verb}', verb);
+
+  let defaultParameters: ParameterData[] = [];
+  switch (verb) {
+    case 'Get Document':
+      defaultParameters = [
+        makeParam('document_id', 'string', false, `The ID of the ${doctype} to get (optional if other filters given)`, 'Document ID'),
+      ];
+      break;
+    case 'Get Multiple Documents':
+      defaultParameters = [
+        makeParam('document_ids', 'array', true, `The IDs of the ${doctype} documents to get`, 'Document IDs'),
+      ];
+      break;
+    case 'Get List':
+      // filters/fields/limit are auto-generated by the backend schema; the
+      // parameter table only adds filter hints, so leave it empty by default.
+      defaultParameters = [];
+      break;
+    case 'Create Document':
+    case 'Create Multiple Documents':
+      // Mandatory DocType fields are appended separately from DocType meta.
+      defaultParameters = [];
+      break;
+    case 'Update Document':
+    case 'Update Multiple Documents':
+      defaultParameters = [
+        makeParam('document_id', 'string', true, `The ID of the ${doctype} to update`, 'Document ID'),
+      ];
+      break;
+    case 'Delete Document':
+      defaultParameters = [
+        makeParam('document_id', 'string', true, `The ID of the ${doctype} to delete`, 'Document ID'),
+      ];
+      break;
+    case 'Delete Multiple Documents':
+      defaultParameters = [
+        makeParam('document_ids', 'array', true, `The IDs of the ${doctype} documents to delete`, 'Document IDs'),
+      ];
+      break;
+    case 'Submit Document':
+      defaultParameters = [
+        makeParam('document_id', 'string', true, `The ID of the ${doctype} to submit`, 'Document ID'),
+      ];
+      break;
+    case 'Cancel Document':
+      defaultParameters = [
+        makeParam('document_id', 'string', true, `The ID of the ${doctype} to cancel`, 'Document ID'),
+      ];
+      break;
+    case 'Get Amended Document':
+      defaultParameters = [
+        makeParam('document_id', 'string', true, `The ID of the ${doctype} to get the amended document for`, 'Document ID'),
+      ];
+      break;
+  }
+
+  return {
+    toolName: `${prefix}_${slug}`,
+    description,
+    isReadOnly: READ_ONLY_OPERATION_TYPES.includes(verb),
+    requiredPermission: OPERATION_PERMISSION[verb] || 'read',
+    defaultParameters,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Default Tool Category per creation template
+// ---------------------------------------------------------------------------
+
+/** Fallback category when a template has no specific mapping. */
+export const FALLBACK_TOOL_CATEGORY = 'Miscellaneous';
+
+/**
+ * Default Tool Category (Agent Tool Type) per creation template.
+ * Keys are the template ids from frontend/src/config/toolTemplates.json
+ * (the five "Create New" picker cards). Values must match the curated
+ * categories seeded by sync_default_tool_categories() in huf/install.py.
+ */
+const TEMPLATE_DEFAULT_CATEGORY: Record<string, string> = {
+  document_operation: 'Data Operations',
+  external_api: 'Integrations',
+  platform_utility: 'AI & Generation',
+  run_agent: 'Automation & Workflow',
+  custom_function: 'Automation & Workflow',
+};
+
+export function getDefaultToolCategory(templateId?: string | null): string {
+  return (templateId && TEMPLATE_DEFAULT_CATEGORY[templateId]) || FALLBACK_TOOL_CATEGORY;
+}
+
+/**
+ * Build the full function definition schema, mirroring the backend
+ * (`AgentToolFunction.prepare_function_params`) for Document Operation verbs
+ * and falling back to the parameter-table schema for everything else.
+ */
+export function buildFunctionDefinition(args: {
+  toolName: string;
+  description: string;
+  types?: string | null;
+  referenceDoctype?: string | null;
+  parameters: ParameterData[];
+}): Record<string, unknown> {
+  const { toolName, description, types, referenceDoctype, parameters } = args;
+
+  const functionDef: Record<string, unknown> = {
+    name: toolName || 'untitled_tool',
+    description: description || 'No description provided.',
+  };
+
+  const dt = referenceDoctype || 'Document';
+  const tableProperties: Record<string, Record<string, unknown>> = {};
+  const tableRequired: string[] = [];
+  parameters.forEach((param) => {
+    if (!param.fieldname) return;
+    const property: Record<string, unknown> = { type: param.type || 'string' };
+    if (param.description) property.description = param.description;
+    if (param.options?.trim()) property.enum = parseParameterOptions(param.options);
+    tableProperties[param.fieldname] = property;
+    if (param.required) tableRequired.push(param.fieldname);
+  });
+
+  const docIdProp = (action: string) => ({
+    type: 'string',
+    description: `The ID of the ${dt} to ${action}`,
+  });
+  const docIdsProp = (action: string) => ({
+    type: 'array',
+    items: { type: 'string' },
+    description: `The IDs of the ${dt}s to ${action}`,
+  });
+  const fixedSchema = (properties: Record<string, unknown>, required: string[] = []) => ({
+    type: 'object',
+    properties,
+    required,
+    additionalProperties: false,
+  });
+
+  let schema: Record<string, unknown> | null = null;
+  switch (types) {
+    case 'Get Document':
+      schema = fixedSchema({ document_id: docIdProp('get (optional)'), ...tableProperties });
+      break;
+    case 'Get Multiple Documents':
+      schema = fixedSchema({ document_ids: docIdsProp('get') }, ['document_ids']);
+      break;
+    case 'Delete Document':
+      schema = fixedSchema({ document_id: docIdProp('delete') }, ['document_id']);
+      break;
+    case 'Delete Multiple Documents':
+      schema = fixedSchema({ document_ids: docIdsProp('delete') }, ['document_ids']);
+      break;
+    case 'Submit Document':
+      schema = fixedSchema({ document_id: docIdProp('submit') }, ['document_id']);
+      break;
+    case 'Cancel Document':
+      schema = fixedSchema({ document_id: docIdProp('cancel') }, ['document_id']);
+      break;
+    case 'Get Amended Document':
+      schema = fixedSchema({ document_id: docIdProp('get the amended document for') }, ['document_id']);
+      break;
+    case 'Get List': {
+      const filterProperties: Record<string, unknown> = {};
+      parameters.forEach((param) => {
+        if (!param.fieldname) return;
+        filterProperties[param.fieldname] = {
+          type: param.type || 'string',
+          description: param.description || param.label || `Filter by ${param.fieldname}`,
+        };
+      });
+      schema = {
+        type: 'object',
+        properties: {
+          filters: {
+            type: 'object',
+            description: "Dictionary of filters. Example: {'status': 'New'}.",
+            properties: filterProperties,
+            additionalProperties: true,
+          },
+          fields: { type: 'array', items: { type: 'string' }, description: 'List of fields to retrieve.' },
+          limit: { type: 'integer', description: 'Max records to return. Set to 0 to fetch ALL records.', default: 0 },
+        },
+        required: [],
+        additionalProperties: false,
+      };
+      break;
+    }
+    case 'Update Document':
+    case 'Update Multiple Documents': {
+      const properties: Record<string, unknown> = {
+        document_id: docIdProp('update'),
+        ...tableProperties,
+      };
+      const required = Array.from(new Set(['document_id', ...tableRequired]));
+      schema = { type: 'object', properties, required, additionalProperties: false };
+      break;
+    }
+    default:
+      break;
+  }
+
+  if (!schema) {
+    schema = { type: 'object', properties: tableProperties };
+    if (tableRequired.length > 0) schema.required = tableRequired;
+  }
+
+  functionDef.parameters = schema;
+  return functionDef;
+}
+
 export async function loadDocTypeFieldCatalog(doctypeName: string): Promise<DocTypeFieldCatalog> {
   const parentMeta = (await getDocTypeMeta(doctypeName)) as DocTypeMeta;
   const parentFields = parentMeta.fields || [];
@@ -319,13 +655,22 @@ export async function loadDocTypeFieldCatalog(doctypeName: string): Promise<DocT
   const childMetaEntries = await Promise.all(
     childTableFields.map(async (tableDf) => {
       const childDoctype = tableDf.options || '';
-      const childMeta = (await getDocTypeMeta(childDoctype)) as DocTypeMeta;
-      return [tableDf.fieldname || '', childMeta] as const;
+      try {
+        const childMeta = (await getDocTypeMeta(childDoctype)) as DocTypeMeta;
+        return [tableDf.fieldname || '', childMeta] as const;
+      } catch (error) {
+        // One child table's meta being denied/unavailable must not break
+        // building the tool schema for every other field on this doctype.
+        console.error(`Error loading child table meta for ${childDoctype}:`, error);
+        return null;
+      }
     })
   );
 
   const childTableMetas: Record<string, DocTypeMeta> = {};
-  childMetaEntries.forEach(([tableFieldname, meta]) => {
+  childMetaEntries.forEach((entry) => {
+    if (!entry) return;
+    const [tableFieldname, meta] = entry;
     childTableMetas[tableFieldname] = meta;
   });
 

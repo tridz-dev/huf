@@ -11,6 +11,7 @@ export const agentFormSchema = z.object({
   persist_conversation: z.boolean(),
   persist_user_history: z.boolean(),
   enable_multi_run: z.boolean(),
+  run_immediately: z.boolean().optional(),
   description: z.string().optional(),
   instructions: z.string(),
 
@@ -25,6 +26,12 @@ export const agentFormSchema = z.object({
   ).default([]),
 
   prompt_mode: z.enum(["Local", "Template"]).default("Local"),
+  starter_prompts: z.array(
+    z.object({
+      name: z.string().optional(),
+      prompt_text: z.string().min(1, 'Prompt text is required'),
+    })
+  ).max(3, 'A maximum of 3 starter prompts is allowed.').default([]),
   agent_prompt: z.string().optional(),
   prompt_version_locked: z.boolean().optional(),
   template_version_at_attach: z.number().optional(),
@@ -52,6 +59,15 @@ export const agentFormSchema = z.object({
   inject_conversation_data: z.boolean().optional(),
   conversation_data_api_permission: z.string().optional(),
   autonaming_of_conversation_title: z.boolean().optional(),
+  enable_memory: z.boolean().optional(),
+  memory_policy: z.string().optional(),
+  enable_memory_search_tool: z.boolean().optional(),
+  enable_memory_write_tool: z.boolean().optional(),
+
+  reasoning_mode: z.enum(['Auto', 'Off', 'On']).default('Auto').optional(),
+  reasoning_effort: z.enum(['Auto', 'Low', 'Medium', 'High']).default('Auto').optional(),
+  reasoning_budget_tokens: z.number().optional(),
+  reasoning_summary: z.enum(['None', 'Concise', 'Detailed']).default('None').optional(),
 
   agent_color: z
     .string()
@@ -62,6 +78,17 @@ export const agentFormSchema = z.object({
     ),
   show_tool_execution_details: z.boolean().optional(),
 
+  agent_skill: z.array(
+    z.object({
+      name: z.string().optional(),
+      skill: z.string().min(1, 'Skill is required'),
+      mode: z.enum(['Mandatory', 'Optional']).default('Mandatory'),
+      auto_load: z.boolean().default(true),
+      priority: z.number().default(0),
+      description: z.string().optional(),
+    })
+  ).default([]),
+
   // Advanced model overrides
   image_generation_model: z.string().optional(),
   tts_model: z.string().optional(),
@@ -70,7 +97,13 @@ export const agentFormSchema = z.object({
 
   allow_file_upload: z.boolean().optional(),
   enable_ocr: z.boolean().optional(),
-  max_upload_size_mb: z.number().int().positive().optional(),
+  max_upload_size_mb: z.number().int().nonnegative().optional(),
+
+  allow_code_execution: z.boolean().optional(),
+  execution_profile: z.string().optional(),
+  execution_shared_dir_limit_mb: z.number().int().nonnegative().optional(),
+  allow_ssh: z.boolean().optional(),
+  ssh_connections: z.array(z.string()).default([]),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({
@@ -79,7 +112,11 @@ export const agentFormSchema = z.object({
       message: 'Select an Agent Prompt when using Template mode',
     });
   }
-  if (values.summary_prompt_mode === "Template" && !values.summary_prompt_template?.trim()) {
+  if (
+    values.context_strategy === "Summarize" &&
+    values.summary_prompt_mode === "Template" &&
+    !values.summary_prompt_template?.trim()
+  ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["summary_prompt_template"],

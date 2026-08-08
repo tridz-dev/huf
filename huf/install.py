@@ -10,13 +10,52 @@ import json
 import frappe
 from huf.utils import is_frappe_16
 
+logger = frappe.logger("huf")
+
+def _resolve_workspace_link_type():
+	"""Pick a link_type whose target actually resolves for link_to="Huf".
+
+	Frappe validates Desktop Icon.link_to against the doctype named by
+	link_type. "Workspace Sidebar" does not always carry a "Huf" record at
+	after_app_install time (on a fresh site it does not exist yet), which made
+	frappe raise LinkValidationError and abort the whole install. Fall back to
+	"Workspace", which the fixture sync has already created by this point.
+	"""
+	for link_type in ("Workspace Sidebar", "Workspace"):
+		if not frappe.db.table_exists(f"tab{link_type}"):
+			continue
+		if frappe.db.exists(link_type, "Huf"):
+			return link_type
+	return None
+
+
 def setup_desktop_icon_as_workspace(app_name):
 	"""
 	Replace the External App desktop icon with a Workspace Sidebar icon.
 	Runs after Frappe creates desktop icons, so we fix the Huf icon to use Workspace Sidebar.
 	Only applies on Frappe version 16 and above.
+
+	This is cosmetic: any failure here is logged and swallowed rather than
+	aborting `bench install-app huf`.
 	"""
 	if not is_frappe_16() or app_name != "huf":
+		return
+
+	try:
+		_setup_desktop_icon_as_workspace()
+	except Exception:
+		frappe.db.rollback()
+		logger.warning("huf: skipped desktop icon setup", exc_info=True)
+		frappe.log_error(
+			title="Huf: desktop icon setup skipped",
+			message=frappe.get_traceback(with_context=True),
+		)
+
+
+def _setup_desktop_icon_as_workspace():
+	link_type = _resolve_workspace_link_type()
+	if not link_type:
+		logger.warning("huf: no resolvable workspace link target; skipping desktop icon")
 		return
 
 	# Delete the App icon (External type) - we want Workspace Sidebar instead
@@ -36,7 +75,7 @@ def setup_desktop_icon_as_workspace(app_name):
 	)
 	if workspace_icon:
 		doc = frappe.get_doc("Desktop Icon", workspace_icon)
-		doc.link_type = "Workspace Sidebar"
+		doc.link_type = link_type
 		doc.link_to = "Huf"
 		doc.hidden = 0
 		doc.parent_icon = None
@@ -50,7 +89,7 @@ def setup_desktop_icon_as_workspace(app_name):
 			icon = frappe.new_doc("Desktop Icon")
 			icon.label = "Huf"
 			icon.icon_type = "Link"
-			icon.link_type = "Workspace Sidebar"
+			icon.link_type = link_type
 			icon.link_to = "Huf"
 			icon.icon = workspace.get("icon") or "header"
 			icon.standard = 1
@@ -64,14 +103,20 @@ def after_install():
     create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
+    create_hub_orchestrator_agent()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
     remove_deprecated_gemini_audio_tools()
     create_ocr_document_tool()
     create_flow_tools()
+    create_memory_tools()
+    create_default_memory_policies()
+    create_default_execution_profiles()
     register_integration_services()
     sync_tool_types()
+    sync_default_tool_categories()
+    seed_skill_categories()
     from huf.ai.tool_registry import sync_discovered_tools
     sync_discovered_tools(use_cache=False)
     frappe.db.commit()
@@ -111,7 +156,12 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
-	setup_desktop_icon_as_workspace("huf")
+	create_demo_ai_providers()
+	create_demo_ai_models()
+	try:
+		setup_desktop_icon_as_workspace("huf")
+	except frappe.LinkValidationError:
+		pass
 	try:
 		create_image_generation_tool()
 		create_transcribe_audio_tool()
@@ -119,27 +169,43 @@ def after_migrate():
 		remove_deprecated_gemini_audio_tools()
 		create_ocr_document_tool()
 		create_flow_tools()
+		create_memory_tools()
+		create_default_memory_policies()
+		create_default_execution_profiles()
 		register_integration_services()
 		sync_tool_types()
+		sync_default_tool_categories()
+		seed_skill_categories()
 		from huf.ai.tool_registry import sync_discovered_tools
 		result = sync_discovered_tools(use_cache=False)  # Full scan (apps_to_scan=None)
-		frappe.log_error(
-			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps",
-			"Tool Sync"
+		logger.info(
+			f"Synced tools after migrate: {result.get('total_tools', 0)} tools from {len(result.get('synced_apps', []))} apps"
 		)
 	except Exception as e:
-		frappe.log_error(
-			f"Failed to sync tools after migrate: {str(e)}",
-			"Tool Sync Error"
-		)
+		logger.warning(f"Failed to sync tools after migrate: {e!s}")
 		
 	try:
 		from huf.ai.app_seeding.seeder import seed_all
 		results = list(seed_all())
-		logger = frappe.logger("app_seeding")
-		_log_seed_results(results, logger)
+		seed_logger = frappe.logger("app_seeding")
+		_log_seed_results(results, seed_logger)
 	except Exception as e:
-		frappe.log_error(f"App seeding failed: {e}", "App Seeding")
+		logger.warning(f"App seeding failed: {e!s}")
+
+	try:
+		create_hub_orchestrator_agent()
+	except Exception as e:
+		logger.warning(f"Failed to seed Hub Orchestrator agent after migrate: {e!s}")
+
+	try:
+		from huf.ai.app_seeding.apps_loader import sync_huf_apps
+		summary = sync_huf_apps()
+		logger.info(
+			f"Synced HUF Apps after migrate: {summary.get('synced', 0)} synced, "
+			f"{summary.get('invalid', 0)} invalid, {summary.get('deleted', 0)} deleted"
+		)
+	except Exception as e:
+		logger.warning(f"HUF Apps sync failed: {e!s}")
 
 
 def _log_seed_results(results, logger):
@@ -175,6 +241,7 @@ def create_demo_ai_providers():
         {"doctype": "AI Provider", "provider_name": "Huggingface", "provider_brand": "huggingface", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Cohere", "provider_brand": "cohere", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Perplexity", "provider_brand": "perplexity", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Moonshot", "provider_brand": "moonshot", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Google", "provider_brand": "google", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Anthropic", "provider_brand": "anthropic", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "OpenRouter", "provider_brand": "openrouter", "api_key": ""},
@@ -191,80 +258,196 @@ def create_demo_ai_providers():
             doc.insert(ignore_permissions=True)
 
 def create_demo_ai_models():
+    """Seed default AI models with modality metadata.
+
+    Modality values must match the options configured on the AI Model DocType:
+    Text, Image, Text-to-Speech, Transcription, Embeddings, Vision, OCR.
+    """
+
+    deprecated_models = ()
+
+    for model_name in deprecated_models:
+        if frappe.db.exists("AI Model", model_name):
+            frappe.delete_doc("AI Model", model_name, ignore_permissions=True, force=True)
+
+    TEXT = "Text"
+    VISION = "Vision"
+    IMAGE = "Image"
+    TTS = "Text-to-Speech"
+    STT = "Transcription"
+    EMB = "Embeddings"
+
+    def _m(model_name, provider, *modalities):
+        entry = {"doctype": "AI Model", "model_name": model_name, "provider": provider}
+        if modalities:
+            entry["modalities"] = ",".join(modalities)
+        return entry
+
     models = [
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-0528", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v2.5-1210", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl2", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-vl", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-coder-v5.7b-mqa-base", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-v3.1-terminus", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-r1-zero", "provider": "DeepSeek"},
-        # {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-lite", "provider": "DeepSeek"},
-        {"doctype": "AI Model", "model_name": "huggingface/meta-llama/Llama-3.2-3B-Instruct", "provider": "Huggingface"},
-        {"doctype": "AI Model", "model_name": "command-a-03-2025", "provider": "Cohere"},
-        {"doctype": "AI Model", "model_name": "sonar-pro", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-reasoning", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-reasoning-pro", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "sonar-deep-research", "provider": "Perplexity"},
-        {"doctype": "AI Model", "model_name": "gemini-3-pro-preview", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.5-flash-lite", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemma-3-27b-it", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemma-3-9b-it", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "nano-banana-pro", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "text-embedding-004", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.0-flash-001", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "gemini-2.0-flash-lite-preview", "provider": "Google"},
-        {"doctype": "AI Model", "model_name": "claude-sonnet-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4.1", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-haiku-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-3.7-sonnet", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-3.5-sonnet", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-3.5-haiku", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-opus-4.5", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-2", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "claude-sonnet-4-20250514", "provider": "Anthropic"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-5-nano", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4.1-nano", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "openai/gpt-4o-mini", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.5-flash-lite-preview-06-17", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemini-2.0-flash-exp:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "google/gemma-3-27b-it:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "anthropic/claude-4.5-sonnet-20250929", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3-0324", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "deepseek/deepseek-chat-v3.1", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-vl-235b-a22b-instruct", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "qwen/qwen3-coder:free", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "minimax/minimax-m2", "provider": "OpenRouter"},
-        {"doctype": "AI Model", "model_name": "o1-preview", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "o1-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "whisper-1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-3-small", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-3-large", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "text-embedding-ada-002", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-image-1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "Alternate", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "dall-e-3", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-3.5-turbo", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4.1-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4o", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4o-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-4-turbo", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5.1", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-mini", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5-nano", "provider": "OpenAI"},
-        {"doctype": "AI Model", "model_name": "gpt-5", "provider": "OpenAI"},
+        # Hugging Face
+        _m("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
+        # Cohere
+        _m("command-a-03-2025", "Cohere", TEXT),
+        # Perplexity
+        _m("sonar-pro", "Perplexity", TEXT),
+        _m("sonar", "Perplexity", TEXT),
+        _m("sonar-reasoning", "Perplexity", TEXT),
+        _m("sonar-reasoning-pro", "Perplexity", TEXT),
+        _m("sonar-deep-research", "Perplexity", TEXT),
+        # Google Gemini (direct)
+        _m("gemini-3.6-flash", "Google", TEXT, VISION),
+        _m("gemini-3.5-flash", "Google", TEXT, VISION),
+        _m("gemini-3.5-flash-lite", "Google", TEXT, VISION),
+        _m("gemini-3.1-flash-lite", "Google", TEXT, VISION),
+        _m("gemini-3.1-pro-preview", "Google", TEXT, VISION),
+        _m("gemini-3-flash-preview", "Google", TEXT, VISION),
+        _m("gemini-2.5-pro", "Google", TEXT, VISION),
+        _m("gemini-2.5-flash", "Google", TEXT, VISION),
+        _m("gemma-3-27b-it", "Google", TEXT, VISION),
+        _m("gemma-3-9b-it", "Google", TEXT, VISION),
+        _m("nano-banana-pro", "Google", IMAGE),
+        _m("gemini-3.1-flash-image", "Google", IMAGE),
+        _m("gemini-3.1-flash-lite-image", "Google", IMAGE),
+        _m("gemini-2.5-flash-image", "Google", IMAGE),
+        _m("gemini-3.1-flash-tts-preview", "Google", TTS),
+        _m("gemini-2.5-flash-tts-preview", "Google", TTS),
+        _m("gemini-2.5-pro-tts-preview", "Google", TTS),
+        _m("computer-use-preview", "Google", TEXT, VISION),
+        _m("gemini-deep-research-preview", "Google", TEXT),
+        _m("gemini-deep-research-max-preview", "Google", TEXT),
+        _m("text-embedding-004", "Google", EMB),
+        _m("gemini-embedding-001", "Google", EMB),
+        _m("gemini-embedding-2", "Google", EMB),
+        # Anthropic
+        _m("claude-fable-5", "Anthropic", TEXT, VISION),
+        _m("claude-mythos-5", "Anthropic", TEXT, VISION),
+        _m("claude-opus-5", "Anthropic", TEXT, VISION),
+        _m("claude-opus-4.8", "Anthropic", TEXT, VISION),
+        _m("claude-sonnet-5", "Anthropic", TEXT, VISION),
+        _m("claude-haiku-4.5", "Anthropic", TEXT, VISION),
+        # DeepSeek (direct)
+        _m("deepseek-v4-pro", "DeepSeek", TEXT),
+        _m("deepseek-v4-flash", "DeepSeek", TEXT),
+        _m("deepseek-chat-v3.1", "DeepSeek", TEXT),
+        _m("deepseek-chat-v3-0324", "DeepSeek", TEXT),
+        # Moonshot (direct)
+        _m("kimi-k3", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.7", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.6", "Moonshot", TEXT, VISION),
+        _m("kimi-k2.5", "Moonshot", TEXT, VISION),
+        # OpenRouter
+        _m("openrouter/free", "OpenRouter", TEXT),
+        _m("openai/gpt-5", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5-mini", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5-nano", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.5-pro", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4-pro", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4-mini", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.4-nano", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.3-codex", "OpenRouter", TEXT),
+        _m("openai/gpt-5.2", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.2-pro", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.1", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-4o-mini", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-4o-mini-tts", "OpenRouter", TTS),
+        _m("openai/gpt-4o-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-4o-mini-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-live-transcribe", "OpenRouter", STT),
+        _m("openai/gpt-realtime-whisper", "OpenRouter", STT),
+        _m("openai/gpt-oss-20b", "OpenRouter", TEXT),
+        _m("openai/gpt-image-2", "OpenRouter", IMAGE),
+        _m("openai/gpt-image-1", "OpenRouter", IMAGE),
+        _m("openai/gpt-image-1-mini", "OpenRouter", IMAGE),
+        _m("openai/chatgpt-image-latest", "OpenRouter", IMAGE),
+        _m("openai/chat-latest", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.3-chat-latest", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-5.2-chat-latest", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.6-flash", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.5-flash", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.5-flash-lite", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.1-flash-lite", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3.1-pro-preview", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-3-flash-preview", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-2.5-pro", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-2.5-flash", "OpenRouter", TEXT, VISION),
+        _m("google/gemini-2.5-flash-lite-preview-06-17", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-3-27b-it", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-4-31b-it", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-4-26b-a4b-it", "OpenRouter", TEXT, VISION),
+        _m("anthropic/claude-opus-5", "OpenRouter", TEXT, VISION),
+        _m("anthropic/claude-sonnet-5", "OpenRouter", TEXT, VISION),
+        _m("deepseek/deepseek-v4-pro", "OpenRouter", TEXT),
+        _m("deepseek/deepseek-v4-flash", "OpenRouter", TEXT),
+        _m("deepseek/deepseek-chat-v3-0324", "OpenRouter", TEXT),
+        _m("deepseek/deepseek-chat-v3.1", "OpenRouter", TEXT),
+        _m("z-ai/glm-5.2", "OpenRouter", TEXT),
+        _m("moonshotai/kimi-k3", "OpenRouter", TEXT, VISION),
+        _m("moonshotai/kimi-k2.7", "OpenRouter", TEXT, VISION),
+        _m("minimax/minimax-m3", "OpenRouter", TEXT),
+        _m("minimax/minimax-m2.7", "OpenRouter", TEXT),
+        _m("minimax/minimax-m2", "OpenRouter", TEXT),
+        _m("microsoft/phi-4", "OpenRouter", TEXT),
+        _m("qwen/qwen3.7-max", "OpenRouter", TEXT),
+        _m("qwen/qwen3.6-plus", "OpenRouter", TEXT),
+        _m("qwen/qwen3-vl-235b-a22b-instruct", "OpenRouter", TEXT, VISION),
+        _m("qwen/qwen3-coder", "OpenRouter", TEXT),
+        # OpenRouter free-tier variants
+        _m("google/gemma-4-31b-it:free", "OpenRouter", TEXT, VISION),
+        _m("google/gemma-4-26b-a4b-it:free", "OpenRouter", TEXT, VISION),
+        _m("openai/gpt-oss-20b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-super-120b-a12b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-ultra-550b-a55b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-nano-30b-a3b:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-nano-12b-v2-vl:free", "OpenRouter", TEXT, VISION),
+        _m("nvidia/nemotron-nano-9b-v2:free", "OpenRouter", TEXT),
+        _m("nvidia/nemotron-3.5-content-safety:free", "OpenRouter", TEXT),
+        _m("cohere/north-mini-code:free", "OpenRouter", TEXT),
+        _m("poolside/laguna-m.1:free", "OpenRouter", TEXT),
+        _m("poolside/laguna-xs-2.1:free", "OpenRouter", TEXT),
+        _m("poolside/laguna-s-2.1:free", "OpenRouter", TEXT),
+        _m("inclusionai/ling-3.0-flash:free", "OpenRouter", TEXT),
+        _m("tencent/hy3:free", "OpenRouter", TEXT),
+        # OpenAI (direct)
+        _m("gpt-5.6-sol", "OpenAI", TEXT, VISION),
+        _m("gpt-5.6-terra", "OpenAI", TEXT, VISION),
+        _m("gpt-5.6-luna", "OpenAI", TEXT, VISION),
+        _m("gpt-5.5", "OpenAI", TEXT, VISION),
+        _m("gpt-5.5-pro", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4-pro", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4-mini", "OpenAI", TEXT, VISION),
+        _m("gpt-5.4-nano", "OpenAI", TEXT, VISION),
+        _m("gpt-5.3-codex", "OpenAI", TEXT),
+        _m("gpt-5.2", "OpenAI", TEXT, VISION),
+        _m("gpt-5.2-pro", "OpenAI", TEXT, VISION),
+        _m("gpt-5.1", "OpenAI", TEXT, VISION),
+        _m("gpt-5", "OpenAI", TEXT, VISION),
+        _m("gpt-5-mini", "OpenAI", TEXT, VISION),
+        _m("gpt-5-nano", "OpenAI", TEXT, VISION),
+        _m("chat-latest", "OpenAI", TEXT, VISION),
+        _m("gpt-5.3-chat-latest", "OpenAI", TEXT, VISION),
+        _m("gpt-5.2-chat-latest", "OpenAI", TEXT, VISION),
+        _m("gpt-4o-mini", "OpenAI", TEXT, VISION),
+        _m("gpt-4o-mini-tts", "OpenAI", TTS),
+        _m("tts-1", "OpenAI", TTS),
+        _m("tts-1-hd", "OpenAI", TTS),
+        _m("whisper-1", "OpenAI", STT),
+        _m("gpt-4o-transcribe", "OpenAI", STT),
+        _m("gpt-4o-mini-transcribe", "OpenAI", STT),
+        _m("gpt-transcribe", "OpenAI", STT),
+        _m("gpt-live-transcribe", "OpenAI", STT),
+        _m("gpt-realtime-whisper", "OpenAI", STT),
+        _m("gpt-image-2", "OpenAI", IMAGE),
+        _m("gpt-image-1", "OpenAI", IMAGE),
+        _m("gpt-image-1-mini", "OpenAI", IMAGE),
+        _m("chatgpt-image-latest", "OpenAI", IMAGE),
+        _m("gpt-oss-20b", "OpenAI", TEXT),
+        _m("text-embedding-3-small", "OpenAI", EMB),
+        _m("text-embedding-3-large", "OpenAI", EMB),
+        _m("text-embedding-ada-002", "OpenAI", EMB),
     ]
 
     for m in models:
@@ -273,6 +456,25 @@ def create_demo_ai_models():
             doc.flags.ignore_mandatory = True
             doc.flags.ignore_validate = True
             doc.insert(ignore_permissions=True)
+        elif m.get("modalities"):
+            existing = frappe.get_doc("AI Model", m["model_name"])
+            if not existing.get("modalities"):
+                existing.modalities = m["modalities"]
+                existing.save(ignore_permissions=True)
+
+
+def create_hub_orchestrator_agent():
+	"""
+	Idempotent: seed the "Hub Orchestrator" system agent that powers hub chat.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.app_seeding.hub_orchestrator import create_hub_orchestrator_agent as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed Hub Orchestrator agent: {e!s}")
+
 
 def create_image_generation_tool():
     """Create the image generation tool in Agent Tool Function DocType."""
@@ -340,7 +542,7 @@ def create_image_generation_tool():
     try:
         tool_doc.insert()
     except Exception as e:
-        frappe.log_error(f"Error creating image generation tool: {str(e)}", "Image Generation Tool Creation")
+        logger.warning(f"Error creating image generation tool: {e!s}")
 
 
 def create_ocr_document_tool():
@@ -365,7 +567,7 @@ def create_ocr_document_tool():
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating ocr_document tool: {str(e)}", "OCR Document Tool Update")
+            logger.warning(f"Error updating ocr_document tool: {e!s}")
     else:
         # Create new tool
         parameters = [
@@ -420,7 +622,7 @@ def create_ocr_document_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating ocr_document tool: {str(e)}", "OCR Document Tool Creation")
+            logger.warning(f"Error creating ocr_document tool: {e!s}")
 
 def create_generate_audio_tool():
     """Create or update the generate_audio tool in Agent Tool Function DocType."""
@@ -493,7 +695,7 @@ def create_generate_audio_tool():
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating generate_audio tool: {str(e)}", "Generate Audio Tool Update")
+            logger.warning(f"Error updating generate_audio tool: {e!s}")
     else:
         # Create new tool
         tool_doc = frappe.get_doc({
@@ -510,12 +712,50 @@ def create_generate_audio_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating generate_audio tool: {str(e)}", "Generate Audio Tool Creation")
+            logger.warning(f"Error creating generate_audio tool: {e!s}")
 
 def create_transcribe_audio_tool():
     """Create or update the transcribe_audio tool in Agent Tool Function DocType."""
     tool_name = "transcribe_audio"
     
+    parameters = [
+        {
+            "label": "File ID",
+            "fieldname": "file_id",
+            "type": "string",
+            "required": 0,
+            "description": "File document ID from Frappe (preferred). File must exist in the system."
+        },
+        {
+            "label": "File URL",
+            "fieldname": "file_url",
+            "type": "string",
+            "required": 0,
+            "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
+        },
+        {
+            "label": "File Path",
+            "fieldname": "file_path",
+            "type": "string",
+            "required": 0,
+            "description": "Absolute server path inside an allowed audio import directory"
+        },
+        {
+            "label": "Language",
+            "fieldname": "language",
+            "type": "string",
+            "required": 0,
+            "description": "Optional language code in ISO 639-1 format (e.g., 'en', 'es', 'fr', 'de'). If omitted, language is auto-detected."
+        },
+        {
+            "label": "Model",
+            "fieldname": "model",
+            "type": "string",
+            "required": 0,
+            "description": "Optional transcription model. Defaults based on provider: OpenAI/Groq use 'whisper-1', Groq can use 'groq/whisper-large-v3', Deepgram uses 'deepgram/nova-2'."
+        }
+    ]
+
     # Ensure Transcription tool type exists
     if not frappe.db.exists("Agent Tool Type", "Transcription"):
         tool_type_doc = frappe.new_doc("Agent Tool Type")
@@ -526,49 +766,21 @@ def create_transcribe_audio_tool():
     tool_exists = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
     
     if tool_exists:
-        # Update existing tool
+        # Update existing tool - add missing parameters if needed
         tool_doc = frappe.get_doc("Agent Tool Function", tool_name)
         # Update description and function path if needed
         tool_doc.description = "Transcribe audio files to text using AI. Use this when the user uploads an audio file or asks to transcribe audio. Supports multiple providers via LiteLLM (OpenAI, Groq, Deepgram, etc.)."
         tool_doc.function_path = "huf.ai.sdk_tools.handle_transcribe_audio"
         tool_doc.tool_type = "Transcription"
+        tool_doc.set("parameters", [])
+        for p in parameters:
+            tool_doc.append("parameters", p)
         try:
             tool_doc.save()
         except Exception as e:
-            frappe.log_error(f"Error updating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Update")
+            logger.warning(f"Error updating transcribe_audio tool: {e!s}")
     else:
         # Create new tool
-        parameters = [
-            {
-                "label": "File ID",
-                "fieldname": "file_id",
-                "type": "string",
-                "required": 0,
-                "description": "File document ID from Frappe (preferred). File must exist in the system."
-            },
-            {
-                "label": "File URL",
-                "fieldname": "file_url",
-                "type": "string",
-                "required": 0,
-                "description": "File URL/path (alternative to file_id). Example: /files/audio.mp3"
-            },
-            {
-                "label": "Language",
-                "fieldname": "language",
-                "type": "string",
-                "required": 0,
-                "description": "Optional language code in ISO 639-1 format (e.g., 'en', 'es', 'fr', 'de'). If omitted, language is auto-detected."
-            },
-            {
-                "label": "Model",
-                "fieldname": "model",
-                "type": "string",
-                "required": 0,
-                "description": "Optional transcription model. Defaults based on provider: OpenAI/Groq use 'whisper-1', Groq can use 'groq/whisper-large-v3', Deepgram uses 'deepgram/nova-2'."
-            }
-        ]
-        
         tool_doc = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": tool_name,
@@ -583,7 +795,7 @@ def create_transcribe_audio_tool():
         try:
             tool_doc.insert()
         except Exception as e:
-            frappe.log_error(f"Error creating transcribe_audio tool: {str(e)}", "Transcribe Audio Tool Creation")
+            logger.warning(f"Error creating transcribe_audio tool: {e!s}")
 
 def create_huf_roles():
 	"""
@@ -741,7 +953,7 @@ def create_flow_tools():
             try:
                 tool_doc.save(ignore_permissions=True)
             except Exception as e:
-                frappe.log_error(f"Error updating {tool_name} tool: {str(e)}", "Flow Tool Update")
+                logger.warning(f"Error updating {tool_name} tool: {e!s}")
         else:
             # Create new tool
             tool_doc = frappe.get_doc({
@@ -758,7 +970,7 @@ def create_flow_tools():
             try:
                 tool_doc.insert(ignore_permissions=True)
             except Exception as e:
-                frappe.log_error(f"Error creating {tool_name} tool: {str(e)}", "Flow Tool Creation")
+                logger.warning(f"Error creating {tool_name} tool: {e!s}")
 
 def remove_deprecated_gemini_audio_tools():
     """Remove deprecated Gemini-native audio tools replaced by unified generate/transcribe tools."""
@@ -770,10 +982,7 @@ def remove_deprecated_gemini_audio_tools():
             try:
                 frappe.delete_doc("Agent Tool Function", tool_docname, ignore_permissions=True, force=True)
             except Exception as e:
-                frappe.log_error(
-                    f"Error removing deprecated tool {tool_name}: {str(e)}",
-                    "Deprecated Tool Cleanup"
-                )
+                logger.warning(f"Error removing deprecated tool {tool_name}: {e!s}")
 
 def register_integration_services():
 	"""
@@ -883,6 +1092,14 @@ def register_integration_services():
 				{"key": "refresh_token", "label": "OAuth Refresh Token", "required": True}
 			]
 		},
+		{
+			"service_name": "serpapi",
+			"category": "Google",
+			"description": "SerpApi search data: hotels, reviews (Google Maps, TripAdvisor, Yelp), and YouTube",
+			"required_credentials": [
+				{"key": "api_key", "label": "SerpApi API Key", "required": True}
+			]
+		},
 	]
 	
 	# Create or update each service
@@ -910,7 +1127,7 @@ def register_integration_services():
 				doc.insert()
 				
 		except Exception as e:
-			frappe.log_error(f"Failed to register integration service {service_data['service_name']}: {e}")
+			logger.warning(f"Failed to register integration service {service_data['service_name']}: {e!s}")
 			continue
 	
 	frappe.db.commit()
@@ -938,7 +1155,235 @@ def sync_tool_types():
 				})
 				doc.insert()
 		except Exception as e:
-			frappe.log_error(f"Failed to create tool type {category}: {e}")
+			logger.warning(f"Failed to create tool type {category}: {e!s}")
 			continue
 	
+	frappe.db.commit()
+
+
+# General-purpose categories for user-authored tools. Seeded alongside the
+# app-integration categories from sync_tool_types(); purely additive — existing
+# Agent Tool Type records are never renamed or touched.
+DEFAULT_TOOL_CATEGORIES = [
+	"Data Operations",
+	"Integrations",
+	"Automation & Workflow",
+	"Communication",
+	"AI & Generation",
+	"Miscellaneous",
+]
+
+
+def sync_default_tool_categories():
+	"""
+	Ensure the curated general-purpose tool categories exist as Agent Tool Type
+	documents. Idempotent: creates missing records only, never duplicates or
+	modifies existing ones. Safe to run on every migrate.
+	"""
+	for category in DEFAULT_TOOL_CATEGORIES:
+		try:
+			if not frappe.db.exists("Agent Tool Type", category):
+				doc = frappe.get_doc({
+					"doctype": "Agent Tool Type",
+					"name1": category
+				})
+				doc.insert()
+		except Exception as e:
+			logger.warning(f"Failed to create default tool category {category}: {e!s}")
+			continue
+
+	frappe.db.commit()
+
+
+def seed_skill_categories():
+	"""
+	Ensure default Skill Category records exist.
+	Called during after_install and after_migrate.
+	"""
+	categories = ["General", "CRM", "Support"]
+	for category in categories:
+		try:
+			if not frappe.db.exists("Skill Category", category):
+				doc = frappe.get_doc({
+					"doctype": "Skill Category",
+					"category_name": category,
+				})
+				doc.insert(ignore_permissions=True)
+		except Exception as e:
+			logger.warning(f"Failed to create skill category {category}: {e!s}")
+			continue
+
+	frappe.db.commit()
+
+
+def create_memory_tools():
+	"""Create or update scoped-memory Agent Tool Function records."""
+	if not frappe.db.exists("Agent Tool Type", "Memory"):
+		tool_type_doc = frappe.new_doc("Agent Tool Type")
+		tool_type_doc.name1 = "Memory"
+		tool_type_doc.insert(ignore_permissions=True)
+
+	memory_tools = [
+		(
+			"save_memory_record",
+			"Save a scoped memory record for future recall.",
+			"huf.ai.memory_tools.handle_save_memory_record",
+			"Save Memory Record",
+			[
+				("Title", "title", "Data", 1, "Short descriptive title for this memory."),
+				("Summary Text", "summary_text", "Long Text", 1, "Detailed content of this memory."),
+				("Record Type", "record_type", "Data", 0, "Fact, Preference, Research Note, Decision, Extracted Data, State, Summary, Policy Hint, Observation, Insight, or Custom."),
+				("Scope Type", "scope_type", "Data", 0, "Conversation, User, Agent, Site, or Global."),
+				("Scope Key", "scope_key", "Data", 0, "Scope identifier. Auto-resolved if empty."),
+				("Data JSON", "data_json", "JSON", 0, "Optional structured data payload."),
+				("Status", "status", "Data", 0, "Draft or Active."),
+				("Visibility", "visibility", "Data", 0, "Private, Shared with Agent, Site, or Global."),
+				("Tags", "tags", "Data", 0, "Comma-separated tags."),
+				("Confidence", "confidence", "Float", 0, "Confidence score from 0 to 1."),
+				("Importance Score", "importance_score", "Float", 0, "Importance score from 0 to 1."),
+			],
+		),
+		(
+			"search_memory_records",
+			"Search saved memory records by text, type, scope, and status.",
+			"huf.ai.memory_tools.handle_search_memory_records",
+			"Search Memory Records",
+			[
+				("Query", "query", "Data", 0, "Search query."),
+				("Record Type", "record_type", "Data", 0, "Optional record type filter."),
+				("Scope Type", "scope_type", "Data", 0, "Optional scope type filter."),
+				("Status", "status", "Data", 0, "Optional status filter. Defaults to Active."),
+				("Limit", "limit", "Int", 0, "Max results, 1-50."),
+			],
+		),
+		(
+			"get_memory_record",
+			"Get a specific memory record by ID.",
+			"huf.ai.memory_tools.handle_get_memory_record",
+			"Get Memory Record",
+			[("Memory Record", "memory_record", "Data", 1, "Memory record name.")],
+		),
+		(
+			"archive_memory_record",
+			"Archive a memory record that is no longer active.",
+			"huf.ai.memory_tools.handle_archive_memory_record",
+			"Archive Memory Record",
+			[("Memory Record", "memory_record", "Data", 1, "Memory record name.")],
+		),
+		(
+			"promote_memory_to_knowledge",
+			"Promote a memory record into a Knowledge Source for indexed retrieval.",
+			"huf.ai.memory_tools.handle_promote_memory_to_knowledge",
+			"Promote Memory to Knowledge",
+			[
+				("Memory Record", "memory_record", "Data", 1, "Memory record name."),
+				("Knowledge Source", "knowledge_source", "Data", 0, "Optional Knowledge Source."),
+			],
+		),
+	]
+
+	for _, _, _, tool_type, _ in memory_tools:
+		if not frappe.db.exists("Agent Tool Type", tool_type):
+			doc = frappe.new_doc("Agent Tool Type")
+			doc.name1 = tool_type
+			doc.insert(ignore_permissions=True)
+
+	for tool_name, description, function_path, tool_type, parameters in memory_tools:
+		parameter_rows = [
+			{
+				"label": label,
+				"fieldname": fieldname,
+				"param_type": param_type,
+				"required": required,
+				"description": description,
+			}
+			for label, fieldname, param_type, required, description in parameters
+		]
+		docname = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+		tool_doc = frappe.get_doc("Agent Tool Function", docname) if docname else frappe.new_doc("Agent Tool Function")
+		tool_doc.tool_name = tool_name
+		tool_doc.description = description
+		tool_doc.function_path = function_path
+		tool_doc.types = tool_type
+		tool_doc.tool_type = "Memory"
+		tool_doc.pass_parameters_as_json = 1
+		tool_doc.set("parameters", parameter_rows)
+		if docname:
+			tool_doc.save(ignore_permissions=True)
+		else:
+			tool_doc.insert(ignore_permissions=True)
+
+	frappe.db.commit()
+
+
+def create_default_memory_policies():
+	"""Create default Memory Policy presets."""
+	presets = [
+		{"policy_name": "Conservative", "description": "Nothing is captured automatically. Memory is written only via explicit tool calls and always needs human approval before it's used, so it's a safe default for agents handling sensitive or high-stakes conversations.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 1, "default_status": "Draft", "inject_mode": "Relevant Only", "max_records": 5, "token_budget": 1500, "auto_promote_to_knowledge": 0, "allow_agent_write": 0},
+		{"policy_name": "Conversational", "description": "For chat agents that should remember users across sessions with minimal friction. Every run is reviewed in the background and captured facts/preferences are injected into every future conversation automatically, no approval step.", "scope_type": "Agent", "capture_mode": "Automatic", "approval_required": 0, "default_status": "Draft", "inject_mode": "Always", "max_records": 10, "token_budget": 2000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+		{"policy_name": "Research", "description": "For agents doing extended research or knowledge work. The agent proposes what's worth remembering after each run, retrieval is narrowed to what's relevant to the current turn, and a larger token budget supports longer-running context.", "scope_type": "Agent", "capture_mode": "Agent Suggested", "approval_required": 0, "default_status": "Active", "inject_mode": "Relevant Only", "max_records": 20, "token_budget": 4000, "auto_promote_to_knowledge": 0, "promotion_min_confidence": 0.5, "promotion_min_importance": 0.5, "allow_agent_write": 1},
+		{"policy_name": "Operational", "description": "For task/ops agents where memory should stay out of the way. Nothing is captured or injected automatically — the agent can write memory via a tool call and pull it back only when it explicitly searches for it.", "scope_type": "Agent", "capture_mode": "Manual", "approval_required": 0, "default_status": "Active", "inject_mode": "Tool Only", "max_records": 10, "token_budget": 1000, "auto_promote_to_knowledge": 0, "allow_agent_write": 1},
+	]
+	for preset in presets:
+		if frappe.db.exists("Memory Policy", preset["policy_name"]):
+			continue
+		try:
+			doc = frappe.new_doc("Memory Policy")
+			doc.update(preset)
+			doc.insert(ignore_permissions=True)
+		except Exception as e:
+			frappe.log_error(
+				f"Error creating memory policy {preset['policy_name']}: {str(e)}",
+				"Memory Policy Creation",
+			)
+
+	frappe.db.commit()
+
+
+def create_default_execution_profiles():
+	"""Create default Execution Profile presets shipped with Huf."""
+	profiles = [
+		{
+			"profile_name": "Restricted",
+			"approval_mode": "Ask Every Time",
+			"is_builtin": 1,
+			"filesystem_policy": "Scratch Only",
+			"max_wall_time_s": 30,
+			"max_cpu_seconds": 30,
+			"max_memory_mb": 256,
+			"max_output_bytes": 1048576,
+		},
+		{
+			"profile_name": "Trusted",
+			"approval_mode": "Auto Approve",
+			"is_builtin": 1,
+			"filesystem_policy": "Scratch Only",
+			"max_wall_time_s": 60,
+			"max_cpu_seconds": 60,
+			"max_memory_mb": 512,
+			"max_output_bytes": 2097152,
+		},
+		{
+			"profile_name": "Blocked",
+			"approval_mode": "Never Allow",
+			"is_builtin": 1,
+			"filesystem_policy": "None",
+			"max_wall_time_s": 5,
+			"max_cpu_seconds": 5,
+			"max_memory_mb": 128,
+			"max_output_bytes": 65536,
+		},
+	]
+	for profile in profiles:
+		if frappe.db.exists("Execution Profile", profile["profile_name"]):
+			continue
+		try:
+			doc = frappe.new_doc("Execution Profile")
+			doc.update(profile)
+			doc.insert(ignore_permissions=True)
+		except Exception as e:
+			logger.warning(
+				f"Failed to create default execution profile {profile['profile_name']}: {e!s}"
+			)
+
 	frappe.db.commit()

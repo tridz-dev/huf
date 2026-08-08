@@ -4,6 +4,7 @@ import frappe
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
+from huf.ai.transaction import commit_if_background
 
 
 def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
@@ -58,12 +59,12 @@ def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversati
         orch.status = "Failed"
         orch.error_log = "Planning failed: No steps available from Agent or Generator"
         orch.save()
-        frappe.db.commit()
+        commit_if_background()
         return orch.name
 
     orch.status = "Running"
     orch.save()
-    frappe.db.commit()
+    commit_if_background()
 
     return orch.name
 
@@ -153,7 +154,7 @@ def execute_next_step(orch=None, orch_name=None):
     if not next_step:
         orch.status = "Completed"
         orch.last_run_at = now_datetime()
-        orch.save(ignore_permissions=True)
+        orch.save()
         if orch.parent_run:
             frappe.db.set_value("Agent Run", orch.parent_run, {
                 "status": "Success",
@@ -169,7 +170,7 @@ def execute_next_step(orch=None, orch_name=None):
     next_step.status = "in_progress"
     orch.current_step = next_step.step_index
     orch.last_run_at = now_datetime()
-    orch.save(ignore_permissions=True)
+    orch.save()
     frappe.db.commit()
 
     try:
@@ -188,7 +189,8 @@ def execute_next_step(orch=None, orch_name=None):
             channel_id="orchestration",
             parent_run_id=orch.parent_run,
             orchestration_id=orch.name,
-            conversation_id=orch.conversation
+            conversation_id=orch.conversation,
+            now=True
         )
 
         if result.get("success"):
@@ -214,7 +216,7 @@ def execute_next_step(orch=None, orch_name=None):
         orch.status = "Failed"
         frappe.log_error(frappe.get_traceback(), "Orchestration Step Error")
 
-    orch.save(ignore_permissions=True)
+    orch.save()
     frappe.db.commit()
 
     return "ok" if next_step.status == "done" else "failed"

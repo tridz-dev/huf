@@ -3,9 +3,12 @@ import react from '@vitejs/plugin-react';
 import proxyOptions from './proxyOptions';
 import { defineConfig } from 'vite';
 
+
 export default defineConfig({
+  base: '/assets/huf/frontend/',
   plugins: [
     react(),
+    // VitePWA removed to prevent aggressive caching
   ],
   resolve: {
     alias: {
@@ -13,6 +16,7 @@ export default defineConfig({
     },
   },
   build: {
+    target: 'es2022',
     outDir: '../huf/public/frontend',
     emptyOutDir: true,
     chunkSizeWarningLimit: 1000,

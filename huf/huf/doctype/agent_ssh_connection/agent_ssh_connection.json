@@ -1,0 +1,58 @@
+{
+ "actions": [],
+ "creation": "2026-07-12 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ssh_connection",
+  "host",
+  "username",
+  "enabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "ssh_connection",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "SSH Connection",
+   "options": "SSH Connection",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "ssh_connection.host",
+   "fieldname": "host",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Host",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "ssh_connection.username",
+   "fieldname": "username",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Username",
+   "read_only": 1
+  },
+  {
+   "fetch_from": "ssh_connection.enabled",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Connection Enabled",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-12 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent SSH Connection",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

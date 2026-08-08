@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -76,7 +77,7 @@ export async function getAgentRunsForMetrics(): Promise<AgentRunMetricsDoc[]> {
     // Fetch all runs (use a very high limit or fetch in batches)
     const runs = await db.getDocList(doctype['Agent Run'], {
       fields: ['status', 'start_time', 'end_time', 'cost'],
-      filters: filters as any,
+      filters: filters as Filter<Record<string, unknown>>[],
       limit: 10000, // High limit to get all runs
       orderBy: { field: 'creation', order: 'desc' },
     });
@@ -116,18 +117,31 @@ export async function getDashboardActiveFlows(limit = 10): Promise<DashboardFlow
 
     return Promise.all(
       active.map(async (flow) => {
-        const [runCount, recentRuns] = await Promise.all([
-          fetchDocCount(doctype['Flow Run'], [['flow_id', '=', flow.flow_id]]),
-          listFlowRuns(flow.flow_id, undefined, 1),
-        ]);
+        try {
+          const [runCount, recentRuns] = await Promise.all([
+            fetchDocCount(doctype['Flow Run'], [['flow_id', '=', flow.flow_id]]),
+            listFlowRuns(flow.flow_id, undefined, 1),
+          ]);
 
-        return {
-          id: flow.flow_id,
-          name: flow.flow_name,
-          status: mapBackendStatusToFrontend(flow.status),
-          runCount: runCount ?? 0,
-          lastRunAt: recentRuns[0]?.started_at ?? null,
-        };
+          return {
+            id: flow.flow_id,
+            name: flow.flow_name,
+            status: mapBackendStatusToFrontend(flow.status),
+            runCount: runCount ?? 0,
+            lastRunAt: recentRuns[0]?.started_at ?? null,
+          };
+        } catch (error) {
+          // One flow's run stats being denied/unavailable must not blank the
+          // whole active-flows widget - show it with unknown stats instead.
+          console.error(`Error fetching run stats for flow ${flow.flow_id}:`, error);
+          return {
+            id: flow.flow_id,
+            name: flow.flow_name,
+            status: mapBackendStatusToFrontend(flow.status),
+            runCount: 0,
+            lastRunAt: null,
+          };
+        }
       })
     );
   } catch (error) {

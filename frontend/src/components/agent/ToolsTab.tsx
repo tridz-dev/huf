@@ -19,26 +19,26 @@ interface ToolsTabProps {
   // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
-  onCreateMCP?: () => void;
   onRemoveMCP?: (serverId: string) => void;
   onToggleMCP?: (serverId: string, enabled: boolean) => void;
   onSyncMCP?: (serverId: string) => void;
   mcpLoading?: boolean;
+  /** True when tool attach/detach must be read-only (system agent + non-admin). */
+  locked?: boolean;
 }
 
 export function ToolsTab({
   selectedTools,
-  toolTypes: _toolTypes,
   onAddTools,
   onRemoveTool,
   onEditTool,
   mcpServers = [],
   onAddMCP,
-  onCreateMCP,
   onRemoveMCP,
   onToggleMCP,
   onSyncMCP,
   mcpLoading = false,
+  locked = false,
 }: ToolsTabProps) {
   const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
 
@@ -131,7 +131,7 @@ export function ToolsTab({
               </CardTitle>
               <CardDescription>The set of tools this agent is allowed to use to interact with the system.</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={onAddTools} type="button">
+            <Button size="sm" variant="outline" onClick={onAddTools} type="button" disabled={locked}>
               <Plus className="w-4 h-4 mr-2" />
               Add Tool
             </Button>
@@ -142,7 +142,7 @@ export function ToolsTab({
             <div className="text-center py-12 border border-dashed rounded-none bg-paper-deep/20">
               <p className="font-body text-steel-soft mb-2">No tools configured yet.</p>
               <p className="text-xs font-body text-steel-soft mb-4">Add tools to let this agent query data, run APIs, or call other agents.</p>
-              <Button onClick={onAddTools} variant="outline" type="button">
+              <Button onClick={onAddTools} variant="outline" type="button" disabled={locked}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Tool
               </Button>
@@ -195,7 +195,8 @@ export function ToolsTab({
                         variant="ghost"
                         size="sm"
                         onClick={() => onRemoveTool(tool.name)}
-                        title="Remove tool"
+                        disabled={locked}
+                        title={locked ? 'System agent tools are locked' : 'Remove tool'}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -220,27 +221,15 @@ export function ToolsTab({
               <CardDescription>Connect to external MCP servers for additional tool capabilities</CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              {onCreateMCP && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={onCreateMCP}
-                  disabled={mcpLoading}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create MCP
-                </Button>
-              )}
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => handleMCPAction('add')}
                 disabled={mcpLoading}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Connect MCP
+                Connect MCP Server
               </Button>
             </div>
           </div>
@@ -253,19 +242,13 @@ export function ToolsTab({
                   <Plug className="w-6 h-6 text-steel-soft" />
                 </div>
               </div>
-              <p className="font-body text-steel mb-2">No MCP servers connected</p>
+              <p className="font-body text-steel mb-2">No MCP servers connected yet</p>
               <p className="text-xs text-steel-soft mb-4">
-                Connect external MCP servers to extend agent capabilities with tools like Gmail, GitHub, Slack, and more.
+                Connect a shared server, or register a new one to get started.
               </p>
               <div className="flex items-center justify-center gap-2 flex-wrap">
-                {onCreateMCP && (
-                  <Button variant="secondary" type="button" onClick={onCreateMCP}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create MCP
-                  </Button>
-                )}
                 <Button
-                  variant="outline"
+                  variant="default"
                   type="button"
                   onClick={() => handleMCPAction('add')}
                 >

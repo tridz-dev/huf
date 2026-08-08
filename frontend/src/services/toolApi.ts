@@ -1,7 +1,59 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { call, db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
-import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
+import type { AgentToolFunctionRef, AgentToolType, ToolType } from '@/types/agent.types';
+import type { ParameterData } from '@/components/tools/ParameterCard';
+import type { HttpHeaderData } from '@/components/tools/HttpHeaderCard';
+import type { ToolFormData } from '@/types/toolTemplate.types';
 import { handleFrappeError } from '@/lib/frappe-error';
+
+/** Tool parameter row after ID enrichment (returned by getToolFunction) */
+export type ToolFunctionParameter = ParameterData & { id: string };
+
+/** Tool HTTP header row after ID enrichment (returned by getToolFunction) */
+export type ToolFunctionHttpHeader = HttpHeaderData & { id: string };
+
+/**
+ * Agent Tool Function document with all fields, including child tables
+ */
+export interface ToolFunctionDoc {
+  name: string;
+  tool_name?: string;
+  tool_type?: string;
+  types?: ToolType;
+  description?: string;
+  reference_doctype?: string;
+  agent?: string;
+  function_path?: string;
+  function_name?: string;
+  pass_parameters_as_json?: number | boolean;
+  provider_app?: string;
+  base_url?: string;
+  required_permission?: ToolFormData['required_permission'];
+  is_read_only?: number | boolean;
+  allowed_for_guest?: number | boolean;
+  parameters?: ToolFunctionParameter[];
+  http_headers?: ToolFunctionHttpHeader[];
+}
+
+/** Raw parameter child row as stored in Frappe */
+type RawToolParameterRow = {
+  name?: string;
+  label?: string;
+  fieldname?: string;
+  type?: ParameterData['type'];
+  required?: number | boolean;
+  description?: string;
+  options?: string;
+  child_table_name?: string;
+};
+
+/** Raw HTTP header child row as stored in Frappe */
+type RawToolHeaderRow = {
+  name?: string;
+  key?: string;
+  value?: string;
+};
 
 /**
  * Fetch all available tool types from Frappe
@@ -26,15 +78,18 @@ export async function getToolTypes(): Promise<AgentToolType[]> {
 export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentToolFunctionRef[]> {
   try {
     const options = {
-      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype"],
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype", "service"],
       limit: 1000,
-      filters: [] as any,
+      filters: [] as Array<{ field: string; operator: string; value: string }>,
     };
     if (toolTypeFilter && options.filters) {
       options.filters.push({ field: 'tool_type', operator: '=', value: toolTypeFilter });
     }
 
-    const tools = await db.getDocList(doctype['Agent Tool Function'], options);
+    const tools = await db.getDocList(doctype['Agent Tool Function'], {
+      ...options,
+      filters: options.filters as unknown as Filter<Record<string, unknown>>[],
+    });
     return tools as AgentToolFunctionRef[];
   } catch (error) {
     handleFrappeError(error, 'Error fetching tool functions');
@@ -50,7 +105,7 @@ export async function getToolFunctionsByName(toolNames: string[]): Promise<Agent
     if (toolNames.length === 0) return [];
     
     const tools = await db.getDocList(doctype['Agent Tool Function'], {
-      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype"],
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype", "service"],
       filters: [["name", "in", toolNames]],
       limit: 1000,
     });
@@ -64,13 +119,13 @@ export async function getToolFunctionsByName(toolNames: string[]): Promise<Agent
 /**
  * Fetch a single Agent Tool Function by name with all fields including child tables
  */
-export async function getToolFunction(name: string): Promise<any> {
+export async function getToolFunction(name: string): Promise<ToolFunctionDoc> {
   try {
     const tool = await db.getDoc(doctype['Agent Tool Function'], name);
     
     // Convert child table data to our format (add IDs for React keys)
     if (tool.parameters && Array.isArray(tool.parameters)) {
-      tool.parameters = tool.parameters.map((param: any, index: number) => ({
+      tool.parameters = tool.parameters.map((param: RawToolParameterRow, index: number) => ({
         id: param.name || `param-${index}`, // Use Frappe name or generate ID
         label: param.label || '',
         fieldname: param.fieldname || '',
@@ -83,7 +138,7 @@ export async function getToolFunction(name: string): Promise<any> {
     }
     
     if (tool.http_headers && Array.isArray(tool.http_headers)) {
-      tool.http_headers = tool.http_headers.map((header: any, index: number) => ({
+      tool.http_headers = tool.http_headers.map((header: RawToolHeaderRow, index: number) => ({
         id: header.name || `header-${index}`, // Use Frappe name or generate ID
         key: header.key || '',
         value: header.value || '',
@@ -130,7 +185,7 @@ export async function updateToolFunction(name: string, data: {
 }): Promise<AgentToolFunctionRef> {
   try {
     // Prepare data for Frappe
-    const toolData: any = {};
+    const toolData: Record<string, unknown> = {};
 
     // Only include fields that are provided
     if (data.tool_name !== undefined) toolData.tool_name = data.tool_name;
@@ -173,10 +228,10 @@ export async function updateToolFunction(name: string, data: {
     const updatedTool = await db.updateDoc(doctype['Agent Tool Function'], name, toolData);
     return {
       name: updatedTool.name,
-      tool_name: updatedTool.tool_name,
-      description: updatedTool.description,
-      types: updatedTool.types as any,
-      tool_type: updatedTool.tool_type,
+      tool_name: updatedTool.tool_name as string,
+      description: updatedTool.description as string | undefined,
+      types: updatedTool.types as ToolType,
+      tool_type: updatedTool.tool_type as string | undefined,
     };
   } catch (error) {
     handleFrappeError(error, 'Error updating tool function');
@@ -217,7 +272,7 @@ export async function createToolFunction(data: {
 }): Promise<AgentToolFunctionRef> {
   try {
     // Prepare data for Frappe
-    const toolData: any = {
+    const toolData: Record<string, unknown> = {
       tool_name: data.tool_name,
       tool_type: data.tool_type,
       types: data.types,
@@ -261,10 +316,10 @@ export async function createToolFunction(data: {
     const newTool = await db.createDoc(doctype['Agent Tool Function'], toolData);
     return {
       name: newTool.name,
-      tool_name: newTool.tool_name,
-      description: newTool.description,
-      types: newTool.types as any,
-      tool_type: newTool.tool_type,
+      tool_name: newTool.tool_name as string,
+      description: newTool.description as string | undefined,
+      types: newTool.types as ToolType,
+      tool_type: newTool.tool_type as string | undefined,
     };
   } catch (error) {
     handleFrappeError(error, 'Error creating tool function');
@@ -281,11 +336,11 @@ export async function getAgentsUsingTool(toolName: string): Promise<string[]> {
     // Filter by child table field using the DocType and fieldname array format
     const agents = await db.getDocList(doctype['Agent'], {
       fields: ['name', 'agent_name'],
-      filters: [['Agent Tool', 'tool', '=', toolName] as any],
+      filters: [['Agent Tool', 'tool', '=', toolName] as unknown as Filter<Record<string, unknown>>],
       limit: 1000,
     });
     // Return document names for consistent comparison
-    return agents.map((agent: any) => agent.name);
+    return agents.map((agent: { name: string }) => agent.name);
   } catch (error) {
     handleFrappeError(error, 'Error fetching agents using tool');
     return [];

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
-import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
+import { FileText, Loader2 } from 'lucide-react';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getArtifacts, type AgentContextArtifactDoc, type ArtifactListParams } from '@/services/agentContextArtifactApi';
@@ -84,7 +85,7 @@ function AgentContextArtifactsPage() {
   );
 
   return (
-    <PageLayout
+    <PageFrame
       subtitle="Browse context artifacts stored for agent runs and conversations"
       filters={
         <FilterBar
@@ -116,8 +117,14 @@ function AgentContextArtifactsPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : artifacts.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title="No artifacts"
+            description="No context artifacts have been stored yet."
+          />
         ) : (
-          <div className="overflow-hidden rounded-none border">
+          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -127,35 +134,27 @@ function AgentContextArtifactsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {artifacts.length ? (
-                  artifacts.map((artifact) => (
-                    <TableRow
-                      key={artifact.name}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/artifacts/${artifact.name}`)}
-                    >
-                      <TableCell className="max-w-md truncate">
-                        {artifact.summary || <span className="font-body text-steel">No summary</span>}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{artifact.artifact_type || 'Unknown'}</Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm text-steel-soft">
-                        {artifact.agent_run || '—'}
-                      </TableCell>
-                      <TableCell className="text-sm">{artifact.visibility || '—'}</TableCell>
-                      <TableCell className="text-sm text-steel">
-                        {formatTimeAgo(artifact.creation ?? null)}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="font-body text-steel-soft">No artifacts found.</div>
+                {artifacts.map((artifact) => (
+                  <TableRow
+                    key={artifact.name}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/artifacts/${artifact.name}`)}
+                  >
+                    <TableCell className="max-w-md truncate">
+                      {artifact.summary || <span className="font-body text-steel">No summary</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{artifact.artifact_type || 'Unknown'}</Badge>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm text-steel-soft">
+                      {artifact.agent_run || '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">{artifact.visibility || '—'}</TableCell>
+                    <TableCell className="text-sm text-steel">
+                      {formatTimeAgo(artifact.creation ?? null)}
                     </TableCell>
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -169,6 +168,6 @@ function AgentContextArtifactsPage() {
           {total !== undefined ? `Showing all ${total} artifacts` : 'No more artifacts to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

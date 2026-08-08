@@ -1,4 +1,4 @@
-import { Clock, Play, Save, MessageSquare, MoreVertical, FileText } from 'lucide-react';
+import { Clock, Play, Save, MessageSquare, MoreVertical, FileText, Lock, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,10 @@ interface AgentHeaderProps {
   models: AIModel[];
   activeTriggerCount: number;
   isNew: boolean;
+  /** True when the agent is a protected system agent (is_system=1). */
+  isSystem?: boolean;
+  /** True when protected fields must be read-only (system agent + non-admin). */
+  locked?: boolean;
   showSaveButton: boolean;
   saving: boolean;
   runningTest?: boolean;
@@ -32,6 +36,7 @@ interface AgentHeaderProps {
   onDuplicate: () => void;
   onViewLogs: () => void;
   onDelete: () => void;
+  duplicating?: boolean;
   agentId?: string;
   allowChat: boolean;
   lastRun?: string | null;
@@ -45,14 +50,17 @@ export function AgentHeader({
   models,
   activeTriggerCount,
   isNew,
+  isSystem = false,
+  locked = false,
   showSaveButton,
   saving,
   runningTest = false,
   onSave,
   onRunTest,
-  // onDuplicate,
+  onDuplicate,
   onViewLogs,
-  // onDelete,
+  onDelete,
+  duplicating = false,
   agentId,
   allowChat,
   lastRun,
@@ -92,6 +100,12 @@ export function AgentHeader({
           <Badge variant={watchDisabled ? 'secondary' : 'default'}>
             {watchDisabled ? 'Disabled' : 'Active'}
           </Badge>
+          {isSystem && (
+            <Badge variant="secondary" className="gap-1">
+              <Lock className="w-3 h-3" />
+              System
+            </Badge>
+          )}
           <Badge variant="outline">
             {providers.find(p => p.name === watchProvider)?.provider_name || watchProvider || 'Provider'}
           </Badge>
@@ -147,8 +161,9 @@ export function AgentHeader({
             <div className="px-2 py-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-sm">Disable</span>
-                <Switch 
-                  checked={watchDisabled} 
+                <Switch
+                  checked={watchDisabled}
+                  disabled={locked}
                   onCheckedChange={(checked) => form.setValue('disabled', checked)}
                   onClick={(e) => e.stopPropagation()}
                 />
@@ -157,18 +172,18 @@ export function AgentHeader({
             {!isNew && (
               <>
                 <DropdownMenuSeparator />
-                {/* <DropdownMenuItem onClick={onDuplicate}>
+                <DropdownMenuItem onClick={onDuplicate} disabled={duplicating || locked}>
                   <Copy className="w-4 h-4 mr-2" />
-                  Duplicate
-                </DropdownMenuItem> */}
+                  {duplicating ? 'Duplicating...' : 'Duplicate'}
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
                   View Logs
                 </DropdownMenuItem>
-                {/* <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />
                   Delete
-                </DropdownMenuItem> */}
+                </DropdownMenuItem>
               </>
             )}
           </DropdownMenuContent>

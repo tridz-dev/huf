@@ -31,11 +31,12 @@ import {
   Code,
   Bot,
   UserCheck,
-  Wrench
+  Wrench,
+  type LucideIcon
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
-import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType } from '../../types/flow.types';
+import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType, AppTriggerIntegration } from '../../types/flow.types';
 import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
 import { Combobox } from '../ui/combobox';
@@ -50,7 +51,7 @@ interface NodeSelectionModalProps {
   initialTriggerConfig?: TriggerConfig;
 }
 
-const iconMap: Record<string, any> = {
+const iconMap: Record<string, LucideIcon> = {
   Webhook,
   Clock,
   Mail,
@@ -147,7 +148,7 @@ export function NodeSelectionModal({
       setTriggerConfig({
         type: 'webhook',
         url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
-        apiKey: Math.random().toString(36).substring(2, 15),
+        apiKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
         method: 'POST'
       });
     } else if (triggerId === 'schedule') {
@@ -165,7 +166,7 @@ export function NodeSelectionModal({
     } else if (triggerId.includes('gmail') || triggerId.includes('slack')) {
       setTriggerConfig({
         type: 'app-trigger',
-        integration: triggerId as any,
+        integration: triggerId as AppTriggerIntegration,
         event: 'new_message'
       });
     } else {
@@ -238,7 +239,7 @@ export function NodeSelectionModal({
             <Select
               value={config.method || 'POST'}
               onValueChange={(value) =>
-                setTriggerConfig({ ...config, method: value as any })
+                setTriggerConfig({ ...config, method: value as 'GET' | 'POST' | 'PUT' | 'DELETE' })
               }
             >
               <SelectTrigger id="method">
@@ -538,7 +539,7 @@ export function NodeSelectionModal({
                                 setSelectedItem(agent.name);
                                 setTriggerConfig({
                                   type: 'app-trigger',
-                                  integration: 'agent' as any,
+                                  integration: 'agent' as unknown as AppTriggerIntegration,
                                   event: 'run_agent',
                                   config: { agentId: agent.name, agentName: agent.agent_name || agent.name }
                                 });

@@ -2,6 +2,7 @@ import json
 import base64
 from email.mime.text import MIMEText
 import frappe
+logger = frappe.logger("huf")
 import httpx
 from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
 
@@ -37,7 +38,7 @@ def _get_gmail_access_token() -> str:
         # In a real app, you might want to save this back to credentials
         return new_token
     except Exception as e:
-        frappe.log_error(f"Gmail token refresh error: {e}", "Gmail Tool")
+        logger.warning(f"Gmail token refresh error: {e}")
         return None
 
 
@@ -97,7 +98,7 @@ def handle_get_emails(**kwargs) -> str:
                     "snippet": msg_data.get("snippet", "")
                 })
             except Exception as e:
-                frappe.log_error(f"Gmail fetch email details error for {msg['id']}: {e}")
+                logger.warning(f"Gmail fetch email details error for {msg['id']}: {e}")
         
         return json.dumps({
             "success": True, 
@@ -105,7 +106,7 @@ def handle_get_emails(**kwargs) -> str:
             "results": detailed_messages
         })
     except Exception as e:
-        frappe.log_error(f"Gmail Get Emails Error: {str(e)}", "Gmail Tool")
+        logger.warning(f"Gmail Get Emails Error: {str(e)}")
         update_last_error(service_name, str(e))
         return json.dumps({"success": False, "error": str(e)})
 
@@ -140,7 +141,7 @@ def handle_send_email(**kwargs) -> str:
         
         return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
-        frappe.log_error(f"Gmail Send Email Error: {str(e)}", "Gmail Tool")
+        logger.warning(f"Gmail Send Email Error: {str(e)}")
         update_last_error(service_name, str(e))
         return json.dumps({"success": False, "error": str(e)})
 
@@ -174,7 +175,7 @@ def handle_create_draft(**kwargs) -> str:
         
         return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
-        frappe.log_error(f"Gmail Create Draft Error: {str(e)}", "Gmail Tool")
+        logger.warning(f"Gmail Create Draft Error: {str(e)}")
         update_last_error(service_name, str(e))
         return json.dumps({"success": False, "error": str(e)})
 
@@ -200,6 +201,6 @@ def handle_mark_as_read(**kwargs) -> str:
         
         return json.dumps({"success": True, "results": response.json()})
     except Exception as e:
-        frappe.log_error(f"Gmail Mark As Read Error: {str(e)}", "Gmail Tool")
+        logger.warning(f"Gmail Mark As Read Error: {str(e)}")
         update_last_error(service_name, str(e))
         return json.dumps({"success": False, "error": str(e)})

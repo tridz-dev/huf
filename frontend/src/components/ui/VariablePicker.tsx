@@ -23,7 +23,12 @@ export function VariablePicker({ onSelect }: VariablePickerProps) {
 
         activeFlow.nodes.forEach(node => {
             if (node.data.actionConfig) {
-                const ac = node.data.actionConfig as any;
+                const ac = node.data.actionConfig as {
+                    save_response_to_context?: string;
+                    save_result_to_context?: string;
+                    output?: { save_result_to_context?: string };
+                    store_decision_in_context?: string;
+                };
                 if (ac.save_response_to_context) vars.push(ac.save_response_to_context);
                 if (ac.save_result_to_context) vars.push(ac.save_result_to_context);
                 if (ac.output?.save_result_to_context) vars.push(ac.output.save_result_to_context);

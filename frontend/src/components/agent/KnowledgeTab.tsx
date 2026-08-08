@@ -7,7 +7,6 @@ import type { AgentKnowledgeRow } from '@/types/agent.types';
 interface KnowledgeTabProps {
   knowledgeSources: AgentKnowledgeRow[];
   onAdd: () => void;
-  onCreate?: () => void;
   onEdit: (index: number) => void;
   onRemove: (index: number) => void;
 }
@@ -15,7 +14,6 @@ interface KnowledgeTabProps {
 export function KnowledgeTab({
   knowledgeSources,
   onAdd,
-  onCreate,
   onEdit,
   onRemove,
 }: KnowledgeTabProps) {
@@ -31,12 +29,6 @@ export function KnowledgeTab({
             <CardDescription>Knowledge sources this agent can access</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            {onCreate && (
-              <Button size="sm" variant="secondary" onClick={onCreate} type="button">
-                <Plus className="w-4 h-4 mr-2" />
-                Create Knowledge
-              </Button>
-            )}
             <Button size="sm" variant="outline" onClick={onAdd} type="button">
               <Plus className="w-4 h-4 mr-2" />
               Add Knowledge
@@ -52,12 +44,6 @@ export function KnowledgeTab({
               Link knowledge sources so this agent can retrieve relevant context from indexed documents.
             </p>
             <div className="flex items-center justify-center gap-2 flex-wrap">
-              {onCreate && (
-                <Button onClick={onCreate} variant="secondary" type="button">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Knowledge
-                </Button>
-              )}
               <Button onClick={onAdd} variant="outline" type="button">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Knowledge

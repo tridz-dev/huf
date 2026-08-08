@@ -9,7 +9,8 @@ Single source of truth for all LLM cost calculations.
 Priority order:
   1. Custom prices defined on the AI Model DocType (user-configured, highest priority)
   2. litellm.completion_cost() auto-lookup from LiteLLM's built-in price table
-  3. 0.0 with source="unknown" (never silently wrong)
+  3. 0.0 with source="local_no_pricing" for local/self-hosted providers (e.g. Ollama)
+  4. 0.0 with source="unknown" (never silently wrong)
 
 Formula (industry standard — same as Langfuse, Portkey, Anthropic):
   cost = (input_tokens  / 1_000_000) * input_cost_per_1m_tokens
@@ -26,7 +27,7 @@ Usage:
       cached_tokens=200,
       litellm_response=response,   # pass the raw litellm response for auto-fallback
   )
-  # source is one of: "custom" | "litellm" | "unknown"
+  # source is one of: "custom" | "litellm" | "local_no_pricing" | "unknown"
 """
 
 import frappe
@@ -58,8 +59,8 @@ def get_model_pricing(model_name: str) -> dict | None:
         if cached is not None:
             # Sentinel: empty dict means "we checked, no custom pricing"
             return cached if cached else None
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort pricing cache operation
+        frappe.logger("huf").debug(f"Model pricing cache operation failed: {exc!s}")
 
     try:
         model_doc = frappe.db.get_value(
@@ -111,8 +112,8 @@ def get_model_pricing(model_name: str) -> dict | None:
 
     try:
         frappe.cache().set_value(cache_key, pricing, expires_in_sec=_PRICING_CACHE_TTL)
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort pricing cache operation
+        frappe.logger("huf").debug(f"Model pricing cache operation failed: {exc!s}")
 
     return pricing
 
@@ -157,6 +158,38 @@ def _calculate_from_custom_pricing(
     return round(cost, 10)
 
 
+def _is_local_model(model_name: str, litellm_response=None) -> bool:
+    """
+    Return True when the model is served by a local/self-hosted provider.
+
+    Detection order:
+      1. Model prefix on the model name (or on the litellm response's model):
+         ``ollama`` / ``ollama_chat``.
+      2. Provider lookup: the linked AI Provider doc has ``is_local_llm`` set.
+    """
+    candidates = [model_name or ""]
+    if litellm_response is not None:
+        if isinstance(litellm_response, dict):
+            resp_model = litellm_response.get("model")
+        else:
+            resp_model = getattr(litellm_response, "model", None)
+        if resp_model:
+            candidates.append(resp_model)
+
+    for candidate in candidates:
+        if "/" in candidate and candidate.split("/", 1)[0].lower() in ("ollama", "ollama_chat"):
+            return True
+
+    try:
+        provider = frappe.db.get_value("AI Model", model_name, "provider")
+        if provider and frappe.db.get_value("AI Provider", provider, "is_local_llm"):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 def calculate_cost(
     model_name: str,
     input_tokens: int,
@@ -168,9 +201,10 @@ def calculate_cost(
     Calculate the cost of an LLM call and return ``(cost_usd, source)``.
 
     source values:
-      "custom"  — HUF custom pricing from AI Model DocType
-      "litellm" — LiteLLM built-in price table
-      "unknown" — neither source has pricing; cost is 0.0
+      "custom"          — HUF custom pricing from AI Model DocType
+      "litellm"         — LiteLLM built-in price table
+      "local_no_pricing"— local/self-hosted provider with no pricing; cost is 0.0
+      "unknown"         — neither source has pricing; cost is 0.0
 
     Args:
         model_name:       The model name (AI Model docname, e.g. "gpt-4o")
@@ -210,7 +244,11 @@ def calculate_cost(
                 "Cost Calculator Priority 2",
             )
 
-    # ── Priority 3: Unknown ──────────────────────────────────────────────────
+    # ── Priority 3: Local provider without pricing ───────────────────────────
+    if _is_local_model(model_name, litellm_response):
+        return 0.0, "local_no_pricing"
+
+    # ── Priority 4: Unknown ──────────────────────────────────────────────────
     return 0.0, "unknown"
 
 
@@ -223,5 +261,5 @@ def invalidate_model_pricing_cache(model_name: str):
         return
     try:
         frappe.cache().delete_key(f"huf_model_pricing:{model_name}")
-    except Exception:
-        pass
+    except Exception as exc:  # best-effort pricing cache operation
+        frappe.logger("huf").debug(f"Model pricing cache operation failed: {exc!s}")

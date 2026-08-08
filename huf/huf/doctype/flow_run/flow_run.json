@@ -87,7 +87,7 @@
    "fieldname": "trigger_type",
    "fieldtype": "Select",
    "label": "Trigger Type",
-   "options": "Manual\nWebhook\nSchedule\nDoc Event",
+   "options": "Manual\nWebhook\nSchedule\nDoc Event\nGateway",
    "read_only": 1
   },
   {
@@ -211,7 +211,7 @@
    "write": 1
   },
   {
-   "create": 0,
+   "create": 1,
    "delete": 0,
    "email": 1,
    "export": 1,
@@ -223,7 +223,7 @@
    "write": 1
   },
   {
-   "create": 0,
+   "create": 1,
    "delete": 0,
    "email": 1,
    "export": 1,
@@ -232,7 +232,7 @@
    "report": 1,
    "role": "Huf User",
    "share": 1,
-   "write": 0
+   "write": 1
   }
  ],
  "sort_field": "modified",

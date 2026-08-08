@@ -25,15 +25,43 @@ export type NewAgentMessageEvent = {
     generated_video?: string;
     agent_run_id?: string;
     conversation_index?: number;
+    injected_memories?: string[];
 };
 
-type ChatSocketProps = {   
+export type AgentRunStatusEvent = {
+    type: 'agent_run_status';
+    agent_run_id: string;
+    conversation_id: string;
+    session_id?: string;
+    status: 'Queued' | 'Started' | 'Success' | 'Failed';
+    response?: string;
+    error?: string;
+    agent_message_id?: string;
+    sequence?: number;
+};
+
+export type ConversationTitleUpdatedEvent = {
+    type: 'conversation_title_updated';
+    conversation_id: string;
+    title: string;
+};
+
+export type OpenArtifactPaneEvent = {
+    type: 'open_artifact_pane';
+    conversation_id: string;
+    artifact_id: string;
+};
+
+type ChatSocketProps = {
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
     onNewMessage?: (event: NewAgentMessageEvent) => void;
+    onAgentRunStatus?: (event: AgentRunStatusEvent) => void;
+    onConversationTitleUpdated?: (event: ConversationTitleUpdatedEvent) => void;
+    onOpenArtifactPane?: (event: OpenArtifactPaneEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onOpenArtifactPane }: ChatSocketProps) {
     const socket = useSocket();
 
     useEffect(() => {
@@ -42,7 +70,7 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
         }
 
         // Listen for conversation-specific events on the shared socket
-        const handler = (data: NewAgentMessageEvent | ToolCallEvent) => {
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | OpenArtifactPaneEvent) => {
             console.log("Conversation event received:", data);
 
             // Route to appropriate handler based on event type
@@ -54,6 +82,12 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
                 data.type === 'tool_call_failed'
             ) {
                 onToolUpdate?.(data as ToolCallEvent);
+            } else if (data.type === 'agent_run_status') {
+                onAgentRunStatus?.(data as AgentRunStatusEvent);
+            } else if (data.type === 'conversation_title_updated') {
+                onConversationTitleUpdated?.(data as ConversationTitleUpdatedEvent);
+            } else if (data.type === 'open_artifact_pane') {
+                onOpenArtifactPane?.(data as OpenArtifactPaneEvent);
             }
         };
 
@@ -64,5 +98,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage }: Ch
             // itself is owned by SocketProvider and stays connected.
             socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [socket, conversationId, onToolUpdate, onNewMessage]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onOpenArtifactPane]);
 }

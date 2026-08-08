@@ -18,7 +18,10 @@ import secrets
 from typing import Optional
 
 import frappe
+logger = frappe.logger("huf")
 from frappe.utils.background_jobs import enqueue
+
+from huf.ai.transaction import commit_if_background
 
 
 WEBHOOK_HEADER = "X-Telegram-Bot-Api-Secret-Token"
@@ -97,7 +100,7 @@ def handle_update():
 
         return {"success": True, "message": "Update accepted"}
     except Exception as e:
-        frappe.log_error(f"Telegram webhook handler error: {e}", "Telegram Webhook")
+        logger.warning(f"Telegram webhook handler error: {e}")
         return _error(str(e))
 
 
@@ -106,11 +109,13 @@ def process_telegram_update(settings_name: str, update: dict):
     Background worker: parse a Telegram update, run the configured HUF Agent,
     and send the reply back to Telegram.
     """
+    original_user = frappe.session.user
     try:
-        frappe.set_user("Administrator")
+        if frappe.session.user != "Administrator":
+            frappe.set_user("Administrator")
 
         if not frappe.db.exists("Integration Settings", settings_name):
-            frappe.log_error(f"Integration Settings {settings_name} not found", "Telegram Webhook")
+            logger.warning(f"Integration Settings {settings_name} not found")
             return
 
         settings = frappe.get_doc("Integration Settings", settings_name)
@@ -119,13 +124,11 @@ def process_telegram_update(settings_name: str, update: dict):
 
         agent_name = settings.telegram_agent
         if not agent_name:
-            frappe.log_error(
-                f"No agent configured for Telegram bot {settings_name}", "Telegram Webhook"
-            )
+            logger.warning(f"No agent configured for Telegram bot {settings_name}")
             return
 
         if not frappe.db.exists("Agent", agent_name):
-            frappe.log_error(f"Agent {agent_name} not found", "Telegram Webhook")
+            logger.warning(f"Agent {agent_name} not found")
             return
 
         message = _extract_message(update)
@@ -137,7 +140,7 @@ def process_telegram_update(settings_name: str, update: dict):
         text = message.get("text")
         message_id = message.get("message_id")
         if not chat_id:
-            frappe.log_error("Telegram update missing chat_id", "Telegram Webhook")
+            logger.warning("Telegram update missing chat_id")
             return
 
         if not text:
@@ -150,33 +153,62 @@ def process_telegram_update(settings_name: str, update: dict):
             )
             return
 
-        # Run the HUF agent
-        try:
-            from huf.ai.agent_integration import run_agent_sync
+        gateway_name = frappe.db.get_value("Gateway", {"integration_settings": settings_name, "provider": "Telegram", "is_enabled": 1})
+        if not gateway_name:
+            # Fallback for old way if no gateway configured
+            try:
+                from huf.ai.agent_integration import run_agent_sync
 
-            result = run_agent_sync(
-                agent_name=agent_name,
-                prompt=text,
-                channel_id="telegram",
-                external_id=str(chat_id),
-            )
-            response_text = result.get("response") if isinstance(result, dict) else str(result)
-        except Exception as e:
-            frappe.log_error(f"Agent run failed for Telegram message: {e}", "Telegram Webhook")
-            response_text = "Sorry, I couldn't process your message. Please try again later."
+                result = run_agent_sync(
+                    agent_name=agent_name,
+                    prompt=text,
+                    channel_id="telegram",
+                    external_id=str(chat_id),
+                    now=True,
+                )
+                response_text = result.get("response") if isinstance(result, dict) else str(result)
+            except Exception as e:
+                logger.warning(f"Agent run failed for Telegram message: {e}")
+                response_text = "Sorry, I couldn't process your message. Please try again later."
 
-        if response_text:
-            _send_telegram_message(
-                settings,
-                chat_id,
-                response_text,
-                reply_to_message_id=message_id,
-            )
+            if response_text:
+                _send_telegram_message(
+                    settings,
+                    chat_id,
+                    response_text,
+                    reply_to_message_id=message_id,
+                )
+            return
+
+        # Gateway Foundation logic
+        from huf.ai.gateway_service import ingest_gateway_event
+
+        context = {
+            "sender_id": str(message.get("username") or chat_id),
+            "conversation_id": str(chat_id),
+            "thread_id": str(message_id) if message_id else "",
+            "message_text": text,
+            "is_room": str(chat_id).startswith("-"),
+            "mentioned": False,
+        }
+
+        ingest_gateway_event(
+            gateway_name,
+            str(message_id or secrets.token_hex(8)),
+            context,
+            verified_sender=True,
+            raw_payload=update,
+        )
 
     except Exception as e:
-        frappe.log_error(f"Error processing Telegram update: {e}", "Telegram Webhook")
+        logger.warning(f"Error processing Telegram update: {e}")
     finally:
-        frappe.db.commit()
+        if frappe.session.user != original_user:
+            try:
+                frappe.set_user(original_user)
+            except Exception:
+                pass
+        commit_if_background()
 
 
 def _extract_message(update: dict) -> Optional[dict]:
@@ -226,9 +258,6 @@ def _send_telegram_message(settings, chat_id, text: str, reply_to_message_id=Non
 
         if not parsed.get("success"):
             error = parsed.get("error") or result or "Unknown Telegram send error"
-            frappe.log_error(
-                f"Telegram reply failed for {settings.name} to chat {chat_id}: {error}",
-                "Telegram Webhook",
-            )
+            logger.warning(f"Telegram reply failed for {settings.name} to chat {chat_id}: {error}")
     except Exception as e:
-        frappe.log_error(f"Failed to send Telegram reply: {e}", "Telegram Webhook")
+        logger.warning(f"Failed to send Telegram reply: {e}")

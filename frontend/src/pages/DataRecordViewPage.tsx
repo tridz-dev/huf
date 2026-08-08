@@ -4,6 +4,11 @@ import { Loader2, Trash2, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Form } from '@/components/ui/form';
+import { useForm } from 'react-hook-form';
+import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
 	getTableRecord,
 	updateTableRecord,
@@ -11,6 +16,7 @@ import {
 	createTableRecord,
 } from '@/services/dataTableApi';
 import type { DataTableSchema, DataTableFieldDef } from '@/types/dataTable.types';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import { buildFormLayout, FieldInput, initFormData } from '@/components/data-table/DataRecordFormLayout';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
@@ -29,6 +35,9 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [deleting, setDeleting] = useState(false);
+    const [isEditing, setIsEditing] = useState<boolean>(isNew);
+
+    const formMethods = useForm();
 
 	const hasSchema = !!schema;
 
@@ -39,8 +48,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			const result = await getTableRecord(schema.doctype_name, recordName);
 			setRecord(result);
 			setFormData(initFormData(schema.fields, result));
-		} catch (error: any) {
-			toast.error('Failed to load record', { description: error?.message });
+		} catch (error) {
+			toast.error('Failed to load record', { description: error instanceof Error ? error.message : undefined });
 			navigate(tableId ? `/data/${tableId}` : '/data');
 		} finally {
 			setLoading(false);
@@ -57,6 +66,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 		if (schema && isNew) {
 			setFormData(initFormData(schema.fields, null));
 			setLoading(false);
+            setIsEditing(true);
 		}
 	}, [schema, isNew]);
 
@@ -67,7 +77,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 	}, [formData, record, isNew]);
 
 	const handleChange = (fieldname: string, value: unknown) => {
-		setFormData((prev) => ({ ...prev, [fieldname]: value }));
+		setFormData((prev: Record<string, unknown>) => ({ ...prev, [fieldname]: value }));
 	};
 
 	const handleSave = useCallback(async () => {
@@ -85,17 +95,30 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			} else if (recordName) {
 				await updateTableRecord(schema.doctype_name, recordName, formData);
 				toast.success('Record updated');
+                setIsEditing(false);
+                loadRecord(); // Reload to get fresh data
 			}
-		} catch (error: any) {
-			toast.error('Failed to save record', { description: error?.message });
+		} catch (error) {
+			toast.error('Failed to save record', { description: error instanceof Error ? error.message : undefined });
 		} finally {
 			setSaving(false);
 		}
-	}, [schema, isNew, formData, tableId, navigate, recordName]);
+	}, [schema, isNew, formData, tableId, navigate, recordName, loadRecord]);
+
+    const handleCancel = useCallback(() => {
+        if (isNew) {
+            navigate(tableId ? `/data/${tableId}` : '/data');
+        } else {
+            setIsEditing(false);
+            if (record && schema) {
+                setFormData(initFormData(schema.fields, record));
+            }
+        }
+    }, [isNew, navigate, tableId, record, schema]);
 
 	useSaveShortcut({
 		onSave: handleSave,
-		enabled: hasSchema && !loading,
+		enabled: hasSchema && !loading && isEditing,
 		isSubmitting: saving,
 	});
 
@@ -106,8 +129,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 			await deleteTableRecord(schema.doctype_name, recordName);
 			toast.success('Record deleted');
 			navigate(tableId ? `/data/${tableId}` : '/data');
-		} catch (error: any) {
-			toast.error('Failed to delete record', { description: error?.message });
+		} catch (error) {
+			toast.error('Failed to delete record', { description: error instanceof Error ? error.message : undefined });
 		} finally {
 			setDeleting(false);
 		}
@@ -120,37 +143,55 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 				<Button
 					variant="outline"
 					size="sm"
-					onClick={() => navigate(tableId ? `/data/${tableId}` : '/data')}
+					onClick={() => {
+                        if (isEditing && !isNew) {
+                            handleCancel();
+                        } else {
+                            navigate(tableId ? `/data/${tableId}` : '/data');
+                        }
+                    }}
 				>
 					<ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
-					Back
+					{isEditing && !isNew ? 'Cancel' : 'Back'}
 				</Button>
-				{!isNew && (
+				{!isNew && !isEditing && (
 					<Button
 						variant="outline"
 						size="sm"
 						onClick={handleDelete}
 						disabled={deleting}
-						className="text-destructive border-destructive/40"
+						className="text-destructive border-destructive/40 rounded-none"
 					>
 						{deleting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
 						<Trash2 className="w-3.5 h-3.5 mr-1.5" />
 						Delete
 					</Button>
 				)}
-				<Button
-					size="sm"
-					onClick={handleSave}
-					disabled={( !isDirty && !isNew ) || saving || !hasSchema}
-				>
-					{saving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
-					Save
-				</Button>
+                {!isEditing && (
+                    <Button
+                        size="sm"
+                        onClick={() => setIsEditing(true)}
+                        className="rounded-none"
+                    >
+                        Edit
+                    </Button>
+                )}
+                {isEditing && (
+                    <Button
+                        size="sm"
+                        onClick={handleSave}
+                        disabled={( !isDirty && !isNew ) || saving || !hasSchema}
+                        className="rounded-none"
+                    >
+                        {saving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                        Save
+                    </Button>
+                )}
 			</div>
 		);
 
 		return () => onHeaderActionsChange(null);
-	}, [onHeaderActionsChange, handleDelete, handleSave, deleting, saving, isDirty, hasSchema, navigate, tableId, isNew]);
+	}, [onHeaderActionsChange, handleDelete, handleSave, deleting, saving, isDirty, hasSchema, navigate, tableId, isNew, isEditing, handleCancel]);
 
 	if (!schema || loading) {
 		return (
@@ -161,9 +202,48 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 	}
 
 	const dataFields: DataTableFieldDef[] = schema.fields.filter(
-		(field) => field.fieldtype !== 'Section Break' && field.fieldtype !== 'Column Break'
+		(field) => !LAYOUT_FIELD_TYPES.includes(field.fieldtype)
 	);
 	const sections = buildFormLayout(schema.fields);
+	const tabGroups = sections.reduce<{ label?: string; sections: typeof sections }[]>((groups, section) => {
+		if (section.tabLabel !== undefined) {
+			groups.push({ label: section.tabLabel, sections: [section] });
+		} else {
+			const current = groups[groups.length - 1];
+			if (current) current.sections.push(section);
+		}
+		return groups;
+	}, [{ sections: [] }]);
+	const hasTabs = tabGroups.length > 1;
+
+	const renderSection = (section: (typeof sections)[number], index: number) => (
+		<Card key={index}>
+			{section.label && (
+				<CardHeader>
+					<CardTitle>{section.label}</CardTitle>
+				</CardHeader>
+			)}
+			<CardContent className={cn('grid gap-6', !section.label && 'pt-6')}>
+				{section.columns.length > 1 ? (
+					<div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))` }}>
+						{section.columns.map((column, columnIndex) => (
+							<div key={columnIndex} className="space-y-4">
+								{column.map((field) => (
+									<FieldInput key={field.fieldname} field={field} value={formData[field.fieldname]} onChange={(value) => handleChange(field.fieldname, value)} isEditing={isEditing} />
+								))}
+							</div>
+						))}
+					</div>
+				) : (
+					<div className="space-y-4">
+						{section.columns[0]?.map((field) => (
+							<FieldInput key={field.fieldname} field={field} value={formData[field.fieldname]} onChange={(value) => handleChange(field.fieldname, value)} isEditing={isEditing} />
+						))}
+					</div>
+				)}
+			</CardContent>
+		</Card>
+	);
 
 	const titleField = schema.title_field_name;
 	const recordTitle = isNew
@@ -171,67 +251,34 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 		: (record && titleField && (record[titleField] as string)) || (recordName as string);
 
 	return (
-		<div className="h-full overflow-auto">
-			<div className="p-6 space-y-6 max-w-5xl mx-auto">
+		<div className="h-full overflow-auto p-6">
+			<div className="p-6 space-y-6 max-w-5xl mx-auto bg-panel border border-line rounded-lg shadow-sm">
 				<div className="space-y-1">
-					<h2 className="text-xl font-semibold">{recordTitle}</h2>
+					<h2 className="text-xl font-semibold text-ink">{recordTitle}</h2>
 					<p className="text-sm text-steel">{schema.table_name}</p>
 				</div>
 
 				<Separator />
 
-				<div className="space-y-4">
-					{sections.map((section, index) => (
-						<div key={index}>
-							{index > 0 && <Separator className="my-4" />}
-							{section.label && (
-								<p className="text-sm font-medium text-steel mb-3">
-									{section.label}
-								</p>
-							)}
-							{section.columns.length > 1 ? (
-								<div
-									className="grid gap-4"
-									style={{
-										gridTemplateColumns: `repeat(${section.columns.length}, minmax(0, 1fr))`,
-									}}
-								>
-									{section.columns.map((column, columnIndex) => (
-										<div key={columnIndex} className="space-y-4">
-											{column.map((field) => (
-												<FieldInput
-													key={field.fieldname}
-													field={field}
-													value={formData[field.fieldname]}
-													onChange={(value) => handleChange(field.fieldname, value)}
-												/>
-											))}
-										</div>
-									))}
-								</div>
-							) : (
-								<div className="space-y-4">
-									{section.columns[0]?.map((field) => (
-										<FieldInput
-											key={field.fieldname}
-											field={field}
-											value={formData[field.fieldname]}
-											onChange={(value) => handleChange(field.fieldname, value)}
-										/>
-									))}
-								</div>
-							)}
-						</div>
-					))}
+                <Form {...formMethods}>
+					<div className="space-y-6">
+						{hasTabs ? (
+							<Tabs defaultValue="tab-0" className="w-full">
+								<TabsList className="w-full justify-start rounded-none border-b border-line bg-transparent p-0">
+									{tabGroups.map((tab, index) => <TabsTrigger key={index} value={`tab-${index}`} className="rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-ink">{tab.label || `Tab ${index + 1}`}</TabsTrigger>)}
+								</TabsList>
+								{tabGroups.map((tab, index) => <TabsContent key={index} value={`tab-${index}`} className="mt-4 space-y-6">{tab.sections.map(renderSection)}</TabsContent>)}
+							</Tabs>
+						) : tabGroups[0]?.sections.map(renderSection)}
 
-					{dataFields.length === 0 && (
-						<p className="text-sm font-body text-steel text-center py-8">
-							No fields defined
-						</p>
-					)}
-				</div>
+                        {dataFields.length === 0 && (
+                            <p className="text-sm font-body text-steel text-center py-8">
+                                No fields defined
+                            </p>
+                        )}
+                    </div>
+                </Form>
 			</div>
 		</div>
 	);
 }
-

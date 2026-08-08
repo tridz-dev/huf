@@ -2,8 +2,8 @@
 # See license.txt
 
 # import frappe
-from frappe.tests.utils import FrappeTestCase
+from frappe.tests import IntegrationTestCase
 
 
-class TestMCPServer(FrappeTestCase):
+class TestMCPServer(IntegrationTestCase):
 	pass

@@ -39,13 +39,16 @@ export type DataTableFieldType =
 	| 'Rating'
 	| 'Color'
 	| 'Phone'
+	| 'Attach'
+	| 'Attach Image'
+	| 'Tab Break'
 	| 'Section Break'
 	| 'Column Break';
 
 /**
  * Layout-only field types (no DB column)
  */
-export type LayoutFieldType = 'Section Break' | 'Column Break';
+export type LayoutFieldType = 'Tab Break' | 'Section Break' | 'Column Break';
 
 /**
  * Huf Data Table registry record (from Frappe)
@@ -61,6 +64,7 @@ export interface HufDataTable {
 	is_active: 0 | 1;
 	autoname_method: 'Autoincrement' | 'Hash' | 'By Field';
 	title_field_name: string;
+	table_group?: string;
 	creation: string;
 	modified: string;
 }
@@ -76,7 +80,26 @@ export interface DataTableSchema {
 	icon: string;
 	autoname_method: string;
 	title_field_name: string;
+	table_group?: string;
 	fields: DataTableFieldDef[];
+}
+
+/**
+ * Plain user-facing actions for the "Add to agent" flow.
+ * The backend owns the mapping to Agent Tool Function `types`
+ * (huf/huf/doctype/huf_data_table/api.py TABLE_ACTION_MAP).
+ */
+export type TableAgentAction = 'view' | 'create' | 'edit' | 'delete';
+
+/**
+ * One agent's access to a Huf data table, as returned by
+ * get_table_agent_access / set_table_agent_access.
+ */
+export interface TableAgentAccess {
+	agent: string;
+	agent_name: string;
+	actions: TableAgentAction[];
+	tools: string[];
 }
 
 /**

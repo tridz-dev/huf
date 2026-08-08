@@ -2,7 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface FormSettingsSectionProps {
-	title: string;
+	title: React.ReactNode;
 	description: string;
 	children: React.ReactNode;
 	className?: string;

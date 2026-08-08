@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +25,8 @@ import {
 import { getProviders } from '@/services/providerApi';
 import type { AIProvider } from '@/types/agent.types';
 import type { ElevenlabsSettingsDoc, HttpProviderSettingsDoc } from '@/types/integration.types';
+import { settleAll } from '@/lib/settleAll';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export { VoiceSettingsTab };
 export default VoiceSettingsTab;
@@ -45,12 +47,14 @@ function HttpProviderForm({
   value,
   onSave,
   providers,
+  notice,
 }: {
   title: string;
   description: string;
   value: HttpProviderSettingsDoc;
   onSave: (data: HttpProviderSettingsDoc) => Promise<void>;
   providers: AIProvider[];
+  notice?: ReactNode;
 }) {
   const [form, setForm] = useState<HttpProviderSettingsDoc>(value);
   const [saving, setSaving] = useState(false);
@@ -80,6 +84,13 @@ function HttpProviderForm({
         <CardTitle>{title}</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
+      {notice && (
+        <CardContent className="pt-0 pb-2">
+          <div className="rounded-md bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+            {notice}
+          </div>
+        </CardContent>
+      )}
       <CardContent className="grid gap-4 sm:grid-cols-2">
         <div className="flex items-center justify-between rounded-lg border p-4 sm:col-span-2">
           <div className="space-y-0.5">
@@ -283,13 +294,16 @@ function VoiceSettingsTab() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const [providersRes, openaiRes, groqRes, elevenlabsRes] = await Promise.all([
-        getProviders(),
-        getOpenAISettings(),
-        getGroqSettings(),
-        getElevenlabsSettings(),
-      ]);
-      setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      const errorLabels = ['providers', 'OpenAI settings', 'Groq settings', 'ElevenLabs settings'];
+      const [providersRes, openaiRes, groqRes, elevenlabsRes] = await settleAll(
+        [getProviders(), getOpenAISettings(), getGroqSettings(), getElevenlabsSettings()],
+        (index, error) => {
+          toast.error(`Failed to load ${errorLabels[index]}: ${getFrappeErrorMessage(error)}`);
+        },
+      );
+      if (providersRes) {
+        setProviders(Array.isArray(providersRes) ? providersRes : providersRes.items);
+      }
       if (openaiRes) setOpenai(openaiRes);
       if (groqRes) setGroq(groqRes);
       if (elevenlabsRes) setElevenlabs(elevenlabsRes);
@@ -328,6 +342,7 @@ function VoiceSettingsTab() {
                 setOpenai(data);
               }}
               providers={providers}
+              notice="Provider-specific transcription settings are deprecated. Configure an AI Provider and use Agent STT Model instead."
             />
           </TabsContent>
 
@@ -341,6 +356,7 @@ function VoiceSettingsTab() {
                 setGroq(data);
               }}
               providers={providers}
+              notice="Provider-specific transcription settings are deprecated. Configure an AI Provider and use Agent STT Model instead."
             />
           </TabsContent>
 

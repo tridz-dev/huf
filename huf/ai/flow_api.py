@@ -8,6 +8,8 @@ Provides REST-style APIs for:
 - Agent tools (run_flow, get_flow_run, resume_flow_run, approve/reject)
 """
 
+from __future__ import annotations
+
 import hmac
 import json
 
@@ -82,7 +84,6 @@ def save_flow_definition(flow_id: str, definition_json: str | dict) -> dict:
 		)
 		doc.insert()
 
-	frappe.db.commit()
 	return {"flow_id": doc.flow_id, "version": doc.version}
 
 
@@ -282,7 +283,7 @@ def approve_flow_run(flow_run_id: str, comment: str | None = None) -> dict:
 	Returns:
 	    dict with status and current_node_id
 	"""
-	if not frappe.has_permission("Flow Run", "write"):
+	if not frappe.has_permission("Flow Run", "read"):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 	from huf.ai.flow_engine import approve_flow_run as engine_approve
@@ -353,20 +354,120 @@ def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
 	return hmac.compare_digest(str(webhook_key or ""), str(expected_auth))
 
 
-@frappe.whitelist(allow_guest=True)
-def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
-	"""
-	Webhook trigger endpoint for flows.
+def _webhook_entry_auth(defn: dict) -> str | None:
+	entry_id = defn.get("entry")
+	for node in defn.get("nodes", []):
+		if node.get("id") == entry_id and node.get("type") == "trigger.webhook":
+			return node.get("config", {}).get("auth")
+	return None
 
-	Validates webhook auth and starts a flow run.
 
-	Args:
-	    flow_id: Flow ID to trigger
-	    webhook_key: Authentication key
+def _request_headers() -> dict:
+	request = getattr(frappe, "request", None)
+	if not request:
+		return {}
+	return getattr(request, "headers", {}) or {}
 
-	Returns:
-	    dict with flow_run_id and status
-	"""
+
+def _header_value(*names: str) -> str | None:
+	headers = _request_headers()
+	for name in names:
+		value = headers.get(name)
+		if value:
+			return value
+	return None
+
+
+def _bearer_token(value: str | None) -> str | None:
+	if not value:
+		return None
+	parts = value.split(None, 1)
+	if len(parts) == 2 and parts[0].lower() == "bearer":
+		return parts[1].strip() or None
+	return None
+
+
+def _parse_webhook_payload() -> dict:
+	payload = {}
+	if not getattr(frappe, "request", None):
+		return payload
+
+	try:
+		raw = frappe.request.get_data(as_text=True)
+		if raw:
+			payload = frappe.parse_json(raw)
+	except (json.JSONDecodeError, TypeError):
+		frappe.log_error(frappe.get_traceback(), "Flow Webhook Payload Parse Error")
+		payload = {}
+
+	if not payload:
+		if frappe.request.form:
+			payload = dict(frappe.request.form)
+		else:
+			exclude = {"cmd", "flow_id", "webhook_key", "key", "secret", "token"}
+			payload = {k: v for k, v in frappe.local.form_dict.items() if k not in exclude}
+
+	return payload if isinstance(payload, dict) else {"payload": payload}
+
+
+def _extract_webhook_key(payload: dict | None = None, explicit_key: str | None = None) -> str | None:
+	if explicit_key:
+		return explicit_key
+
+	request = getattr(frappe, "request", None)
+	if request and getattr(request, "args", None):
+		for key in ("webhook_key", "key", "secret", "token"):
+			if request.args.get(key):
+				return request.args.get(key)
+
+	headers_key = _header_value(
+		"X-Webhook-Secret",
+		"X-Huf-Webhook-Key",
+		"X-Webhook-Key",
+		"X-Hub-Signature",
+	)
+	if headers_key:
+		return headers_key
+
+	bearer = _bearer_token(_header_value("Authorization"))
+	if bearer:
+		return bearer
+
+	if request and getattr(request, "form", None):
+		for key in ("webhook_key", "key", "secret", "token"):
+			if request.form.get(key):
+				return request.form.get(key)
+
+	if payload:
+		for key in ("webhook_key", "key", "secret", "token"):
+			if payload.get(key):
+				return payload.get(key)
+
+	return None
+
+
+def _extract_flow_id(payload: dict | None = None, explicit_flow_id: str | None = None) -> str | None:
+	if explicit_flow_id:
+		return explicit_flow_id
+
+	request = getattr(frappe, "request", None)
+	if request and getattr(request, "args", None) and request.args.get("flow_id"):
+		return request.args.get("flow_id")
+
+	header_flow_id = _header_value("X-Huf-Flow-Id", "X-Flow-Id")
+	if header_flow_id:
+		return header_flow_id
+
+	if request and getattr(request, "form", None) and request.form.get("flow_id"):
+		return request.form.get("flow_id")
+
+	if payload and payload.get("flow_id"):
+		return payload.get("flow_id")
+
+	return None
+
+
+def _load_active_flow_definition(flow_id: str) -> tuple[object, dict]:
 	if not frappe.db.exists("Flow Definition", flow_id):
 		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
 
@@ -375,27 +476,45 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 		frappe.throw(_("Flow '{0}' is not active").format(flow_id))
 
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
+	return defn_doc, defn
 
-	# Validate webhook auth — mandatory, fail closed.
+
+def _resolve_flow_by_webhook_key(webhook_key: str | None) -> str:
+	if not webhook_key:
+		frappe.throw(_("Webhook key is required"), frappe.AuthenticationError)
+
+	matches = []
+	for row in frappe.get_all(
+		"Flow Definition",
+		filters={"status": "Active"},
+		fields=["name", "definition_json"],
+	):
+		name = row.get("name") if isinstance(row, dict) else row.name
+		definition_json = row.get("definition_json") if isinstance(row, dict) else row.definition_json
+		defn = json.loads(definition_json) if isinstance(definition_json, str) else definition_json
+		expected_auth = _webhook_entry_auth(defn or {})
+		if expected_auth and hmac.compare_digest(str(webhook_key), str(expected_auth)):
+			matches.append(name)
+
+	if not matches:
+		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
+	if len(matches) > 1:
+		frappe.throw(_("Webhook key matches multiple active flows; provide flow_id"))
+	return matches[0]
+
+
+def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | None = None) -> dict:
+	defn_doc, defn = _load_active_flow_definition(flow_id)
+
+	# Validate webhook auth - mandatory, fail closed.
 	if not _webhook_key_is_valid(defn, webhook_key):
 		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
 
-	# Get payload from request
-	payload = {}
-	if frappe.request:
-		try:
-			raw = frappe.request.get_data(as_text=True)
-			if raw:
-				payload = frappe.parse_json(raw)
-		except Exception:
-			pass
+	# Switch execution identity to the flow owner so the run does not execute as Guest
+	frappe.set_user(defn_doc.owner or "Administrator")
 
-		if not payload:
-			if frappe.request.form:
-				payload = dict(frappe.request.form)
-			else:
-				exclude = {'cmd', 'flow_id', 'webhook_key'}
-				payload = {k: v for k, v in frappe.local.form_dict.items() if k not in exclude}
+	if payload is None:
+		payload = _parse_webhook_payload()
 
 	from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
@@ -416,6 +535,47 @@ def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
 		"flow_run_id": flow_run.name,
 		"status": flow_run.status,
 	}
+
+
+@frappe.whitelist(allow_guest=True)
+def flow_webhook(flow_id: str, webhook_key: str | None = None) -> dict:
+	"""
+	Webhook trigger endpoint for flows.
+
+	Validates webhook auth and starts a flow run.
+
+	Args:
+	    flow_id: Flow ID to trigger
+	    webhook_key: Authentication key
+
+	Returns:
+	    dict with flow_run_id and status
+	"""
+	# Frappe's make_form_dict drops query string arguments if the request has a JSON body.
+	# We must manually extract webhook_key from request.args if it's missing.
+	if webhook_key is None and getattr(frappe, "request", None) and frappe.request.args:
+		webhook_key = frappe.request.args.get("webhook_key")
+
+	return _run_flow_webhook(flow_id, webhook_key)
+
+
+@frappe.whitelist(allow_guest=True)
+def flow_webhook_clean(flow_id: str | None = None, webhook_key: str | None = None) -> dict:
+	"""
+	Clean URL webhook receiver for providers that reject query parameters.
+
+	Key resolution is intentionally versatile while still failing closed:
+	- Frappe Cloud/Press: X-Webhook-Secret header.
+	- Huf/native callers: X-Huf-Webhook-Key or X-Huf-Flow-Id headers.
+	- Generic providers: Authorization: Bearer <key>, form fields, JSON body, or legacy args.
+
+	If flow_id is omitted, Huf resolves it by finding exactly one active
+	trigger.webhook flow whose configured auth matches the resolved key.
+	"""
+	payload = _parse_webhook_payload()
+	resolved_key = _extract_webhook_key(payload, webhook_key)
+	resolved_flow_id = _extract_flow_id(payload, flow_id) or _resolve_flow_by_webhook_key(resolved_key)
+	return _run_flow_webhook(resolved_flow_id, resolved_key, payload)
 
 
 @frappe.whitelist()
@@ -472,8 +632,6 @@ def schedule_flow(flow_id: str, cron: str, schedule_name: str | None = None, tim
 		})
 		doc.insert()
 	
-	frappe.db.commit()
-	
 	return {
 		"schedule_id": doc.name,
 		"flow_id": flow_id,
@@ -507,7 +665,6 @@ def unschedule_flow(flow_id: str) -> dict:
 		}
 	
 	frappe.delete_doc("Scheduled Job Type", existing, ignore_missing=True)
-	frappe.db.commit()
 	
 	return {
 		"status": "unscheduled",
@@ -602,7 +759,10 @@ def execute_scheduled_flow(flow_id: str) -> dict:
 		}
 	except Exception as e:
 		error_msg = str(e)
-		frappe.log_error(f"Error executing scheduled flow '{flow_id}': {error_msg}", "Flow Scheduler")
+		frappe.log_error(
+			frappe.get_traceback(),
+			f"Scheduled Flow Execution Error: {flow_id}",
+		)
 		return {"status": "error", "error": error_msg, "flow_id": flow_id}
 
 
@@ -801,13 +961,16 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 	Returns:
 	    dict with flow_run_id, status, message
 	"""
+	if not frappe.has_permission("Flow Run", "create"):
+		return {"error": "Insufficient permissions to start flows"}
+
 	try:
 		if isinstance(payload, str):
 			try:
 				payload = json.loads(payload)
-			except Exception:
+			except (json.JSONDecodeError, TypeError):
 				payload = {}
-				
+
 		from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 
 		flow_run = create_flow_run(flow_id=flow_id, payload=payload or {}, mode=mode)
@@ -824,6 +987,7 @@ def handle_run_flow(flow_id: str, payload: str | dict | None = None, mode: str |
 			"current_node_id": flow_run.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Run Flow Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -838,6 +1002,9 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 	Returns:
 	    dict with status, context summary, waiting state
 	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		return {"error": "Insufficient permissions to view flow runs"}
+
 	try:
 		doc = frappe.get_doc("Flow Run", flow_run_id)
 		ctx = {}
@@ -860,6 +1027,7 @@ def handle_get_flow_run(flow_run_id: str, **kwargs) -> dict:
 			"waiting": waiting,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Get Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -875,6 +1043,9 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 	Returns:
 	    dict with updated status
 	"""
+	if not frappe.has_permission("Flow Run", "write"):
+		return {"error": "Insufficient permissions to resume flow runs"}
+
 	try:
 		from huf.ai.flow_engine import resume_flow_run as engine_resume
 
@@ -887,6 +1058,7 @@ def handle_resume_flow_run(flow_run_id: str, input: dict | None = None, **kwargs
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Resume Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -903,11 +1075,18 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 	Returns:
 	    dict with updated status
 	"""
+	if not frappe.has_permission("Flow Run", "read"):
+		return {"error": "Insufficient permissions to approve flow runs"}
+
 	try:
-		from huf.ai.flow_engine import approve_flow_run as engine_approve
+		from huf.ai.flow_engine import approve_flow_run as engine_approve, _verify_approval_permission
+
+		doc = frappe.get_doc("Flow Run", flow_run_id)
+		waiting = json.loads(doc.waiting) if doc.waiting else {}
+		_verify_approval_permission(waiting)
 
 		engine_approve(flow_run_id, decision=decision, comment=comment)
-		doc = frappe.get_doc("Flow Run", flow_run_id)
+		doc.reload()
 
 		return {
 			"success": True,
@@ -915,6 +1094,7 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 			"current_node_id": doc.current_node_id,
 		}
 	except Exception as e:
+		frappe.log_error(frappe.get_traceback(), "Approve Flow Run Tool Error")
 		return {"success": False, "error": str(e)}
 
 
@@ -923,81 +1103,86 @@ def handle_approve_flow_run(flow_run_id: str, decision: str = "approved", commen
 # ---------------------------------------------------------------------------
 
 
-@frappe.whitelist()
-def get_pending_approvals(limit: int = 50) -> list:
-	"""
-	Get list of flow runs waiting for approval that the current user can approve.
-	
-	This endpoint is used by the Approval Inbox feature to show users
-	all pending approvals that require their attention.
-	
-	Args:
-	    limit: Maximum number of results (default 50)
-	
-	Returns:
-	    list of pending approval items with flow details
-	"""
-	if not frappe.has_permission("Flow Run", "read"):
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	
-	user = frappe.session.user
-	user_roles = set(frappe.get_roles(user))
-	
-	# Get all flow runs waiting for approval
-	pending_runs = frappe.get_all(
-		"Flow Run",
-		filters={"status": "Waiting Approval"},
-		fields=[
-			"name",
-			"flow_id",
-			"flow_version",
-			"current_node_id",
-			"status",
-			"waiting",
-			"started_at",
-			"modified",
-		],
-		order_by="modified desc",
-		limit_page_length=limit,
-	)
-	
-	results = []
-	
-	for run in pending_runs:
-		try:
-			waiting = json.loads(run.waiting) if run.waiting else {}
-		except (json.JSONDecodeError, TypeError):
-			waiting = {}
-		
-		approval_type = waiting.get("approval_type", "role")
-		can_approve = False
-		
-		# Check if current user can approve this flow run
-		if approval_type == "role":
-			approver_role = waiting.get("approver_role")
-			if approver_role and approver_role in user_roles:
-				can_approve = True
-		elif approval_type == "users":
-			approver_users = waiting.get("approver_users", [])
-			if isinstance(approver_users, str):
-				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
-			if user in approver_users:
-				can_approve = True
-		
-		if can_approve:
-			results.append({
-				"flow_run_id": run.name,
-				"flow_id": run.flow_id,
-				"flow_version": run.flow_version,
-				"current_node_id": run.current_node_id,
-				"title": waiting.get("title", "Approval Required"),
-				"instructions": waiting.get("instructions", ""),
-				"approval_type": approval_type,
-				"approver_role": waiting.get("approver_role"),
-				"approver_users": waiting.get("approver_users", []),
-				"started_at": str(run.started_at) if run.started_at else None,
-				"waiting_since": str(run.modified) if run.modified else None,
-				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
-			})
-	
-	return results
+# TEMPORARILY DISABLED (2026-08-02):
+# get_pending_approvals returns 403 even for Administrator, so the Approval
+# Inbox bell is disabled until the permission check is fixed/replaced.
+# See UnifiedHeader.tsx and ApprovalsBell.tsx for the related UI removal.
+# ---------------------------------------------------------------------------
+# @frappe.whitelist()
+# def get_pending_approvals(limit: int = 50) -> list:
+# 	"""
+# 	Get list of flow runs waiting for approval that the current user can approve.
+# 	
+# 	This endpoint is used by the Approval Inbox feature to show users
+# 	all pending approvals that require their attention.
+# 	
+# 	Args:
+# 	    limit: Maximum number of results (default 50)
+# 	
+# 	Returns:
+# 	    list of pending approval items with flow details
+# 	"""
+# 	if not frappe.has_permission("Flow Run", "read"):
+# 		frappe.throw(_("Not permitted"), frappe.PermissionError)
+# 
+# 	user = frappe.session.user
+# 	user_roles = set(frappe.get_roles(user))
+# 
+# 	# Get all flow runs waiting for approval
+# 	pending_runs = frappe.get_all(
+# 		"Flow Run",
+# 		filters={"status": "Waiting Approval"},
+# 		fields=[
+# 			"name",
+# 			"flow_id",
+# 			"flow_version",
+# 			"current_node_id",
+# 			"status",
+# 			"waiting",
+# 			"started_at",
+# 			"modified",
+# 		],
+# 		order_by="modified desc",
+# 		limit_page_length=limit,
+# 	)
+# 
+# 	results = []
+# 
+# 	for run in pending_runs:
+# 		try:
+# 			waiting = json.loads(run.waiting) if run.waiting else {}
+# 		except (json.JSONDecodeError, TypeError):
+# 			waiting = {}
+# 
+# 		approval_type = waiting.get("approval_type", "role")
+# 		can_approve = False
+# 
+# 		# Check if current user can approve this flow run
+# 		if approval_type == "role":
+# 			approver_role = waiting.get("approver_role")
+# 			if approver_role and approver_role in user_roles:
+# 				can_approve = True
+# 		elif approval_type in ("user", "users"):
+# 			approver_users = waiting.get("approver_users", [])
+# 			if isinstance(approver_users, str):
+# 				approver_users = [u.strip() for u in approver_users.split(",") if u.strip()]
+# 			if user in approver_users:
+# 				can_approve = True
+# 
+# 		if can_approve:
+# 			results.append({
+# 				"flow_run_id": run.name,
+# 				"flow_id": run.flow_id,
+# 				"flow_version": run.flow_version,
+# 				"current_node_id": run.current_node_id,
+# 				"title": waiting.get("title", "Approval Required"),
+# 				"instructions": waiting.get("instructions", ""),
+# 				"approval_type": approval_type,
+# 				"approver_role": waiting.get("approver_role"),
+# 				"approver_users": waiting.get("approver_users", []),
+# 				"started_at": str(run.started_at) if run.started_at else None,
+# 				"waiting_since": str(run.modified) if run.modified else None,
+# 				"view_link": f"/huf/flows/{run.flow_id}?run={run.name}",
+# 			})
+# 
+# 	return results

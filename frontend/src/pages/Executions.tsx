@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
-import { FilterBar, PageLayout, LoadMoreButton } from '@/components/dashboard';
+import { Activity, ArrowUpDown, Loader2 } from 'lucide-react';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, LoadMoreButton, EmptyState } from '@/components/dashboard';
+import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import { StatusDot, type StatusDotVariant } from '@/components/dashboard/ledger/LedgerSection';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
@@ -27,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
 
 function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
   const normalized = status?.toLowerCase() || '';
@@ -218,6 +221,34 @@ export default function Executions() {
         },
       },
       {
+        accessorKey: 'cached_tokens',
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+            >
+              Cached Tokens
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          );
+        },
+        cell: ({ row }) => {
+          const cached = row.original.cached_tokens;
+          return (
+            <div className="font-mono text-[12px] text-steel">
+              {typeof cached === 'number' ? cached.toLocaleString() : '0'}
+            </div>
+          );
+        },
+        sortingFn: (rowA, rowB) => {
+          const valA = rowA.original.cached_tokens ?? 0;
+          const valB = rowB.original.cached_tokens ?? 0;
+          return valA - valB;
+        },
+      },
+      {
         id: 'duration',
         header: 'Duration',
         cell: ({ row }) => {
@@ -267,8 +298,9 @@ export default function Executions() {
   });
 
   return (
-    <PageLayout
+    <PageFrame
       title="Executions"
+      badge={<ExperimentalBadge />}
       subtitle="Inspect agent runs and their results."
       filters={
         <FilterBar
@@ -312,11 +344,18 @@ export default function Executions() {
         />
       }
     >
+      <ExecutionAnalyticsDashboard />
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
+        ) : runs.length === 0 ? (
+          <EmptyState
+            icon={Activity}
+            title="No executions"
+            description="No agent runs have been recorded yet."
+          />
         ) : (
           <div className="border border-line bg-panel">
             <Table>
@@ -336,27 +375,19 @@ export default function Executions() {
                 ))}
               </TableHeader>
               <TableBody>
-                {table.getRowModel().rows?.length ? (
-                  table.getRowModel().rows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      className="cursor-pointer hover:bg-paper-deep"
-                      onClick={() => navigate(`/executions/${row.original.name}`)}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center">
-                      <div className="text-steel">No executions found.</div>
-                    </TableCell>
+                {table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    className="cursor-pointer hover:bg-paper-deep"
+                    onClick={() => navigate(`/executions/${row.original.name}`)}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
+                    ))}
                   </TableRow>
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -375,6 +406,6 @@ export default function Executions() {
           {total !== undefined ? `Showing all ${total} executions` : 'No more executions to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

@@ -414,7 +414,7 @@ export const SidebarContent = React.forwardRef<
       ref={ref}
       data-sidebar="content"
       className={cn(
-        "flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
+        "flex min-h-0 flex-1 flex-col gap-0.5 overflow-auto group-data-[collapsible=icon]:overflow-hidden",
         className
       )}
       {...props}
@@ -431,7 +431,11 @@ export const SidebarGroup = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="group"
-      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+      className={cn(
+        "relative flex w-full min-w-0 flex-col px-2 py-0.5",
+        "group-data-[collapsible=icon]:mt-1.5 group-data-[collapsible=icon]:pt-1.5 group-data-[collapsible=icon]:first:mt-0 group-data-[collapsible=icon]:first:pt-0.5 group-data-[collapsible=icon]:first:border-t-0 group-data-[collapsible=icon]:border-t group-data-[collapsible=icon]:border-sidebar-border",
+        className
+      )}
       {...props}
     />
   )
@@ -449,8 +453,8 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "flex h-8 shrink-0 items-center rounded-none px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
-        "group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0",
+        "flex h-6 shrink-0 items-center rounded-none px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "group-data-[collapsible=icon]:hidden",
         className
       )}
       {...props}
@@ -501,7 +505,7 @@ export const SidebarMenu = React.forwardRef<
   <ul
     ref={ref}
     data-sidebar="menu"
-    className={cn("flex w-full min-w-0 flex-col gap-1", className)}
+    className={cn("flex w-full min-w-0 flex-col gap-0.5", className)}
     {...props}
   />
 ))
@@ -514,7 +518,7 @@ export const SidebarMenuItem = React.forwardRef<
   <li
     ref={ref}
     data-sidebar="menu-item"
-    className={cn("group/menu-item relative", className)}
+    className={cn("group/menu-item relative z-10", className)}
     {...props}
   />
 ))

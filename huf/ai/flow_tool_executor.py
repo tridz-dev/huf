@@ -139,7 +139,7 @@ def _execute_tool(tool_name: str, args: dict) -> dict:
 				loop.close()
 
 		# Normalize result
-		if hasattr(result, "as_dict"):
+		if hasattr(result, "as_dict") and callable(getattr(result, "as_dict", None)):
 			result = result.as_dict()
 
 		if isinstance(result, (dict, list)):
@@ -182,6 +182,7 @@ def _resolve_function_path(tool_doc: dict) -> str | None:
 		"Get Conversation Data": "huf.ai.sdk_tools.handle_get_conversation_data",
 		"Set Conversation Data": "huf.ai.sdk_tools.handle_set_conversation_data",
 		"Load Conversation Data": "huf.ai.sdk_tools.handle_load_conversation_data",
+		"Perplexity Search": "huf.ai.tools.perplexity.handle_perplexity_search",
 	}
 
 	return type_to_handler.get(tool_type)
@@ -204,6 +205,9 @@ def _inject_extra_args(args: dict, tool_doc: dict):
 		"Update Multiple Documents",
 		"Delete Document",
 		"Delete Multiple Documents",
+		"Submit Document",
+		"Cancel Document",
+		"Get Amended Document",
 	):
 		if tool_doc.get("reference_doctype"):
 			args.setdefault("reference_doctype", tool_doc["reference_doctype"])

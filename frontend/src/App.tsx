@@ -1,7 +1,8 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Routes, Route } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'motion/react';
 import { UserProvider } from './contexts/UserContext';
-import { PermissionsProvider } from './contexts/PermissionsContext';
+import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AuthenticatingPage } from './components/AuthenticatingPage';
 import { FlowProvider } from './contexts/FlowContext';
@@ -12,41 +13,53 @@ import { AgentsHeaderActions } from './components/AgentsHeaderActions';
 import { McpHeaderActions } from './components/McpHeaderActions';
 import { FlowsListHeaderActions } from './components/FlowsListHeaderActions';
 import { KnowledgeHeaderActions } from './components/KnowledgeHeaderActions';
+import { SkillsHeaderActions } from './components/skills/SkillsHeaderActions';
 import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderActions';
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
+import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
+import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
 import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
-import { toast } from 'sonner';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
+const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
 const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
 const AgentSummaryPromptFormPageWrapper = lazy(() => import('./pages/AgentSummaryPromptFormPageWrapper'));
+const ExecutionProfilesPage = lazy(() => import('./pages/ExecutionProfilesPage'));
+const ExecutionProfileFormPageWrapper = lazy(() => import('./pages/ExecutionProfileFormPageWrapper'));
+const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
+const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
+const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
-const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
-const AgentContextArtifactDetailPage = lazy(() => import('./pages/AgentContextArtifactDetailPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
+const MemoryPage = lazy(() => import('./pages/MemoryPage'));
+const MemoryPolicyFormPageWrapper = lazy(() => import('./pages/MemoryPolicyFormPageWrapper'));
+const SkillsPage = lazy(() => import('./pages/SkillsPage'));
+const SkillFormPageWrapper = lazy(() => import('./pages/SkillFormPageWrapper'));
+const SshPage = lazy(() => import('./pages/SshPage'));
 const PreviewViewPage = lazy(() => import('./pages/PreviewViewPage'));
+const ArtifactViewPage = lazy(() => import('./pages/ArtifactViewPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const DataRecordViewWrapper = lazy(() => import('./pages/DataRecordViewWrapper'));
 const ModelsPageWrapper = lazy(() => import('./pages/ModelsPageWrapper'));
-const ConsolePage = lazy(() => import('./pages/ConsolePage'));
+const PlaygroundPage = lazy(() => import('./pages/PlaygroundPage'));
 const IntegrationSettingsListingPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsListingPageWrapper'),
 );
@@ -59,8 +72,14 @@ const IntegrationServicesListingPageWrapper = lazy(
 const IntegrationServiceFormPageWrapper = lazy(
   () => import('./pages/IntegrationServiceFormPageWrapper'),
 );
+const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
+const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
+const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 
 import { useEffect } from 'react';
+import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
+import { initTheme } from './lib/personalization';
 import { SocketProvider } from './contexts/SocketContext';
 import {
   checkStreamingAvailable,
@@ -68,21 +87,84 @@ import {
 } from './services/streamChatApi';
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const RolesPage = lazy(() => import('./pages/RolesPage'));
+const MembersPage = lazy(() => import('./pages/MembersPage'));
+
+function ChatOnlyRedirectGuard() {
+  const location = useLocation();
+  const { capabilities, isLoading } = usePermissions();
+  // Chat-only users get `chat.use` plus nothing outside the chat.* namespace
+  // (e.g. `chat.view_own` is fine, but `agent.use` means they are a full user).
+  const isChatOnlyUser =
+    capabilities.includes('chat.use') &&
+    capabilities.every((capability) => capability.startsWith('chat.'));
+  const isAllowedChatOnlyPath =
+    location.pathname.startsWith('/ui/chat') || location.pathname.startsWith('/view/');
+
+  if (isLoading || !isChatOnlyUser || isAllowedChatOnlyPath) {
+    return null;
+  }
+
+  return <Navigate to="/ui/chat" replace />;
+}
 
 function AppShell() {
+  const location = useLocation();
+
+  useEffect(() => {
+    clearChunkReloadFlag();
+  }, []);
+
+  useEffect(() => {
+    initTheme();
+  }, []);
+
   return (
     <SocketProvider>
       <UserProvider>
         <PermissionsProvider>
+          <ChatOnlyRedirectGuard />
           <Suspense fallback={<AuthenticatingPage />}>
-            <Routes>
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={location.pathname}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="h-full"
+              >
+                <Routes location={location}>
           <Route
             path="/"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader>
+                  <Suspense fallback={<PageLoader />}>
+                    <HubSimplePage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<HomeHeaderActions />}>
                   <Suspense fallback={<PageLoader />}>
                     <HomePage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/apps"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AppsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -155,6 +237,50 @@ function AppShell() {
             }
           />
           <Route
+            path="/execution-profiles"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<ExecutionProfilesHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <ExecutionProfilesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/execution-profiles/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ExecutionProfileFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ssh-connections"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<SSHConnectionsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <SSHConnectionsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ssh-connections/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <SSHConnectionFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/data"
             element={
               <ProtectedRoute>
@@ -167,21 +293,22 @@ function AppShell() {
             }
           />
           <Route
-            path="/console"
+            path="/playground"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
+                <UnifiedLayout hideHeader>
                   <Suspense fallback={<PageLoader />}>
-                    <ConsolePage />
+                    <PlaygroundPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
             }
           />
+          <Route path="/console" element={<Navigate to="/playground" replace />} />
           <Route
             path="/data/new"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="data.tables.manage">
                 <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
@@ -207,7 +334,7 @@ function AppShell() {
           <Route
             path="/data/:tableId/edit"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="data.tables.manage">
                 <DataTableBuilderWrapper />
               </ProtectedRoute>
             }
@@ -285,6 +412,26 @@ function AppShell() {
             }
           />
           <Route
+            path="/ui/chat"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ui/chat/:chatId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChatOnlyPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/executions"
             element={
               <ProtectedRoute>
@@ -306,37 +453,27 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/artifacts"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentContextArtifactsPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/artifacts/:artifactId"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <Suspense fallback={<PageLoader />}>
-                    <AgentContextArtifactDetailPage />
-                  </Suspense>
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
+          <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <NotFoundPage />
+                    <AgentSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/general"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GeneralSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -355,12 +492,68 @@ function AppShell() {
             }
           />
           <Route
+            path="/memory"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <MemoryPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/knowledge/:id"
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <KnowledgeSourceFormPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/memory/policies/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <MemoryPolicyFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/skills"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<SkillsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <SkillsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/skills/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <SkillFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ssh"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <SshPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
@@ -381,6 +574,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsDetailsPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gateways"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <GatewaysPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
@@ -437,6 +642,26 @@ function AppShell() {
             }
           />
           <Route
+            path="/artifact/:artifactId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ArtifactViewPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/members"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <MembersPage />
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/users"
             element={
               <ProtectedRoute>
@@ -468,7 +693,9 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-            </Routes>
+                </Routes>
+              </motion.div>
+            </AnimatePresence>
           </Suspense>
           <Toaster />
         </PermissionsProvider>
@@ -478,22 +705,19 @@ function AppShell() {
 }
 
 const router = createBrowserRouter(
-  [{ path: '*', element: <AppShell /> }],
+  [{ path: '*', element: <AppShell />, errorElement: <RouteErrorBoundary /> }],
   { basename: '/huf' },
 );
 
 function App() {
   useEffect(() => {
-    console.log("Checking streaming availability");
+    // Streaming (SSE) is the explicit direct-execution mode: it is only used
+    // for agents with the advanced `run_immediately` policy enabled. Ordinary
+    // chat turns go through the queue-first REST path regardless of this
+    // probe, so a failed probe is informational, not an error.
     checkStreamingAvailable().then((ok) => {
       console.log("Streaming available:", ok);
       setStreamingAvailable(ok);
-      if (!ok) {
-        toast.error("Streaming not working", {
-          description: 'Some features may be disabled or not work as expected. Please refresh the page to retry.',
-          duration: 5000,
-        });
-      }
     });
   }, []);
 

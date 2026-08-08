@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
-import { Calendar, Settings, Tag } from 'lucide-react';
+import { Calendar, Settings, Tag, Server } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PageLayout, FilterBar, GridView, ItemCard, LoadMoreButton } from '../components/dashboard';
+import { PageFrame } from '@/layouts/PageFrame';
+import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { getMCPServers } from '../services/mcpApi';
 import { formatTimeAgo } from '../utils/time';
@@ -77,7 +78,7 @@ export default function McpListingPage() {
   }, [error]);
 
   return (
-    <PageLayout
+    <PageFrame
       title="MCP Servers"
       subtitle="Connect Model Context Protocol servers."
       filters={
@@ -99,9 +100,11 @@ export default function McpListingPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <div className="text-center py-12">
-            <p className="font-body text-steel-soft mb-4">No MCP servers found.</p>
-          </div>
+          <EmptyState
+            icon={Server}
+            title="No MCP servers"
+            description="No MCP servers have been connected yet."
+          />
         }
         renderItem={(server) => {
           const status = getMcpStatus(server);
@@ -141,6 +144,6 @@ export default function McpListingPage() {
           {total !== undefined ? `Showing all ${total} MCP servers` : 'No more MCP servers to load'}
         </div>
       )}
-    </PageLayout>
+    </PageFrame>
   );
 }

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { useNavigate, useParams, useBlocker, type Location } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Save, Loader2, Settings2 } from 'lucide-react';
+import { Save, Loader2, Settings2, Shield } from 'lucide-react';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import { Button } from '@/components/ui/button';
 import { TableBuilderCanvas } from '@/components/data-table/TableBuilderCanvas';
 import { FieldConfigPanel } from '@/components/data-table/FieldConfigPanel';
 import { TableSettingsPanel } from '@/components/data-table/TableSettingsPanel';
 import { createDataTable, updateDataTable, getTableSchema } from '@/services/dataTableApi';
+import { LAYOUT_FIELD_TYPES } from '@/data/fieldTypes';
 import type { DataTableFieldDef, DataTableFieldType, DataTableSchema } from '@/types/dataTable.types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -16,6 +18,7 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 interface BuilderState {
 	tableName: string;
 	description: string;
+	tableGroup: string;
 	icon: string;
 	autonameMethod: string;
 	titleField: string;
@@ -28,6 +31,7 @@ interface BuilderState {
 type BuilderAction =
 	| { type: 'SET_TABLE_NAME'; payload: string }
 	| { type: 'SET_DESCRIPTION'; payload: string }
+	| { type: 'SET_TABLE_GROUP'; payload: string }
 	| { type: 'SET_ICON'; payload: string }
 	| { type: 'SET_AUTONAME_METHOD'; payload: string }
 	| { type: 'SET_TITLE_FIELD'; payload: string }
@@ -42,6 +46,7 @@ type BuilderAction =
 const initialState: BuilderState = {
 	tableName: '',
 	description: '',
+	tableGroup: '',
 	icon: '',
 	autonameMethod: 'Autoincrement',
 	titleField: '',
@@ -57,6 +62,8 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 			return { ...state, tableName: action.payload, isDirty: true };
 		case 'SET_DESCRIPTION':
 			return { ...state, description: action.payload, isDirty: true };
+		case 'SET_TABLE_GROUP':
+			return { ...state, tableGroup: action.payload, isDirty: true };
 		case 'SET_ICON':
 			return { ...state, icon: action.payload, isDirty: true };
 		case 'SET_AUTONAME_METHOD':
@@ -114,6 +121,7 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
 				...state,
 				tableName: action.payload.table_name,
 				description: action.payload.description || '',
+				tableGroup: action.payload.table_group || '',
 				icon: action.payload.icon || '',
 				autonameMethod: action.payload.autoname_method || 'Autoincrement',
 				titleField: action.payload.title_field_name || '',
@@ -133,6 +141,8 @@ export function DataTableBuilderPage() {
 	const { tableId } = useParams<{ tableId: string }>();
 	const navigate = useNavigate();
 	const isEdit = !!tableId && tableId !== 'new';
+
+	const { hasCapability, isLoading: permissionsLoading } = usePermissions();
 
 	const [state, dispatch] = useReducer(builderReducer, initialState);
 	const [saving, setSaving] = useState(false);
@@ -183,7 +193,9 @@ export function DataTableBuilderPage() {
 
 	const handleAddField = useCallback(
 		(type: DataTableFieldType) => {
-			const isLayout = type === 'Section Break' || type === 'Column Break';
+			const isLayout = LAYOUT_FIELD_TYPES.includes(type);
+			// Frappe does not permit `in_list_view` on Attach/Attach Image fields.
+			const supportsListView = type !== 'Attach' && type !== 'Attach Image';
 			const baseName = isLayout
 				? type.toLowerCase().replace(/\s+/g, '_')
 				: 'new_field';
@@ -196,9 +208,9 @@ export function DataTableBuilderPage() {
 			const newField: DataTableFieldDef = {
 				fieldname,
 				fieldtype: type,
-				label: isLayout ? '' : '',
-				...(isLayout ? {} : { in_list_view: state.fields.filter(
-					(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+				label: '',
+				...(isLayout || !supportsListView ? {} : { in_list_view: state.fields.filter(
+					(f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 				).length < 4 ? 1 : 0 as 0 | 1 }),
 			};
 
@@ -214,7 +226,7 @@ export function DataTableBuilderPage() {
 		}
 
 		const dataFields = state.fields.filter(
-			(f) => f.fieldtype !== 'Section Break' && f.fieldtype !== 'Column Break'
+			(f) => !LAYOUT_FIELD_TYPES.includes(f.fieldtype)
 		);
 		if (dataFields.length === 0) {
 			toast.error('Add at least one data field');
@@ -233,6 +245,7 @@ export function DataTableBuilderPage() {
 				await updateDataTable(state.registryName || tableId, {
 					fields: state.fields,
 					description: state.description,
+					table_group: state.tableGroup,
 					icon: state.icon,
 				});
 				toast.success('Table updated successfully');
@@ -244,6 +257,7 @@ export function DataTableBuilderPage() {
 					table_name: state.tableName.trim(),
 					fields: state.fields,
 					description: state.description,
+					table_group: state.tableGroup,
 					icon: state.icon,
 					autoname_method: state.autonameMethod,
 					title_field: state.titleField,
@@ -253,9 +267,9 @@ export function DataTableBuilderPage() {
 				allowNavigationRef.current = true;
 				navigate(`/data/${result.name}`);
 			}
-		} catch (err: any) {
+		} catch (err) {
 			toast.error(isEdit ? 'Failed to update table' : 'Failed to create table', {
-				description: err.message,
+				description: err instanceof Error ? err.message : 'An error occurred.',
 			});
 		} finally {
 			setSaving(false);
@@ -267,6 +281,20 @@ export function DataTableBuilderPage() {
 		enabled: !loading,
 		isSubmitting: saving,
 	});
+
+	if (!permissionsLoading && !hasCapability('data.tables.manage')) {
+		return (
+			<div className="flex items-center justify-center h-full">
+				<div className="text-center max-w-md p-6">
+					<Shield className="w-10 h-10 mx-auto text-muted-foreground mb-4" />
+					<h2 className="text-lg font-semibold mb-2">Access Denied</h2>
+					<p className="text-sm text-muted-foreground">
+						You don't have permission to manage data tables.
+					</p>
+				</div>
+			</div>
+		);
+	}
 
 	if (loading) {
 		return (
@@ -306,6 +334,7 @@ export function DataTableBuilderPage() {
 			<TableSettingsPanel
 				tableName={state.tableName}
 				description={state.description}
+				tableGroup={state.tableGroup}
 				icon={state.icon}
 				autonameMethod={state.autonameMethod}
 				titleField={state.titleField}
@@ -316,6 +345,9 @@ export function DataTableBuilderPage() {
 				}
 				onDescriptionChange={(v) =>
 					dispatch({ type: 'SET_DESCRIPTION', payload: v })
+				}
+				onTableGroupChange={(v) =>
+					dispatch({ type: 'SET_TABLE_GROUP', payload: v })
 				}
 				onIconChange={(v) =>
 					dispatch({ type: 'SET_ICON', payload: v })
@@ -334,8 +366,8 @@ export function DataTableBuilderPage() {
 		<div className="h-full flex flex-col">
 			<div className="flex-1 flex overflow-hidden relative">
 				{/* Left: Builder Canvas */}
-				<div className="flex-1 overflow-y-auto p-6">
-					<div className="max-w-2xl mx-auto">
+				<div className="flex-1 overflow-y-auto p-6 bg-paper">
+					<div className="max-w-2xl mx-auto rounded-none border border-line bg-panel p-6">
 						<TableBuilderCanvas
 							fields={state.fields}
 							selectedFieldIndex={state.selectedFieldIndex}
@@ -366,7 +398,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-full bg-panel"
+							className="fixed bottom-20 right-4 z-20 rounded-none bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />
@@ -385,14 +417,14 @@ export function DataTableBuilderPage() {
 						</Sheet>
 					</>
 				) : (
-					<div className="w-80 border-l bg-paper-deep/30 overflow-y-auto p-4">
+					<div className="w-80 border-l border-line bg-panel overflow-y-auto p-4">
 						{sidebarContent}
 					</div>
 				)}
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t px-6 py-3 flex items-center justify-between bg-paper">
+			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel">
 				<Button
 					variant="outline"
 					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}

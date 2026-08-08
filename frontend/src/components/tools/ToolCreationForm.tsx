@@ -1,8 +1,8 @@
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Settings, Zap, Plus, Braces, Pencil, Trash2, Check, AlertTriangle, FlaskConical, ChevronDown, FileText, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ColumnDef,
   flexRender,
@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { linkRoutes } from '@/lib/link-routes';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -38,19 +39,39 @@ import {
 import { ParameterCard, type ParameterData } from './ParameterCard';
 import { HttpHeaderCard, type HttpHeaderData } from './HttpHeaderCard';
 import { SelectDocTypeFieldsDialog } from './SelectDocTypeFieldsDialog';
+import { TestToolDrawer } from './TestToolDrawer';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
 import type { AgentToolType, ToolType } from '@/types/agent.types';
+import { getToolTypeDisplayLabel } from '@/data/ai';
 import { getDocTypeMeta } from '@/services/agentApi';
 import { fetchToolParametersFromCode, getAgentsUsingTool } from '@/services/toolApi';
 import { toast } from 'sonner';
 import { useToolCreationOptions } from './useToolCreationOptions';
 import {
+  buildFunctionDefinition,
   buildMissingMandatoryParameters,
+  deriveDocumentOperationDefaults,
+  getDefaultToolCategory,
+  isDocumentOperationType,
   parseParameterOptions,
   createToolFormSchema,
   getDefaultToolFormValues,
   shouldShowField,
 } from './toolCreationForm.utils';
+
+type AutoFieldKey = 'tool_name' | 'tool_type' | 'description' | 'is_read_only' | 'required_permission' | 'parameters';
+type AutoFieldState = Record<AutoFieldKey, 'auto' | 'edited'>;
+
+// Consistent 2-level type scale: section headers (this) sit above field labels
+// (FormLabel). One shared treatment for every zone header in the form.
+function SectionHeader({ icon: Icon, title }: { icon?: LucideIcon; title: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      {Icon ? <Icon className="w-4 h-4 text-steel-soft shrink-0" /> : null}
+      <h3 className="text-sm font-semibold uppercase tracking-wide text-steel">{title}</h3>
+    </div>
+  );
+}
 
 interface ToolCreationFormProps {
   template: ToolTemplate;
@@ -79,10 +100,27 @@ export function ToolCreationForm({
   const { loadingData, docTypeOptions, agentOptions } = useToolCreationOptions();
   const [fetchingCodeParams, setFetchingCodeParams] = useState(false);
   const [showFieldSelector, setShowFieldSelector] = useState(false);
-  const [configView, setConfigView] = useState<'settings' | 'function_definition'>('settings');
   const [editingParameterIndex, setEditingParameterIndex] = useState<number | null>(null);
   const [showParamsPreview, setShowParamsPreview] = useState(false);
+  const [showTestDrawer, setShowTestDrawer] = useState(false);
   const [sharedUsedBy, setSharedUsedBy] = useState<string[]>([]);
+
+  // Tracks whether derive-able fields still hold their auto-derived value.
+  // Flips to 'edited' as soon as the user changes the field manually.
+  const autoStateRef = useRef<AutoFieldState>({
+    tool_name: mode === 'create' ? 'auto' : 'edited',
+    tool_type: mode === 'create' ? 'auto' : 'edited',
+    description: mode === 'create' ? 'auto' : 'edited',
+    is_read_only: mode === 'create' ? 'auto' : 'edited',
+    required_permission: mode === 'create' ? 'auto' : 'edited',
+    parameters: mode === 'create' ? 'auto' : 'edited',
+  });
+  const [autoBadges, setAutoBadges] = useState<AutoFieldState>({ ...autoStateRef.current });
+  const markEdited = (key: AutoFieldKey) => {
+    if (autoStateRef.current[key] === 'edited') return;
+    autoStateRef.current[key] = 'edited';
+    setAutoBadges({ ...autoStateRef.current });
+  };
 
   const defaultValues = useMemo(
     () => getDefaultToolFormValues(initialData, template.toolTypes[0] as ToolType),
@@ -123,7 +161,6 @@ export function ToolCreationForm({
 
   useEffect(() => {
     if (!loading) {
-      setConfigView('settings');
       setEditingParameterIndex(null);
       setShowParamsPreview(false);
     }
@@ -134,11 +171,50 @@ export function ToolCreationForm({
   const selectedReferenceDoctype = useWatch({ control: form.control, name: 'reference_doctype' });
   const functionPathValue = useWatch({ control: form.control, name: 'function_path' });
 
+  // Auto-derive tool_name / description / read-only / permission / default
+  // parameters whenever a Document Operation verb + DocType are selected.
+  // Fields the user has manually edited are never overwritten.
+  useEffect(() => {
+    if (mode !== 'create') return;
+
+    // Default Tool Category from the creation template — applies to all five
+    // tool-type bodies, independent of verb/DocType selection.
+    if (autoStateRef.current.tool_type === 'auto') {
+      const category = getDefaultToolCategory(template.id);
+      if (form.getValues('tool_type') !== category) {
+        form.setValue('tool_type', category, { shouldDirty: true });
+      }
+    }
+
+    if (!selectedType || !selectedReferenceDoctype) return;
+
+    const defaults = deriveDocumentOperationDefaults(selectedType, selectedReferenceDoctype);
+    if (!defaults) return;
+
+    if (autoStateRef.current.tool_name === 'auto') {
+      form.setValue('tool_name', defaults.toolName, { shouldDirty: true });
+    }
+    if (autoStateRef.current.description === 'auto') {
+      form.setValue('description', defaults.description, { shouldDirty: true });
+    }
+    if (autoStateRef.current.is_read_only === 'auto') {
+      form.setValue('is_read_only', defaults.isReadOnly, { shouldDirty: true });
+    }
+    if (autoStateRef.current.required_permission === 'auto') {
+      form.setValue('required_permission', defaults.requiredPermission, { shouldDirty: true });
+    }
+    if (autoStateRef.current.parameters === 'auto' && defaults.defaultParameters.length > 0) {
+      form.setValue('parameters', defaults.defaultParameters, { shouldDirty: true });
+    }
+  }, [selectedType, selectedReferenceDoctype, mode, form, template.id]);
+
   // Auto-fill mandatory params for Create Document / Create Multiple Documents
   useEffect(() => {
     const shouldAutofill =
       selectedType === 'Create Document' || selectedType === 'Create Multiple Documents';
     if (!shouldAutofill || !selectedReferenceDoctype) return;
+    // Don't fight the user once they've touched the parameter table manually.
+    if (autoStateRef.current.parameters === 'edited') return;
 
     const autofillMandatoryFields = async () => {
       try {
@@ -163,7 +239,7 @@ export function ToolCreationForm({
 
   const toolTypeOptions = toolTypes.map((type) => ({
     value: type.name,
-    label: type.name1 || type.name,
+    label: getToolTypeDisplayLabel(type.name1 || type.name),
   }));
 
   const operationTypeOptions = template.toolTypes;
@@ -174,6 +250,7 @@ export function ToolCreationForm({
 
   // Handle child table operations
   const handleAddParameter = () => {
+    markEdited('parameters');
     const current = form.getValues('parameters') || [];
     form.setValue('parameters', [
       ...current,
@@ -190,6 +267,7 @@ export function ToolCreationForm({
   };
 
   const handleUpdateParameter = (index: number, data: Partial<ParameterData>) => {
+    markEdited('parameters');
     const current = form.getValues('parameters') || [];
     const updated = [...current];
     updated[index] = { ...updated[index], ...data };
@@ -197,6 +275,7 @@ export function ToolCreationForm({
   };
 
   const handleDeleteParameter = (index: number) => {
+    markEdited('parameters');
     const current = form.getValues('parameters') || [];
     form.setValue('parameters', current.filter((_, i) => i !== index));
     if (editingParameterIndex !== null) {
@@ -209,6 +288,7 @@ export function ToolCreationForm({
   };
 
   const handleAddParametersFromDocType = (newRows: ParameterData[]) => {
+    markEdited('parameters');
     const current = (form.getValues('parameters') || []) as ParameterData[];
     form.setValue('parameters', [...current, ...newRows], { shouldDirty: true });
     toast.success('Fields added');
@@ -252,6 +332,7 @@ export function ToolCreationForm({
       }));
 
       form.setValue('parameters', fetchedParams, { shouldDirty: true });
+      markEdited('parameters');
       form.setValue(
         'pass_parameters_as_json',
         response?.pass_parameters_as_json === 1 || response?.pass_parameters_as_json === true,
@@ -269,8 +350,33 @@ export function ToolCreationForm({
   const parameters = form.watch('parameters') || [];
   const httpHeaders = form.watch('http_headers') || [];
   const formToolName = form.watch('tool_name');
+  const formToolType = form.watch('tool_type');
   const description = form.watch('description');
   const autoAddToAgent = form.watch('auto_add_to_agent');
+  const requiredPermission = form.watch('required_permission');
+  const isReadOnly = form.watch('is_read_only');
+  const allowedForGuest = form.watch('allowed_for_guest');
+
+  const [contractOpen, setContractOpen] = useState(false);
+  const [guardrailsOpen, setGuardrailsOpen] = useState(false);
+
+  // One-line summary shown on the collapsed "Details" section header.
+  const contractSummary = useMemo(() => {
+    const category = formToolType || 'No category';
+    const desc = (description || '').trim();
+    const truncated = desc.length > 60 ? `${desc.slice(0, 60)}…` : desc;
+    return truncated ? `${category} · ${truncated}` : category;
+  }, [formToolType, description]);
+
+  // One-line summary shown on the collapsed "Guardrails" section header.
+  const guardrailsSummary = useMemo(() => {
+    const permission = requiredPermission
+      ? requiredPermission.charAt(0).toUpperCase() + requiredPermission.slice(1)
+      : 'Any permission';
+    const mutability = isReadOnly ? 'Read-only' : 'Writable';
+    const guests = allowedForGuest ? 'Guest access' : 'Not for guests';
+    return `${permission} · ${mutability} · ${guests}`;
+  }, [requiredPermission, isReadOnly, allowedForGuest]);
 
   const { parameterSchema, functionDefinition } = useMemo(() => {
     const properties: Record<string, Record<string, unknown>> = {};
@@ -301,19 +407,38 @@ export function ToolCreationForm({
       schema.required = required;
     }
 
-    const functionDef: Record<string, unknown> = {
-      name: formToolName || 'untitled_tool',
-      description: description || 'No description provided.',
-    };
-    if (Object.keys(properties).length > 0) {
-      functionDef.parameters = schema;
-    }
+    const functionDef = buildFunctionDefinition({
+      toolName: formToolName,
+      description,
+      types: selectedType,
+      referenceDoctype: selectedReferenceDoctype,
+      parameters,
+    });
 
     return {
       parameterSchema: schema,
       functionDefinition: functionDef,
     };
-  }, [parameters, formToolName, description]);
+  }, [parameters, formToolName, description, selectedType, selectedReferenceDoctype]);
+
+  const showAutoBadges =
+    mode === 'create' && isDocumentOperationType(selectedType) && !!selectedReferenceDoctype;
+
+  const renderAutoBadge = (key: AutoFieldKey) => {
+    // tool_type is auto-derived from the template for all five tool-type
+    // bodies, so its badge does not depend on verb/DocType selection.
+    const visible = key === 'tool_type' ? mode === 'create' : showAutoBadges;
+    if (!visible) return null;
+    return autoBadges[key] === 'auto' ? (
+      <Badge variant="secondary" className="text-[10px] ml-2 font-normal">
+        Auto
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="text-[10px] ml-2 font-normal">
+        Edited
+      </Badge>
+    );
+  };
 
   const parameterColumns = useMemo<ColumnDef<ParameterData>[]>(
     () => [
@@ -434,11 +559,8 @@ export function ToolCreationForm({
       {editingParameterIndex !== null ? renderParameterEditorView() : (
         <div className="space-y-8 pb-2">
       {/* CORE CONFIGURATION Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Settings className="w-5 h-5 text-steel-soft" />
-          <h3 className="font-semibold text-foreground">Core configuration</h3>
-        </div>
+      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
+        <SectionHeader icon={Settings} title="Core configuration" />
 
         <FormField
           control={form.control}
@@ -447,11 +569,17 @@ export function ToolCreationForm({
             <FormItem>
               <FormLabel>
                 Tool Name<span className="text-destructive">*</span>
+                {renderAutoBadge('tool_name')}
               </FormLabel>
               <FormControl>
                 <Input
                   placeholder="e.g. create_sales_order"
+                  className="bg-background"
                   {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    markEdited('tool_name');
+                  }}
                   disabled={loading}
                 />
               </FormControl>
@@ -460,58 +588,11 @@ export function ToolCreationForm({
           )}
         />
 
-        <FormField
-          control={form.control}
-          name="tool_type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Tool Category<span className="text-destructive">*</span>
-              </FormLabel>
-              <FormControl>
-                <Combobox
-                  options={toolTypeOptions}
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  placeholder="Select Tool Category..."
-                  searchPlaceholder="Search tool categories..."
-                  emptyText="No tool category found."
-                  disabled={loading}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>
-                Description<span className="text-destructive">*</span>
-              </FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
-                  className="min-h-[100px]"
-                  {...field}
-                  disabled={loading}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
       </div>
 
       {/* OPERATION DETAILS Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap className="w-5 h-5 text-steel-soft" />
-          <h3 className="font-semibold text-foreground">Operation details</h3>
-        </div>
+      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
+        <SectionHeader icon={Zap} title="Operation details" />
 
         <FormField
           control={form.control}
@@ -527,7 +608,7 @@ export function ToolCreationForm({
                 disabled={loading}
               >
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Select Operation Type..." />
                   </SelectTrigger>
                 </FormControl>
@@ -563,6 +644,7 @@ export function ToolCreationForm({
                     searchPlaceholder="Search DocTypes..."
                     emptyText="No DocType found."
                     disabled={loading || loadingData}
+                    className="bg-background"
                   />
                 </FormControl>
                 <FormMessage />
@@ -590,6 +672,7 @@ export function ToolCreationForm({
                     emptyText="No agent found."
                     disabled={loading || loadingData}
                     linkTo={linkRoutes.agent}
+                    className="bg-background"
                   />
                 </FormControl>
                 <FormMessage />
@@ -608,6 +691,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app.api.my_function"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -628,6 +712,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., myClientFunction"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -648,6 +733,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., my_app"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -668,6 +754,7 @@ export function ToolCreationForm({
                 <FormControl>
                   <Input
                     placeholder="e.g., https://api.example.com"
+                    className="bg-background"
                     {...field}
                     disabled={loading}
                   />
@@ -705,9 +792,9 @@ export function ToolCreationForm({
 
       {/* HTTP Headers Section (for GET/POST) */}
       {selectedType && shouldShowField('http_headers', selectedType) && (
-        <div className="space-y-4">
+        <div className="space-y-4 rounded-none border border-line bg-panel p-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">HTTP Headers</h3>
+            <SectionHeader title="HTTP Headers" />
             <Button
               type="button"
               variant="outline"
@@ -740,9 +827,9 @@ export function ToolCreationForm({
       )}
 
       {/* Parameters Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 rounded-none border border-line bg-panel p-4">
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-foreground">Parameters</h3>
+          <SectionHeader title={<>Parameters{renderAutoBadge('parameters')}</>} />
           <div className="flex items-center gap-2">
             {selectedReferenceDoctype && (
               <Button
@@ -836,104 +923,8 @@ export function ToolCreationForm({
         )}
       </div>
 
-      {/* Optional Fields Section */}
-      <div className="space-y-4 pt-1">
-        <h3 className="font-semibold text-foreground">Additional Settings</h3>
-
-        <FormField
-          control={form.control}
-          name="required_permission"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Required Permission</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                value={field.value}
-                disabled={loading}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select permission level..." />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="read">Read</SelectItem>
-                  <SelectItem value="write">Write</SelectItem>
-                  <SelectItem value="create">Create</SelectItem>
-                  <SelectItem value="delete">Delete</SelectItem>
-                  <SelectItem value="submit">Submit</SelectItem>
-                  <SelectItem value="cancel">Cancel</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormDescription>Permission level required to use this tool</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="is_read_only"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
-              <div className="space-y-0.5">
-                <FormLabel>Read Only</FormLabel>
-                <p className="text-sm text-steel">
-                  If checked, this tool does not modify data
-                </p>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  disabled={loading}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="allowed_for_guest"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
-              <div className="space-y-0.5">
-                <FormLabel>Allowed for Guest</FormLabel>
-                <p className="text-sm text-steel">
-                  If checked, Guest users can use this tool
-                </p>
-              </div>
-              <FormControl>
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                  disabled={loading}
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
-      </div>
         </div>
       )}
-    </div>
-  );
-
-  const renderFunctionDefinitionView = () => (
-    <div className="space-y-4">
-      <Alert>
-        <Braces className="h-4 w-4" />
-        <AlertDescription>
-          <p className="font-medium text-foreground">Function definition preview</p>
-          <p className="text-steel">
-            This JSON is generated from your current tool settings and parameter definitions.
-          </p>
-        </AlertDescription>
-      </Alert>
-      <div className="rounded-none border border-line bg-ink p-4">
-        <pre className="text-xs overflow-x-auto font-mono text-steel-soft">{JSON.stringify(functionDefinition, null, 2)}</pre>
-      </div>
     </div>
   );
 
@@ -950,7 +941,7 @@ export function ToolCreationForm({
           />
         )}
         {editingParameterIndex === null && (
-          <div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4">
+          <div className="sticky top-0 z-10 bg-background border-b border-line py-3 mb-4">
             <div className="flex items-center justify-between gap-4">
               <Button
                 type="button"
@@ -962,26 +953,6 @@ export function ToolCreationForm({
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
               </Button>
-              <div className="flex items-center gap-1 rounded-none border border-line bg-paper-deep/30 p-1">
-                <Button
-                  type="button"
-                  variant={configView === 'settings' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  onClick={() => setConfigView('settings')}
-                >
-                  <Settings className="w-4 h-4 mr-1" />
-                  Settings
-                </Button>
-                <Button
-                  type="button"
-                  variant={configView === 'function_definition' ? 'secondary' : 'ghost'}
-                  size="sm"
-                  onClick={() => setConfigView('function_definition')}
-                >
-                  <Braces className="w-4 h-4 mr-1" />
-                  Function Def
-                </Button>
-              </div>
             </div>
           </div>
         )}
@@ -994,7 +965,223 @@ export function ToolCreationForm({
           </Alert>
         )}
 
-        {configView === 'settings' ? renderSettingsView() : renderFunctionDefinitionView()}
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
+          <div className="min-w-0">{renderSettingsView()}</div>
+
+          {/* Right rail: contract, guardrails, then the persistent live preview */}
+          <aside className="min-w-0 self-start xl:sticky xl:top-16 space-y-3">
+            {/* CONTRACT (Tool Category + Description, collapsed by default) */}
+            <Collapsible open={contractOpen} onOpenChange={setContractOpen} className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  disabled={loading}
+                >
+                  <FileText className="w-4 h-4 text-steel-soft shrink-0" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Details</h3>
+                  {!contractOpen && (
+                    <span className="text-sm text-steel truncate ml-1">— {contractSummary}</span>
+                  )}
+                  <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 rounded-none border border-line bg-panel p-4">
+                <FormField
+                  control={form.control}
+                  name="tool_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Tool Category<span className="text-destructive">*</span>
+                        {renderAutoBadge('tool_type')}
+                      </FormLabel>
+                      <FormControl>
+                        <Combobox
+                          options={toolTypeOptions}
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                            markEdited('tool_type');
+                          }}
+                          placeholder="Select Tool Category..."
+                          searchPlaceholder="Search tool categories..."
+                          emptyText="No tool category found."
+                          disabled={loading}
+                          className="bg-background"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Description
+                        {renderAutoBadge('description')}
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Describe what this tool does. The AI uses this description to decide when to call it."
+                          className="min-h-[100px] bg-background"
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            markEdited('description');
+                          }}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* GUARDRAILS (permission + access switches, collapsed by default) */}
+            <Collapsible open={guardrailsOpen} onOpenChange={setGuardrailsOpen} className="space-y-3">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex w-full items-center gap-2 rounded-none border border-line bg-panel px-3 py-2.5 text-left transition-colors hover:bg-paper-deep"
+                  disabled={loading}
+                >
+                  <ShieldCheck className="w-4 h-4 text-steel-soft shrink-0" />
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-steel shrink-0">Guardrails</h3>
+                  {!guardrailsOpen && (
+                    <span className="text-sm text-steel truncate ml-1">— {guardrailsSummary}</span>
+                  )}
+                  <ChevronDown className="w-4 h-4 ml-auto shrink-0 text-steel-soft transition-transform group-data-[state=open]:rotate-180" />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-4 rounded-none border border-line bg-panel p-4">
+                <FormField
+                  control={form.control}
+                  name="required_permission"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Required Permission
+                        {renderAutoBadge('required_permission')}
+                      </FormLabel>
+                      <Select
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          markEdited('required_permission');
+                        }}
+                        value={field.value}
+                        disabled={loading}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="Select permission level..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="read">Read</SelectItem>
+                          <SelectItem value="write">Write</SelectItem>
+                          <SelectItem value="create">Create</SelectItem>
+                          <SelectItem value="delete">Delete</SelectItem>
+                          <SelectItem value="submit">Submit</SelectItem>
+                          <SelectItem value="cancel">Cancel</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>Permission level required to use this tool</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="is_read_only"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>
+                          Read Only
+                          {renderAutoBadge('is_read_only')}
+                        </FormLabel>
+                        <p className="text-sm text-steel">
+                          If checked, this tool does not modify data
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            markEdited('is_read_only');
+                          }}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="allowed_for_guest"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel>Allowed for Guest</FormLabel>
+                        <p className="text-sm text-steel">
+                          If checked, Guest users can use this tool
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={loading}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
+            <div className="flex items-center justify-between gap-2">
+              <SectionHeader icon={Braces} title="Function Definition" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTestDrawer(true)}
+                disabled={loading}
+              >
+                <FlaskConical className="w-4 h-4 mr-2" />
+                Test call
+              </Button>
+            </div>
+            <p className="text-xs text-steel">
+              Live schema generated from your current settings — this is what the AI receives.
+            </p>
+            <div className="rounded-none border border-line bg-ink p-4 max-h-[70vh] overflow-auto">
+              <pre className="text-xs font-mono text-steel-soft whitespace-pre-wrap break-words">
+                {JSON.stringify(functionDefinition, null, 2)}
+              </pre>
+            </div>
+          </aside>
+        </div>
+
+        <TestToolDrawer
+          open={showTestDrawer}
+          onOpenChange={setShowTestDrawer}
+          toolName={formToolName}
+          types={selectedType}
+          referenceDoctype={selectedReferenceDoctype}
+          functionDefinition={functionDefinition}
+        />
 
         {/* Footer */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-end gap-4 pt-4 border-t">

@@ -12,6 +12,12 @@ export type MessageType = {
   generatedAudio?: string;
   generatedVideo?: string;
   voiceMessage?: string;
+  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
+  /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
+  agentRunId?: string;
+  error?: string;
+  sttModel?: string;
+  status?: string;
   attachment?: {
     name: string;
     label: string;
@@ -26,4 +32,8 @@ export type MessageType = {
     result: string | undefined;
     error: string | undefined;
   }[];
+  injected_memories?: string[];
+  /** Provider thinking/reasoning text, shown collapsed above the answer. */
+  reasoning?: string;
+  reasoningStreaming?: boolean;
 };

@@ -43,6 +43,7 @@ def run_agent_sync_chat(
     parent_conversation_id: str = None,
     invoked_by_agent: str = None,
     prompt_cache_options=None,
+    now=None,
 ):
     """Sync chat API with explicit new-conversation support.
 
@@ -54,6 +55,9 @@ def run_agent_sync_chat(
     Set ``create_new=true`` to force a fresh Agent Conversation, then run the
     first message inside that new conversation. Subsequent turns should pass the
     returned ``conversation_id``.
+
+    Runs are queue-first by default; pass ``now=true`` to force direct
+    execution in the request (see ``run_agent_sync``).
     """
     if not agent_name:
         frappe.throw(_("Agent Name is required"))
@@ -103,4 +107,5 @@ def run_agent_sync_chat(
         parent_conversation_id=parent_conversation_id,
         invoked_by_agent=invoked_by_agent,
         prompt_cache_options=prompt_cache_options,
+        now=now,
     )

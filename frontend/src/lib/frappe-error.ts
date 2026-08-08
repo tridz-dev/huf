@@ -1,3 +1,5 @@
+import DOMPurify from 'dompurify';
+
 /**
  * Frappe API Error Handler
  * Extracts user-friendly error messages from Frappe API error responses
@@ -17,23 +19,47 @@ export interface FrappeErrorResponse {
 }
 
 /**
+ * Loose shape of a Frappe API error object.
+ * Real payloads vary (axios wrappers, SDK errors, plain objects), so all fields are optional.
+ */
+export interface FrappeErrorShape {
+  message?: string;
+  exception?: string;
+  _server_messages?: string | string[];
+  originalError?: unknown;
+  response?: { _server_messages?: string };
+  data?: { _server_messages?: string };
+  exc_type?: string;
+}
+
+/** Error augmented by createFrappeError with the original Frappe error details */
+export interface FrappeError extends Error {
+  originalError?: unknown;
+  serverMessages?: FrappeServerMessage[] | null;
+  exceptionType?: string;
+}
+
+/**
  * Extract server messages from Frappe error response
  * @param error - The error object from Frappe API
  * @returns Array of server messages or null if none found
  */
-export function extractFrappeServerMessages(error: any): FrappeServerMessage[] | null {
+export function extractFrappeServerMessages(error: unknown): FrappeServerMessage[] | null {
+  const err = error as FrappeErrorShape | null | undefined;
   try {
     let messagesString: string | null = null;
 
     // Check if error has _server_messages property
-    if (error?._server_messages) {
-      messagesString = error._server_messages;
-    } else if (error?.response?._server_messages) {
+    if (typeof err?._server_messages === 'string') {
+      messagesString = err._server_messages;
+    } else if (Array.isArray(err?._server_messages)) {
+      messagesString = JSON.stringify(err._server_messages);
+    } else if (err?.response?._server_messages) {
       // Check if error.response exists (some SDKs wrap errors)
-      messagesString = error.response._server_messages;
-    } else if (error?.data?._server_messages) {
+      messagesString = err.response._server_messages;
+    } else if (err?.data?._server_messages) {
       // Check if error.data exists (another possible structure)
-      messagesString = error.data._server_messages;
+      messagesString = err.data._server_messages;
     }
 
     if (!messagesString) {
@@ -41,7 +67,7 @@ export function extractFrappeServerMessages(error: any): FrappeServerMessage[] |
     }
 
     // Parse the JSON string array
-    let parsedMessages = JSON.parse(messagesString);
+    const parsedMessages = JSON.parse(messagesString);
     
     // Handle case where parsedMessages might be an array of JSON strings
     if (Array.isArray(parsedMessages)) {
@@ -77,18 +103,23 @@ export function extractFrappeServerMessages(error: any): FrappeServerMessage[] |
  * @param error - The error object from Frappe API (can be original or wrapped Error)
  * @returns User-friendly error message string
  */
-export function getFrappeErrorMessage(error: any): string {
+export function getFrappeErrorMessage(error: unknown): string {
+  const err = error as FrappeErrorShape | null | undefined;
   // If this is a wrapped error from createFrappeError, use the original error
-  const originalError = error?.originalError;
-  const errorToProcess = originalError || error;
+  const originalError = err?.originalError;
+  const errorToProcess = (originalError || err) as FrappeErrorShape | null | undefined;
 
   // Try to extract server messages first (from original error if available)
   const serverMessages = extractFrappeServerMessages(errorToProcess);
   if (serverMessages && serverMessages.length > 0) {
     // Return the first message (usually the most relevant)
     const message = serverMessages[0].message || serverMessages[0].title || 'An error occurred';
-    // Remove HTML tags if present (e.g., <strong> tags)
-    return message.replace(/<[^>]*>/g, '');
+    // Strip HTML tags safely using DOMPurify without regexes or double-escaping
+    const clean =
+      typeof window !== 'undefined'
+        ? DOMPurify.sanitize(message, { ALLOWED_TAGS: [] }).trim()
+        : message.replace(/<[^>]*>/g, '').trim();
+    return clean || 'An error occurred';
   }
 
   // Fallback to exception message
@@ -100,7 +131,7 @@ export function getFrappeErrorMessage(error: any): string {
   }
 
   // If this is a wrapped Error object, use its message (which is already user-friendly)
-  if (error?.message && error instanceof Error) {
+  if (error instanceof Error && error.message) {
     return error.message;
   }
 
@@ -124,15 +155,16 @@ export function getFrappeErrorMessage(error: any): string {
  * @param defaultMessage - Default message if error cannot be parsed
  * @returns Error object with user-friendly message
  */
-export function createFrappeError(error: any, defaultMessage?: string): Error {
+export function createFrappeError(error: unknown, defaultMessage?: string): Error {
   const message = getFrappeErrorMessage(error) || defaultMessage || 'An error occurred';
-  const customError = new Error(message);
-  
+  const customError = new Error(message) as FrappeError;
+  const err = error as FrappeErrorShape | null | undefined;
+
   // Preserve original error for debugging
-  (customError as any).originalError = error;
-  (customError as any).serverMessages = extractFrappeServerMessages(error);
-  (customError as any).exceptionType = error?.exc_type || error?.exception?.split('.')?.pop()?.split('(')?.[0];
-  
+  customError.originalError = error;
+  customError.serverMessages = extractFrappeServerMessages(error);
+  customError.exceptionType = err?.exc_type || err?.exception?.split('.')?.pop()?.split('(')?.[0];
+
   return customError;
 }
 
@@ -142,10 +174,10 @@ export function createFrappeError(error: any, defaultMessage?: string): Error {
  * @param context - Context for logging (e.g., "Error creating agent")
  * @throws Error with user-friendly message
  */
-export function handleFrappeError(error: any, context?: string): never {
+export function handleFrappeError(error: unknown, context?: string): never {
   // Log the full error for debugging
   if (context) {
-    console.error(`${context}:`, error);
+    console.error('Frappe API error context:', context, error);
   } else {
     console.error('Frappe API error:', error);
   }
@@ -153,4 +185,3 @@ export function handleFrappeError(error: any, context?: string): never {
   // Throw user-friendly error
   throw createFrappeError(error, context);
 }
-

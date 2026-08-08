@@ -70,10 +70,38 @@ export type SpeechInputProps = ComponentProps<typeof Button> & {
    */
   onAudioRecorded?: (audioBlob: Blob) => Promise<string>;
   lang?: string;
+  /**
+   * Maximum recording duration in seconds for MediaRecorder mode.
+   * When the cap is reached, recording auto-stops and the recorded blob is
+   * still delivered to onAudioRecorded. Defaults to 180 (3 minutes).
+   */
+  maxDurationSeconds?: number;
+  /**
+   * When true, always use server-side STT (MediaRecorder) even if the
+   * browser supports the Web Speech API. This keeps transcription on the
+   * server where provider, audit, and cost controls apply. Browser-only
+   * dictation is treated as a fallback and labeled as local/unaudited.
+   */
+  preferServerStt?: boolean;
 };
 
-const detectSpeechInputMode = (): SpeechInputMode => {
+const detectSpeechInputMode = (preferServerStt = false): SpeechInputMode => {
   if (typeof window === "undefined") {
+    return "none";
+  }
+
+  const hasMediaRecorder =
+    "MediaRecorder" in window && "mediaDevices" in navigator;
+
+  // Prefer server-side STT when requested; only fall back to browser
+  // dictation when MediaRecorder is unavailable.
+  if (preferServerStt) {
+    if (hasMediaRecorder) {
+      return "media-recorder";
+    }
+    if ("SpeechRecognition" in window || "webkitSpeechRecognition" in window) {
+      return "speech-recognition";
+    }
     return "none";
   }
 
@@ -81,7 +109,7 @@ const detectSpeechInputMode = (): SpeechInputMode => {
     return "speech-recognition";
   }
 
-  if ("MediaRecorder" in window && "mediaDevices" in navigator) {
+  if (hasMediaRecorder) {
     return "media-recorder";
   }
 
@@ -93,16 +121,21 @@ export const SpeechInput = ({
   onTranscriptionChange,
   onAudioRecorded,
   lang = "en-US",
+  maxDurationSeconds = 180,
+  preferServerStt = false,
   ...props
 }: SpeechInputProps) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode);
+  const [mode] = useState<SpeechInputMode>(detectSpeechInputMode(preferServerStt));
   const [isRecognitionReady, setIsRecognitionReady] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const maxDurationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const onTranscriptionChangeRef = useRef<
     SpeechInputProps["onTranscriptionChange"]
   >(onTranscriptionChange);
@@ -181,6 +214,10 @@ export const SpeechInput = ({
   // Cleanup MediaRecorder and stream on unmount
   useEffect(
     () => () => {
+      if (maxDurationTimeoutRef.current !== null) {
+        clearTimeout(maxDurationTimeoutRef.current);
+        maxDurationTimeoutRef.current = null;
+      }
       if (mediaRecorderRef.current?.state === "recording") {
         mediaRecorderRef.current.stop();
       }
@@ -192,6 +229,13 @@ export const SpeechInput = ({
     },
     []
   );
+
+  const clearMaxDurationTimeout = useCallback(() => {
+    if (maxDurationTimeoutRef.current !== null) {
+      clearTimeout(maxDurationTimeoutRef.current);
+      maxDurationTimeoutRef.current = null;
+    }
+  }, []);
 
   // Start MediaRecorder recording
   const startMediaRecorder = useCallback(async () => {
@@ -212,6 +256,7 @@ export const SpeechInput = ({
       };
 
       const handleStop = async () => {
+        clearMaxDurationTimeout();
         for (const track of stream.getTracks()) {
           track.stop();
         }
@@ -237,6 +282,7 @@ export const SpeechInput = ({
       };
 
       const handleError = () => {
+        clearMaxDurationTimeout();
         setIsListening(false);
         for (const track of stream.getTracks()) {
           track.stop();
@@ -251,18 +297,31 @@ export const SpeechInput = ({
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
       setIsListening(true);
+
+      // Auto-stop at the max duration cap; the "stop" handler above still
+      // delivers the recorded blob to onAudioRecorded.
+      if (maxDurationSeconds > 0) {
+        maxDurationTimeoutRef.current = setTimeout(() => {
+          maxDurationTimeoutRef.current = null;
+          if (mediaRecorderRef.current?.state === "recording") {
+            mediaRecorderRef.current.stop();
+          }
+          setIsListening(false);
+        }, maxDurationSeconds * 1000);
+      }
     } catch {
       setIsListening(false);
     }
-  }, []);
+  }, [clearMaxDurationTimeout, maxDurationSeconds]);
 
   // Stop MediaRecorder recording
   const stopMediaRecorder = useCallback(() => {
+    clearMaxDurationTimeout();
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
     }
     setIsListening(false);
-  }, []);
+  }, [clearMaxDurationTimeout]);
 
   const toggleListening = useCallback(() => {
     if (mode === "speech-recognition" && recognitionRef.current) {
@@ -314,12 +373,22 @@ export const SpeechInput = ({
         )}
         disabled={isDisabled}
         onClick={toggleListening}
+        title={
+          mode === "speech-recognition"
+            ? "Local browser dictation (not audited by server STT)"
+            : "Record audio and transcribe with server STT"
+        }
         {...props}
       >
         {isProcessing && <Spinner />}
         {!isProcessing && isListening && <SquareIcon className="size-4" />}
         {!(isProcessing || isListening) && <MicIcon className="size-4" />}
       </Button>
+      {mode === "speech-recognition" && !isListening && (
+        <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-zinc-400">
+          local
+        </span>
+      )}
     </div>
   );
 };

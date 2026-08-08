@@ -8,12 +8,16 @@ import { useEffect, useRef, useState, useId } from 'react';
 import mermaid from 'mermaid';
 import { cn } from '@/lib/utils';
 
-// Initialize mermaid with secure settings
+// Initialize mermaid with secure settings.
+// suppressErrorRendering is required: without it, a failed render() still
+// injects mermaid's own unstyled bomb-icon error SVG into the page before
+// throwing, bypassing our try/catch and the styled error card below.
 mermaid.initialize({
 	startOnLoad: false,
 	theme: 'neutral',
 	securityLevel: 'strict',
 	fontFamily: 'inherit',
+	suppressErrorRendering: true,
 });
 
 interface MermaidProps {

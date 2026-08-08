@@ -194,6 +194,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             "total_cost": metadata.get("cost", 0),
         }
     )
+    # Guest webhook runs after signature validation; internal audit record created on behalf of the system.
     run_doc.insert(ignore_permissions=True)
     if api_key and conversation_id:
         try:
@@ -236,5 +237,4 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             )
             msg_doc.db_set("creation", msg_timestamp)
 
-    frappe.db.commit()
     return {"status": "success", "run_id": run_doc.name}

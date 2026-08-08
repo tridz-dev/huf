@@ -8,12 +8,14 @@ import { UseFormReturn } from 'react-hook-form';
 import type { AgentFormValues } from './types';
 import type { AIModel } from '@/types/agent.types';
 import { Combobox } from '@/components/ui/combobox';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AgentPromptOption } from './PromptTemplateSection';
 import { FormSettingsSection } from './FormSettingsSection';
+import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
 import {
 	MODEL_MODALITY_IMAGE,
 	MODEL_MODALITY_TTS,
@@ -32,15 +34,58 @@ import {
 	STT_MODEL_DESCRIPTION,
 } from '@/data/ai';
 
+export interface ExecutionProfileOption {
+	value: string;
+	label: string;
+	approvalMode?: string;
+}
+
+export interface SSHConnectionOption {
+	value: string;
+	label: string;
+	description?: string;
+}
+
+export interface MemoryPolicyOption {
+	value: string;
+	label: string;
+	description?: string;
+}
+
 interface AdvancedTabProps {
 	form: UseFormReturn<AgentFormValues>;
 	allModels: AIModel[];
 	summaryPromptOptions: AgentPromptOption[];
 	loadingSummaryPrompts?: boolean;
+	executionProfileOptions?: ExecutionProfileOption[];
+	loadingExecutionProfiles?: boolean;
+	sshConnectionOptions?: SSHConnectionOption[];
+	loadingSSHConnections?: boolean;
+	memoryPolicyOptions?: MemoryPolicyOption[];
+	loadingMemoryPolicies?: boolean;
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
-	return (model.modalities || '').trim() === required;
+	const items = new Set(
+		(model.modalities || '')
+			.split(',')
+			.map((m) => m.trim())
+			.filter(Boolean),
+	);
+	return items.has(required);
+}
+
+function approvalModeDescription(mode?: string): string {
+	switch (mode) {
+		case 'Auto Approve':
+			return 'Code runs execute without manual approval.';
+		case 'Ask Every Time':
+			return 'This profile requires approval on every call.';
+		case 'Never Allow':
+			return 'This profile blocks all code execution calls.';
+		default:
+			return '';
+	}
 }
 
 function parseOptionalNumber(
@@ -59,6 +104,12 @@ export function AdvancedTab({
 	allModels,
 	summaryPromptOptions,
 	loadingSummaryPrompts = false,
+	executionProfileOptions = [],
+	loadingExecutionProfiles = false,
+	sshConnectionOptions = [],
+	loadingSSHConnections = false,
+	memoryPolicyOptions = [],
+	loadingMemoryPolicies = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
@@ -66,6 +117,7 @@ export function AdvancedTab({
 	const contextStrategy = form.watch('context_strategy');
 	const summaryPromptMode = form.watch('summary_prompt_mode');
 	const enableConversationData = form.watch('enable_conversation_data');
+	const enableMemory = form.watch('enable_memory');
 	const navigate = useNavigate();
 	const location = useLocation();
 	const selectedSummaryPrompt = summaryPromptOptions.find(
@@ -75,6 +127,23 @@ export function AdvancedTab({
 		...option,
 		subtitle: option.version ? `Version ${option.version}` : undefined,
 	}));
+	const selectedExecutionProfile = executionProfileOptions.find(
+		(option) => option.value === form.watch('execution_profile'),
+	);
+	const executionProfileComboboxOptions = executionProfileOptions.map((option) => ({
+		...option,
+		subtitle: option.approvalMode ? `Approval: ${option.approvalMode}` : undefined,
+	}));
+	const memoryPolicyComboboxOptions = memoryPolicyOptions.map((option) => ({
+		value: option.value,
+		label: option.label,
+	}));
+	const sshConnectionMultiSelectOptions = sshConnectionOptions.map((option) => ({
+		value: option.value,
+		label: option.label,
+		description: option.description,
+	}));
+	const selectedApprovalHint = approvalModeDescription(selectedExecutionProfile?.approvalMode);
 
 	return (
 		<div className="space-y-12">
@@ -517,6 +586,208 @@ export function AdvancedTab({
 			</FormSettingsSection>
 
 			<FormSettingsSection
+				title="Reasoning Configuration"
+				description="Configure provider-aware reasoning parameters (e.g. Anthropic extended thinking, OpenAI reasoning effort)."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="reasoning_mode"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>Reasoning Mode</FormLabel>
+								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Select mode" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="Auto">Auto (Default / Model Native)</SelectItem>
+										<SelectItem value="Off">Off (Force Disable)</SelectItem>
+										<SelectItem value="On">On (Force Enable)</SelectItem>
+									</SelectContent>
+								</Select>
+								<FormDescription>
+									Whether to request reasoning/thinking controls from the LLM provider.
+								</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+
+					<FormField
+						control={form.control}
+						name="reasoning_effort"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>Reasoning Effort</FormLabel>
+								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Select effort" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="Auto">Auto (Default)</SelectItem>
+										<SelectItem value="Low">Low</SelectItem>
+										<SelectItem value="Medium">Medium</SelectItem>
+										<SelectItem value="High">High</SelectItem>
+									</SelectContent>
+								</Select>
+								<FormDescription>
+									Portable effort level (maps to OpenAI reasoning_effort or Anthropic thinking budget).
+								</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('reasoning_mode') === 'On' && (
+						<FormField
+							control={form.control}
+							name="reasoning_budget_tokens"
+							render={({ field }) => (
+								<FormItem>
+									<FormLabel>Reasoning Budget Tokens</FormLabel>
+									<FormControl>
+										<Input
+											type="number"
+											placeholder="1024"
+											{...field}
+											value={field.value?.toString() || ''}
+											onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
+										/>
+									</FormControl>
+									<FormDescription>
+										Explicit token budget for thinking (primarily for Anthropic thinking models).
+									</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+					)}
+
+					<FormField
+						control={form.control}
+						name="reasoning_summary"
+						render={({ field }) => (
+							<FormItem>
+								<FormLabel>Reasoning Summary</FormLabel>
+								<Select onValueChange={field.onChange} value={field.value || 'None'}>
+									<FormControl>
+										<SelectTrigger>
+											<SelectValue placeholder="Select summary" />
+										</SelectTrigger>
+									</FormControl>
+									<SelectContent>
+										<SelectItem value="None">None</SelectItem>
+										<SelectItem value="Concise">Concise</SelectItem>
+										<SelectItem value="Detailed">Detailed</SelectItem>
+									</SelectContent>
+								</Select>
+								<FormDescription>
+									Request reasoning summaries (supported by OpenAI Responses API).
+								</FormDescription>
+								<FormMessage />
+							</FormItem>
+						)}
+					/>
+				</div>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Memory Settings"
+				description="Enable long-term, scoped memory for this agent and configure memory policies and automated memory tools."
+			>
+				<FormField
+					control={form.control}
+					name="enable_memory"
+					render={({ field }) => (
+						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+							<div className="space-y-0.5 pr-4">
+								<FormLabel className="text-base">Enable Memory</FormLabel>
+								<FormDescription>
+									Enable long-term, scoped memory for this agent.
+								</FormDescription>
+							</div>
+							<FormControl>
+								<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+							</FormControl>
+						</FormItem>
+					)}
+				/>
+
+				{enableMemory && (
+					<>
+						<FormField
+							control={form.control}
+							name="memory_policy"
+							render={({ field }) => (
+								<FormItem className="sm:col-span-2">
+									<FormLabel>Memory Policy</FormLabel>
+									<FormControl>
+										<Combobox
+											options={memoryPolicyComboboxOptions}
+											value={field.value}
+											onValueChange={(v) => field.onChange(v || undefined)}
+											placeholder={loadingMemoryPolicies ? 'Loading policies...' : 'Select a Memory Policy'}
+											disabled={loadingMemoryPolicies}
+											searchPlaceholder="Search memory policies..."
+											emptyText="No enabled Memory Policies found."
+											linkTo={linkRoutes.memoryPolicy}
+										/>
+									</FormControl>
+									<FormDescription>
+										Policy governing memory capture and retrieval.
+									</FormDescription>
+									<FormMessage />
+								</FormItem>
+							)}
+						/>
+
+						<div className="grid gap-6 sm:grid-cols-2 sm:col-span-2">
+							<FormField
+								control={form.control}
+								name="enable_memory_search_tool"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+										<div className="space-y-0.5 pr-4">
+											<FormLabel className="text-base">Enable Memory Search Tool</FormLabel>
+											<FormDescription>
+												Automatically provide the agent with a tool to search memory records.
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
+								name="enable_memory_write_tool"
+								render={({ field }) => (
+									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+										<div className="space-y-0.5 pr-4">
+											<FormLabel className="text-base">Enable Memory Write Tool</FormLabel>
+											<FormDescription>
+												Automatically provide the agent with a tool to save new memory records.
+											</FormDescription>
+										</div>
+										<FormControl>
+											<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+										</FormControl>
+									</FormItem>
+								)}
+							/>
+						</div>
+					</>
+				)}
+			</FormSettingsSection>
+
+			<FormSettingsSection
 				title="Huf UI"
 				description="Chat avatar styling and tool execution visibility in the agent chat interface."
 			>
@@ -759,6 +1030,211 @@ This includes whether each tool call is completed and its corresponding result.`
 									</FormItem>
 								)}
 							/>
+						</>
+					)}
+				</div>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Code Execution"
+				description="Allow this agent to run Python code through the sandboxed Code Execution tool."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="allow_code_execution"
+						render={({ field }) => (
+							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+								<div className="space-y-0.5">
+									<FormLabel className="text-base">Allow Code Execution</FormLabel>
+									<FormDescription>
+										Explicit second confirmation enabling the Python Code Execution tool for this agent. The tool stays inert until this is checked and an Execution Profile is selected.
+									</FormDescription>
+								</div>
+								<FormControl>
+									<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								</FormControl>
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('allow_code_execution') && (
+						<>
+							<FormField
+								control={form.control}
+								name="execution_profile"
+								render={({ field }) => (
+									<FormItem className="sm:col-span-2">
+										<FormLabel>Execution Profile</FormLabel>
+										<div className="flex items-center gap-2">
+											<FormControl>
+												<Combobox
+													options={executionProfileComboboxOptions}
+													value={field.value}
+													onValueChange={(v) => field.onChange(v || undefined)}
+													placeholder={loadingExecutionProfiles ? 'Loading profiles...' : 'Select an Execution Profile'}
+													disabled={loadingExecutionProfiles}
+													searchPlaceholder="Search execution profiles..."
+													emptyText="No enabled Execution Profiles found."
+													linkTo={linkRoutes.executionProfile}
+												/>
+											</FormControl>
+											<Button
+												type="button"
+												variant="secondary"
+												onClick={() => {
+													const returnTo = `${location.pathname}#advanced`;
+													const selectedField = 'execution_profile';
+													try {
+														localStorage.setItem(
+															'executionProfileCreateReturnTo',
+															JSON.stringify({ returnTo, selectedField }),
+														);
+													} catch {
+														// ignore storage failures
+													}
+													navigate('/execution-profiles/new', {
+														state: {
+															returnTo,
+															selectedField,
+															showTab: 'advanced',
+														},
+													});
+												}}
+											>
+												<Plus className="w-4 h-4 mr-2" />
+												New
+											</Button>
+										</div>
+										<FormDescription>
+											Caps modules, network, filesystem, broker capabilities, and resource limits for code runs. Execution Profiles are managed by admins in the Frappe desk.
+										</FormDescription>
+										{selectedExecutionProfile && selectedApprovalHint && (
+											<div className="flex flex-wrap items-center gap-2 pt-2">
+												{selectedExecutionProfile.approvalMode ? (
+													<Badge variant="outline">Approval: {selectedExecutionProfile.approvalMode}</Badge>
+												) : null}
+												<span className="text-sm text-muted-foreground">{selectedApprovalHint}</span>
+											</div>
+										)}
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<FormField
+								control={form.control}
+								name="execution_shared_dir_limit_mb"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Shared Dir Limit (MB)</FormLabel>
+										<FormControl>
+											<Input
+												type="number"
+												placeholder="Profile default"
+												{...field}
+												value={field.value?.toString() || ''}
+												onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
+											/>
+										</FormControl>
+										<FormDescription>
+											Optional per-agent cap on the per-conversation shared directory. Must be at or below the selected profile&apos;s own limit (enforced server-side). Leave blank to use the profile default.
+										</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+						</>
+					)}
+				</div>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title={
+					<div className="flex items-center gap-2.5">
+						<span>SSH Execution</span>
+						<ExperimentalBadge size="sm" />
+					</div>
+				}
+				description="Allow this agent to run one-shot SSH commands against explicitly allowlisted SSH Connection records. Interactive PTY sessions are deferred."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
+					<FormField
+						control={form.control}
+						name="allow_ssh"
+						render={({ field }) => (
+							<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+								<div className="space-y-0.5">
+									<FormLabel className="text-base">Allow SSH Execution</FormLabel>
+									<FormDescription>
+										Enables the SSH execution tool for this agent only when at least one SSH Connection is selected below and the acting user holds the ssh.run capability.
+									</FormDescription>
+								</div>
+								<FormControl>
+									<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								</FormControl>
+							</FormItem>
+						)}
+					/>
+
+					{form.watch('allow_ssh') && (
+						<>
+							<FormField
+								control={form.control}
+								name="ssh_connections"
+								render={({ field }) => (
+									<FormItem className="sm:col-span-2">
+										<FormLabel>Allowlisted SSH Connections</FormLabel>
+										<div className="flex items-center gap-2">
+											<FormControl>
+												<MultiSelectCombobox
+													options={sshConnectionMultiSelectOptions}
+													values={field.value || []}
+													onValuesChange={field.onChange}
+													placeholder={loadingSSHConnections ? 'Loading SSH connections...' : 'Select SSH connections'}
+													searchPlaceholder="Search SSH connections..."
+													emptyText="No enabled SSH connections found."
+													disabled={loadingSSHConnections}
+												/>
+											</FormControl>
+											<Button
+												type="button"
+												variant="secondary"
+												onClick={() => {
+													const returnTo = `${location.pathname}#advanced`;
+													const selectedField = 'ssh_connections';
+													try {
+														localStorage.setItem(
+															'sshConnectionCreateReturnTo',
+															JSON.stringify({ returnTo, selectedField }),
+														);
+													} catch {
+														// ignore storage failures
+													}
+													navigate('/ssh-connections/new', {
+														state: {
+															returnTo,
+															selectedField,
+															showTab: 'advanced',
+														},
+													});
+												}}
+											>
+												<Plus className="w-4 h-4 mr-2" />
+												New
+											</Button>
+										</div>
+										<FormDescription>
+											Each command call must pick one of these connections. Use the Frappe desk SSH Connection DocType to store credentials, enroll host keys, and rotate secrets.
+										</FormDescription>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+
+							<div className="sm:col-span-2 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+								SSH uses the selected Execution Profile only when present, for approval mode and network policy. Without a profile, the backend falls back to strict default timeouts and Ask Every Time approval.
+							</div>
 						</>
 					)}
 				</div>

@@ -1,3 +1,4 @@
+import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import type { AgentDoc, AgentKnowledgeRow } from '@/types/agent.types';
@@ -6,13 +7,62 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { getBrandLabel } from '@/utils/providerBrands';
 import { fetchPaginatedCount } from './utilsApi';
 
+export type AgentConfigSection =
+  | 'general'
+  | 'behavior'
+  | 'tools'
+  | 'knowledge'
+  | 'skills'
+  | 'permissions'
+  | 'advanced';
+
+export interface AgentSectionResponse {
+  name: string;
+  section: AgentConfigSection;
+  modified: string;
+  values: Partial<AgentDoc>;
+}
+
+export async function getAgentSection(
+  name: string,
+  section: AgentConfigSection,
+): Promise<AgentSectionResponse> {
+  try {
+    const result = await call.get('huf.ai.agent_config_api.get_agent_section', {
+      agent_name: name,
+      section,
+    });
+    return result.message as AgentSectionResponse;
+  } catch (error) {
+    handleFrappeError(error, `Error fetching ${section} settings for agent ${name}`);
+  }
+}
+
+export async function updateAgentSection(
+  name: string,
+  section: AgentConfigSection,
+  values: Partial<AgentDoc>,
+  expectedModified: string,
+): Promise<AgentSectionResponse> {
+  try {
+    const result = await call.post('huf.ai.agent_config_api.update_agent_section', {
+      agent_name: name,
+      section,
+      values: JSON.stringify(values),
+      expected_modified: expectedModified,
+    });
+    return result.message as AgentSectionResponse;
+  } catch (error) {
+    handleFrappeError(error, `Error updating ${section} settings for agent ${name}`);
+  }
+}
+
 /**
  * Trigger type from API
  */
 export interface TriggerTypeOption {
   name: string;
 }
-
 /**
  * Fetch trigger types from API
  */
@@ -46,9 +96,71 @@ const AGENT_LIST_FIELDS = [
   'enable_multi_run',
   'enable_prompt_caching',
   'allow_guest',
+  'is_system',
   'provider_brand',
   'modified',
 ];
+
+/**
+ * Fetch all active AI Models with their provider details for the inline
+ * model switcher in chat. Only models whose provider exists are returned.
+ */
+export interface AIModelItem {
+  id: string;
+  name: string;
+  provider: string;
+  providerBrand: string;
+  providerBrandLabel: string;
+  modelName: string;
+  modalities?: string[];
+}
+
+export async function getAIModels(): Promise<AIModelItem[]> {
+  try {
+    const [models, providerResult] = await Promise.all([
+      db.getDocList(doctype['AI Model'], {
+        fields: ['name', 'model_name', 'provider', 'modalities'],
+        limit: 1000,
+        orderBy: { field: 'modified', order: 'desc' },
+      }),
+      call.get('huf.huf.doctype.ai_provider.ai_provider.get_configured_providers'),
+    ]);
+
+    const providers = (providerResult?.message ?? providerResult) as Array<{
+      name: string;
+      provider_brand?: string;
+    }>;
+
+    const providerBrandMap = new Map(
+      providers.map((p) => [p.name, p.provider_brand || 'other'])
+    );
+
+    return (models as Array<{
+      name: string;
+      model_name?: string;
+      provider?: string;
+      modalities?: string;
+    }>)
+      .filter((m) => m.provider && providerBrandMap.has(m.provider))
+      .map((m) => {
+        const brand = providerBrandMap.get(m.provider!) || 'other';
+        return {
+          id: m.name,
+          name: m.model_name || m.name,
+          provider: m.provider!,
+          providerBrand: brand,
+          providerBrandLabel: getBrandLabel(brand),
+          modelName: m.model_name || m.name,
+          modalities: m.modalities
+            ? m.modalities.split(',').map((x) => x.trim()).filter(Boolean)
+            : undefined,
+        };
+      });
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching AI models');
+    return [];
+  }
+}
 
 /**
  * Fields needed for model selector (agents as models)
@@ -56,10 +168,23 @@ const AGENT_LIST_FIELDS = [
 const AGENT_MODEL_FIELDS = [
   'name',
   'agent_name',
+  'provider',
   'provider_brand',
   'model',
   'agent_color',
   'description',
+];
+
+// Only fields that exist on the Agent doctype may be listed here: Frappe
+// validates get_list fields for non-System-Manager users and rejects unknown
+// ones with HTTP 417 ("Field not permitted in query").
+const CHAT_AGENT_FIELDS = [
+  'name',
+  'agent_name',
+  'description',
+  'provider',
+  'model',
+  'agent_color',
 ];
 
 /**
@@ -98,8 +223,6 @@ function mapAgentTriggerListItem(doc: {
     status: doc.disabled === 1 ? 'disabled' : 'active',
   };
 }
-
-
 /**
  * Pagination parameters for fetching agents
  */
@@ -119,6 +242,33 @@ export interface PaginatedAgentsResponse {
   items: AgentDoc[];
   hasMore: boolean;
   total?: number;
+}
+
+export interface ChatAgentItem {
+  name: string;
+  agent_name: string;
+  description?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  agent_color?: string | null;
+}
+
+/**
+ * Return the set of existing AI Provider document names.
+ * Used to filter out agents whose provider link is stale/deleted.
+ */
+async function getValidProviderNames(): Promise<Set<string>> {
+  try {
+    const providers = await db.getDocList(doctype['AI Provider'], {
+      fields: ['name'],
+      limit: 1000,
+    });
+    return new Set((providers as Array<{ name: string }>).map((p) => p.name));
+  } catch (error) {
+    // Fail-open: if the caller cannot read AI Provider, do not hide agents.
+    console.error('Failed to load AI Provider names for agent filtering', error);
+    return new Set<string>();
+  }
 }
 
 /**
@@ -168,7 +318,7 @@ export async function getAgents(
     // Fetch data
     const agents = await db.getDocList(doctype.Agent, {
       fields: AGENT_LIST_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
+      filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
       limit: limit + 1, // Fetch one extra to check if there's more
       ...(start > 0 && { limit_start: start }), // Only include if start > 0
       orderBy: { field: 'modified', order: 'desc' },
@@ -190,6 +340,32 @@ export async function getAgents(
   }
 }
 
+export async function getChatAgents(): Promise<ChatAgentItem[]> {
+  try {
+    const [agents, validProviders] = await Promise.all([
+      db.getDocList(doctype.Agent, {
+        fields: CHAT_AGENT_FIELDS,
+        filters: [
+          ['allow_chat', '=', 1],
+          ['disabled', '=', 0],
+        ],
+        limit: 1000,
+        orderBy: { field: 'modified', order: 'desc' },
+      }),
+      getValidProviderNames(),
+    ]);
+
+    const validAgents = (agents as ChatAgentItem[]).filter(
+      (agent) => agent.provider && validProviders.has(agent.provider)
+    );
+
+    return validAgents;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching chat agents');
+    return [];
+  }
+}
+
 /**
  * Fetch a single agent by name
  * Fetches all fields for detail view
@@ -201,6 +377,16 @@ export async function getAgent(name: string): Promise<AgentDoc> {
   } catch (error) {
     handleFrappeError(error, `Error fetching agent ${name}`);
   }
+}
+
+/**
+ * Child table row for Agent Trigger file attachments (Agent Trigger Attachment)
+ */
+export interface AgentTriggerAttachmentRow {
+  name?: string;
+  source_type: 'DocField' | 'Child Table Field';
+  child_table?: string;
+  field_name: string;
 }
 
 /**
@@ -217,6 +403,8 @@ export interface AgentTriggerDoc {
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;
+  prompt_field?: string;
+  file_attachments?: AgentTriggerAttachmentRow[];
   webhook_key?: string;
   webhook_slug?: string;
   app_name?: string;
@@ -304,11 +492,27 @@ export async function getRoles(): Promise<Array<{ name: string }>> {
 }
 
 /**
+ * DocType metadata field shape (subset of Frappe DocField used by consumers)
+ */
+export interface DocTypeMetaField {
+  fieldname: string;
+  label?: string;
+  fieldtype?: string;
+  reqd?: 0 | 1 | boolean;
+  options?: string;
+  hidden?: 0 | 1 | boolean;
+}
+
+export interface DocTypeMetaResponse {
+  fields?: DocTypeMetaField[];
+}
+
+/**
  * Fetch DocType metadata with fields (used for tool parameter auto-fill)
  */
-export async function getDocTypeMeta(doctypeName: string): Promise<any> {
+export async function getDocTypeMeta(doctypeName: string): Promise<DocTypeMetaResponse> {
   try {
-    return await db.getDoc('DocType', doctypeName);
+    return (await db.getDoc('DocType', doctypeName)) as DocTypeMetaResponse;
   } catch (error) {
     handleFrappeError(error, `Error fetching DocType meta for ${doctypeName}`);
   }
@@ -364,6 +568,68 @@ export async function updateAgent(name: string, data: Partial<AgentDoc>): Promis
     return updatedAgent as AgentDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating agent ${name}`);
+  }
+}
+
+/**
+ * Delete an agent document
+ */
+export async function deleteAgent(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype.Agent, name);
+  } catch (error) {
+    handleFrappeError(error, `Error deleting agent ${name}`);
+  }
+}
+
+/**
+ * Duplicate an agent document (copies all fields except identity/stats fields).
+ * Ensures the duplicated name is unique by appending "(Copy)", "(Copy 2)", etc.
+ */
+export async function duplicateAgent(name: string): Promise<AgentDoc> {
+  try {
+    const source = await db.getDoc(doctype.Agent, name);
+    const excludedFields = [
+      'name',
+      'owner',
+      'creation',
+      'modified',
+      'modified_by',
+      'last_run',
+      'total_run',
+      'idx',
+      'docstatus',
+    ];
+    const rest = Object.fromEntries(
+      Object.entries(source as Record<string, unknown>).filter(
+        ([key]) => !excludedFields.includes(key)
+      )
+    );
+
+    const baseName = (source as AgentDoc).agent_name;
+    const nameExists = async (candidate: string): Promise<boolean> => {
+      const matches = await db.getDocList(doctype.Agent, {
+        filters: [['agent_name', '=', candidate]] as any,
+        fields: ['name'],
+        limit: 1,
+      });
+      return matches.length > 0;
+    };
+
+    let candidateName = `${baseName} (Copy)`;
+    let suffix = 2;
+    while (await nameExists(candidateName)) {
+      candidateName = `${baseName} (Copy ${suffix})`;
+      suffix += 1;
+    }
+
+    const copy = await db.createDoc(doctype.Agent, {
+      ...rest,
+      agent_name: candidateName,
+    });
+    return copy as AgentDoc;
+  } catch (error) {
+    handleFrappeError(error, `Error duplicating agent ${name}`);
   }
 }
 
@@ -507,7 +773,10 @@ export interface AgentModelItem {
   name: string;
   providerBrand: string;
   providerBrandLabel: string;
+  provider?: string;
   model?: string;
+  modelName?: string;
+  modalities?: string[];
   agent_color?: string | null;
   description?: string | null;
 }
@@ -539,6 +808,7 @@ export interface RunAgentTestParams {
   prompt: string;
   provider: string;
   model: string;
+  now?: boolean;
 }
 
 /**
@@ -553,6 +823,9 @@ export interface RunAgentTestResponse {
     agent_run_id?: string;
     conversation_id?: string;
     session_id?: string;
+    queued?: boolean;
+    status?: string;
+    sequence?: number;
   };
 }
 
@@ -561,12 +834,16 @@ export interface RunAgentTestResponse {
  */
 export async function runAgentTest(params: RunAgentTestParams): Promise<RunAgentTestResponse> {
   try {
-    const result = await call.post('huf.ai.agent_integration.run_agent_sync', {
+    const payload: Record<string, unknown> = {
       agent_name: params.agent_name,
       prompt: params.prompt,
       provider: params.provider,
       model: params.model,
-    });
+    };
+    if (params.now !== undefined) {
+      payload.now = params.now;
+    }
+    const result = await call.post('huf.ai.agent_integration.run_agent_sync', payload);
     return result as RunAgentTestResponse;
   } catch (error) {
     handleFrappeError(error, 'Error running agent test');
@@ -603,24 +880,29 @@ export async function getAgentModels(
     }
 
     // Fetch data
-    const agents = await db.getDocList(doctype.Agent, {
-      fields: AGENT_MODEL_FIELDS,
-      filters: filters.length > 0 ? (filters as any) : undefined,
-      limit: limit + 1, // Fetch one extra to check if there's more
-      ...(start > 0 && { limit_start: start }), // Only include if start > 0
-      orderBy: { field: 'modified', order: 'desc' },
-    });
+    const [agents, validProviders] = await Promise.all([
+      db.getDocList(doctype.Agent, {
+        fields: AGENT_MODEL_FIELDS,
+        filters: filters.length > 0 ? (filters as Filter<Record<string, unknown>>[]) : undefined,
+        limit: limit + 1, // Fetch one extra to check if there's more
+        ...(start > 0 && { limit_start: start }), // Only include if start > 0
+        orderBy: { field: 'modified', order: 'desc' },
+      }),
+      getValidProviderNames(),
+    ]);
 
-    // Map agents to model format
-    const mappedModels: AgentModelItem[] = (agents as any[]).map((agent) => ({
-      id: agent.name,
-      name: agent.agent_name || agent.name,
-      providerBrand: agent.provider_brand || 'other',
-      providerBrandLabel: getBrandLabel(agent.provider_brand),
-      model: agent.model || '',
-      agent_color: agent.agent_color || null,
-      description: agent.description || null,
-    }));
+    // Map agents to model format, dropping agents whose provider no longer exists
+    const mappedModels: AgentModelItem[] = (agents as Array<Record<string, string>>)
+      .filter((agent) => agent.provider && validProviders.has(agent.provider))
+      .map((agent) => ({
+        id: agent.name,
+        name: agent.agent_name || agent.name,
+        providerBrand: agent.provider_brand || 'other',
+        providerBrandLabel: getBrandLabel(agent.provider_brand),
+        model: agent.model || '',
+        agent_color: agent.agent_color || null,
+        description: agent.description || null,
+      }));
 
     const hasMore = mappedModels.length > limit;
     const items = hasMore ? mappedModels.slice(0, limit) : mappedModels;
@@ -642,3 +924,32 @@ export async function getAgentModels(
   }
 }
 
+export interface CacheableModelsResponse {
+  supported: boolean;
+  alternatives: string[];
+}
+
+/**
+ * Check if a provider/model combination supports prompt caching
+ */
+export async function checkCacheableModels(
+  provider?: string,
+  model?: string
+): Promise<CacheableModelsResponse> {
+  if (!provider) {
+    return { supported: false, alternatives: [] };
+  }
+  try {
+    const response = await call.get('huf.huf.doctype.agent.agent.get_cacheable_models', {
+      provider,
+      model: model || undefined,
+    });
+    const data = response?.message || response;
+    return {
+      supported: Boolean(data?.supported),
+      alternatives: Array.isArray(data?.alternatives) ? data.alternatives : [],
+    };
+  } catch {
+    return { supported: false, alternatives: [] };
+  }
+}

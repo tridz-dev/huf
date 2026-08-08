@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Bot, PanelLeftOpen } from "lucide-react";
+import { PanelLeftOpen, SquareAsterisk } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import ChatAvatar from "./ChatAvatar";
@@ -20,7 +20,6 @@ interface ChatWindowHeaderProps {
 
 export function ChatWindowHeader({
     chatId: chatIdProp,
-    sidebarOpen: _sidebarOpen,
     onToggleSidebar,
 }: ChatWindowHeaderProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
@@ -180,7 +179,7 @@ export function ChatWindowHeader({
                 <Link to={`/agents/${agent.name}`}>
                     <Button asChild variant="outline" className="gap-x-2 text-xs text-muted-foreground" size="sm">
                         <div>
-                            <Bot className="w-4 h-4" />
+                            <SquareAsterisk className="w-4 h-4" />
                             <span>Open Agent</span>
                         </div>
                     </Button>
