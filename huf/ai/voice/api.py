@@ -252,15 +252,17 @@ def start_public_session(publishable_key, agent) -> dict[str, Any]:
 	if not _origin_allowed(origin, getattr(agent_doc, "allowed_origins", None)):
 		frappe.throw(_("Origin not permitted for Agent '{0}'").format(agent), frappe.PermissionError)
 
-	# Reflect the validated origin (never "*") so browsers permit this
-	# fetch() response to be read cross-origin. frappe.local.response is the
-	# JSON payload dict, not the HTTP response - the actual werkzeug Headers
-	# object that process_response() merges into the outgoing response is
-	# frappe.local.response_headers (see frappe/app.py process_response()
-	# and e.g. frappe/desk/reportview.py's use of the same object).
-	frappe.local.response_headers["Access-Control-Allow-Origin"] = origin
-	frappe.local.response_headers["Vary"] = "Origin"
-
+	# No per-request header injection here: this Frappe version builds a
+	# fresh werkzeug Response from frappe.local.response (the JSON payload
+	# dict) in build_response(), well after this function returns, and
+	# there is no frappe.local.response_headers object to write into (an
+	# earlier version of this function tried that and crashed every call
+	# with AttributeError - do not reintroduce it). The actual
+	# Access-Control-Allow-Origin reflection happens centrally in
+	# frappe/app.py's set_cors_headers(), driven by the site's own
+	# `allow_cors` config - see the NOTE above and TESTING.md for why that
+	# site-wide config is required for this endpoint to be browser-callable
+	# at all, independent of the allowed_origins check above.
 	_, config = _get_agent_voice_config(agent_doc)
 
 	# Identifies the source as an embed session without propagating the
