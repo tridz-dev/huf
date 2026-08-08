@@ -363,12 +363,16 @@ export const SpeechInput = ({
 
       {/* Main record button */}
       <Button
-        variant="secondary"
+        variant="ghost"
         className={cn(
-          "relative z-10 rounded-full transition-all duration-300",
+          "relative z-10 transition-all duration-300",
           isListening
-            ? "bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground"
-            : "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+            // Recording keeps its filled treatment: it is a live state the user
+            // must be able to see and stop at a glance.
+            ? "rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:text-destructive-foreground"
+            // Idle is a bare glyph, per spec 28.1's composer control row - no
+            // fill, no box. A resting mic should not out-weigh the send button.
+            : "bg-transparent text-steel hover:bg-transparent hover:text-ink",
           className
         )}
         disabled={isDisabled}
@@ -382,7 +386,7 @@ export const SpeechInput = ({
       >
         {isProcessing && <Spinner />}
         {!isProcessing && isListening && <SquareIcon className="size-4" />}
-        {!(isProcessing || isListening) && <MicIcon className="size-4" />}
+        {!(isProcessing || isListening) && <MicIcon className="size-[17px]" />}
       </Button>
       {mode === "speech-recognition" && !isListening && (
         <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] text-steel-soft">

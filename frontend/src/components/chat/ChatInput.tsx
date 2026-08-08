@@ -968,7 +968,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     preferServerStt={true}
                                     disabled={isSubmitting}
                                     size="icon"
-                                    className="shrink-0 rounded-full"
+                                    // The box stays (a 17px hit target is too small
+                                    // to tap); it is transparent when idle so the
+                                    // control reads as the bare glyph spec 28.1 draws.
+                                    className="shrink-0"
                                 />
                             )}
                             {isStreamingResponse ? (
