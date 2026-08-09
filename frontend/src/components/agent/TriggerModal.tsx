@@ -2,6 +2,7 @@ import React from 'react';
 import { useForm, Control } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogDescription,
@@ -36,8 +37,31 @@ import { toast } from 'sonner';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
 import { triggerFieldsConfig } from './TriggerFieldsConfig';
 import { TriggerDocEventExtras } from './TriggerDocEventExtras';
+import { AppPicker } from '@/components/capabilities/AppPicker';
+import { ResourceCard } from '@/components/capabilities/ResourceCard';
+import { ResourceDetail } from '@/components/capabilities/ResourceDetail';
+import { EventDetail } from '@/components/capabilities/EventDetail';
+import { getAppResources } from '@/services/capabilityApi';
 import type { AgentTriggerDoc, TriggerTypeOption } from '@/services/agentApi';
 import type { TriggerType } from '@/types/agent.types';
+import type { CapabilityApp, CapabilityDescriptor } from '@/types/capability.types';
+
+/**
+ * Steps for the guided "From App" Doc Event trigger creation path (plan §14.3).
+ * "form" is the existing raw DocType + doc_event Advanced path; it stays the
+ * default/fallback for every trigger type (Schedule/Webhook/App Event/Manual
+ * always render "form" since only Doc Event has a guided entry point).
+ */
+type FromAppStep = 'form' | 'app' | 'resource' | 'resource-detail' | 'event';
+
+/** Shape returned by huf.ai.capabilities.api.get_app_resources, matching ResourceCard's props. */
+interface AppResourceSummary {
+  doctype: string;
+  title: string;
+  visibility: string;
+  is_exposed?: boolean;
+  submittable?: boolean;
+}
 
 /**
  * Dynamically validate trigger fields based on triggerFieldsConfig
@@ -153,9 +177,30 @@ export function TriggerModal({
 
   const watchTriggerType = triggerForm.watch('trigger_type');
 
+  // "From App" guided Doc Event creation wizard state (local component state,
+  // matching how the rest of this modal manages state). Only ever entered for
+  // new triggers; the raw Advanced form above is untouched and remains the
+  // fallback for every trigger type.
+  const [fromAppStep, setFromAppStep] = React.useState<FromAppStep>('form');
+  const [selectedApp, setSelectedApp] = React.useState<CapabilityApp | null>(null);
+  const [selectedDoctype, setSelectedDoctype] = React.useState<string | null>(null);
+  const [selectedEventCapability, setSelectedEventCapability] =
+    React.useState<CapabilityDescriptor | null>(null);
+  const [appResources, setAppResources] = React.useState<AppResourceSummary[]>([]);
+  const [loadingAppResources, setLoadingAppResources] = React.useState(false);
+
+  const resetFromAppWizard = () => {
+    setFromAppStep('form');
+    setSelectedApp(null);
+    setSelectedDoctype(null);
+    setSelectedEventCapability(null);
+    setAppResources([]);
+  };
+
   // Reset form when modal opens/closes or editing trigger changes
   React.useEffect(() => {
     if (open) {
+      resetFromAppWizard();
       if (editingTrigger) {
         triggerForm.reset({
           trigger_name: editingTrigger.trigger_name,
@@ -202,6 +247,83 @@ export function TriggerModal({
     toast.error('Please fix the highlighted fields');
   };
 
+  // Fetch resources (DocTypes) for the selected app when entering the resource step
+  React.useEffect(() => {
+    if (fromAppStep !== 'resource' || !selectedApp) return;
+
+    let cancelled = false;
+    setLoadingAppResources(true);
+    getAppResources(selectedApp.app, 'recommended')
+      .then((result) => {
+        if (!cancelled) {
+          setAppResources(result as AppResourceSummary[]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingAppResources(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fromAppStep, selectedApp]);
+
+  const handleFromAppSelectApp = (app: CapabilityApp) => {
+    setSelectedApp(app);
+    setSelectedDoctype(null);
+    setSelectedEventCapability(null);
+    setFromAppStep('resource');
+  };
+
+  const handleFromAppSelectResource = (doctype: string) => {
+    setSelectedDoctype(doctype);
+    setFromAppStep('resource-detail');
+  };
+
+  const handleFromAppSelectEvent = (capability: CapabilityDescriptor) => {
+    setSelectedEventCapability(capability);
+    setFromAppStep('event');
+  };
+
+  // Actions aren't applicable to Doc Event trigger creation; ResourceDetail
+  // always renders them alongside events, so this is a no-op guard.
+  const handleFromAppSelectAction = () => {};
+
+  const handleFromAppUseEvent = (triggerPayload: Record<string, unknown>) => {
+    // Pre-populate the existing form state with the guided-flow payload and
+    // hand off to the same Advanced form fields / save path used below —
+    // this does not create or save the Agent Trigger itself.
+    triggerForm.reset({
+      trigger_name: '',
+      trigger_type: 'Doc Event',
+      active: true,
+      interval_count: undefined,
+      scheduled_interval: undefined,
+      reference_doctype:
+        typeof triggerPayload.reference_doctype === 'string'
+          ? triggerPayload.reference_doctype
+          : undefined,
+      doc_event:
+        typeof triggerPayload.doc_event === 'string' ? triggerPayload.doc_event : undefined,
+      condition:
+        typeof triggerPayload.condition === 'string' ? triggerPayload.condition : undefined,
+      prompt_field:
+        typeof triggerPayload.prompt_field === 'string' ? triggerPayload.prompt_field : undefined,
+      file_attachments: [],
+      app_name: undefined,
+      event_name: undefined,
+      webhook_slug: undefined,
+      webhook_key: undefined,
+    });
+    setFromAppStep('form');
+    setSelectedApp(null);
+    setSelectedDoctype(null);
+    setSelectedEventCapability(null);
+    setAppResources([]);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-[600px]">
@@ -218,6 +340,93 @@ export function TriggerModal({
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
             <DialogScrollBody className="space-y-4 pb-4">
+            {fromAppStep !== 'form' ? (
+              <>
+                {fromAppStep === 'app' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        type="button"
+                        onClick={() => setFromAppStep('form')}
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </Button>
+                      <div>
+                        <h3 className="font-medium text-sm">Choose an app</h3>
+                        <p className="text-xs text-steel-soft">
+                          Pick the app whose events should trigger this agent.
+                        </p>
+                      </div>
+                    </div>
+                    <AppPicker onSelect={handleFromAppSelectApp} />
+                  </div>
+                )}
+
+                {fromAppStep === 'resource' && selectedApp && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        type="button"
+                        onClick={() => setFromAppStep('app')}
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </Button>
+                      <div>
+                        <h3 className="font-medium text-sm">{selectedApp.title}</h3>
+                        <p className="text-xs text-steel-soft">
+                          Pick a resource (DocType) to trigger from.
+                        </p>
+                      </div>
+                    </div>
+                    {loadingAppResources ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-5 h-5 animate-spin text-steel-soft" />
+                      </div>
+                    ) : appResources.length === 0 ? (
+                      <div className="text-center py-12 border border-dashed rounded-none bg-paper-deep/20">
+                        <p className="font-body text-steel-soft">
+                          No resources available for this app.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {appResources.map((resource) => (
+                          <ResourceCard
+                            key={resource.doctype}
+                            resource={resource}
+                            onSelect={handleFromAppSelectResource}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {fromAppStep === 'resource-detail' && selectedApp && selectedDoctype && (
+                  <ResourceDetail
+                    app={selectedApp.app}
+                    doctype={selectedDoctype}
+                    onSelectAction={handleFromAppSelectAction}
+                    onSelectEvent={handleFromAppSelectEvent}
+                    onBack={() => setFromAppStep('resource')}
+                  />
+                )}
+
+                {fromAppStep === 'event' && selectedApp && selectedEventCapability && (
+                  <EventDetail
+                    app={selectedApp.app}
+                    capability={selectedEventCapability}
+                    onUseEvent={handleFromAppUseEvent}
+                    onBack={() => setFromAppStep('resource-detail')}
+                  />
+                )}
+              </>
+            ) : (
+              <>
             {/* Trigger Name Field - Only editable when adding */}
             {!editingTrigger && (
               <FormField
@@ -272,6 +481,23 @@ export function TriggerModal({
               )}
             />
 
+            {/* Guided entry point: hand off Doc Event trigger creation to the
+                AppPicker -> ResourceDetail -> EventDetail wizard (plan §14.3).
+                Advanced path above (raw DocType + doc_event picker) is untouched. */}
+            {!editingTrigger && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => setFromAppStep('app')}
+                >
+                  Or configure from an app&apos;s events &rarr;
+                </Button>
+              </div>
+            )}
+
             <FormField
               control={triggerForm.control}
               name="active"
@@ -304,6 +530,8 @@ export function TriggerModal({
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               <TriggerDocEventExtras control={triggerForm.control as unknown as Control<any>} />
             )}
+              </>
+            )}
 
             </DialogScrollBody>
 
@@ -311,9 +539,11 @@ export function TriggerModal({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit">
-                {editingTrigger ? 'Update' : 'Add'} Trigger
-              </Button>
+              {fromAppStep === 'form' && (
+                <Button type="submit">
+                  {editingTrigger ? 'Update' : 'Add'} Trigger
+                </Button>
+              )}
             </DialogScrollFooter>
           </form>
         </Form>
