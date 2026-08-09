@@ -5,7 +5,34 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { CapabilityBadges } from './CapabilityBadges';
 import { describeAppAction } from '@/services/capabilityApi';
-import type { CapabilityDescriptor } from '@/types/capability.types';
+import type {
+  CapabilityDescriptor,
+  CapabilityParameter,
+  CapabilityParametersSchema,
+} from '@/types/capability.types';
+
+/**
+ * The backend sends `parameters_schema` as a JSON-Schema object
+ * ({type, properties, required}) for action capabilities, but some descriptors
+ * carry a flat parameter list. Accept both and always render a flat list.
+ */
+function normalizeParameters(
+  schema: CapabilityDescriptor['parameters_schema']
+): CapabilityParameter[] {
+  if (!schema) return [];
+  if (Array.isArray(schema)) return schema;
+
+  const { properties, required } = schema as CapabilityParametersSchema;
+  if (!properties) return [];
+
+  const requiredNames = new Set(required || []);
+  return Object.entries(properties).map(([name, spec]) => ({
+    name,
+    type: spec?.type || 'string',
+    required: requiredNames.has(name),
+    description: spec?.description,
+  }));
+}
 
 interface ActionDetailProps {
   capability: CapabilityDescriptor;
@@ -38,7 +65,7 @@ export function ActionDetail({ capability, onAdd, onBack, className }: ActionDet
     };
   }, [capability.id]);
 
-  const parameters = detail.parameters_schema || [];
+  const parameters = normalizeParameters(detail.parameters_schema);
 
   return (
     <div className={cn('flex flex-col gap-4', className)}>

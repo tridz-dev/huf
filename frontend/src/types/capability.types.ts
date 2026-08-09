@@ -8,6 +8,16 @@ export type CapabilityVisibility = "recommended" | "normal" | "advanced" | "hidd
 
 export type CapabilityActionability = "actionable_now" | "informational" | "requires_adapter" | "requires_app_declaration";
 
+/**
+ * JSON-Schema-shaped parameter description, as emitted by
+ * huf.ai.capabilities.actions for action capabilities.
+ */
+export interface CapabilityParametersSchema {
+  type?: string;
+  properties?: Record<string, { type?: string; description?: string }>;
+  required?: string[];
+}
+
 export interface CapabilityParameter {
   name: string;
   type: string;
@@ -30,7 +40,8 @@ export interface CapabilityDescriptor {
   function_path?: string;
   event_name?: string;
   hook_name?: string;
-  parameters_schema?: CapabilityParameter[];
+  /** Either a flat parameter list or a JSON-Schema object; normalize before rendering. */
+  parameters_schema?: CapabilityParameter[] | CapabilityParametersSchema;
   payload_schema?: Record<string, unknown>;
   return_schema?: Record<string, unknown>;
   read_only?: boolean;
