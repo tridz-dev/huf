@@ -15,6 +15,7 @@ inventing new permission logic.
 import frappe
 
 from huf.ai.capabilities import actions, apps, events, resources
+from huf.ai.capabilities.apps import app_owns_doctype
 
 
 def _require_capability_discovery_access():
@@ -82,6 +83,8 @@ def describe_resource(app, doctype):
 def get_resource_events(app, doctype, include_advanced=False):
 	"""List event capability descriptors for a doctype's lifecycle events."""
 	_require_capability_discovery_access()
+	if not app_owns_doctype(app, doctype):
+		frappe.throw(f"{doctype} does not belong to {app}", frappe.PermissionError)
 	submittable = bool(frappe.get_meta(doctype).is_submittable)
 	return events.generate_events_for_resource(
 		app,
@@ -99,4 +102,6 @@ def preview_trigger_payload(app, doctype, event_capability_id, condition=None, p
 	creation stays in the existing Agent Trigger creation flow on the frontend.
 	"""
 	_require_capability_discovery_access()
+	if not app_owns_doctype(app, doctype):
+		frappe.throw(f"{doctype} does not belong to {app}", frappe.PermissionError)
 	return events.build_trigger_payload(app, doctype, event_capability_id, condition, prompt_field)
