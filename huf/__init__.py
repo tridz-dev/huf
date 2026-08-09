@@ -19,3 +19,15 @@ try:
 	sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 except ImportError:
 	pass  # Fall back to stdlib; sqlite_vec will fail with clear error
+
+# v16-only test classes backported for v15 compat
+try:
+	import frappe.tests as _frappe_tests
+	from frappe.tests.utils import FrappeTestCase
+
+	if not hasattr(_frappe_tests, "IntegrationTestCase"):
+		_frappe_tests.IntegrationTestCase = FrappeTestCase
+	if not hasattr(_frappe_tests, "UnitTestCase"):
+		_frappe_tests.UnitTestCase = FrappeTestCase
+except ImportError:
+	pass  # frappe.tests.utils.FrappeTestCase unavailable; leave frappe.tests as-is
