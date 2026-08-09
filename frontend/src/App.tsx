@@ -44,6 +44,15 @@ const DataPage = lazy(() => import('./pages/DataPage'));
 const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
+const ChatProjectsPage = lazy(() =>
+  import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatProjectsPage }))
+);
+const ChatArtifactsPage = lazy(() =>
+  import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatArtifactsPage }))
+);
+const ChatScheduledPage = lazy(() =>
+  import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatScheduledPage }))
+);
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
@@ -392,9 +401,45 @@ function AppShell() {
             path="/chat"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/projects"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatProjectsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/artifacts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/scheduled"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatScheduledPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -404,7 +449,7 @@ function AppShell() {
             path="/chat/:chatId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatPage />
                   </Suspense>

@@ -40,13 +40,13 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
 
   return (
     <>
-      <div className="mt-3 flex items-center gap-2 text-muted-foreground">
+      <div className="mt-3 flex items-center gap-[14px] text-muted-foreground">
         <CopyButton content={content} />
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="!h-7 !w-7 text-steel-soft hover:text-ink"
           onClick={() => onFeedback('Thumbs Up', { agentMessageId })}
           aria-label="Mark response helpful"
         >
@@ -56,7 +56,7 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="!h-7 !w-7 text-steel-soft hover:text-ink"
           onClick={() => setCommentDialogOpen(true)}
           aria-label="Mark response not helpful"
         >
@@ -67,7 +67,7 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="!h-7 !w-7 text-steel-soft hover:text-ink"
             onClick={onRegenerate}
             disabled={regenerateDisabled}
             aria-label="Regenerate response"
@@ -81,7 +81,7 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="!h-7 !w-7 text-steel-soft hover:text-ink"
             asChild
             aria-label="View context & cache metrics"
           >

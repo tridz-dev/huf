@@ -19,6 +19,7 @@ interface UnifiedLayoutProps {
   children?: ReactNode;
   sidebarContent?: ReactNode;
   hideHeader?: boolean;
+  hideRail?: boolean;
   headerActions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
 }
@@ -48,7 +49,7 @@ export function usePageChrome() {
   return useContext(PageChromeContext);
 }
 
-export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs }: UnifiedLayoutProps) {
+export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, breadcrumbs }: UnifiedLayoutProps) {
   const location = useLocation();
   const defaultOpen = location.pathname !== '/';
   const [framed, setFramed] = useState(false);
@@ -73,7 +74,7 @@ export function UnifiedLayout({ children, hideHeader, headerActions, breadcrumbs
   return (
     <ShortcutsHelpProvider>
       <SidebarProvider defaultOpen={defaultOpen}>
-        <AppSidebar />
+        {!hideRail && <AppSidebar />}
         <SidebarInset className="h-svh max-h-svh overflow-hidden">
           {!hideHeader && !framed && (
             <header className="flex h-[60px] shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px] border-b border-line bg-panel">

@@ -101,6 +101,30 @@
     --control-px-lg: 32px;
     --control-py: 8px;
 
+    /* Chat shell (spec section 28) — chat runs one density step tighter than
+       the rest of the system. These are chat-scoped on purpose: do not use
+       them outside the chat page.
+       --chat-row-hover and --chat-bubble use the spec's literal fill
+       (#F0F0F4) for this default theme rather than aliasing --paper-deep, so
+       there is no drift from the spec value. Each [data-theme="..."] block
+       below overrides both tokens with a value consistent with its own
+       --paper-deep, so a non-default theme doesn't inherit a light fill on
+       a dark background. --chat-row-selected still derives from --line
+       rather than a hex literal. */
+    --chat-rail-w:       232px;
+    --chat-row-h:        26px;
+    --chat-row-r:        7px;
+    --chat-header-h:     40px;
+    --chat-footer-h:     44px;
+    --chat-turn-gap:     22px;
+    --chat-measure:      620px;
+    --chat-wide:         720px;
+    --chat-row-hover:    #F0F0F4;
+    --chat-row-selected: var(--line);
+    --chat-bubble:       #F0F0F4;
+    --chat-bubble-r:     12px;
+    --chat-send-r:       8px;
+
     /* Typography */
     --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -201,6 +225,11 @@
     --destructive-tint: #FAECE7;
     --destructive: #C0392B;
     --destructive-foreground: var(--paper);
+    /* One step darker than this theme's --paper-deep (#E2E4DE), matching
+       the default theme's relationship between --paper-deep and its own
+       literal chat fill. */
+    --chat-row-hover: #DEE0DB;
+    --chat-bubble:    #DEE0DB;
   }
 
   [data-theme="midnight"] {
@@ -220,6 +249,12 @@
     --destructive-tint: #2E201B;
     --destructive: #FF5A47;
     --destructive-foreground: var(--paper);
+    /* This theme's --paper-deep (#0E1013) is the darkest surface, so a fill
+       derived by darkening it further would be invisible against --paper
+       (#14161A). Lighten instead, landing between --paper and --panel
+       (#1E2126) so the fill still reads against the dark background. */
+    --chat-row-hover: #1A1D22;
+    --chat-bubble:    #1A1D22;
   }
 
   [data-theme="summer"] {
@@ -239,6 +274,11 @@
     --destructive-tint: #FFF0E6;
     --destructive: #C0392B;
     --destructive-foreground: var(--paper);
+    /* One step darker than this theme's --paper-deep (#F5E6C0), matching
+       the default theme's relationship between --paper-deep and its own
+       literal chat fill. */
+    --chat-row-hover: #F1E2BD;
+    --chat-bubble:    #F1E2BD;
   }
 
   [data-theme="morning"] {
@@ -258,6 +298,11 @@
     --destructive-tint: #FCECE6;
     --destructive: #C0392B;
     --destructive-foreground: var(--paper);
+    /* One step darker than this theme's --paper-deep (#F5D6C5), matching
+       the default theme's relationship between --paper-deep and its own
+       literal chat fill. */
+    --chat-row-hover: #F1D2C2;
+    --chat-bubble:    #F1D2C2;
   }
 
   /* Proposal preview only — not registered in the theme picker (src/lib/personalization.ts).
@@ -279,6 +324,10 @@
     --destructive-tint: #FDECEA;
     --destructive: #B3261E;
     --destructive-foreground: var(--paper);
+    /* Same --paper-deep (#F4F4F7) as the root theme, so this uses the same
+       literal chat fill as the default theme. */
+    --chat-row-hover: #F0F0F4;
+    --chat-bubble:    #F0F0F4;
 
     --r: 8px;
     --r-sm: 6px;

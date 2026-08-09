@@ -131,12 +131,12 @@ export function DocumentPreview({
   }
 
   return (
-    <div className={cn('flex justify-center py-4', className)}>
+    <div className={cn('flex justify-center px-4 py-4', className)}>
       <iframe
         srcDoc={html}
         sandbox="allow-same-origin"
         title="Document preview"
-        className="w-full max-w-[820px] rounded-lg border shadow-md bg-panel"
+        className="w-full flex-1 rounded border bg-panel"
         style={{ aspectRatio: '210 / 297', minHeight: '1000px' }}
       />
     </div>
