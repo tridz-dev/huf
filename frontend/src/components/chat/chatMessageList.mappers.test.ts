@@ -235,6 +235,89 @@ describe('mergeConversationItemsIntoMessages', () => {
     expect(next[0].from).toBe('assistant');
     expect(next[0].agentRunId).toBe('AR-100');
   });
+
+  it('groups persisted tool-call-only items sharing an agent_run into one message', () => {
+    // Each persisted "Tool Result" item is one Agent Message row (one per
+    // tool call), same as a Hub Orchestrator turn that ran several builder
+    // tools (fc_list_marketplace_apps, fc_site_options, fc_create_site, ...).
+    const conversationItems: ChatMessage[] = [
+      {
+        id: 'AM-1',
+        conversation: 'CONV-1',
+        content: '',
+        isAgent: true,
+        agentRun: 'AR-1',
+        kind: 'Tool Result',
+        toolName: 'list_marketplace_apps',
+        toolStatus: 'Completed',
+      },
+      {
+        id: 'AM-2',
+        conversation: 'CONV-1',
+        content: '',
+        isAgent: true,
+        agentRun: 'AR-1',
+        kind: 'Tool Result',
+        toolName: 'site_options',
+        toolStatus: 'Completed',
+      },
+      {
+        id: 'AM-3',
+        conversation: 'CONV-1',
+        content: '',
+        isAgent: true,
+        agentRun: 'AR-1',
+        kind: 'Tool Result',
+        toolName: 'create_site',
+        toolStatus: 'Completed',
+      },
+    ];
+    const next = mergeConversationItemsIntoMessages([], conversationItems, false);
+    expect(next).toHaveLength(1);
+    expect(next[0].tools).toHaveLength(3);
+    expect(next[0].tools?.map((t) => t.name)).toEqual([
+      'list_marketplace_apps',
+      'site_options',
+      'create_site',
+    ]);
+  });
+
+  it('does not group tool calls from different runs, and leaves the final text reply as its own message', () => {
+    const conversationItems: ChatMessage[] = [
+      {
+        id: 'AM-1',
+        conversation: 'CONV-1',
+        content: '',
+        isAgent: true,
+        agentRun: 'AR-1',
+        kind: 'Tool Result',
+        toolName: 'list_marketplace_apps',
+        toolStatus: 'Completed',
+      },
+      {
+        id: 'AM-2',
+        conversation: 'CONV-1',
+        content: 'Here is what I built.',
+        isAgent: true,
+        agentRun: 'AR-1',
+      },
+      {
+        id: 'AM-3',
+        conversation: 'CONV-1',
+        content: '',
+        isAgent: true,
+        agentRun: 'AR-2',
+        kind: 'Tool Result',
+        toolName: 'site_options',
+        toolStatus: 'Completed',
+      },
+    ];
+    const next = mergeConversationItemsIntoMessages([], conversationItems, false);
+    expect(next).toHaveLength(3);
+    expect(next[0].tools).toHaveLength(1);
+    expect(next[1].versions[0].content).toBe('Here is what I built.');
+    expect(next[2].tools).toHaveLength(1);
+  });
 });
 
 describe('applyPolledRunStatus', () => {

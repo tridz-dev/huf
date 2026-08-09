@@ -377,6 +377,7 @@ export function ChatMessageList({
                                     loadingType={loadingType}
                                     onFeedback={handleFeedback}
                                     scrollToBottomAfterPaint={scrollToBottomAfterPaint}
+                                    onSendText={(text) => chatInputRef.current?.send(text)}
                                 />
                             ))}
                         </div>
