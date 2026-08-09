@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Loader2, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CapabilityCard } from './CapabilityCard';
 import { describeResource } from '@/services/capabilityApi';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { CapabilityDescriptor, CapabilityResourceDetail } from '@/types/capability.types';
 
 interface ResourceDetailProps {
@@ -26,13 +28,32 @@ export function ResourceDetail({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setDetail(null);
 
-    describeResource(app, doctype).then((result) => {
-      setDetail(result || null);
-      setLoading(false);
-    });
+    describeResource(app, doctype)
+      .then((result) => {
+        if (!cancelled) {
+          setDetail(result || null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading resource details:', error);
+          const errorMessage = getFrappeErrorMessage(error);
+          toast.error(errorMessage || 'Failed to load resource details');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [app, doctype]);
 
   if (loading) {

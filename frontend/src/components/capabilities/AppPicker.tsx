@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { getCapabilityApps } from '@/services/capabilityApi';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { CapabilityApp } from '@/types/capability.types';
 
 interface AppPickerProps {
@@ -22,6 +24,13 @@ export function AppPicker({ onSelect, className }: AppPickerProps) {
       .then((result) => {
         if (!cancelled) {
           setApps(result);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading capability apps:', error);
+          const errorMessage = getFrappeErrorMessage(error);
+          toast.error(errorMessage || 'Failed to load apps');
         }
       })
       .finally(() => {

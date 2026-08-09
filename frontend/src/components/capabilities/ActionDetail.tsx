@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { CapabilityBadges } from './CapabilityBadges';
 import { describeAppAction } from '@/services/capabilityApi';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type {
   CapabilityDescriptor,
   CapabilityParameter,
@@ -52,6 +54,13 @@ export function ActionDetail({ capability, onAdd, onBack, className }: ActionDet
       .then((result) => {
         if (!cancelled && result) {
           setDetail(result);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading action details:', error);
+          const errorMessage = getFrappeErrorMessage(error);
+          toast.error(errorMessage || 'Failed to load action details');
         }
       })
       .finally(() => {

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { CapabilityCard } from './CapabilityCard';
 import { searchAppActions } from '@/services/capabilityApi';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { CapabilityDescriptor } from '@/types/capability.types';
 
 interface CapabilitySearchProps {
@@ -26,6 +28,13 @@ export function CapabilitySearch({ app, onSelectAction, className }: CapabilityS
       .then((result) => {
         if (!cancelled) {
           setResults(result);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error searching app actions:', error);
+          const errorMessage = getFrappeErrorMessage(error);
+          toast.error(errorMessage || 'Failed to search actions');
         }
       })
       .finally(() => {
