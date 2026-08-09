@@ -38,6 +38,8 @@ def get_app_resources(app_name, scope="recommended") -> list:
     candidates.sort(key=lambda r: r["score"], reverse=True)
 
     if scope == "all":
+        for r in candidates:
+            r.pop("_eligible", None)
         return candidates
 
     eligible = [r for r in candidates if r["_eligible"]]
