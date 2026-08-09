@@ -8,6 +8,7 @@ import { useUser } from "@/contexts/UserContext";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, ToolGroup } from '@/components/ai-elements/tool';
+import type { ToolUIPart } from 'ai';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
 import { HubAskUser, splitAskUserBlocks } from '../hub/HubAskUser';
 import { MessageActions } from './MessageActions';

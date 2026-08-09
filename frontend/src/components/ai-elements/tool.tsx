@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import type { ToolUIPart } from "ai";
 import { ChevronRightIcon, Layers2Icon, ShieldAlertIcon, WrenchIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { isValidElement, useState } from "react";
+import { isValidElement, useEffect, useState } from "react";
 import { CodeBlock } from "./code-block";
 import { Video } from "./video";
 import { extractVideoFromToolResult } from "@/components/chat/videoDetection";
@@ -394,12 +394,16 @@ export type ToolGroupCall = {
   durationMs?: number;
 };
 
-export type ToolGroupProps = ComponentProps<typeof Collapsible> & {
+export type ToolGroupProps = Omit<ComponentProps<typeof Collapsible>, "open" | "onOpenChange"> & {
   calls: ToolGroupCall[];
   /** Called with the call's `callId` when its inline "Allow" button is clicked. */
   onApprove?: (callId: string) => void;
   /** Called with the call's `callId` when its inline "Deny" button is clicked. */
   onDeny?: (callId: string) => void;
+  /** Drives auto-expand-while-running / auto-collapse-when-done below. Omit for a plain uncontrolled group. */
+  runStatus?: "Queued" | "Started" | "Success" | "Failed";
+  /** Groups rehydrated from persisted history have no in-flight signal — render collapsed, not auto-open. */
+  isHistorical?: boolean;
 };
 
 /**
@@ -413,8 +417,20 @@ export type ToolGroupProps = ComponentProps<typeof Collapsible> & {
  * exposes. Splitting a single message's tools into multiple groups based on
  * prose interleaved between calls would need backend turn-boundary data that
  * doesn't exist yet — deliberately out of scope here, not an oversight.
+ *
+ * While a run is in flight the group auto-opens so the user can watch it
+ * work, and auto-closes once it finishes — unless the user has already
+ * toggled it by hand, in which case their choice wins from then on.
  */
-export const ToolGroup = ({ calls, onApprove, onDeny, className, ...props }: ToolGroupProps) => {
+export const ToolGroup = ({ calls, onApprove, onDeny, runStatus, isHistorical, className, ...props }: ToolGroupProps) => {
+  const isRunning = runStatus === "Queued" || runStatus === "Started";
+  const [open, setOpen] = useState(!isHistorical && isRunning);
+  const [userToggled, setUserToggled] = useState(false);
+
+  useEffect(() => {
+    if (!isRunning && !userToggled) setOpen(false);
+  }, [isRunning, userToggled]);
+
   const counts = new Map<string, number>();
   for (const call of calls) {
     counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
@@ -427,7 +443,15 @@ export const ToolGroup = ({ calls, onApprove, onDeny, className, ...props }: Too
   const totalDurationMs = durations.length > 0 ? durations.reduce((sum, ms) => sum + ms, 0) : undefined;
 
   return (
-    <Collapsible className={cn("not-prose mb-1 w-full", className)} {...props}>
+    <Collapsible
+      className={cn("not-prose mb-1 w-full", className)}
+      open={open}
+      onOpenChange={(next) => {
+        setUserToggled(true);
+        setOpen(next);
+      }}
+      {...props}
+    >
       <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 rounded-[7px] px-[7px] py-[3px] -ml-[7px] text-left leading-[24px] transition-colors hover:bg-muted/60">
         <Layers2Icon className="size-[13px] shrink-0 text-muted-foreground" />
         <span className="shrink-0 text-[12.5px] font-medium text-foreground">
