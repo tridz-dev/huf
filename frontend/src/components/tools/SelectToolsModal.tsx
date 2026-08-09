@@ -17,9 +17,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs';
 import { ToolCard } from './ToolCard';
 import { ToolTemplateCard } from './ToolTemplateCard';
 import { ToolCreationForm } from './ToolCreationForm';
+import { AppPicker } from '../capabilities/AppPicker';
+import { CapabilitySearch } from '../capabilities/CapabilitySearch';
+import { ActionDetail } from '../capabilities/ActionDetail';
 import { getToolFunctions, getToolTypes, createToolFunction, getAgentsUsingTool } from '@/services/toolApi';
 import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { ToolTemplate, ToolFormData } from '@/types/toolTemplate.types';
+import type { CapabilityApp, CapabilityDescriptor } from '@/types/capability.types';
 import { getToolTypeDisplayLabel } from '@/data/ai';
 import { getIntegrationSettings } from '@/services/integrationApi';
 import type { IntegrationSettingsDoc } from '@/types/integration.types';
@@ -34,6 +38,19 @@ import { cn } from '@/lib/utils';
 
 const UNCATEGORIZED_GROUP = '__uncategorized__';
 const UNCATEGORIZED_LABEL = 'Other Tools';
+
+// `tool_name` is validated server-side (AgentToolFunction.validate_tool_name)
+// against /^[a-zA-Z0-9_-]{1,128}$/ - spaces are rejected. Capability titles can
+// be free text ("Send Email") or already identifier-shaped ("send_email"), so
+// normalize into a valid identifier instead of a human-readable label.
+function toToolNameSlug(title: string): string {
+  return title
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^[_-]+|[_-]+$/g, '')
+    .slice(0, 128);
+}
 
 interface SelectToolsModalProps {
   open: boolean;
@@ -62,13 +79,29 @@ export function SelectToolsModal({
   const [connectedServices, setConnectedServices] = useState<Set<string>>(new Set());
   
   // Tab and view state
-  const [activeTab, setActiveTab] = useState<'tool-library' | 'create-new'>('tool-library');
+  const [activeTab, setActiveTab] = useState<'tool-library' | 'create-new' | 'from-apps'>('tool-library');
   const [createView, setCreateView] = useState<'templates' | 'form'>('templates');
   const [selectedTemplate, setSelectedTemplate] = useState<ToolTemplate | null>(null);
   const [creatingTool, setCreatingTool] = useState(false);
-  
+
+  // "From Apps" discovery flow state: AppPicker -> CapabilitySearch -> ActionDetail,
+  // and (for newly-discovered, non-declared actions) a final prefilled
+  // ToolCreationForm step.
+  const [discoverStep, setDiscoverStep] = useState<'apps' | 'search' | 'detail' | 'form'>('apps');
+  const [discoverApp, setDiscoverApp] = useState<CapabilityApp | null>(null);
+  const [discoverCapability, setDiscoverCapability] = useState<CapabilityDescriptor | null>(null);
+  const [discoverInitialData, setDiscoverInitialData] = useState<Partial<ToolFormData> | null>(null);
+
   // Load templates from config
   const templates = useMemo(() => toolTemplatesConfig.templates as ToolTemplate[], []);
+  // The template body used for tools created via discovery — always
+  // "Custom Function" per plan §7.5, never "App Provided" (that types value
+  // is reserved for the huf_tools sync, and a manual create must not collide
+  // with its orphan-cleanup).
+  const customFunctionTemplate = useMemo(
+    () => templates.find((t) => t.id === 'custom_function') || null,
+    [templates]
+  );
 
   // Load tools and tool types when modal opens
   useEffect(() => {
@@ -127,6 +160,10 @@ export function SelectToolsModal({
       setCreateView('templates');
       setSelectedTemplate(null);
       setExpandedGroups(new Set());
+      setDiscoverStep('apps');
+      setDiscoverApp(null);
+      setDiscoverCapability(null);
+      setDiscoverInitialData(null);
     }
   }, [open, selectedTools]);
 
@@ -409,6 +446,12 @@ export function SelectToolsModal({
       setActiveTab('tool-library');
       setCreateView('templates');
       setSelectedTemplate(null);
+      // Also reset the "From Apps" discovery flow, in case this submission
+      // came from ActionDetail's "Add to Agent" rather than the Create New tab.
+      setDiscoverStep('apps');
+      setDiscoverApp(null);
+      setDiscoverCapability(null);
+      setDiscoverInitialData(null);
     } catch (error) {
       console.error('Error creating tool:', error);
       const errorMessage = getFrappeErrorMessage(error);
@@ -416,6 +459,80 @@ export function SelectToolsModal({
     } finally {
       setCreatingTool(false);
     }
+  };
+
+  // --- "From Apps" discovery flow -----------------------------------------
+
+  const handleDiscoverAppSelect = (app: CapabilityApp) => {
+    setDiscoverApp(app);
+    setDiscoverStep('search');
+  };
+
+  const handleDiscoverActionSelect = (capability: CapabilityDescriptor) => {
+    setDiscoverCapability(capability);
+    setDiscoverStep('detail');
+  };
+
+  const handleDiscoverBackToApps = () => {
+    setDiscoverStep('apps');
+    setDiscoverApp(null);
+    setDiscoverCapability(null);
+  };
+
+  const handleDiscoverBackToSearch = () => {
+    setDiscoverStep('search');
+    setDiscoverCapability(null);
+  };
+
+  const handleDiscoverFormBack = () => {
+    setDiscoverStep('detail');
+    setDiscoverInitialData(null);
+  };
+
+  // ActionDetail's "Add to Agent" handler. A "declared" capability is one
+  // already synced from huf_tools as an App Provided Agent Tool Function, so
+  // the correct move is to attach that existing record — never re-create it,
+  // since App Provided tools are exclusively owned by the huf_tools sync and
+  // its orphan-cleanup. Anything else (framework_discovered / generated /
+  // inferred) is a genuinely new action: open the creation form prefilled,
+  // and it will always persist as "Custom Function" (never "App Provided").
+  const handleDiscoverAdd = (capability: CapabilityDescriptor) => {
+    if (capability.source_type === 'declared') {
+      const existing = allTools.find(
+        (tool) => tool.function_path && tool.function_path === capability.function_path
+      );
+
+      if (!existing) {
+        toast.error(
+          'Could not find the synced tool for this action. Try refreshing the Tool Library.'
+        );
+        return;
+      }
+
+      const newSelectedIds = new Set(selectedToolIds);
+      newSelectedIds.add(existing.name);
+      setSelectedToolIds(newSelectedIds);
+
+      const alreadyOnAgent = selectedTools.some((st) => st.name === existing.name);
+      onOpenChange(false);
+      if (!alreadyOnAgent) {
+        onAddTools([existing]);
+        toast.success('Tool added successfully!');
+      }
+      return;
+    }
+
+    setDiscoverInitialData({
+      types: 'Custom Function',
+      function_path: capability.function_path,
+      tool_name: toToolNameSlug(capability.title),
+      description: capability.description || capability.short_description || '',
+    });
+    // handleFormSubmit requires selectedTemplate to be set — reuse the
+    // existing "Custom Script / Function" template body so the shared
+    // submit path (and its tool_type/types options) works unmodified.
+    setSelectedTemplate(customFunctionTemplate);
+    setDiscoverStep('form');
   };
 
   return (
@@ -426,14 +543,17 @@ export function SelectToolsModal({
         </DialogScrollHeader>
 
         {/* Tabs */}
-        <Tabs 
-          value={activeTab} 
-          onValueChange={(value) => setActiveTab(value as 'tool-library' | 'create-new')} 
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) =>
+            setActiveTab(value as 'tool-library' | 'create-new' | 'from-apps')
+          }
           className="flex min-h-0 flex-1 flex-col overflow-hidden px-6"
         >
-          <TabsList layout="grid" cols={2} className="flex-shrink-0">
-            <TabsTrigger value="tool-library">Tool library</TabsTrigger>
-            <TabsTrigger value="create-new">Create new</TabsTrigger>
+          <TabsList layout="grid" cols={3} className="flex-shrink-0">
+            <TabsTrigger value="tool-library">Tool Library</TabsTrigger>
+            <TabsTrigger value="from-apps">From Apps</TabsTrigger>
+            <TabsTrigger value="create-new">Create New</TabsTrigger>
           </TabsList>
 
           {/* Tool Library Tab */}
@@ -512,6 +632,63 @@ export function SelectToolsModal({
                 </>
               )}
             </div>
+          </TabsContent>
+
+          {/* From Apps Tab: AppPicker -> CapabilitySearch -> ActionDetail,
+              and (for genuinely new actions) a final prefilled create form. */}
+          <TabsContent
+            value="from-apps"
+            className="mt-4 data-[state=active]:flex data-[state=active]:flex-col data-[state=active]:flex-1 data-[state=active]:min-h-0 data-[state=active]:overflow-y-auto"
+          >
+            {discoverStep === 'apps' && (
+              <div className="pb-4">
+                <DialogDescription className="pb-3">
+                  Pick an app to browse the actions it makes available.
+                </DialogDescription>
+                <AppPicker onSelect={handleDiscoverAppSelect} />
+              </div>
+            )}
+
+            {discoverStep === 'search' && discoverApp && (
+              <div className="pb-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mb-3 gap-1.5"
+                  onClick={handleDiscoverBackToApps}
+                >
+                  <ChevronRight className="h-3.5 w-3.5 rotate-180" aria-hidden="true" />
+                  Back to apps
+                </Button>
+                <DialogDescription className="pb-3">
+                  Actions available from {discoverApp.title}.
+                </DialogDescription>
+                <CapabilitySearch app={discoverApp.app} onSelectAction={handleDiscoverActionSelect} />
+              </div>
+            )}
+
+            {discoverStep === 'detail' && discoverCapability && (
+              <div className="pb-4">
+                <ActionDetail
+                  capability={discoverCapability}
+                  onAdd={handleDiscoverAdd}
+                  onBack={handleDiscoverBackToSearch}
+                />
+              </div>
+            )}
+
+            {discoverStep === 'form' && discoverInitialData && (
+              <div className="pb-4">
+                <ToolCreationForm
+                  template={customFunctionTemplate || templates[0]}
+                  toolTypes={toolTypes}
+                  onSubmit={handleFormSubmit}
+                  onBack={handleDiscoverFormBack}
+                  loading={creatingTool}
+                  initialData={discoverInitialData}
+                />
+              </div>
+            )}
           </TabsContent>
 
           {/* Create New Tab */}
