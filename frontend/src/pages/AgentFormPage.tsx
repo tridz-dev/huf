@@ -31,6 +31,7 @@ import { BehaviorTab } from '../components/agent/BehaviorTab';
 import { TriggersTab } from '../components/agent/TriggersTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption, type MemoryPolicyOption } from '../components/agent/AdvancedTab';
+import { VoiceTab } from '../components/agent/VoiceTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
@@ -155,6 +156,10 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     agent_color: agent.agent_color?.trim() || '',
     show_tool_execution_details: agent.show_tool_execution_details === 1,
     agent_skill: (agent.agent_skill ?? []) as any,
+    voice_enabled: agent.voice_enabled === 1,
+    voice_engine: agent.voice_engine || undefined,
+    voice_config: agent.voice_config || '{}',
+    voice_greeting: agent.voice_greeting || '',
     image_generation_model: agent.image_generation_model || undefined,
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
@@ -205,6 +210,12 @@ export function AgentFormPage() {
     behavior: {
       label: 'Behavior',
       fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run', 'default_plan'],
+      default: false,
+      disabled: false,
+    },
+    voice: {
+      label: 'Voice',
+      fields: ['voice_enabled', 'voice_engine', 'voice_config', 'voice_greeting', 'tts_model', 'tts_voice', 'stt_model'],
       default: false,
       disabled: false,
     },
@@ -268,9 +279,6 @@ export function AgentFormPage() {
         'agent_color',
         'show_tool_execution_details',
         'image_generation_model',
-        'tts_model',
-        'tts_voice',
-        'stt_model',
         'allow_file_upload',
         'enable_ocr',
         'max_upload_size_mb',
@@ -434,6 +442,10 @@ export function AgentFormPage() {
         reasoning_summary: 'None',
         agent_color: '',
         show_tool_execution_details: false,
+        voice_enabled: false,
+        voice_engine: undefined,
+        voice_config: '{}',
+        voice_greeting: '',
         image_generation_model: undefined,
         tts_model: undefined,
         tts_voice: '',
@@ -1168,6 +1180,7 @@ export function AgentFormPage() {
             knowledge: data.modified,
             skills: data.modified,
             permissions: data.modified,
+            voice: data.modified,
             advanced: data.modified,
           });
         }
@@ -1228,7 +1241,11 @@ export function AgentFormPage() {
             enable_memory_write_tool: data.enable_memory_write_tool !== undefined ? data.enable_memory_write_tool === 1 : true,
             agent_color: data.agent_color?.trim() || '',
             show_tool_execution_details: data.show_tool_execution_details === 1,
-  
+
+            voice_enabled: data.voice_enabled === 1,
+            voice_engine: data.voice_engine || undefined,
+            voice_config: data.voice_config || '{}',
+            voice_greeting: data.voice_greeting || '',
             image_generation_model: data.image_generation_model || undefined,
             tts_model: data.tts_model || undefined,
             tts_voice: data.tts_voice || '',
@@ -1546,6 +1563,10 @@ export function AgentFormPage() {
         agent_color: values.agent_color?.trim() || undefined,
         show_tool_execution_details: values.show_tool_execution_details ? 1 : 0,
 
+        voice_enabled: values.voice_enabled ? 1 : 0,
+        voice_engine: values.voice_engine || undefined,
+        voice_config: values.voice_config || '{}',
+        voice_greeting: values.voice_greeting || '',
         image_generation_model: values.image_generation_model || undefined,
         tts_model: values.tts_model || undefined,
         tts_voice: values.tts_voice || undefined,
@@ -1603,6 +1624,7 @@ export function AgentFormPage() {
           knowledge: ['agent_knowledge'],
           skills: ['agent_skill'],
           permissions: tabConfig.permissions.fields,
+          voice: tabConfig.voice.fields,
           advanced: tabConfig.advanced.fields,
         };
         const sectionPayload = Object.fromEntries(
@@ -1732,6 +1754,10 @@ export function AgentFormPage() {
           agent_color: newAgent.agent_color?.trim() || '',
           show_tool_execution_details: newAgent.show_tool_execution_details === 1,
 
+          voice_enabled: newAgent.voice_enabled === 1,
+          voice_engine: newAgent.voice_engine || undefined,
+          voice_config: newAgent.voice_config || '{}',
+          voice_greeting: newAgent.voice_greeting || '',
           image_generation_model: newAgent.image_generation_model || undefined,
           tts_model: newAgent.tts_model || undefined,
           tts_voice: newAgent.tts_voice || '',
@@ -1820,6 +1846,10 @@ export function AgentFormPage() {
           agent_color: values.agent_color,
           show_tool_execution_details: values.show_tool_execution_details,
 
+          voice_enabled: values.voice_enabled,
+          voice_engine: values.voice_engine,
+          voice_config: values.voice_config,
+          voice_greeting: values.voice_greeting,
           image_generation_model: values.image_generation_model,
           tts_model: values.tts_model,
           tts_voice: values.tts_voice,
@@ -2457,6 +2487,10 @@ export function AgentFormPage() {
 
               <TabsContent value="behavior" className="space-y-4">
                 <BehaviorTab form={form} locked={systemLocked} />
+              </TabsContent>
+
+              <TabsContent value="voice" className="space-y-4">
+                <VoiceTab form={form} allModels={allModels} />
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">

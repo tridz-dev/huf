@@ -11,7 +11,8 @@ import {
   setStreamingAvailable,
 } from "@/services/streamChatApi";
 import { transcribeAudio, prepareMessageWithFile, uploadFileAttachment } from "@/services/chatApi";
-import type { PrepareMessageWithFileFile, TranscribeAudioResponse } from "@/services/chatApi";
+import type { PrepareMessageWithFileFile, TranscribeAudioResponse, ClientToolCallPayload } from "@/services/chatApi";
+import { executeClientToolCallsFromResponse } from "@/lib/clientToolDispatcher";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
@@ -209,6 +210,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 // bubble or an endless loading state. `new_conversation` nests the
                 // run ack under `msg.run`; `send_message_to_conversation` flattens it.
                 const runAck = msg?.run as Record<string, unknown> | undefined;
+                // Second delivery path for client-side tool calls, alongside the
+                // `frontend_tool_call_initiated` socket event: the queue-first
+                // design treats realtime events as best-effort, so a dropped
+                // socket event must not be the only way a tool call gets run.
+                // `send_message_to_conversation` flattens `client_side_tool_calls`
+                // at the top level; `new_conversation` nests it under `msg.run`.
+                const clientSideToolCalls =
+                    (msg?.client_side_tool_calls as ClientToolCallPayload[] | undefined) ??
+                    (runAck?.client_side_tool_calls as ClientToolCallPayload[] | undefined);
+                executeClientToolCallsFromResponse(clientSideToolCalls);
                 const runSuccess = (msg?.success as boolean | undefined) ?? (runAck?.success as boolean | undefined);
                 if (runSuccess === false) {
                     const errorText =

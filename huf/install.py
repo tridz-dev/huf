@@ -284,6 +284,10 @@ def create_demo_ai_models():
         return entry
 
     models = [
+        # ElevenLabs
+        _m("eleven_multilingual_v2", "ElevenLabs", TTS),
+        _m("eleven_turbo_v2_5", "ElevenLabs", TTS),
+        _m("eleven_flash_v2_5", "ElevenLabs", TTS),
         # Hugging Face
         _m("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
         # Cohere
@@ -461,6 +465,45 @@ def create_demo_ai_models():
             if not existing.get("modalities"):
                 existing.modalities = m["modalities"]
                 existing.save(ignore_permissions=True)
+
+
+def seed_voice_engines():
+	"""Ensure a Voice Engine row exists for every engine discovered by the registry.
+
+	Idempotent and safe to call on after_migrate even when zero engines are
+	registered (the current state, since the registry starts empty). Existing
+	rows are left alone except for backfilling a missing label/kind, so user
+	edits are preserved.
+	"""
+	try:
+		from huf.ai.voice import get_engine, supported_engines
+
+		for engine_key in supported_engines():
+			engine = get_engine(engine_key)
+			label = getattr(engine, "label", engine_key)
+			kind = getattr(engine, "kind", None)
+
+			if not frappe.db.exists("Voice Engine", engine_key):
+				doc = frappe.new_doc("Voice Engine")
+				doc.engine_key = engine_key
+				doc.label = label
+				doc.kind = kind
+				doc.enabled = 1
+				doc.insert(ignore_permissions=True)
+				continue
+
+			existing = frappe.get_doc("Voice Engine", engine_key)
+			dirty = False
+			if not existing.get("label") and label:
+				existing.label = label
+				dirty = True
+			if not existing.get("kind") and kind:
+				existing.kind = kind
+				dirty = True
+			if dirty:
+				existing.save(ignore_permissions=True)
+	except Exception as e:
+		logger.warning(f"Failed to seed voice engines: {e!s}")
 
 
 def create_hub_orchestrator_agent():

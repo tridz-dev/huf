@@ -119,6 +119,7 @@ after_app_install = [
 after_migrate = [
     "huf.install.after_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
+    "huf.install.seed_voice_engines",
 ]
 
 # Uninstallation
@@ -376,3 +377,12 @@ huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
 huf_knowledge_backends = {
     "redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
 }
+
+# Voice Engines Hook
+# ------------------
+# Register additional voice engines with the hook-based engine registry (see
+# huf.ai.voice). Maps engine_key -> dotted path to a VoiceEngine subclass.
+# Built-in engine keys cannot be overridden by a hook. Built-in engines land
+# in a later phase, so this starts empty.
+
+huf_voice_engines = {}
