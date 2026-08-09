@@ -65,7 +65,7 @@ function getAgentBadges(agent: AgentDoc) {
   if (agent.enable_prompt_caching === 1) {
     badges.push({ label: 'Prompt cache', variant: 'outline' });
   }
-  if (agent.allow_guest === 1) {
+  if (agent.allow_guest) {
     badges.push({ label: 'Guest', variant: 'outline' });
   }
 

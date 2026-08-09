@@ -17,3 +17,4 @@ huf.patches.v1.fix_agent_message_status
 huf.patches.v1.sync_data_table_permissions
 huf.patches.v1.add_frappe_cloud_service
 huf.patches.v1.backfill_tool_service_links
+huf.patches.v1.preserve_gateway_agent_access

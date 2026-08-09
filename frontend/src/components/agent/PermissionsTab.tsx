@@ -38,6 +38,14 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
           <CardDescription>
             Configure who can run this agent. If both lists are empty, any authenticated user can access it.
             Otherwise access is limited to the owner, selected users, or users with selected roles.
+            <br />
+            Agents reached via external channels (Slack, Discord, Teams, Telegram, voice) are only
+            reachable if Allow Public / Unauthenticated Access is enabled below -- Allowed Users and
+            Allowed Roles cannot be evaluated for those channels since external callers are not mapped
+            to a HUF user.
+            <br />
+            This tab controls who can run this agent; it is separate from data-table agent access,
+            which controls what an agent can do to a table.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -47,9 +55,13 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
                 <div className="space-y-0.5">
-                  <FormLabel className="text-base">Allow Guest API Access</FormLabel>
+                  <FormLabel className="text-base">Allow Public / Unauthenticated Access</FormLabel>
                   <FormDescription>
-                    If checked, this agent can be run by Guest users (via API).
+                    If checked, anyone who can reach the API can run this agent without logging in -- not
+                    just people in your organization. Guest access is governed by this switch alone;
+                    Allowed Users and Allowed Roles are not evaluated for unauthenticated callers. Use only
+                    for agents meant to be public-facing, such as an embedded support-chat widget. If
+                    unsure, leave this off.
                   </FormDescription>
                 </div>
                 <FormControl>
@@ -76,7 +88,9 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  Leave empty to avoid user-specific restrictions. Add specific users for targeted access.
+                  Add specific users to limit who can run this agent. If both Allowed Users and Allowed
+                  Roles are left empty, every logged-in HUF user can run this agent -- leaving both empty
+                  does not restrict access, it removes all restrictions.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -100,7 +114,9 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
                   />
                 </FormControl>
                 <FormDescription>
-                  Use roles for scalable access control across teams without listing every user individually.
+                  Use roles for scalable access control across teams without listing every user
+                  individually -- e.g. restrict an HR agent to the HR Manager role. If both Allowed Users
+                  and Allowed Roles are empty, every logged-in user can run this agent.
                 </FormDescription>
                 <FormMessage />
               </FormItem>

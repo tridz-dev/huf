@@ -118,7 +118,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     prompt_version_locked: agent.prompt_version_locked === 1,
     template_version_at_attach:
       agent.template_version_at_attach !== undefined ? agent.template_version_at_attach : undefined,
-    allow_guest: agent.allow_guest === 1,
+    allow_guest: !!agent.allow_guest,
     allowed_users: (agent.allowed_users || []).map((row) => row.user).filter(Boolean),
     allowed_roles: (agent.allowed_roles || []).map((row) => row.role).filter(Boolean),
     copied_from_prompt: agent.copied_from_prompt ?? undefined,
@@ -607,8 +607,12 @@ export function AgentFormPage() {
       getModels(),
       getToolTypes(),
       getSkillOptions(),
-      db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
-      db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
+      // Capped well below the previous unbounded 1000: this list backs the
+      // Permissions tab's user/role picker, not a full directory browser.
+      // Instances with more users/roles than this cap need server-side
+      // search here instead of a raise — see AGENT_PERMISSIONS_AUDIT.md OQ3.
+      db.getDocList('User', { fields: ['name'], limit: 200, orderBy: { field: 'name', order: 'asc' } }),
+      db.getDocList('Role', { fields: ['name'], limit: 200, orderBy: { field: 'name', order: 'asc' } }),
     ]).then(([providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult]) => {
       const results = [providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult];
       results.forEach((result, i) => {
@@ -1198,7 +1202,7 @@ export function AgentFormPage() {
             agent_prompt: data.agent_prompt || '',
             prompt_version_locked: data.prompt_version_locked === 1,
             template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
-            allow_guest: data.allow_guest === 1,
+            allow_guest: !!data.allow_guest,
             allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
             allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
             enable_prompt_caching: data.enable_prompt_caching === 1,
@@ -1512,7 +1516,7 @@ export function AgentFormPage() {
         agent_prompt: values.agent_prompt || '',
         prompt_version_locked: values.prompt_version_locked ? 1 : 0,
         template_version_at_attach: values.template_version_at_attach !== undefined ? values.template_version_at_attach : undefined,
-        allow_guest: values.allow_guest ? 1 : 0,
+        allow_guest: values.allow_guest,
         allowed_users: (values.allowed_users || []).map((user) => ({ user })) as AgentPermissionUserRow[],
         allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as AgentPermissionRoleRow[],
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
@@ -1701,7 +1705,7 @@ export function AgentFormPage() {
           agent_prompt: newAgent.agent_prompt || '',
           prompt_version_locked: newAgent.prompt_version_locked === 1,
           template_version_at_attach: newAgent.template_version_at_attach !== undefined ? newAgent.template_version_at_attach : undefined,
-          allow_guest: newAgent.allow_guest === 1,
+          allow_guest: !!newAgent.allow_guest,
           allowed_users: (newAgent.allowed_users || []).map((row) => row.user).filter(Boolean),
           allowed_roles: (newAgent.allowed_roles || []).map((row) => row.role).filter(Boolean),
           enable_prompt_caching: newAgent.enable_prompt_caching === 1,

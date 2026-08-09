@@ -272,7 +272,7 @@ export interface AgentDoc {
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
   show_tool_execution_details?: 0 | 1; // 0 or 1
-  allow_guest?: number; // 0 or 1
+  allow_guest?: boolean;
   is_system?: number; // 0 or 1 — system agents are locked and hidden from non-admins
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];

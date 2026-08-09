@@ -26,6 +26,7 @@ from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
+from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -479,30 +480,13 @@ class AgentManager:
         return agent
 
 def _is_user_allowed(agent_doc, user: str) -> bool:
-    """Check if user is allowed to run this agent"""
+    """Check if user is allowed to run this agent.
 
-    # Guest check
-    if user == "Guest":
-        return agent_doc.allow_guest
-
-    # Check allowed_users if specified
-    if agent_doc.allowed_users:
-        allowed_user_names = [u.user for u in agent_doc.allowed_users]
-        if user in allowed_user_names:
-            return True
-
-    # Check allowed_roles if specified
-    if agent_doc.allowed_roles:
-        allowed_role_names = [r.role for r in agent_doc.allowed_roles]
-        user_roles = frappe.get_roles(user)
-        if any(role in user_roles for role in allowed_role_names):
-            return True
-
-    # If no restrictions specified, allow all logged-in users
-    if not agent_doc.allowed_users and not agent_doc.allowed_roles:
-        return True
-
-    return False
+    Thin wrapper kept for backward compatibility with existing callers
+    (e.g. huf/ai/handlers/agent_runner.py); delegates to the shared
+    huf.ai.agent_access helper, which is now the single source of truth.
+    """
+    return _check_agent_access(agent_doc, user)
 
 # Canonical lifecycle status values. These must match the Agent Run doctype
 # Select options (Queued/Started/Success/Failed), the HTTP acknowledgement
@@ -965,14 +949,7 @@ def run_agent_sync(
         provider=provider,
     )
 
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
-
-    if not _is_user_allowed(agent_doc, frappe.session.user):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError
-        )
+    assert_agent_access(agent_doc)
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -1218,16 +1195,7 @@ def get_agent_run_status(agent_run_id: str):
         frappe.throw(_("Agent Run not found: {0}").format(agent_run_id), frappe.DoesNotExistError)
 
     agent_doc = frappe.get_doc("Agent", run.agent)
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(
-            _("Access denied. This agent does not allow guest access."),
-            frappe.PermissionError,
-        )
-    if not _is_user_allowed(agent_doc, frappe.session.user):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError,
-        )
+    assert_agent_access(agent_doc)
 
     agent_message_id = None
     if run.status in ("Success", "Failed"):
@@ -2468,19 +2436,13 @@ async def run_agent_stream(
             }
             return
 
-        # 1. Guest Check
-        if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+        # 1. Guest + Permission Check (User/Role binding)
+        try:
+            assert_agent_access(agent_doc)
+        except frappe.PermissionError as e:
             yield {
                 "type": "error",
-                "error": "Access denied. This agent does not allow guest access."
-            }
-            return
-
-        # 2. Permission Check (User/Role binding)
-        if not _is_user_allowed(agent_doc, frappe.session.user):
-            yield {
-                "type": "error",
-                "error": "You are not authorized to use this agent."
+                "error": str(e) or "You are not authorized to use this agent."
             }
             return
 
