@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { BarChart2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import ChatAvatar from "./ChatAvatar";
 import { getInitials } from "@/utils/getInitials";
 import { useUser } from "@/contexts/UserContext";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, ToolGroup } from '@/components/ai-elements/tool';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
 import type { ToolUIPart } from 'ai';
 import { MessageActions } from './MessageActions';
@@ -89,6 +90,21 @@ export function ChatMessage({
         ? () => onRegenerate(precedingUserMessage)
         : undefined;
 
+    // TODO(tool-call-approval-api): there is no backend/socket endpoint yet to
+    // approve or deny a pending tool call (only flow-run-level approvals exist,
+    // see ApprovalsBell.tsx / flowApi.ts). These are UI-only stubs so the
+    // "approval-requested" state is visually complete; wire them to a real
+    // call/agent-run approve-deny endpoint once one exists.
+    const handleToolCallApprove = (toolCallId: string) => {
+        console.warn('tool-call approval API not yet implemented', { toolCallId });
+        toast.info("Approving tool calls isn't wired up yet.");
+    };
+
+    const handleToolCallDeny = (toolCallId: string) => {
+        console.warn('tool-call approval API not yet implemented', { toolCallId });
+        toast.info("Denying tool calls isn't wired up yet.");
+    };
+
     const showLoading = isAssistant && !message.error && (
         ((status === 'submitted' || status === 'streaming') && isEmpty) ||
         message.runStatus === 'Queued' ||
@@ -146,33 +162,60 @@ export function ChatMessage({
                     )}
                 </div>
                 
-                {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
-                    message.tools.map((tool, toolIndex) => (
-                        <Tool key={`${message.key}-tool-${toolIndex}`}>
-                            <ToolHeader
-                                title={tool.name}
-                                type={`tool-${tool.name}` as ToolUIPart['type']}
-                                state={tool.status}
-                            />
-                            <ToolContent>
-                                <ToolInput input={tool.parameters} />
-                                <ToolOutput
-                                    output={tool.result}
-                                    errorText={tool.error}
+                <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
+                    <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
+                        {isAssistant && message.reasoning && (
+                            <Reasoning isStreaming={!!message.reasoningStreaming} defaultOpen={false}>
+                                <ReasoningTrigger />
+                                <ReasoningContent>{message.reasoning}</ReasoningContent>
+                            </Reasoning>
+                        )}
+                        {/*
+                          Tool calls are a footnote to the answer, not a replacement for it: render
+                          them above, then let the answer text follow normally below (never either/or).
+                          2+ calls in this message collapse into one ToolGroup line; a single call keeps
+                          the existing standalone Tool view. Grouping is scoped to this message's whole
+                          tools[] array (the only "same turn" boundary the data model exposes today) —
+                          splitting one message into multiple groups around interleaved prose is deferred,
+                          not a bug, until the backend carries turn-boundary data.
+                        */}
+                        {showToolExecutionDetails && message.tools && message.tools.length > 0 && (
+                            message.tools.length > 1 ? (
+                                <ToolGroup
+                                    calls={message.tools.map((tool) => ({
+                                        callId: tool.tool_call_id,
+                                        name: tool.name,
+                                        state: tool.status,
+                                        input: tool.parameters,
+                                        output: tool.result,
+                                        errorText: tool.error,
+                                        durationMs: tool.durationMs,
+                                    }))}
+                                    onApprove={handleToolCallApprove}
+                                    onDeny={handleToolCallDeny}
                                 />
-                            </ToolContent>
-                        </Tool>
-                    ))
-                ) : (
-                    <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
-                        <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
-                            {isAssistant && message.reasoning && (
-                                <Reasoning isStreaming={!!message.reasoningStreaming} defaultOpen={false}>
-                                    <ReasoningTrigger />
-                                    <ReasoningContent>{message.reasoning}</ReasoningContent>
-                                </Reasoning>
-                            )}
-                            {/* Show loading state while message is generating */}
+                            ) : (
+                                <Tool key={`${message.key}-tool-0`}>
+                                    <ToolHeader
+                                        title={message.tools[0].name}
+                                        type={`tool-${message.tools[0].name}` as ToolUIPart['type']}
+                                        state={message.tools[0].status}
+                                        durationMs={message.tools[0].durationMs}
+                                        onRetry={handleRegenerate}
+                                        onApprove={() => handleToolCallApprove(message.tools![0].tool_call_id)}
+                                        onDeny={() => handleToolCallDeny(message.tools![0].tool_call_id)}
+                                    />
+                                    <ToolContent>
+                                        <ToolInput input={message.tools[0].parameters} />
+                                        <ToolOutput
+                                            output={message.tools[0].result}
+                                            errorText={message.tools[0].error}
+                                        />
+                                    </ToolContent>
+                                </Tool>
+                            )
+                        )}
+                        {/* Show loading state while message is generating */}
                             {showLoading && (
                                 <MessageLoadingState
                                     type={showToolExecutionDetails && message.tools?.length ? 'tool-execution' : loadingType}
@@ -284,7 +327,7 @@ export function ChatMessage({
                             )}
                         </MessageContent>
                         {/* Actions for assistant messages */}
-                        {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
+                        {message.from === 'assistant' && message.versions[0]?.content && (
                             <div className="opacity-0 transition-opacity group-hover:opacity-100">
                                 <MessageActions
                                     content={message.versions[0].content}
@@ -303,7 +346,6 @@ export function ChatMessage({
                             </div>
                         )}
                     </Message>
-                )}
             </div>
         </div>
     );

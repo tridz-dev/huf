@@ -18,7 +18,6 @@ import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderAction
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
 import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
-import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
@@ -86,8 +85,6 @@ import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
-const UsersPage = lazy(() => import('./pages/UsersPage'));
-const RolesPage = lazy(() => import('./pages/RolesPage'));
 const MembersPage = lazy(() => import('./pages/MembersPage'));
 
 function ChatOnlyRedirectGuard() {
@@ -662,25 +659,10 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout headerActions={<UsersHeaderActions />}>
-                  <UsersPage />
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/users" element={<Navigate to="/members" replace />} />
           <Route
             path="/roles"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout>
-                  <RolesPage />
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/members?view=roles" replace />}
           />
           <Route
             path="*"

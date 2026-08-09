@@ -29,7 +29,7 @@ interface StarterPrompt {
 const STARTER_PROMPTS: Record<string, StarterPrompt[]> = {
   admin: [
     { label: 'Create approval flow for ToDo', route: '/flows' },
-    { label: 'Invite user and assign Builder role', route: '/users' },
+    { label: 'Invite user and assign Builder role', route: '/members' },
     { label: 'Show weekly cost analysis', route: '/dashboard' },
     { label: 'List failed automations today', route: '/executions' },
   ],
@@ -170,7 +170,7 @@ export default function HubSimplePage() {
 
   const handleSlashSelect = (cmd: string) => {
     const routeMap: Record<string, string> = {
-      '/flow': '/flows', '/agent': '/agents', '/users': '/users',
+      '/flow': '/flows', '/agent': '/agents', '/users': '/members',
       '/runs': '/executions', '/knowledge': '/knowledge', '/settings': '/models', '/cost': '/dashboard',
     };
     const lastSlash = inputValue.lastIndexOf('/');

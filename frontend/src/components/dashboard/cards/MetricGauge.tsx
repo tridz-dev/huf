@@ -26,7 +26,7 @@ export function MetricGauge({
     <div className="px-[18px] py-4 min-w-0">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-body text-[13px] font-medium text-ink">
+          <div className="font-body text-[11px] font-medium text-steel-soft">
             {label}
           </div>
           {period && (
@@ -56,7 +56,7 @@ export function MetricGauge({
             figure itself never does. */}
         <span
           className={cn(
-            'font-display font-semibold text-[30px] tracking-[-.02em] leading-none tabular-nums',
+            'font-display font-semibold text-[22px] tracking-[-.02em] leading-none tabular-nums',
             'text-ink',
           )}
         >

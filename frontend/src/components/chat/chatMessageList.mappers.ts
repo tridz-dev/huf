@@ -69,6 +69,26 @@ function safeStringify(value: unknown): string {
   }
 }
 
+/** Terminal states where a tool's elapsed run time can be finalized. */
+const TOOL_TERMINAL_STATES = new Set<ToolUIPart['state']>(['output-available', 'output-error']);
+
+/**
+ * Frontend-only approximation of tool duration: stamps `startedAt` the first time a tool
+ * reaches "input-available" (running), then derives `durationMs` once it reaches a terminal
+ * state. Not exact server timing, but close enough for a lightweight footnote display.
+ */
+function computeToolTiming(
+  existing: { startedAt?: number; durationMs?: number } | undefined,
+  newStatus: ToolUIPart['state']
+): { startedAt?: number; durationMs?: number } {
+  const startedAt = existing?.startedAt ?? (newStatus === 'input-available' ? Date.now() : undefined);
+  let durationMs = existing?.durationMs;
+  if (durationMs === undefined && TOOL_TERMINAL_STATES.has(newStatus) && startedAt !== undefined) {
+    durationMs = Math.max(0, Date.now() - startedAt);
+  }
+  return { startedAt, durationMs };
+}
+
 export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCallEvent | Record<string, unknown>): MessageType[] {
   const event = normalizeToolCallEvent(
     typeof rawEvent?.type === 'string' ? (rawEvent as Record<string, unknown>) : (rawEvent as Record<string, unknown>)
@@ -80,16 +100,7 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
 
   const parsedArgs = safeParseJsonRecord(event.tool_args);
   const parsedResult = event.tool_result ? safeStringify(event.tool_result) : undefined;
-
-  const updatedTool = {
-    tool_call_id: event.tool_call_id,
-    name: displayName,
-    description: displayName,
-    status: mapToolStatusToState(event.tool_status) as ToolUIPart['state'],
-    parameters: parsedArgs,
-    result: event.tool_status === 'Completed' ? parsedResult : undefined,
-    error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
-  };
+  const newStatus = mapToolStatusToState(event.tool_status) as ToolUIPart['state'];
 
   // Find message: 1) by agent_run_id, 2) by tool_call_id in any message's tools
   let messageIndex = event.agent_run_id
@@ -114,6 +125,21 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
       );
     }
 
+    const existingTool = toolIndex >= 0 ? existingTools[toolIndex] : undefined;
+    const { startedAt, durationMs } = computeToolTiming(existingTool, newStatus);
+
+    const updatedTool = {
+      tool_call_id: event.tool_call_id,
+      name: displayName,
+      description: displayName,
+      status: newStatus,
+      parameters: parsedArgs,
+      result: event.tool_status === 'Completed' ? parsedResult : undefined,
+      error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
+      startedAt,
+      durationMs,
+    };
+
     const updatedTools = [...existingTools];
     if (toolIndex >= 0) updatedTools[toolIndex] = updatedTool;
     else updatedTools.push(updatedTool);
@@ -131,6 +157,19 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
 
   // Don't create new message if we have no agent_run_id (completed event without started)
   if (!event.agent_run_id) return prev;
+
+  const { startedAt, durationMs } = computeToolTiming(undefined, newStatus);
+  const updatedTool = {
+    tool_call_id: event.tool_call_id,
+    name: displayName,
+    description: displayName,
+    status: newStatus,
+    parameters: parsedArgs,
+    result: event.tool_status === 'Completed' ? parsedResult : undefined,
+    error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
+    startedAt,
+    durationMs,
+  };
 
   const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
   const newMessage: MessageType = {

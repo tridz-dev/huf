@@ -37,7 +37,7 @@ function AgentRunDetailPageWrapper() {
   ];
 
   return (
-    <UnifiedLayout breadcrumbs={breadcrumbs}>
+    <UnifiedLayout breadcrumbs={breadcrumbs} showCurrentCrumb>
       <AgentRunDetailPage />
     </UnifiedLayout>
   );
