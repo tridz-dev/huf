@@ -400,6 +400,7 @@ export function ChatMessageList({
                                         scrollToBottomAfterPaint={scrollToBottomAfterPaint}
                                         precedingUserMessage={precedingUserMessage}
                                         onRegenerate={handleRegenerate}
+                                        onSendText={(text) => chatInputRef.current?.send(text)}
                                     />
                                 );
                             })}

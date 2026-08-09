@@ -539,6 +539,40 @@ export function mergePendingRunsIntoMessages(
   return result;
 }
 
+/**
+ * Collapse consecutive "tool-only" messages (persisted as one Agent Message
+ * per tool call, kind "Tool Result") that share an agent_run_id into a
+ * single message with a combined `tools[]` array — matching how the live
+ * socket path already accumulates a run's tool calls onto one message (see
+ * upsertToolUpdateFromSocket above). Without this, reloading a conversation
+ * from history renders one bubble per tool call instead of one per run.
+ */
+function mergeToolCallGroups(messages: MessageType[]): MessageType[] {
+  const grouped: MessageType[] = [];
+  const groupIndexByRun = new Map<string, number>();
+
+  for (const msg of messages) {
+    const isToolOnly = !!msg.tools?.length &&
+      (!msg.versions[0]?.content || msg.versions[0].content.trim() === '');
+
+    if (isToolOnly && msg.agentRunId) {
+      const existingIndex = groupIndexByRun.get(msg.agentRunId);
+      if (existingIndex !== undefined) {
+        const existing = grouped[existingIndex];
+        const toolMap = new Map((existing.tools || []).map((t) => [t.tool_call_id, t]));
+        msg.tools!.forEach((t) => toolMap.set(t.tool_call_id, t));
+        grouped[existingIndex] = { ...existing, tools: Array.from(toolMap.values()) };
+        continue;
+      }
+      groupIndexByRun.set(msg.agentRunId, grouped.length);
+    }
+
+    grouped.push(msg);
+  }
+
+  return grouped;
+}
+
 export function mergeConversationItemsIntoMessages(
   prev: MessageType[],
   conversationItems: ChatMessage[],
@@ -646,5 +680,5 @@ export function mergeConversationItemsIntoMessages(
     ? prev.filter((msg) => !apiMessageIds.has(msg.key))
     : prev.filter(shouldPreserveTempMessage);
 
-  return [...mapped, ...remainingTempMessages];
+  return [...mergeToolCallGroups(mapped), ...remainingTempMessages];
 }

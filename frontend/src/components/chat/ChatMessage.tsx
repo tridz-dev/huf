@@ -9,7 +9,7 @@ import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { Message, MessageContent } from '@/components/ai-elements/message';
 import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, ToolGroup } from '@/components/ai-elements/tool';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
-import type { ToolUIPart } from 'ai';
+import { HubAskUser, splitAskUserBlocks } from '../hub/HubAskUser';
 import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
 import { ChatErrorCard } from './ChatErrorCard';
@@ -60,6 +60,8 @@ interface ChatMessageProps {
     precedingUserMessage?: string;
     /** Re-runs a prior user turn (regenerate / retry). Appends a new turn rather than mutating history. */
     onRegenerate?: (userContent: string) => void;
+    /** Sends text as a new user message — wired to the ask-user "answer" buttons. */
+    onSendText?: (text: string) => void;
 }
 
 export function ChatMessage({
@@ -73,6 +75,7 @@ export function ChatMessage({
     scrollToBottomAfterPaint,
     precedingUserMessage,
     onRegenerate,
+    onSendText,
 }: ChatMessageProps) {
     const { user } = useUser();
     const isUser = message.from === 'user';
@@ -161,7 +164,7 @@ export function ChatMessage({
                         </Link>
                     )}
                 </div>
-                
+
                 <Message from={message.from} className={cn(isUser && "!ml-0", !isUser && "!max-w-full")}>
                     <MessageContent className={cn(isUser && "!ml-0", !isUser && "w-full")}>
                         {isAssistant && message.reasoning && (
@@ -191,6 +194,8 @@ export function ChatMessage({
                                         errorText: tool.error,
                                         durationMs: tool.durationMs,
                                     }))}
+                                    runStatus={message.runStatus}
+                                    isHistorical={!message.runStatus}
                                     onApprove={handleToolCallApprove}
                                     onDeny={handleToolCallDeny}
                                 />
@@ -319,10 +324,36 @@ export function ChatMessage({
                                             className="mb-2 max-w-sm"
                                         />
                                     )}
-                                    <MessageContentWithArtifacts
-                                        content={message.versions[0]?.content || ''}
-                                        messageId={message.versions[0]?.id ?? message.key}
-                                    />
+                                    {isAssistant ? (() => {
+                                        // Extract fenced ```ask-user blocks (from the ask_user tool) so any
+                                        // agent with it attached renders the interactive question widget,
+                                        // not raw fenced markdown — same parsing HubConversationView uses.
+                                        const { text, blocks } = splitAskUserBlocks(message.versions[0]?.content || '');
+                                        return (
+                                            <>
+                                                {text && (
+                                                    <MessageContentWithArtifacts
+                                                        content={text}
+                                                        messageId={message.versions[0]?.id ?? message.key}
+                                                    />
+                                                )}
+                                                {blocks.map((block, blockIndex) => (
+                                                    <HubAskUser
+                                                        key={`${message.key}-ask-${blockIndex}`}
+                                                        payload={block}
+                                                        onSubmit={(answer) =>
+                                                            onSendText?.(`Regarding "${block.question}": ${answer}`)
+                                                        }
+                                                    />
+                                                ))}
+                                            </>
+                                        );
+                                    })() : (
+                                        <MessageContentWithArtifacts
+                                            content={message.versions[0]?.content || ''}
+                                            messageId={message.versions[0]?.id ?? message.key}
+                                        />
+                                    )}
                                 </>
                             )}
                         </MessageContent>
