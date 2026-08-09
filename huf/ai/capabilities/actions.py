@@ -104,6 +104,9 @@ def _iter_declared_function_paths(app_name):
     """
     from huf.ai.tool_registry import _normalize_hook_tools
 
+    if app_name not in frappe.get_installed_apps():
+        return
+
     seen = set()
     hook_entries = frappe.get_hooks("huf_tools", app_name=app_name) or []
 
