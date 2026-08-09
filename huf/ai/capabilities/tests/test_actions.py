@@ -30,7 +30,7 @@ class TestCapabilityActions(IntegrationTestCase):
         suffix = frappe.generate_hash(length=8)
         fields = {
             "doctype": "Agent Tool Function",
-            "tool_name": f"Test Tool {suffix}",
+            "tool_name": f"test_tool_{suffix}",
             "description": "A test tool for capability discovery unit tests",
             "tool_type": "Miscellaneous",
             "types": "App Provided",
@@ -105,7 +105,7 @@ class TestCapabilityActions(IntegrationTestCase):
         self.assertEqual(by_path["huf.tests.fixtures.only_discovered"]["source_type"], "framework_discovered")
 
     def test_search_app_actions_filters_by_query(self):
-        tool = self._make_tool(tool_name="Unique Searchable Widget")
+        tool = self._make_tool(tool_name="unique_searchable_widget")
 
         with patch("huf.ai.capabilities.actions.discover_whitelisted_actions_for_app", return_value=[]):
             matched = search_app_actions(TEST_APP, query="searchable")
