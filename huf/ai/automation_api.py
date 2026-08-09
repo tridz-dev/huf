@@ -374,10 +374,19 @@ def create_trigger(automation: str, trigger_type: str, **kwargs) -> dict:
     if not frappe.has_permission("Automation Trigger", "create"):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+    # trigger_name is deliberately excluded from _TRIGGER_FIELDS (see the
+    # comment on that tuple) so update_trigger can never silently desync
+    # doc.name from it. But it is Automation Trigger's autoname source
+    # (field:trigger_name) -- Frappe requires it be set at insert time, so
+    # create_trigger (unlike update_trigger) still accepts it explicitly,
+    # generating a reasonable default if the caller did not supply one.
+    trigger_name = kwargs.get("trigger_name") or f"{automation}-{trigger_type}-{frappe.generate_hash(length=6)}"
+
     doc_fields = {
         "doctype": "Automation Trigger",
         "automation": automation,
         "trigger_type": trigger_type,
+        "trigger_name": trigger_name,
     }
     for fieldname in _TRIGGER_FIELDS:
         if fieldname in kwargs and kwargs[fieldname] is not None:

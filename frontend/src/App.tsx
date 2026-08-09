@@ -30,6 +30,7 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
+const AutomationFormPageWrapper = lazy(() => import('./pages/AutomationFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
 const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
@@ -197,6 +198,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <AgentFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/automations/:automationId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AutomationFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
