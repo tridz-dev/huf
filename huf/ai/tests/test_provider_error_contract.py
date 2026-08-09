@@ -32,6 +32,7 @@ from huf.ai.providers.litellm import (
     _is_transient_litellm_error,
     _normalize_model_name,
     _resolve_api_base,
+    _resolve_api_key,
     _setup_api_key,
     run,
 )
@@ -186,6 +187,62 @@ class TestGenericProviderSupport(IntegrationTestCase):
             _setup_api_key("foo-bar", "secret-key", kwargs)
             self.assertEqual(kwargs.get("api_key"), "secret-key")
             self.assertEqual(os.environ.get(env_key), "secret-key")
+
+
+class TestResolveApiKeyEnvFallback(IntegrationTestCase):
+    """_resolve_api_key should fall back to the environment when the AI
+    Provider's stored api_key is blank, using the same env var name
+    _setup_api_key would use for that provider brand.
+
+    _resolve_api_key reads from litellm_module._BOOT_ENV (a snapshot taken at
+    import time), NOT live os.environ — that's deliberate, so a key
+    _setup_api_key() writes into os.environ for one request can never leak
+    into a different, genuinely-blank-keyed AI Provider record later in the
+    same worker process. Tests patch _BOOT_ENV directly to match.
+    """
+
+    def test_uses_db_key_when_present(self):
+        doc = _FakeDoc(api_key="db-secret", provider_brand="google")
+        with patch.object(litellm_module, "_BOOT_ENV", {"GEMINI_API_KEY": "env-secret"}):
+            self.assertEqual(_resolve_api_key(doc), "db-secret")
+
+    def test_falls_back_to_known_provider_env_var_when_db_key_blank(self):
+        doc = _FakeDoc(api_key="", provider_brand="google")
+        with patch.object(litellm_module, "_BOOT_ENV", {"GEMINI_API_KEY": "from-env"}):
+            self.assertEqual(_resolve_api_key(doc), "from-env")
+
+    def test_falls_back_to_heuristic_env_var_for_unlisted_provider_brand(self):
+        doc = _FakeDoc(api_key=None, provider_brand="some-new-provider")
+        with patch.object(litellm_module, "_BOOT_ENV", {"SOME_NEW_PROVIDER_API_KEY": "from-env"}):
+            self.assertEqual(_resolve_api_key(doc), "from-env")
+
+    def test_returns_empty_string_when_neither_db_nor_env_has_a_key(self):
+        doc = _FakeDoc(api_key="", provider_brand="google")
+        with patch.object(litellm_module, "_BOOT_ENV", {}):
+            self.assertEqual(_resolve_api_key(doc), "")
+
+    def test_aliased_brand_resolves_to_the_prefix_its_write_path_actually_uses(self):
+        # provider_brand "alibaba" routes through the "dashscope" LiteLLM
+        # prefix (see _normalize_model_name's provider_prefix_map), so
+        # _setup_api_key("dashscope", ...) is what actually runs for it —
+        # the read side must resolve the same DASHSCOPE_API_KEY, not a
+        # naive ALIBABA_API_KEY guess.
+        doc = _FakeDoc(api_key="", provider_brand="alibaba")
+        with patch.object(litellm_module, "_BOOT_ENV", {"DASHSCOPE_API_KEY": "from-env"}):
+            self.assertEqual(_resolve_api_key(doc), "from-env")
+
+    def test_does_not_leak_a_key_setup_api_key_wrote_for_a_different_request(self):
+        # _setup_api_key's write into os.environ must never be visible to a
+        # later _resolve_api_key call for a different, genuinely blank-keyed
+        # provider record — that would be a real cross-request key leak.
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("GEMINI_API_KEY", None)
+            _setup_api_key("google", "leaked-from-another-request", {})
+            self.assertEqual(os.environ.get("GEMINI_API_KEY"), "leaked-from-another-request")
+
+            other_doc = _FakeDoc(api_key="", provider_brand="google")
+            with patch.object(litellm_module, "_BOOT_ENV", {}):
+                self.assertEqual(_resolve_api_key(other_doc), "")
 
 
 class TestNormalizeModelName(IntegrationTestCase):
