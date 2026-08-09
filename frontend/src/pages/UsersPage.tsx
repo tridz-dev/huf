@@ -90,6 +90,9 @@ function initialsFor(name: string): string {
 // Status helpers
 // ---------------------------------------------------------------------------
 
+// TODO(user-status-tristate): the design spec's status dot vocabulary distinguishes
+// Active / Invited / Suspended, but the backend only exposes a boolean `enabled` field
+// today, so this only ever renders Active/Disabled. See branch follow-up-user-status-tristate.
 type UserStatusFilter = 'all' | 'active' | 'disabled';
 
 // ---------------------------------------------------------------------------
