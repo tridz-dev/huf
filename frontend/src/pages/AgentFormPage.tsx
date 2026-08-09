@@ -211,7 +211,7 @@ export function AgentFormPage() {
     },
     behavior: {
       label: 'Behavior',
-      fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run', 'default_plan'],
+      fields: ['allow_chat', 'persist_conversation', 'persist_user_history', 'enable_multi_run', 'default_plan', 'allow_ask_user', 'allow_rich_elements', 'allow_document_artifacts'],
       default: false,
       disabled: false,
     },
@@ -289,9 +289,6 @@ export function AgentFormPage() {
         'execution_shared_dir_limit_mb',
         'allow_ssh',
         'ssh_connections',
-        'allow_ask_user',
-        'allow_rich_elements',
-        'allow_document_artifacts',
       ],
       default: false,
       disabled: false,

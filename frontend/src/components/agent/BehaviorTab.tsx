@@ -51,6 +51,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 	const persistConversationEnabled = form.watch('persist_conversation')
 	const enableMultiRun = form.watch('enable_multi_run')
 	const defaultPlan = form.watch('default_plan') || []
+	const allowChat = form.watch('allow_chat')
 
 	const updateRow = useCallback(
 		(index: number, field: keyof AgentOrchestrationPlanRow, value: string) => {
@@ -211,6 +212,72 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 					/>
 				</CardContent>
 			</Card>
+
+			{allowChat && (
+				<Card className="mt-6">
+					<CardHeader>
+						<CardTitle>Chat Response Capabilities</CardTitle>
+						<CardDescription>
+							Control which extra response modes this agent's model can use beyond plain text. Turn any of these off to conserve prompt context for small, local, or API-only models — the AI Model can also force one off for every agent that uses it, from that model's own settings.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="grid gap-4 sm:grid-cols-2">
+						<FormField
+							control={form.control}
+							name="allow_ask_user"
+							render={({ field }) => (
+								<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+									<div className="space-y-0.5">
+										<FormLabel className="text-base">Allow Ask User</FormLabel>
+										<FormDescription>
+											Let the agent ask structured clarifying questions (buttons, choices, yes/no) via the ask_user tool instead of only plain text. Has no effect unless ask_user is also attached as a tool below.
+										</FormDescription>
+									</div>
+									<FormControl>
+										<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+									</FormControl>
+								</FormItem>
+							)}
+						/>
+
+						<FormField
+							control={form.control}
+							name="allow_rich_elements"
+							render={({ field }) => (
+								<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+									<div className="space-y-0.5">
+										<FormLabel className="text-base">Allow Rich Elements</FormLabel>
+										<FormDescription>
+											Let the agent render inline charts, HTML/SVG/mermaid previews, and generated media instead of plain markdown text.
+										</FormDescription>
+									</div>
+									<FormControl>
+										<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+									</FormControl>
+								</FormItem>
+							)}
+						/>
+
+						<FormField
+							control={form.control}
+							name="allow_document_artifacts"
+							render={({ field }) => (
+								<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
+									<div className="space-y-0.5">
+										<FormLabel className="text-base">Allow Document Artifacts</FormLabel>
+										<FormDescription>
+											Let the agent author long-form documents as artifacts (Markdown/HTML), and export or redline them when those tools are attached.
+										</FormDescription>
+									</div>
+									<FormControl>
+										<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+									</FormControl>
+								</FormItem>
+							)}
+						/>
+					</CardContent>
+				</Card>
+			)}
 
 			{enableMultiRun && (
 				<Card className="mt-6">
