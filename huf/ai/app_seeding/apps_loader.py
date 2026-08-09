@@ -154,6 +154,20 @@ def _get_doctype_module(doctype: str) -> str:
 	return frappe.get_meta(doctype).module
 
 
+def get_doctype_owner_app(doctype: str) -> str | None:
+	"""App that owns the given DocType via its Module Def.
+
+	Returns None if the DocType does not exist or its module has no
+	registered app_name. Public, reusable ownership lookup (see
+	huf.ai.capabilities.apps.app_owns_doctype).
+	"""
+	try:
+		module = _get_doctype_module(doctype)
+	except Exception:
+		return None
+	return _get_module_app(module)
+
+
 def _validate_exposed_tables(tables: list, source_app: str) -> str | None:
 	"""Return an error message unless every exposed table is an existing
 	DocType whose module belongs to the provider app. Never raises."""
