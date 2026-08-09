@@ -67,7 +67,7 @@ def run_agent_sync_chat(
     if _as_bool(create_new):
         agent_doc = frappe.get_doc("Agent", agent_name)
 
-        assert_agent_access(agent_doc)
+        assert_agent_access(agent_doc, user=frappe.session.user)
 
         conv_manager = ConversationManager(
             agent_name=agent_name,

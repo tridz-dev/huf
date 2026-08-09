@@ -162,7 +162,7 @@ def upload_audio_and_transcribe_web(
         frappe.throw(_("agent is required"))
 
     agent_doc = frappe.get_doc("Agent", agent)
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     # Ensure conversation exists (or create a new one)
     conv = None
@@ -380,7 +380,7 @@ def create_conversation(agent: str, channel: str = "Chat"):
         frappe.throw(_("agent is required"))
 
     agent_doc = frappe.get_doc("Agent", agent)
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     try:
         cm = ConversationManager(agent_name=agent, channel=channel)
@@ -417,7 +417,7 @@ def set_conversation_model_override(conversation: str, model_override: str | Non
         frappe.throw(_("Conversation has no agent set"))
 
     agent_doc = frappe.get_doc("Agent", agent_name)
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     if model_override:
         _resolve_effective_model(agent_doc, model=model_override)
@@ -647,7 +647,7 @@ def upload_file_and_process_web(
         frappe.throw(_("agent is required"))
 
     agent_doc = frappe.get_doc("Agent", agent)
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     if not agent_doc.get("allow_file_upload"):
         return {"success": False, "error": _("File uploads are disabled for this agent.")}
@@ -838,7 +838,7 @@ def upload_file_attachment_web(filename: str, b64data: str, agent: str, model_ov
         frappe.throw(_("Filename and file data are required"))
 
     agent_doc = frappe.get_doc("Agent", agent)
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     if "," in b64data:
         b64data = b64data.split(",", 1)[1]
@@ -1097,7 +1097,7 @@ def add_message(
             frappe.throw(_("You do not have access to this conversation."), frappe.PermissionError)
 
         agent_doc = frappe.get_doc("Agent", agent_name)
-        assert_agent_access(agent_doc)
+        assert_agent_access(agent_doc, user=frappe.session.user)
 
         cm = ConversationManager(agent_name=agent_name)
         provider = frappe.db.get_value("Agent", agent_name, "provider")

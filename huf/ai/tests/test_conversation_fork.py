@@ -136,6 +136,9 @@ class TestConversationFork(unittest.TestCase):
         agent_doc.name = "AGENT-001"
         agent_doc.provider = "OpenAI"
         agent_doc.model = "gpt-4o"
+        # Owner matches mock_session.user so assert_agent_access's owner bypass
+        # lets this "user forks their own conversation" scenario through.
+        agent_doc.owner = "user@example.com"
 
         mock_get_roles.return_value = ["All"]
         mock_has_permission.return_value = True
@@ -183,6 +186,9 @@ class TestConversationFork(unittest.TestCase):
         agent_doc.name = "AGENT-001"
         agent_doc.provider = "OpenAI"
         agent_doc.model = "gpt-4o"
+        # Owner matches mock_session.user so assert_agent_access's owner bypass
+        # lets this "user forks their own conversation" scenario through.
+        agent_doc.owner = "user@example.com"
         summary_msg = MagicMock()
         summary_msg.content = "Summary text"
 
@@ -233,6 +239,9 @@ class TestConversationFork(unittest.TestCase):
         agent_doc.name = "AGENT-001"
         agent_doc.provider = "OpenAI"
         agent_doc.model = "gpt-4o"
+        # Owner matches mock_session.user so assert_agent_access's owner bypass
+        # lets this "user forks their own conversation" scenario through.
+        agent_doc.owner = "user@example.com"
         agent_msg = self._make_message(
             name="MSG-002", role="agent", is_agent_message=1, conversation_index=2
         )

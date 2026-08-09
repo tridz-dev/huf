@@ -949,7 +949,7 @@ def run_agent_sync(
         provider=provider,
     )
 
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -1195,7 +1195,7 @@ def get_agent_run_status(agent_run_id: str):
         frappe.throw(_("Agent Run not found: {0}").format(agent_run_id), frappe.DoesNotExistError)
 
     agent_doc = frappe.get_doc("Agent", run.agent)
-    assert_agent_access(agent_doc)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     agent_message_id = None
     if run.status in ("Success", "Failed"):
@@ -2438,7 +2438,7 @@ async def run_agent_stream(
 
         # 1. Guest + Permission Check (User/Role binding)
         try:
-            assert_agent_access(agent_doc)
+            assert_agent_access(agent_doc, user=frappe.session.user)
         except frappe.PermissionError as e:
             yield {
                 "type": "error",
