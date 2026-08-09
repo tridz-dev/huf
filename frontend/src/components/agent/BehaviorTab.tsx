@@ -168,10 +168,10 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
 									<LabelWithInfo
-										label="Persist per user (doc/schedule)"
-										tooltip="When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used."
+										label="Persist per user (legacy Doc Event only)"
+										tooltip="Applies only to Doc Event runs on the legacy Agent Trigger model: creates/maintains conversation history per initiating user (or trigger owner) when checked, otherwise a single shared history is used. Scheduled runs never read this field. Automations built on the newer Automation model set conversation identity per-Automation via Conversation Mode instead — this toggle has no effect there."
 									/>
-									<FormDescription>Creates history per initiating user.</FormDescription>
+									<FormDescription>Legacy Doc Event history scoping — does not apply to Scheduled runs or to the newer Automation model.</FormDescription>
 								</div>
 								<FormControl className="ml-1">
 									<Switch checked={field.value} onCheckedChange={field.onChange} />

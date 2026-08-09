@@ -11,7 +11,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import type { AgentSkillRow } from '../types/skill.types';
 import { getSkillOptions } from '../services/skillApi';
-import { getAgent, getAgentSection, updateAgent, updateAgentSection, createAgent, getAgentTriggers, getAgentTrigger, createAgentTrigger, updateAgentTrigger, getDocTypes, getTriggerTypes, type AgentConfigSection, type AgentTriggerListItem, type AgentTriggerDoc, type AgentTriggerAttachmentRow, type TriggerTypeOption, deleteAgentTrigger, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
+import { getAgent, getAgentSection, updateAgent, updateAgentSection, createAgent, type AgentConfigSection, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -21,14 +21,13 @@ import type { AgentToolType } from '../types/agent.types';
 import { SelectToolsModal, SelectMCPServersModal } from '../components/tools';
 import { ToolFormModal } from '../components/tools/ToolFormModal';
 import type { ToolFormData } from '../types/toolTemplate.types';
-import { TriggerModal } from '../components/agent/TriggerModal';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { db } from '../lib/frappe-sdk';
 import { AgentHeader } from '../components/agent/AgentHeader';
 import { DeleteAgentDialog } from '../components/agent/DeleteAgentDialog';
 import { GeneralTab } from '../components/agent/GeneralTab';
 import { BehaviorTab } from '../components/agent/BehaviorTab';
-import { TriggersTab } from '../components/agent/TriggersTab';
+import { AutomationsTab } from '../components/agent/AutomationsTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption, type MemoryPolicyOption } from '../components/agent/AdvancedTab';
 import { VoiceTab } from '../components/agent/VoiceTab';
@@ -223,8 +222,8 @@ export function AgentFormPage() {
       disabled: false,
     },
     triggers: {
-      label: 'Triggers',
-      fields: [], // Triggers tab doesn't have form fields
+      label: 'Automations',
+      fields: [], // Automations tab doesn't have form fields
       default: false,
       disabled: false,
     },
@@ -341,7 +340,6 @@ export function AgentFormPage() {
   };
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [deletingTrigger, setDeletingTrigger] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -358,11 +356,6 @@ export function AgentFormPage() {
   const [loadingSSHConnections, setLoadingSSHConnections] = useState(false);
   const [memoryPolicyOptions, setMemoryPolicyOptions] = useState<MemoryPolicyOption[]>([]);
   const [loadingMemoryPolicies, setLoadingMemoryPolicies] = useState(false);
-  const [triggers, setTriggers] = useState<AgentTriggerListItem[]>([]);
-  const [showTriggerModal, setShowTriggerModal] = useState(false);
-  const [editingTrigger, setEditingTrigger] = useState<AgentTriggerDoc | null>(null);
-  const [triggerFilter, setTriggerFilter] = useState<string>('all');
-  const [triggerStatusFilter, setTriggerStatusFilter] = useState<string>('all');
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const [showToolsModal, setShowToolsModal] = useState(false);
   const [showToolFormModal, setShowToolFormModal] = useState(false);
@@ -371,10 +364,6 @@ export function AgentFormPage() {
   const [initialTools, setInitialTools] = useState<AgentToolFunctionRef[]>([]); // Track initial tools state
   const [toolTypes, setToolTypes] = useState<AgentToolType[]>([]);
   const [initialDisabled, setInitialDisabled] = useState(false); // Track initial disabled state
-  const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
-  const [loadingDocTypes, setLoadingDocTypes] = useState(false);
-  const [triggerTypes, setTriggerTypes] = useState<TriggerTypeOption[]>([]);
-  const [loadingTriggerTypes, setLoadingTriggerTypes] = useState(false);
   const [showMCPServersModal, setShowMCPServersModal] = useState(false);
   const [mcpServers, setMcpServers] = useState<MCPServerRef[]>([]);
   const [initialMcpServers, setInitialMcpServers] = useState<MCPServerRef[]>([]); // Track initial MCP servers state
@@ -575,47 +564,6 @@ export function AgentFormPage() {
   );
 
   const blocker = useBlocker(shouldBlock);
-
-  // Load trigger types on mount
-  useEffect(() => {
-    if (triggerTypes.length === 0 && !loadingTriggerTypes) {
-      setLoadingTriggerTypes(true);
-      getTriggerTypes()
-        .then((data) => {
-          // Ensure data is an array before setting state
-          if (Array.isArray(data)) {
-            // Filter out any types that don't have a name
-            const triggerTypes = data.filter((type) => (type.name));
-            setTriggerTypes(triggerTypes);
-          } else {
-            console.error('getTriggerTypes returned non-array:', data);
-            setTriggerTypes([]);
-          }
-          setLoadingTriggerTypes(false);
-        })
-        .catch((error) => {
-          console.error('Error loading trigger types:', error);
-          setTriggerTypes([]);
-          setLoadingTriggerTypes(false);
-        });
-    }
-  }, [triggerTypes.length, loadingTriggerTypes]);
-
-  // Load DocTypes when modal opens
-  useEffect(() => {
-    if (showTriggerModal && docTypes.length === 0 && !loadingDocTypes) {
-      setLoadingDocTypes(true);
-      getDocTypes()
-        .then((data) => {
-          setDocTypes(data);
-          setLoadingDocTypes(false);
-        })
-        .catch((error) => {
-          console.error('Error loading DocTypes:', error);
-          setLoadingDocTypes(false);
-        });
-    }
-  }, [showTriggerModal, docTypes.length, loadingDocTypes]);
 
   // Load providers, models, and tool types on mount.
   // Each lookup is independent (a Huf User, for instance, can't list Users/Roles)
@@ -1323,14 +1271,6 @@ export function AgentFormPage() {
           setAgentSkills([]);
           setInitialAgentSkills([]);
         }
-        // Load triggers from Agent Trigger doctype
-        getAgentTriggers(id).then((triggersData) => {
-          setTriggers(triggersData);
-        }).catch((error) => {
-          console.error('Error loading triggers:', error);
-          // Don't show error toast for triggers, just log it
-          setTriggers([]);
-        });
         // Load MCP servers from agent_mcp_server child table (already in agent document)
         if (data.agent_mcp_server && Array.isArray(data.agent_mcp_server) && data.agent_mcp_server.length > 0) {
           // First, map child table data to MCPServerRef format
@@ -2289,118 +2229,13 @@ export function AgentFormPage() {
     }
   };
 
-  const handleAddTrigger = () => {
-    setEditingTrigger(null);
-    setShowTriggerModal(true);
-  };
-
-  const handleEditTrigger = async (trigger: AgentTriggerListItem) => {
-    try {
-      const fullTrigger = await getAgentTrigger(trigger.name);
-      setEditingTrigger(fullTrigger);
-      setShowTriggerModal(true);
-    } catch (error) {
-      console.error('Error loading trigger:', error);
-      const errorMessage = getFrappeErrorMessage(error);
-      toast.error(errorMessage || 'Failed to load trigger details');
-    }
-  };
-
-  const handleDeleteTrigger = async (triggerId: string) => {
-    setDeletingTrigger(true);
-    try {
-      await deleteAgentTrigger(triggerId);
-      setTriggers(triggers.filter(t => t.name !== triggerId));
-      toast.success('Trigger deleted');
-    } catch (error) {
-      const errorMessage = getFrappeErrorMessage(error);
-      toast.error(errorMessage || 'Failed to delete trigger');
-    } finally {
-      setDeletingTrigger(false);
-    }
-  };
-
-  const handleSaveTrigger = async (values: {
-    trigger_name?: string;
-    trigger_type: string;
-    active: boolean;
-    scheduled_interval?: string;
-    interval_count?: string;
-    reference_doctype?: string;
-    doc_event?: string;
-    condition?: string;
-    prompt_field?: string;
-    file_attachments?: AgentTriggerAttachmentRow[];
-    app_name?: string;
-    event_name?: string;
-    webhook_slug?: string;
-    webhook_key?: string;
-  }) => {
-    if (!id || id === 'new') {
-      toast.error('Please save the agent first before adding triggers');
-      return;
-    }
-
-    // Validate trigger_name when creating
-    if (!editingTrigger && !values.trigger_name) {
-      toast.error('Trigger name is required');
-      return;
-    }
-
-    try {
-      const triggerData: Partial<AgentTriggerDoc> = {
-        trigger_name: editingTrigger ? editingTrigger.trigger_name : (values.trigger_name || ''),
-        trigger_type: values.trigger_type,
-        disabled: values.active ? 0 : 1,
-        scheduled_interval: values.scheduled_interval,
-        interval_count: values.interval_count && values.interval_count.trim() !== ''
-          ? parseInt(values.interval_count, 10)
-          : undefined,
-        reference_doctype: values.reference_doctype,
-        doc_event: values.doc_event,
-        condition: values.condition,
-        app_name: values.app_name,
-        event_name: values.event_name,
-        webhook_slug: values.webhook_slug,
-        webhook_key: values.webhook_key,
-      };
-
-      // Doc Event extras: field to read the prompt from + file/audio attachment mappings
-      if (values.trigger_type === 'Doc Event') {
-        triggerData.prompt_field = values.prompt_field || '';
-        triggerData.file_attachments = (values.file_attachments || []).map((row) => ({
-          ...(row.name ? { name: row.name } : {}),
-          source_type: row.source_type,
-          field_name: row.field_name,
-          child_table: row.source_type === 'Child Table Field' ? row.child_table || '' : '',
-        }));
-      }
-
-      if (editingTrigger) {
-        // Update existing trigger
-        await updateAgentTrigger(editingTrigger.name, triggerData);
-        toast.success('Trigger updated successfully');
-      } else {
-        // Create new trigger
-        triggerData.agent = id;
-        await createAgentTrigger(triggerData);
-        toast.success('Trigger created successfully');
-      }
-
-      // Reload triggers list
-      const updatedTriggers = await getAgentTriggers(id);
-      setTriggers(updatedTriggers);
-      setShowTriggerModal(false);
-      setEditingTrigger(null);
-    } catch (error) {
-      console.error('Error saving trigger:', error);
-      const errorMessage = getFrappeErrorMessage(error);
-      toast.error(errorMessage || `Failed to ${editingTrigger ? 'update' : 'create'} trigger`);
-    }
-  };
-
-
-  const activeTriggerCount = triggers.filter(t => t.status === 'active').length;
+  // Agent Trigger CRUD (create/edit/delete of raw Agent Trigger records) used
+  // to live on this page via the handlers this block replaced. Per the plan,
+  // this page must not directly manipulate raw Trigger records anymore --
+  // AutomationsTab below owns automation lifecycle actions (run/pause/
+  // resume/archive) through automationApi, and creating/editing an
+  // Automation's triggers happens in the dedicated Automation editor (S17),
+  // not here.
 
   if (loading) {
     return (
@@ -2439,7 +2274,7 @@ export function AgentFormPage() {
           form={form}
           watchDisabled={watchDisabled}
           models={models}
-          activeTriggerCount={activeTriggerCount}
+          activeTriggerCount={0 /* Agent Trigger tracking removed; see AutomationsTab */}
           isNew={isNew}
           isSystem={isSystemAgent}
           locked={systemLocked || permissionLocked}
@@ -2512,18 +2347,7 @@ export function AgentFormPage() {
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">
-                <TriggersTab
-                  triggers={triggers}
-                  triggerTypes={triggerTypes}
-                  triggerFilter={triggerFilter}
-                  triggerStatusFilter={triggerStatusFilter}
-                  onTriggerFilterChange={setTriggerFilter}
-                  onTriggerStatusFilterChange={setTriggerStatusFilter}
-                  onAddTrigger={handleAddTrigger}
-                  onEditTrigger={handleEditTrigger}
-                  onDeleteTrigger={handleDeleteTrigger}
-                  deletingTrigger={deletingTrigger}
-                />
+                <AutomationsTab agentId={id ?? ''} />
               </TabsContent>
 
               <TabsContent value="tools" className="space-y-4">
@@ -2582,18 +2406,6 @@ export function AgentFormPage() {
           </form>
         </Form>
       </div>
-
-      {/* Trigger Modal */}
-      <TriggerModal
-        open={showTriggerModal}
-        onOpenChange={setShowTriggerModal}
-        editingTrigger={editingTrigger}
-        triggerTypes={triggerTypes}
-        docTypes={docTypes}
-        loadingDocTypes={loadingDocTypes}
-        agentId={id}
-        onSave={handleSaveTrigger}
-      />
 
       {/* Select Tools Modal */}
       <SelectToolsModal

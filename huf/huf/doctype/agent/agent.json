@@ -634,7 +634,7 @@
   },
   {
    "default": "1",
-   "description": "When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.",
+   "description": "Applies only to Doc Event runs on the legacy Agent Trigger model: creates/maintains conversation history per initiating user (or trigger owner) when checked, otherwise a single shared history is used. Scheduled runs never read this field. Automations built on the newer Automation model (Schedule, Doc Event, Webhook, App Event) do not read this field either — they set conversation identity per-Automation via Conversation Mode instead.",
    "fieldname": "persist_user_history",
    "fieldtype": "Check",
    "label": "Persist per User (Doc/Schedule)"

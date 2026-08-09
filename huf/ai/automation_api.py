@@ -21,11 +21,50 @@ from frappe import _
 
 from huf.ai import automation_service
 
+
+def _ensure_agent_automations_editable(agent_name):
+	"""Block non-admins from creating/editing/deleting Automations or
+	Automation Triggers that target a locked system agent.
+
+	This is the Automation-model analog of
+	``Agent._validate_system_agent_immutability()``'s ``protected_fields``
+	check (huf/huf/doctype/agent/agent.py). Since Automation is a separate
+	doctype rather than an Agent child table, that check can't cover it --
+	Automations pointing at a system agent need their own guard here, or a
+	non-admin could freely create/edit/delete automations (this track's
+	replacement for the old Triggers tab) on an agent whose own identity
+	fields are otherwise locked. Mirrors the same bypass conditions
+	(seeding/install/migrate, System Manager role).
+	"""
+	if not agent_name:
+		return
+	if (
+		frappe.flags.in_seeding
+		or frappe.flags.in_install
+		or frappe.flags.in_migrate
+		or "System Manager" in frappe.get_roles()
+	):
+		return
+	is_system = frappe.db.get_value("Agent", agent_name, "is_system")
+	if is_system:
+		frappe.throw(
+			_(
+				"Only System Managers can create or modify automations for the "
+				"system agent '{0}'."
+			).format(agent_name),
+			frappe.PermissionError,
+			title=_("System Agent Protected"),
+		)
+
 # Fields a client may set when creating/updating an Automation Trigger.
 # ``automation`` and ``trigger_type`` are handled explicitly by
 # create_trigger; everything else here is passed straight through.
 _TRIGGER_FIELDS = (
-    "trigger_name",
+    # NOTE: trigger_name deliberately excluded — Automation Trigger's
+    # autoname is field:trigger_name, so a plain doc.set()+doc.save() would
+    # silently desync doc.name from doc.trigger_name instead of renaming.
+    # Renaming (if ever needed) must go through frappe.rename_doc()
+    # explicitly, not this generic field-update path.
     "disabled",
     "schedule_type",
     "cron_expression",
@@ -118,6 +157,8 @@ def create_automation(automation_name: str, agent: str, instruction: str, **kwar
     if not frappe.has_permission("Automation", "create"):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+    _ensure_agent_automations_editable(agent)
+
     doc = automation_service.create_automation(automation_name, agent, instruction, **kwargs)
 
     return doc.as_dict()
@@ -140,6 +181,8 @@ def update_automation(automation: str, **kwargs) -> dict:
     doc = automation_service.resolve_automation(automation)
     if not doc.has_permission("write"):
         frappe.throw(_("You do not have permission to edit this automation."), frappe.PermissionError)
+
+    _ensure_agent_automations_editable(doc.agent)
 
     doc = automation_service.update_automation(doc, **kwargs)
 
@@ -184,6 +227,8 @@ def delete_automation(automation: str) -> dict:
     doc = automation_service.resolve_automation(automation)
     if not doc.has_permission("delete"):
         frappe.throw(_("You do not have permission to delete this automation."), frappe.PermissionError)
+
+    _ensure_agent_automations_editable(doc.agent)
 
     if doc.status not in ("Draft", "Archived"):
         frappe.throw(
@@ -321,16 +366,27 @@ def create_trigger(automation: str, trigger_type: str, **kwargs) -> dict:
     if not automation_doc.has_permission("write"):
         frappe.throw(_("You do not have permission to modify this automation."), frappe.PermissionError)
 
+    _ensure_agent_automations_editable(automation_doc.agent)
+
     if not trigger_type or not trigger_type.strip():
         frappe.throw(_("Trigger Type is required"))
 
     if not frappe.has_permission("Automation Trigger", "create"):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+    # trigger_name is deliberately excluded from _TRIGGER_FIELDS (see the
+    # comment on that tuple) so update_trigger can never silently desync
+    # doc.name from it. But it is Automation Trigger's autoname source
+    # (field:trigger_name) -- Frappe requires it be set at insert time, so
+    # create_trigger (unlike update_trigger) still accepts it explicitly,
+    # generating a reasonable default if the caller did not supply one.
+    trigger_name = kwargs.get("trigger_name") or f"{automation}-{trigger_type}-{frappe.generate_hash(length=6)}"
+
     doc_fields = {
         "doctype": "Automation Trigger",
         "automation": automation,
         "trigger_type": trigger_type,
+        "trigger_name": trigger_name,
     }
     for fieldname in _TRIGGER_FIELDS:
         if fieldname in kwargs and kwargs[fieldname] is not None:
@@ -359,6 +415,8 @@ def update_trigger(trigger: str, **kwargs) -> dict:
     doc = frappe.get_doc("Automation Trigger", trigger)
     if not doc.has_permission("write"):
         frappe.throw(_("You do not have permission to edit this trigger."), frappe.PermissionError)
+
+    _ensure_agent_automations_editable(frappe.db.get_value("Automation", doc.automation, "agent"))
 
     changed = False
     for fieldname in _TRIGGER_FIELDS:
@@ -390,6 +448,8 @@ def delete_trigger(trigger: str) -> dict:
     doc = frappe.get_doc("Automation Trigger", trigger)
     if not doc.has_permission("delete"):
         frappe.throw(_("You do not have permission to delete this trigger."), frappe.PermissionError)
+
+    _ensure_agent_automations_editable(frappe.db.get_value("Automation", doc.automation, "agent"))
 
     frappe.delete_doc("Automation Trigger", trigger)
 
