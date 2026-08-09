@@ -8,6 +8,7 @@ import { HubConversationView } from '@/components/hub/HubConversationView';
 import { AutoGrowTextarea } from '@/components/hub/AutoGrowTextarea';
 import { HubRecentChats } from '@/components/hub/HubRecentChats';
 import { SlashCommandMenu } from '@/components/hub/SlashCommandMenu';
+import { Button } from '@/components/ui/button';
 import { getHubReadiness, HubReadiness } from '@/services/hubApi';
 import { getConversationMessages } from '@/services/chatApi';
 import { sendMessage, streamingAvailable } from '@/services/streamChatApi';
@@ -260,7 +261,7 @@ export default function HubSimplePage() {
               <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col items-center justify-center px-4">
                 {/* Greeting */}
                 <div className="mb-8">
-                  <h1 className="font-display font-bold text-2xl uppercase tracking-wide text-ink text-center">
+                  <h1 className="font-display font-bold text-2xl tracking-wide text-ink text-center">
                     What can huf do for you today?
                   </h1>
                 </div>
@@ -280,13 +281,15 @@ export default function HubSimplePage() {
                       placeholder="Ask anything or type / for commands..."
                       className="w-full px-4 py-3 pr-12 text-sm resize-none outline-none bg-transparent text-ink placeholder:text-steel-soft min-h-[52px]"
                     />
-                    <button
+                    <Button
                       onClick={handleSend}
                       disabled={!inputValue.trim()}
-                      className="absolute right-3 bottom-3 p-1.5 rounded-md bg-ink text-paper disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal transition-colors"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="absolute right-3 bottom-3 rounded-md bg-ink text-paper disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal hover:text-paper"
                     >
                       <Send className="w-3.5 h-3.5" />
-                    </button>
+                    </Button>
                     <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={handleSlashSelect} />
                   </div>
 

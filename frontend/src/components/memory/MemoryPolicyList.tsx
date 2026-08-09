@@ -99,7 +99,7 @@ export function MemoryPolicyList() {
           },
         ]}
         primaryAction={{
-          label: 'New Policy',
+          label: 'New policy',
           icon: <Plus className="h-3.5 w-3.5" />,
           onClick: () => navigate('/memory/policies/new'),
         }}
@@ -119,12 +119,29 @@ export function MemoryPolicyList() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Brain}
-            title="No memory policies"
-            description="Create a memory policy to control how agents capture and retrieve long-term memory."
-            action={{ label: 'New policy', onClick: () => navigate('/memory/policies/new') }}
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Brain}
+              title="No memory policies found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Brain}
+              title="No memory policies"
+              description="Create a memory policy to control how agents capture and retrieve long-term memory."
+              action={{ label: 'New policy', onClick: () => navigate('/memory/policies/new') }}
+            />
+          )
         }
         renderItem={(policy) => (
           <ItemCard
@@ -139,7 +156,7 @@ export function MemoryPolicyList() {
             metadata={[
               { label: 'Agent', value: policy.agent || 'Any', icon: ShieldCheck },
               { label: 'Capture', value: policy.capture_mode, icon: Layers },
-              { label: 'Inject Mode', value: policy.inject_mode, icon: Layers },
+              { label: 'Inject mode', value: policy.inject_mode, icon: Layers },
               {
                 label: 'Auto-promote',
                 value: policy.auto_promote_to_knowledge ? 'Yes' : 'No',

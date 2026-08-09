@@ -125,7 +125,7 @@ export async function getSSHConnections(
       total,
     };
   } catch (error) {
-    handleFrappeError(error, 'Error fetching SSH Connections');
+    handleFrappeError(error, 'Error fetching SSH connections');
     throw error;
   }
 }

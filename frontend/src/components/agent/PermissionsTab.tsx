@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
+import { Info } from 'lucide-react';
 
 import type { AgentFormValues } from './types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Switch } from '@/components/ui/switch';
 import { MultiSelectCombobox, type MultiSelectComboboxOption } from '@/components/ui/multi-select-combobox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NamedOption {
   name: string;
@@ -34,20 +36,30 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Access Control</CardTitle>
-          <CardDescription>
-            Configure who can run this agent. If both lists are empty, any authenticated user can access it.
-            Otherwise access is limited to the owner, selected users, or users with selected roles.
-          </CardDescription>
+          <div className="flex items-center gap-1.5">
+            <CardTitle>Access control</CardTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Configure who can run this agent. If both lists are empty, any authenticated user can access it.
+                  Otherwise access is limited to the owner, selected users, or users with selected roles.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <CardDescription>Configure who can run this agent.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
           <FormField
             control={form.control}
             name="allow_guest"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
                 <div className="space-y-0.5">
-                  <FormLabel className="text-base">Allow Guest API Access</FormLabel>
+                  <FormLabel className="text-base">Allow guest API access</FormLabel>
                   <FormDescription>
                     If checked, this agent can be run by Guest users (via API).
                   </FormDescription>
@@ -64,7 +76,7 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
             name="allowed_users"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Allowed Users</FormLabel>
+                <FormLabel>Allowed users</FormLabel>
                 <FormControl>
                   <MultiSelectCombobox
                     options={userOptions}
@@ -88,7 +100,7 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
             name="allowed_roles"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Allowed Roles</FormLabel>
+                <FormLabel>Allowed roles</FormLabel>
                 <FormControl>
                   <MultiSelectCombobox
                     options={roleOptions}
@@ -108,7 +120,7 @@ export function PermissionsTab({ form, users, roles }: PermissionsTabProps) {
           />
 
           {(selectedUsers?.length || selectedRoles?.length) ? (
-            <div className="rounded-none border border-dashed bg-paper-deep/30 p-4 text-sm text-steel">
+            <div className="rounded-lg border border-dashed bg-paper-deep/30 p-4 text-sm text-steel">
               This agent is restricted to {selectedUsers?.length || 0} user(s) and {selectedRoles?.length || 0} role(s),
               in addition to the document owner.
             </div>

@@ -3,6 +3,7 @@ import { Calendar, Activity, Settings, Zap, Server, Lock, Users } from 'lucide-r
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
+import { Button } from '@/components/ui/button';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
 import { usePermissions } from '../contexts/PermissionsContext';
@@ -13,15 +14,15 @@ import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
 import { resolveProviderBrand } from '@/utils/providerBrands';
 
 const statusOptions = [
-  { label: 'All Status', value: 'all' },
+  { label: 'All status', value: 'all' },
   { label: 'Active', value: 'active' },
   { label: 'Disabled', value: 'disabled' },
 ];
 
 const chatOptions = [
-  { label: 'All Agents', value: 'all' },
-  { label: 'Chat Enabled', value: 'chat' },
-  { label: 'Automation Only', value: 'no_chat' },
+  { label: 'All agents', value: 'all' },
+  { label: 'Chat enabled', value: 'chat' },
+  { label: 'Automation only', value: 'no_chat' },
 ];
 
 function getStatusVariant(status: 'active' | 'disabled') {
@@ -150,7 +151,7 @@ function AgentsPage() {
   return (
     <PageFrame
       title="Agents"
-      subtitle="Create and manage your AI agents."
+      actions={<Button onClick={() => navigate('/agents/new')}>New agent</Button>}
       filters={
         <FilterBar
           searchPlaceholder="Search agents..."
@@ -184,12 +185,30 @@ function AgentsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Users}
-            title="No agents"
-            description="Create an agent to get started."
-            action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
-          />
+          search || (filters.status && filters.status !== 'all') || (filters.chat && filters.chat !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Users}
+              title="No agents found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                  setFilter('chat', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Users}
+              title="No agents"
+              description="Create an agent to get started."
+              action={{ label: 'New agent', onClick: () => navigate('/agents/new') }}
+            />
+          )
         }
         renderItem={(agent) => {
           const status = getStatusLabel(agent);
@@ -230,7 +249,7 @@ function AgentsPage() {
                 },
                 {
                   icon: Activity,
-                  label: 'View Logs',
+                  label: 'View logs',
                   onClick: () => navigate(`/executions?agents=${encodeURIComponent(agent.name)}`),
                 },
               ]}

@@ -71,7 +71,7 @@ export function GeneralTab({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>LLM Configuration</CardTitle>
+          <CardTitle>LLM configuration</CardTitle>
           <CardDescription>Configure language model settings</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -81,7 +81,7 @@ export function GeneralTab({
               name="agent_name"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Agent Name</FormLabel>
+                  <FormLabel>Agent name</FormLabel>
                   <FormControl>
                     <Input placeholder="my-agent" {...field} />
                   </FormControl>
@@ -225,7 +225,7 @@ We generally recommend altering this or temperature but not both.`}
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                 <div className="space-y-0.5 pr-4">
-                  <FormLabel className="text-base">Run Immediately</FormLabel>
+                  <FormLabel className="text-base">Run immediately</FormLabel>
                   <FormDescription>
                     When enabled, agent runs execute synchronously and return a direct response. When disabled (default), runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require an immediate response.
                   </FormDescription>
@@ -241,7 +241,7 @@ We generally recommend altering this or temperature but not both.`}
 
       <Card>
         <CardHeader>
-          <CardTitle>Prompt Source</CardTitle>
+          <CardTitle>Prompt source</CardTitle>
           <CardDescription>Choose whether this agent uses inline instructions or a reusable prompt template.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -250,7 +250,7 @@ We generally recommend altering this or temperature but not both.`}
             name="prompt_mode"
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel>Prompt Mode</FormLabel>
+                <FormLabel>Prompt mode</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
                   <FormControl>
                     <SelectTrigger>
@@ -316,7 +316,7 @@ We generally recommend altering this or temperature but not both.`}
 
       <Card>
         <CardHeader>
-          <CardTitle>Starter Prompts</CardTitle>
+          <CardTitle>Starter prompts</CardTitle>
           <CardDescription>
             Up to 3 starter prompts shown to users when starting a chat with this agent.
           </CardDescription>
@@ -381,7 +381,7 @@ We generally recommend altering this or temperature but not both.`}
 
       <Card>
         <CardHeader>
-          <CardTitle>Prompt Caching</CardTitle>
+          <CardTitle>Prompt caching</CardTitle>
           <CardDescription>
             Configure prompt caching to reduce costs by caching repeated prompt content
           </CardDescription>
@@ -391,9 +391,9 @@ We generally recommend altering this or temperature but not both.`}
             control={form.control}
             name="enable_prompt_caching"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                 <div className="space-y-0.5">
-                  <FormLabel className="text-base">Enable Prompt Caching</FormLabel>
+                  <FormLabel className="text-base">Enable prompt caching</FormLabel>
                   <FormDescription>
                     Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).
                   </FormDescription>
@@ -406,8 +406,8 @@ We generally recommend altering this or temperature but not both.`}
           />
 
           {watchEnablePromptCaching && watchProvider && watchModel && cacheStatus && !cacheStatus.supported && (
-            <Alert className="sm:col-span-2 border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-200">
-              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <Alert className="sm:col-span-2 border-warning/50 bg-warning/10 text-warning">
+              <AlertTriangle className="h-4 w-4 text-warning" />
               <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Not Supported</AlertTitle>
               <AlertDescription className="text-xs mt-1 space-y-1">
                 <p>
@@ -428,7 +428,7 @@ We generally recommend altering this or temperature but not both.`}
               name="cache_control_type"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Cache Control Type</FormLabel>
+                  <FormLabel>Cache control type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -454,9 +454,9 @@ We generally recommend altering this or temperature but not both.`}
               control={form.control}
               name="cache_system_message"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+                <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Cache System Message</FormLabel>
+                    <FormLabel className="text-base">Cache system message</FormLabel>
                     <FormDescription>
                       Cache the system message/instructions to avoid re-sending them on every request.
                     </FormDescription>
@@ -474,9 +474,9 @@ We generally recommend altering this or temperature but not both.`}
               control={form.control}
               name="cache_conversation_history"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+                <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
-                    <FormLabel className="text-base">Cache Conversation History</FormLabel>
+                    <FormLabel className="text-base">Cache conversation history</FormLabel>
                     <FormDescription>
                       Cache conversation history messages to reduce token usage in multi-turn conversations.
                     </FormDescription>

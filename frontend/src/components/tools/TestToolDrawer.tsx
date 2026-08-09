@@ -206,7 +206,7 @@ export function TestToolDrawer({
           )}
 
           {argSpecs.length === 0 ? (
-            <div className="text-sm text-steel border border-dashed rounded-none p-4 text-center">
+            <div className="text-sm text-steel border border-dashed rounded p-4 text-center">
               This tool takes no arguments.
             </div>
           ) : (
@@ -215,7 +215,7 @@ export function TestToolDrawer({
                 <div key={spec.name} className="space-y-1.5">
                   <Label htmlFor={`test-arg-${spec.name}`} className="flex items-center gap-2">
                     <span className="font-mono text-sm">{spec.name}</span>
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" size="sm">
                       {spec.type}
                     </Badge>
                     {spec.required && <span className="text-destructive">*</span>}
@@ -262,11 +262,11 @@ export function TestToolDrawer({
                 <span className="text-sm font-medium">
                   {result.dryRun ? 'Payload preview' : result.ok ? 'Result' : 'Error'}
                 </span>
-                <Badge variant={result.ok ? 'secondary' : 'destructive'} className="text-[10px]">
+                <Badge variant={result.ok ? 'secondary' : 'destructive'} size="sm">
                   {result.dryRun ? 'dry run' : result.ok ? 'success' : 'failed'}
                 </Badge>
               </div>
-              <div className="rounded-none border border-line bg-ink p-3 max-h-[40vh] overflow-auto">
+              <div className="rounded-lg border border-line bg-ink p-3 max-h-[40vh] overflow-auto">
                 <pre className="text-xs font-mono text-steel-soft whitespace-pre-wrap">
                   {typeof result.payload === 'string'
                     ? result.payload

@@ -31,7 +31,7 @@ export function RetrievalTab({ form }: RetrievalTabProps) {
           name="inject_mode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Inject Mode</FormLabel>
+              <FormLabel>Inject mode</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger>
@@ -63,7 +63,7 @@ export function RetrievalTab({ form }: RetrievalTabProps) {
             name="max_records"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Max Records</FormLabel>
+                <FormLabel>Max records</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -85,7 +85,7 @@ export function RetrievalTab({ form }: RetrievalTabProps) {
             name="token_budget"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Token Budget</FormLabel>
+                <FormLabel>Token budget</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

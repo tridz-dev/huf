@@ -1,5 +1,6 @@
 import { Fragment, ReactNode, useState } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -36,7 +37,7 @@ const divider = <div className="w-px self-stretch bg-line" />;
 
 /** Select trigger restyled to sit flush inside the strip (no box of its own). */
 const flushTriggerClass =
-  'h-auto w-auto min-w-[150px] gap-2 rounded-none border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100';
+  'h-auto w-auto min-w-[150px] gap-2 rounded border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100';
 
 function searchInputCell(
   searchPlaceholder: string,
@@ -88,15 +89,16 @@ export function FilterBar({
   if (onSearchChange) {
     if (collapsibleSearch && !isSearchExpanded) {
       cells.push(
-        <button
+        <Button
           key="search"
           type="button"
+          variant="ghost"
           aria-label="Open search"
-          className="flex items-center px-3.5 text-steel-soft hover:text-steel"
+          className="h-auto items-center rounded-none px-3.5 text-steel-soft hover:bg-transparent hover:text-steel"
           onClick={handleToggleSearch}
         >
           <Search className="h-4 w-4" />
-        </button>
+        </Button>
       );
     } else {
       cells.push(
@@ -107,14 +109,16 @@ export function FilterBar({
           onSearchSubmit,
           collapsibleSearch,
           collapsibleSearch ? (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               aria-label="Close search"
-              className="shrink-0 text-steel-soft hover:text-steel"
+              className="h-auto w-auto shrink-0 p-0 text-steel-soft hover:bg-transparent hover:text-steel"
               onClick={handleToggleSearch}
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
           ) : undefined
         )
       );
@@ -132,7 +136,7 @@ export function FilterBar({
           className={flushTriggerClass}
           icon={<ChevronDown className="h-3.5 w-3.5 text-steel-soft" />}
         >
-          <span className="font-mono text-[11px] uppercase tracking-[.08em] text-steel">
+          <span className="font-mono text-eyebrow uppercase text-steel">
             {filter.label}: {current}
           </span>
         </SelectTrigger>
@@ -149,21 +153,21 @@ export function FilterBar({
 
   if (primaryAction) {
     cells.push(
-      <button
+      <Button
         key="primary-action"
-        type="button"
-        className="flex items-center gap-2 self-stretch bg-ink px-4 font-display text-[13px] font-bold uppercase tracking-[.06em] text-paper transition-colors hover:bg-signal disabled:opacity-50"
+        variant="default"
+        className="h-auto gap-2 self-stretch rounded-none px-4"
         onClick={primaryAction.onClick}
         disabled={primaryAction.disabled}
       >
         {primaryAction.icon}
         {primaryAction.label}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex flex-1 items-center gap-3">
+    <div className="flex flex-1 items-stretch gap-3">
       {cells.length > 0 && (
         <div className="flex flex-1 items-stretch rounded border border-line bg-panel max-sm:flex-wrap">
           {cells.map((cell, index) => (

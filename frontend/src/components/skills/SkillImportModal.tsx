@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   importSkillFromGit,
   importSkillFromCommonDestination,
@@ -138,7 +139,7 @@ export function SkillImportModal({ open, onOpenChange, onSuccess }: SkillImportM
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import Skills</DialogTitle>
+          <DialogTitle>Import skills</DialogTitle>
           <DialogDescription>
             Import skills from a Git repository or a configured common destination.
           </DialogDescription>
@@ -198,20 +199,25 @@ export function SkillImportModal({ open, onOpenChange, onSuccess }: SkillImportM
           <TabsContent value="common" className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label htmlFor="destination_name">Destination</Label>
-              <select
-                id="destination_name"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={destinationName}
-                onChange={(e) => setDestinationName(e.target.value)}
+              <Select
+                value={destinationName || '__none'}
+                onValueChange={(value) => setDestinationName(value === '__none' ? '' : value)}
                 disabled={loading}
               >
-                <option value="">Select a destination...</option>
-                {destinations.map((dest) => (
-                  <option key={dest.name} value={dest.name}>
-                    {dest.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="destination_name">
+                  <SelectValue placeholder="Select a destination..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none" disabled>
+                    Select a destination...
+                  </SelectItem>
+                  {destinations.map((dest) => (
+                    <SelectItem key={dest.name} value={dest.name}>
+                      {dest.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {destinations.length === 0 && (
                 <p className="text-xs text-muted-foreground">
                   No destinations configured. Add one in Agent Settings.
@@ -222,7 +228,7 @@ export function SkillImportModal({ open, onOpenChange, onSuccess }: SkillImportM
 
           <TabsContent value="huf" className="space-y-4 mt-4">
             <div className="space-y-2">
-              <Label htmlFor="huf_file">Skill Package (.huf)</Label>
+              <Label htmlFor="huf_file">Skill package (.huf)</Label>
               <Input
                 id="huf_file"
                 type="file"

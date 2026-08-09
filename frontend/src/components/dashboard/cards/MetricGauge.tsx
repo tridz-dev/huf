@@ -12,7 +12,6 @@ export interface MetricGaugeProps {
   period?: string;
   value: string | number;
   unit?: string;
-  flag?: boolean;
   info?: string;
 }
 
@@ -21,18 +20,17 @@ export function MetricGauge({
   period,
   value,
   unit,
-  flag,
   info,
 }: MetricGaugeProps) {
   return (
-    <div className="px-[22px] py-5 min-w-0">
+    <div className="px-[18px] py-4 min-w-0">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="font-body text-[12.5px] font-semibold text-steel">
+          <div className="font-body text-[13px] font-medium text-ink">
             {label}
           </div>
           {period && (
-            <div className="font-mono text-[10.5px] text-steel-soft mt-1">
+            <div className="font-mono text-eyebrow uppercase text-steel-soft mt-1">
               {period}
             </div>
           )}
@@ -52,16 +50,20 @@ export function MetricGauge({
         )}
       </div>
       <div className="mt-4 flex items-baseline">
+        {/* Figures stay ink black — the design system reserves violet for state
+            and selection, and calls out "one dashboard figure is violet for no
+            stated reason" as a defect. A delta may carry semantic colour; the
+            figure itself never does. */}
         <span
           className={cn(
-            'font-display font-bold text-[40px] leading-none',
-            flag ? 'text-signal-ink' : 'text-ink'
+            'font-display font-semibold text-[30px] tracking-[-.02em] leading-none tabular-nums',
+            'text-ink',
           )}
         >
           {value}
         </span>
         {unit && (
-          <span className="font-mono text-[13px] text-steel ml-1">{unit}</span>
+          <span className="font-mono text-base text-steel ml-1">{unit}</span>
         )}
       </div>
     </div>
@@ -78,7 +80,7 @@ export function GaugeRow({ children, className }: GaugeRowProps) {
     <TooltipProvider>
       <div
         className={cn(
-          'border border-ink bg-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y divide-line overflow-hidden',
+          'border border-line rounded-lg bg-panel grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-x divide-y divide-line overflow-hidden',
           className
         )}
       >

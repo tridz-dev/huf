@@ -80,11 +80,11 @@ export function SkillMarketplaceModal({ open, onOpenChange, onSuccess }: SkillMa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-[960px] max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Store className="w-5 h-5" />
-            Skills Marketplace
+            Skills marketplace
           </DialogTitle>
           <DialogDescription>
             Browse and install curated skills from the Huf marketplace.
@@ -131,7 +131,7 @@ export function SkillMarketplaceModal({ open, onOpenChange, onSuccess }: SkillMa
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="font-medium text-sm">{skill.title || skill.name}</p>
                   {skill.category && (
-                    <Badge variant="secondary" className="text-[10px]">
+                    <Badge variant="secondary" size="sm">
                       {skill.category}
                     </Badge>
                   )}

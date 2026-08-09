@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,38 +15,137 @@
 
 @layer base {
   :root {
-    /* HUF Design System — Themable tokens (default = Winter) */
+    /* HUF Design System — "Apple-quiet" v3.0 is now the sole shipped UI
+       direction. These are no longer "themable defaults" overridden by a
+       runtime picker — the [data-theme="winter/midnight/summer/morning"]
+       blocks below are dead code kept only for reference (the theme
+       switcher in src/lib/personalization.ts no longer applies a
+       data-theme attribute, see applyEffectiveTheme()), not a priority to
+       remove. Do not rely on them. */
 
     /* Surfaces */
-    --paper:      #EEF0EC;
-    --paper-deep: #E2E4DE;
-    --panel:      #FBFCFA;
+    --paper:      #FBFBFD;
+    --paper-deep: #F4F4F7;
+    --panel:      #FFFFFF;
 
     /* Text & lines */
-    --ink:        #15181C;
+    --ink:        #1D1D1F;
     --ink-soft:   #2A2F36;
-    --steel:      #5A636F;
-    --steel-soft: #8A929C;
-    --line:       #DEE1D9;
-    --line-marketing: #C7CCC0;
+    --steel:      #6E6E73;
+    --steel-soft: #98989D;
+    --line:       #ECECF0;
+    --line-marketing: #ECECF0;
     --line-dark:  #343A42;
 
     /* Signal */
-    --signal:     #C6511F;
-    --signal-ink: #9C3F17;
-    --good:       #3F7A4E;
-    --coral-soft: #FAECE7;
+    --signal:     #7A5AF0;
+    --signal-ink: #5B3FC4;
+    --good:       #1C7C54;
+    --good-tint:  #E8F5EE;
+    --destructive-tint: #FDECEA;
+    --destructive: #B3261E;
+    --destructive-foreground: var(--paper);
+    --warning:      #8A5A00;
+    --warning-tint: #FDF3E0;
 
     /* Shape */
-    --r: 2px;
+    --r: 8px;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 14px;
+    --r-full: 999px;
+    --shadow-flat: none;
+    --shadow-raised: 0 1px 2px rgba(0,0,0,.05);
+    --shadow-overlay: 0 8px 24px -8px rgba(0,0,0,.16);
+
+    /* Spacing scale */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    /* Control sizing
+       Arithmetic (border-box, worst case = bordered variant e.g. `outline`
+       has 1px border = 2px total height eaten):
+         md (default, icon too, and Input/Select/Textarea): the actual
+             class applied by these components is `text-ui-text`
+             (--text-ui-size 13px / --text-ui-weight 500 — see the Type
+             scale below), whose Tailwind fontSize entry does NOT specify
+             a lineHeight, so no line-height utility is emitted and the
+             browser falls back to the UA-computed "normal" line-height
+             for the -apple-system stack at 13px, which renders at ~16px
+             (13px * ~1.23). That 16px content line-height + control-py
+             (8px * 2 = 16px) + 2px border = 34px, matching the design
+             doc's "Density: Controls 8px radius at 34px tall" and the
+             Inputs section's "field height 34px". control-py stays 8px
+             unchanged — it already balances the equation once height is
+             derived from the 13px text-ui-text class these components
+             actually use (an earlier pass's 38px/20px-line-height math
+             mistakenly assumed the default Tailwind `text-sm` size/line-
+             height, which none of these components render with).
+         sm (icon-sm too): scaled down from md by the same relative step
+             the previous 32/38/44 triad used (~±6px around a 38px
+             center), rounded to clean numbers: 30px.
+         lg: scaled up from md the same way: 38px.
+       Horizontal padding (--control-px/-sm/-lg) is unchanged by this
+       pass — out of scope here, kept at prior values. */
+    --control-h-sm: 30px;
+    --control-h-md: 34px;
+    --control-h-lg: 38px;
+    --control-px: 16px;
+    --control-px-sm: 12px;
+    --control-px-lg: 32px;
+    --control-py: 8px;
 
     /* Typography */
-    --display: 'Big Shoulders Display', sans-serif;
-    --body:    'IBM Plex Sans', sans-serif;
-    --mono:    'IBM Plex Mono', monospace;
+    --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Type scale */
+    --text-display-size:     28px;
+    --text-display-weight:   600;
+    --text-display-tracking: -0.02em;
+
+    --text-title-size:     20px;
+    --text-title-weight:   590;
+    --text-title-tracking: -0.015em;
+
+    /* Section/card headers. Added because a parity audit found 6 callsites
+       independently reaching for 18px across a 15px→20px gap — a missing
+       step in the scale, not 6 separate mistakes. */
+    --text-subtitle-size:   18px;
+    --text-subtitle-weight: 590;
+
+    /* 16px has no custom token on purpose: Tailwind's own `text-base` is
+       already exactly 16px, and the design doc uses 16px 50 times (four of
+       them as 16px/590 card titles). So `text-base` IS the sanctioned 16px
+       step — callsites using it are correct and must not be "migrated" to
+       15px or 18px. Likewise `text-xs` (12px) and `text-sm` (14px) are the
+       sanctioned small tier. Only ARBITRARY sizes — text-[Npx] — are drift. */
+
+    --text-body-size:   15px;
+    --text-body-weight: 400;
+
+    --text-ui-size:   13px;
+    --text-ui-weight: 500;
+
+    /* Dense form/table text. Same reasoning: 15+ callsites landed on 12px
+       across the 11px→13px gap. */
+    --text-micro-size:   12px;
+    --text-micro-weight: 500;
+
+    --text-meta-size: 11px;
+
+    --text-eyebrow-size:     10px;
+    --text-eyebrow-tracking: 0.07em;
 
     /* shadcn compatibility — mapped to HUF tokens so themes propagate */
-    --radius: 2px;
+    --radius: 8px;
     --background: var(--paper);
     --foreground: var(--ink);
     --card: var(--panel);
@@ -62,10 +160,8 @@
     --muted-foreground: var(--steel);
     --accent: var(--paper-deep);
     --accent-foreground: var(--ink);
-    --destructive: #C0392B;
-    --destructive-foreground: var(--paper);
     --border: var(--line);
-    --input: var(--line);
+    --input: #E4E4E8;
     --ring: var(--signal);
 
     /* Sidebar */
@@ -102,7 +198,9 @@
     --signal:     #C6511F;
     --signal-ink: #9C3F17;
     --good:       #3F7A4E;
-    --coral-soft: #FAECE7;
+    --destructive-tint: #FAECE7;
+    --destructive: #C0392B;
+    --destructive-foreground: var(--paper);
   }
 
   [data-theme="midnight"] {
@@ -119,7 +217,9 @@
     --signal:     #FF7A3D;
     --signal-ink: #FF9A63;
     --good:       #5FC97A;
-    --coral-soft: #2E201B;
+    --destructive-tint: #2E201B;
+    --destructive: #FF5A47;
+    --destructive-foreground: var(--paper);
   }
 
   [data-theme="summer"] {
@@ -136,7 +236,9 @@
     --signal:     #FF5A1F;
     --signal-ink: #D6440F;
     --good:       #2E9A4E;
-    --coral-soft: #FFF0E6;
+    --destructive-tint: #FFF0E6;
+    --destructive: #C0392B;
+    --destructive-foreground: var(--paper);
   }
 
   [data-theme="morning"] {
@@ -153,7 +255,53 @@
     --signal:     #E8531F;
     --signal-ink: #BC3E0F;
     --good:       #4E8F5C;
-    --coral-soft: #FCECE6;
+    --destructive-tint: #FCECE6;
+    --destructive: #C0392B;
+    --destructive-foreground: var(--paper);
+  }
+
+  /* Proposal preview only — not registered in the theme picker (src/lib/personalization.ts).
+     Force it for a live check via: document.documentElement.setAttribute('data-theme','apple-quiet') */
+  [data-theme="apple-quiet"] {
+    --paper:      #FBFBFD;
+    --paper-deep: #F4F4F7;
+    --panel:      #FFFFFF;
+    --ink:        #1D1D1F;
+    --ink-soft:   #2A2F36;
+    --steel:      #6E6E73;
+    --steel-soft: #98989D;
+    --line:       #ECECF0;
+    --line-marketing: #ECECF0;
+    --line-dark:  #343A42;
+    --signal:     #7A5AF0;
+    --signal-ink: #5B3FC4;
+    --good:       #1C7C54;
+    --destructive-tint: #FDECEA;
+    --destructive: #B3261E;
+    --destructive-foreground: var(--paper);
+
+    --r: 8px;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 14px;
+    --r-full: 999px;
+    --shadow-flat: none;
+    --shadow-raised: 0 1px 2px rgba(0,0,0,.05);
+    --shadow-overlay: 0 8px 24px -8px rgba(0,0,0,.16);
+
+    --display: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --body:    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Control sizing — kept in sync with the :root block above. */
+    --control-h-sm: 32px;
+    --control-h-md: 38px;
+    --control-h-lg: 44px;
+    --control-px: 16px;
+    --control-px-sm: 12px;
+    --control-px-lg: 32px;
+    --control-py: 8px;
   }
 
   @keyframes blink { 50% { opacity: .2; } }
@@ -303,7 +451,6 @@
   font-size: 39px;
   font-weight: 600;
   line-height: 1.1;
-  text-transform: uppercase;
   letter-spacing: 0.025em;
 }
 .coldstart-desc {

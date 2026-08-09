@@ -239,7 +239,7 @@ export function AgentFormPage() {
       disabled: false,
     },
     advanced: {
-      label: 'Advanced Settings',
+      label: 'Advanced settings',
       fields: [
        'context_strategy',
         'summary_model',
@@ -716,7 +716,7 @@ export function AgentFormPage() {
         console.error('Error loading SSH connections:', error);
         if (!cancelled) {
           setSSHConnectionOptions([]);
-          toast.error('Failed to load SSH Connections');
+          toast.error('Failed to load SSH connections');
         }
       } finally {
         if (!cancelled) {
@@ -806,7 +806,7 @@ export function AgentFormPage() {
         console.error('Error loading execution profiles:', error);
         if (!cancelled) {
           setExecutionProfileOptions([]);
-          toast.error('Failed to load Execution Profiles');
+          toast.error('Failed to load execution profiles');
         }
       } finally {
         if (!cancelled) {
@@ -2390,7 +2390,6 @@ export function AgentFormPage() {
         <AgentHeader
           form={form}
           watchDisabled={watchDisabled}
-          providers={providers}
           models={models}
           activeTriggerCount={activeTriggerCount}
           isNew={isNew}
@@ -2422,13 +2421,13 @@ export function AgentFormPage() {
         <Form {...form}>
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="scroll" className="w-full">
+              <TabsList layout="overflow" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}
                     disabled={config.disabled}
-                    className="shrink-0 px-3 sm:min-w-[110px]"
+                    className="shrink-0"
                   >
                     {config.label}
                   </TabsTrigger>

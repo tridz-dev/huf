@@ -109,7 +109,7 @@ export function ParameterCard({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={`param-child-table-${index}`}>Child Table Name</Label>
+            <Label htmlFor={`param-child-table-${index}`}>Child table name</Label>
             <Input
               id={`param-child-table-${index}`}
               value={parameter.child_table_name || ''}

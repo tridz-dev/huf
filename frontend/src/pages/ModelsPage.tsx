@@ -311,7 +311,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   return (
     <PageFrame
       title="Models"
-      subtitle="Manage AI models and their capabilities"
       filters={
         <FilterBar
           searchPlaceholder="Search models..."
@@ -332,12 +331,23 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Cpu}
-            title="No models"
-            description="Add a model to use with your AI providers."
-            action={{ label: 'Add model', onClick: handleAddModel }}
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Cpu}
+              title="No models found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Cpu}
+              title="No models"
+              description="Add a model to use with your AI providers."
+              action={{ label: 'Add model', onClick: handleAddModel }}
+            />
+          )
         }
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);
@@ -460,7 +470,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="use_custom_pricing">Enable Custom Pricing</Label>
+                    <Label htmlFor="use_custom_pricing">Enable custom pricing</Label>
                     <p className="text-xs text-steel-soft">
                       Check this to activate the custom prices below. When unchecked, LiteLLM&apos;s automatic pricing is used regardless of what is entered below.
                     </p>
@@ -477,7 +487,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 {formData.use_custom_pricing && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label htmlFor="input_cost">Input Cost per 1M Tokens (USD)</Label>
+                      <Label htmlFor="input_cost">Input cost per 1M tokens (USD)</Label>
                       <p className="text-xs text-steel-soft">
                         Cost in USD per 1 million prompt/input tokens. E.g. enter 2.50 for $2.50 per 1M tokens. Enter 0 for free/self-hosted models.
                       </p>
@@ -494,7 +504,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="output_cost">Output Cost per 1M Tokens (USD)</Label>
+                      <Label htmlFor="output_cost">Output cost per 1M tokens (USD)</Label>
                       <p className="text-xs text-steel-soft">
                         Cost in USD per 1 million completion/output tokens. E.g. enter 10.00 for $10.00 per 1M tokens.
                       </p>

@@ -150,7 +150,7 @@ export default function Executions() {
   }, []);
 
   const statusOptions = [
-    { label: 'All Status', value: 'all' },
+    { label: 'All status', value: 'all' },
     { label: 'Started', value: 'Started' },
     { label: 'Queued', value: 'Queued' },
     { label: 'Success', value: 'Success' },
@@ -162,7 +162,7 @@ export default function Executions() {
       value: agent.name,
       label: agent.name,
     }));
-    return [{ label: 'All Agents', value: 'all' }, ...items];
+    return [{ label: 'All agents', value: 'all' }, ...items];
   }, [agents]);
 
   const selectedAgentValue = filters.agents || 'all';
@@ -229,7 +229,7 @@ export default function Executions() {
               onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
               className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
             >
-              Cached Tokens
+              Cached tokens
               <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
           );
@@ -301,7 +301,6 @@ export default function Executions() {
     <PageFrame
       title="Executions"
       badge={<ExperimentalBadge />}
-      subtitle="Inspect agent runs and their results."
       filters={
         <FilterBar
           searchPlaceholder="Search executions using Agent Name"
@@ -351,11 +350,30 @@ export default function Executions() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : runs.length === 0 ? (
-          <EmptyState
-            icon={Activity}
-            title="No executions"
-            description="No agent runs have been recorded yet."
-          />
+          !!search || (filters.status && filters.status !== 'all') || (filters.agents && filters.agents !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Activity}
+              title="No executions found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                  setFilter('agents', 'all');
+                  updateSearchParams({ q: '', status: 'all', agents: 'all' });
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="passive"
+              icon={Activity}
+              title="No executions"
+              description="No agent runs have been recorded yet."
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>
