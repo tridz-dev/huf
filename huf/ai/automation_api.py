@@ -25,7 +25,11 @@ from huf.ai import automation_service
 # ``automation`` and ``trigger_type`` are handled explicitly by
 # create_trigger; everything else here is passed straight through.
 _TRIGGER_FIELDS = (
-    "trigger_name",
+    # NOTE: trigger_name deliberately excluded — Automation Trigger's
+    # autoname is field:trigger_name, so a plain doc.set()+doc.save() would
+    # silently desync doc.name from doc.trigger_name instead of renaming.
+    # Renaming (if ever needed) must go through frappe.rename_doc()
+    # explicitly, not this generic field-update path.
     "disabled",
     "schedule_type",
     "cron_expression",
