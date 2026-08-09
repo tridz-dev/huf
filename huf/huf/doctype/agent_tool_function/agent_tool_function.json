@@ -29,7 +29,10 @@
   "parameters_section",
   "parameters",
   "params",
-  "function_definition"
+  "function_definition",
+  "seeding_metadata_section",
+  "source_app",
+  "source_file"
  ],
  "fields": [
   {

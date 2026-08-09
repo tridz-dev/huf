@@ -16,7 +16,11 @@
   "use_custom_pricing",
   "input_cost_per_1m_tokens",
   "output_cost_per_1m_tokens",
-  "cached_input_cost_per_1m_tokens"
+  "cached_input_cost_per_1m_tokens",
+  "chat_capability_overrides_section",
+  "disable_ask_user",
+  "disable_rich_elements",
+  "disable_document_artifacts"
  ],
  "fields": [
   {
