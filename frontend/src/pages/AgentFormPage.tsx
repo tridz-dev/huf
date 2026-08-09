@@ -371,14 +371,13 @@ export function AgentFormPage() {
   const [initialAgentSkills, setInitialAgentSkills] = useState<AgentSkillRow[]>([]);
   const [skillOptions, setSkillOptions] = useState<{ value: string; label: string; subtitle?: string }[]>([]);
   const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
+  const [agentOwner, setAgentOwner] = useState<string | null>(null);
   const [sectionRevisions, setSectionRevisions] = useState<Partial<Record<AgentConfigSection, string>>>({});
   const [loadedSections, setLoadedSections] = useState<Set<AgentConfigSection>>(new Set());
   const [loadingSection, setLoadingSection] = useState<AgentConfigSection | null>(null);
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
-  const [users, setUsers] = useState<Array<{ name: string }>>([]);
-  const [roles, setRoles] = useState<Array<{ name: string }>>([]);
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
@@ -601,20 +600,14 @@ export function AgentFormPage() {
   // so a denied/failed one must not blank fields that loaded fine — hence
   // allSettled with a per-field fallback instead of Promise.all + one catch.
   useEffect(() => {
-    const labels = ['providers', 'models', 'tool types', 'skill options', 'users', 'roles'];
+    const labels = ['providers', 'models', 'tool types', 'skill options'];
     Promise.allSettled([
       getProviders(),
       getModels(),
       getToolTypes(),
       getSkillOptions(),
-      // Capped well below the previous unbounded 1000: this list backs the
-      // Permissions tab's user/role picker, not a full directory browser.
-      // Instances with more users/roles than this cap need server-side
-      // search here instead of a raise — see AGENT_PERMISSIONS_AUDIT.md OQ3.
-      db.getDocList('User', { fields: ['name'], limit: 200, orderBy: { field: 'name', order: 'asc' } }),
-      db.getDocList('Role', { fields: ['name'], limit: 200, orderBy: { field: 'name', order: 'asc' } }),
-    ]).then(([providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult]) => {
-      const results = [providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult];
+    ]).then(([providersResult, modelsResult, toolTypesResult, skillOptionsResult]) => {
+      const results = [providersResult, modelsResult, toolTypesResult, skillOptionsResult];
       results.forEach((result, i) => {
         if (result.status === 'rejected') {
           console.error(`Error loading ${labels[i]}:`, result.reason);
@@ -636,12 +629,6 @@ export function AgentFormPage() {
       }
       if (skillOptionsResult.status === 'fulfilled') {
         setSkillOptions((skillOptionsResult.value || []) as { value: string; label: string; subtitle?: string }[]);
-      }
-      if (usersResult.status === 'fulfilled') {
-        setUsers(usersResult.value as Array<{ name: string }>);
-      }
-      if (rolesResult.status === 'fulfilled') {
-        setRoles((rolesResult.value as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
       }
     });
   }, []);
@@ -923,7 +910,7 @@ export function AgentFormPage() {
       if (state.showTab) {
         setActiveTab(state.showTab);
       }
-      navigate(`${location.pathname}${location.search}#advanced`, { replace: true, state: {} });
+      navigate(`${location.pathname}${location.search}#${state.showTab || 'advanced'}`, { replace: true, state: {} });
       return;
     }
 
@@ -944,7 +931,7 @@ export function AgentFormPage() {
       if (state.showTab) {
         setActiveTab(state.showTab);
       }
-      navigate(`${location.pathname}${location.search}#advanced`, { replace: true, state: {} });
+      navigate(`${location.pathname}${location.search}#${state.showTab || 'advanced'}`, { replace: true, state: {} });
       return;
     }
 
@@ -1259,6 +1246,7 @@ export function AgentFormPage() {
         setAllowChat(data.allow_chat === 1);
         setIsSystemAgent(data.is_system === 1);
         setAgentStats({ last_run: data.last_run ?? null, total_run: data.total_run ?? null });
+        setAgentOwner(data.owner ?? null);
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
         if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
@@ -1382,6 +1370,7 @@ export function AgentFormPage() {
       setKnowledgeSources([]);
       setInitialKnowledgeSources([]);
       setAgentStats({});
+      setAgentOwner(null);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -1763,6 +1752,7 @@ export function AgentFormPage() {
         setInitialKnowledgeSources([...knowledgeSources]);
         setInitialAgentSkills([...agentSkills]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
+        setAgentOwner(newAgent.owner ?? null);
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
         // Navigate to the edit page with the new agent's ID
@@ -1851,6 +1841,7 @@ export function AgentFormPage() {
               last_run: updatedData.last_run ?? null,
               total_run: updatedData.total_run ?? null,
             });
+            setAgentOwner(updatedData.owner ?? null);
             // Reset tools, disabled state, and persisted allow_chat after successful update
             setInitialTools([...selectedTools]);
             setInitialDisabled(updatedData.disabled === 1);
@@ -2514,7 +2505,14 @@ export function AgentFormPage() {
               </TabsContent>
 
               <TabsContent value="permissions" className="space-y-4">
-                <PermissionsTab form={form} users={users} roles={roles} />
+                <PermissionsTab
+                  form={form}
+                  owner={agentOwner}
+                  executionProfileOptions={executionProfileOptions}
+                  loadingExecutionProfiles={loadingExecutionProfiles}
+                  sshConnectionOptions={sshConnectionOptions}
+                  loadingSSHConnections={loadingSSHConnections}
+                />
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
@@ -2523,10 +2521,6 @@ export function AgentFormPage() {
                   allModels={allModels}
                   summaryPromptOptions={summaryPromptOptions}
                   loadingSummaryPrompts={loadingSummaryPrompts}
-                  executionProfileOptions={executionProfileOptions}
-                  loadingExecutionProfiles={loadingExecutionProfiles}
-                  sshConnectionOptions={sshConnectionOptions}
-                  loadingSSHConnections={loadingSSHConnections}
                   memoryPolicyOptions={memoryPolicyOptions}
                   loadingMemoryPolicies={loadingMemoryPolicies}
                 />

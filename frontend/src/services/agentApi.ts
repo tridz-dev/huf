@@ -492,6 +492,95 @@ export async function getRoles(): Promise<Array<{ name: string }>> {
 }
 
 /**
+ * Search enabled Users for the Agent Permissions "Allowed Users" picker.
+ * Excludes system accounts (Administrator, Guest) and disabled users.
+ */
+export async function searchUsers(query: string, limit = 25): Promise<Array<{ name: string }>> {
+  try {
+    const filters: Array<[string, string, unknown]> = [
+      ['enabled', '=', 1],
+      ['name', 'not in', ['Administrator', 'Guest']],
+    ];
+    if (query) {
+      filters.push(['name', 'like', `%${query}%`]);
+    }
+    const users = await db.getDocList('User', {
+      fields: ['name'],
+      filters: filters as Filter<Record<string, unknown>>[],
+      limit,
+      orderBy: { field: 'name', order: 'asc' },
+    });
+    return users as Array<{ name: string }>;
+  } catch (error) {
+    handleFrappeError(error, 'Error searching users');
+    return [];
+  }
+}
+
+/**
+ * Search Roles for the Agent Permissions "Allowed Roles" picker.
+ * Excludes the Guest role, mirroring the previous eager-fetch behavior.
+ */
+export async function searchRoles(query: string, limit = 100): Promise<Array<{ name: string }>> {
+  try {
+    const filters: Array<[string, string, unknown]> = [['name', '!=', 'Guest']];
+    if (query) {
+      filters.push(['name', 'like', `%${query}%`]);
+    }
+    const roles = await db.getDocList('Role', {
+      fields: ['name'],
+      filters: filters as Filter<Record<string, unknown>>[],
+      limit,
+      orderBy: { field: 'name', order: 'asc' },
+    });
+    return roles as Array<{ name: string }>;
+  } catch (error) {
+    handleFrappeError(error, 'Error searching roles');
+    return [];
+  }
+}
+
+/**
+ * Resolve specific User names (e.g. an agent's currently-selected allowed
+ * users) so they render as labeled options even if outside the default/search set.
+ */
+export async function fetchUsersByName(names: string[]): Promise<Array<{ name: string }>> {
+  if (!names.length) {
+    return [];
+  }
+  try {
+    const users = await db.getDocList('User', {
+      fields: ['name'],
+      filters: [['name', 'in', names]] as Filter<Record<string, unknown>>[],
+    });
+    return users as Array<{ name: string }>;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching users by name');
+    return [];
+  }
+}
+
+/**
+ * Resolve specific Role names (e.g. an agent's currently-selected allowed
+ * roles) so they render as labeled options even if outside the default/search set.
+ */
+export async function fetchRolesByName(names: string[]): Promise<Array<{ name: string }>> {
+  if (!names.length) {
+    return [];
+  }
+  try {
+    const roles = await db.getDocList('Role', {
+      fields: ['name'],
+      filters: [['name', 'in', names]] as Filter<Record<string, unknown>>[],
+    });
+    return roles as Array<{ name: string }>;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching roles by name');
+    return [];
+  }
+}
+
+/**
  * DocType metadata field shape (subset of Frappe DocField used by consumers)
  */
 export interface DocTypeMetaField {

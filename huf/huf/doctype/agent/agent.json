@@ -640,13 +640,14 @@
   },
   {
    "default": "0",
-   "description": "If checked, this agent can be run by Guest users (via API).",
+   "description": "If checked, anyone who can reach the API can run this agent without logging in. Guest access is governed by this field alone; Allowed Users and Allowed Roles are never evaluated for unauthenticated callers.",
    "fieldname": "allow_guest",
    "fieldtype": "Check",
-   "label": "Allow Guest"
+   "label": "Allow Public / Unauthenticated Access"
   },
   {
    "fieldname": "allowed_users",
+   "description": "Users who may run this agent. If both Allowed Users and Allowed Roles are empty, every logged-in user may run this agent.",
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Users",
    "options": "Agent User"
@@ -657,6 +658,7 @@
   },
   {
    "fieldname": "allowed_roles",
+   "description": "Roles that may run this agent. If both Allowed Users and Allowed Roles are empty, every logged-in user may run this agent.",
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Roles",
    "options": "Agent Role"

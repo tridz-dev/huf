@@ -31,6 +31,8 @@ interface MultiSelectComboboxProps {
   disabled?: boolean;
   className?: string;
   maxBadges?: number;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 export function MultiSelectCombobox({
@@ -44,6 +46,8 @@ export function MultiSelectCombobox({
   disabled = false,
   className,
   maxBadges = 3,
+  searchValue,
+  onSearchChange,
 }: MultiSelectComboboxProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -102,7 +106,10 @@ export function MultiSelectCombobox({
                 {closeLabel}
               </Button>
             </div>
-            <CommandInput placeholder={searchPlaceholder} />
+            <CommandInput
+              placeholder={searchPlaceholder}
+              {...(onSearchChange ? { value: searchValue, onValueChange: onSearchChange } : {})}
+            />
             <CommandList className="max-h-[min(50vh,280px)]">
               <CommandEmpty>{emptyText}</CommandEmpty>
               <CommandGroup>
