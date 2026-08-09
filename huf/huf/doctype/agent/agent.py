@@ -189,6 +189,19 @@ class Agent(Document):
             "model",
             "disabled",
             "allow_chat",
+            # The remaining Behavior-tab fields: BehaviorTab.tsx already locks
+            # the whole tab (all four switches) on the frontend via the same
+            # `systemLocked` prop that gates allow_chat, so a locked system
+            # agent's persist/multi-run behavior reads as protected in the
+            # UI. Before this fix, only allow_chat was actually enforced here
+            # server-side -- a non-admin could still PATCH persist_conversation,
+            # persist_user_history, or enable_multi_run directly via the API on
+            # a "locked" system agent, bypassing the frontend-only lock on the
+            # other three. Listed explicitly so backend enforcement matches
+            # what the frontend already implies is locked.
+            "persist_conversation",
+            "persist_user_history",
+            "enable_multi_run",
         )
         changed = [field for field in protected_fields if self.has_value_changed(field)]
 
@@ -198,6 +211,15 @@ class Agent(Document):
             previous_tools = [row.as_dict() for row in before.get("agent_tool") or []]
             if frappe.as_json(current_tools) != frappe.as_json(previous_tools):
                 changed.append("agent_tool")
+
+            # default_plan is the Behavior tab's other locked-when-system field
+            # (only shown/editable when enable_multi_run is on) -- diff it the
+            # same way agent_tool is diffed, since has_value_changed() does not
+            # cover child tables.
+            current_plan = [row.as_dict() for row in self.get("default_plan") or []]
+            previous_plan = [row.as_dict() for row in before.get("default_plan") or []]
+            if frappe.as_json(current_plan) != frappe.as_json(previous_plan):
+                changed.append("default_plan")
 
         if changed:
             frappe.throw(
