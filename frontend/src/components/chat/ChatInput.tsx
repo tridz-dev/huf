@@ -36,6 +36,10 @@ interface ChatInputProps {
     agentName: string;
     /** Current agent/conversation model, shown as an inline chip next to the keyboard hint. */
     agentModel?: string | null;
+    /** HUF Project a brand-new conversation (no `chatId` yet) should be
+     * created into. Ignored once a conversation already exists - its own
+     * `project` is authoritative from then on. */
+    project?: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
@@ -62,6 +66,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     chatId,
     agentName,
     agentModel,
+    project,
     onConversationCreated,
     onStatusChange,
     onLoadingTypeChange,
@@ -198,6 +203,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         conversationId: params.conversationId,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
+                        // Only relevant the first time a conversation is created -
+                        // once `conversationId` exists the project is already set
+                        // on the document (moving it happens via ConversationMenu).
+                        project: params.conversationId ? undefined : project,
                     },
                     {
                         useStreaming,
@@ -251,7 +260,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 clearRunTimeout();
             }
         },
-        [agentName, runImmediately, armRunTimeout, clearRunTimeout]
+        [agentName, project, runImmediately, armRunTimeout, clearRunTimeout]
     );
 
     const syncAssistantMessageId = useCallback(

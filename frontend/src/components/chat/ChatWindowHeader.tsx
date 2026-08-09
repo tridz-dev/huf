@@ -64,6 +64,12 @@ export function ChatWindowHeader({
     const [agent, setAgent] = useState<AgentDoc | null>(null);
     const [conversationModel, setConversationModel] = useState<string | null>(null);
     const [conversationTitle, setConversationTitle] = useState<string | null>(null);
+    // Spec §9/§22: switching agents starts a new conversation rather than
+    // mutating this one - when the open conversation belongs to a Project,
+    // that new conversation must inherit it. Tracked separately from the
+    // model/title state above so `AgentSwitcher` can read it regardless of
+    // whether `agent` has resolved yet.
+    const [conversationProject, setConversationProject] = useState<string | null>(null);
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [dataPanelOpen, setDataPanelOpen] = useState(false);
 
@@ -73,6 +79,7 @@ export function ChatWindowHeader({
         if (!chatId) {
             setConversationModel(null);
             setConversationTitle(null);
+            setConversationProject(null);
         }
 
         async function fetchAgentData() {
@@ -96,6 +103,7 @@ export function ChatWindowHeader({
                         if (!cancelled) {
                             setConversationModel(model);
                             setConversationTitle(title);
+                            setConversationProject(conversation?.project ?? null);
                         }
                     } catch (error) {
                         console.error('Error fetching conversation:', error);
@@ -154,6 +162,12 @@ export function ChatWindowHeader({
     const showOpenSidebarBtn = !!onToggleSidebar;
 
     const model = conversationModel || agent?.model;
+    // For an existing conversation, use its own project. For a not-yet-
+    // created chat, fall back to `?project=` so a Project's "+ New chat"
+    // entry point (which lands here with that param already set) still
+    // carries the project through an agent switch before any message
+    // has been sent.
+    const projectForSwitch = chatId ? conversationProject : searchParams.get('project');
     const showConversationData = !!chatId && agent?.enable_conversation_data === 1;
 
     // Spec 28.1 uses `padding: 0 16px`; the collapsed-rail row (28.5) is
@@ -183,7 +197,7 @@ export function ChatWindowHeader({
                         </Button>
                     )
                 )}
-                <AgentSwitcher currentAgentName={null} open={switcherOpen} onOpenChange={setSwitcherOpen}>
+                <AgentSwitcher currentAgentName={null} projectId={projectForSwitch} open={switcherOpen} onOpenChange={setSwitcherOpen}>
                     <button
                         type="button"
                         className="flex items-center gap-1 rounded-md -mx-1 px-1 text-sm font-semibold text-ink hover:bg-paper-deep"
@@ -236,7 +250,7 @@ export function ChatWindowHeader({
                 menu. Switching stays in the conversation; settings navigates away —
                 those two different outcomes never share a menu (see the overflow
                 menu below for the navigate-away actions). */}
-            <AgentSwitcher currentAgentName={agent.name} open={switcherOpen} onOpenChange={setSwitcherOpen}>
+            <AgentSwitcher currentAgentName={agent.name} projectId={projectForSwitch} open={switcherOpen} onOpenChange={setSwitcherOpen}>
                 <button
                     type="button"
                     className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-deep"
@@ -415,6 +429,10 @@ interface AgentSwitcherProps {
     /** Name (doctype id) of the agent currently active in this chat window,
      * or null when no conversation/agent has been resolved yet. */
     currentAgentName: string | null;
+    /** HUF Project the resulting new conversation should inherit (spec
+     * §9/§22: agent switching never mutates the open conversation, but a
+     * switch made from inside a Project must still land in that Project). */
+    projectId?: string | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     /** Trigger element the popover anchors to and opens from (wrapped `asChild`). */
@@ -469,6 +487,7 @@ function groupAgentsByProvider(agents: ChatAgentItem[]): AgentProviderGroup[] {
  */
 function AgentSwitcher({
     currentAgentName,
+    projectId,
     open,
     onOpenChange,
     children,
@@ -505,7 +524,9 @@ function AgentSwitcher({
 
     const handleSelect = (agentName: string) => {
         onOpenChange(false);
-        navigate(`/chat?agent=${encodeURIComponent(agentName)}`);
+        const query = new URLSearchParams({ agent: agentName });
+        if (projectId) query.set('project', projectId);
+        navigate(`/chat?${query.toString()}`);
     };
 
     const filteredAgents = useMemo(() => {

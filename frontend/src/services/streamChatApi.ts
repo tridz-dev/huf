@@ -93,6 +93,8 @@ export interface StreamAgentParams {
   skipUserMessage?: boolean;
   files?: StreamAgentFile[];
   modelOverride?: string;
+  /** HUF Project to associate a newly created conversation with, if any. */
+  project?: string;
   /**
    * User-triggered cancellation signal (e.g. a "Stop" button), distinct from
    * the internal 3s connectivity guard used elsewhere in this module.
@@ -106,7 +108,7 @@ export interface StreamAgentParams {
 export async function* streamAgentResponse(
   params: StreamAgentParams
 ): AsyncGenerator<StreamChunk, StreamChunk | undefined, unknown> {
-  const { agentName, message, conversationId, skipUserMessage, files, modelOverride, signal } = params;
+  const { agentName, message, conversationId, skipUserMessage, files, modelOverride, project, signal } = params;
   const url = `${frappeUrl}/huf/stream/${encodeURIComponent(agentName)}`;
 
   const body: Record<string, unknown> = {
@@ -126,6 +128,9 @@ export async function* streamAgentResponse(
   }
   if (modelOverride) {
     body.model_override = modelOverride;
+  }
+  if (project) {
+    body.project = project;
   }
 
   const res = await fetch(url, {
@@ -205,6 +210,8 @@ export async function sendMessage(
     skipUserMessage?: boolean;
     files?: StreamAgentFile[];
     modelOverride?: string;
+    /** HUF Project to associate a newly created conversation with, if any. */
+    project?: string;
   },
   options: SendMessageOptions
 ): Promise<ChatResult> {
@@ -227,6 +234,7 @@ export async function sendMessage(
         skipUserMessage: streamSkip,
         files: streamFiles,
         modelOverride: params.modelOverride,
+        project: params.project,
         signal,
       })) {
         if (chunk.type === 'delta' && chunk.full_response !== undefined) {
@@ -330,5 +338,6 @@ export async function sendMessage(
     skip_user_message: streamSkip,
     files: streamFiles,
     modelOverride: params.modelOverride,
+    project: params.project,
   }) as Promise<NewConversationResponse>;
 }

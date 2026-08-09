@@ -455,6 +455,24 @@ class AgentManager:
             if agent_has_document_tools(self.agent_doc):
                 instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
 
+        # Inject Project-level instructions, if the conversation is scoped to a
+        # HUF Project. This layer sits between the Agent's own instructions
+        # (plus all hardcoded scaffolding above) and the conversation-level /
+        # per-turn context assembled later in run_agent_sync / run_agent_stream.
+        # No project set -> no-op, instructions stay byte-for-byte unchanged.
+        if conversation_id:
+            try:
+                project = frappe.db.get_value("Agent Conversation", conversation_id, "project")
+                if project:
+                    project_instructions = frappe.db.get_value("HUF Project", project, "instructions")
+                    if project_instructions:
+                        instructions += "\n\n" + project_instructions
+            except Exception as e:
+                frappe.log_error(
+                    f"Error injecting project instructions: {str(e)}",
+                    "Project Instruction Error",
+                )
+
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
             top_p=self.agent_doc.top_p
@@ -944,6 +962,7 @@ def run_agent_sync(
     files=None,
     skip_user_message: bool = False,
     now=None,
+    project: str = None,
 ):
 
     if not agent_name:
@@ -982,12 +1001,14 @@ def run_agent_sync(
     if agent_doc.persist_conversation:
         conversation = conv_manager.get_or_create_conversation(
             title=f"Chat with {agent_name}",
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            project=project
         )
 
     else:
         conversation = conv_manager.create_new_conversation(
-            title=f"Chat with {agent_name}"
+            title=f"Chat with {agent_name}",
+            project=project
         )
 
     # if conversation.model:
@@ -2423,6 +2444,7 @@ async def run_agent_stream(
     prompt_cache_options=None,
     skip_user_message: bool = False,
     files=None,
+    project: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2500,12 +2522,14 @@ async def run_agent_stream(
 
         if create_new or not agent_doc.persist_conversation:
             conversation = conv_manager.create_new_conversation(
-                title=f"Streaming chat with {agent_name}"
+                title=f"Streaming chat with {agent_name}",
+                project=project
             )
         else:
             conversation = conv_manager.get_or_create_conversation(
                 title=f"Streaming chat with {agent_name}",
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                project=project
             )
 
         # Model Validation
