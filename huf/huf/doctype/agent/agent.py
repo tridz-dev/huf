@@ -122,6 +122,7 @@ class Agent(Document):
         self._validate_advanced_models()
         self._validate_skills()
         self._validate_starter_prompts()
+        self._validate_allowed_users_and_roles()
         self._update_mcp_tool_counts()
         self._ensure_publishable_key()
 
@@ -141,6 +142,59 @@ class Agent(Document):
             if row.skill in seen:
                 frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
             seen.add(row.skill)
+
+    def _validate_allowed_users_and_roles(self):
+        """Warn (without blocking the save) about dangling or disabled references
+        in the access allowlists.
+
+        Deliberately non-blocking: agents saved before this validation existed
+        may already carry a since-deleted User/Role in allowed_users/allowed_roles,
+        and an unrelated edit (e.g. fixing a typo in the prompt) must not become
+        unsaveable because of pre-existing dangling data. This surfaces the issue
+        to the admin instead of silently degrading the allowlist or hard-blocking.
+        """
+        missing_users = []
+        disabled_users = []
+        missing_roles = []
+
+        for row in self.get("allowed_users", []):
+            if not row.user:
+                continue
+            if not frappe.db.exists("User", row.user):
+                missing_users.append(row.user)
+            elif frappe.db.get_value("User", row.user, "enabled") == 0:
+                disabled_users.append(row.user)
+
+        for row in self.get("allowed_roles", []):
+            if not row.role:
+                continue
+            if not frappe.db.exists("Role", row.role):
+                missing_roles.append(row.role)
+
+        if missing_users:
+            frappe.msgprint(
+                _("The following allowed users no longer exist and will never match: {0}").format(
+                    ", ".join(missing_users)
+                ),
+                title=_("Dangling Allowed Users"),
+                indicator="orange",
+            )
+        if disabled_users:
+            frappe.msgprint(
+                _("The following allowed users are disabled and will not be able to access this agent: {0}").format(
+                    ", ".join(disabled_users)
+                ),
+                title=_("Disabled Users in Allowed Users"),
+                indicator="orange",
+            )
+        if missing_roles:
+            frappe.msgprint(
+                _("The following allowed roles no longer exist and will never match: {0}").format(
+                    ", ".join(missing_roles)
+                ),
+                title=_("Dangling Allowed Roles"),
+                indicator="orange",
+            )
 
     def _validate_starter_prompts(self):
         """Enforce a maximum of 3 starter prompts and required prompt text."""
@@ -511,6 +565,7 @@ class Agent(Document):
 
     
     def has_permission(self, permission_type=None, verbose=False):
+        from huf.ai.agent_access import check_agent_access
         from huf.permissions import has_capability
         user = frappe.session.user
 
@@ -521,30 +576,13 @@ class Agent(Document):
         # Strict Capability Checks for Mutating Actions
         if permission_type == "create":
             return has_capability(user, "agent.create")
-        
+
         if permission_type in ("write", "save"):
             return has_capability(user, "agent.edit")
 
         if permission_type == "delete":
             return has_capability(user, "agent.delete")
 
-        # Access/Read Permissions
-        if self.owner == user:
-            return True
-
-        # Fetch the restrictions from the child tables
-        allowed_users = [d.user for d in self.allowed_users]
-        allowed_roles = [d.role for d in self.allowed_roles]
-
-        # If both lists are empty, anyone can access (standard Huf behavior)
-        if not allowed_users and not allowed_roles:
-            return True
-
-        if user in allowed_users:
-            return True
-
-        my_roles = frappe.get_roles(user)
-        if set(my_roles).intersection(allowed_roles):
-            return True
-
-        return False
+        # Access/Read Permissions — delegated to the shared helper so this
+        # stays in sync with huf.ai.agent_integration's access checks.
+        return check_agent_access(self, user)

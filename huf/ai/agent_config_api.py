@@ -3,6 +3,31 @@
 The Agent DocType remains the canonical runtime aggregate. These endpoints
 only change the editor transport boundary: callers load and save one cohesive
 section at a time instead of round-tripping every field and child table.
+
+INTENTIONAL PERMISSION SPLIT: ``update_agent_section``'s write-permission gate
+(``agent_doc.check_permission("write")``, which for the Agent DocType routes
+through ``huf.permissions.has_capability(user, "agent.edit")``) is a
+deliberately separate axis from execution-time access control
+(``huf.ai.agent_access.check_agent_access`` / ``assert_agent_access``, which
+gates on ``allow_guest`` / ``allowed_users`` / ``allowed_roles``). Config-edit
+answers "who may build/configure agents" -- an authoring concern; execution
+access answers "who may run this specific agent" -- an audience concern. The
+two are not synchronized and are not meant to be: a user with the
+``agent.edit`` capability but excluded from an agent's ``allowed_users`` /
+``allowed_roles`` CANNOT run that agent, and conversely a user listed in
+``allowed_users`` without the ``agent.edit`` capability CANNOT modify the
+agent's configuration sections via ``update_agent_section``.
+
+Note the asymmetry: ``get_agent_section`` (read) is NOT capability-gated.
+``Agent.has_permission()`` routes "write"/"save"/"create"/"delete" through
+capability checks, but everything else (including "read") falls through to
+``check_agent_access`` -- the SAME allowlist check that governs execution.
+So a user in ``allowed_users`` (who can run the agent) can also read its
+configuration sections, even without ``agent.edit``; they just cannot save
+changes to them. This is deliberate, not an oversight -- it was reviewed and
+confirmed in the Agent Permissions audit
+(Tracks/AgentPermissionsAudit/AGENT_PERMISSIONS_AUDIT.md, finding F13, OQ7).
+Do not "fix" this by unifying the two checks.
 """
 
 from __future__ import annotations
@@ -40,6 +65,7 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"last_run",
 		"total_run",
 		"allow_chat",
+		"owner",
 	),
 	"behavior": (
 		"allow_chat",
@@ -110,6 +136,7 @@ READ_ONLY_FIELDS = {
 	"total_run",
 	"copied_from_prompt",
 	"copied_from_summary_prompt",
+	"owner",
 }
 
 

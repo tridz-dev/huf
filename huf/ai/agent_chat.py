@@ -12,6 +12,7 @@ logger = frappe.logger("huf")
 from huf.ai import audio_service
 from huf.ai import conversation_fork
 from huf.ai import sdk_tools
+from huf.ai.agent_access import assert_agent_access
 from huf.ai.agent_integration import _is_truthy, _resolve_effective_model, _run_async_safely, run_agent_sync
 from huf.ai.conversation_manager import ConversationManager
 
@@ -160,6 +161,9 @@ def upload_audio_and_transcribe_web(
     if not agent:
         frappe.throw(_("agent is required"))
 
+    agent_doc = frappe.get_doc("Agent", agent)
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
     # Ensure conversation exists (or create a new one)
     conv = None
     if conversation:
@@ -284,6 +288,15 @@ def get_history(conversation_id: str = None, limit: int = 200):
     if not conversation_id:
         return []
 
+    conv_doc = frappe.get_doc("Agent Conversation", conversation_id)
+
+    if conv_doc.owner != frappe.session.user and "System Manager" not in frappe.get_roles():
+        # Conversation history is per-user private data: being allowed to run the
+        # agent (e.g. an unrestricted agent with empty allowlists) is NOT enough
+        # to read someone else's conversation with it. Only the conversation's
+        # owner or a System Manager may read it.
+        frappe.throw(_("You do not have access to this conversation."), frappe.PermissionError)
+
     messages = frappe.get_all(
         "Agent Message",
         filters={"conversation": conversation_id},
@@ -366,6 +379,9 @@ def create_conversation(agent: str, channel: str = "Chat", project: str | None =
     if not agent:
         frappe.throw(_("agent is required"))
 
+    agent_doc = frappe.get_doc("Agent", agent)
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
     try:
         cm = ConversationManager(agent_name=agent, channel=channel)
         conversation = cm.create_new_conversation(project=project)
@@ -401,6 +417,7 @@ def set_conversation_model_override(conversation: str, model_override: str | Non
         frappe.throw(_("Conversation has no agent set"))
 
     agent_doc = frappe.get_doc("Agent", agent_name)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     if model_override:
         _resolve_effective_model(agent_doc, model=model_override)
@@ -630,6 +647,7 @@ def upload_file_and_process_web(
         frappe.throw(_("agent is required"))
 
     agent_doc = frappe.get_doc("Agent", agent)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     if not agent_doc.get("allow_file_upload"):
         return {"success": False, "error": _("File uploads are disabled for this agent.")}
@@ -818,6 +836,9 @@ def upload_file_attachment_web(filename: str, b64data: str, agent: str, model_ov
     """Stage a chat attachment upload. Saves the file and returns file_id without OCR or agent run."""
     if not b64data or not filename:
         frappe.throw(_("Filename and file data are required"))
+
+    agent_doc = frappe.get_doc("Agent", agent)
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     if "," in b64data:
         b64data = b64data.split(",", 1)[1]
@@ -1068,6 +1089,15 @@ def add_message(
     try:
         conv_doc = frappe.get_doc("Agent Conversation", conversation_id)
         agent_name = conv_doc.agent
+
+        if conv_doc.owner != frappe.session.user and "System Manager" not in frappe.get_roles():
+            # Writing into someone else's conversation is not a "can I run this
+            # agent" question -- being allowed to run an unrestricted agent must
+            # not let another user inject messages into your private thread.
+            frappe.throw(_("You do not have access to this conversation."), frappe.PermissionError)
+
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        assert_agent_access(agent_doc, user=frappe.session.user)
 
         cm = ConversationManager(agent_name=agent_name)
         provider = frappe.db.get_value("Agent", agent_name, "provider")

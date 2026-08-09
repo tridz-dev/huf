@@ -77,6 +77,11 @@ def fork_conversation_impl(
         frappe.throw(_("Source conversation has no agent"))
 
     agent_doc = frappe.get_doc("Agent", agent_name)
+
+    from huf.ai.agent_access import assert_agent_access
+
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
     provider = agent_doc.provider
     model = source.model or agent_doc.model
 

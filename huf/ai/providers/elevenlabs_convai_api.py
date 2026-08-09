@@ -171,6 +171,18 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
         )
         return {"status": "error", "message": "Internal Agent not found"}
 
+    from huf.ai.agent_access import assert_agent_access
+
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    try:
+        assert_agent_access(agent_doc, user="Guest")
+    except frappe.PermissionError:
+        frappe.log_error(
+            f"Agent '{agent_name}' does not allow guest access; rejecting ElevenLabs webhook",
+            "Huf Webhook",
+        )
+        return {"status": "error", "message": "Agent not accessible"}
+
     model = frappe.db.get_value("Agent", agent_name, "model")
 
     conversation_id = data.get("conversation_id")
