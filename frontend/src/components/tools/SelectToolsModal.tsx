@@ -39,16 +39,17 @@ import { cn } from '@/lib/utils';
 const UNCATEGORIZED_GROUP = '__uncategorized__';
 const UNCATEGORIZED_LABEL = 'Other Tools';
 
-// Capability titles are usually already human-readable (e.g. "Send Email").
-// Only reach for snake_case/kebab-case normalization when the title looks
-// machine-generated (no spaces, no internal case change).
-function humanizeCapabilityTitle(title: string): string {
-  const trimmed = title.trim();
-  if (!trimmed) return trimmed;
-  if (/\s/.test(trimmed) || /[a-z][A-Z]/.test(trimmed)) return trimmed;
-  return trimmed
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+// `tool_name` is validated server-side (AgentToolFunction.validate_tool_name)
+// against /^[a-zA-Z0-9_-]{1,128}$/ - spaces are rejected. Capability titles can
+// be free text ("Send Email") or already identifier-shaped ("send_email"), so
+// normalize into a valid identifier instead of a human-readable label.
+function toToolNameSlug(title: string): string {
+  return title
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^[_-]+|[_-]+$/g, '')
+    .slice(0, 128);
 }
 
 interface SelectToolsModalProps {
@@ -524,7 +525,7 @@ export function SelectToolsModal({
     setDiscoverInitialData({
       types: 'Custom Function',
       function_path: capability.function_path,
-      tool_name: humanizeCapabilityTitle(capability.title),
+      tool_name: toToolNameSlug(capability.title),
       description: capability.description || capability.short_description || '',
     });
     // handleFormSubmit requires selectedTemplate to be set — reuse the
