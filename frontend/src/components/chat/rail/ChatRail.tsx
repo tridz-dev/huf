@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/services/chatApi';
 import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
+import { getProject, getPinnedConversations } from '@/services/projectApi';
 import { ChatRailToolbar } from './ChatRailToolbar';
 import { ChatRailNav } from './ChatRailNav';
 import { ChatRailHistory } from './ChatRailHistory';
@@ -14,19 +15,27 @@ import {
   type ConversationTitleUpdatedDetail,
   useConversationTitleSwitchFallback,
 } from '../useConversationTitleFallback';
+import type { ChatRailScope } from './chatRailScope';
 
 export interface ChatRailProps {
   onToggleRail: () => void;
   className?: string;
 }
 
+// Matches the (not-yet-routed) /chat/projects/:projectId project landing
+// page. Kept separate from the static /chat/projects list route, which has
+// no trailing segment and stays in global scope.
+const PROJECT_ROUTE_PATTERN = /^\/chat\/projects\/([^/]+)$/;
+
 export function ChatRail({ onToggleRail, className }: ChatRailProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const selectedChatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
 
   const [animatingConversationId, setAnimatingConversationId] = useState<string | null>(null);
   const [selectedConversationTitle, setSelectedConversationTitle] = useState<string | null>(null);
+  const [selectedConversationProject, setSelectedConversationProject] = useState<string | null>(null);
   const [selectedAutonamingEnabled, setSelectedAutonamingEnabled] = useState(false);
 
   // Fork dialog state
@@ -73,6 +82,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
   useEffect(() => {
     if (!selectedChatId) {
       setSelectedConversationTitle(null);
+      setSelectedConversationProject(null);
       setSelectedAutonamingEnabled(false);
       return;
     }
@@ -86,6 +96,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
         if (cancelled || !conversationDoc) return;
 
         setSelectedConversationTitle(conversationDoc.title ?? null);
+        setSelectedConversationProject(conversationDoc.project ?? null);
 
         if (conversationDoc.agent) {
           const agentData = await getAgent(conversationDoc.agent);
@@ -104,6 +115,84 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
       cancelled = true;
     };
   }, [selectedChatId]);
+
+  // Sidebar scope, derived from the route alone (never separate client
+  // state, so it can't drift): the /chat/projects/:projectId landing page
+  // scopes directly, and /chat/:conversationId scopes via that
+  // conversation's `project` field once it loads.
+  const directProjectId = useMemo(() => {
+    const match = PROJECT_ROUTE_PATTERN.exec(location.pathname);
+    return match ? decodeURIComponent(match[1]) : null;
+  }, [location.pathname]);
+
+  const effectiveProjectId = directProjectId ?? (selectedChatId ? selectedConversationProject : null);
+
+  const [scope, setScope] = useState<ChatRailScope>({ kind: 'global' });
+
+  useEffect(() => {
+    if (!effectiveProjectId) {
+      setScope({ kind: 'global' });
+      return;
+    }
+
+    let cancelled = false;
+    const projectId = effectiveProjectId;
+
+    async function loadProjectScope() {
+      const project = await getProject(projectId);
+      if (cancelled) return;
+      setScope(
+        project
+          ? { kind: 'project', projectId: project.name, projectName: project.project_name }
+          : { kind: 'global' }
+      );
+    }
+
+    void loadProjectScope();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveProjectId]);
+
+  const scopeProjectId = scope.kind === 'project' ? scope.projectId : undefined;
+
+  // Pinned conversations for the current scope - unfiltered globally, or
+  // scoped to the active project's pins when the rail is project-scoped.
+  const [pinnedChats, setPinnedChats] = useState<ChatListItem[]>([]);
+
+  // Bumped whenever a row's menu pins/unpins a conversation, so the
+  // pinned-chats fetch effect below re-runs even though scopeProjectId
+  // hasn't changed.
+  const [pinVersion, setPinVersion] = useState(0);
+
+  const handlePinChange = useCallback(() => {
+    setPinVersion((version) => version + 1);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPinnedChats() {
+      const pins = await getPinnedConversations(scopeProjectId);
+      if (cancelled) return;
+      setPinnedChats(
+        pins.map((pin) => ({
+          id: pin.name,
+          title: pin.title || 'Untitled Chat',
+          agent: pin.agent || '',
+          timestamp: pin.last_activity,
+          project: pin.project,
+        }))
+      );
+    }
+
+    void loadPinnedChats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeProjectId, pinVersion]);
 
   useConversationTitleSwitchFallback({
     conversationId: selectedChatId,
@@ -212,14 +301,17 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
     <>
       <aside className={cn('flex h-full w-chat-rail flex-none flex-col border-r border-line bg-paper', className)}>
         <ChatRailToolbar onToggleRail={onToggleRail} />
-        <ChatRailNav />
+        <ChatRailNav scope={scope} />
         <ChatRailHistory
           selectedChatId={selectedChatId}
+          pinnedChats={pinnedChats}
+          project={scopeProjectId}
           onRename={handleRename}
           onFork={handleFork}
           titleRefs={titleRefs}
           animatingConversationId={animatingConversationId}
           onAddItemReady={handleAddItemReady}
+          onPinChange={handlePinChange}
         />
         <ChatRailFooter />
       </aside>

@@ -47,7 +47,9 @@
   "trigger_reference_section",
   "reference_doctype",
   "column_break_hbrm",
-  "reference_name"
+  "reference_name",
+  "automation",
+  "automation_trigger"
  ],
  "fields": [
   {
@@ -261,6 +263,20 @@
    "fieldtype": "Dynamic Link",
    "label": "Reference Name",
    "options": "reference_doctype",
+   "read_only": 1
+  },
+  {
+   "fieldname": "automation",
+   "fieldtype": "Link",
+   "label": "Automation",
+   "options": "Automation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "automation_trigger",
+   "fieldtype": "Link",
+   "label": "Automation Trigger",
+   "options": "Automation Trigger",
    "read_only": 1
   },
   {

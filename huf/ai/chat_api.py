@@ -42,6 +42,7 @@ def run_agent_sync_chat(
     invoked_by_agent: str = None,
     prompt_cache_options=None,
     now=None,
+    project: str = None,
 ):
     """Sync chat API with explicit new-conversation support.
 
@@ -78,7 +79,8 @@ def run_agent_sync_chat(
             external_id=external_id,
         )
         conversation = conv_manager.create_new_conversation(
-            title=f"Chat with {agent_name}"
+            title=f"Chat with {agent_name}",
+            project=project,
         )
         conversation_id = conversation.name
 
@@ -102,4 +104,5 @@ def run_agent_sync_chat(
         invoked_by_agent=invoked_by_agent,
         prompt_cache_options=prompt_cache_options,
         now=now,
+        project=project,
     )

@@ -61,6 +61,10 @@ export function ChatMessageList({
     const [searchParams] = useSearchParams();
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
     const isNewChat = !chatId;
+    // HUF Project a not-yet-created conversation should be created into.
+    // Only meaningful before the first message - once `chatId` exists the
+    // conversation's own `project` is authoritative (see ChatWindowHeader).
+    const newConversationProject = isNewChat ? searchParams.get('project') : null;
 
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
@@ -476,6 +480,7 @@ export function ChatMessageList({
                 chatId={chatId}
                 agentName={agentName}
                 agentModel={agentModel}
+                project={newConversationProject ?? undefined}
                 onConversationCreated={onConversationCreated}
                 onStatusChange={setStatus}
                 onLoadingTypeChange={setLoadingType}

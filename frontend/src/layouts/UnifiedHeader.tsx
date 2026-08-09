@@ -112,6 +112,8 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
     if (path.startsWith('/prompts')) return 'Prompts';
     if (path.startsWith('/summary-prompts')) return 'Prompts';
     if (path.startsWith('/members')) return 'Members';
+    if (path.startsWith('/users')) return 'Users';
+    if (path.startsWith('/roles')) return 'Roles';
     if (path.startsWith('/models')) return 'AI providers & models';
     if (path.startsWith('/execution-profiles')) return 'Code execution';
     if (path.startsWith('/ssh-connections')) return 'SSH connections';

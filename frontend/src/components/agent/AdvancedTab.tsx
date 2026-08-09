@@ -837,7 +837,7 @@ This includes whether each tool call is completed and its corresponding result.`
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Model Modality Settings"
+				title="Model modality settings"
 				description="Optional: select a dedicated model for image generation."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">

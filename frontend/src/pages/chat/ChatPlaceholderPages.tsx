@@ -1,32 +1,14 @@
-// Placeholder destination pages for spec section 28's chat rail rows.
-// Projects and Scheduled have no backing schema yet; these exist so no rail row
-// is a dead control that navigates nowhere.
+// Placeholder destination pages for spec section 28 chat rail rows.
+// Scheduled has no backing schema yet; Artifacts has a real global feed
+// (see A9+) that has not landed here yet either. These exist so no rail
+// row is a dead control that navigates nowhere.
+// (ChatProjectsPage moved to its own file - ./ChatProjectsPage.tsx - once
+// it grew beyond a placeholder; see A7.)
 
 import { useNavigate } from 'react-router-dom';
-import { Folder, FileText, Clock } from 'lucide-react';
+import { FileText, Clock } from 'lucide-react';
 import { EmptyState } from '@/components/dashboard/views/EmptyState';
 import { ChatShellFrame } from '@/components/chat/rail/ChatShellFrame';
-
-export function ChatProjectsPage() {
-  const navigate = useNavigate();
-
-  return (
-    <ChatShellFrame>
-      <div className="flex h-full w-full items-center justify-center">
-        <EmptyState
-          variant="passive"
-          icon={Folder}
-          title="No projects yet"
-          description="Projects group related conversations so they share context and files."
-          secondaryAction={{
-            label: 'Start a chat',
-            onClick: () => navigate('/chat/new'),
-          }}
-        />
-      </div>
-    </ChatShellFrame>
-  );
-}
 
 export function ChatArtifactsPage() {
   const navigate = useNavigate();

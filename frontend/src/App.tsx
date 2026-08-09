@@ -44,8 +44,9 @@ const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
 const ChatProjectsPage = lazy(() =>
-  import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatProjectsPage }))
+  import('./pages/chat/ChatProjectsPage').then((m) => ({ default: m.ChatProjectsPage }))
 );
+const ChatProjectPage = lazy(() => import('./pages/chat/ChatProjectPage'));
 const ChatArtifactsPage = lazy(() =>
   import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatArtifactsPage }))
 );
@@ -413,6 +414,18 @@ function AppShell() {
                 <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatProjectsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/projects/:projectId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatProjectPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

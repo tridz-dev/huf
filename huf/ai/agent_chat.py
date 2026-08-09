@@ -361,14 +361,14 @@ def render_markdown(content: str = "") -> str:
 
 
 @frappe.whitelist()
-def create_conversation(agent: str, channel: str = "Chat"):
+def create_conversation(agent: str, channel: str = "Chat", project: str | None = None):
     """Create a new Agent Conversation without running the agent."""
     if not agent:
         frappe.throw(_("agent is required"))
 
     try:
         cm = ConversationManager(agent_name=agent, channel=channel)
-        conversation = cm.create_new_conversation()
+        conversation = cm.create_new_conversation(project=project)
         return {
             "success": True,
             "conversation_id": conversation.name,
@@ -416,10 +416,10 @@ def set_conversation_model_override(conversation: str, model_override: str | Non
 
 
 @frappe.whitelist()
-def fork_conversation(conversation_id: str, mode: str, title: str | None = None):
+def fork_conversation(conversation_id: str, mode: str, title: str | None = None, project: str | None = None):
     """Fork an existing Agent Conversation into a new one."""
     try:
-        return conversation_fork.fork_conversation_impl(conversation_id, mode, title)
+        return conversation_fork.fork_conversation_impl(conversation_id, mode, title, project=project)
     except Exception:  # boundary exception handler: API endpoint
         frappe.log_error(
             message=f"fork_conversation error: {frappe.get_traceback()}",
@@ -429,7 +429,7 @@ def fork_conversation(conversation_id: str, mode: str, title: str | None = None)
 
 
 @frappe.whitelist()
-def new_conversation(agent: str, message: str, skip_user_message=0, files=None, model_override: str | None = None):
+def new_conversation(agent: str, message: str, skip_user_message=0, files=None, model_override: str | None = None, project: str | None = None):
 
     if not agent:
         frappe.throw(_("agent is required"))
@@ -438,7 +438,7 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None, 
 
     try:
         cm = ConversationManager(agent_name=agent, channel="Chat")
-        conversation = cm.create_new_conversation()
+        conversation = cm.create_new_conversation(project=project)
 
         effective_model = model_override if model_override else frappe.db.get_value("Agent", agent, "model")
 

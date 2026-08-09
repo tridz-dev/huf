@@ -14,6 +14,7 @@
   "model",
   "column_break_9v4t",
   "is_active",
+  "project",
   "session_id",
   "created_at",
   "last_activity",
@@ -160,6 +161,14 @@
    "label": "Total Cost",
    "precision": "6",
    "read_only": 1
+  },
+  {
+   "description": "The HUF Project this conversation is associated with.",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "HUF Project",
+   "search_index": 1
   },
   {
    "description": "Unique identifier for the session, often linked to a browser session or API client.",

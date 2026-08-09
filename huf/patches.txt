@@ -18,3 +18,6 @@ huf.patches.v1.sync_data_table_permissions
 huf.patches.v1.add_frappe_cloud_service
 huf.patches.v1.backfill_tool_service_links
 huf.patches.v1.backfill_conversation_lifecycle_defaults
+
+huf.patches.v1.add_conversation_pin_indexes
+huf.patches.v1.migrate_agent_triggers_to_automations
