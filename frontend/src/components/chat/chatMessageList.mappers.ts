@@ -69,6 +69,26 @@ function safeStringify(value: unknown): string {
   }
 }
 
+/** Terminal states where a tool's elapsed run time can be finalized. */
+const TOOL_TERMINAL_STATES = new Set<ToolUIPart['state']>(['output-available', 'output-error']);
+
+/**
+ * Frontend-only approximation of tool duration: stamps `startedAt` the first time a tool
+ * reaches "input-available" (running), then derives `durationMs` once it reaches a terminal
+ * state. Not exact server timing, but close enough for a lightweight footnote display.
+ */
+function computeToolTiming(
+  existing: { startedAt?: number; durationMs?: number } | undefined,
+  newStatus: ToolUIPart['state']
+): { startedAt?: number; durationMs?: number } {
+  const startedAt = existing?.startedAt ?? (newStatus === 'input-available' ? Date.now() : undefined);
+  let durationMs = existing?.durationMs;
+  if (durationMs === undefined && TOOL_TERMINAL_STATES.has(newStatus) && startedAt !== undefined) {
+    durationMs = Math.max(0, Date.now() - startedAt);
+  }
+  return { startedAt, durationMs };
+}
+
 export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCallEvent | Record<string, unknown>): MessageType[] {
   const event = normalizeToolCallEvent(
     typeof rawEvent?.type === 'string' ? (rawEvent as Record<string, unknown>) : (rawEvent as Record<string, unknown>)
@@ -80,16 +100,7 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
 
   const parsedArgs = safeParseJsonRecord(event.tool_args);
   const parsedResult = event.tool_result ? safeStringify(event.tool_result) : undefined;
-
-  const updatedTool = {
-    tool_call_id: event.tool_call_id,
-    name: displayName,
-    description: displayName,
-    status: mapToolStatusToState(event.tool_status) as ToolUIPart['state'],
-    parameters: parsedArgs,
-    result: event.tool_status === 'Completed' ? parsedResult : undefined,
-    error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
-  };
+  const newStatus = mapToolStatusToState(event.tool_status) as ToolUIPart['state'];
 
   // Find message: 1) by agent_run_id, 2) by tool_call_id in any message's tools
   let messageIndex = event.agent_run_id
@@ -114,6 +125,21 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
       );
     }
 
+    const existingTool = toolIndex >= 0 ? existingTools[toolIndex] : undefined;
+    const { startedAt, durationMs } = computeToolTiming(existingTool, newStatus);
+
+    const updatedTool = {
+      tool_call_id: event.tool_call_id,
+      name: displayName,
+      description: displayName,
+      status: newStatus,
+      parameters: parsedArgs,
+      result: event.tool_status === 'Completed' ? parsedResult : undefined,
+      error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
+      startedAt,
+      durationMs,
+    };
+
     const updatedTools = [...existingTools];
     if (toolIndex >= 0) updatedTools[toolIndex] = updatedTool;
     else updatedTools.push(updatedTool);
@@ -131,6 +157,19 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
 
   // Don't create new message if we have no agent_run_id (completed event without started)
   if (!event.agent_run_id) return prev;
+
+  const { startedAt, durationMs } = computeToolTiming(undefined, newStatus);
+  const updatedTool = {
+    tool_call_id: event.tool_call_id,
+    name: displayName,
+    description: displayName,
+    status: newStatus,
+    parameters: parsedArgs,
+    result: event.tool_status === 'Completed' ? parsedResult : undefined,
+    error: event.tool_status === 'Failed' ? (event.error || parsedResult) : undefined,
+    startedAt,
+    durationMs,
+  };
 
   const isImageGeneration = event.tool_name === 'generate_image' && event.type === 'tool_call_started';
   const newMessage: MessageType = {
@@ -500,6 +539,40 @@ export function mergePendingRunsIntoMessages(
   return result;
 }
 
+/**
+ * Collapse consecutive "tool-only" messages (persisted as one Agent Message
+ * per tool call, kind "Tool Result") that share an agent_run_id into a
+ * single message with a combined `tools[]` array — matching how the live
+ * socket path already accumulates a run's tool calls onto one message (see
+ * upsertToolUpdateFromSocket above). Without this, reloading a conversation
+ * from history renders one bubble per tool call instead of one per run.
+ */
+function mergeToolCallGroups(messages: MessageType[]): MessageType[] {
+  const grouped: MessageType[] = [];
+  const groupIndexByRun = new Map<string, number>();
+
+  for (const msg of messages) {
+    const isToolOnly = !!msg.tools?.length &&
+      (!msg.versions[0]?.content || msg.versions[0].content.trim() === '');
+
+    if (isToolOnly && msg.agentRunId) {
+      const existingIndex = groupIndexByRun.get(msg.agentRunId);
+      if (existingIndex !== undefined) {
+        const existing = grouped[existingIndex];
+        const toolMap = new Map((existing.tools || []).map((t) => [t.tool_call_id, t]));
+        msg.tools!.forEach((t) => toolMap.set(t.tool_call_id, t));
+        grouped[existingIndex] = { ...existing, tools: Array.from(toolMap.values()) };
+        continue;
+      }
+      groupIndexByRun.set(msg.agentRunId, grouped.length);
+    }
+
+    grouped.push(msg);
+  }
+
+  return grouped;
+}
+
 export function mergeConversationItemsIntoMessages(
   prev: MessageType[],
   conversationItems: ChatMessage[],
@@ -607,5 +680,5 @@ export function mergeConversationItemsIntoMessages(
     ? prev.filter((msg) => !apiMessageIds.has(msg.key))
     : prev.filter(shouldPreserveTempMessage);
 
-  return [...mapped, ...remainingTempMessages];
+  return [...mergeToolCallGroups(mapped), ...remainingTempMessages];
 }

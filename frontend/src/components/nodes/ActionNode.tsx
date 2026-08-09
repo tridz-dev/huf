@@ -11,7 +11,6 @@ import {
   Webhook,
   FileText,
   Calendar,
-  Plus,
   Bot,
   Wrench,
   Trash2,
@@ -40,17 +39,15 @@ const iconMap: Record<string, LucideIcon> = {
   Wrench
 };
 
-interface ActionNodeProps extends NodeProps<FlowNodeData> {
-  onAddNode?: (sourceNodeId: string) => void;
-}
+type ActionNodeProps = NodeProps<FlowNodeData>;
 
-export const ActionNode = memo(({ id, data, selected, onAddNode }: ActionNodeProps) => {
+export const ActionNode = memo(({ id, data, selected }: ActionNodeProps) => {
   const { deleteNode } = useFlowContext();
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Play;
   const statusClasses = getExecutionStatusClasses(data.status, selected);
 
   return (
-    <div className="relative group">
+    <div className="relative">
       <Handle
         type="target"
         position={Position.Top}
@@ -100,19 +97,6 @@ export const ActionNode = memo(({ id, data, selected, onAddNode }: ActionNodePro
         position={Position.Bottom}
         className={NODE_HANDLE}
       />
-      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="default"
-          size="icon"
-          className="h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddNode?.(id);
-          }}
-        >
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
     </div>
   );
 });

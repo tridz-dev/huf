@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
 import { BarChart2, BrainIcon, ChevronDownIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, ToolGroup } from '@/components/ai-elements/tool';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import type { ToolUIPart } from 'ai';
+import { HubAskUser, splitAskUserBlocks } from '../hub/HubAskUser';
 import { MessageActions } from './MessageActions';
 import { MessageLoadingState } from './MessageLoadingState';
 import { ChatErrorCard } from './ChatErrorCard';
@@ -55,6 +57,8 @@ interface ChatMessageProps {
     precedingUserMessage?: string;
     /** Re-runs a prior user turn (regenerate / retry). Appends a new turn rather than mutating history. */
     onRegenerate?: (userContent: string) => void;
+    /** Sends text as a new user message — wired to the ask-user "answer" buttons. */
+    onSendText?: (text: string) => void;
 }
 
 export function ChatMessage({
@@ -67,6 +71,7 @@ export function ChatMessage({
     scrollToBottomAfterPaint,
     precedingUserMessage,
     onRegenerate,
+    onSendText,
 }: ChatMessageProps) {
     const isUser = message.from === 'user';
     const isAssistant = message.from === 'assistant';
@@ -79,6 +84,21 @@ export function ChatMessage({
     const handleRegenerate = precedingUserMessage && onRegenerate
         ? () => onRegenerate(precedingUserMessage)
         : undefined;
+
+    // TODO(tool-call-approval-api): there is no backend/socket endpoint yet to
+    // approve or deny a pending tool call (only flow-run-level approvals exist,
+    // see ApprovalsBell.tsx / flowApi.ts). These are UI-only stubs so the
+    // "approval-requested" state is visually complete; wire them to a real
+    // call/agent-run approve-deny endpoint once one exists.
+    const handleToolCallApprove = (toolCallId: string) => {
+        console.warn('tool-call approval API not yet implemented', { toolCallId });
+        toast.info("Approving tool calls isn't wired up yet.");
+    };
+
+    const handleToolCallDeny = (toolCallId: string) => {
+        console.warn('tool-call approval API not yet implemented', { toolCallId });
+        toast.info("Denying tool calls isn't wired up yet.");
+    };
 
     const showLoading = isAssistant && !message.error && (
         ((status === 'submitted' || status === 'streaming') && isEmpty) ||
@@ -105,22 +125,42 @@ export function ChatMessage({
         <div className={cn("flex flex-col group relative", isUser ? "self-end" : "self-start w-full")}>
             {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
                 <div className="flex w-full max-w-chat-measure flex-col gap-2">
-                    {message.tools.map((tool, toolIndex) => (
-                        <Tool key={`${message.key}-tool-${toolIndex}`}>
+                    {message.tools.length > 1 ? (
+                        <ToolGroup
+                            calls={message.tools.map((tool) => ({
+                                callId: tool.tool_call_id,
+                                name: tool.name,
+                                state: tool.status,
+                                input: tool.parameters,
+                                output: tool.result,
+                                errorText: tool.error,
+                                durationMs: tool.durationMs,
+                            }))}
+                            runStatus={message.runStatus}
+                            isHistorical={!message.runStatus}
+                            onApprove={handleToolCallApprove}
+                            onDeny={handleToolCallDeny}
+                        />
+                    ) : (
+                        <Tool key={`${message.key}-tool-0`}>
                             <ToolHeader
-                                title={tool.name}
-                                type={`tool-${tool.name}` as ToolUIPart['type']}
-                                state={tool.status}
+                                title={message.tools[0].name}
+                                type={`tool-${message.tools[0].name}` as ToolUIPart['type']}
+                                state={message.tools[0].status}
+                                durationMs={message.tools[0].durationMs}
+                                onRetry={handleRegenerate}
+                                onApprove={() => handleToolCallApprove(message.tools![0].tool_call_id)}
+                                onDeny={() => handleToolCallDeny(message.tools![0].tool_call_id)}
                             />
                             <ToolContent>
-                                <ToolInput input={tool.parameters} />
+                                <ToolInput input={message.tools[0].parameters} />
                                 <ToolOutput
-                                    output={tool.result}
-                                    errorText={tool.error}
+                                    output={message.tools[0].result}
+                                    errorText={message.tools[0].error}
                                 />
                             </ToolContent>
                         </Tool>
-                    ))}
+                    )}
                 </div>
             ) : (
                     <Message from={message.from} className={cn(isUser && "!ml-0 max-w-[68%]", !isUser && "!max-w-full")}>
@@ -253,10 +293,36 @@ export function ChatMessage({
                                             className="mb-2 max-w-sm"
                                         />
                                     )}
-                                    <MessageContentWithArtifacts
-                                        content={message.versions[0]?.content || ''}
-                                        messageId={message.versions[0]?.id ?? message.key}
-                                    />
+                                    {isAssistant ? (() => {
+                                        // Extract fenced ```ask-user blocks (from the ask_user tool) so any
+                                        // agent with it attached renders the interactive question widget,
+                                        // not raw fenced markdown — same parsing HubConversationView uses.
+                                        const { text, blocks } = splitAskUserBlocks(message.versions[0]?.content || '');
+                                        return (
+                                            <>
+                                                {text && (
+                                                    <MessageContentWithArtifacts
+                                                        content={text}
+                                                        messageId={message.versions[0]?.id ?? message.key}
+                                                    />
+                                                )}
+                                                {blocks.map((block, blockIndex) => (
+                                                    <HubAskUser
+                                                        key={`${message.key}-ask-${blockIndex}`}
+                                                        payload={block}
+                                                        onSubmit={(answer) =>
+                                                            onSendText?.(`Regarding "${block.question}": ${answer}`)
+                                                        }
+                                                    />
+                                                ))}
+                                            </>
+                                        );
+                                    })() : (
+                                        <MessageContentWithArtifacts
+                                            content={message.versions[0]?.content || ''}
+                                            messageId={message.versions[0]?.id ?? message.key}
+                                        />
+                                    )}
                                 </>
                             )}
                         </MessageContent>

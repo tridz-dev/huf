@@ -174,6 +174,9 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
       agent.execution_shared_dir_limit_mb ? agent.execution_shared_dir_limit_mb : undefined,
     allow_ssh: agent.allow_ssh === 1,
     ssh_connections: (agent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+    allow_ask_user: agent.allow_ask_user === 1,
+    allow_rich_elements: agent.allow_rich_elements === 1,
+    allow_document_artifacts: agent.allow_document_artifacts === 1,
   };
 }
 
@@ -287,6 +290,9 @@ export function AgentFormPage() {
         'execution_shared_dir_limit_mb',
         'allow_ssh',
         'ssh_connections',
+        'allow_ask_user',
+        'allow_rich_elements',
+        'allow_document_artifacts',
       ],
       default: false,
       disabled: false,
@@ -458,6 +464,9 @@ export function AgentFormPage() {
         execution_shared_dir_limit_mb: undefined,
         allow_ssh: false,
         ssh_connections: [],
+        allow_ask_user: false,
+        allow_rich_elements: false,
+        allow_document_artifacts: false,
         agent_skill: [],
       },
   });
@@ -1264,6 +1273,9 @@ export function AgentFormPage() {
                 : undefined,
             allow_ssh: data.allow_ssh === 1,
             ssh_connections: (data.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+            allow_ask_user: data.allow_ask_user === 1,
+            allow_rich_elements: data.allow_rich_elements === 1,
+            allow_document_artifacts: data.allow_document_artifacts === 1,
             agent_skill: [],
           });
         }
@@ -1581,6 +1593,9 @@ export function AgentFormPage() {
         ssh_connections: (values.ssh_connections || []).map((connectionName) => ({
           ssh_connection: connectionName,
         })),
+        allow_ask_user: values.allow_ask_user ? 1 : 0,
+        allow_rich_elements: values.allow_rich_elements ? 1 : 0,
+        allow_document_artifacts: values.allow_document_artifacts ? 1 : 0,
         // Include tools - Frappe child table format: array of objects with 'tool' field pointing to Agent Tool Function name
         agent_tool: selectedTools.map((tool) => ({
           tool: tool.name,
@@ -1776,6 +1791,9 @@ export function AgentFormPage() {
               : undefined,
           allow_ssh: newAgent.allow_ssh === 1,
           ssh_connections: (newAgent.ssh_connections || []).map((row) => row.ssh_connection).filter(Boolean),
+          allow_ask_user: newAgent.allow_ask_user === 1,
+          allow_rich_elements: newAgent.allow_rich_elements === 1,
+          allow_document_artifacts: newAgent.allow_document_artifacts === 1,
           agent_skill: [],
         });
         setInitialDisabled(newAgent.disabled === 1);

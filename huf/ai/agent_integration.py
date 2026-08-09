@@ -116,7 +116,7 @@ class AgentManager:
 
         try:
             from huf.ai.sdk_tools import create_agent_tools
-            agent_tools = create_agent_tools(self.agent_doc)
+            agent_tools = create_agent_tools(self.agent_doc, model_name=self.effective_model)
             if agent_tools:
                 self.tools.extend(agent_tools)
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
@@ -433,27 +433,31 @@ class AgentManager:
                     frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         if self.agent_doc.allow_chat:
-            from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
-            from huf.ai.artifact_instructions import (
-                AI_ELEMENT_INSTRUCTIONS,
-                MEDIA_ELEMENT_INSTRUCTIONS,
-                agent_has_media_tools,
-            )
+            from huf.ai.capabilities import capability_enabled
 
-            instructions += CHART_ARTIFACT_INSTRUCTIONS
-            instructions += AI_ELEMENT_INSTRUCTIONS
-            if agent_has_media_tools(self.agent_doc):
-                instructions += MEDIA_ELEMENT_INSTRUCTIONS
+            if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
+                from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+                from huf.ai.artifact_instructions import (
+                    AI_ELEMENT_INSTRUCTIONS,
+                    MEDIA_ELEMENT_INSTRUCTIONS,
+                    agent_has_media_tools,
+                )
 
-            from huf.ai.document_artifact_instructions import (
-                DOCUMENT_ARTIFACT_INSTRUCTIONS,
-                DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
-                agent_has_document_tools,
-            )
+                instructions += CHART_ARTIFACT_INSTRUCTIONS
+                instructions += AI_ELEMENT_INSTRUCTIONS
+                if agent_has_media_tools(self.agent_doc):
+                    instructions += MEDIA_ELEMENT_INSTRUCTIONS
 
-            instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
-            if agent_has_document_tools(self.agent_doc):
-                instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
+            if capability_enabled(self.agent_doc, self.effective_model, "document_artifacts"):
+                from huf.ai.document_artifact_instructions import (
+                    DOCUMENT_ARTIFACT_INSTRUCTIONS,
+                    DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
+                    agent_has_document_tools,
+                )
+
+                instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
+                if agent_has_document_tools(self.agent_doc):
+                    instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,

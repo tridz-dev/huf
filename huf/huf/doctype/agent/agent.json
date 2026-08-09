@@ -945,6 +945,33 @@
    "label": "Show Tool Execution Details"
   },
   {
+   "description": "Control which extra response modes this agent's model can use beyond plain text. Each is opt-in-attached separately (via tool/agent config) but can be switched off here to conserve prompt context for small, local, or API-only models.",
+   "fieldname": "chat_capabilities_section",
+   "fieldtype": "Section Break",
+   "label": "Chat Response Capabilities"
+  },
+  {
+   "default": "1",
+   "description": "Let the agent ask structured clarifying questions (buttons, single/multi-choice, yes/no) in chat via the ask_user tool, instead of only plain text. Has no effect unless the ask_user tool is also attached to this agent.",
+   "fieldname": "allow_ask_user",
+   "fieldtype": "Check",
+   "label": "Allow Ask User"
+  },
+  {
+   "default": "1",
+   "description": "Let the agent render inline charts, HTML/SVG/mermaid previews, and generated-media elements as rich elements instead of plain markdown text.",
+   "fieldname": "allow_rich_elements",
+   "fieldtype": "Check",
+   "label": "Allow Rich Elements"
+  },
+  {
+   "default": "1",
+   "description": "Let the agent author long-form documents as artifacts (Markdown/HTML) and, when the export/redline tools are attached, export or redline them.",
+   "fieldname": "allow_document_artifacts",
+   "fieldtype": "Check",
+   "label": "Allow Document Artifacts"
+  },
+  {
    "fieldname": "seeding_metadata_section",
    "fieldtype": "Section Break",
    "hidden": 1,
@@ -1052,7 +1079,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-17 13:11:19.673477",
+ "modified": "2026-08-09 03:51:03.550222",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

@@ -94,13 +94,18 @@ def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_gue
     return {"allowed": True}
 
 
-def create_agent_tools(agent) -> list[FunctionTool]:
+def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
     """
     Create function tools for Huf Agent
 
     This combines:
     1. MCP tools from linked MCP servers
     2. Native tools from Agent Tool Function documents
+
+    model_name is the effective AI Model in use for this run (falls back to
+    agent.model when omitted) — passed through to the permission-aware
+    registry so an AI Model's capability overrides (see huf.ai.capabilities)
+    can gate tools like ask_user regardless of the agent's own setting.
     """
     tools = []
 
@@ -116,7 +121,9 @@ def create_agent_tools(agent) -> list[FunctionTool]:
             )
 
     # Load native tools from Agent Tool Function documents
-    allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(agent, frappe.session.user)
+    allowed_tool_docs = PermissionAwareToolRegistry.get_allowed_tools(
+        agent, frappe.session.user, model_name=model_name
+    )
 
     for function_doc in allowed_tool_docs:
         try:

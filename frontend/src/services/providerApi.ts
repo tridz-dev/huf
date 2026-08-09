@@ -333,6 +333,9 @@ export interface AIModelDoc {
   input_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
   cached_input_cost_per_1m_tokens?: number | null;
+  disable_ask_user?: number;
+  disable_rich_elements?: number;
+  disable_document_artifacts?: number;
 }
 
 /**

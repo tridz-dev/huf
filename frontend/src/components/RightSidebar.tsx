@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
-import { PanelRightClose, Settings, Edit, Trash2 } from 'lucide-react';
+import { X, Settings, Edit, Trash2, Clock } from 'lucide-react';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
@@ -21,10 +21,47 @@ import {
 } from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
-import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
+import { ScheduleIntervalType, DocEventType, ScheduleTriggerConfig } from '../types/flow.types';
 import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
+
+/**
+ * Computes a human-readable summary of a schedule trigger's cadence, e.g.
+ * "Runs every 5 minutes". Only handles the simple interval case (every N
+ * minutes/hours/days) since that can be described with plain arithmetic; the
+ * custom-cron case is intentionally left unhandled (returns null) because
+ * there's no cron-parsing library in this project to describe it reliably —
+ * showing a wrong or placeholder value would be worse than showing nothing.
+ *
+ * This deliberately does NOT claim to be an exact "next run" time: the
+ * backend does not expose a real next-execution timestamp to the frontend
+ * (no such field exists on ScheduleTriggerConfig or node data), so there is
+ * no honest way to compute when the schedule actually last fired or its real
+ * anchor point. Presenting "now + interval" as the next run time would be
+ * misleading, not just approximate — it would always read "in N minutes"
+ * regardless of the schedule's true state.
+ */
+function computeScheduleNextRun(config: ScheduleTriggerConfig): string | null {
+  if (config.intervalType === 'custom') {
+    return null;
+  }
+
+  const unitLabels: Record<'minutes' | 'hours' | 'days', string> = {
+    minutes: 'minute',
+    hours: 'hour',
+    days: 'day',
+  };
+  const unitLabel = unitLabels[config.intervalType as 'minutes' | 'hours' | 'days'];
+  if (!unitLabel) {
+    return null;
+  }
+
+  const interval = config.interval && config.interval > 0 ? config.interval : 1;
+  const pluralizedUnit = interval === 1 ? unitLabel : `${unitLabel}s`;
+
+  return `Runs every ${interval} ${pluralizedUnit}`;
+}
 
 interface ToolParameter {
   fieldname: string;
@@ -47,8 +84,6 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
-  const [width, setWidth] = useState(380);
-  const [isResizing, setIsResizing] = useState(false);
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [agents, setAgents] = useState<Array<{ value: string; label: string }>>([]);
@@ -61,26 +96,6 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const [loadingToolDetails, setLoadingToolDetails] = useState(false);
   const [roles, setRoles] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
-
-  useEffect(() => {
-    if (!isResizing) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = window.innerWidth - e.clientX;
-      setWidth(Math.min(Math.max(320, newWidth), 600));
-    };
-    const handleMouseUp = () => setIsResizing(false);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
 
   // Load agents when agent-run or router node selected
   useEffect(() => {
@@ -259,35 +274,46 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
     }
 
     if (config.type === 'schedule') {
+      const scheduleTypeSelect = (
+        <Select
+          value={config.intervalType}
+          onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
+        >
+          <SelectTrigger id="interval-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="minutes">Minutes</SelectItem>
+            <SelectItem value="hours">Hours</SelectItem>
+            <SelectItem value="days">Days</SelectItem>
+            <SelectItem value="custom">Custom (cron)</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+
       return (
         <>
-          <div>
-            <Label htmlFor="interval-type">Schedule type</Label>
-            <Select
-              value={config.intervalType}
-              onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
-            >
-              <SelectTrigger id="interval-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minutes">Minutes</SelectItem>
-                <SelectItem value="hours">Hours</SelectItem>
-                <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (cron)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {config.intervalType !== 'custom' && (
+          {config.intervalType !== 'custom' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="interval">Every</Label>
+                <Input
+                  id="interval"
+                  type="number"
+                  min="1"
+                  value={config.interval || 1}
+                  onChange={(e) => handleUpdateTriggerConfig('interval', parseInt(e.target.value))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="interval-type">Unit</Label>
+                {scheduleTypeSelect}
+              </div>
+            </div>
+          ) : (
             <div>
-              <Label htmlFor="interval">Interval</Label>
-              <Input
-                id="interval"
-                type="number"
-                min="1"
-                value={config.interval || 1}
-                onChange={(e) => handleUpdateTriggerConfig('interval', parseInt(e.target.value))}
-              />
+              <Label htmlFor="interval-type">Schedule type</Label>
+              {scheduleTypeSelect}
             </div>
           )}
           {config.intervalType === 'custom' && (
@@ -373,22 +399,19 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
   const isSheet = variant === 'sheet';
 
+  const scheduleNextRun =
+    selectedNode?.data.nodeType === 'trigger' && selectedNode.data.triggerConfig?.type === 'schedule'
+      ? computeScheduleNextRun(selectedNode.data.triggerConfig as ScheduleTriggerConfig)
+      : null;
+
   return (
     <div
       className={cn(
-        'relative bg-card flex flex-col',
+        'relative bg-card flex flex-col w-[300px]',
         isSheet ? 'h-full' : 'h-screen border-l border-border',
       )}
-      style={isSheet ? undefined : { width: `${width}px` }}
     >
-      {!isSheet && (
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
-        onMouseDown={handleMouseDown}
-      />
-      )}
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
         {!selectedNode && !selectedEdge ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Settings className="w-12 h-12 text-muted-foreground mb-4" />
@@ -421,6 +444,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 placeholder="Optional label..."
               />
             </div>
+
+            <div className="border-t border-border" />
 
             <div className="space-y-4">
               <div>
@@ -521,11 +546,30 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           </>
         ) : selectedNode ? (
           <>
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="text-sm font-semibold">{selectedNode.data.label}</div>
-                <span className="text-xs text-muted-foreground">({selectedNode.data.nodeType})</span>
-              </div>
+            <div className="-mx-3.5 -mt-3.5 mb-0 h-10 px-3.5 flex items-center gap-2 border-b border-border shrink-0">
+              <span className="text-[13px] leading-none truncate" style={{ fontWeight: 590 }}>
+                {selectedNode.data.label}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                {selectedNode.data.nodeType}
+              </span>
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="hover:bg-accent"
+                onClick={onToggle}
+              >
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
             </div>
 
             <div>
@@ -537,6 +581,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 className="font-medium"
               />
             </div>
+
+            <div className="border-t border-border" />
 
             {selectedNode.data.nodeType === 'trigger' && (
               <>
@@ -684,7 +730,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                                     });
                                   }}
                                   placeholder={param.description || `Enter ${param.fieldname}...`}
-                                  className="h-8 text-xs font-mono"
+                                  size="sm"
+                                  className="font-mono"
                                 />
                                 {param.description && (
                                   <p className="text-[10px] text-muted-foreground mt-1">{param.description}</p>
@@ -1052,7 +1099,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                               handleUpdateActionConfig('transformations', updated);
                             }}
                             placeholder="e.g., api_response.data"
-                            className="h-7 text-xs"
+                            size="sm"
                           />
                         </div>
                         <div>
@@ -1065,7 +1112,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                               handleUpdateActionConfig('transformations', updated);
                             }}
                             placeholder="e.g., processed_data"
-                            className="h-7 text-xs"
+                            size="sm"
                           />
                         </div>
                         <div>
@@ -1193,24 +1240,16 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
         ) : null}
       </div>
 
-      <div className="border-t border-border p-3 bg-card flex items-center justify-between gap-2">
-        <div className="flex-1">
-          {selectedNode && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              Delete node
-            </Button>
-          )}
+      {scheduleNextRun ? (
+        <div className="border-t border-border p-3 bg-card flex items-center gap-2">
+          <div className="flex items-center gap-1.5 min-w-0 rounded-md bg-[#fbfbfd] dark:bg-white/5 px-2 py-1">
+            <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
+            <span className="text-[12px] leading-none text-muted-foreground truncate">
+              {scheduleNextRun}
+            </span>
+          </div>
         </div>
-        <Button variant="ghost" size="icon-sm" className="hover:bg-accent" onClick={onToggle}>
-          <PanelRightClose className="w-4 h-4 text-muted-foreground" />
-        </Button>
-      </div>
+      ) : null}
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

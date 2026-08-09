@@ -12,8 +12,23 @@ export interface ContextBarProps {
   cacheState?: ContextBarCacheState;
   total: number;
   size?: 'sm' | 'md';
+  /** Render a visible swatch legend below the bars (run detail context panel). */
+  showLegend?: boolean;
   className?: string;
   onClick?: () => void;
+}
+
+/**
+ * Cache economics ramp. Red would read as failure, so cached and uncached
+ * tokens share the neutral ramp and only cache reads get the accent.
+ */
+const CACHE_READ_COLOR = 'bg-signal';
+const CACHE_WRITE_COLOR = 'bg-steel';
+const UNCACHED_COLOR = 'bg-steel-soft';
+const FREE_COLOR = 'bg-muted';
+
+function LegendSwatch({ color }: { color: string }) {
+  return <span aria-hidden className={cn('inline-block h-[7px] w-[7px] rounded-[1px] shrink-0', color)} />;
 }
 
 const SEGMENT_ORDER: Array<{ key: keyof SegmentTokens; label: string; color: string }> = [
@@ -30,8 +45,16 @@ const SEGMENT_ORDER: Array<{ key: keyof SegmentTokens; label: string; color: str
  * economics (what each token cost this turn). Same component at every
  * scope: chat header (size="sm"), run detail / agent / fleet (size="md").
  */
-export function ContextBar({ segments, cacheState, total, size = 'md', className, onClick }: ContextBarProps) {
-  const height = size === 'sm' ? 'h-1' : 'h-2.5';
+export function ContextBar({
+  segments,
+  cacheState,
+  total,
+  size = 'md',
+  showLegend = false,
+  className,
+  onClick,
+}: ContextBarProps) {
+  const height = size === 'sm' ? 'h-1' : 'h-2';
   const known = SEGMENT_ORDER.reduce((sum, { key }) => sum + (segments[key] ?? 0), 0);
   const headroom = total > known ? total - known : 0;
 
@@ -71,22 +94,50 @@ export function ContextBar({ segments, cacheState, total, size = 'md', className
       {cacheState && cacheTotal > 0 && (
         <div className={cn('flex w-full overflow-hidden rounded-full bg-muted', height)}>
           <div
-            className="bg-signal"
+            className={CACHE_READ_COLOR}
             style={{ width: `${(cacheState.cacheRead / cacheTotal) * 100}%` }}
             title={`Cache read (~0.1x): ${cacheState.cacheRead.toLocaleString()} tokens`}
           />
           <div
-            className="bg-warning"
+            className={CACHE_WRITE_COLOR}
             style={{ width: `${(cacheState.cacheWrite / cacheTotal) * 100}%` }}
             title={`Cache write (~1.25x): ${cacheState.cacheWrite.toLocaleString()} tokens`}
           />
           <div
-            className="bg-destructive"
+            className={UNCACHED_COLOR}
             style={{ width: `${(cacheState.uncached / cacheTotal) * 100}%` }}
-            title={`Uncached (1x): ${cacheState.uncached.toLocaleString()} tokens`}
+            title={`Fresh input (1x): ${cacheState.uncached.toLocaleString()} tokens`}
           />
+        </div>
+      )}
+
+      {showLegend && cacheState && cacheTotal > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-[11px] text-steel">
+          <span className="flex items-center gap-1.5">
+            <LegendSwatch color={CACHE_READ_COLOR} />
+            Cache reads {formatPct(cacheState.cacheRead / cacheTotal)}
+          </span>
+          {cacheState.cacheWrite > 0 && (
+            <span className="flex items-center gap-1.5">
+              <LegendSwatch color={CACHE_WRITE_COLOR} />
+              Cache writes {formatPct(cacheState.cacheWrite / cacheTotal)}
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <LegendSwatch color={UNCACHED_COLOR} />
+            Fresh input {formatPct(cacheState.uncached / cacheTotal)}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <LegendSwatch color={cn(FREE_COLOR, 'border border-line')} />
+            Window free {total > 0 ? formatPct(headroom / total) : '0%'}
+          </span>
         </div>
       )}
     </Wrapper>
   );
+}
+
+function formatPct(ratio: number) {
+  if (!Number.isFinite(ratio) || ratio <= 0) return '0%';
+  return `${Math.round(ratio * 100)}%`;
 }

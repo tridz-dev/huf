@@ -1,10 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Fragment, ReactNode } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbList,
+  BreadcrumbPage,
   BreadcrumbSeparator,
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
@@ -13,46 +15,80 @@ import { ApprovalsBell } from '../components/ApprovalsBell';
 interface UnifiedHeaderProps {
   actions?: ReactNode;
   breadcrumbs?: BreadcrumbItemType[];
+  showCurrentCrumb?: boolean;
+  /** Overrides the left-hand ancestry-crumb/page-title zone entirely when provided. */
+  leftContent?: ReactNode;
 }
 
 /**
- * Ancestry-only breadcrumb: renders the chain of ancestors leading up to the
- * current page, but never the trailing/current-page crumb. Used both inside
- * PageFrame's 52px bar and by the standalone 60px topbar (via UnifiedHeader
- * below) — in both places the page itself already names the current record
- * once (an h1, InlineEditName, or similar), so repeating that name in the
- * breadcrumb would name the page twice. Renders nothing when there is no
- * real ancestry (a single-item or empty breadcrumb list).
+ * Ancestry breadcrumb: by default renders the chain of ancestors leading up
+ * to the current page, but never the trailing/current-page crumb. Used both
+ * inside PageFrame's 52px bar and by the standalone 60px topbar (via
+ * UnifiedHeader below) — in both places the page itself usually already
+ * names the current record once (an h1, InlineEditName, or similar), so
+ * repeating that name in the breadcrumb would name the page twice. Renders
+ * nothing when there is no real ancestry (a single-item or empty breadcrumb
+ * list).
+ *
+ * Pages that do NOT render their own name anywhere else (e.g. a run-detail
+ * page whose only "title" is the record id) opt in via `showCurrentCrumb` to
+ * also render the trailing/current crumb, plus a leading back-arrow icon
+ * that links to the first ancestor — this is what lets back-navigation live
+ * in the app bar instead of a floating button in the content column. This
+ * is additive and off by default, so every other consumer is unaffected.
  */
-export function AncestryCrumb({ breadcrumbs }: { breadcrumbs?: BreadcrumbItemType[] }) {
+export function AncestryCrumb({
+  breadcrumbs,
+  showCurrentCrumb = false,
+}: {
+  breadcrumbs?: BreadcrumbItemType[];
+  showCurrentCrumb?: boolean;
+}) {
   if (!breadcrumbs || breadcrumbs.length < 2) return null;
-  const ancestors = breadcrumbs.slice(0, -1);
+  const items = showCurrentCrumb ? breadcrumbs : breadcrumbs.slice(0, -1);
+  const backHref = breadcrumbs[0]?.href;
 
   return (
     <div className="flex items-center gap-2 shrink-0">
+      {showCurrentCrumb && backHref && (
+        <Link
+          to={backHref}
+          aria-label="Back"
+          className="flex items-center justify-center text-steel hover:text-ink transition-colors shrink-0"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+        </Link>
+      )}
       <Breadcrumb>
         <BreadcrumbList>
-          {ancestors.map((crumb, index) => (
-            <Fragment key={index}>
-              <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
-                {crumb.href ? (
-                  <BreadcrumbLink href={crumb.href} asChild>
-                    <Link to={crumb.href}>{crumb.label}</Link>
-                  </BreadcrumbLink>
-                ) : (
-                  <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
+          {items.map((crumb, index) => {
+            const isCurrent = showCurrentCrumb && index === items.length - 1;
+            return (
+              <Fragment key={index}>
+                <BreadcrumbItem className={index === 0 ? 'hidden md:block' : ''}>
+                  {crumb.href && !isCurrent ? (
+                    <BreadcrumbLink href={crumb.href} asChild>
+                      <Link to={crumb.href}>{crumb.label}</Link>
+                    </BreadcrumbLink>
+                  ) : isCurrent ? (
+                    <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  ) : (
+                    <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{crumb.label}</span>
+                  )}
+                </BreadcrumbItem>
+                {(!showCurrentCrumb || index < items.length - 1) && (
+                  <BreadcrumbSeparator className="hidden md:block mt-0.5" />
                 )}
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block mt-0.5" />
-            </Fragment>
-          ))}
+              </Fragment>
+            );
+          })}
         </BreadcrumbList>
       </Breadcrumb>
     </div>
   );
 }
 
-export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
+export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent }: UnifiedHeaderProps) {
   const location = useLocation();
 
   const getPageTitle = () => {
@@ -76,8 +112,6 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     if (path.startsWith('/prompts')) return 'Prompts';
     if (path.startsWith('/summary-prompts')) return 'Prompts';
     if (path.startsWith('/members')) return 'Members';
-    if (path.startsWith('/users')) return 'Users';
-    if (path.startsWith('/roles')) return 'Roles';
     if (path.startsWith('/models')) return 'AI providers & models';
     if (path.startsWith('/execution-profiles')) return 'Code execution';
     if (path.startsWith('/ssh-connections')) return 'SSH connections';
@@ -88,13 +122,15 @@ export function UnifiedHeader({ actions, breadcrumbs }: UnifiedHeaderProps) {
     return 'HufAI';
   };
 
-  const ancestryCrumb = <AncestryCrumb breadcrumbs={breadcrumbs} />;
+  const ancestryCrumb = <AncestryCrumb breadcrumbs={breadcrumbs} showCurrentCrumb={showCurrentCrumb} />;
   const hasAncestry = !!breadcrumbs && breadcrumbs.length >= 2;
 
   return (
     <div className="flex items-center justify-between flex-1">
-      <div className="flex items-center gap-2">
-        {hasAncestry ? (
+      <div className="flex items-center gap-2 min-w-0">
+        {leftContent ? (
+          leftContent
+        ) : hasAncestry ? (
           ancestryCrumb
         ) : (
           <span className="font-mono text-[11px] uppercase tracking-widest text-steel">{getPageTitle()}</span>

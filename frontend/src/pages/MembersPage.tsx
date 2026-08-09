@@ -1,4 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
+import { Users } from 'lucide-react';
 import UsersPage from './UsersPage';
 import RolesPage from './RolesPage';
 import { PageFrame } from '@/layouts/PageFrame';
@@ -15,7 +16,12 @@ export default function MembersPage() {
 
   return (
     <PageFrame
-      title="Members"
+      title={
+        <span className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-steel-soft" />
+          Members
+        </span>
+      }
       filters={
         <Tabs value={view} onValueChange={(value) => setSearchParams(value === 'people' ? {} : { view: value })}>
           <TabsList>

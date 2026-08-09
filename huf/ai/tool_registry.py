@@ -40,22 +40,24 @@ class PermissionAwareToolRegistry:
     }
 
     @classmethod
-    def get_allowed_tools(cls, agent_doc, user: str) -> list:
+    def get_allowed_tools(cls, agent_doc, user: str, model_name: str = None) -> list:
         """Return only tools the user has permission to use"""
         all_tools = []
-        
+
         if not hasattr(agent_doc, "agent_tool"):
             return []
 
         for tool_link in agent_doc.agent_tool:
             try:
                 tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
-                
+
                 if (
                     cls._can_use_tool(tool_doc, user)
                     and cls._allows_code_execution(tool_doc, agent_doc, user)
                     and cls._allows_ssh_execution(tool_doc, agent_doc, user)
                     and cls._allows_docker_execution(tool_doc, user)
+                    and cls._allows_ask_user(tool_doc, agent_doc, model_name)
+                    and cls._allows_document_artifact_tools(tool_doc, agent_doc, model_name)
                 ):
                     all_tools.append(tool_doc)
 
@@ -181,6 +183,29 @@ class PermissionAwareToolRegistry:
         from huf.permissions import has_capability
 
         return has_capability(user, "docker.run")
+
+    @classmethod
+    def _allows_ask_user(cls, tool_doc, agent_doc, model_name) -> bool:
+        """Gate the ask_user builder tool on Agent.allow_ask_user / AI Model.disable_ask_user."""
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        if tool_name != "ask_user":
+            return True
+
+        from huf.ai.capabilities import capability_enabled
+
+        return capability_enabled(agent_doc, model_name, "ask_user")
+
+    @classmethod
+    def _allows_document_artifact_tools(cls, tool_doc, agent_doc, model_name) -> bool:
+        """Gate the document-artifact tools on Agent.allow_document_artifacts /
+        AI Model.disable_document_artifacts."""
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        if tool_name not in ("list_document_artifacts", "export_artifact", "redline_artifact"):
+            return True
+
+        from huf.ai.capabilities import capability_enabled
+
+        return capability_enabled(agent_doc, model_name, "document_artifacts")
 
 def _get_app_modified_time(app_name):
     """

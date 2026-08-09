@@ -110,6 +110,10 @@ export const agentFormSchema = z.object({
   execution_shared_dir_limit_mb: z.number().int().nonnegative().optional(),
   allow_ssh: z.boolean().optional(),
   ssh_connections: z.array(z.string()).default([]),
+
+  allow_ask_user: z.boolean().optional(),
+  allow_rich_elements: z.boolean().optional(),
+  allow_document_artifacts: z.boolean().optional(),
 }).superRefine((values, ctx) => {
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({

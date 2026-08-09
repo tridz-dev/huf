@@ -9,6 +9,7 @@ import {
 } from '../components/ui/sidebar';
 import { Separator } from '../components/ui/separator';
 import { ShortcutsHelpProvider } from '../components/shortcuts/ShortcutsHelpContext';
+import { cn } from '../lib/utils';
 
 export interface BreadcrumbItem {
   label: string;
@@ -22,6 +23,26 @@ interface UnifiedLayoutProps {
   hideRail?: boolean;
   headerActions?: ReactNode;
   breadcrumbs?: BreadcrumbItem[];
+  /**
+   * Replaces the ancestry-crumb/page-title zone on the left of the header
+   * with custom content (e.g. a "Flows > name [edit]" control). Falls back
+   * to the default AncestryCrumb/title rendering when omitted.
+   */
+  leftContent?: ReactNode;
+  /**
+   * Renders the standalone topbar at a denser 46px instead of the default
+   * 60px, keeping the same bottom hairline. Intended for the flow canvas
+   * toolbar only — leave unset everywhere else.
+   */
+  compact?: boolean;
+  /**
+   * Opt-in: also render the trailing/current-page crumb (plus a leading
+   * back-arrow icon) instead of only the ancestor chain. Use this for pages
+   * that don't otherwise render their own name anywhere in the content
+   * column — e.g. a run-detail page whose back-navigation lives entirely in
+   * this breadcrumb. See AncestryCrumb in UnifiedHeader.tsx for details.
+   */
+  showCurrentCrumb?: boolean;
 }
 
 /**
@@ -49,7 +70,7 @@ export function usePageChrome() {
   return useContext(PageChromeContext);
 }
 
-export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, breadcrumbs }: UnifiedLayoutProps) {
+export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, breadcrumbs, leftContent, compact, showCurrentCrumb }: UnifiedLayoutProps) {
   const location = useLocation();
   const defaultOpen = location.pathname !== '/';
   const [framed, setFramed] = useState(false);
@@ -64,7 +85,10 @@ export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, b
     [],
   );
 
-  const ancestryCrumb = useMemo(() => <AncestryCrumb breadcrumbs={breadcrumbs} />, [breadcrumbs]);
+  const ancestryCrumb = useMemo(
+    () => <AncestryCrumb breadcrumbs={breadcrumbs} showCurrentCrumb={showCurrentCrumb} />,
+    [breadcrumbs, showCurrentCrumb],
+  );
 
   const chromeValue = useMemo<PageChromeContextValue>(
     () => ({ railToggle, ancestryCrumb, setFramed }),
@@ -77,11 +101,23 @@ export function UnifiedLayout({ children, hideHeader, hideRail, headerActions, b
         {!hideRail && <AppSidebar />}
         <SidebarInset className="h-svh max-h-svh overflow-hidden">
           {!hideHeader && !framed && (
-            <header className="flex h-[60px] shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px] border-b border-line bg-panel">
+            <header
+              className={cn(
+                'flex shrink-0 items-center gap-2 transition-[width,height] ease-linear border-b border-line bg-panel',
+                compact
+                  ? 'h-[46px] group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[46px]'
+                  : 'h-[60px] group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-[60px]',
+              )}
+            >
               <div className="flex items-center gap-2 px-4 w-full">
                 <SidebarTrigger className="-ml-1 text-steel hover:text-ink" />
                 <Separator orientation="vertical" className="mr-2 h-4 bg-line" />
-                <UnifiedHeader actions={headerActions} breadcrumbs={breadcrumbs} />
+                <UnifiedHeader
+                  actions={headerActions}
+                  breadcrumbs={breadcrumbs}
+                  leftContent={leftContent}
+                  showCurrentCrumb={showCurrentCrumb}
+                />
               </div>
             </header>
           )}

@@ -13,6 +13,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { cn } from '@/lib/utils';
 import {
   ColumnDef,
   flexRender,
@@ -30,6 +31,26 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
+
+const DEFAULT_RANGE = '24h';
+
+const TIME_RANGE_OPTIONS = [
+  { label: 'Last 24h', value: '24h' },
+  { label: 'Last 7d', value: '7d' },
+  { label: 'Last 30d', value: '30d' },
+  { label: 'All time', value: 'all' },
+];
+
+/** Window length in ms for each range option; `null` means unbounded ("All time"). */
+const TIME_RANGE_MS: Record<string, number | null> = {
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+  all: null,
+};
+
+/** Columns whose values are numeric/temporal and read better right-aligned with tabular figures. */
+const RIGHT_ALIGNED_COLUMNS = new Set(['cached_tokens', 'duration', 'started']);
 
 function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: string } {
   const normalized = status?.toLowerCase() || '';
@@ -56,10 +77,29 @@ export default function Executions() {
     filters,
     setFilter,
   } = useInfiniteScroll<
-    { page?: number; limit?: number; start?: number; search?: string; status?: string; agents?: string },
+    {
+      page?: number;
+      limit?: number;
+      start?: number;
+      search?: string;
+      status?: string;
+      agents?: string;
+      range?: string;
+    },
     AgentRunDoc
   >({
     fetchFn: async (params) => {
+      // `range` is only present in params once a non-default value is picked
+      // (setFilter drops the key when it equals the "no-op" sentinel — here
+      // that's the not-yet-initialized state, so an absent range still means
+      // "use the default window", same as the Status/Agent filters below).
+      const rangeKey = params.range ?? DEFAULT_RANGE;
+      const rangeMs = TIME_RANGE_MS[rangeKey] ?? TIME_RANGE_MS[DEFAULT_RANGE];
+      const runFilters: Array<[string, string, unknown]> = [['is_child', '=', '0']];
+      if (rangeMs) {
+        runFilters.push(['start_time', '>=', new Date(Date.now() - rangeMs).toISOString()]);
+      }
+
       const response = await getAgentRuns({
         page: params.page,
         limit: params.limit,
@@ -67,7 +107,7 @@ export default function Executions() {
         search: params.search,
         status: params.status as 'Started' | 'Queued' | 'Success' | 'Failed' | 'all' | undefined,
         agents: params.agents ? params.agents.split(',').filter(Boolean) : undefined,
-        filters: [["is_child","=","0"]]
+        filters: runFilters,
       });
 
       if (Array.isArray(response)) {
@@ -95,6 +135,7 @@ export default function Executions() {
     const initialSearch = searchParams.get('q') ?? '';
     const initialStatus = searchParams.get('status') ?? 'all';
     const initialAgents = searchParams.get('agents') ?? 'all';
+    const initialRange = searchParams.get('range') ?? DEFAULT_RANGE;
 
     if (initialSearch) {
       setSearch(initialSearch);
@@ -105,10 +146,13 @@ export default function Executions() {
     if (initialAgents && initialAgents !== (filters.agents || 'all')) {
       setFilter('agents', initialAgents);
     }
+    if (initialRange && initialRange !== (filters.range || DEFAULT_RANGE)) {
+      setFilter('range', initialRange);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const updateSearchParams = (next: { q?: string; status?: string; agents?: string }) => {
+  const updateSearchParams = (next: { q?: string; status?: string; agents?: string; range?: string }) => {
     setSearchParams((prev) => {
       const sp = new URLSearchParams(prev);
 
@@ -125,6 +169,11 @@ export default function Executions() {
       if (next.agents !== undefined) {
         if (next.agents && next.agents !== 'all') sp.set('agents', next.agents);
         else sp.delete('agents');
+      }
+
+      if (next.range !== undefined) {
+        if (next.range && next.range !== DEFAULT_RANGE) sp.set('range', next.range);
+        else sp.delete('range');
       }
 
       return sp;
@@ -166,6 +215,18 @@ export default function Executions() {
   }, [agents]);
 
   const selectedAgentValue = filters.agents || 'all';
+  const selectedRange = filters.range || DEFAULT_RANGE;
+
+  // The metric strip mirrors the same Time filter as the data grid, so
+  // "Last 24h" narrows both together. "All time" can't be sent unbounded —
+  // the analytics API caps a window at 93 days — so it's approximated with
+  // a 90-day lookback instead.
+  const analyticsFromDate = useMemo(() => {
+    const rangeMs = TIME_RANGE_MS[selectedRange];
+    const ms = rangeMs ?? 90 * 24 * 60 * 60 * 1000;
+    return new Date(Date.now() - ms).toISOString();
+  }, [selectedRange]);
+  const analyticsGranularity: 'hour' | 'day' = selectedRange === '24h' ? 'hour' : 'day';
 
   // Define table columns
   const columns = useMemo<ColumnDef<AgentRunDoc>[]>(
@@ -224,20 +285,28 @@ export default function Executions() {
         accessorKey: 'cached_tokens',
         header: ({ column }) => {
           return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
-            >
-              Cached tokens
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+              >
+                Cached tokens
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           );
         },
         cell: ({ row }) => {
           const cached = row.original.cached_tokens;
+          const isZero = !cached;
           return (
-            <div className="font-mono text-[12px] text-steel">
+            <div
+              className={cn(
+                'text-right font-mono text-[12px] tabular-nums',
+                isZero ? 'text-steel-soft/60' : 'text-steel'
+              )}
+            >
               {typeof cached === 'number' ? cached.toLocaleString() : '0'}
             </div>
           );
@@ -250,29 +319,31 @@ export default function Executions() {
       },
       {
         id: 'duration',
-        header: 'Duration',
+        header: () => <div className="text-right">Duration</div>,
         cell: ({ row }) => {
           const duration = calculateDuration(row.original.start_time ?? null, row.original.end_time ?? null);
-          return <div className="font-mono text-[12px] text-steel">{duration}</div>;
+          return <div className="text-right font-mono text-[12px] tabular-nums text-steel">{duration}</div>;
         },
       },
       {
         id: 'started',
         header: ({ column }) => {
           return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-              className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
-            >
-              Started
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+                className="h-8 px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft hover:text-ink hover:bg-paper-deep"
+              >
+                Started
+                <ArrowUpDown className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           );
         },
         cell: ({ row }) => {
           const timeAgo = formatTimeAgo(row.original.start_time ?? null);
-          return <div className="font-mono text-[12px] text-steel">{timeAgo}</div>;
+          return <div className="text-right font-mono text-[12px] tabular-nums text-steel">{timeAgo}</div>;
         },
         sortingFn: (rowA, rowB) => {
           const timeA = rowA.original.start_time ? new Date(rowA.original.start_time).getTime() : 0;
@@ -319,6 +390,15 @@ export default function Executions() {
                 updateSearchParams({ status: value });
               },
             },
+            {
+              label: 'Time',
+              value: selectedRange,
+              options: TIME_RANGE_OPTIONS,
+              onChange: (value) => {
+                setFilter('range', value);
+                updateSearchParams({ range: value });
+              },
+            },
           ]}
           actions={
             <div className="w-full sm:w-48">
@@ -343,46 +423,58 @@ export default function Executions() {
         />
       }
     >
-      <ExecutionAnalyticsDashboard />
-      <div className="w-full">
-        {initialLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
-          </div>
-        ) : runs.length === 0 ? (
-          !!search || (filters.status && filters.status !== 'all') || (filters.agents && filters.agents !== 'all') ? (
-            <EmptyState
-              variant="no-results"
-              icon={Activity}
-              title="No executions found"
-              filterTerm={search}
-              secondaryAction={{
-                label: 'Clear filters',
-                onClick: () => {
-                  setSearch('');
-                  setFilter('status', 'all');
-                  setFilter('agents', 'all');
-                  updateSearchParams({ q: '', status: 'all', agents: 'all' });
-                },
-              }}
-            />
+      {/*
+        One bordered/rounded card holds the metric strip and the data grid —
+        runs are scanned, not read, so the numbers and the rows they roll up
+        live in the same frame instead of two separately-bordered blocks.
+      */}
+      <div className="w-full rounded-lg border border-line bg-panel overflow-hidden">
+        <ExecutionAnalyticsDashboard fromDate={analyticsFromDate} granularity={analyticsGranularity} />
+        <div className="border-t border-line">
+          {initialLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
+            </div>
+          ) : runs.length === 0 ? (
+            !!search ||
+            (filters.status && filters.status !== 'all') ||
+            (filters.agents && filters.agents !== 'all') ||
+            (filters.range && filters.range !== DEFAULT_RANGE) ? (
+              <EmptyState
+                variant="no-results"
+                icon={Activity}
+                title="No executions found"
+                filterTerm={search}
+                secondaryAction={{
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearch('');
+                    setFilter('status', 'all');
+                    setFilter('agents', 'all');
+                    setFilter('range', DEFAULT_RANGE);
+                    updateSearchParams({ q: '', status: 'all', agents: 'all', range: DEFAULT_RANGE });
+                  },
+                }}
+              />
+            ) : (
+              <EmptyState
+                variant="passive"
+                icon={Activity}
+                title="No executions"
+                description="No agent runs have been recorded yet."
+              />
+            )
           ) : (
-            <EmptyState
-              variant="passive"
-              icon={Activity}
-              title="No executions"
-              description="No agent runs have been recorded yet."
-            />
-          )
-        ) : (
-          <div className="border border-line bg-panel">
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
                   <TableRow key={headerGroup.id}>
                     {headerGroup.headers.map((header) => {
                       return (
-                        <TableHead key={header.id}>
+                        <TableHead
+                          key={header.id}
+                          className={cn(RIGHT_ALIGNED_COLUMNS.has(header.column.id) && 'text-right')}
+                        >
                           {header.isPlaceholder
                             ? null
                             : flexRender(header.column.columnDef.header, header.getContext())}
@@ -396,11 +488,14 @@ export default function Executions() {
                 {table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
-                    className="cursor-pointer hover:bg-paper-deep"
+                    className="h-11 cursor-pointer hover:bg-paper-deep"
                     onClick={() => navigate(`/executions/${row.original.name}`)}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell
+                        key={cell.id}
+                        className={cn(RIGHT_ALIGNED_COLUMNS.has(cell.column.id) && 'text-right')}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}
@@ -408,8 +503,8 @@ export default function Executions() {
                 ))}
               </TableBody>
             </Table>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <LoadMoreButton
@@ -421,7 +516,7 @@ export default function Executions() {
 
       {!hasMore && runs.length > 0 && (
         <div className="text-center py-4 text-sm text-steel">
-          {total !== undefined ? `Showing all ${total} executions` : 'No more executions to load'}
+          {total !== undefined ? `All ${total} executions` : 'No more executions to load'}
         </div>
       )}
     </PageFrame>

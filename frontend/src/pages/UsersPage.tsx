@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { UserPlus, ChevronDown, Users } from 'lucide-react';
+import { UserPlus, ChevronDown, Users, MoreVertical, Power } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import {
   getUsers,
   getHufRoles,
@@ -15,9 +16,9 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, EmptyState } from '@/components/dashboard';
-import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -39,27 +40,59 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
 // ---------------------------------------------------------------------------
-// Role badge colour map
+// Avatar colour helper
 // ---------------------------------------------------------------------------
 
-const ROLE_COLOURS: Record<string, string> = {
-  'Huf Admin': 'border-destructive/30 text-destructive bg-transparent',
-  'Huf Manager': 'border-warning/30 text-warning bg-transparent',
-  'Huf User': 'border-good/30 text-good bg-transparent',
-  'Huf Viewer': 'border-steel text-steel-soft bg-paper-deep',
-};
+// Role names are identity, not alarm — every role renders in the same
+// neutral pill (Badge's default/secondary variant). Only the avatar
+// initials get a deterministic colour, derived from the person's name.
+const AVATAR_COLOURS = [
+  'bg-blue-100 text-blue-700',
+  'bg-purple-100 text-purple-700',
+  'bg-amber-100 text-amber-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-orange-100 text-orange-700',
+];
 
-function roleBadgeClass(role: string): string {
-  return ROLE_COLOURS[role] ?? 'border-line text-steel bg-transparent';
+function avatarColourClass(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return AVATAR_COLOURS[Math.abs(hash) % AVATAR_COLOURS.length];
+}
+
+function initialsFor(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------
 // Status helpers
 // ---------------------------------------------------------------------------
 
+// TODO(user-status-tristate): the design spec's status dot vocabulary distinguishes
+// Active / Invited / Suspended, but the backend only exposes a boolean `enabled` field
+// today, so this only ever renders Active/Disabled. See branch follow-up-user-status-tristate.
 type UserStatusFilter = 'all' | 'active' | 'disabled';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +111,8 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
   const [fullName, setFullName] = useState('');
   const [selectedRole, setSelectedRole] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const selectedRoleDescription = roles.find((r) => r.role_name === selectedRole)?.description;
 
   const reset = () => {
     setEmail('');
@@ -113,7 +148,7 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-[320px]">
         <DialogHeader>
           <DialogTitle>Invite user</DialogTitle>
         </DialogHeader>
@@ -151,6 +186,9 @@ function InviteDialog({ open, roles, onClose, onInvited }: InviteDialogProps) {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+            {selectedRoleDescription && (
+              <p className="mt-1 text-[11px] text-steel-soft">{selectedRoleDescription}</p>
+            )}
           </div>
         </div>
         <DialogFooter>
@@ -188,6 +226,8 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
   const [showInvite, setShowInvite] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<UserStatusFilter>('all');
+  const [pendingToggleUser, setPendingToggleUser] = useState<HufUser | null>(null);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
 
   const statusOptions = useMemo(
     () => [
@@ -235,6 +275,17 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
     }
   };
 
+  const confirmToggleEnabled = async () => {
+    if (!pendingToggleUser) return;
+    setTogglingEnabled(true);
+    try {
+      await handleToggleEnabled(pendingToggleUser);
+      setPendingToggleUser(null);
+    } finally {
+      setTogglingEnabled(false);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
       const matchesSearch =
@@ -262,7 +313,7 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
 
   const toolbar = (
     <FilterBar
-      searchPlaceholder="Search users..."
+      searchPlaceholder="Search people"
       searchValue={search}
       onSearchChange={setSearch}
       filters={[
@@ -310,17 +361,17 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
           <Table className="w-full min-w-[32rem] table-fixed text-sm">
             <TableHeader className="bg-paper-deep/50">
               <TableRow>
-                <TableHead className="text-left px-3 py-2 font-medium sm:px-4 sm:py-3 w-[35%] sm:w-[32%]">
+                <TableHead className="text-left px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft sm:px-4 sm:py-3 w-[35%] sm:w-[32%]">
                   User
                 </TableHead>
-                <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[25%] sm:w-[26%]">
+                <TableHead className="text-right px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft sm:px-4 sm:py-3 w-[25%] sm:w-[26%]">
                   Role
                 </TableHead>
-                <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
+                <TableHead className="text-right px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
                   Status
                 </TableHead>
-                <TableHead className="text-right px-3 py-2 font-medium sm:px-4 sm:py-3 w-[20%] sm:w-[21%]">
-                  Actions
+                <TableHead className="text-right px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft sm:px-4 sm:py-3 w-[20%] sm:w-[21%]" aria-label="Actions">
+                  <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -328,13 +379,26 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
               {filteredUsers.map((u) => (
                 <TableRow key={u.user} className="hover:bg-paper-deep/20">
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3">
-                    <div
-                      className="font-medium truncate"
-                      title={[u.full_name, u.email].filter(Boolean).join(' — ')}
-                    >
-                      {u.full_name || u.email}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar className="h-[26px] w-[26px] shrink-0">
+                        <AvatarFallback
+                          className={avatarColourClass(u.full_name || u.email || u.user)}
+                        >
+                          <span className="text-[10px] font-medium">
+                            {initialsFor(u.full_name || u.email || u.user)}
+                          </span>
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div
+                          className="font-medium truncate"
+                          title={[u.full_name, u.email].filter(Boolean).join(' — ')}
+                        >
+                          {u.full_name || u.email}
+                        </div>
+                        <div className="text-xs text-steel-soft truncate">{u.email}</div>
+                      </div>
                     </div>
-                    <div className="text-xs text-steel-soft truncate">{u.email}</div>
                   </TableCell>
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
                     <DropdownMenu>
@@ -343,7 +407,7 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
                           variant="ghost"
                           className="ml-auto flex h-auto items-center gap-1 p-0 hover:bg-transparent hover:opacity-80"
                         >
-                          <Badge className={roleBadgeClass(u.huf_role)}>{u.huf_role}</Badge>
+                          <Badge variant="secondary">{u.huf_role}</Badge>
                           <ChevronDown className="h-3 w-3 shrink-0 text-steel-soft" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -360,16 +424,44 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
                     </DropdownMenu>
                   </TableCell>
                   <TableCell className="min-w-0 px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <Badge variant={u.enabled ? 'success' : 'secondary'}>
-                      {u.enabled ? 'Active' : 'Disabled'}
-                    </Badge>
+                    <span className="inline-flex items-center justify-end gap-1.5">
+                      <span
+                        className={cn(
+                          'h-1.5 w-1.5 rounded-full flex-shrink-0',
+                          u.enabled ? 'bg-good' : 'bg-steel-soft',
+                        )}
+                        aria-hidden
+                      />
+                      <span
+                        className={cn(
+                          'text-[13px]',
+                          u.enabled ? 'text-ink' : 'text-steel',
+                        )}
+                      >
+                        {u.enabled ? 'Active' : 'Disabled'}
+                      </span>
+                    </span>
                   </TableCell>
                   <TableCell className="px-3 py-2 sm:px-4 sm:py-3 text-right">
-                    <Switch
-                      checked={!!u.enabled}
-                      onCheckedChange={() => handleToggleEnabled(u)}
-                      aria-label={u.enabled ? 'Disable user' : 'Enable user'}
-                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="ml-auto h-7 w-7 text-steel-soft hover:text-ink"
+                          title="User actions"
+                          aria-label="User actions"
+                        >
+                          <MoreVertical className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setPendingToggleUser(u)}>
+                          <Power className="h-3.5 w-3.5" />
+                          {u.enabled ? 'Disable user' : 'Enable user'}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -384,6 +476,37 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
         onClose={() => setShowInvite(false)}
         onInvited={(u) => setUsers((prev) => [u, ...prev])}
       />
+
+      <AlertDialog
+        open={!!pendingToggleUser}
+        onOpenChange={(next) => {
+          if (!togglingEnabled && !next) setPendingToggleUser(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingToggleUser?.enabled ? 'Disable' : 'Enable'}{' '}
+              {pendingToggleUser?.full_name || pendingToggleUser?.email}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingToggleUser?.enabled
+                ? 'This user will lose access to Huf immediately. They can be re-enabled at any time.'
+                : 'This user will regain access to Huf with their existing role.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={togglingEnabled}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmToggleEnabled} disabled={togglingEnabled}>
+              {togglingEnabled
+                ? 'Saving…'
+                : pendingToggleUser?.enabled
+                  ? 'Disable user'
+                  : 'Enable user'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 
