@@ -582,20 +582,28 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 </Label>
               </div>
 
-              {formData.is_local_llm && (
-                <div className="space-y-2">
-                  <Label htmlFor="api_base_url">
-                    API Base URL <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="api_base_url"
-                    type="text"
-                    placeholder="http://host.docker.internal:11434"
-                    value={formData.api_base_url}
-                    onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="api_base_url">
+                  API Base URL
+                  {formData.is_local_llm && <span className="text-destructive"> *</span>}
+                </Label>
+                <Input
+                  id="api_base_url"
+                  type="text"
+                  placeholder={
+                    formData.is_local_llm
+                      ? 'http://host.docker.internal:11434'
+                      : 'Leave blank to use the provider default (e.g. https://api.openai.com/v1)'
+                  }
+                  value={formData.api_base_url}
+                  onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
+                />
+                {!formData.is_local_llm && (
+                  <p className="text-xs text-muted-foreground">
+                    Only needed for a custom or self-hosted endpoint (Azure, Moonshot, a LiteLLM proxy, etc.).
+                  </p>
+                )}
+              </div>
 
               <ProviderBrandSelect
                 value={formData.provider_brand}

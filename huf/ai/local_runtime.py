@@ -2,10 +2,10 @@
 # For license information, please see license.txt
 
 """
-Local LLM runtime probing (Ollama / OpenAI-compatible local endpoints).
+AI Provider connection probing — local (Ollama / OpenAI-compatible) and cloud.
 
-Lightweight HTTP probes used to validate local provider configuration and to
-build capability overrides, so Huf checks what a local model can do instead of
+Lightweight HTTP probes used to validate provider configuration and to build
+capability overrides, so Huf checks what a local model can do instead of
 assuming OpenAI-grade behavior.
 """
 
@@ -14,6 +14,33 @@ import requests
 
 _PROBE_TIMEOUT = 5
 _PROBE_CACHE_TTL = 3600  # 1 hour
+
+# Default endpoints used to sanity-check a cloud provider's API key when the
+# record doesn't set its own `api_base_url` override (e.g. Azure/Moonshot/a
+# LiteLLM proxy in front of an OpenAI-compatible API).
+CLOUD_PROVIDER_ENDPOINTS = {
+    "openai": {
+        "default_url": "https://api.openai.com/v1/models",
+        "list_path": "/models",
+        "auth": lambda key: {"Authorization": f"Bearer {key}"},
+    },
+    "anthropic": {
+        "default_url": "https://api.anthropic.com/v1/models",
+        "list_path": "/models",
+        "auth": lambda key: {"x-api-key": key, "anthropic-version": "2023-06-01"},
+    },
+    "google": {
+        "default_url": "https://generativelanguage.googleapis.com/v1beta/models",
+        "list_path": "/models",
+        "auth": lambda key: {},
+        "params": lambda key: {"key": key},
+    },
+    "openrouter": {
+        "default_url": "https://openrouter.ai/api/v1/auth/key",
+        "list_path": "/auth/key",
+        "auth": lambda key: {"Authorization": f"Bearer {key}"},
+    },
+}
 
 
 def _resolve_api_base(provider_doc) -> str | None:
@@ -88,6 +115,41 @@ def probe_model(api_base: str, model: str) -> dict:
         return {"ok": False, "capabilities": [], "error": str(e)}
 
 
+def probe_cloud_provider(provider_brand: str, api_key: str, api_base_url: str | None = None) -> dict:
+    """Verify a cloud provider's API key with a single lightweight call.
+
+    Hits `api_base_url + list_path` when the record overrides the endpoint
+    (custom/self-hosted OpenAI-compatible gateways), otherwise the provider's
+    public default endpoint. Returns {"ok": bool, "error": str|None}. Never
+    raises.
+    """
+    endpoint = CLOUD_PROVIDER_ENDPOINTS.get(provider_brand)
+    if not endpoint:
+        return {
+            "ok": False,
+            "error": f"Test Connection isn't supported for provider brand '{provider_brand}' yet.",
+        }
+    if not api_key:
+        return {"ok": False, "error": "API Key is required for cloud providers."}
+
+    api_base_url = (api_base_url or "").strip()
+    url = f"{api_base_url.rstrip('/')}{endpoint['list_path']}" if api_base_url else endpoint["default_url"]
+
+    try:
+        resp = requests.get(
+            url,
+            headers=endpoint["auth"](api_key),
+            params=endpoint["params"](api_key) if "params" in endpoint else None,
+            timeout=_PROBE_TIMEOUT,
+        )
+        if resp.status_code in (401, 403):
+            return {"ok": False, "error": "API key was rejected by the provider."}
+        resp.raise_for_status()
+        return {"ok": True, "error": None}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def build_local_overrides(provider_doc, model_name: str) -> dict:
     """Capability overrides for a local provider/model pair.
 
@@ -130,6 +192,15 @@ def test_provider_connection(provider_name: str) -> dict:
         provider_doc = frappe.get_doc("AI Provider", provider_name)
     except Exception as e:
         result["provider"]["error"] = str(e)
+        return result
+
+    if not provider_doc.get("is_local_llm", 0):
+        server = probe_cloud_provider(
+            provider_doc.get("provider_brand"),
+            provider_doc.get_password("api_key"),
+            provider_doc.get("api_base_url"),
+        )
+        result["provider"] = server
         return result
 
     api_base = _resolve_api_base(provider_doc)
