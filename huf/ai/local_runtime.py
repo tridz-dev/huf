@@ -197,7 +197,7 @@ def test_provider_connection(provider_name: str) -> dict:
     if not provider_doc.get("is_local_llm", 0):
         server = probe_cloud_provider(
             provider_doc.get("provider_brand"),
-            provider_doc.get_password("api_key"),
+            provider_doc.get_password("api_key", raise_exception=False),
             provider_doc.get("api_base_url"),
         )
         result["provider"] = server
