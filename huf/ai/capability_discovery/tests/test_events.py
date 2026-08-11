@@ -7,7 +7,7 @@ import os
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.capabilities.events import (
+from huf.ai.capability_discovery.events import (
     ADVANCED_EVENT_LABELS,
     CANONICAL_EVENT_LABELS,
     build_trigger_payload,

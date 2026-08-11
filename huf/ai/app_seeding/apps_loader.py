@@ -159,7 +159,7 @@ def get_doctype_owner_app(doctype: str) -> str | None:
 
 	Returns None if the DocType does not exist or its module has no
 	registered app_name. Public, reusable ownership lookup (see
-	huf.ai.capabilities.apps.app_owns_doctype).
+	huf.ai.capability_discovery.apps.app_owns_doctype).
 	"""
 	try:
 		module = _get_doctype_module(doctype)

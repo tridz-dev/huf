@@ -10,7 +10,7 @@ export type CapabilityActionability = "actionable_now" | "informational" | "requ
 
 /**
  * JSON-Schema-shaped parameter description, as emitted by
- * huf.ai.capabilities.actions for action capabilities.
+ * huf.ai.capability_discovery.actions for action capabilities.
  */
 export interface CapabilityParametersSchema {
   type?: string;

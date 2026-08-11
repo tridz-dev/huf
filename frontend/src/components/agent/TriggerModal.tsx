@@ -54,7 +54,7 @@ import type { CapabilityApp, CapabilityDescriptor } from '@/types/capability.typ
  */
 type FromAppStep = 'form' | 'app' | 'resource' | 'resource-detail' | 'event';
 
-/** Shape returned by huf.ai.capabilities.api.get_app_resources, matching ResourceCard's props. */
+/** Shape returned by huf.ai.capability_discovery.api.get_app_resources, matching ResourceCard's props. */
 interface AppResourceSummary {
   doctype: string;
   title: string;

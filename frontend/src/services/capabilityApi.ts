@@ -11,7 +11,7 @@ import type {
  */
 export async function getCapabilityApps(): Promise<CapabilityApp[]> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.get_capability_apps");
+    const result = await call.get("huf.ai.capability_discovery.api.get_capability_apps");
     return (result?.message || result) as CapabilityApp[];
   } catch (error) {
     handleFrappeError(error, "Error fetching capability apps");
@@ -28,7 +28,7 @@ export async function searchAppActions(
   limit = 50,
 ): Promise<CapabilityDescriptor[]> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.search_app_actions", {
+    const result = await call.get("huf.ai.capability_discovery.api.search_app_actions", {
       app,
       query,
       limit,
@@ -45,7 +45,7 @@ export async function searchAppActions(
  */
 export async function describeAppAction(capabilityId: string): Promise<CapabilityDescriptor> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.describe_app_action", {
+    const result = await call.get("huf.ai.capability_discovery.api.describe_app_action", {
       capability_id: capabilityId,
     });
     return (result?.message || result) as CapabilityDescriptor;
@@ -62,7 +62,7 @@ export async function getAppResources(
   scope: "recommended" | "discovered" | "all" = "recommended",
 ): Promise<unknown[]> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.get_app_resources", {
+    const result = await call.get("huf.ai.capability_discovery.api.get_app_resources", {
       app,
       scope,
     });
@@ -81,7 +81,7 @@ export async function describeResource(
   doctype: string,
 ): Promise<CapabilityResourceDetail> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.describe_resource", {
+    const result = await call.get("huf.ai.capability_discovery.api.describe_resource", {
       app,
       doctype,
     });
@@ -100,7 +100,7 @@ export async function getResourceEvents(
   includeAdvanced = false,
 ): Promise<CapabilityDescriptor[]> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.get_resource_events", {
+    const result = await call.get("huf.ai.capability_discovery.api.get_resource_events", {
       app,
       doctype,
       include_advanced: includeAdvanced,
@@ -123,7 +123,7 @@ export async function previewTriggerPayload(
   promptField?: string,
 ): Promise<Record<string, unknown>> {
   try {
-    const result = await call.get("huf.ai.capabilities.api.preview_trigger_payload", {
+    const result = await call.get("huf.ai.capability_discovery.api.preview_trigger_payload", {
       app,
       doctype,
       event_capability_id: eventCapabilityId,

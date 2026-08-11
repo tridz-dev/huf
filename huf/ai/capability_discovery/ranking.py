@@ -5,7 +5,7 @@ Pure functions only: no frappe DB access, no writes. Callers pass in a
 (exposure, submittability, link counts).
 """
 
-from huf.ai.capabilities.models import VISIBILITY_LEVELS
+from huf.ai.capability_discovery.models import VISIBILITY_LEVELS
 
 # Substrings (case-insensitive) that mark a DocType name as an operational or
 # supporting object rather than a primary business object. Used both to
