@@ -8,7 +8,7 @@ an ``Agent Trigger`` "Doc Event" record.
 
 from frappe import ValidationError
 
-from huf.ai.capabilities.models import make_capability_descriptor
+from huf.ai.capability_discovery.models import make_capability_descriptor
 
 # Human-friendly labels for the small set of doc events we recommend by default.
 # Technical values are the real `doc_event` Select options from

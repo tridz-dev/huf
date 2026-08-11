@@ -1,8 +1,8 @@
-"""Unit tests for huf.ai.capabilities.resources and huf.ai.capabilities.ranking.
+"""Unit tests for huf.ai.capability_discovery.resources and huf.ai.capability_discovery.ranking.
 
 Run with:
     bench --site app-capability-discovery.local run-tests --app huf \
-        --module huf.ai.capabilities.tests.test_resources
+        --module huf.ai.capability_discovery.tests.test_resources
 """
 
 import unittest
@@ -11,8 +11,8 @@ from types import SimpleNamespace
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from huf.ai.capabilities import ranking
-from huf.ai.capabilities.resources import get_app_resources, describe_resource
+from huf.ai.capability_discovery import ranking
+from huf.ai.capability_discovery.resources import get_app_resources, describe_resource
 
 
 def _fake_meta(name, istable=0, issingle=0):

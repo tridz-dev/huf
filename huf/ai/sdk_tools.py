@@ -104,7 +104,7 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
 
     model_name is the effective AI Model in use for this run (falls back to
     agent.model when omitted) — passed through to the permission-aware
-    registry so an AI Model's capability overrides (see huf.ai.capabilities)
+    registry so an AI Model's capability overrides (see huf.ai.capability_discovery)
     can gate tools like ask_user regardless of the agent's own setting.
     """
     tools = []

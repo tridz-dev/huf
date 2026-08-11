@@ -2,16 +2,16 @@
 
 Builds ranked resource lists and per-resource capability detail (generated
 actions/events, related resources) for a single provider app, using
-Module Def -> app_name ownership (huf.ai.capabilities.apps.app_owns_doctype)
+Module Def -> app_name ownership (huf.ai.capability_discovery.apps.app_owns_doctype)
 as the source of truth for "which DocTypes belong to this app".
 """
 
 import frappe
 
-from huf.ai.capabilities import ranking
-from huf.ai.capabilities.apps import app_owns_doctype
-from huf.ai.capabilities.events import generate_events_for_resource
-from huf.ai.capabilities.models import make_capability_descriptor
+from huf.ai.capability_discovery import ranking
+from huf.ai.capability_discovery.apps import app_owns_doctype
+from huf.ai.capability_discovery.events import generate_events_for_resource
+from huf.ai.capability_discovery.models import make_capability_descriptor
 
 RESOURCE_SCOPES = ("recommended", "discovered", "all")
 RECOMMENDED_CAP = 20

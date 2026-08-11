@@ -1,4 +1,4 @@
-"""Unit tests for huf.ai.capabilities.actions (action capability discovery)."""
+"""Unit tests for huf.ai.capability_discovery.actions (action capability discovery)."""
 
 import json
 from unittest.mock import patch
@@ -6,7 +6,7 @@ from unittest.mock import patch
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from huf.ai.capabilities.actions import (
+from huf.ai.capability_discovery.actions import (
     _iter_app_api_module_paths,
     _iter_module_function_paths,
     declared_actions_for_app,
@@ -14,7 +14,7 @@ from huf.ai.capabilities.actions import (
     discover_whitelisted_actions_for_app,
     search_app_actions,
 )
-from huf.ai.capabilities.models import build_capability_id, make_capability_descriptor
+from huf.ai.capability_discovery.models import build_capability_id, make_capability_descriptor
 
 TEST_APP = "capability-discovery-test-app"
 REAL_APP = "huf"
@@ -96,7 +96,7 @@ class TestCapabilityActions(IntegrationTestCase):
         )
 
         with patch(
-            "huf.ai.capabilities.actions.discover_whitelisted_actions_for_app",
+            "huf.ai.capability_discovery.actions.discover_whitelisted_actions_for_app",
             return_value=[fake_discovered_dup, only_discovered],
         ):
             results = search_app_actions(TEST_APP)
@@ -111,7 +111,7 @@ class TestCapabilityActions(IntegrationTestCase):
     def test_search_app_actions_filters_by_query(self):
         tool = self._make_tool(tool_name="unique_searchable_widget")
 
-        with patch("huf.ai.capabilities.actions.discover_whitelisted_actions_for_app", return_value=[]):
+        with patch("huf.ai.capability_discovery.actions.discover_whitelisted_actions_for_app", return_value=[]):
             matched = search_app_actions(TEST_APP, query="searchable")
             unmatched = search_app_actions(TEST_APP, query="totally-unrelated-xyz-nomatch")
 
@@ -126,7 +126,7 @@ class TestCapabilityActions(IntegrationTestCase):
         tool = self._make_tool()
         capability_id = build_capability_id("action", TEST_APP, tool.function_path)
 
-        with patch("huf.ai.capabilities.actions.discover_whitelisted_actions_for_app", return_value=[]):
+        with patch("huf.ai.capability_discovery.actions.discover_whitelisted_actions_for_app", return_value=[]):
             descriptor = describe_app_action(capability_id)
 
         self.assertEqual(descriptor["id"], capability_id)
@@ -146,7 +146,7 @@ class TestZeroConfigDiscovery(IntegrationTestCase):
     def test_iter_app_api_module_paths_finds_real_module(self):
         module_paths = list(_iter_app_api_module_paths(REAL_APP))
 
-        self.assertIn("huf.ai.capabilities.api", module_paths)
+        self.assertIn("huf.ai.capability_discovery.api", module_paths)
         self.assertFalse(
             any(".tests." in path for path in module_paths),
             "no module path should come from a 'tests' directory",
@@ -156,18 +156,18 @@ class TestZeroConfigDiscovery(IntegrationTestCase):
         self.assertEqual(list(_iter_app_api_module_paths("no-such-app-xyz")), [])
 
     def test_iter_module_function_paths_finds_real_function_excludes_underscored(self):
-        function_paths = list(_iter_module_function_paths("huf.ai.capabilities.api"))
+        function_paths = list(_iter_module_function_paths("huf.ai.capability_discovery.api"))
 
-        self.assertIn("huf.ai.capabilities.api.search_app_actions", function_paths)
-        self.assertIn("huf.ai.capabilities.api.describe_app_action", function_paths)
+        self.assertIn("huf.ai.capability_discovery.api.search_app_actions", function_paths)
+        self.assertIn("huf.ai.capability_discovery.api.describe_app_action", function_paths)
         # Underscore-prefixed helpers defined in this module must be excluded.
         self.assertFalse(any(p.split(".")[-1].startswith("_") for p in function_paths))
-        self.assertNotIn("huf.ai.capabilities.api._require_capability_discovery_access", function_paths)
-        self.assertNotIn("huf.ai.capabilities.api._coerce_bool", function_paths)
+        self.assertNotIn("huf.ai.capability_discovery.api._require_capability_discovery_access", function_paths)
+        self.assertNotIn("huf.ai.capability_discovery.api._coerce_bool", function_paths)
 
     def test_discover_whitelisted_actions_for_app_surfaces_zero_config_function(self):
         # Cross-reference huf_tools-declared function_paths against a real api.py module
-        # to prove huf.ai.capabilities.api.search_app_actions has NO huf_tools declaration
+        # to prove huf.ai.capability_discovery.api.search_app_actions has NO huf_tools declaration
         # (i.e. declared_actions_for_app / huf_tools scanning alone would never surface it),
         # so its presence below proves the new zero-config discovery path is doing real work.
         from huf.ai.tool_registry import _normalize_hook_tools
@@ -179,7 +179,7 @@ class TestZeroConfigDiscovery(IntegrationTestCase):
                 if function_path:
                     declared_paths.add(function_path)
 
-        target_function_path = "huf.ai.capabilities.api.search_app_actions"
+        target_function_path = "huf.ai.capability_discovery.api.search_app_actions"
         self.assertNotIn(
             target_function_path,
             declared_paths,
@@ -202,7 +202,7 @@ class TestZeroConfigDiscovery(IntegrationTestCase):
         # any framework-discovered action. describe_app_action must look these up directly
         # (declared_actions_for_app / discover_whitelisted_actions_for_app), not through
         # the limit-truncated search results.
-        target_function_path = "huf.ai.capabilities.api.search_app_actions"
+        target_function_path = "huf.ai.capability_discovery.api.search_app_actions"
         capability_id = build_capability_id("action", REAL_APP, target_function_path)
 
         search_results = search_app_actions(REAL_APP, query="")

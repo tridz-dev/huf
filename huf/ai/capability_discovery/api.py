@@ -1,7 +1,7 @@
 """Whitelisted API endpoints for HUF app capability discovery.
 
 Thin wrappers only: input validation/coercion and an admin-only permission
-gate, then delegation to huf.ai.capabilities.{apps,actions,resources,events}.
+gate, then delegation to huf.ai.capability_discovery.{apps,actions,resources,events}.
 No business logic lives here (see plan §13 Phase 1/2 APIs).
 
 Permission gate: capability discovery exposes implementation details (app
@@ -14,8 +14,8 @@ inventing new permission logic.
 
 import frappe
 
-from huf.ai.capabilities import actions, apps, events, resources
-from huf.ai.capabilities.apps import app_owns_doctype
+from huf.ai.capability_discovery import actions, apps, events, resources
+from huf.ai.capability_discovery.apps import app_owns_doctype
 
 
 def _require_capability_discovery_access():

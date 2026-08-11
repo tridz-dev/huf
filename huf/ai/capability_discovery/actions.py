@@ -1,6 +1,6 @@
 """Action capability discovery: declared (huf_tools) + framework-discovered whitelisted actions.
 
-This module builds "action" capability descriptors (see huf.ai.capabilities.models) for a
+This module builds "action" capability descriptors (see huf.ai.capability_discovery.models) for a
 given installed app, from two sources:
 
   1. Declared actions: `Agent Tool Function` records already synced from an app's `huf_tools`
@@ -24,7 +24,7 @@ import os
 import frappe
 from frappe import _
 
-from huf.ai.capabilities.models import build_capability_id, make_capability_descriptor
+from huf.ai.capability_discovery.models import build_capability_id, make_capability_descriptor
 from huf.huf.doctype.agent_tool_function.agent_tool_function import get_function_metadata
 
 DECLARED_TOOL_TYPE = "App Provided"
@@ -131,7 +131,7 @@ def _iter_app_api_module_paths(app_name):
     """Yield dotted module paths for `app_name`'s api.py / *_api.py files.
 
     This is a deliberately narrow, opt-in naming convention already used
-    throughout this codebase (e.g. huf/ai/session_api.py, huf/ai/capabilities/api.py,
+    throughout this codebase (e.g. huf/ai/session_api.py, huf/ai/capability_discovery/api.py,
     huf/huf/doctype/huf_data_table/api.py) to mark modules meant to expose
     whitelisted HTTP endpoints. It intentionally does NOT walk every .py file in
     the app -- only files matching this convention are considered, so a module
