@@ -27,6 +27,7 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.permissions import has_capability
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -935,7 +936,15 @@ def run_agent_sync(
     if not channel_id:
         channel_id = "api"
 
-    agent_doc = frappe.get_doc("Agent", agent_name)
+    # A missing agent and a Guest-not-allowed agent must look identical to a
+    # Guest caller — otherwise the exception type (DoesNotExistError vs
+    # PermissionError) is an oracle for enumerating agent names.
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+    except frappe.DoesNotExistError:
+        agent_doc = None
+    if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+        frappe.throw(_("Agent not found or access denied."), frappe.PermissionError)
 
     if agent_doc.disabled:
         frappe.throw(
@@ -943,13 +952,24 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
+    if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+        frappe.throw(
+            _("You are not authorized to use this agent."),
+            frappe.PermissionError
+        )
+
+    if frappe.session.user == "Guest":
+        # Guests may not redirect execution to a caller-chosen provider/model.
+        provider = None
+        model = None
+
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
         provider=provider,
     )
-
-    assert_agent_access(agent_doc, user=frappe.session.user)
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -2426,9 +2446,21 @@ async def run_agent_stream(
         channel_id = "sse_stream"
 
     try:
-        agent_doc = frappe.get_doc("Agent", agent_name)
+        # 0. Load the agent, keeping "doesn't exist" and "exists but Guest
+        # isn't allowed" indistinguishable to a Guest caller (same generic
+        # error) so agent names can't be enumerated by exception type.
+        try:
+            agent_doc = frappe.get_doc("Agent", agent_name)
+        except frappe.DoesNotExistError:
+            agent_doc = None
+        if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+            yield {
+                "type": "error",
+                "error": "Agent not found or access denied."
+            }
+            return
 
-        # 0. Disabled agents cannot run
+        # 0b. Disabled agents cannot run
         if agent_doc.disabled:
             yield {
                 "type": "error",
@@ -2443,6 +2475,14 @@ async def run_agent_stream(
             yield {
                 "type": "error",
                 "error": str(e) or "You are not authorized to use this agent."
+            }
+            return
+
+        # 1b. Capability check for logged-in users
+        if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+            yield {
+                "type": "error",
+                "error": "You are not authorized to use this agent."
             }
             return
 
@@ -2493,6 +2533,11 @@ async def run_agent_stream(
                 exact_match = frappe.db.get_value("Agent Prompt", {"prompt_group": prompt_data.prompt_group, "version": int(prompt_version)}, "name")
                 if exact_match:
                     resolved_prompt_template = exact_match
+
+        # Guests may not override the agent's configured provider/model
+        if frappe.session.user == "Guest":
+            provider = None
+            model = None
 
         resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
             agent_doc,

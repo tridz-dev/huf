@@ -6,6 +6,7 @@ from frappe import _
 from .agent_integration import run_agent_sync
 from .agent_access import assert_agent_access
 from .conversation_manager import ConversationManager
+from huf.permissions import has_capability
 
 
 def _as_bool(value) -> bool:
@@ -65,9 +66,17 @@ def run_agent_sync_chat(
         channel_id = "api"
 
     if _as_bool(create_new):
-        agent_doc = frappe.get_doc("Agent", agent_name)
+        try:
+            agent_doc = frappe.get_doc("Agent", agent_name)
+        except frappe.DoesNotExistError:
+            agent_doc = None
+        if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+            frappe.throw(_("Agent not found or access denied."), frappe.PermissionError)
 
         assert_agent_access(agent_doc, user=frappe.session.user)
+
+        if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+            frappe.throw(_("You are not authorized to use this agent."), frappe.PermissionError)
 
         conv_manager = ConversationManager(
             agent_name=agent_name,
