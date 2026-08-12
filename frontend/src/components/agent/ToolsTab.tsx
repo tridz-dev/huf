@@ -150,7 +150,7 @@ export function ToolsTab({
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {selectedTools.map((tool) => {
-                const ToolIcon = getToolIconForType(tool.types);
+                const ToolIcon = getToolIconForType(tool.types, tool.service, tool.tool_type);
                 const usedByAgents = toolUsageMap.get(tool.name) || [];
                 const isShared = usedByAgents.length > 0;
                 
