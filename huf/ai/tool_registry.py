@@ -49,7 +49,7 @@ class PermissionAwareToolRegistry:
 
         for tool_link in agent_doc.agent_tool:
             try:
-                tool_doc = frappe.get_doc("Agent Tool Function", tool_link.tool)
+                tool_doc = frappe.get_cached_doc("Agent Tool Function", tool_link.tool)
 
                 if (
                     cls._can_use_tool(tool_doc, user)

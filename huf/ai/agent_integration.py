@@ -58,7 +58,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
         frappe.throw(_("Agent model is not configured"))
 
     if model and model != agent_doc.model:
-        model_doc = frappe.get_doc("AI Model", model)
+        model_doc = frappe.get_cached_doc("AI Model", model)
         if not model_doc.provider:
             frappe.throw(
                 _("AI Model '{0}' has no provider configured.").format(model),
@@ -79,7 +79,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
     if not effective_provider:
         frappe.throw(_("Provider is not configured"))
 
-    model_name = frappe.db.get_value("AI Model", effective_model, "model_name")
+    model_name = frappe.get_cached_value("AI Model", effective_model, "model_name")
     if not model_name:
         frappe.throw(
             _("AI Model '{0}' has no model name configured.").format(effective_model),
@@ -92,7 +92,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 class AgentManager:
     """Manages the creation and execution of agents."""
     def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None):
-        self.agent_doc = frappe.get_doc("Agent", agent_name)
+        self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
         (
             self.effective_provider,
             self.effective_model,
@@ -102,7 +102,7 @@ class AgentManager:
             model=model_override,
             provider=provider_override,
         )
-        self.settings = frappe.get_doc("AI Provider", self.effective_provider)
+        self.settings = frappe.get_cached_doc("AI Provider", self.effective_provider)
         self.provider_override = provider_override
         self.model_override = model_override
         # self.file_handler = file_handler
