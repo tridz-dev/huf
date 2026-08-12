@@ -1,6 +1,7 @@
 import asyncio
 import json
 import threading
+import random
 import time
 from types import SimpleNamespace
 import litellm
@@ -1180,11 +1181,15 @@ def run_agent_sync(
 
     lock_key = _conversation_lock_key(conversation.name)
     lock_acquired = False
-    for _attempt in range(_DIRECT_LOCK_ATTEMPTS):
+    for attempt in range(_DIRECT_LOCK_ATTEMPTS):
         if frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
             lock_acquired = True
             break
-        time.sleep(_DIRECT_LOCK_RETRY_DELAY)
+        if attempt < _DIRECT_LOCK_ATTEMPTS - 1:
+            # Exponential backoff with jitter so concurrent direct-execution
+            # waiters on the same conversation don't all retry in lockstep.
+            backoff = _DIRECT_LOCK_RETRY_DELAY * (2 ** attempt)
+            time.sleep(backoff + random.uniform(0, _DIRECT_LOCK_RETRY_DELAY))
 
     if not lock_acquired:
         frappe.throw(
@@ -1589,8 +1594,12 @@ def _execute_agent_run(
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
         }
-        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
-        result = _run_async_safely(run)
+        async def _run_with_mcp_pool():
+            from huf.ai.mcp_client import mcp_session_pool
+            async with mcp_session_pool():
+                return await RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
+
+        result = _run_async_safely(_run_with_mcp_pool())
 
         new_items = getattr(result, "new_items", []) or []
 

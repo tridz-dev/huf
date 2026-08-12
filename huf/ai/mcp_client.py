@@ -18,7 +18,10 @@ Uses LiteLLM's experimental MCP client for underlying MCP protocol handling.
 """
 
 import asyncio
+import contextlib
+import contextvars
 import json
+from contextlib import AsyncExitStack
 from typing import Any
 
 import frappe
@@ -32,6 +35,36 @@ from huf.ai.transaction import commit_if_background
 
 # MCP Tool prefix to identify MCP-sourced tools during execution
 MCP_TOOL_PREFIX = "__mcp__"
+
+# Scoped MCP ClientSession pool: set via `mcp_session_pool()` for the duration of a
+# single agent run so all MCP tool calls within that run reuse one initialized
+# session per server instead of paying a fresh transport + handshake per call.
+# Left unset (None) outside a run (e.g. tool sync / connection tests), which falls
+# back to the original open-per-call behavior.
+_mcp_session_pool: "contextvars.ContextVar[tuple[AsyncExitStack, dict] | None]" = contextvars.ContextVar(
+    "mcp_session_pool", default=None
+)
+
+
+@contextlib.asynccontextmanager
+async def mcp_session_pool():
+    """
+    Scope MCP ClientSession reuse to the wrapped coroutine.
+
+    Wrap a single agent run (one Runner.run call) with this so every MCP tool
+    invocation made during that run's tool-calling loop shares one initialized
+    session per MCP server, instead of opening a new transport + session per call.
+    Sessions are torn down automatically when the block exits (success or error),
+    so there is no separate warmup/clearing step to manage.
+    """
+    stack = AsyncExitStack()
+    sessions: dict[str, Any] = {}
+    token = _mcp_session_pool.set((stack, sessions))
+    try:
+        async with stack:
+            yield
+    finally:
+        _mcp_session_pool.reset(token)
 
 
 def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[FunctionTool]:
@@ -275,7 +308,7 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
     Automatically handles transport selection (SSE vs HTTP) and OAuth 401 retries.
     """
     headers = _build_mcp_headers(mcp_server)
-    
+
     try:
         return await _do_execute_mcp_session(mcp_server, headers, operation)
     except Exception as e:
@@ -284,8 +317,10 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
             from huf.ai.mcp_oauth import refresh_oauth_token
             try:
                 refresh_oauth_token(mcp_server.name)
-                # Rebuild headers with fresh token
+                # Rebuild headers with fresh token and drop any pooled session
+                # created with the stale token so the retry opens a fresh one.
                 headers = _build_mcp_headers(mcp_server)
+                _evict_pooled_session(mcp_server.name)
                 return await _do_execute_mcp_session(mcp_server, headers, operation)
             except Exception as refresh_exc:
                 frappe.log_error(
@@ -299,31 +334,57 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
         )
         raise Exception(_format_mcp_error(e))
 
-async def _do_execute_mcp_session(mcp_server, headers, operation):
+def _evict_pooled_session(server_name: str) -> None:
+    pool_ctx = _mcp_session_pool.get()
+    if pool_ctx is not None:
+        _, sessions = pool_ctx
+        sessions.pop(server_name, None)
+
+
+async def _open_mcp_session(mcp_server, headers, stack: AsyncExitStack):
+    """Open a transport + ClientSession, registering both with `stack` for cleanup."""
     import httpx
     from mcp.client.session import ClientSession
-    
+
     url = mcp_server.server_url
     transport_type = getattr(mcp_server, "transport_type", "http").lower()
     timeout_sec = float(mcp_server.timeout_seconds or 30.0)
-    
+
     if transport_type == "sse":
         from mcp.client.sse import sse_client
-        async with sse_client(url, headers=headers, timeout=timeout_sec) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                return await operation(session)
+        read_stream, write_stream = await stack.enter_async_context(
+            sse_client(url, headers=headers, timeout=timeout_sec)
+        )
     else:
         from mcp.client.streamable_http import streamable_http_client
         client = httpx.AsyncClient(
-            headers=headers, 
+            headers=headers,
             timeout=httpx.Timeout(timeout_sec, read=timeout_sec)
         )
-        async with streamable_http_client(url, http_client=client) as streams:
-            read_stream, write_stream, get_session_id = streams
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                return await operation(session)
+        await stack.enter_async_context(client)
+        read_stream, write_stream, _get_session_id = await stack.enter_async_context(
+            streamable_http_client(url, http_client=client)
+        )
+
+    session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
+    await session.initialize()
+    return session
+
+
+async def _do_execute_mcp_session(mcp_server, headers, operation):
+    pool_ctx = _mcp_session_pool.get()
+    if pool_ctx is not None:
+        stack, sessions = pool_ctx
+        session = sessions.get(mcp_server.name)
+        if session is None:
+            session = await _open_mcp_session(mcp_server, headers, stack)
+            sessions[mcp_server.name] = session
+        return await operation(session)
+
+    # No active pool (e.g. tool sync / connection test) - open, use, and close inline.
+    async with AsyncExitStack() as stack:
+        session = await _open_mcp_session(mcp_server, headers, stack)
+        return await operation(session)
 
 async def _execute_mcp_tool_via_sdk(mcp_server, tool_name: str, arguments: dict) -> Any:
     """
