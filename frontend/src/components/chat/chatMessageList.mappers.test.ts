@@ -156,6 +156,35 @@ describe('upsertToolUpdateFromSocket', () => {
     expect(first?.status).toBe('output-available');
     expect(second?.status).not.toBe('output-available');
   });
+
+  it('still reconciles an id-less completion event onto the tool card by name', () => {
+    const prev: MessageType[] = [pendingRun('AR-1')];
+
+    const started = upsertToolUpdateFromSocket(prev, {
+      type: 'tool_call_started',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_call_id: 'call-1',
+      tool_name: 'web_search',
+      tool_status: 'Queued',
+      tool_args: { query: 'x' },
+    });
+
+    // Legacy/incomplete event: no tool_call_id. It must update the existing
+    // card by name rather than pushing a second, id-less duplicate.
+    const completed = upsertToolUpdateFromSocket(started, {
+      type: 'tool_call_completed',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_name: 'web_search',
+      tool_status: 'Completed',
+      tool_result: { output: 'result-x' },
+    });
+
+    const tools = completed[0].tools ?? [];
+    expect(tools).toHaveLength(1);
+    expect(tools[0].status).toBe('output-available');
+  });
 });
 
 describe('mergePendingRunsIntoMessages', () => {

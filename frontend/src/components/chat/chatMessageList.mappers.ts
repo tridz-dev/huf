@@ -126,8 +126,7 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
     // would silently overwrite the earlier call's args/result.
     if (toolIndex < 0 && !event.tool_call_id) {
       toolIndex = existingTools.findIndex(
-        (t: { name?: string; tool_call_id?: string }) =>
-          !t.tool_call_id && (t.name === displayName || t.name === event.tool_name)
+        (t: { name?: string }) => t.name === displayName || t.name === event.tool_name
       );
     }
 
