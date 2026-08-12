@@ -16,7 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getAgents } from '@/services/agentApi';
-import { attachServiceTools, getServiceTools } from '@/services/integrationApi';
+import { attachServiceTools } from '@/services/integrationApi';
+import { getServiceToolsCached } from '@/services/serviceToolsCache';
 import type { AgentDoc } from '@/types/agent.types';
 import type { ServiceTool } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
@@ -54,7 +55,7 @@ export function AddIntegrationToAgentModal({
     setToolsLoading(true);
     setAgentsLoading(true);
 
-    getServiceTools(service)
+    getServiceToolsCached(service)
       .then((items) => {
         setTools(items || []);
         // Every tool is selected by default — most users want the full set,
