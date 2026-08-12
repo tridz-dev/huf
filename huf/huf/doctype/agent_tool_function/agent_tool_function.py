@@ -11,6 +11,18 @@ from frappe import _, is_whitelisted
 from frappe.model.document import Document
 
 
+def _json_schema_type(param_type):
+	"""Map a stored Agent Function Params `type` value to a valid JSON Schema type.
+
+	"float" is offered in the doctype's Select field for UX familiarity but is not a
+	valid JSON Schema type (json-schema.org only defines number/integer/string/boolean/
+	object/array/null); LLM providers reject or mishandle tool schemas containing it.
+	"""
+	if param_type == "float":
+		return "number"
+	return param_type
+
+
 def _annotation_to_param_type(annotation):
 	if annotation == inspect.Parameter.empty:
 		return "string"
@@ -252,7 +264,7 @@ class AgentToolFunction(Document):
 
 			for param in self.parameters:
 				properties[param.fieldname] = {
-					"type": param.type,
+					"type": _json_schema_type(param.type),
 					"description": param.description or param.label,
 				}
 
@@ -375,7 +387,7 @@ class AgentToolFunction(Document):
 			filter_properties = {}
 			for param in self.parameters:
 				filter_properties[param.fieldname] = {
-					"type": param.type,
+					"type": _json_schema_type(param.type),
 					"description": param.description or param.label or f"Filter by {param.fieldname}"
 				}
 
@@ -481,7 +493,7 @@ class AgentToolFunction(Document):
 			query_required = []
 
 			for param in self.parameters:
-				field_schema = {"type": param.type, "description": param.description or param.label}
+				field_schema = {"type": _json_schema_type(param.type), "description": param.description or param.label}
 				if param.type == "string" and param.options:
 					field_schema["enum"] = param.options.split("\n")
 
@@ -514,7 +526,7 @@ class AgentToolFunction(Document):
 			body_required = []
 
 			for param in self.parameters:
-				field_schema = {"type": param.type, "description": param.description or param.label}
+				field_schema = {"type": _json_schema_type(param.type), "description": param.description or param.label}
 
 				if param.type == "string" and param.options:
 					field_schema["enum"] = param.options.split("\n")
@@ -678,7 +690,7 @@ class AgentToolFunction(Document):
 
 		for param in self.parameters:
 			obj = {
-				"type": param.type,
+				"type": _json_schema_type(param.type),
 				"description": param.description or param.label,
 			}
 

@@ -32,8 +32,9 @@ CLOUD_PROVIDER_ENDPOINTS = {
     "google": {
         "default_url": "https://generativelanguage.googleapis.com/v1beta/models",
         "list_path": "/models",
-        "auth": lambda key: {},
-        "params": lambda key: {"key": key},
+        # Header-based auth avoids putting the raw API key in the request URL
+        # (query params are commonly captured in access/proxy logs).
+        "auth": lambda key: {"x-goog-api-key": key},
     },
     "openrouter": {
         "default_url": "https://openrouter.ai/api/v1/auth/key",
@@ -144,6 +145,17 @@ def probe_cloud_provider(provider_brand: str, api_key: str, api_base_url: str | 
         )
         if resp.status_code in (401, 403):
             return {"ok": False, "error": "API key was rejected by the provider."}
+        # Google's Generative Language API commonly returns 400 (not 401/403)
+        # for an invalid/expired key (error status API_KEY_INVALID) — detect
+        # that case too so the user gets the same clean message instead of a
+        # raw HTTPError string.
+        if provider_brand == "google" and resp.status_code == 400:
+            try:
+                body_error = (resp.json().get("error") or {}).get("status", "")
+            except Exception:
+                body_error = ""
+            if body_error == "INVALID_ARGUMENT" or "API_KEY_INVALID" in resp.text:
+                return {"ok": False, "error": "API key was rejected by the provider."}
         resp.raise_for_status()
         return {"ok": True, "error": None}
     except Exception as e:

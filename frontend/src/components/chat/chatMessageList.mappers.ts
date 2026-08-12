@@ -119,9 +119,15 @@ export function upsertToolUpdateFromSocket(prev: MessageType[], rawEvent: ToolCa
     let toolIndex = event.tool_call_id
       ? existingTools.findIndex((t: { tool_call_id?: string }) => t.tool_call_id === event.tool_call_id)
       : -1;
-    if (toolIndex < 0) {
+    // Only fall back to name-based matching when the event itself carries no
+    // tool_call_id (older/incomplete events). If the event *does* have an id
+    // but it doesn't match any existing tool, this is a genuinely new call
+    // (e.g. the same tool invoked twice in one turn) — matching by name here
+    // would silently overwrite the earlier call's args/result.
+    if (toolIndex < 0 && !event.tool_call_id) {
       toolIndex = existingTools.findIndex(
-        (t: { name?: string }) => t.name === displayName || t.name === event.tool_name
+        (t: { name?: string; tool_call_id?: string }) =>
+          !t.tool_call_id && (t.name === displayName || t.name === event.tool_name)
       );
     }
 

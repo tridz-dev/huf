@@ -327,6 +327,26 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setTestingConnection(true);
     setConnectionTest(null);
     try {
+      // Test Connection always probes the *saved* provider record on the
+      // backend, not the in-progress form state. Password-type fields (the
+      // API key) are never returned to the form when it's opened, so
+      // `formData.api_key` is blank unless the user just typed a new key in
+      // this session — persist any pending edits first so the test reflects
+      // what's actually in the form, not stale data from the last save.
+      // Omit `api_key` when the field is blank so an untouched key isn't
+      // sent as an empty string (which would fail provider validation or,
+      // if that guard were ever loosened, blank out the saved key).
+      const pendingUpdate: Record<string, unknown> = {
+        provider_brand:
+          formData.provider_brand || suggestBrandFromProviderName(formData.provider_name) || 'other',
+        is_local_llm: formData.is_local_llm ? 1 : 0,
+        api_base_url: formData.api_base_url.trim(),
+      };
+      if (formData.api_key) {
+        pendingUpdate.api_key = formData.api_key;
+      }
+      await updateProvider(selectedProvider.name, pendingUpdate);
+
       const result = await testProviderConnection(selectedProvider.name);
       setConnectionTest(result);
     } catch (error) {
