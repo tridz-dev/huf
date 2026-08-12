@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Check, Loader2, Search, Wrench } from 'lucide-react';
+import { Bot, Loader2, Search, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -36,6 +36,7 @@ export function AddIntegrationToAgentModal({
 }: AddIntegrationToAgentModalProps) {
   const [tools, setTools] = useState<ServiceTool[]>([]);
   const [toolsLoading, setToolsLoading] = useState(false);
+  const [selectedToolNames, setSelectedToolNames] = useState<Set<string>>(new Set());
   const [agents, setAgents] = useState<AgentDoc[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
   const [selectedAgentNames, setSelectedAgentNames] = useState<Set<string>>(new Set());
@@ -45,6 +46,7 @@ export function AddIntegrationToAgentModal({
   useEffect(() => {
     if (!open) {
       setSelectedAgentNames(new Set());
+      setSelectedToolNames(new Set());
       setAgentSearch('');
       return;
     }
@@ -53,7 +55,12 @@ export function AddIntegrationToAgentModal({
     setAgentsLoading(true);
 
     getServiceTools(service)
-      .then((items) => setTools(items || []))
+      .then((items) => {
+        setTools(items || []);
+        // Every tool is selected by default — most users want the full set,
+        // but can now deselect the ones they don't need for this agent.
+        setSelectedToolNames(new Set((items || []).map((t) => t.tool_name)));
+      })
       .catch((error) => {
         toast.error(getFrappeErrorMessage(error) || 'Failed to load tools');
       })
@@ -80,6 +87,26 @@ export function AddIntegrationToAgentModal({
     );
   }, [agents, agentSearch]);
 
+  const toggleTool = (name: string) => {
+    setSelectedToolNames((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) {
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllTools = () => {
+    if (selectedToolNames.size === tools.length) {
+      setSelectedToolNames(new Set());
+    } else {
+      setSelectedToolNames(new Set(tools.map((t) => t.tool_name)));
+    }
+  };
+
   const toggleAgent = (name: string) => {
     setSelectedAgentNames((prev) => {
       const next = new Set(prev);
@@ -105,8 +132,8 @@ export function AddIntegrationToAgentModal({
       toast.error('Select at least one agent');
       return;
     }
-    if (tools.length === 0) {
-      toast.error('No tools available for this integration');
+    if (selectedToolNames.size === 0) {
+      toast.error('Select at least one tool');
       return;
     }
 
@@ -114,7 +141,7 @@ export function AddIntegrationToAgentModal({
     try {
       const result = await attachServiceTools({
         service,
-        tool_names: tools.map((t) => t.tool_name),
+        tool_names: Array.from(selectedToolNames),
         agents: Array.from(selectedAgentNames),
       });
 
@@ -126,7 +153,7 @@ export function AddIntegrationToAgentModal({
         });
       } else {
         toast.success(
-          `Added ${tools.length} tool${tools.length > 1 ? 's' : ''} to ${selectedAgentNames.size} agent${
+          `Added ${selectedToolNames.size} tool${selectedToolNames.size > 1 ? 's' : ''} to ${selectedAgentNames.size} agent${
             selectedAgentNames.size > 1 ? 's' : ''
           }${skipped > 0 ? ` (${skipped} already present)` : ''}`,
         );
@@ -155,14 +182,21 @@ export function AddIntegrationToAgentModal({
         </DialogScrollHeader>
 
         <div className="space-y-6 px-6 py-2">
-          {/* Tools summary */}
+          {/* Tools selection */}
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-steel">
-              <Wrench className="w-4 h-4" />
-              Tools to attach
-              <Badge variant="outline" className="ml-1">
-                {tools.length}
-              </Badge>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-medium text-steel">
+                <Wrench className="w-4 h-4" />
+                Tools to attach
+                <Badge variant="outline" className="ml-1">
+                  {selectedToolNames.size}/{tools.length}
+                </Badge>
+              </div>
+              {tools.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleSelectAllTools}>
+                  {selectedToolNames.size === tools.length ? 'Deselect all' : 'Select all'}
+                </Button>
+              )}
             </div>
             {toolsLoading ? (
               <div className="flex items-center gap-2 text-sm text-steel-soft">
@@ -172,16 +206,28 @@ export function AddIntegrationToAgentModal({
             ) : tools.length === 0 ? (
               <div className="text-sm text-steel-soft">No tools found for this service.</div>
             ) : (
-              <div className="rounded-md border border-border bg-muted/30 p-3 space-y-1 max-h-40 overflow-y-auto">
-                {tools.map((tool) => (
-                  <div key={tool.tool_name} className="flex items-start gap-2 text-sm">
-                    <Check className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                    <div>
-                      <div className="font-medium">{tool.tool_name}</div>
-                      <div className="text-xs text-steel-soft">{tool.description}</div>
-                    </div>
-                  </div>
-                ))}
+              <div className="rounded-md border border-border divide-y divide-border max-h-52 overflow-y-auto">
+                {tools.map((tool) => {
+                  const selected = selectedToolNames.has(tool.tool_name);
+                  return (
+                    <label
+                      key={tool.tool_name}
+                      className={`flex items-start gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors ${
+                        selected ? 'bg-muted/50' : ''
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selected}
+                        onCheckedChange={() => toggleTool(tool.tool_name)}
+                        className="mt-0.5"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium text-sm truncate">{tool.tool_name}</div>
+                        <div className="text-xs text-steel-soft">{tool.description}</div>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -268,7 +314,7 @@ export function AddIntegrationToAgentModal({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={selectedAgentNames.size === 0 || tools.length === 0 || submitting}
+              disabled={selectedAgentNames.size === 0 || selectedToolNames.size === 0 || submitting}
             >
               {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Add to {selectedAgentNames.size > 0 ? `${selectedAgentNames.size} Agent${selectedAgentNames.size > 1 ? 's' : ''}` : 'Agent'}

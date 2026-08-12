@@ -283,6 +283,17 @@ export function SelectToolsModal({
     });
   };
 
+  const handleSelectAllInGroup = (tools: AgentToolFunctionRef[], allSelected: boolean) => {
+    setSelectedToolIds((prev) => {
+      const next = new Set(prev);
+      tools.forEach((tool) => {
+        if (allSelected) next.delete(tool.name);
+        else next.add(tool.name);
+      });
+      return next;
+    });
+  };
+
   const renderGroup = ({
     key,
     label,
@@ -297,40 +308,60 @@ export function SelectToolsModal({
     const Icon = getCategoryIcon(label);
     const expanded = isSearching || expandedGroups.has(key);
     const selectedHere = tools.filter((t) => selectedToolIds.has(t.name)).length;
+    const allSelected = selectedHere === tools.length && tools.length > 0;
     const isService = key.startsWith('service:');
 
     return (
       <div key={key} className="mb-2 last:mb-0">
-        <button
-          type="button"
-          onClick={() => toggleGroup(key)}
-          aria-expanded={expanded}
+        <div
           className={cn(
-            'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors',
-            'hover:bg-paper-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            'flex w-full items-center gap-2 rounded-lg px-2 py-2 transition-colors',
+            'hover:bg-paper-deep'
           )}
         >
-          <ChevronRight
+          <button
+            type="button"
+            onClick={() => toggleGroup(key)}
+            aria-expanded={expanded}
             className={cn(
-              'h-4 w-4 shrink-0 text-steel-soft transition-transform',
-              expanded && 'rotate-90'
+              'flex flex-1 items-center gap-2 text-left min-w-0',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md'
             )}
-            aria-hidden="true"
-          />
-          <Icon className="h-4 w-4 shrink-0 text-steel-soft" aria-hidden="true" />
-          <span className="text-sm font-medium text-foreground">{label}</span>
-          <span className="text-xs text-steel-soft">{tools.length}</span>
-          {isService && !connected && (
-            <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
-              Needs setup
-            </Badge>
-          )}
-          {selectedHere > 0 && (
-            <Badge variant="secondary" className="ml-auto shrink-0 text-[10px]">
-              {selectedHere} selected
-            </Badge>
-          )}
-        </button>
+          >
+            <ChevronRight
+              className={cn(
+                'h-4 w-4 shrink-0 text-steel-soft transition-transform',
+                expanded && 'rotate-90'
+              )}
+              aria-hidden="true"
+            />
+            <Icon className="h-4 w-4 shrink-0 text-steel-soft" aria-hidden="true" />
+            <span className="truncate text-sm font-medium text-foreground">{label}</span>
+            <span className="shrink-0 text-xs text-steel-soft">{tools.length}</span>
+            {isService && !connected && (
+              <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+                Needs setup
+              </Badge>
+            )}
+            {selectedHere > 0 && (
+              <Badge variant="secondary" className="ml-auto shrink-0 text-[10px]">
+                {selectedHere} selected
+              </Badge>
+            )}
+          </button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSelectAllInGroup(tools, allSelected);
+            }}
+          >
+            {allSelected ? 'Deselect all' : 'Select all'}
+          </Button>
+        </div>
         {expanded && (
           <div className="mt-1 space-y-2 pl-6">
             {isService && !connected && (
