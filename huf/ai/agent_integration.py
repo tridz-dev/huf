@@ -695,6 +695,53 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                     if len(val) > 140000:
                         val = val[:140000]
                     result_val = {"output": val}
+
+            # Idempotency: a client-side tool call (see client_side_tool.py's
+            # ``_get_or_create_call``) already inserted an ``Agent Tool Call``
+            # row for this (call_id, agent_run) DURING execution, before this
+            # function ever runs. Without this lookup we'd insert a second,
+            # unpolled row here and point ``tool_call_ref`` at it instead of
+            # the row the frontend/poller are actually using. call_id alone
+            # is not unique across runs, so scope the lookup by agent_run too.
+            existing_name = (
+                frappe.db.get_value(
+                    "Agent Tool Call",
+                    {"call_id": tool_call_id, "agent_run": agent_run},
+                    "name",
+                )
+                if tool_call_id
+                else None
+            )
+
+            if existing_name:
+                doc = frappe.get_doc("Agent Tool Call", existing_name)
+
+                update_data = {}
+                if name and not doc.tool:
+                    update_data["tool"] = name
+                if not doc.is_mcp_tool:
+                    update_data["is_mcp_tool"] = is_mcp_tool
+                if mcp_server and not doc.mcp_server:
+                    update_data["mcp_server"] = mcp_server
+                if args and not doc.tool_args:
+                    update_data["tool_args"] = json.dumps(args)
+                if result_val is not None and not doc.tool_result:
+                    update_data["tool_result"] = result_val
+                if error and not doc.error_message:
+                    update_data["error_message"] = error
+                if conversation and not doc.conversation:
+                    update_data["conversation"] = conversation
+
+                if update_data:
+                    doc.update(update_data)
+                    if not frappe.has_permission("Agent Tool Call", "write", doc=doc):
+                        frappe.throw(
+                            _("Not permitted to update Agent Tool Call records."),
+                            frappe.PermissionError,
+                        )
+                    doc.save()
+                return doc.name
+
             doc = frappe.get_doc({
                 "doctype": "Agent Tool Call",
                 "agent_run": agent_run,
@@ -1574,7 +1621,11 @@ def _execute_agent_run(
                          "function": {
                              "name": tool_name,
                              "arguments": tool_args
-                        }
+                        },
+                        # Agent Tool Call docname — the unambiguous key the frontend
+                        # sends back to huf.ai.client_side_tool.submit_client_tool_result.
+                        # ``call_id`` (above) is kept for backward compatibility.
+                        "tool_call_ref": tool_call_id
                     })
 
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"

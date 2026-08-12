@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent } from '@/hooks/useChatSocket';
+import { executeClientToolCall, resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
@@ -188,12 +189,35 @@ export function ChatMessageList({
         });
     }, [chatId]);
 
+    // Socket events are best-effort/at-least-once, and the same call can
+    // also arrive via the send-message HTTP response (see ChatInput), so
+    // de-duplication is shared across both channels in clientToolDispatcher.
+    // Clear tracked ids whenever the active conversation changes.
+    useEffect(() => {
+        resetClientToolCallTracking();
+    }, [chatId]);
+
+    // Handle backend-initiated client-side ("frontend") tool calls
+    const handleFrontendToolCall = useCallback((event: FrontendToolCallEvent) => {
+        if (event.conversation_id !== chatId) return;
+
+        const callId = event.tool_call_ref ?? event.call_id;
+        if (!callId) return;
+
+        void executeClientToolCall({
+            callId,
+            functionName: event.function_name,
+            toolParams: event.tool_params,
+        });
+    }, [chatId]);
+
     useChatSocket({
         conversationId: chatId,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
         onConversationTitleUpdated: handleConversationTitleUpdated,
+        onFrontendToolCall: handleFrontendToolCall,
     });
 
     useConversationTitlePostSuccessFallback({

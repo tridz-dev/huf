@@ -14,6 +14,7 @@ export type AgentConfigSection =
   | 'knowledge'
   | 'skills'
   | 'permissions'
+  | 'voice'
   | 'advanced';
 
 export interface AgentSectionResponse {

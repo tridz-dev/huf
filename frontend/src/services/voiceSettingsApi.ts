@@ -1,7 +1,45 @@
-import { db } from '@/lib/frappe-sdk';
+import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import type { ElevenlabsSettingsDoc, HttpProviderSettingsDoc } from '@/types/integration.types';
+
+/** One entry from `huf.ai.voice.api.list_engines()`. */
+export interface VoiceEngineOption {
+  key: string;
+  label: string;
+  kind: string;
+}
+
+/** One entry from `huf.ai.voice.api.get_config_schema()`. */
+export interface VoiceConfigSchemaField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'boolean' | 'select' | 'secret';
+  default?: unknown;
+  help_text?: string;
+  options?: Array<{ value: string; label: string }>;
+  visible_when?: Record<string, unknown>;
+}
+
+/** Fetch the registered voice engines available for agents to use. */
+export async function listVoiceEngines(): Promise<VoiceEngineOption[]> {
+  try {
+    const result = await call.get('huf.ai.voice.api.list_engines');
+    return (result.message as VoiceEngineOption[]) || [];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching voice engines');
+  }
+}
+
+/** Fetch the config schema declared by a given voice engine key. */
+export async function getVoiceConfigSchema(engine: string): Promise<VoiceConfigSchemaField[]> {
+  try {
+    const result = await call.get('huf.ai.voice.api.get_config_schema', { engine });
+    return (result.message as VoiceConfigSchemaField[]) || [];
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching voice engine configuration schema');
+  }
+}
 
 export async function getElevenlabsSettings(): Promise<ElevenlabsSettingsDoc | undefined> {
   try {
