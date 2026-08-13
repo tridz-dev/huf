@@ -510,7 +510,15 @@ def sync_mcp_server_tools(server_name: str) -> dict:
                     "parameters": parameters,
                     "enabled": 1
                 })
-        
+
+        # Remove tools that no longer exist on the remote MCP server so stale/deleted
+        # tools aren't left enabled and exposed to agents after a sync.
+        removed_tool_names = set(current_tools.keys()) - synced_tool_names
+        if removed_tool_names:
+            mcp_server.tools = [
+                row for row in mcp_server.tools if row.tool_name not in removed_tool_names
+            ]
+
         # Whitelisted sync endpoint updates server metadata after permission check; bypass is required because non-admin users may trigger sync.
         mcp_server.save(ignore_permissions=True)
         commit_if_background()

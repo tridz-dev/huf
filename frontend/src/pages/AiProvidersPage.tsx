@@ -327,7 +327,19 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setTestingConnection(true);
     setConnectionTest(null);
     try {
-      const result = await testProviderConnection(selectedProvider.name);
+      // Test what's in the form, not what was last saved. The API key is a
+      // Password field, so it never comes back when the form is opened —
+      // without sending the in-progress values, a key the user just typed
+      // would never be the thing actually tested. These are used for the
+      // probe only and are not persisted, so Cancel still discards edits.
+      // `api_key` is omitted when blank so the saved key is used instead.
+      const result = await testProviderConnection(selectedProvider.name, {
+        ...(formData.api_key ? { api_key: formData.api_key } : {}),
+        api_base_url: formData.api_base_url.trim(),
+        provider_brand:
+          formData.provider_brand || suggestBrandFromProviderName(formData.provider_name) || 'other',
+        is_local_llm: formData.is_local_llm ? 1 : 0,
+      });
       setConnectionTest(result);
     } catch (error) {
       toast.error('Connection test failed', {

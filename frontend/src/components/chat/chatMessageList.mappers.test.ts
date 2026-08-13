@@ -4,6 +4,7 @@ import {
   mergeConversationItemsIntoMessages,
   mergePendingRunsIntoMessages,
   upsertAgentRunStatusFromSocket,
+  upsertToolUpdateFromSocket,
 } from './chatMessageList.mappers';
 import type { MessageType } from './types';
 import type { ChatMessage, PendingConversationRun } from '@/services/chatApi';
@@ -103,6 +104,86 @@ describe('upsertAgentRunStatusFromSocket', () => {
       status: 'success',
     });
     expect(next).toBe(prev);
+  });
+});
+
+describe('upsertToolUpdateFromSocket', () => {
+  it('keeps two calls to the same tool within one run as separate tool cards', () => {
+    const prev: MessageType[] = [pendingRun('AR-1')];
+
+    // First call to `web_search` starts.
+    let next = upsertToolUpdateFromSocket(prev, {
+      type: 'tool_call_started',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_call_id: 'call-1',
+      tool_name: 'web_search',
+      tool_status: 'Queued',
+      tool_args: { query: 'x' },
+    });
+
+    // Second call to the SAME tool starts with a different call id before
+    // the first one completes (e.g. the model issues two searches in one turn).
+    next = upsertToolUpdateFromSocket(next, {
+      type: 'tool_call_started',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_call_id: 'call-2',
+      tool_name: 'web_search',
+      tool_status: 'Queued',
+      tool_args: { query: 'y' },
+    });
+
+    const tools = next[0].tools ?? [];
+    expect(tools).toHaveLength(2);
+    expect(tools.map((t) => t.tool_call_id).sort()).toEqual(['call-1', 'call-2']);
+
+    // Completing the first call must update only that card, not the second.
+    next = upsertToolUpdateFromSocket(next, {
+      type: 'tool_call_completed',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_call_id: 'call-1',
+      tool_name: 'web_search',
+      tool_status: 'Completed',
+      tool_result: { output: 'result-x' },
+    });
+
+    const updatedTools = next[0].tools ?? [];
+    expect(updatedTools).toHaveLength(2);
+    const first = updatedTools.find((t) => t.tool_call_id === 'call-1');
+    const second = updatedTools.find((t) => t.tool_call_id === 'call-2');
+    expect(first?.status).toBe('output-available');
+    expect(second?.status).not.toBe('output-available');
+  });
+
+  it('still reconciles an id-less completion event onto the tool card by name', () => {
+    const prev: MessageType[] = [pendingRun('AR-1')];
+
+    const started = upsertToolUpdateFromSocket(prev, {
+      type: 'tool_call_started',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_call_id: 'call-1',
+      tool_name: 'web_search',
+      tool_status: 'Queued',
+      tool_args: { query: 'x' },
+    });
+
+    // Legacy/incomplete event: no tool_call_id. It must update the existing
+    // card by name rather than pushing a second, id-less duplicate.
+    const completed = upsertToolUpdateFromSocket(started, {
+      type: 'tool_call_completed',
+      conversation_id: 'CONV-1',
+      agent_run_id: 'AR-1',
+      tool_name: 'web_search',
+      tool_status: 'Completed',
+      tool_result: { output: 'result-x' },
+    });
+
+    const tools = completed[0].tools ?? [];
+    expect(tools).toHaveLength(1);
+    expect(tools[0].status).toBe('output-available');
   });
 });
 
