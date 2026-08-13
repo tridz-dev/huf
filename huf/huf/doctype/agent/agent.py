@@ -23,6 +23,10 @@ def get_permission_query_conditions(user):
     if "System Manager" in frappe.get_roles(user):
         return None
 
+    from huf.permissions import has_capability
+    if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
+        return "`tabAgent`.is_system = 0"
+
     user_roles = frappe.get_roles(user)
     user_roles_str = "', '".join([r.replace("'", "''") for r in user_roles])
 
@@ -550,6 +554,10 @@ class Agent(Document):
 
         if permission_type == "delete":
             return has_capability(user, "agent.delete")
+
+        if permission_type == "read" or permission_type is None:
+            if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
+                return True
 
         # Access/Read Permissions — delegated to the shared helper so this
         # stays in sync with huf.ai.agent_integration's access checks.
