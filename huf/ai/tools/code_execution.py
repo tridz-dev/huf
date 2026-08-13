@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import hashlib
 import ipaddress
+
+import frappe
 import json
 import os
 import shutil

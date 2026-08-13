@@ -107,15 +107,21 @@ class PermissionAwareToolRegistry:
 
     @classmethod
     def _allows_code_execution(cls, tool_doc, agent_doc, user: str) -> bool:
-        """Additional gate for tools of type 'Code Execution'.
+        """Additional gate for the Python code execution tool.
 
-        A Code Execution tool is only returned when ALL of:
-          (a) the acting user holds the ``code_execution.run`` capability;
-          (b) the agent has ``allow_code_execution`` enabled;
-          (c) the agent references an Execution Profile that is not disabled.
-        Tools of any other type pass straight through this gate.
+        Matches the SSH/Docker gate pattern: identify the tool by function_path
+        or tool_name (registry-synced tools are App Provided, not "Code
+        Execution" type) and enforce code_execution.run capability, agent opt-in,
+        and an enabled Execution Profile.
         """
-        if tool_doc.types != "Code Execution":
+        function_path = (getattr(tool_doc, "function_path", None) or "").strip()
+        tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
+        is_code_tool = (
+            tool_doc.types == "Code Execution"
+            or function_path == "huf.ai.tools.code_execution.run_python"
+            or tool_name == "run_python"
+        )
+        if not is_code_tool:
             return True
 
         from huf.permissions import has_capability

@@ -124,6 +124,7 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_voice_config()
         self._validate_skills()
         self._validate_starter_prompts()
         self._validate_allowed_users_and_roles()
@@ -363,6 +364,23 @@ class Agent(Document):
                     _("Selected STT Model does not support modality: Transcription"),
                     title=_("Invalid Model Capability"),
                 )
+
+    def _validate_voice_config(self):
+        """Ensure voice_config is valid JSON when voice is enabled."""
+        if not getattr(self, "voice_enabled", 0):
+            return
+
+        raw_config = getattr(self, "voice_config", None)
+        if not raw_config:
+            return
+
+        try:
+            json.loads(raw_config)
+        except (TypeError, ValueError):
+            frappe.throw(
+                _("Voice Configuration must be valid JSON."),
+                title=_("Invalid Voice Configuration"),
+            )
 
     def _validate_prompt_caching(self):
         if not self.model:
