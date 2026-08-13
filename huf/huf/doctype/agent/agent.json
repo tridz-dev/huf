@@ -884,7 +884,8 @@
    "description": "Maximum size (in MB) for a single uploaded file. Capped by the global 25 MB limit.",
    "fieldname": "max_upload_size_mb",
    "fieldtype": "Int",
-   "label": "Max Upload Size (MB)"
+   "label": "Max Upload Size (MB)",
+   "non_negative": 1
   },
   {
    "description": "Opt-in to the elevated-risk Python Code Execution tool. Requires both this flag and a Code Execution tool assigned in the Tools tab, plus an Execution Profile below, before the tool becomes active.",

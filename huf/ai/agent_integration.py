@@ -890,6 +890,29 @@ def run_background_summarization(conversation_name, agent_name):
             "Agent Background Summarization Error"
         )
 
+
+
+def _set_conversation_title_with_retry(conversation_name, title, max_retries=2):
+    """Set conversation title, retrying on transient MariaDB deadlocks.
+
+    The title generation runs in a background job that may race with the
+    main request thread updating the same Agent Conversation row. A single
+    short retry is usually enough to land the title without surfacing a
+    non-critical error to the user.
+    """
+    import time
+
+    for attempt in range(max_retries):
+        try:
+            frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
+            return
+        except frappe.QueryDeadlockError:
+            if attempt < max_retries - 1:
+                time.sleep(0.2 * (attempt + 1))
+                continue
+            raise
+
+
 @frappe.whitelist()
 def generate_conversation_title(conversation_name, agent_name):
     """
@@ -928,7 +951,7 @@ def generate_conversation_title(conversation_name, agent_name):
         )
         if title:
             title = title.strip().strip('"').strip("'")
-            frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
+            _set_conversation_title_with_retry(conversation_name, title)
             frappe.db.commit()  # nosemgrep: justified background-job commit
             _emit_conversation_title_updated(conversation_name, title)
     except Exception as e:

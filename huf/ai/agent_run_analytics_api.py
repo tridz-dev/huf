@@ -28,6 +28,14 @@ def get_execution_analytics(from_date: str | None = None, to_date: str | None = 
         frappe.throw("granularity must be 'hour' or 'day'")
     end = get_datetime(to_date) if to_date else now_datetime()
     start = get_datetime(from_date) if from_date else add_to_date(end, days=-7)
+    # from_date/to_date arrive as ISO strings (often UTC with a Z/offset suffix) from the
+    # frontend, which get_datetime parses as timezone-aware, while now_datetime()/add_to_date()
+    # return naive local datetimes. Mixing the two raises
+    # "can't compare offset-naive and offset-aware datetimes" on the next line.
+    if start.tzinfo is not None:
+        start = start.replace(tzinfo=None)
+    if end.tzinfo is not None:
+        end = end.replace(tzinfo=None)
     if start > end or (end - start).days > MAX_WINDOW_DAYS:
         frappe.throw(f"Date range must be between zero and {MAX_WINDOW_DAYS} days")
     if not frappe.db.exists("DocType", ROLLUP_DOCTYPE):
