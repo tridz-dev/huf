@@ -27,13 +27,16 @@ import { getKnowledgeSources } from '@/services/knowledgeApi';
 import type { AgentKnowledgeRow } from '@/types/agent.types';
 import type { ComboboxOption } from '@/components/ui/combobox';
 import { linkRoutes } from '@/lib/link-routes';
+import { KnowledgeSourceCreateModal } from './KnowledgeSourceCreateModal';
+import type { KnowledgeSourceDoc } from '@/types/knowledge.types';
 
 interface AgentKnowledgeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (row: AgentKnowledgeRow) => void;
   initialData?: AgentKnowledgeRow | null;
-  onCreateNew?: () => void;
+  /** Called after a new knowledge source is created in-context; return false to no-op. */
+  onCreateNew?: () => boolean | void;
 }
 
 export function AgentKnowledgeModal({
@@ -44,6 +47,7 @@ export function AgentKnowledgeModal({
   onCreateNew,
 }: AgentKnowledgeModalProps) {
   const [knowledgeSource, setKnowledgeSource] = useState('');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const [mode, setMode] = useState<'Mandatory' | 'Optional'>('Optional');
   const [priority, setPriority] = useState(0);
   const [maxChunks, setMaxChunks] = useState(5);
@@ -97,6 +101,19 @@ export function AgentKnowledgeModal({
     onOpenChange(false);
   };
 
+  const handleOpenCreate = () => {
+    if (onCreateNew && onCreateNew() === false) return;
+    setCreateModalOpen(true);
+  };
+
+  const handleSourceCreated = (source: KnowledgeSourceDoc) => {
+    setSourceOptions((prev) => [
+      { value: source.name, label: source.source_name || source.name },
+      ...prev,
+    ]);
+    setKnowledgeSource(source.name);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-md">
@@ -113,7 +130,7 @@ export function AgentKnowledgeModal({
             {sourceOptions.length === 0 && onCreateNew ? (
               <div className="flex flex-col items-center gap-3 rounded-none border border-dashed py-6 text-center">
                 <p className="text-sm text-steel">No knowledge sources registered yet</p>
-                <Button type="button" variant="default" size="sm" onClick={onCreateNew}>
+                <Button type="button" variant="default" size="sm" onClick={handleOpenCreate}>
                   Register your first knowledge source →
                 </Button>
               </div>
@@ -133,7 +150,7 @@ export function AgentKnowledgeModal({
                 type="button"
                 variant="link"
                 className="h-auto p-0 text-xs"
-                onClick={onCreateNew}
+                onClick={handleOpenCreate}
               >
                 Don't see it? Create a new knowledge source →
               </Button>
@@ -209,6 +226,12 @@ export function AgentKnowledgeModal({
           </Button>
         </DialogScrollFooter>
       </DialogScrollContent>
+
+      <KnowledgeSourceCreateModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+        onCreated={handleSourceCreated}
+      />
     </Dialog>
   );
 }

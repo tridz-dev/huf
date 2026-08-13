@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,9 +7,9 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import type { AgentFormValues } from './types';
 import type { UseFormReturn } from 'react-hook-form';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { linkRoutes } from '@/lib/link-routes';
+import { PromptTemplateCreateModal } from './PromptTemplateCreateModal';
 
 export interface AgentPromptOption {
   value: string;
@@ -25,6 +26,8 @@ interface PromptTemplateSectionProps {
   showAddNew?: boolean;
   /** True when protected fields must be read-only (system agent + non-admin). */
   locked?: boolean;
+  /** Called after a new prompt template is created via the in-context modal, so the caller can add it to promptOptions. */
+  onPromptCreated?: (option: AgentPromptOption) => void;
 }
 
 export function PromptTemplateSection({
@@ -33,9 +36,9 @@ export function PromptTemplateSection({
   loadingPrompts = false,
   showAddNew = true,
   locked = false,
+  onPromptCreated,
 }: PromptTemplateSectionProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const selectedPrompt = promptOptions.find((option) => option.value === form.watch('agent_prompt'));
   const promptComboboxOptions = promptOptions.map((option) => ({
     ...option,
@@ -71,31 +74,7 @@ export function PromptTemplateSection({
                   />
                 </FormControl>
                 {showAddNew ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() =>
-                      (() => {
-                        const returnTo = `${location.pathname}#general`;
-                        const selectedPromptField = 'agent_prompt';
-                        // Fallback for cases where react-router location.state is lost.
-                        try {
-                          localStorage.setItem(
-                            'agentPromptCreateReturnTo',
-                            JSON.stringify({ returnTo, selectedPromptField })
-                          );
-                        } catch {
-                          // ignore storage failures
-                        }
-                        navigate('/prompts/new', {
-                          state: {
-                            returnTo,
-                            selectedPromptField,
-                          },
-                        });
-                      })()
-                    }
-                  >
+                  <Button type="button" variant="secondary" onClick={() => setCreateModalOpen(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     New
                   </Button>
@@ -157,6 +136,20 @@ export function PromptTemplateSection({
           )}
         />
       </CardContent>
+      <PromptTemplateCreateModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+        onCreated={(prompt) => {
+          onPromptCreated?.({
+            value: prompt.name,
+            label: prompt.title || prompt.name,
+            description: prompt.description || undefined,
+            version: typeof prompt.version === 'number' ? prompt.version : undefined,
+            isLatest: prompt.is_latest === 1,
+          });
+          form.setValue('agent_prompt', prompt.name, { shouldDirty: true });
+        }}
+      />
     </Card>
   );
 }

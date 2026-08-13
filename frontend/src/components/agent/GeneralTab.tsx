@@ -30,6 +30,7 @@ interface GeneralTabProps {
   showAddNewPrompt?: boolean;
   /** True when protected fields must be read-only (system agent + non-admin). */
   locked?: boolean;
+  onPromptCreated?: (option: AgentPromptOption) => void;
 }
 
 export function GeneralTab({
@@ -43,6 +44,7 @@ export function GeneralTab({
   loadingPrompts,
   showAddNewPrompt = true,
   locked = false,
+  onPromptCreated,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
   const watchModel = form.watch('model');
@@ -310,6 +312,7 @@ We generally recommend altering this or temperature but not both.`}
           loadingPrompts={loadingPrompts}
           showAddNew={showAddNewPrompt}
           locked={locked}
+          onPromptCreated={onPromptCreated}
         />
       )}
 

@@ -2,8 +2,6 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useBlocker, useSearchParams, type Location } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Form } from '../components/ui/form';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
 import {
   getKnowledgeSource,
@@ -15,31 +13,14 @@ import { getProviders } from '../services/providerApi';
 import type { AIProvider } from '../types/agent.types';
 import { getFrappeErrorMessage } from '../lib/frappe-error';
 import { KnowledgeSourceHeader } from '../components/knowledge/KnowledgeSourceHeader';
-import { GeneralTab } from '../components/knowledge/GeneralTab';
-import { StatusTab } from '../components/knowledge/StatusTab';
 import { KnowledgeInputsModal } from '../components/knowledge/KnowledgeInputsModal';
+import { knowledgeSourceFormSchema, type KnowledgeSourceFormValues } from '../components/knowledge/types';
 import {
-  knowledgeSourceFormSchema,
-  type KnowledgeSourceFormValues,
-} from '../components/knowledge/types';
-
-function parseAdvancedConfig(value: unknown): Record<string, unknown> {
-  if (typeof value === 'string' && value.trim()) {
-    try {
-      return JSON.parse(value) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
-  }
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
-
-function stringifyAdvancedConfig(value: Record<string, unknown> | undefined): string {
-  return JSON.stringify(value || {});
-}
+  KnowledgeSourceForm,
+  knowledgeSourceTabConfig,
+  mapDocToFormValues,
+  buildKnowledgeSourcePayload,
+} from '../components/knowledge/KnowledgeSourceForm';
 import type { KnowledgeSourceDoc } from '../types/knowledge.types';
 import { createFormSubmitHandler, type TabFieldMapping } from '../utils/formValidation';
 import { useSaveShortcut } from '../hooks/useSaveShortcut';
@@ -49,37 +30,6 @@ import { linkKnowledgeToAgent } from '../services/agentApi';
 export { KnowledgeSourceFormPage };
 export default KnowledgeSourceFormPage;
 
-function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFormValues {
-  return {
-    source_name: doc.source_name || '',
-    description: doc.description || '',
-    knowledge_type: doc.knowledge_type || 'sqlite_fts',
-    scope: doc.scope || 'Site',
-    storage_mode: doc.storage_mode || 'Frappe File',
-    chunk_size: doc.chunk_size ?? 512,
-    chunk_overlap: doc.chunk_overlap ?? 50,
-    disabled: doc.disabled === 1,
-    embedding_model: doc.embedding_model || '',
-    vector_dimension: doc.vector_dimension ?? 1536,
-    embedding_provider: doc.embedding_provider || '',
-    chroma_mode: doc.chroma_mode || 'File',
-    chroma_host: doc.chroma_host || 'localhost',
-    chroma_port: doc.chroma_port ?? 8000,
-    chroma_ssl: doc.chroma_ssl === 1,
-    pgvector_connection_mode: doc.pgvector_connection_mode || 'External PostgreSQL',
-    pgvector_table_name: doc.pgvector_table_name || 'huf_knowledge_vectors',
-    pgvector_distance_metric: doc.pgvector_distance_metric || 'cosine',
-    pgvector_index_type: doc.pgvector_index_type || 'hnsw',
-    pgvector_host: doc.pgvector_host || 'localhost',
-    pgvector_port: doc.pgvector_port ?? 5432,
-    pgvector_database: doc.pgvector_database || '',
-    pgvector_user: doc.pgvector_user || '',
-    pgvector_password: doc.pgvector_password || '',
-    pgvector_sslmode: doc.pgvector_sslmode || 'prefer',
-    advanced_config: parseAdvancedConfig(doc.advanced_config),
-  };
-}
-
 function KnowledgeSourceFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -88,46 +38,7 @@ function KnowledgeSourceFormPage() {
   const isNew = id === 'new';
   const skipBlockRef = useRef(false);
 
-  const tabConfig = {
-    general: {
-      label: 'General',
-      fields: [
-        'source_name',
-        'description',
-        'knowledge_type',
-        'scope',
-        'storage_mode',
-        'chunk_size',
-        'chunk_overlap',
-        'embedding_model',
-        'vector_dimension',
-        'embedding_provider',
-        'chroma_mode',
-        'chroma_host',
-        'chroma_port',
-        'chroma_ssl',
-        'pgvector_connection_mode',
-        'pgvector_table_name',
-        'pgvector_distance_metric',
-        'pgvector_index_type',
-        'pgvector_host',
-        'pgvector_port',
-        'pgvector_database',
-        'pgvector_user',
-        'pgvector_password',
-        'pgvector_sslmode',
-        'advanced_config',
-      ],
-      default: true,
-      disabled: false,
-    },
-    status: {
-      label: 'Status',
-      fields: [],
-      default: false,
-      disabled: isNew,
-    },
-  } as const;
+  const tabConfig = knowledgeSourceTabConfig;
 
   const validTabs = useMemo(() => Object.keys(tabConfig), []);
   const defaultTab = useMemo(
@@ -248,34 +159,7 @@ function KnowledgeSourceFormPage() {
   const onSubmit = async (values: KnowledgeSourceFormValues) => {
     setSaving(true);
     try {
-      const payload: Partial<KnowledgeSourceDoc> = {
-        source_name: values.source_name,
-        description: values.description || '',
-        knowledge_type: values.knowledge_type,
-        scope: values.scope,
-        storage_mode: values.storage_mode as KnowledgeSourceDoc['storage_mode'],
-        chunk_size: values.chunk_size,
-        chunk_overlap: values.chunk_overlap,
-        disabled: values.disabled ? 1 : 0,
-        embedding_model: values.embedding_model || '',
-        vector_dimension: values.vector_dimension ?? 1536,
-        embedding_provider: values.embedding_provider || '',
-        chroma_mode: values.chroma_mode,
-        chroma_host: values.chroma_host || '',
-        chroma_port: values.chroma_port ?? 8000,
-        chroma_ssl: values.chroma_ssl ? 1 : 0,
-        pgvector_connection_mode: values.pgvector_connection_mode,
-        pgvector_table_name: values.pgvector_table_name || 'huf_knowledge_vectors',
-        pgvector_distance_metric: values.pgvector_distance_metric,
-        pgvector_index_type: values.pgvector_index_type,
-        pgvector_host: values.pgvector_host || '',
-        pgvector_port: values.pgvector_port ?? 5432,
-        pgvector_database: values.pgvector_database || '',
-        pgvector_user: values.pgvector_user || '',
-        pgvector_password: values.pgvector_password || '',
-        pgvector_sslmode: values.pgvector_sslmode,
-        advanced_config: stringifyAdvancedConfig(values.advanced_config),
-      };
+      const payload = buildKnowledgeSourcePayload(values);
 
       if (isNew) {
         const created = await createKnowledgeSource(payload);
@@ -398,27 +282,16 @@ function KnowledgeSourceFormPage() {
           onOpenInputs={() => setInputsModalOpen(true)}
         />
 
-        <Form {...form}>
-          <form onSubmit={handleFormSubmit} className="space-y-6">
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-              <TabsList layout="grid" cols={2}>
-                {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} disabled={config.disabled}>
-                    {config.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              <TabsContent value="general" className="space-y-4">
-                <GeneralTab form={form} isNew={isNew} providers={providers} />
-              </TabsContent>
-
-              <TabsContent value="status" className="space-y-4">
-                <StatusTab source={sourceDoc} />
-              </TabsContent>
-            </Tabs>
-          </form>
-        </Form>
+        <KnowledgeSourceForm
+          form={form}
+          isNew={isNew}
+          providers={providers}
+          sourceDoc={sourceDoc}
+          showStatusTab
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onSubmit={handleFormSubmit}
+        />
 
         {!isNew && id && (
           <KnowledgeInputsModal
