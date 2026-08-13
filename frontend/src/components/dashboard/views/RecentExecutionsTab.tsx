@@ -52,8 +52,8 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
   }, [providedRuns, providedLoading]);
 
   const handleExecutionClick = (run: AgentRunDoc) => {
-    if (run.conversation) {
-      navigate(`/chat/${run.conversation}`);
+    if (run.name) {
+      navigate(`/executions/${run.name}`);
     }
   };
 
@@ -77,7 +77,7 @@ export function RecentExecutionsTab({ runs: providedRuns, loading: providedLoadi
           const duration = calculateDuration(run.start_time, run.end_time);
           const timeAgo = formatTimeAgo(run.start_time);
           const status = getExecutionStatus(run.status);
-          const isClickable = Boolean(run.conversation);
+          const isClickable = Boolean(run.name);
 
           return (
             <LedgerRow
