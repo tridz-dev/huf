@@ -11,6 +11,7 @@ import {
 } from '@/services/integrationApi';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
+import { ServiceToolCount } from '@/components/integrations/ServiceToolCount';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
 import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
@@ -183,6 +184,7 @@ export function IntegrationSettingsListingPage({
           const identity = getServiceIdentity(setting.service);
           const metadata = [
             ...(category ? [{ label: 'Category', value: category }] : []),
+            { label: 'Tools', value: <ServiceToolCount service={setting.service} /> },
             ...(setting.is_default ? [{ label: 'Default', value: 'Yes', icon: Star }] : []),
             ...(setting.last_used
               ? [{ label: 'Last used', value: formatTimeAgo(setting.last_used) }]
