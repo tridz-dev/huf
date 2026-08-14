@@ -1,0 +1,38 @@
+name: Deploy HUF Bench
+
+on:
+  push:
+    branches:
+      # - pre-develop
+      - stage-1
+      #- stage-2
+      #- develop
+      #- test-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.HUF_DEPLOY_SSH_KEY }}
+          SSH_HOST: ${{ secrets.HUF_DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SSH_HOST: ${{ secrets.HUF_DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.HUF_DEPLOY_USER }}
+        run: |
+          ssh "$SSH_USER@$SSH_HOST" \
+            "/home/ubuntu/deploy-huf.sh \
+            '${GITHUB_REF_NAME}' \
+            '${GITHUB_SHA}'"
+
