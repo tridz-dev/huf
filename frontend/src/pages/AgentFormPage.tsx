@@ -119,7 +119,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     prompt_version_locked: agent.prompt_version_locked === 1,
     template_version_at_attach:
       agent.template_version_at_attach !== undefined ? agent.template_version_at_attach : undefined,
-    allow_guest: agent.allow_guest === 1,
+    allow_guest: !!agent.allow_guest,
     allowed_users: (agent.allowed_users || []).map((row) => row.user).filter(Boolean),
     allowed_roles: (agent.allowed_roles || []).map((row) => row.role).filter(Boolean),
     copied_from_prompt: agent.copied_from_prompt ?? undefined,
@@ -245,7 +245,13 @@ export function AgentFormPage() {
     },
     permissions: {
       label: 'Permissions',
-      fields: ['allow_guest', 'allowed_users', 'allowed_roles'],
+      fields: [
+        'allow_guest', 'allowed_users', 'allowed_roles',
+        'enable_conversation_data',
+        'conversation_data_api_permission',
+        'allow_code_execution', 'execution_profile', 'execution_shared_dir_limit_mb',
+        'allow_ssh', 'ssh_connections'
+      ],
       default: false,
       disabled: false,
     },
@@ -266,7 +272,6 @@ export function AgentFormPage() {
         'max_context_chars',
         'enable_conversation_data',
         'inject_conversation_data',
-        'conversation_data_api_permission',
         'autonaming_of_conversation_title',
         'enable_memory',
         'memory_policy',
@@ -282,11 +287,6 @@ export function AgentFormPage() {
         'allow_file_upload',
         'enable_ocr',
         'max_upload_size_mb',
-        'allow_code_execution',
-        'execution_profile',
-        'execution_shared_dir_limit_mb',
-        'allow_ssh',
-        'ssh_connections',
       ],
       default: false,
       disabled: false,
@@ -379,14 +379,13 @@ export function AgentFormPage() {
   const [initialAgentSkills, setInitialAgentSkills] = useState<AgentSkillRow[]>([]);
   const [skillOptions, setSkillOptions] = useState<{ value: string; label: string; subtitle?: string }[]>([]);
   const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
+  const [agentOwner, setAgentOwner] = useState<string | null>(null);
   const [sectionRevisions, setSectionRevisions] = useState<Partial<Record<AgentConfigSection, string>>>({});
   const [loadedSections, setLoadedSections] = useState<Set<AgentConfigSection>>(new Set());
   const [loadingSection, setLoadingSection] = useState<AgentConfigSection | null>(null);
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
   const [allowChat, setAllowChat] = useState(false); // Persisted value only – updated on load/save
-  const [users, setUsers] = useState<Array<{ name: string }>>([]);
-  const [roles, setRoles] = useState<Array<{ name: string }>>([]);
   const form = useForm<AgentFormValues>({
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
@@ -613,16 +612,14 @@ export function AgentFormPage() {
   // so a denied/failed one must not blank fields that loaded fine — hence
   // allSettled with a per-field fallback instead of Promise.all + one catch.
   useEffect(() => {
-    const labels = ['providers', 'models', 'tool types', 'skill options', 'users', 'roles'];
+    const labels = ['providers', 'models', 'tool types', 'skill options'];
     Promise.allSettled([
       getProviders(),
       getModels(),
       getToolTypes(),
       getSkillOptions(),
-      db.getDocList('User', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
-      db.getDocList('Role', { fields: ['name'], limit: 1000, orderBy: { field: 'name', order: 'asc' } }),
-    ]).then(([providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult]) => {
-      const results = [providersResult, modelsResult, toolTypesResult, skillOptionsResult, usersResult, rolesResult];
+    ]).then(([providersResult, modelsResult, toolTypesResult, skillOptionsResult]) => {
+      const results = [providersResult, modelsResult, toolTypesResult, skillOptionsResult];
       results.forEach((result, i) => {
         if (result.status === 'rejected') {
           console.error(`Error loading ${labels[i]}:`, result.reason);
@@ -644,12 +641,6 @@ export function AgentFormPage() {
       }
       if (skillOptionsResult.status === 'fulfilled') {
         setSkillOptions((skillOptionsResult.value || []) as { value: string; label: string; subtitle?: string }[]);
-      }
-      if (usersResult.status === 'fulfilled') {
-        setUsers(usersResult.value as Array<{ name: string }>);
-      }
-      if (rolesResult.status === 'fulfilled') {
-        setRoles((rolesResult.value as Array<{ name: string }>).filter((role) => role.name !== 'Guest'));
       }
     });
   }, []);
@@ -931,7 +922,7 @@ export function AgentFormPage() {
       if (state.showTab) {
         setActiveTab(state.showTab);
       }
-      navigate(`${location.pathname}${location.search}#advanced`, { replace: true, state: {} });
+      navigate(`${location.pathname}${location.search}#${state.showTab || 'advanced'}`, { replace: true, state: {} });
       return;
     }
 
@@ -952,7 +943,7 @@ export function AgentFormPage() {
       if (state.showTab) {
         setActiveTab(state.showTab);
       }
-      navigate(`${location.pathname}${location.search}#advanced`, { replace: true, state: {} });
+      navigate(`${location.pathname}${location.search}#${state.showTab || 'advanced'}`, { replace: true, state: {} });
       return;
     }
 
@@ -1211,7 +1202,7 @@ export function AgentFormPage() {
             agent_prompt: data.agent_prompt || '',
             prompt_version_locked: data.prompt_version_locked === 1,
             template_version_at_attach: data.template_version_at_attach !== undefined ? data.template_version_at_attach : undefined,
-            allow_guest: data.allow_guest === 1,
+            allow_guest: !!data.allow_guest,
             allowed_users: (data.allowed_users || []).map((row) => row.user).filter(Boolean),
             allowed_roles: (data.allowed_roles || []).map((row) => row.role).filter(Boolean),
             enable_prompt_caching: data.enable_prompt_caching === 1,
@@ -1272,6 +1263,7 @@ export function AgentFormPage() {
         setAllowChat(data.allow_chat === 1);
         setIsSystemAgent(data.is_system === 1);
         setAgentStats({ last_run: data.last_run ?? null, total_run: data.total_run ?? null });
+        setAgentOwner(data.owner ?? null);
         // Load tools from agent_tool field
         // agent_tool is a child table with format: [{ tool: "tool-name" }, ...]
         if (data.agent_tool && Array.isArray(data.agent_tool) && data.agent_tool.length > 0) {
@@ -1395,6 +1387,7 @@ export function AgentFormPage() {
       setKnowledgeSources([]);
       setInitialKnowledgeSources([]);
       setAgentStats({});
+      setAgentOwner(null);
       setLoading(false);
     }
   }, [id, isNew, form]);
@@ -1529,7 +1522,7 @@ export function AgentFormPage() {
         agent_prompt: values.agent_prompt || '',
         prompt_version_locked: values.prompt_version_locked ? 1 : 0,
         template_version_at_attach: values.template_version_at_attach !== undefined ? values.template_version_at_attach : undefined,
-        allow_guest: values.allow_guest ? 1 : 0,
+        allow_guest: values.allow_guest,
         allowed_users: (values.allowed_users || []).map((user) => ({ user })) as AgentPermissionUserRow[],
         allowed_roles: (values.allowed_roles || []).map((role) => ({ role })) as AgentPermissionRoleRow[],
         enable_prompt_caching: values.enable_prompt_caching ? 1 : 0,
@@ -1723,7 +1716,7 @@ export function AgentFormPage() {
           agent_prompt: newAgent.agent_prompt || '',
           prompt_version_locked: newAgent.prompt_version_locked === 1,
           template_version_at_attach: newAgent.template_version_at_attach !== undefined ? newAgent.template_version_at_attach : undefined,
-          allow_guest: newAgent.allow_guest === 1,
+          allow_guest: !!newAgent.allow_guest,
           allowed_users: (newAgent.allowed_users || []).map((row) => row.user).filter(Boolean),
           allowed_roles: (newAgent.allowed_roles || []).map((row) => row.role).filter(Boolean),
           enable_prompt_caching: newAgent.enable_prompt_caching === 1,
@@ -1785,6 +1778,7 @@ export function AgentFormPage() {
         setInitialKnowledgeSources([...knowledgeSources]);
         setInitialAgentSkills([...agentSkills]);
         setAgentStats({ last_run: newAgent.last_run ?? null, total_run: newAgent.total_run ?? null });
+        setAgentOwner(newAgent.owner ?? null);
         // Sync tool-details setting to other tabs via localStorage
         writeToolDetailsSetting(newAgent.name, newAgent.show_tool_execution_details === 1);
         // Navigate to the edit page with the new agent's ID
@@ -1877,6 +1871,7 @@ export function AgentFormPage() {
               last_run: updatedData.last_run ?? null,
               total_run: updatedData.total_run ?? null,
             });
+            setAgentOwner(updatedData.owner ?? null);
             // Reset tools, disabled state, and persisted allow_chat after successful update
             setInitialTools([...selectedTools]);
             setInitialDisabled(updatedData.disabled === 1);
@@ -2543,7 +2538,14 @@ export function AgentFormPage() {
               </TabsContent>
 
               <TabsContent value="permissions" className="space-y-4">
-                <PermissionsTab form={form} users={users} roles={roles} />
+                <PermissionsTab
+                  form={form}
+                  owner={agentOwner}
+                  executionProfileOptions={executionProfileOptions}
+                  loadingExecutionProfiles={loadingExecutionProfiles}
+                  sshConnectionOptions={sshConnectionOptions}
+                  loadingSSHConnections={loadingSSHConnections}
+                />
               </TabsContent>
 
               <TabsContent value="advanced" className="space-y-4">
@@ -2552,10 +2554,6 @@ export function AgentFormPage() {
                   allModels={allModels}
                   summaryPromptOptions={summaryPromptOptions}
                   loadingSummaryPrompts={loadingSummaryPrompts}
-                  executionProfileOptions={executionProfileOptions}
-                  loadingExecutionProfiles={loadingExecutionProfiles}
-                  sshConnectionOptions={sshConnectionOptions}
-                  loadingSSHConnections={loadingSSHConnections}
                   memoryPolicyOptions={memoryPolicyOptions}
                   loadingMemoryPolicies={loadingMemoryPolicies}
                 />

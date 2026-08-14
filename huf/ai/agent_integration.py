@@ -26,6 +26,8 @@ from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
+from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.permissions import has_capability
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -479,30 +481,13 @@ class AgentManager:
         return agent
 
 def _is_user_allowed(agent_doc, user: str) -> bool:
-    """Check if user is allowed to run this agent"""
+    """Check if user is allowed to run this agent.
 
-    # Guest check
-    if user == "Guest":
-        return agent_doc.allow_guest
-
-    # Check allowed_users if specified
-    if agent_doc.allowed_users:
-        allowed_user_names = [u.user for u in agent_doc.allowed_users]
-        if user in allowed_user_names:
-            return True
-
-    # Check allowed_roles if specified
-    if agent_doc.allowed_roles:
-        allowed_role_names = [r.role for r in agent_doc.allowed_roles]
-        user_roles = frappe.get_roles(user)
-        if any(role in user_roles for role in allowed_role_names):
-            return True
-
-    # If no restrictions specified, allow all logged-in users
-    if not agent_doc.allowed_users and not agent_doc.allowed_roles:
-        return True
-
-    return False
+    Thin wrapper kept for backward compatibility with existing callers
+    (e.g. huf/ai/handlers/agent_runner.py); delegates to the shared
+    huf.ai.agent_access helper, which is now the single source of truth.
+    """
+    return _check_agent_access(agent_doc, user)
 
 # Canonical lifecycle status values. These must match the Agent Run doctype
 # Select options (Queued/Started/Success/Failed), the HTTP acknowledgement
@@ -998,7 +983,15 @@ def run_agent_sync(
     if not channel_id:
         channel_id = "api"
 
-    agent_doc = frappe.get_doc("Agent", agent_name)
+    # A missing agent and a Guest-not-allowed agent must look identical to a
+    # Guest caller — otherwise the exception type (DoesNotExistError vs
+    # PermissionError) is an oracle for enumerating agent names.
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+    except frappe.DoesNotExistError:
+        agent_doc = None
+    if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+        frappe.throw(_("Agent not found or access denied."), frappe.PermissionError)
 
     if agent_doc.disabled:
         frappe.throw(
@@ -1006,20 +999,24 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
+    if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+        frappe.throw(
+            _("You are not authorized to use this agent."),
+            frappe.PermissionError
+        )
+
+    if frappe.session.user == "Guest":
+        # Guests may not redirect execution to a caller-chosen provider/model.
+        provider = None
+        model = None
+
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
         provider=provider,
     )
-
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
-
-    if not _is_user_allowed(agent_doc, frappe.session.user):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError
-        )
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -1265,16 +1262,7 @@ def get_agent_run_status(agent_run_id: str):
         frappe.throw(_("Agent Run not found: {0}").format(agent_run_id), frappe.DoesNotExistError)
 
     agent_doc = frappe.get_doc("Agent", run.agent)
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(
-            _("Access denied. This agent does not allow guest access."),
-            frappe.PermissionError,
-        )
-    if not _is_user_allowed(agent_doc, frappe.session.user):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError,
-        )
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     agent_message_id = None
     if run.status in ("Success", "Failed"):
@@ -2509,9 +2497,21 @@ async def run_agent_stream(
         channel_id = "sse_stream"
 
     try:
-        agent_doc = frappe.get_doc("Agent", agent_name)
+        # 0. Load the agent, keeping "doesn't exist" and "exists but Guest
+        # isn't allowed" indistinguishable to a Guest caller (same generic
+        # error) so agent names can't be enumerated by exception type.
+        try:
+            agent_doc = frappe.get_doc("Agent", agent_name)
+        except frappe.DoesNotExistError:
+            agent_doc = None
+        if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+            yield {
+                "type": "error",
+                "error": "Agent not found or access denied."
+            }
+            return
 
-        # 0. Disabled agents cannot run
+        # 0b. Disabled agents cannot run
         if agent_doc.disabled:
             yield {
                 "type": "error",
@@ -2519,16 +2519,18 @@ async def run_agent_stream(
             }
             return
 
-        # 1. Guest Check
-        if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+        # 1. Guest + Permission Check (User/Role binding)
+        try:
+            assert_agent_access(agent_doc, user=frappe.session.user)
+        except frappe.PermissionError as e:
             yield {
                 "type": "error",
-                "error": "Access denied. This agent does not allow guest access."
+                "error": str(e) or "You are not authorized to use this agent."
             }
             return
 
-        # 2. Permission Check (User/Role binding)
-        if not _is_user_allowed(agent_doc, frappe.session.user):
+        # 1b. Capability check for logged-in users
+        if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
             yield {
                 "type": "error",
                 "error": "You are not authorized to use this agent."
@@ -2582,6 +2584,11 @@ async def run_agent_stream(
                 exact_match = frappe.db.get_value("Agent Prompt", {"prompt_group": prompt_data.prompt_group, "version": int(prompt_version)}, "name")
                 if exact_match:
                     resolved_prompt_template = exact_match
+
+        # Guests may not override the agent's configured provider/model
+        if frappe.session.user == "Guest":
+            provider = None
+            model = None
 
         resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
             agent_doc,

@@ -1,6 +1,8 @@
 import frappe
 from frappe import _
 from frappe.utils import now
+
+from huf.permissions import has_capability
 import json
 from collections import defaultdict
 from typing import Any
@@ -368,12 +370,25 @@ class ConversationManager:
     def get_or_create_conversation(self, title=None, conversation_id=None):
         """Get active conversation or create new one"""
         if conversation_id:
+            # An explicit conversation_id is authoritative: a missing id and an
+            # inaccessible one must fail identically (generic error), otherwise
+            # callers can enumerate conversation ids (existence oracle).
             try:
                 conversation = frappe.get_doc("Agent Conversation", conversation_id)
-                if conversation.is_active:
-                    return conversation
+                accessible = conversation.agent == self.agent_name and (
+                    conversation.owner == frappe.session.user
+                    or conversation.session_id == self.session_id
+                    or has_capability(frappe.session.user, "chat.view_all")
+                )
             except frappe.DoesNotExistError:
-                pass
+                conversation, accessible = None, False
+            if not accessible:
+                frappe.throw(
+                    _("Conversation not found or access denied."),
+                    frappe.PermissionError
+                )
+            if conversation.is_active:
+                return conversation
 
         # Try to get existing active conversation
         conversation = frappe.get_all(

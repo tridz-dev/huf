@@ -866,24 +866,28 @@ def create_huf_roles():
 			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
 			"is_system_role": 1,
 			"frappe_role": "System Manager",
+			"role_weight": 100,
 		},
 		{
 			"role_name": "Huf Manager",
 			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
 			"is_system_role": 1,
 			"frappe_role": "Huf Manager",
+			"role_weight": 80,
 		},
 		{
 			"role_name": "Huf User",
 			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
 			"is_system_role": 1,
 			"frappe_role": "Huf User",
+			"role_weight": 50,
 		},
 		{
 			"role_name": "Huf Viewer",
 			"description": "Read-only access. Can view agents and own conversations only.",
 			"is_system_role": 1,
 			"frappe_role": "Huf Viewer",
+			"role_weight": 10,
 		},
 	]
 
@@ -903,6 +907,9 @@ def create_huf_roles():
 				if cap not in existing_caps:
 					doc.append("permissions", {"capability": cap})
 					changed = True
+			if doc.role_weight != meta.get("role_weight", 0):
+				doc.role_weight = meta.get("role_weight", 0)
+				changed = True
 			if changed:
 				doc.save(ignore_permissions=True)
 
