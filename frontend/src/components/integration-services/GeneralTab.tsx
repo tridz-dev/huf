@@ -32,7 +32,7 @@ export function GeneralTab({ form, isNew }: GeneralTabProps) {
         name="service_name"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Service Name</FormLabel>
+            <FormLabel>Service name</FormLabel>
             <FormControl>
               <Input
                 {...field}

@@ -1,5 +1,6 @@
 import { FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
@@ -16,20 +17,9 @@ import type { AgentPromptOption } from './PromptTemplateSection';
 import { FormSettingsSection } from './FormSettingsSection';
 import {
 	MODEL_MODALITY_IMAGE,
-	MODEL_MODALITY_TTS,
-	MODEL_MODALITY_STT,
 	IMAGE_MODEL_LABEL,
 	IMAGE_MODEL_PLACEHOLDER,
 	IMAGE_MODEL_DESCRIPTION,
-	TTS_MODEL_LABEL,
-	TTS_MODEL_PLACEHOLDER,
-	TTS_MODEL_DESCRIPTION,
-	TTS_VOICE_LABEL,
-	TTS_VOICE_PLACEHOLDER,
-	TTS_VOICE_DESCRIPTION,
-	STT_MODEL_LABEL,
-	STT_MODEL_PLACEHOLDER,
-	STT_MODEL_DESCRIPTION,
 } from '@/data/ai';
 
 export interface ExecutionProfileOption {
@@ -89,8 +79,6 @@ export function AdvancedTab({
 	loadingMemoryPolicies = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
-	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
-	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
 	const contextStrategy = form.watch('context_strategy');
 	const summaryPromptMode = form.watch('summary_prompt_mode');
 	const enableConversationData = form.watch('enable_conversation_data');
@@ -112,7 +100,7 @@ export function AdvancedTab({
 	return (
 		<div className="space-y-12">
 			<FormSettingsSection
-				title="Conversation Strategy"
+				title="Conversation strategy"
 				description="Define the rules for how the agent manages its memory window when a conversation grows long and approaches token limits."
 			>
 				<FormField
@@ -120,7 +108,7 @@ export function AdvancedTab({
 					name="context_strategy"
 					render={({ field }) => (
 						<FormItem>
-							<FormLabel>Context Strategy</FormLabel>
+							<FormLabel>Context strategy</FormLabel>
 							<Select onValueChange={field.onChange} value={field.value || ''}>
 								<FormControl>
 									<SelectTrigger>
@@ -141,13 +129,37 @@ export function AdvancedTab({
 					)}
 				/>
 
+
+				<FormField
+					control={form.control}
+					name="autonaming_of_conversation_title"
+					render={({ field }) => (
+						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+							<div className="space-y-0.5 pr-4">
+								<FormLabel className="text-base">Autonaming of conversation title</FormLabel>
+								<FormDescription>
+									If enabled, the conversation title will be automatically updated based on the initial context.
+								</FormDescription>
+							</div>
+							<FormControl>
+								<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+							</FormControl>
+						</FormItem>
+					)}
+				/>
+			</FormSettingsSection>
+
+			<FormSettingsSection
+				title="Limits"
+				description="Set caps on agent operations and resource usage."
+			>
 				<div className="grid gap-6 sm:grid-cols-2">
 					<FormField
 						control={form.control}
 						name="history_limit"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>History Limit</FormLabel>
+								<FormLabel>History limit</FormLabel>
 								<FormControl>
 									<Input
 										type="number"
@@ -168,7 +180,7 @@ export function AdvancedTab({
 						name="max_turns"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Max Turns</FormLabel>
+								<FormLabel>Max turns</FormLabel>
 								<FormControl>
 									<Input
 										type="number"
@@ -190,7 +202,7 @@ export function AdvancedTab({
 					name="max_knowledge_tokens"
 					render={({ field }) => (
 						<FormItem>
-							<FormLabel>Max Knowledge Tokens</FormLabel>
+							<FormLabel>Max knowledge tokens</FormLabel>
 							<FormControl>
 								<Input
 									type="number"
@@ -208,18 +220,23 @@ export function AdvancedTab({
 
 				<FormField
 					control={form.control}
-					name="autonaming_of_conversation_title"
+					name="max_context_chars"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
-							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Autonaming of Conversation Title</FormLabel>
-								<FormDescription>
-									If enabled, the conversation title will be automatically updated based on the initial context.
-								</FormDescription>
-							</div>
+						<FormItem>
+							<FormLabel>Max context characters</FormLabel>
 							<FormControl>
-								<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+								<Input
+									type="number"
+									placeholder="2000"
+									{...field}
+									value={field.value?.toString() || ''}
+									onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
+								/>
 							</FormControl>
+							<FormDescription>
+								Maximum characters allowed for tool results before truncating and applying include_reference context policy.
+							</FormDescription>
+							<FormMessage />
 						</FormItem>
 					)}
 				/>
@@ -227,7 +244,7 @@ export function AdvancedTab({
 
 			{contextStrategy === 'Summarize' && (
 				<FormSettingsSection
-					title="Summarization Engine"
+					title="Summarization engine"
 					description="Configure how older conversation history is compressed when the context strategy is set to Summarize."
 				>
 					<div className="grid gap-6 sm:grid-cols-2">
@@ -236,7 +253,7 @@ export function AdvancedTab({
 							name="summary_ratio"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Summary Ratio</FormLabel>
+									<FormLabel>Summary ratio</FormLabel>
 									<FormControl>
 										<Input
 											type="text"
@@ -257,7 +274,7 @@ export function AdvancedTab({
 							name="summary_model"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Summary Model</FormLabel>
+									<FormLabel>Summary model</FormLabel>
 									<FormControl>
 										<LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
 											<Select
@@ -288,7 +305,7 @@ export function AdvancedTab({
 						control={form.control}
 						name="summary_prompt_mode"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5 pr-4">
 									<FormLabel className="text-base">Use external template</FormLabel>
 									<FormDescription>
@@ -311,7 +328,7 @@ export function AdvancedTab({
 							name="summary_prompt_template"
 							render={({ field }) => (
 								<FormItem id="summary-prompt-template-field">
-									<FormLabel>Summary Prompt Template</FormLabel>
+									<FormLabel>Summary prompt template</FormLabel>
 									<div className="flex items-center gap-2">
 										<FormControl>
 											<Combobox
@@ -378,9 +395,9 @@ export function AdvancedTab({
 								control={form.control}
 								name="summary_prompt_version_locked"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 										<div className="space-y-0.5 pr-4">
-											<FormLabel className="text-base">Lock Summary Prompt Version</FormLabel>
+											<FormLabel className="text-base">Lock summary prompt version</FormLabel>
 											<FormDescription>
 												If checked, this agent will stay on the summary prompt version it was attached to, ignoring newer versions.
 											</FormDescription>
@@ -397,9 +414,9 @@ export function AdvancedTab({
 								name="summary_template_version_at_attach"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Summary Attached at Version</FormLabel>
+										<FormLabel>Summary attached at version</FormLabel>
 										<FormControl>
-											<div className="flex min-h-10 items-center rounded-none border bg-paper-deep/40 px-3 text-sm text-steel">
+											<div className="flex min-h-10 items-center rounded-md border bg-paper-deep/40 px-3 text-sm text-steel">
 												{field.value ?? 'Will be recorded after template attachment'}
 											</div>
 										</FormControl>
@@ -419,7 +436,7 @@ export function AdvancedTab({
 							name="summary_prompt"
 							render={({ field }) => (
 								<FormItem>
-									<div className="rounded-none border bg-paper-deep/20 p-4 space-y-3">
+									<div className="rounded-lg border bg-paper-deep/20 p-4 space-y-3">
 										<div>
 											<p className="text-sm font-medium">Local Prompt</p>
 											<p className="text-xs text-steel-soft">
@@ -427,8 +444,8 @@ export function AdvancedTab({
 											</p>
 										</div>
 										<FormControl>
-											<textarea
-												className="flex min-h-[120px] w-full rounded-none border border-input bg-paper px-3 py-2 text-sm ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+											<Textarea
+												className="min-h-[120px]"
 												placeholder="Enter the prompt used to summarize conversation history..."
 												{...field}
 												value={field.value || ''}
@@ -447,16 +464,16 @@ export function AdvancedTab({
 			)}
 
 			<FormSettingsSection
-				title="Conversation Data"
+				title="Conversation data"
 				description="Control agent memory storage, injection into prompts, and tool-result context limits."
 			>
 				<FormField
 					control={form.control}
 					name="enable_conversation_data"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Allow Conversation Data Management</FormLabel>
+								<FormLabel className="text-base">Allow conversation data management</FormLabel>
 								<FormDescription>
 									If enabled, the agent can store key-value pairs in the conversation context.
 								</FormDescription>
@@ -483,9 +500,9 @@ export function AdvancedTab({
 						control={form.control}
 						name="inject_conversation_data"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5 pr-4">
-									<FormLabel className="text-base">Inject Conversation Data into Prompt</FormLabel>
+									<FormLabel className="text-base">Inject conversation data into prompt</FormLabel>
 									<FormDescription>
 										Auto-injects all active memory items into the LLM system prompt on every turn. Disabling this avoids &apos;Context Bloat&apos; (saving tokens/cost and improving speed) and allows on-demand access strictly through the &apos;get_conversation_data&apos; tool.
 									</FormDescription>
@@ -523,7 +540,7 @@ export function AdvancedTab({
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Reasoning Configuration"
+				title="Reasoning configuration"
 				description="Configure provider-aware reasoning parameters (e.g. Anthropic extended thinking, OpenAI reasoning effort)."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
@@ -532,7 +549,7 @@ export function AdvancedTab({
 						name="reasoning_mode"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Reasoning Mode</FormLabel>
+								<FormLabel>Reasoning mode</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
 									<FormControl>
 										<SelectTrigger>
@@ -540,9 +557,9 @@ export function AdvancedTab({
 										</SelectTrigger>
 									</FormControl>
 									<SelectContent>
-										<SelectItem value="Auto">Auto (Default / Model Native)</SelectItem>
-										<SelectItem value="Off">Off (Force Disable)</SelectItem>
-										<SelectItem value="On">On (Force Enable)</SelectItem>
+										<SelectItem value="Auto">Auto (default / model native)</SelectItem>
+										<SelectItem value="Off">Off (force disable)</SelectItem>
+										<SelectItem value="On">On (force enable)</SelectItem>
 									</SelectContent>
 								</Select>
 								<FormDescription>
@@ -558,7 +575,7 @@ export function AdvancedTab({
 						name="reasoning_effort"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Reasoning Effort</FormLabel>
+								<FormLabel>Reasoning effort</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || 'Auto'}>
 									<FormControl>
 										<SelectTrigger>
@@ -566,7 +583,7 @@ export function AdvancedTab({
 										</SelectTrigger>
 									</FormControl>
 									<SelectContent>
-										<SelectItem value="Auto">Auto (Default)</SelectItem>
+										<SelectItem value="Auto">Auto (default)</SelectItem>
 										<SelectItem value="Low">Low</SelectItem>
 										<SelectItem value="Medium">Medium</SelectItem>
 										<SelectItem value="High">High</SelectItem>
@@ -586,7 +603,7 @@ export function AdvancedTab({
 							name="reasoning_budget_tokens"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Reasoning Budget Tokens</FormLabel>
+									<FormLabel>Reasoning budget tokens</FormLabel>
 									<FormControl>
 										<Input
 											type="number"
@@ -610,7 +627,7 @@ export function AdvancedTab({
 						name="reasoning_summary"
 						render={({ field }) => (
 							<FormItem>
-								<FormLabel>Reasoning Summary</FormLabel>
+								<FormLabel>Reasoning summary</FormLabel>
 								<Select onValueChange={field.onChange} value={field.value || 'None'}>
 									<FormControl>
 										<SelectTrigger>
@@ -634,16 +651,16 @@ export function AdvancedTab({
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Memory Settings"
+				title="Memory settings"
 				description="Enable long-term, scoped memory for this agent and configure memory policies and automated memory tools."
 			>
 				<FormField
 					control={form.control}
 					name="enable_memory"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Enable Memory</FormLabel>
+								<FormLabel className="text-base">Enable memory</FormLabel>
 								<FormDescription>
 									Enable long-term, scoped memory for this agent.
 								</FormDescription>
@@ -662,7 +679,7 @@ export function AdvancedTab({
 							name="memory_policy"
 							render={({ field }) => (
 								<FormItem className="sm:col-span-2">
-									<FormLabel>Memory Policy</FormLabel>
+									<FormLabel>Memory policy</FormLabel>
 									<FormControl>
 										<Combobox
 											options={memoryPolicyComboboxOptions}
@@ -688,9 +705,9 @@ export function AdvancedTab({
 								control={form.control}
 								name="enable_memory_search_tool"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 										<div className="space-y-0.5 pr-4">
-											<FormLabel className="text-base">Enable Memory Search Tool</FormLabel>
+											<FormLabel className="text-base">Enable memory search tool</FormLabel>
 											<FormDescription>
 												Automatically provide the agent with a tool to search memory records.
 											</FormDescription>
@@ -706,9 +723,9 @@ export function AdvancedTab({
 								control={form.control}
 								name="enable_memory_write_tool"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 										<div className="space-y-0.5 pr-4">
-											<FormLabel className="text-base">Enable Memory Write Tool</FormLabel>
+											<FormLabel className="text-base">Enable memory write tool</FormLabel>
 											<FormDescription>
 												Automatically provide the agent with a tool to save new memory records.
 											</FormDescription>
@@ -763,9 +780,9 @@ export function AdvancedTab({
 					control={form.control}
 					name="show_tool_execution_details"
 					render={({ field }) => (
-						<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+						<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 							<div className="space-y-0.5 pr-4">
-								<FormLabel className="text-base">Show Tool Execution Details</FormLabel>
+								<FormLabel className="text-base">Show tool execution details</FormLabel>
 								<FormDescription className="whitespace-pre-line">
 									{`Enable to display tool execution status and responses in the agent output.
 This includes whether each tool call is completed and its corresponding result.`}
@@ -781,7 +798,7 @@ This includes whether each tool call is completed and its corresponding result.`
 
 			<FormSettingsSection
 				title="Model Modality Settings"
-				description="Optional: select dedicated models for image generation, audio generation (TTS), and transcription (STT)."
+				description="Optional: select a dedicated model for image generation."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
 					<FormField
@@ -814,88 +831,11 @@ This includes whether each tool call is completed and its corresponding result.`
 							</FormItem>
 						)}
 					/>
-
-					<FormField
-						control={form.control}
-						name="tts_model"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{TTS_MODEL_LABEL}</FormLabel>
-								<FormControl>
-									<LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
-										<Select
-											onValueChange={(v) => field.onChange(v || undefined)}
-											value={field.value || ''}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder={TTS_MODEL_PLACEHOLDER} />
-											</SelectTrigger>
-											<SelectContent>
-												{ttsModels.map((m) => (
-													<SelectItem key={m.name} value={m.name}>
-														{m.model_name || m.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</LinkFieldControl>
-								</FormControl>
-								<FormDescription>{TTS_MODEL_DESCRIPTION}</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-
-					<FormField
-						control={form.control}
-						name="tts_voice"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{TTS_VOICE_LABEL}</FormLabel>
-								<FormControl>
-									<Input placeholder={TTS_VOICE_PLACEHOLDER} {...field} value={field.value || ''} />
-								</FormControl>
-								<FormDescription>{TTS_VOICE_DESCRIPTION}</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
-
-					<FormField
-						control={form.control}
-						name="stt_model"
-						render={({ field }) => (
-							<FormItem>
-								<FormLabel>{STT_MODEL_LABEL}</FormLabel>
-								<FormControl>
-									<LinkFieldControl value={field.value} linkTo={linkRoutes.aiModel}>
-										<Select
-											onValueChange={(v) => field.onChange(v || undefined)}
-											value={field.value || ''}
-										>
-											<SelectTrigger>
-												<SelectValue placeholder={STT_MODEL_PLACEHOLDER} />
-											</SelectTrigger>
-											<SelectContent>
-												{sttModels.map((m) => (
-													<SelectItem key={m.name} value={m.name}>
-														{m.model_name || m.name}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</LinkFieldControl>
-								</FormControl>
-								<FormDescription>{STT_MODEL_DESCRIPTION}</FormDescription>
-								<FormMessage />
-							</FormItem>
-						)}
-					/>
 				</div>
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Document Upload"
+				title="Document upload"
 				description="Let users attach documents or images in chat for this agent."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
@@ -903,9 +843,9 @@ This includes whether each tool call is completed and its corresponding result.`
 						control={form.control}
 						name="allow_file_upload"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Allow File Upload</FormLabel>
+									<FormLabel className="text-base">Allow file upload</FormLabel>
 									<FormDescription>
 										Lets users attach documents or images in chat for this agent.
 									</FormDescription>
@@ -923,7 +863,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								control={form.control}
 								name="enable_ocr"
 								render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+									<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
 										<div className="space-y-0.5">
 											<FormLabel className="text-base">Enable OCR</FormLabel>
 											<FormDescription>
@@ -942,7 +882,7 @@ This includes whether each tool call is completed and its corresponding result.`
 								name="max_upload_size_mb"
 								render={({ field }) => (
 									<FormItem>
-										<FormLabel>Max Upload Size (MB)</FormLabel>
+										<FormLabel>Max upload size (MB)</FormLabel>
 										<FormControl>
 											<Input
 												type="number"

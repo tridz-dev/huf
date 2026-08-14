@@ -13,7 +13,7 @@ export function FlowNode({ icon, title, subtitle, variant = 'default', showLine 
   const variantStyles = {
     default: 'border-border bg-card',
     primary: 'border-primary bg-primary/5',
-    success: 'border-green-500 bg-green-500/5',
+    success: 'border-good bg-good/5',
   };
 
   return (

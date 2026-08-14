@@ -47,7 +47,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="source_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Source Name</FormLabel>
+                  <FormLabel>Source name</FormLabel>
                   <FormControl>
                     <Input placeholder="my-knowledge-source" {...field} />
                   </FormControl>
@@ -83,7 +83,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="knowledge_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Knowledge Type</FormLabel>
+                  <FormLabel>Knowledge type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -134,7 +134,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="storage_mode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Storage Mode</FormLabel>
+                  <FormLabel>Storage mode</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -160,7 +160,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {isVectorKnowledgeType(watchKnowledgeType) && (
         <Card>
           <CardHeader>
-            <CardTitle>Vector Settings</CardTitle>
+            <CardTitle>Vector settings</CardTitle>
             <CardDescription>Configure embedding model for vector-based retrieval</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -169,7 +169,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="embedding_model"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Embedding Model</FormLabel>
+                  <FormLabel>Embedding model</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="text-embedding-3-small"
@@ -188,7 +188,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="vector_dimension"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vector Dimension</FormLabel>
+                  <FormLabel>Vector dimension</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -209,7 +209,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="embedding_provider"
               render={({ field }) => (
                 <FormItem className="sm:col-span-2">
-                  <FormLabel>Embedding Provider</FormLabel>
+                  <FormLabel>Embedding provider</FormLabel>
                   <FormControl>
                     <Combobox
                       options={providerOptions}
@@ -233,7 +233,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {watchKnowledgeType === 'chroma' && (
         <Card>
           <CardHeader>
-            <CardTitle>Chroma Connection Settings</CardTitle>
+            <CardTitle>Chroma connection settings</CardTitle>
             <CardDescription>Configure how this knowledge source connects to ChromaDB</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -242,7 +242,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="chroma_mode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Chroma Mode</FormLabel>
+                  <FormLabel>Chroma mode</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -270,7 +270,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                   name="chroma_host"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Chroma Host</FormLabel>
+                      <FormLabel>Chroma host</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="localhost"
@@ -289,7 +289,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                   name="chroma_port"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Chroma Port</FormLabel>
+                      <FormLabel>Chroma port</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -332,7 +332,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {watchKnowledgeType === 'pgvector' && (
         <Card>
           <CardHeader>
-            <CardTitle>PGVector Connection Settings</CardTitle>
+            <CardTitle>PGVector connection settings</CardTitle>
             <CardDescription>Connect HUF Knowledge to PostgreSQL with the pgvector extension</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -341,7 +341,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="pgvector_connection_mode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Connection Mode</FormLabel>
+                  <FormLabel>Connection mode</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value ?? 'External PostgreSQL'}>
                     <FormControl>
                       <SelectTrigger>
@@ -364,7 +364,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="pgvector_table_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Table Name</FormLabel>
+                  <FormLabel>Table name</FormLabel>
                   <FormControl>
                     <Input placeholder="huf_knowledge_vectors" {...field} value={field.value ?? ''} />
                   </FormControl>
@@ -379,7 +379,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="pgvector_distance_metric"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Distance Metric</FormLabel>
+                  <FormLabel>Distance metric</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value ?? 'cosine'}>
                     <FormControl>
                       <SelectTrigger>
@@ -389,7 +389,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                     <SelectContent>
                       <SelectItem value="cosine">Cosine</SelectItem>
                       <SelectItem value="l2">L2</SelectItem>
-                      <SelectItem value="inner_product">Inner Product</SelectItem>
+                      <SelectItem value="inner_product">Inner product</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -402,7 +402,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               name="pgvector_index_type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Index Type</FormLabel>
+                  <FormLabel>Index type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value ?? 'hnsw'}>
                     <FormControl>
                       <SelectTrigger>
@@ -504,7 +504,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                   name="pgvector_sslmode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>SSL Mode</FormLabel>
+                      <FormLabel>SSL mode</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value ?? 'prefer'}>
                         <FormControl>
                           <SelectTrigger>
@@ -517,7 +517,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
                           <SelectItem value="disable">Disable</SelectItem>
                           <SelectItem value="allow">Allow</SelectItem>
                           <SelectItem value="verify-ca">Verify CA</SelectItem>
-                          <SelectItem value="verify-full">Verify Full</SelectItem>
+                          <SelectItem value="verify-full">Verify full</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -553,7 +553,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
       {watchKnowledgeType === 'redis' && (
         <Card>
           <CardHeader>
-            <CardTitle>Redis Connection Settings</CardTitle>
+            <CardTitle>Redis connection settings</CardTitle>
             <CardDescription>
               Connect HUF Knowledge to Redis with RediSearch vector search
             </CardDescription>
@@ -567,7 +567,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Chunking Settings</CardTitle>
+          <CardTitle>Chunking settings</CardTitle>
           <CardDescription>Control how content is split into chunks for indexing</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
@@ -576,7 +576,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
             name="chunk_size"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Chunk Size</FormLabel>
+                <FormLabel>Chunk size</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -596,7 +596,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
             name="chunk_overlap"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Chunk Overlap</FormLabel>
+                <FormLabel>Chunk overlap</FormLabel>
                 <FormControl>
                   <Input
                     type="number"

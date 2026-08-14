@@ -83,7 +83,7 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
         name="prompt_field"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Prompt Field</FormLabel>
+            <FormLabel>Prompt field</FormLabel>
             <Select
               onValueChange={field.onChange}
               value={field.value || ''}
@@ -110,10 +110,10 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
         )}
       />
 
-      <div className="space-y-3 rounded-none border p-4">
+      <div className="space-y-3 rounded-lg border p-4">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <FormLabel>File Attachments</FormLabel>
+            <FormLabel>File attachments</FormLabel>
             <FormDescription>
               Fetch files from specific DocFields or Child Tables
             </FormDescription>
@@ -139,13 +139,13 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
         )}
 
         {fields.map((row, index) => (
-          <div key={row.id} className="grid gap-3 rounded-none border p-3 sm:grid-cols-2">
+          <div key={row.id} className="grid gap-3 rounded-md border p-3 sm:grid-cols-2">
             <FormField
               control={control}
               name={`file_attachments.${index}.source_type`}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Source Type</FormLabel>
+                  <FormLabel>Source type</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -167,7 +167,7 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
               name={`file_attachments.${index}.field_name`}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Attach Field Name</FormLabel>
+                  <FormLabel>Attach field name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g. attachment" {...field} />
                   </FormControl>
@@ -182,7 +182,7 @@ export function TriggerDocEventExtras({ control }: TriggerDocEventExtrasProps) {
                 name={`file_attachments.${index}.child_table`}
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Child Table</FormLabel>
+                    <FormLabel>Child table</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value || ''}>
                       <FormControl>
                         <SelectTrigger>

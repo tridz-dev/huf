@@ -311,6 +311,12 @@ export interface AgentDoc {
   enable_memory_search_tool?: number; // 0 or 1
   enable_memory_write_tool?: number; // 0 or 1
 
+  // Voice
+  voice_enabled?: number; // 0 or 1
+  voice_engine?: string | null; // Link to Voice Engine
+  voice_config?: string | null; // JSON-encoded engine-specific config
+  voice_greeting?: string | null;
+
   // Advanced model overrides
   image_generation_model?: string | null;
   tts_model?: string | null;

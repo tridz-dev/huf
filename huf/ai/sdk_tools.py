@@ -42,6 +42,12 @@ def _merge_run_context(args_dict: dict, ctx) -> dict:
     conversation_id / agent_run_id / agent_name from the huf run context are
     only injected when the key is NOT already present in args_dict — the
     LLM's explicit arguments always win (setdefault semantics).
+
+    ``call_id`` is the Agents SDK's own tool_call_id (``ctx.tool_call_id``,
+    e.g. ``call_xyz``) rather than anything from the huf run context dict —
+    it identifies this specific invocation, which tool functions that create
+    their own audit row up front (e.g. client-side tools, code execution)
+    need in order to correlate a later result back to this call.
     """
     huf_ctx = _frappe_run_context_dict(ctx)
     for key in ("conversation_id", "agent_run_id", "agent_name"):
@@ -62,6 +68,10 @@ def _merge_run_context(args_dict: dict, ctx) -> dict:
         current = args_dict.get(key)
         if current is None or (isinstance(current, str) and not current.strip()):
             args_dict[key] = huf_ctx[key]
+
+    tool_call_id = getattr(ctx, "tool_call_id", None)
+    if tool_call_id:
+        args_dict.setdefault("call_id", tool_call_id)
 
     return args_dict
 
@@ -218,6 +228,16 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     if function_doc.agent:
                         extra_args["target_agent_name"] = function_doc.agent
 
+                # Client Side Tool calls block (waiting on the browser to report a
+                # result via submit_client_tool_result); run them off the event loop.
+                # ``blocking`` defaults to checked, so a missing/unset field (e.g. on
+                # rows created before this field existed) still behaves as blocking.
+                is_blocking = (
+                    bool(getattr(function_doc, "blocking", 1))
+                    if function_doc.types == "Client Side Tool"
+                    else False
+                )
+
                 tool = create_function_tool(
                     function_doc.tool_name,
                     function_doc.description,
@@ -225,7 +245,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     params,
                     extra_args=extra_args,
                     tool_type=function_doc.types,
-                    allowed_for_guest=bool(function_doc.allowed_for_guest)
+                    allowed_for_guest=bool(function_doc.allowed_for_guest),
+                    blocking=is_blocking,
                 )
 
                 if tool:
@@ -372,7 +393,8 @@ def create_function_tool(
     parameters: dict[str, Any],
     extra_args: dict[str, Any] = None,
     tool_type: str = None,
-    allowed_for_guest: bool = False
+    allowed_for_guest: bool = False,
+    blocking: bool = False,
 ) -> FunctionTool:
     """
     Create a FunctionTool for Huf Tool functions
@@ -383,6 +405,12 @@ def create_function_tool(
         function_name: Function name to call
         parameters: Function parameters schema
         extra_args: Extra arguments to pass to the function
+        blocking: When True, the tool function is invoked via
+            ``asyncio.to_thread`` instead of being awaited inline. Tool
+            functions that perform a bounded blocking wait (e.g. the
+            client-side tool round trip) would otherwise stall the event
+            loop for the whole run; running them on a worker thread lets
+            other concurrent work keep going while this call waits.
 
     Returns:
         FunctionTool: Function tool
@@ -440,15 +468,24 @@ def create_function_tool(
                     for p in sig.parameters.values()
                 )
                 if accepts_kwargs:
-                    result = _function(**args_dict)
+                    call_kwargs = args_dict
                 else:
                     valid_params = set(sig.parameters.keys())
 
-                    filtered_args = {
+                    call_kwargs = {
                         k: v for k, v in args_dict.items()
                         if k in valid_params
                     }
-                    result = _function(**filtered_args)
+
+                if blocking:
+                    # Run off the event loop: a blocking tool function (e.g. one
+                    # that polls for a browser-reported result for up to tens of
+                    # seconds) would otherwise stall this whole run. Mirrors the
+                    # asyncio.to_thread precedent in huf.ai.handlers.media (TTS
+                    # via litellm.speech).
+                    result = await asyncio.to_thread(_function, **call_kwargs)
+                else:
+                    result = _function(**call_kwargs)
 
                 # Handle async functions
                 if asyncio.iscoroutine(result):

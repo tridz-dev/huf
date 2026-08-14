@@ -5,6 +5,7 @@ export { ConfigStrip } from './ConfigStrip';
 export { PromptPanel } from './PromptPanel';
 export { ResponsePanel } from './ResponsePanel';
 export { RunLedger, type RunLedgerProps } from './RunLedger';
+export { TraceRail } from './TraceRail';
 export { TemplatePickerDialog } from './TemplatePickerDialog';
 export { SaveTemplateDialog } from './SaveTemplateDialog';
 export { usePlaygroundSlot } from './usePlaygroundSlot';

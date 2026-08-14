@@ -503,6 +503,26 @@ export async function prepareMessageWithFile(
 }
 
 /**
+ * A backend-initiated client-side ("frontend") tool call as it appears in
+ * the `client_side_tool_calls` array on the send-message / new-conversation
+ * HTTP response. Mirrors the same call the backend may also announce via the
+ * `frontend_tool_call_initiated` socket event -- see
+ * doc/domain/queue-first-execution-model.md design rule 4 (pending-state UI
+ * must reconcile via polling/response data, not rely on the socket alone).
+ */
+export interface ClientToolCallPayload {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    /** JSON-encoded arguments; must be parsed by the caller. */
+    arguments: string;
+  };
+  /** Agent Tool Call docname -- present alongside `id` for some call sites. */
+  tool_call_ref?: string;
+}
+
+/**
  * Start a new conversation
  */
 export interface NewConversationParams {
@@ -531,6 +551,7 @@ export interface NewConversationResponse {
       agent_run_id: string;
       conversation_id: string;
       session_id: string;
+      client_side_tool_calls?: ClientToolCallPayload[];
     };
   };
 }
@@ -560,6 +581,7 @@ export interface SendMessageResponse {
     status?: string;
     agent_message_id?: string;
     sequence?: number;
+    client_side_tool_calls?: ClientToolCallPayload[];
   };
 }
 
@@ -661,6 +683,34 @@ export async function updateConversationTitle(conversationId:string,title:string
     })
   }catch(e){
     handleFrappeError(e,"Error update conversation title")
+  }
+}
+
+export interface SubmitClientToolResultParams {
+  callId: string;
+  result?: unknown;
+  error?: string;
+}
+
+export interface SubmitClientToolResultResponse {
+  success: boolean;
+}
+
+/**
+ * Submit the result of a browser-executed ("frontend") tool call back to the backend.
+ */
+export async function submitClientToolResult(
+  params: SubmitClientToolResultParams
+): Promise<SubmitClientToolResultResponse> {
+  try {
+    const result = await call.post('huf.ai.client_side_tool.submit_client_tool_result', {
+      call_id: params.callId,
+      result: params.result,
+      error: params.error,
+    });
+    return (result?.message ?? result) as SubmitClientToolResultResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error submitting client tool result');
   }
 }
 

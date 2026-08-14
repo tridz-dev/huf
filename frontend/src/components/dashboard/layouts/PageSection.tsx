@@ -22,7 +22,7 @@ export function PageSection({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
             {title && (
-              <h2 className="font-display font-bold text-[18px] uppercase tracking-[.02em] text-ink">
+              <h2 className="font-display font-bold text-[18px] tracking-[.02em] text-ink">
                 {title}
               </h2>
             )}

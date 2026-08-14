@@ -174,7 +174,7 @@ export function PermissionsTab({
             control={form.control}
             name="allow_guest"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Allow Public / Unauthenticated Access</FormLabel>
                   <FormDescription>
@@ -197,7 +197,7 @@ export function PermissionsTab({
             name="allowed_users"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Allowed Users</FormLabel>
+                <FormLabel>Allowed users</FormLabel>
                 <FormControl>
                   <MultiSelectCombobox
                     options={userOptions}
@@ -225,7 +225,7 @@ export function PermissionsTab({
             name="allowed_roles"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Allowed Roles</FormLabel>
+                <FormLabel>Allowed roles</FormLabel>
                 <FormControl>
                   <MultiSelectCombobox
                     options={roleOptions}
@@ -247,7 +247,7 @@ export function PermissionsTab({
           />
 
           {(selectedUsers?.length || selectedRoles?.length) ? (
-            <div className="rounded-none border border-dashed bg-paper-deep/30 p-4 text-sm text-steel">
+            <div className="rounded-lg border border-dashed bg-paper-deep/30 p-4 text-sm text-steel">
               This agent is restricted to {selectedUsers?.length || 0} user(s) and {selectedRoles?.length || 0} role(s),
               in addition to the document owner.
             </div>

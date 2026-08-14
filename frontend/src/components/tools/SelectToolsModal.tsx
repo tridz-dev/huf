@@ -149,7 +149,7 @@ export function SelectToolsModal({
   // Prepare tool type options for Combobox
   const toolTypeOptions = useMemo(() => {
     const options = [
-      { value: 'all', label: 'All Tool Types' },
+      { value: 'all', label: 'All tool types' },
       ...toolTypes.map((type) => ({
         value: type.name,
         label: getToolTypeDisplayLabel(type.name1 || type.name),
@@ -422,7 +422,7 @@ export function SelectToolsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="sm:max-w-5xl">
         <DialogScrollHeader>
-          <DialogTitle>Add Tool</DialogTitle>
+          <DialogTitle>Add tool</DialogTitle>
         </DialogScrollHeader>
 
         {/* Tabs */}
@@ -432,8 +432,8 @@ export function SelectToolsModal({
           className="flex min-h-0 flex-1 flex-col overflow-hidden px-6"
         >
           <TabsList layout="grid" cols={2} className="flex-shrink-0">
-            <TabsTrigger value="tool-library">Tool Library</TabsTrigger>
-            <TabsTrigger value="create-new">Create New</TabsTrigger>
+            <TabsTrigger value="tool-library">Tool library</TabsTrigger>
+            <TabsTrigger value="create-new">Create new</TabsTrigger>
           </TabsList>
 
           {/* Tool Library Tab */}

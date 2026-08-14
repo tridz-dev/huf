@@ -70,12 +70,12 @@ export function ConversationDataPanel({ conversationId, canWrite }: Conversation
       <SheetTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2">
           <Database className="h-4 w-4" />
-          Conversation Data
+          Conversation data
         </Button>
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Conversation Data</SheetTitle>
+          <SheetTitle>Conversation data</SheetTitle>
           <SheetDescription>
             Key/value memory items stored for this conversation.
             {!canWrite && ' Read-only for this agent.'}
@@ -108,7 +108,7 @@ export function ConversationDataPanel({ conversationId, canWrite }: Conversation
 
         {canWrite && (
           <div className="mt-6 space-y-3 border-t pt-4">
-            <Label className="text-sm font-medium">Add / update item</Label>
+            <Label>Add / update item</Label>
             <Input placeholder="Key" value={newKey} onChange={(e) => setNewKey(e.target.value)} />
             <Input placeholder="Value" value={newValue} onChange={(e) => setNewValue(e.target.value)} />
             <Button onClick={handleAdd} disabled={saving} size="sm" className="gap-2">

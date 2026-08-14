@@ -29,7 +29,7 @@ export function DefaultPlanTable({
 }: DefaultPlanTableProps) {
 	return (
 		<>
-			<div className="overflow-hidden rounded-none border">
+			<div className="overflow-hidden rounded-lg border">
 				<div className="max-h-72 overflow-auto">
 					<Table className="table-fixed w-full">
 						<TableHeader className="bg-paper-deep sticky top-0 z-10">
@@ -56,7 +56,7 @@ export function DefaultPlanTable({
 												</SelectTrigger>
 												<SelectContent>
 													<SelectItem value="pending">Pending</SelectItem>
-													<SelectItem value="in_progress">In Progress</SelectItem>
+													<SelectItem value="in_progress">In progress</SelectItem>
 													<SelectItem value="done">Done</SelectItem>
 													<SelectItem value="failed">Failed</SelectItem>
 												</SelectContent>
@@ -104,7 +104,7 @@ export function DefaultPlanTable({
 			</div>
 
 			<Button type="button" variant="ghost" size="sm" className="mt-3" onClick={onAddRow}>
-				Add Row
+				Add row
 			</Button>
 		</>
 	)

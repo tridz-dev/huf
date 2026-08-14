@@ -52,7 +52,7 @@ export function ToolsTab({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Sync Settings</CardTitle>
+          <CardTitle>Sync settings</CardTitle>
           <CardDescription>Configure tool synchronization settings</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -60,9 +60,9 @@ export function ToolsTab({
             control={form.control}
             name="enable_auto_sync"
             render={({ field }) => (
-              <FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
-                  <FormLabel className="text-base">Enable Auto Sync</FormLabel>
+                  <FormLabel className="text-base">Enable auto sync</FormLabel>
                   <FormDescription>
                     Automatically sync tools periodically
                   </FormDescription>
@@ -83,7 +83,7 @@ export function ToolsTab({
               name="auto_sync_interval"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Sync Interval (Hours)</FormLabel>
+                  <FormLabel>Sync interval (hours)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -100,7 +100,7 @@ export function ToolsTab({
             />
           )}
 
-          <div className="flex items-center justify-between p-4 rounded-none border bg-paper-deep/30">
+          <div className="flex items-center justify-between p-4 rounded-lg border bg-paper-deep/30">
             <div>
               <p className="text-sm font-medium">Last Sync</p>
               <p className="text-sm text-steel">{formatTimeAgo(lastSync)}</p>
@@ -120,7 +120,7 @@ export function ToolsTab({
 
       <Card>
         <CardHeader>
-          <CardTitle>Available Tools</CardTitle>
+          <CardTitle>Available tools</CardTitle>
           <CardDescription>
             {tools.length > 0
               ? `${tools.length} tool${tools.length !== 1 ? 's' : ''} available`
@@ -143,7 +143,7 @@ export function ToolsTab({
               </Button>
             </div>
           ) : (
-            <div className="rounded-none border">
+            <div className="rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>

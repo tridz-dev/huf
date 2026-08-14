@@ -42,7 +42,7 @@ export function TableBuilderCanvas({
 	return (
 		<div className="space-y-2">
 			{fields.length === 0 ? (
-				<div className="flex flex-col items-center justify-center p-8 border border-dashed border-line bg-panel rounded-none">
+				<div className="flex flex-col items-center justify-center p-8 border border-dashed border-line bg-panel rounded-lg">
 					<p className="text-sm text-steel mb-4">
 						No fields yet. Add your first field to get started.
 					</p>
@@ -51,14 +51,14 @@ export function TableBuilderCanvas({
 						trigger={
 							<Button variant="outline" size="sm">
 								<Plus className="w-4 h-4 mr-2" />
-								Add Field
+								Add field
 							</Button>
 						}
 					/>
 				</div>
 			) : (
 				<>
-					<div className="rounded-none border border-line bg-panel overflow-hidden mb-4">
+					<div className="rounded-lg border border-line bg-panel overflow-hidden mb-4">
 						{fields.map((field, index) => (
 							<FieldCard
 								key={`${field.fieldname}-${index}`}
@@ -80,7 +80,7 @@ export function TableBuilderCanvas({
 						trigger={
 							<Button variant="outline" size="sm" className="w-full">
 								<Plus className="w-4 h-4 mr-2" />
-								Add Field
+								Add field
 							</Button>
 						}
 					/>

@@ -17,11 +17,11 @@ export interface ContextBarProps {
 }
 
 const SEGMENT_ORDER: Array<{ key: keyof SegmentTokens; label: string; color: string }> = [
-  { key: 'system', label: 'System', color: 'bg-slate-500' },
-  { key: 'tools', label: 'Tools', color: 'bg-indigo-500' },
-  { key: 'knowledge', label: 'Knowledge', color: 'bg-emerald-500' },
-  { key: 'history', label: 'History', color: 'bg-amber-500' },
-  { key: 'message', label: 'Message', color: 'bg-rose-500' },
+  { key: 'system', label: 'System', color: 'bg-signal' },
+  { key: 'tools', label: 'Tools', color: 'bg-signal' },
+  { key: 'knowledge', label: 'Knowledge', color: 'bg-good' },
+  { key: 'history', label: 'History', color: 'bg-warning' },
+  { key: 'message', label: 'Message', color: 'bg-signal' },
 ];
 
 /**
@@ -71,17 +71,17 @@ export function ContextBar({ segments, cacheState, total, size = 'md', className
       {cacheState && cacheTotal > 0 && (
         <div className={cn('flex w-full overflow-hidden rounded-full bg-muted', height)}>
           <div
-            className="bg-sky-500"
+            className="bg-signal"
             style={{ width: `${(cacheState.cacheRead / cacheTotal) * 100}%` }}
             title={`Cache read (~0.1x): ${cacheState.cacheRead.toLocaleString()} tokens`}
           />
           <div
-            className="bg-orange-500"
+            className="bg-warning"
             style={{ width: `${(cacheState.cacheWrite / cacheTotal) * 100}%` }}
             title={`Cache write (~1.25x): ${cacheState.cacheWrite.toLocaleString()} tokens`}
           />
           <div
-            className="bg-red-400"
+            className="bg-destructive"
             style={{ width: `${(cacheState.uncached / cacheTotal) * 100}%` }}
             title={`Uncached (1x): ${cacheState.uncached.toLocaleString()} tokens`}
           />

@@ -38,7 +38,7 @@ export function PolicyTab({ form, isNew, agentOptions }: PolicyTabProps) {
             name="policy_name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Policy Name</FormLabel>
+                <FormLabel>Policy name</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. support-agent-memory" {...field} />
                 </FormControl>
@@ -110,7 +110,7 @@ export function PolicyTab({ form, isNew, agentOptions }: PolicyTabProps) {
             name="scope_type"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Scope Type</FormLabel>
+                <FormLabel>Scope type</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -140,7 +140,7 @@ export function PolicyTab({ form, isNew, agentOptions }: PolicyTabProps) {
           name="scope_key"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Scope Key</FormLabel>
+              <FormLabel>Scope key</FormLabel>
               <FormControl>
                 <Input placeholder="Leave empty to use runtime context" {...field} />
               </FormControl>

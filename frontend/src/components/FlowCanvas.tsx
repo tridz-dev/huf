@@ -18,6 +18,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus } from 'lucide-react';
 import { Button } from './ui/button';
+import { InlineEditName } from './common/InlineEditName';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
@@ -38,7 +39,7 @@ export function FlowCanvas({
   onToggleLeftSidebar,
   onToggleRightSidebar
 }: FlowCanvasProps) {
-  const { activeFlow, updateNodesAndEdges, updateNode, setSelectedNode, setSelectedEdge } = useFlowContext();
+  const { activeFlow, updateNodesAndEdges, updateNode, updateFlowName, setSelectedNode, setSelectedEdge } = useFlowContext();
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -264,17 +265,17 @@ export function FlowCanvas({
           };
 
           const labelMap: Record<string, string> = {
-            'agent-run': 'Run Agent',
-            'tool-call': 'Call Tool',
-            transform: 'Transform Data',
+            'agent-run': 'Run agent',
+            'tool-call': 'Call tool',
+            transform: 'Transform data',
             router: 'Router',
             loop: 'Loop',
-            'human.approval': 'Human in Loop',
-            code: 'Execute Code',
-            email: 'Send Email',
-            webhook: 'Call Webhook',
-            file: 'File Operations',
-            date: 'Date Utility'
+            'human.approval': 'Human in loop',
+            code: 'Execute code',
+            email: 'Send email',
+            webhook: 'Call webhook',
+            file: 'File operations',
+            date: 'Date utility'
           };
 
           const newNode: Node<FlowNodeData> = {
@@ -373,11 +374,23 @@ export function FlowCanvas({
         <MiniMap
           nodeColor={(node) => {
             if (node.type === 'trigger') return 'var(--primary)';
-            if (node.type === 'end') return '#10b981';
+            if (node.type === 'end') return 'var(--good)';
             return 'var(--muted)';
           }}
           className="!bg-background !border-border !bottom-6"
         />
+        <Panel position="top-left" className="m-2">
+          <div className="rounded-md border border-line bg-panel px-3 py-1.5 shadow-sm">
+            <InlineEditName
+              value={activeFlow.name}
+              onChange={(value) => {
+                void updateFlowName(activeFlow.id, value);
+              }}
+              placeholder="Untitled flow"
+              className="max-w-xs"
+            />
+          </div>
+        </Panel>
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
             {!nodes.some(n => n.data.nodeType === 'trigger') && (
@@ -391,7 +404,7 @@ export function FlowCanvas({
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Trigger
+                Add trigger
               </Button>
             )}
             <Button

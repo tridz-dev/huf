@@ -18,7 +18,7 @@ export function McpHeaderActions() {
   return (
     <Button variant="display" onClick={handleNewMcp} size="sm">
       <Plus className="w-4 h-4 mr-2" />
-      New MCP Server
+      New MCP server
     </Button>
   );
 }
