@@ -3,12 +3,8 @@ name: Deploy HUF Bench
 on:
   push:
     branches:
-      - pre-develop
-      #- stage-1
-      #- stage-2
-      #- develop
-      #- test-1
-
+      - develop
+     
 jobs:
   deploy:
     runs-on: ubuntu-latest
