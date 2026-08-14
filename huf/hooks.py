@@ -199,6 +199,9 @@ doc_events = {
         "on_trash": "huf.ai.agent_hooks.run_hooked_agents",
         "after_delete": "huf.ai.agent_hooks.run_hooked_agents",
     },
+    "User": {
+        "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
+    },
     "Agent Trigger": {
         "after_insert": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
         "on_update": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
