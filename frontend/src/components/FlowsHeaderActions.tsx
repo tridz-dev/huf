@@ -1,13 +1,93 @@
-import { useEffect, useState } from 'react';
-import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings } from 'lucide-react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
+import { Play, History, Upload, Loader2, Save, CheckCircle2, Circle, Settings, Pencil } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { useFlowContext } from '../contexts/FlowContext';
 import { runFlow, updateFlowDefinitionFields } from '../services/flowApi';
 import { toast } from 'sonner';
 import { FlowRunHistory } from './FlowRunHistory';
 import { FlowRunViewer } from './FlowRunViewer';
 import { FlowSettingsModal } from './modals/FlowSettingsModal';
-import { useLocation, useNavigate } from 'react-router-dom';
+
+/**
+ * Left-aligned "Flows > flow name [pencil]" control for the flow canvas
+ * toolbar. Replaces the floating InlineEditName panel that used to sit over
+ * the canvas — this renders in the toolbar row itself instead, reusing the
+ * same rename plumbing (`activeFlow.name` + `updateFlowName`).
+ */
+export function FlowToolbarTitle() {
+  const { activeFlow, updateFlowName } = useFlowContext();
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  if (!activeFlow) {
+    return (
+      <span className="text-[13px] text-steel truncate">Flows</span>
+    );
+  }
+
+  const startEditing = () => {
+    setDraftName(activeFlow.name);
+    setIsEditing(true);
+  };
+
+  const commit = () => {
+    setIsEditing(false);
+    const trimmed = draftName.trim();
+    if (trimmed && trimmed !== activeFlow.name) {
+      void updateFlowName(activeFlow.id, trimmed);
+    }
+  };
+
+  const revert = () => {
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      revert();
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <Link to="/flows" className="text-[13px] text-steel hover:text-ink shrink-0 transition-colors">
+        Flows
+      </Link>
+      <span className="text-[13px] text-steel shrink-0">/</span>
+      {isEditing ? (
+        <Input
+          value={draftName}
+          onChange={(event) => setDraftName(event.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="h-6 text-[13px] font-medium text-ink border-0 px-1 py-0 focus-visible:ring-1 min-w-0 max-w-[240px]"
+        />
+      ) : (
+        <span className="text-[13px] font-medium text-ink truncate max-w-[240px]">
+          {activeFlow.name || 'Untitled flow'}
+        </span>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label="Edit flow name"
+        onClick={startEditing}
+        disabled={isEditing}
+        className="h-6 w-6 shrink-0 text-steel hover:text-ink"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
 
 export function FlowsHeaderActions() {
   const { activeFlow, saveState, hasUnsavedChanges, saveFlow } = useFlowContext();
@@ -106,9 +186,9 @@ export function FlowsHeaderActions() {
 
   return (
     <div className="flex items-center gap-2">
-      {/* Save State Indicator */}
+      {/* Save State Indicator (bare dot + text, no chip background) */}
       {activeFlow && (
-        <div className="flex items-center gap-1.5 mr-2 text-sm text-muted-foreground bg-muted/50 px-2 py-1 rounded-md">
+        <div className="flex items-center gap-1.5 mr-2 text-muted-foreground">
           {saveState === 'saving' ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : saveState === 'error' ? (
@@ -128,7 +208,7 @@ export function FlowsHeaderActions() {
 
       {/* Save Draft Button */}
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         className="gap-2"
         onClick={handleSaveDraft}
@@ -140,7 +220,7 @@ export function FlowsHeaderActions() {
 
       {/* Runs Button */}
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         className="gap-2"
         onClick={() => setShowHistory(true)}
@@ -152,7 +232,7 @@ export function FlowsHeaderActions() {
 
       {/* Settings Button */}
       <Button
-        variant="ghost"
+        variant="outline"
         size="sm"
         className="gap-2"
         onClick={() => setShowSettings(true)}

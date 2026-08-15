@@ -1,10 +1,12 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ArrowUpDown, Loader2, AlertTriangle } from 'lucide-react';
+import { ArrowUpDown, Loader2, AlertTriangle, Copy, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { PageFrame } from '@/layouts/PageFrame';
+import { cn } from '@/lib/utils';
 import type { AgentRunDoc } from '@/services/agentRunApi';
 import { getAgentRuns } from '@/services/agentRunApi';
 import { checkCacheableModels } from '@/services/agentApi';
@@ -32,6 +34,97 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
+/** One row of the Overview / Tokens & Cost definition list. */
+function DefinitionRow({ label, value, mono }: { label: string; value: ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex h-[26px] items-center justify-between gap-4">
+      <span className="text-[13px] text-steel shrink-0">{label}</span>
+      <span
+        className={cn(
+          'text-[13px] tabular-nums truncate text-right text-ink',
+          mono && 'font-mono'
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** A labeled column of DefinitionRows, headed by a mono uppercase eyebrow. */
+function DefinitionColumn({ heading, children }: { heading: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="font-mono text-[10px] uppercase tracking-widest text-steel pb-1.5">{heading}</div>
+      <div className="divide-y divide-line">{children}</div>
+    </div>
+  );
+}
+
+/** One field in the Context panel's four-column stat row: 11px label over a 13px value. */
+function ContextStat({
+  label,
+  value,
+  capitalize,
+}: {
+  label: string;
+  value: ReactNode;
+  capitalize?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[11px] text-steel truncate">{label}</div>
+      <div className={cn('text-[13px] tabular-nums text-ink truncate', capitalize && 'capitalize')}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/** Prompt/Response panel: title + copy button, content in a mono box. */
+function CopyableTextPanel({
+  title,
+  content,
+  emptyText,
+}: {
+  title: string;
+  content?: string | null;
+  emptyText: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    if (!content) return;
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-line bg-panel p-4">
+      <div className="flex items-center justify-between gap-2 pb-2">
+        <h3 className="text-[13px] font-[590] text-ink">{title}</h3>
+        <button
+          type="button"
+          onClick={handleCopy}
+          disabled={!content}
+          aria-label={`Copy ${title.toLowerCase()}`}
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-steel transition-colors hover:bg-paper-deep hover:text-ink disabled:pointer-events-none disabled:opacity-40"
+        >
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+      <div className="max-h-[320px] overflow-auto whitespace-pre-wrap break-words rounded-md bg-paper-deep p-3 font-mono text-xs leading-[1.6] text-ink">
+        {content || emptyText}
+      </div>
+    </div>
+  );
+}
 
 interface AgentRunDetail extends AgentRunDoc {
   prompt?: string;
@@ -286,24 +379,14 @@ function AgentRunDetailPage() {
 
   if (!run) {
     return (
-      <div className="h-full overflow-auto">
-        <div className="p-6 max-w-4xl mx-auto space-y-4">
-          <Button
-            variant="ghost"
-            className="px-0"
-            onClick={() => navigate('/executions')}
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <Card>
-            <CardHeader>
-              <CardTitle>Run not found</CardTitle>
-              <CardDescription>This agent run could not be loaded.</CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </div>
+      <PageFrame className="mx-auto w-full max-w-4xl">
+        <Card>
+          <CardHeader>
+            <CardTitle>Run not found</CardTitle>
+            <CardDescription>This agent run could not be loaded.</CardDescription>
+          </CardHeader>
+        </Card>
+      </PageFrame>
     );
   }
 
@@ -312,20 +395,8 @@ function AgentRunDetailPage() {
   const startedAt = run.start_time ? formatTimeAgo(run.start_time) : 'Not available';
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 space-y-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => navigate('/executions')}
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          </div>
-        </div>
-
+    <PageFrame className="mx-auto w-full max-w-5xl">
+      <div className="space-y-6">
         {isSilentDegradation && (
           <Alert className="border-warning/50 bg-warning/10 text-warning">
             <AlertTriangle className="h-4 w-4 text-warning" />
@@ -336,94 +407,50 @@ function AgentRunDetailPage() {
           </Alert>
         )}
 
-        <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div>
-              <CardTitle className="flex items-center gap-3">
-                Agent run
-                <Badge variant={getAgentRunStatusVariant(run.status)}>{status}</Badge>
-              </CardTitle>
-              <CardDescription className="mt-1">
-                {run.agent || 'Unknown Agent'} • Run ID: {run.name}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-8 md:grid-cols-2">
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-steel">Overview</h3>
-                <div className="space-y-1 text-sm">
-                  <Link to={`/agents/${run.agent}`} className="flex justify-between gap-4">
-                    <span className="text-steel">Agent</span>
-                    <span className="font-medium truncate">{run.agent || 'Unknown'}</span>
-                  </Link>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Provider</span>
-                    <span className="font-medium truncate">{run.provider || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Model</span>
-                    <span className="font-medium truncate">{run.model || 'Unknown'}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Status</span>
-                    <span className="font-medium">{status}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Started</span>
-                    <span className="font-medium">{startedAt}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Duration</span>
-                    <span className="font-medium">{duration}</span>
-                  </div>
-                </div>
-              </div>
+        <div className="rounded-lg border border-line bg-panel p-5">
+          <div className="flex flex-wrap items-center gap-3 pb-4">
+            <h2 className="text-[17px] font-[600] text-ink">Agent run</h2>
+            <Badge variant={getAgentRunStatusVariant(run.status)}>{status}</Badge>
+            <span className="text-[13px] text-steel">{run.agent || 'Unknown agent'}</span>
+          </div>
 
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-steel">Tokens & Cost</h3>
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Input tokens</span>
-                    <span className="font-medium">
-                      {typeof run.input_tokens === 'number' ? run.input_tokens : 'Not available'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Output tokens</span>
-                    <span className="font-medium">
-                      {typeof run.output_tokens === 'number' ? run.output_tokens : 'Not available'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Total tokens</span>
-                    <span className="font-medium">
-                      {typeof run.input_tokens === 'number' || typeof run.output_tokens === 'number'
-                        ? (run.input_tokens || 0) + (run.output_tokens || 0)
-                        : 'Not available'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Cached tokens</span>
-                    <span className="font-medium">
-                      {typeof run.cached_tokens === 'number' ? run.cached_tokens : 'Not available'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Cost</span>
-                    <span className="font-medium">
-                      {typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-steel">Cost source</span>
-                    <span className="font-medium">{run.cost_source || 'Not available'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
+            <DefinitionColumn heading="Overview">
+              <DefinitionRow
+                label="Agent"
+                value={
+                  <Link to={`/agents/${run.agent}`} className="hover:text-signal">
+                    {run.agent || 'Unknown'}
+                  </Link>
+                }
+              />
+              <DefinitionRow label="Provider" value={run.provider || 'Unknown'} />
+              <DefinitionRow label="Model" value={run.model || 'Unknown'} mono />
+              <DefinitionRow label="Started" value={startedAt} />
+              <DefinitionRow label="Duration" value={duration} />
+            </DefinitionColumn>
+
+            <DefinitionColumn heading="Tokens & Cost">
+              <DefinitionRow
+                label="Input"
+                value={typeof run.input_tokens === 'number' ? run.input_tokens.toLocaleString() : 'Not available'}
+              />
+              <DefinitionRow
+                label="Output"
+                value={typeof run.output_tokens === 'number' ? run.output_tokens.toLocaleString() : 'Not available'}
+              />
+              <DefinitionRow
+                label="Cached"
+                value={typeof run.cached_tokens === 'number' ? run.cached_tokens.toLocaleString() : 'Not available'}
+              />
+              <DefinitionRow
+                label="Cost"
+                value={typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
+              />
+              <DefinitionRow label="Cost source" value={run.cost_source || 'Not available'} />
+            </DefinitionColumn>
+          </div>
+        </div>
 
         {contextMetrics?.segment_tokens && (
           <Card>
@@ -437,6 +464,7 @@ function AgentRunDetailPage() {
               <ContextBar
                 segments={contextMetrics.segment_tokens}
                 total={contextMetrics.context_window}
+                showLegend
                 cacheState={
                   typeof contextMetrics.metrics.cache_read_share === 'number'
                     ? {
@@ -450,76 +478,40 @@ function AgentRunDetailPage() {
                     : undefined
                 }
               />
-              <div className="grid grid-cols-2 gap-y-1 gap-x-4 text-sm sm:grid-cols-3">
-                <div className="flex justify-between gap-2">
-                  <span className="text-steel">Cache read share</span>
-                  <span className="font-medium">
-                    {typeof contextMetrics.metrics.cache_read_share === 'number'
-                      ? `${(contextMetrics.metrics.cache_read_share * 100).toFixed(0)}%`
-                      : 'Unavailable'}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-steel">Effective multiplier</span>
-                  <span className="font-medium">
-                    {typeof contextMetrics.metrics.effective_input_multiplier === 'number'
+              <div className="grid grid-cols-4 gap-x-4 gap-y-2 border-t border-line pt-3">
+                <ContextStat label="Prefix stability" value={contextMetrics.metrics.prefix_stability} capitalize />
+                <ContextStat
+                  label="Effective multiplier"
+                  value={
+                    typeof contextMetrics.metrics.effective_input_multiplier === 'number'
                       ? `${contextMetrics.metrics.effective_input_multiplier.toFixed(2)}x`
-                      : 'Unavailable'}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-steel">Wasted writes</span>
-                  <span className="font-medium">
-                    {typeof contextMetrics.metrics.wasted_writes_tokens === 'number'
-                      ? contextMetrics.metrics.wasted_writes_tokens
-                      : 'Not yet tracked'}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-steel">Prefix stability</span>
-                  <span className="font-medium capitalize">{contextMetrics.metrics.prefix_stability}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-steel">Counterfactual savings</span>
-                  <span className="font-medium">
-                    {typeof contextMetrics.metrics.counterfactual_savings === 'number'
+                      : 'Unavailable'
+                  }
+                />
+                <ContextStat
+                  label="Counterfactual saving"
+                  value={
+                    typeof contextMetrics.metrics.counterfactual_savings === 'number'
                       ? `$${contextMetrics.metrics.counterfactual_savings.toFixed(6)}`
-                      : 'Unavailable'}
-                  </span>
-                </div>
+                      : 'Unavailable'
+                  }
+                />
+                <ContextStat
+                  label="Wasted writes"
+                  value={
+                    typeof contextMetrics.metrics.wasted_writes_tokens === 'number'
+                      ? contextMetrics.metrics.wasted_writes_tokens.toLocaleString()
+                      : 'Not yet tracked'
+                  }
+                />
               </div>
             </CardContent>
           </Card>
         )}
 
         <div className="grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Prompt</CardTitle>
-              <CardDescription>
-                Full prompt sent to the model for this run.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
-                {run.prompt || 'No prompt recorded.'}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Response</CardTitle>
-              <CardDescription>
-                Final response returned by the model.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="rounded-lg bg-paper-deep p-3 text-sm whitespace-pre-wrap break-words max-h-[320px] overflow-auto">
-                {run.response || 'No response recorded.'}
-              </div>
-            </CardContent>
-          </Card>
+          <CopyableTextPanel title="Prompt" content={run.prompt} emptyText="No prompt recorded." />
+          <CopyableTextPanel title="Response" content={run.response} emptyText="No response recorded." />
         </div>
 
         {/* Agent Orchestration Table */}
@@ -584,6 +576,6 @@ function AgentRunDetailPage() {
           </Card>
         )}
       </div>
-    </div>
+    </PageFrame>
   );
 }

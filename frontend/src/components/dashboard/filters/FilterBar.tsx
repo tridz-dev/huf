@@ -32,12 +32,16 @@ interface FilterBarProps {
   collapsibleSearch?: boolean;
 }
 
-/** Hairline divider between strip cells. */
-const divider = <div className="w-px self-stretch bg-line" />;
+/**
+ * Each filter — the search box, each dropdown — is its own distinct 30px
+ * / 8px-radius bordered chip, not a shared box divided by internal
+ * hairlines. Chips sit side by side with a gap between them.
+ */
+const CHIP_HEIGHT = 'h-[30px]';
+const chipShellClass = `flex ${CHIP_HEIGHT} items-center gap-2 rounded-lg border border-line bg-panel px-3`;
 
-/** Select trigger restyled to sit flush inside the strip (no box of its own). */
-const flushTriggerClass =
-  'h-auto w-auto min-w-[150px] gap-2 rounded border-0 bg-transparent px-4 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100';
+/** Select trigger restyled as its own chip rather than a flush strip cell. */
+const flushTriggerClass = `${chipShellClass} w-auto min-w-[140px] gap-2 py-0 shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:text-steel-soft [&>svg]:opacity-100`;
 
 function searchInputCell(
   searchPlaceholder: string,
@@ -48,11 +52,11 @@ function searchInputCell(
   trailing?: ReactNode
 ) {
   return (
-    <div className="flex flex-1 items-center gap-2 px-3.5">
-      <Search className="h-4 w-4 shrink-0 text-steel-soft" />
+    <div className={`${chipShellClass} flex-1`}>
+      <Search className="h-3.5 w-3.5 shrink-0 text-steel-soft" />
       <input
         placeholder={searchPlaceholder}
-        className="w-full bg-transparent py-2.5 font-body text-[13.5px] text-ink outline-none placeholder:text-steel-soft"
+        className="w-full bg-transparent font-body text-[13px] text-ink outline-none placeholder:text-steel-soft"
         value={searchValue}
         onChange={(e) => onSearchChange(e.target.value)}
         onKeyDown={(e) => {
@@ -94,7 +98,7 @@ export function FilterBar({
           type="button"
           variant="ghost"
           aria-label="Open search"
-          className="h-auto items-center rounded-none px-3.5 text-steel-soft hover:bg-transparent hover:text-steel"
+          className={`${chipShellClass} justify-center p-0 text-steel-soft hover:bg-panel hover:text-steel`}
           onClick={handleToggleSearch}
         >
           <Search className="h-4 w-4" />
@@ -156,7 +160,7 @@ export function FilterBar({
       <Button
         key="primary-action"
         variant="default"
-        className="h-auto gap-2 self-stretch rounded-none px-4"
+        className={`${CHIP_HEIGHT} gap-2 rounded-lg px-4`}
         onClick={primaryAction.onClick}
         disabled={primaryAction.disabled}
       >
@@ -169,12 +173,9 @@ export function FilterBar({
   return (
     <div className="flex flex-1 items-stretch gap-3">
       {cells.length > 0 && (
-        <div className="flex flex-1 items-stretch rounded border border-line bg-panel max-sm:flex-wrap">
+        <div className="flex flex-1 flex-wrap items-center gap-2">
           {cells.map((cell, index) => (
-            <Fragment key={index}>
-              {index > 0 && divider}
-              {cell}
-            </Fragment>
+            <Fragment key={index}>{cell}</Fragment>
           ))}
         </div>
       )}

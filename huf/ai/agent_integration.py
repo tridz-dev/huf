@@ -1,6 +1,7 @@
 import asyncio
 import json
 import threading
+import random
 import time
 from types import SimpleNamespace
 import litellm
@@ -59,7 +60,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
         frappe.throw(_("Agent model is not configured"))
 
     if model and model != agent_doc.model:
-        model_doc = frappe.get_doc("AI Model", model)
+        model_doc = frappe.get_cached_doc("AI Model", model)
         if not model_doc.provider:
             frappe.throw(
                 _("AI Model '{0}' has no provider configured.").format(model),
@@ -80,7 +81,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
     if not effective_provider:
         frappe.throw(_("Provider is not configured"))
 
-    model_name = frappe.db.get_value("AI Model", effective_model, "model_name")
+    model_name = frappe.get_cached_value("AI Model", effective_model, "model_name")
     if not model_name:
         frappe.throw(
             _("AI Model '{0}' has no model name configured.").format(effective_model),
@@ -93,7 +94,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 class AgentManager:
     """Manages the creation and execution of agents."""
     def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None):
-        self.agent_doc = frappe.get_doc("Agent", agent_name)
+        self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
         (
             self.effective_provider,
             self.effective_model,
@@ -103,7 +104,7 @@ class AgentManager:
             model=model_override,
             provider=provider_override,
         )
-        self.settings = frappe.get_doc("AI Provider", self.effective_provider)
+        self.settings = frappe.get_cached_doc("AI Provider", self.effective_provider)
         self.provider_override = provider_override
         self.model_override = model_override
         # self.file_handler = file_handler
@@ -118,7 +119,7 @@ class AgentManager:
 
         try:
             from huf.ai.sdk_tools import create_agent_tools
-            agent_tools = create_agent_tools(self.agent_doc)
+            agent_tools = create_agent_tools(self.agent_doc, model_name=self.effective_model)
             if agent_tools:
                 self.tools.extend(agent_tools)
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
@@ -435,27 +436,49 @@ class AgentManager:
                     frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         if self.agent_doc.allow_chat:
-            from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
-            from huf.ai.artifact_instructions import (
-                AI_ELEMENT_INSTRUCTIONS,
-                MEDIA_ELEMENT_INSTRUCTIONS,
-                agent_has_media_tools,
-            )
+            from huf.ai.capabilities import capability_enabled
 
-            instructions += CHART_ARTIFACT_INSTRUCTIONS
-            instructions += AI_ELEMENT_INSTRUCTIONS
-            if agent_has_media_tools(self.agent_doc):
-                instructions += MEDIA_ELEMENT_INSTRUCTIONS
+            if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
+                from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+                from huf.ai.artifact_instructions import (
+                    AI_ELEMENT_INSTRUCTIONS,
+                    MEDIA_ELEMENT_INSTRUCTIONS,
+                    agent_has_media_tools,
+                )
 
-            from huf.ai.document_artifact_instructions import (
-                DOCUMENT_ARTIFACT_INSTRUCTIONS,
-                DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
-                agent_has_document_tools,
-            )
+                instructions += CHART_ARTIFACT_INSTRUCTIONS
+                instructions += AI_ELEMENT_INSTRUCTIONS
+                if agent_has_media_tools(self.agent_doc):
+                    instructions += MEDIA_ELEMENT_INSTRUCTIONS
 
-            instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
-            if agent_has_document_tools(self.agent_doc):
-                instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
+            if capability_enabled(self.agent_doc, self.effective_model, "document_artifacts"):
+                from huf.ai.document_artifact_instructions import (
+                    DOCUMENT_ARTIFACT_INSTRUCTIONS,
+                    DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
+                    agent_has_document_tools,
+                )
+
+                instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
+                if agent_has_document_tools(self.agent_doc):
+                    instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
+
+        # Inject Project-level instructions, if the conversation is scoped to a
+        # HUF Project. This layer sits between the Agent's own instructions
+        # (plus all hardcoded scaffolding above) and the conversation-level /
+        # per-turn context assembled later in run_agent_sync / run_agent_stream.
+        # No project set -> no-op, instructions stay byte-for-byte unchanged.
+        if conversation_id:
+            try:
+                project = frappe.db.get_value("Agent Conversation", conversation_id, "project")
+                if project:
+                    project_instructions = frappe.db.get_value("HUF Project", project, "instructions")
+                    if project_instructions:
+                        instructions += "\n\n" + project_instructions
+            except Exception as e:
+                frappe.log_error(
+                    f"Error injecting project instructions: {str(e)}",
+                    "Project Instruction Error",
+                )
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
@@ -976,6 +999,7 @@ def run_agent_sync(
     files=None,
     skip_user_message: bool = False,
     now=None,
+    project: str = None,
 ):
 
     if not agent_name:
@@ -1026,12 +1050,14 @@ def run_agent_sync(
     if agent_doc.persist_conversation:
         conversation = conv_manager.get_or_create_conversation(
             title=f"Chat with {agent_name}",
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            project=project
         )
 
     else:
         conversation = conv_manager.create_new_conversation(
-            title=f"Chat with {agent_name}"
+            title=f"Chat with {agent_name}",
+            project=project
         )
 
     # if conversation.model:
@@ -1175,11 +1201,15 @@ def run_agent_sync(
 
     lock_key = _conversation_lock_key(conversation.name)
     lock_acquired = False
-    for _attempt in range(_DIRECT_LOCK_ATTEMPTS):
+    for attempt in range(_DIRECT_LOCK_ATTEMPTS):
         if frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
             lock_acquired = True
             break
-        time.sleep(_DIRECT_LOCK_RETRY_DELAY)
+        if attempt < _DIRECT_LOCK_ATTEMPTS - 1:
+            # Exponential backoff with jitter so concurrent direct-execution
+            # waiters on the same conversation don't all retry in lockstep.
+            backoff = _DIRECT_LOCK_RETRY_DELAY * (2 ** attempt)
+            time.sleep(backoff + random.uniform(0, _DIRECT_LOCK_RETRY_DELAY))
 
     if not lock_acquired:
         frappe.throw(
@@ -1584,8 +1614,12 @@ def _execute_agent_run(
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
         }
-        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
-        result = _run_async_safely(run)
+        async def _run_with_mcp_pool():
+            from huf.ai.mcp_client import mcp_session_pool
+            async with mcp_session_pool():
+                return await RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
+
+        result = _run_async_safely(_run_with_mcp_pool())
 
         new_items = getattr(result, "new_items", []) or []
 
@@ -2462,6 +2496,7 @@ async def run_agent_stream(
     prompt_cache_options=None,
     skip_user_message: bool = False,
     files=None,
+    project: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2553,12 +2588,14 @@ async def run_agent_stream(
 
         if create_new or not agent_doc.persist_conversation:
             conversation = conv_manager.create_new_conversation(
-                title=f"Streaming chat with {agent_name}"
+                title=f"Streaming chat with {agent_name}",
+                project=project
             )
         else:
             conversation = conv_manager.get_or_create_conversation(
                 title=f"Streaming chat with {agent_name}",
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                project=project
             )
 
         # Model Validation

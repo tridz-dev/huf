@@ -16,7 +16,11 @@
   "use_custom_pricing",
   "input_cost_per_1m_tokens",
   "output_cost_per_1m_tokens",
-  "cached_input_cost_per_1m_tokens"
+  "cached_input_cost_per_1m_tokens",
+  "chat_capability_overrides_section",
+  "disable_ask_user",
+  "disable_rich_elements",
+  "disable_document_artifacts"
  ],
  "fields": [
   {
@@ -99,12 +103,39 @@
    "description": "Optional. Cost for prompt cache reads (cache hits) in USD per 1M tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave as 0 if not applicable.",
    "precision": "8",
    "depends_on": "eval:doc.use_custom_pricing"
+  },
+  {
+   "fieldname": "chat_capability_overrides_section",
+   "fieldtype": "Section Break",
+   "label": "Chat Capability Overrides",
+   "description": "Force these chat capabilities off for every agent using this model, regardless of each agent's own setting \u2014 useful for small/local models where the extra prompt instructions or tools would waste context."
+  },
+  {
+   "fieldname": "disable_ask_user",
+   "fieldtype": "Check",
+   "label": "Disable Ask User",
+   "description": "Force off the ask_user structured-question tool for agents using this model.",
+   "default": "0"
+  },
+  {
+   "fieldname": "disable_rich_elements",
+   "fieldtype": "Check",
+   "label": "Disable Rich Elements",
+   "description": "Force off chart/HTML/SVG/mermaid/media rich-element instructions for agents using this model.",
+   "default": "0"
+  },
+  {
+   "fieldname": "disable_document_artifacts",
+   "fieldtype": "Check",
+   "label": "Disable Document Artifacts",
+   "description": "Force off document-artifact authoring/export/redline for agents using this model.",
+   "default": "0"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-01 07:27:58.701437",
+ "modified": "2026-08-09 03:51:03.550222",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Model",

@@ -1,0 +1,301 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:automation_name",
+ "creation": "2026-08-09 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "automation_name",
+  "status",
+  "column_break_identity",
+  "disabled",
+  "section_break_identity",
+  "description",
+  "executor_section",
+  "agent",
+  "model_override",
+  "column_break_executor",
+  "project",
+  "run_as_user",
+  "work_section",
+  "instruction",
+  "input_template",
+  "column_break_work",
+  "source_system",
+  "is_virtual",
+  "metadata",
+  "execution_section",
+  "conversation_mode",
+  "conversation",
+  "notify_user",
+  "column_break_execution",
+  "last_run",
+  "last_execution",
+  "last_status",
+  "next_execution",
+  "total_runs",
+  "last_error",
+  "seeding_metadata_section",
+  "source_app",
+  "source_file"
+ ],
+ "fields": [
+  {
+   "fieldname": "automation_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Automation Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nActive\nPaused\nError\nArchived"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "section_break_identity",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "executor_section",
+   "fieldtype": "Section Break",
+   "label": "Executor"
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "reqd": 1
+  },
+  {
+   "description": "Optional AI Model to use for this automation instead of the Agent's default model.",
+   "fieldname": "model_override",
+   "fieldtype": "Link",
+   "label": "Model Override",
+   "options": "AI Model"
+  },
+  {
+   "fieldname": "column_break_executor",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "HUF Project",
+   "search_index": 1
+  },
+  {
+   "description": "User the automation should run as. Defaults to the current user/system user if left blank.",
+   "fieldname": "run_as_user",
+   "fieldtype": "Link",
+   "label": "Run As User",
+   "options": "User"
+  },
+  {
+   "fieldname": "work_section",
+   "fieldtype": "Section Break",
+   "label": "Work"
+  },
+  {
+   "fieldname": "instruction",
+   "fieldtype": "Long Text",
+   "ignore_xss_filter": 1,
+   "label": "Instruction",
+   "reqd": 1
+  },
+  {
+   "description": "Optional template used to build the instruction/input sent to the agent at run time.",
+   "fieldname": "input_template",
+   "fieldtype": "Long Text",
+   "label": "Input Template"
+  },
+  {
+   "fieldname": "column_break_work",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "source_system",
+   "fieldtype": "Data",
+   "label": "Source System"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_virtual",
+   "fieldtype": "Check",
+   "label": "Is Virtual"
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "JSON",
+   "label": "MetaData"
+  },
+  {
+   "fieldname": "execution_section",
+   "fieldtype": "Section Break",
+   "label": "Execution Behavior"
+  },
+  {
+   "default": "New",
+   "fieldname": "conversation_mode",
+   "fieldtype": "Select",
+   "label": "Conversation Mode",
+   "options": "New\nDedicated\nNo-UI"
+  },
+  {
+   "depends_on": "eval: doc.conversation_mode == \"Dedicated\"",
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation"
+  },
+  {
+   "default": "0",
+   "fieldname": "notify_user",
+   "fieldtype": "Check",
+   "label": "Notify User"
+  },
+  {
+   "fieldname": "column_break_execution",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_run",
+   "fieldtype": "Link",
+   "label": "Last Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_execution",
+   "fieldtype": "Datetime",
+   "label": "Last Execution",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_status",
+   "fieldtype": "Select",
+   "label": "Last Status",
+   "options": "\nDraft\nActive\nPaused\nError\nArchived",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_execution",
+   "fieldtype": "Datetime",
+   "label": "Next Execution",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "total_runs",
+   "fieldtype": "Int",
+   "label": "Total Runs",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Long Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "seeding_metadata_section",
+   "fieldtype": "Section Break",
+   "hidden": 1,
+   "label": "Seeding Metadata"
+  },
+  {
+   "fieldname": "source_app",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source App",
+   "read_only": 1
+  },
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Source File",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-09 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Automation",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

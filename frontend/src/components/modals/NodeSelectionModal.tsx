@@ -38,6 +38,7 @@ import {
 import { triggerOptions } from '../../data/triggers';
 import { actionOptions } from '../../data/actions';
 import { TriggerConfig, ActionConfig, ScheduleIntervalType, DocEventType, AppTriggerIntegration } from '../../types/flow.types';
+import type { ActionOption } from '../../types/modal.types';
 import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
 import { Combobox } from '../ui/combobox';
@@ -50,6 +51,11 @@ interface NodeSelectionModalProps {
   onSaveTrigger?: (config: TriggerConfig) => void;
   onSaveAction?: (actionType: string, config: ActionConfig) => void;
   initialTriggerConfig?: TriggerConfig;
+  /**
+   * Restrict the actions tab to a single category (used by the node palette
+   * rail). Leave undefined to show every category, as the "Add step" flow does.
+   */
+  actionCategory?: ActionOption['category'] | null;
 }
 
 const iconMap: Record<string, LucideIcon> = {
@@ -79,7 +85,8 @@ export function NodeSelectionModal({
   mode,
   onSaveTrigger,
   onSaveAction,
-  initialTriggerConfig
+  initialTriggerConfig,
+  actionCategory
 }: NodeSelectionModalProps) {
   const [mainTab, setMainTab] = useState<MainTab>(mode === 'trigger' ? 'triggers' : 'actions');
   const [triggerSubTab, setTriggerSubTab] = useState<TriggerSubTab>('explore');
@@ -94,6 +101,16 @@ export function NodeSelectionModal({
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+
+  // The modal stays mounted between openings, so its tab has to follow the
+  // `mode` prop each time it is (re)opened — otherwise an "add action" request
+  // can land on the triggers tab left over from a previous opening.
+  useEffect(() => {
+    if (open) {
+      setMainTab(mode === 'trigger' ? 'triggers' : 'actions');
+      setSearchQuery('');
+    }
+  }, [open, mode]);
 
   useEffect(() => {
     if (open && docTypes.length === 0 && !loadingDocTypes) {
@@ -129,8 +146,10 @@ export function NodeSelectionModal({
       trigger.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredActions = actionOptions.filter((action) =>
-    action.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredActions = actionOptions.filter(
+    (action) =>
+      (!actionCategory || action.category === actionCategory) &&
+      action.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');

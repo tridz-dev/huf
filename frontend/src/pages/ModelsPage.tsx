@@ -53,6 +53,9 @@ interface ModelFormData {
   input_cost_per_1m_tokens: string;
   output_cost_per_1m_tokens: string;
   cached_input_cost_per_1m_tokens: string;
+  disable_ask_user: boolean;
+  disable_rich_elements: boolean;
+  disable_document_artifacts: boolean;
 }
 
 const emptyFormData: ModelFormData = {
@@ -63,6 +66,9 @@ const emptyFormData: ModelFormData = {
   input_cost_per_1m_tokens: '',
   output_cost_per_1m_tokens: '',
   cached_input_cost_per_1m_tokens: '',
+  disable_ask_user: false,
+  disable_rich_elements: false,
+  disable_document_artifacts: false,
 };
 
 function parseModalityBadges(modalities?: string): string[] {
@@ -201,6 +207,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           details.cached_input_cost_per_1m_tokens != null
             ? String(details.cached_input_cost_per_1m_tokens)
             : '',
+        disable_ask_user: details.disable_ask_user === 1,
+        disable_rich_elements: details.disable_rich_elements === 1,
+        disable_document_artifacts: details.disable_document_artifacts === 1,
       });
     } catch (loadError) {
       toast.error('Failed to load model details');
@@ -254,6 +263,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       provider: formData.provider,
       modalities: formData.modalities.join(','),
       use_custom_pricing: formData.use_custom_pricing ? 1 : 0,
+      disable_ask_user: formData.disable_ask_user ? 1 : 0,
+      disable_rich_elements: formData.disable_rich_elements ? 1 : 0,
+      disable_document_artifacts: formData.disable_document_artifacts ? 1 : 0,
     };
 
     if (formData.use_custom_pricing) {
@@ -539,6 +551,60 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div>
+                  <Label>Chat Capability Overrides</Label>
+                  <p className="text-xs text-steel-soft mt-0.5">
+                    Force these chat capabilities off for every agent using this model, regardless of each agent&apos;s own setting — useful for small/local models where the extra prompt instructions or tools would waste context.
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="disable_ask_user">Disable Ask User</Label>
+                    <p className="text-xs text-steel-soft">
+                      Force off the ask_user structured-question tool for agents using this model.
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_ask_user"
+                    checked={formData.disable_ask_user}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, disable_ask_user: checked })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="disable_rich_elements">Disable Rich Elements</Label>
+                    <p className="text-xs text-steel-soft">
+                      Force off chart/HTML/SVG/mermaid/media rich-element instructions for agents using this model.
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_rich_elements"
+                    checked={formData.disable_rich_elements}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, disable_rich_elements: checked })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="disable_document_artifacts">Disable Document Artifacts</Label>
+                    <p className="text-xs text-steel-soft">
+                      Force off document-artifact authoring/export/redline for agents using this model.
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_document_artifacts"
+                    checked={formData.disable_document_artifacts}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, disable_document_artifacts: checked })
+                    }
+                  />
+                </div>
               </div>
             </div>
           )}

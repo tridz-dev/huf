@@ -15,6 +15,8 @@ export interface AgentConversationDoc {
   model?: string;
   last_activity?: string;
   modified?: string;
+  /** HUF Project this conversation belongs to, if any. */
+  project?: string;
 }
 
 /**
@@ -33,6 +35,8 @@ export interface ChatListItem {
    * UI-friendly label (e.g. "2m ago"). Populated by UI hooks.
    */
   timestampLabel?: string;
+  /** HUF Project this conversation belongs to, if any. */
+  project?: string;
 }
 
 type ConversationFilter = [keyof AgentConversationDoc | string, string, unknown];
@@ -96,6 +100,7 @@ function mapChatListItem(doc: AgentConversationDoc): ChatListItem {
     title: doc.title || 'Untitled Chat',
     agent: doc.agent || '',
     timestamp: doc.last_activity || doc.modified || undefined,
+    project: doc.project || undefined,
   };
 }
 
@@ -148,7 +153,7 @@ export async function getConversations(
       (search ? [['title', 'like', `%${search}%`]] : undefined);
 
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
       limit_start: start,
@@ -254,7 +259,7 @@ export async function getConversationsByAgent(
 
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
       filters: [
         ['agent', '=', agentName],
         ['channel', '=', 'Chat'],
@@ -287,7 +292,7 @@ export async function getAllConversationsForRecents(
 ): Promise<ChatListItem[]> {
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
       filters: [['channel', '=', 'Chat']],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
@@ -532,6 +537,8 @@ export interface NewConversationParams {
   skip_user_message?: boolean;
   files?: PrepareMessageWithFileFile[];
   modelOverride?: string;
+  /** HUF Project to associate the newly created conversation with, if any. */
+  project?: string;
 }
 
 export interface NewConversationResponse {
@@ -598,6 +605,7 @@ export async function newConversation(
       skip_user_message: params.skip_user_message ? 1 : 0,
       files: params.files,
       model_override: params.modelOverride ?? undefined,
+      project: params.project ?? undefined,
     });
     return result as NewConversationResponse;
   } catch (error) {

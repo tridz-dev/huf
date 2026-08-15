@@ -628,7 +628,7 @@ Frappe's asset build uses `sites/apps.txt` to know which apps to include. Withou
 
 Files: `huf/huf/prompts/demo-assistant.json`, `huf/huf/agents/demo-assistant.json`
 
-Commit `22e705c` added HUF demo seed data. The demo agent is **disabled by default** so it does not consume API credits, but it is present so users can enable it and start chatting immediately.
+Commit `22e705c` added HUF demo seed data. The demo agent (Google's `gemini-3.5-flash-lite`) is **enabled by default** so it's ready to chat with as soon as a Google AI Provider API key is added — it costs nothing until then, since no run happens without one.
 
 The seed data is loaded through HUF's app-seeding framework. The guard that skipped HUF during seeding was removed in that commit:
 

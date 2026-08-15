@@ -327,7 +327,19 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setTestingConnection(true);
     setConnectionTest(null);
     try {
-      const result = await testProviderConnection(selectedProvider.name);
+      // Test what's in the form, not what was last saved. The API key is a
+      // Password field, so it never comes back when the form is opened —
+      // without sending the in-progress values, a key the user just typed
+      // would never be the thing actually tested. These are used for the
+      // probe only and are not persisted, so Cancel still discards edits.
+      // `api_key` is omitted when blank so the saved key is used instead.
+      const result = await testProviderConnection(selectedProvider.name, {
+        ...(formData.api_key ? { api_key: formData.api_key } : {}),
+        api_base_url: formData.api_base_url.trim(),
+        provider_brand:
+          formData.provider_brand || suggestBrandFromProviderName(formData.provider_name) || 'other',
+        is_local_llm: formData.is_local_llm ? 1 : 0,
+      });
       setConnectionTest(result);
     } catch (error) {
       toast.error('Connection test failed', {
@@ -597,20 +609,28 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 </Label>
               </div>
 
-              {formData.is_local_llm && (
-                <div className="space-y-2">
-                  <Label htmlFor="api_base_url">
-                    API Base URL <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="api_base_url"
-                    type="text"
-                    placeholder="http://host.docker.internal:11434"
-                    value={formData.api_base_url}
-                    onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
-                  />
-                </div>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="api_base_url">
+                  API Base URL
+                  {formData.is_local_llm && <span className="text-destructive"> *</span>}
+                </Label>
+                <Input
+                  id="api_base_url"
+                  type="text"
+                  placeholder={
+                    formData.is_local_llm
+                      ? 'http://host.docker.internal:11434'
+                      : 'Leave blank to use the provider default (e.g. https://api.openai.com/v1)'
+                  }
+                  value={formData.api_base_url}
+                  onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
+                />
+                {!formData.is_local_llm && (
+                  <p className="text-xs text-muted-foreground">
+                    Only needed for a custom or self-hosted endpoint (Azure, Moonshot, a LiteLLM proxy, etc.).
+                  </p>
+                )}
+              </div>
 
               <ProviderBrandSelect
                 value={formData.provider_brand}

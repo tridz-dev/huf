@@ -22,10 +22,25 @@ import {
 interface ConversationDataPanelProps {
   conversationId: string;
   canWrite: boolean;
+  /** Controlled open state. When provided the panel renders no trigger of its own
+   * and the caller (e.g. a menu item) is responsible for opening it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ConversationDataPanel({ conversationId, canWrite }: ConversationDataPanelProps) {
-  const [open, setOpen] = useState(false);
+export function ConversationDataPanel({
+  conversationId,
+  canWrite,
+  open: openProp,
+  onOpenChange,
+}: ConversationDataPanelProps) {
+  const controlled = openProp !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlled ? openProp : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ConversationDataItem[]>([]);
   const [newKey, setNewKey] = useState('');
@@ -67,12 +82,14 @@ export function ConversationDataPanel({ conversationId, canWrite }: Conversation
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Database className="h-4 w-4" />
-          Conversation data
-        </Button>
-      </SheetTrigger>
+      {!controlled && (
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Database className="h-4 w-4" />
+            Conversation data
+          </Button>
+        </SheetTrigger>
+      )}
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
           <SheetTitle>Conversation data</SheetTitle>

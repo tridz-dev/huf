@@ -598,7 +598,6 @@ export default function GatewaysPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Open">Open — allow anyone to message</SelectItem>
                     <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
                     <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
                     <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>

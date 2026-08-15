@@ -19,6 +19,9 @@ export type AIModel = {
   cached_input_cost_per_1m_tokens?: number | null;
   supports_reasoning?: number;
   reasoning_config_override?: string;
+  disable_ask_user?: number;
+  disable_rich_elements?: number;
+  disable_document_artifacts?: number;
 };
 
 export type ToolType =
@@ -332,6 +335,9 @@ export interface AgentDoc {
   // Execution policy (advanced): run turns directly instead of queue-first
   run_immediately?: 0 | 1;
   allow_ssh?: 0 | 1;
+  allow_ask_user?: 0 | 1;
+  allow_rich_elements?: 0 | 1;
+  allow_document_artifacts?: 0 | 1;
   ssh_connections?: Array<{
     name?: string;
     ssh_connection: string;

@@ -514,29 +514,6 @@ export function AdvancedTab({
 						)}
 					/>
 				)}
-
-				<FormField
-					control={form.control}
-					name="max_context_chars"
-					render={({ field }) => (
-						<FormItem>
-							<FormLabel>Max Context Characters</FormLabel>
-							<FormControl>
-								<Input
-									type="number"
-									placeholder="2000"
-									{...field}
-									value={field.value?.toString() || ''}
-									onChange={(e) => field.onChange(parseOptionalNumber(e.target.value, (v) => parseInt(v, 10)))}
-								/>
-							</FormControl>
-							<FormDescription>
-								Maximum characters allowed for tool results before truncating and applying include_reference context policy.
-							</FormDescription>
-							<FormMessage />
-						</FormItem>
-					)}
-				/>
 			</FormSettingsSection>
 
 			<FormSettingsSection
@@ -797,7 +774,7 @@ This includes whether each tool call is completed and its corresponding result.`
 			</FormSettingsSection>
 
 			<FormSettingsSection
-				title="Model Modality Settings"
+				title="Model modality settings"
 				description="Optional: select a dedicated model for image generation."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
