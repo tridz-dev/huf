@@ -183,6 +183,7 @@ def _resolve_function_path(tool_doc: dict) -> str | None:
 		"Set Conversation Data": "huf.ai.sdk_tools.handle_set_conversation_data",
 		"Load Conversation Data": "huf.ai.sdk_tools.handle_load_conversation_data",
 		"Perplexity Search": "huf.ai.tools.perplexity.handle_perplexity_search",
+		"Code Execution": "huf.ai.tools.code_execution.run_python",
 	}
 
 	return type_to_handler.get(tool_type)

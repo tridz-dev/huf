@@ -192,6 +192,8 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
                     function_path = "huf.ai.memory_tools.handle_archive_memory_record"
                 elif function_doc.types == "Promote Memory to Knowledge":
                     function_path = "huf.ai.memory_tools.handle_promote_memory_to_knowledge"
+                elif function_doc.types == "Code Execution":
+                    function_path = "huf.ai.tools.code_execution.run_python"
 
                 else:
                     continue

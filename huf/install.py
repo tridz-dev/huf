@@ -99,6 +99,31 @@ def _setup_desktop_icon_as_workspace():
 	frappe.db.commit()
 
 
+def before_tests():
+	"""Clear the stale test-record cache before every `bench run-tests` invocation.
+
+	Frappe test_runner.main() calls frappe.utils.scheduler.disable_scheduler() (an
+	uncommitted write) before running any doctype/module tests. On a first run,
+	make_test_records(..., commit=True) happens to flush that write. But
+	make_test_records short-circuits per doctype once sites/<site>/.test_log
+	already lists it (see frappe/test_runner.py get_test_record_log /
+	add_to_test_record_log), so on any second-or-later run against the same site
+	no commit ever happens and the next frappe.db.begin() collides with the
+	still-uncommitted scheduler-disable write, raising
+	frappe.exceptions.ImplicitCommitError. Clearing the cache here forces
+	make_test_records to recreate (and commit) on every run, so this cannot
+	recur regardless of prior test-runner state on this site.
+	"""
+	import os
+
+	test_log_path = frappe.get_site_path(".test_log")
+	if os.path.exists(test_log_path):
+		os.remove(test_log_path)
+	frame = getattr(frappe, "flags", None)
+	if frame is not None and "test_record_log" in frame:
+		del frame["test_record_log"]
+
+
 def after_install():
     create_huf_roles()
     create_demo_ai_providers()
