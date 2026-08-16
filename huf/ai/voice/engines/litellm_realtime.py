@@ -45,6 +45,7 @@ class LitellmRealtimeEngine(VoiceEngine):
 				order_by="name",
 			)
 		]
+		options = [{"label": name, "value": name} for name in model_names]
 		return [
 			{
 				"key": "model",
@@ -55,7 +56,7 @@ class LitellmRealtimeEngine(VoiceEngine):
 					"The AI Model to use for this realtime voice session - must "
 					"have Speech-to-Speech modality."
 				),
-				"options": model_names,
+				"options": options,
 			},
 		]
 
