@@ -122,7 +122,7 @@ export function ChatMessage({
     }
 
     return (
-        <div className={cn("flex flex-col group relative", isUser ? "self-end" : "self-start w-full")}>
+        <div className="flex flex-col group relative w-full">
             {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
                 <div className="flex w-full max-w-chat-measure flex-col gap-2">
                     {message.tools.length > 1 ? (
@@ -163,11 +163,11 @@ export function ChatMessage({
                     )}
                 </div>
             ) : (
-                    <Message from={message.from} className={cn(isUser && "!ml-0 max-w-[68%]", !isUser && "!max-w-full")}>
+                    <Message from={message.from} className={cn(isUser && "max-w-[68%]", !isUser && "!max-w-full")}>
                         <MessageContent
                             className={cn(
                                 isUser
-                                    ? "!ml-0 !rounded-chat-bubble !bg-chat-bubble !px-3 !py-[7px] text-[13px] leading-[1.55]"
+                                    ? "!rounded-chat-bubble !bg-chat-bubble !px-3 !py-[7px] text-[13px] leading-[1.55]"
                                     : "w-full max-w-chat-measure text-[13px] leading-[1.65]"
                             )}
                         >
