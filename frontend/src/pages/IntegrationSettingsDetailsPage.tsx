@@ -23,6 +23,7 @@ import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
 import { TelegramTab } from '@/components/integrations/TelegramTab';
+import { ChannelTab } from '@/components/integrations/ChannelTab';
 import { integrationFormSchema, type IntegrationFormValues } from '@/components/integrations/types';
 import {
   createIntegrationSetting,
@@ -126,19 +127,25 @@ export function IntegrationSettingsDetailsPage({
     }
 
     if ((isNew ? initialService : watchService) === 'telegram') {
-      return {
-        ...base,
-        telegram: {
-          label: 'Telegram',
-          fields: ['telegram_agent', 'telegram_auto_setup_webhook'],
-          default: false,
-          disabled: isNew,
-        },
+      base.telegram = {
+        label: 'Telegram',
+        fields: ['telegram_agent', 'telegram_auto_setup_webhook'],
+        default: false,
+        disabled: isNew,
+      };
+    }
+
+    if (surface === 'Gateway') {
+      base.channel = {
+        label: 'Channel',
+        fields: [],
+        default: false,
+        disabled: false,
       };
     }
 
     return base;
-  }, [isNew, initialService, watchService, serviceCategory]);
+  }, [isNew, initialService, watchService, serviceCategory, surface]);
 
   const validTabs = useMemo(() => Object.keys(tabConfig), [tabConfig]);
   const defaultTab = useMemo(
@@ -491,6 +498,12 @@ export function IntegrationSettingsDetailsPage({
                     settingUpWebhook={settingUpWebhook}
                     onSetupWebhook={handleSetupWebhook}
                   />
+                </TabsContent>
+              )}
+
+              {'channel' in tabConfig && (
+                <TabsContent value="channel" className="space-y-4">
+                  <ChannelTab settingId={settingId && !isNew ? settingId : undefined} isNew={isNew} />
                 </TabsContent>
               )}
             </Tabs>

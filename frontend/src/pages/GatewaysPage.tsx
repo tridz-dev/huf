@@ -52,12 +52,12 @@ import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/utils/time';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 
-const PROVIDER_SERVICE: Partial<Record<GatewayProvider, string>> = {
-  WhatsApp: 'whatsapp',
-  VK: 'vk',
-  WeCom: 'wecom',
-  Telegram: 'telegram',
-};
+// Mirrors huf/ai/gateway_adapters/provider_ids.py::provider_to_service_id
+// Must stay in sync with the backend canonical transform for all 12 gateway providers.
+// Each provider maps to a lowercase service_name with spaces replaced by underscores.
+function providerToServiceId(provider: string): string {
+  return provider.toLowerCase().replace(/ /g, '_');
+}
 
 type GatewaysTab = 'gateways' | 'pending-access' | 'credentials';
 
@@ -311,11 +311,15 @@ export default function GatewaysPage() {
     setCreating(true);
     setError('');
     try {
-      const requiresIntegration = Boolean(PROVIDER_SERVICE[provider]);
       const created = (await db.createDoc(doctype.Gateway, {
         gateway_name: gatewayName.trim(),
         provider,
-        is_enabled: requiresIntegration ? 0 : 1,
+        // Every messaging channel needs credentials before it can carry traffic, and
+        // Gateway.validate() enforces that for all providers once enabled. So a new
+        // gateway always starts disabled and is turned on after credentials are linked.
+        // (This used to vary by provider via a hardcoded 4-entry map, which meant the
+        // other 8 were created enabled-but-credential-less and failed at runtime.)
+        is_enabled: 0,
         // 'Allow list' with zero access entries silently rejects every inbound DM and never
         // generates a pairing request, so a fresh gateway would go totally silent with a
         // permanently empty Pending access tab. 'Pairing' is safe and self-explaining out of
@@ -746,9 +750,10 @@ export default function GatewaysPage() {
                 </span>
               </label>
 
-              {/* Connected Integration (credentials) */}
-              {PROVIDER_SERVICE[editingGateway.provider] && (() => {
-                const requiredService = PROVIDER_SERVICE[editingGateway.provider]!;
+              {/* Connected Integration (credentials) — shown for every provider, since
+                  every messaging channel needs credentials before it can be enabled. */}
+              {(() => {
+                const requiredService = providerToServiceId(editingGateway.provider);
                 const matches = integrationSettings.filter((s) => s.service === requiredService);
                 return (
                   <label className="grid gap-1 text-xs font-medium text-ink">
