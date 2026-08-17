@@ -86,7 +86,18 @@ export function GeneralTab({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Modality</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
+                <Select
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    if (value === 'Text') {
+                      form.setValue('voice_enabled', false);
+                    } else if (value === 'Voice') {
+                      form.setValue('voice_enabled', true);
+                    }
+                  }}
+                  value={field.value}
+                  disabled={locked}
+                >
                   <FormControl>
                     <SelectTrigger>
                       <SelectValue placeholder="Select modality" />
