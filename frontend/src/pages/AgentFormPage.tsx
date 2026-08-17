@@ -96,6 +96,7 @@ function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
 function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
   return {
     agent_name: agent.agent_name || '',
+    agent_modality: (agent.agent_modality as AgentFormValues['agent_modality']) || 'Both',
     provider: agent.provider || '',
     model: agent.model || '',
     temperature: agent.temperature ?? 1,
@@ -383,6 +384,7 @@ export function AgentFormPage() {
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
         agent_name: '',
+        agent_modality: 'Both',
         provider: '',
         model: '',
         temperature: 1,
@@ -1492,6 +1494,7 @@ export function AgentFormPage() {
       // Convert form values (booleans) to AgentDoc format (numbers 0/1)
       const agentData: AgentUpdatePayload = {
         agent_name: values.agent_name,
+        agent_modality: values.agent_modality,
         provider: values.provider,
         model: values.model,
         temperature: values.temperature,
@@ -1680,6 +1683,7 @@ export function AgentFormPage() {
         // Reset form state with the created agent's values
         form.reset({
           agent_name: newAgent.agent_name || '',
+          agent_modality: (newAgent.agent_modality as AgentFormValues['agent_modality']) || 'Both',
           provider: newAgent.provider || '',
           model: newAgent.model || '',
           temperature: newAgent.temperature ?? 1,
@@ -1773,6 +1777,7 @@ export function AgentFormPage() {
         // Reset form state with the updated values to mark form as clean
         form.reset({
           agent_name: values.agent_name,
+          agent_modality: values.agent_modality,
           provider: values.provider,
           model: values.model,
           temperature: values.temperature,

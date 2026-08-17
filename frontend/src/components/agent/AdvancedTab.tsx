@@ -114,6 +114,9 @@ export function AdvancedTab({
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const ttsModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_TTS));
 	const sttModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_STT));
+	const agentModality = form.watch('agent_modality');
+	const isVoiceOnly = agentModality === 'Voice';
+	const isTextOnly = agentModality === 'Text';
 	const contextStrategy = form.watch('context_strategy');
 	const summaryPromptMode = form.watch('summary_prompt_mode');
 	const enableConversationData = form.watch('enable_conversation_data');
@@ -147,6 +150,7 @@ export function AdvancedTab({
 
 	return (
 		<div className="space-y-12">
+			{!isVoiceOnly && (<>
 			<FormSettingsSection
 				title="Conversation Strategy"
 				description="Define the rules for how the agent manages its memory window when a conversation grows long and approaches token limits."
@@ -786,6 +790,7 @@ export function AdvancedTab({
 					</>
 				)}
 			</FormSettingsSection>
+			</>)}
 
 			<FormSettingsSection
 				title="Huf UI"
@@ -842,9 +847,10 @@ This includes whether each tool call is completed and its corresponding result.`
 				/>
 			</FormSettingsSection>
 
+			{!isVoiceOnly && (
 			<FormSettingsSection
-				title="Model Modality Settings"
-				description="Optional: select dedicated models for image generation, audio generation (TTS), and transcription (STT)."
+				title="Image Generation"
+				description="Optional: select a dedicated model for image generation."
 			>
 				<div className="grid gap-6 sm:grid-cols-2">
 					<FormField
@@ -877,7 +883,16 @@ This includes whether each tool call is completed and its corresponding result.`
 							</FormItem>
 						)}
 					/>
+				</div>
+			</FormSettingsSection>
+			)}
 
+			{!isTextOnly && (
+			<FormSettingsSection
+				title="Voice Configuration"
+				description="Dedicated models for audio generation (TTS) and transcription (STT), used by realtime voice calls."
+			>
+				<div className="grid gap-6 sm:grid-cols-2">
 					<FormField
 						control={form.control}
 						name="tts_model"
@@ -956,7 +971,9 @@ This includes whether each tool call is completed and its corresponding result.`
 					/>
 				</div>
 			</FormSettingsSection>
+			)}
 
+			{!isVoiceOnly && (<>
 			<FormSettingsSection
 				title="Document Upload"
 				description="Let users attach documents or images in chat for this agent."
@@ -1239,6 +1256,7 @@ This includes whether each tool call is completed and its corresponding result.`
 					)}
 				</div>
 			</FormSettingsSection>
+			</>)}
 		</div>
 	);
 }

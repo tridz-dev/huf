@@ -9,6 +9,7 @@
   "general_tab",
   "llm_configuration_section",
   "agent_name",
+  "agent_modality",
   "provider",
   "provider_brand",
   "temperature",
@@ -141,30 +142,44 @@
    "unique": 1
   },
   {
+   "default": "Both",
+   "description": "What this agent talks to users through. 'Text' hides voice/TTS settings. 'Voice' hides text-model/LLM settings not used by the realtime voice call. 'Both' shows everything (default, matches prior behavior).",
+   "fieldname": "agent_modality",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Modality",
+   "options": "Text\nVoice\nBoth",
+   "reqd": 1
+  },
+  {
    "description": "The AI provider that will power this agent (e.g., OpenAI, OpenRouter).",
    "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
+   "depends_on": "eval:doc.agent_modality != 'Voice'",
    "fieldname": "provider",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Provider",
-   "options": "AI Provider",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.agent_modality != 'Voice'",
+   "options": "AI Provider"
   },
   {
    "fieldname": "column_break_df8m",
    "fieldtype": "Column Break"
   },
   {
+   "depends_on": "eval:doc.agent_modality != 'Voice'",
    "description": "The specific AI model to use from the selected provider (e.g., gpt-4-turbo).",
    "documentation_url": "https://docs.huf.ai/docs/concepts/providers-models/",
    "fieldname": "model",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Model",
-   "options": "AI Model",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.agent_modality != 'Voice'",
+   "options": "AI Model"
   },
   {
+   "depends_on": "eval:doc.agent_modality != 'Text'",
    "description": "Specific model for Text-to-Speech (Audio Generation). If unset, defaults to the provider's default TTS model.",
    "fieldname": "tts_model",
    "fieldtype": "Link",
@@ -172,6 +187,7 @@
    "options": "AI Model"
   },
   {
+   "depends_on": "eval:doc.agent_modality != 'Text'",
    "description": "Voice to use for TTS (e.g. alloy, echo, onyx).",
    "fieldname": "tts_voice",
    "fieldtype": "Data",
@@ -757,11 +773,13 @@
    "label": "Instruction"
   },
   {
+   "depends_on": "eval:doc.agent_modality != 'Text'",
    "fieldname": "audio_generation_section",
    "fieldtype": "Section Break",
    "label": "Audio Generation"
   },
   {
+   "depends_on": "eval:doc.agent_modality != 'Text'",
    "description": "Specific model for Speech-to-Text (Audio Transcription). If unset, defaults to the provider's default STT model.",
    "fieldname": "stt_model",
    "fieldtype": "Link",
@@ -769,6 +787,7 @@
    "options": "AI Model"
   },
   {
+   "depends_on": "eval:doc.agent_modality != 'Text'",
    "fieldname": "audio_transcription_section",
    "fieldtype": "Section Break",
    "label": "Audio Transcription"

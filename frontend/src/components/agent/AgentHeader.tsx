@@ -68,6 +68,8 @@ export function AgentHeader({
 }: AgentHeaderProps) {
   const watchProvider = form.watch('provider');
   const watchModel = form.watch('model');
+  const watchModality = form.watch('agent_modality');
+  const isVoiceOnly = watchModality === 'Voice';
   const navigate = useNavigate();
 
   const handleOpenChat = () => {
@@ -131,10 +133,10 @@ export function AgentHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!isNew && (<Button 
-          variant="outline" 
-          size="icon-sm" 
-          onClick={onRunTest} 
+        {!isNew && !isVoiceOnly && (<Button
+          variant="outline"
+          size="icon-sm"
+          onClick={onRunTest}
           type="button"
           disabled={runningTest || isNew}
           title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}

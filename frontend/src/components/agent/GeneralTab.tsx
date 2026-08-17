@@ -23,7 +23,7 @@ interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
   providers: AIProvider[];
   models: AIModel[];
-  watchProvider: string;
+  watchProvider: string | undefined;
   optimizingPrompt: boolean;
   onOptimizePrompt: () => void;
   promptOptions: AgentPromptOption[];
@@ -48,6 +48,8 @@ export function GeneralTab({
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
   const watchModel = form.watch('model');
   const promptMode = form.watch('prompt_mode');
+  const watchModality = form.watch('agent_modality');
+  const isVoiceOnly = watchModality === 'Voice';
 
   const [cacheStatus, setCacheStatus] = useState<CacheableModelsResponse | null>(null);
 
@@ -71,8 +73,49 @@ export function GeneralTab({
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>LLM Configuration</CardTitle>
-          <CardDescription>Configure language model settings</CardDescription>
+          <CardTitle>Modality</CardTitle>
+          <CardDescription>
+            What this agent talks to users through. Voice-only hides text/LLM settings that a
+            realtime voice call doesn&apos;t use; Text-only hides voice settings.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FormField
+            control={form.control}
+            name="agent_modality"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Modality</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value} disabled={locked}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select modality" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Text">Text only</SelectItem>
+                    <SelectItem value="Voice">Voice only</SelectItem>
+                    <SelectItem value="Both">Text and Voice</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  {field.value === 'Voice'
+                    ? 'This agent only handles realtime voice calls. Tools, knowledge, skills, and text-model settings are hidden.'
+                    : field.value === 'Text'
+                      ? 'This agent only handles text chat. Voice/TTS settings are hidden.'
+                      : 'This agent handles both text chat and voice calls.'}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Agent Identity</CardTitle>
+          <CardDescription>Name and description for this agent.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -118,6 +161,16 @@ export function GeneralTab({
               </Accordion>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {!isVoiceOnly && (
+      <Card>
+        <CardHeader>
+          <CardTitle>LLM Configuration</CardTitle>
+          <CardDescription>Configure language model settings</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="provider"
@@ -238,6 +291,7 @@ We generally recommend altering this or temperature but not both.`}
           />
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -314,6 +368,7 @@ We generally recommend altering this or temperature but not both.`}
         />
       )}
 
+      {!isVoiceOnly && (
       <Card>
         <CardHeader>
           <CardTitle>Starter Prompts</CardTitle>
@@ -378,7 +433,9 @@ We generally recommend altering this or temperature but not both.`}
           )}
         </CardContent>
       </Card>
+      )}
 
+      {!isVoiceOnly && (
       <Card>
         <CardHeader>
           <CardTitle>Prompt Caching</CardTitle>
@@ -490,6 +547,7 @@ We generally recommend altering this or temperature but not both.`}
           )}
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
