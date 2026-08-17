@@ -193,7 +193,7 @@ export function SummaryPromptCategoriesModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="max-w-2xl">
         <DialogScrollHeader>
-          <DialogTitle>Summary Prompt Categories</DialogTitle>
+          <DialogTitle>Summary prompt categories</DialogTitle>
           <DialogDescription>
             Browse, create, and assign categories for agent summary prompts
           </DialogDescription>
@@ -218,7 +218,7 @@ export function SummaryPromptCategoriesModal({
               }}
             >
               <Plus className="w-4 h-4 mr-2" />
-              New Category
+              New category
             </Button>
           </div>
 
@@ -229,7 +229,7 @@ export function SummaryPromptCategoriesModal({
               </p>
 
               <div className="space-y-2">
-                <Label>Category Name</Label>
+                <Label>Category name</Label>
                 <Input
                   placeholder="e.g. Summarization"
                   value={formData.category_name}
@@ -274,7 +274,7 @@ export function SummaryPromptCategoriesModal({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Parent Category</Label>
+                  <Label>Parent category</Label>
                   <Select
                     value={formData.parent_category || '__none__'}
                     onValueChange={(value) =>

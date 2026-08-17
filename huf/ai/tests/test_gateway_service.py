@@ -214,7 +214,11 @@ class TestGatewayReplyDelivery(unittest.TestCase):
             sender_id="42",
         )
         configured_gateway = gateway(name="Support VK", execution_user="gateway-bot")
-        mock_frappe.get_doc.side_effect = [event, configured_gateway]
+        # Third item: the target Agent lookup added by the F1 access-control fix
+        # (gateway-routed runs are authorized as Guest -- see agent_access.py).
+        # allow_guest=True so this "delivered successfully" scenario still passes.
+        target_agent_doc = MagicMock(allow_guest=True)
+        mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-001", "response": "Hello back"})
         mock_send.return_value = SimpleNamespace(provider_message_id="vk-message-1")
 

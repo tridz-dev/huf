@@ -285,13 +285,13 @@ function MemoryPolicyFormPage() {
                   value={form.watch('policy_name')}
                   onChange={(e) => form.setValue('policy_name', e.target.value, { shouldDirty: true })}
                   className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-                  placeholder="Policy Name"
+                  placeholder="e.g. Support agent memory"
                 />
               ) : (
                 <InlineEditName
                   value={form.watch('policy_name')}
                   onChange={(value) => form.setValue('policy_name', value, { shouldDirty: true })}
-                  placeholder="Policy Name"
+                  placeholder="e.g. Support agent memory"
                 />
               )}
               <Badge variant={form.watch('enabled') ? 'default' : 'secondary'}>

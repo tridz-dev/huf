@@ -11,6 +11,18 @@ from frappe import _, is_whitelisted
 from frappe.model.document import Document
 
 
+def _json_schema_type(param_type):
+	"""Map a stored Agent Function Params `type` value to a valid JSON Schema type.
+
+	"float" is offered in the doctype's Select field for UX familiarity but is not a
+	valid JSON Schema type (json-schema.org only defines number/integer/string/boolean/
+	object/array/null); LLM providers reject or mishandle tool schemas containing it.
+	"""
+	if param_type == "float":
+		return "number"
+	return param_type
+
+
 def _annotation_to_param_type(annotation):
 	if annotation == inspect.Parameter.empty:
 		return "string"
@@ -27,12 +39,21 @@ def _annotation_to_param_type(annotation):
 	return "string"
 
 
-def _inspect_function_parameters(function_path):
+def resolve_function_descriptor(function_path):
+	"""Resolve a dotted function path (e.g. "app.module.function") to a callable.
+
+	Raises frappe.ValidationError if the path cannot be imported/resolved.
+	"""
 	try:
 		func = frappe.get_attr(function_path)
 	except Exception as e:
 		frappe.throw(_("Could not find function at {0}: {1}").format(function_path, str(e)))
 
+	return func
+
+
+def inspect_function_parameters(func):
+	"""Build the tool-parameter list for an already-resolved callable."""
 	parameters = []
 	for name, param in inspect.signature(func).parameters.items():
 		if name in ("self", "cls"):
@@ -47,8 +68,55 @@ def _inspect_function_parameters(function_path):
 			}
 		)
 
+	return parameters
+
+
+def get_function_metadata(function_path, require_whitelisted=False):
+	"""Resolve a function path and return a full metadata descriptor for it.
+
+	If require_whitelisted is True, raises frappe.PermissionError when the
+	resolved function is not whitelisted.
+	"""
+	func = resolve_function_descriptor(function_path)
+
+	try:
+		is_whitelisted(func)
+		func_is_whitelisted = True
+	except Exception:
+		func_is_whitelisted = False
+
+	if require_whitelisted and not func_is_whitelisted:
+		raise frappe.PermissionError(
+			_("Function {0} is not whitelisted and cannot be used here.").format(function_path)
+		)
+
+	guest_methods = getattr(frappe, "guest_methods", set())
+	allow_guest = func in guest_methods
+
+	return_annotation = inspect.signature(func).return_annotation
+	return_annotation = (
+		None if return_annotation is inspect.Signature.empty else str(return_annotation)
+	)
+
 	return {
-		"parameters": parameters,
+		"function_path": function_path,
+		"function_name": getattr(func, "__name__", function_path),
+		"module": getattr(func, "__module__", None),
+		"docstring": inspect.getdoc(func),
+		"parameters": inspect_function_parameters(func),
+		"return_annotation": return_annotation,
+		"is_async": inspect.iscoroutinefunction(func),
+		"is_whitelisted": func_is_whitelisted,
+		"allow_guest": allow_guest,
+	}
+
+
+def _inspect_function_parameters(function_path):
+	"""Backwards-compatible wrapper around resolve_function_descriptor + inspect_function_parameters."""
+	func = resolve_function_descriptor(function_path)
+
+	return {
+		"parameters": inspect_function_parameters(func),
 		"pass_parameters_as_json": 1,
 	}
 
@@ -196,7 +264,7 @@ class AgentToolFunction(Document):
 
 			for param in self.parameters:
 				properties[param.fieldname] = {
-					"type": param.type,
+					"type": _json_schema_type(param.type),
 					"description": param.description or param.label,
 				}
 
@@ -319,7 +387,7 @@ class AgentToolFunction(Document):
 			filter_properties = {}
 			for param in self.parameters:
 				filter_properties[param.fieldname] = {
-					"type": param.type,
+					"type": _json_schema_type(param.type),
 					"description": param.description or param.label or f"Filter by {param.fieldname}"
 				}
 
@@ -425,7 +493,7 @@ class AgentToolFunction(Document):
 			query_required = []
 
 			for param in self.parameters:
-				field_schema = {"type": param.type, "description": param.description or param.label}
+				field_schema = {"type": _json_schema_type(param.type), "description": param.description or param.label}
 				if param.type == "string" and param.options:
 					field_schema["enum"] = param.options.split("\n")
 
@@ -458,7 +526,7 @@ class AgentToolFunction(Document):
 			body_required = []
 
 			for param in self.parameters:
-				field_schema = {"type": param.type, "description": param.description or param.label}
+				field_schema = {"type": _json_schema_type(param.type), "description": param.description or param.label}
 
 				if param.type == "string" and param.options:
 					field_schema["enum"] = param.options.split("\n")
@@ -622,7 +690,7 @@ class AgentToolFunction(Document):
 
 		for param in self.parameters:
 			obj = {
-				"type": param.type,
+				"type": _json_schema_type(param.type),
 				"description": param.description or param.label,
 			}
 

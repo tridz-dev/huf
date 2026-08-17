@@ -1,6 +1,7 @@
 import asyncio
 import json
 import threading
+import random
 import time
 from types import SimpleNamespace
 import litellm
@@ -26,6 +27,8 @@ from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
+from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.permissions import has_capability
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -57,7 +60,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
         frappe.throw(_("Agent model is not configured"))
 
     if model and model != agent_doc.model:
-        model_doc = frappe.get_doc("AI Model", model)
+        model_doc = frappe.get_cached_doc("AI Model", model)
         if not model_doc.provider:
             frappe.throw(
                 _("AI Model '{0}' has no provider configured.").format(model),
@@ -78,7 +81,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
     if not effective_provider:
         frappe.throw(_("Provider is not configured"))
 
-    model_name = frappe.db.get_value("AI Model", effective_model, "model_name")
+    model_name = frappe.get_cached_value("AI Model", effective_model, "model_name")
     if not model_name:
         frappe.throw(
             _("AI Model '{0}' has no model name configured.").format(effective_model),
@@ -91,7 +94,7 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 class AgentManager:
     """Manages the creation and execution of agents."""
     def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None):
-        self.agent_doc = frappe.get_doc("Agent", agent_name)
+        self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
         (
             self.effective_provider,
             self.effective_model,
@@ -101,7 +104,7 @@ class AgentManager:
             model=model_override,
             provider=provider_override,
         )
-        self.settings = frappe.get_doc("AI Provider", self.effective_provider)
+        self.settings = frappe.get_cached_doc("AI Provider", self.effective_provider)
         self.provider_override = provider_override
         self.model_override = model_override
         # self.file_handler = file_handler
@@ -116,7 +119,7 @@ class AgentManager:
 
         try:
             from huf.ai.sdk_tools import create_agent_tools
-            agent_tools = create_agent_tools(self.agent_doc)
+            agent_tools = create_agent_tools(self.agent_doc, model_name=self.effective_model)
             if agent_tools:
                 self.tools.extend(agent_tools)
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
@@ -433,27 +436,49 @@ class AgentManager:
                     frappe.log_error(title="Memory Injection Failed", message=str(e))
 
         if self.agent_doc.allow_chat:
-            from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
-            from huf.ai.artifact_instructions import (
-                AI_ELEMENT_INSTRUCTIONS,
-                MEDIA_ELEMENT_INSTRUCTIONS,
-                agent_has_media_tools,
-            )
+            from huf.ai.capabilities import capability_enabled
 
-            instructions += CHART_ARTIFACT_INSTRUCTIONS
-            instructions += AI_ELEMENT_INSTRUCTIONS
-            if agent_has_media_tools(self.agent_doc):
-                instructions += MEDIA_ELEMENT_INSTRUCTIONS
+            if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
+                from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+                from huf.ai.artifact_instructions import (
+                    AI_ELEMENT_INSTRUCTIONS,
+                    MEDIA_ELEMENT_INSTRUCTIONS,
+                    agent_has_media_tools,
+                )
 
-            from huf.ai.document_artifact_instructions import (
-                DOCUMENT_ARTIFACT_INSTRUCTIONS,
-                DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
-                agent_has_document_tools,
-            )
+                instructions += CHART_ARTIFACT_INSTRUCTIONS
+                instructions += AI_ELEMENT_INSTRUCTIONS
+                if agent_has_media_tools(self.agent_doc):
+                    instructions += MEDIA_ELEMENT_INSTRUCTIONS
 
-            instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
-            if agent_has_document_tools(self.agent_doc):
-                instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
+            if capability_enabled(self.agent_doc, self.effective_model, "document_artifacts"):
+                from huf.ai.document_artifact_instructions import (
+                    DOCUMENT_ARTIFACT_INSTRUCTIONS,
+                    DOCUMENT_EXPORT_TOOL_INSTRUCTIONS,
+                    agent_has_document_tools,
+                )
+
+                instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
+                if agent_has_document_tools(self.agent_doc):
+                    instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
+
+        # Inject Project-level instructions, if the conversation is scoped to a
+        # HUF Project. This layer sits between the Agent's own instructions
+        # (plus all hardcoded scaffolding above) and the conversation-level /
+        # per-turn context assembled later in run_agent_sync / run_agent_stream.
+        # No project set -> no-op, instructions stay byte-for-byte unchanged.
+        if conversation_id:
+            try:
+                project = frappe.db.get_value("Agent Conversation", conversation_id, "project")
+                if project:
+                    project_instructions = frappe.db.get_value("HUF Project", project, "instructions")
+                    if project_instructions:
+                        instructions += "\n\n" + project_instructions
+            except Exception as e:
+                frappe.log_error(
+                    f"Error injecting project instructions: {str(e)}",
+                    "Project Instruction Error",
+                )
 
         model_settings = ModelSettings(
             temperature=self.agent_doc.temperature,
@@ -479,30 +504,13 @@ class AgentManager:
         return agent
 
 def _is_user_allowed(agent_doc, user: str) -> bool:
-    """Check if user is allowed to run this agent"""
+    """Check if user is allowed to run this agent.
 
-    # Guest check
-    if user == "Guest":
-        return agent_doc.allow_guest
-
-    # Check allowed_users if specified
-    if agent_doc.allowed_users:
-        allowed_user_names = [u.user for u in agent_doc.allowed_users]
-        if user in allowed_user_names:
-            return True
-
-    # Check allowed_roles if specified
-    if agent_doc.allowed_roles:
-        allowed_role_names = [r.role for r in agent_doc.allowed_roles]
-        user_roles = frappe.get_roles(user)
-        if any(role in user_roles for role in allowed_role_names):
-            return True
-
-    # If no restrictions specified, allow all logged-in users
-    if not agent_doc.allowed_users and not agent_doc.allowed_roles:
-        return True
-
-    return False
+    Thin wrapper kept for backward compatibility with existing callers
+    (e.g. huf/ai/handlers/agent_runner.py); delegates to the shared
+    huf.ai.agent_access helper, which is now the single source of truth.
+    """
+    return _check_agent_access(agent_doc, user)
 
 # Canonical lifecycle status values. These must match the Agent Run doctype
 # Select options (Queued/Started/Success/Failed), the HTTP acknowledgement
@@ -695,6 +703,53 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                     if len(val) > 140000:
                         val = val[:140000]
                     result_val = {"output": val}
+
+            # Idempotency: a client-side tool call (see client_side_tool.py's
+            # ``_get_or_create_call``) already inserted an ``Agent Tool Call``
+            # row for this (call_id, agent_run) DURING execution, before this
+            # function ever runs. Without this lookup we'd insert a second,
+            # unpolled row here and point ``tool_call_ref`` at it instead of
+            # the row the frontend/poller are actually using. call_id alone
+            # is not unique across runs, so scope the lookup by agent_run too.
+            existing_name = (
+                frappe.db.get_value(
+                    "Agent Tool Call",
+                    {"call_id": tool_call_id, "agent_run": agent_run},
+                    "name",
+                )
+                if tool_call_id
+                else None
+            )
+
+            if existing_name:
+                doc = frappe.get_doc("Agent Tool Call", existing_name)
+
+                update_data = {}
+                if name and not doc.tool:
+                    update_data["tool"] = name
+                if not doc.is_mcp_tool:
+                    update_data["is_mcp_tool"] = is_mcp_tool
+                if mcp_server and not doc.mcp_server:
+                    update_data["mcp_server"] = mcp_server
+                if args and not doc.tool_args:
+                    update_data["tool_args"] = json.dumps(args)
+                if result_val is not None and not doc.tool_result:
+                    update_data["tool_result"] = result_val
+                if error and not doc.error_message:
+                    update_data["error_message"] = error
+                if conversation and not doc.conversation:
+                    update_data["conversation"] = conversation
+
+                if update_data:
+                    doc.update(update_data)
+                    if not frappe.has_permission("Agent Tool Call", "write", doc=doc):
+                        frappe.throw(
+                            _("Not permitted to update Agent Tool Call records."),
+                            frappe.PermissionError,
+                        )
+                    doc.save()
+                return doc.name
+
             doc = frappe.get_doc({
                 "doctype": "Agent Tool Call",
                 "agent_run": agent_run,
@@ -944,6 +999,7 @@ def run_agent_sync(
     files=None,
     skip_user_message: bool = False,
     now=None,
+    project: str = None,
 ):
 
     if not agent_name:
@@ -951,7 +1007,15 @@ def run_agent_sync(
     if not channel_id:
         channel_id = "api"
 
-    agent_doc = frappe.get_doc("Agent", agent_name)
+    # A missing agent and a Guest-not-allowed agent must look identical to a
+    # Guest caller — otherwise the exception type (DoesNotExistError vs
+    # PermissionError) is an oracle for enumerating agent names.
+    try:
+        agent_doc = frappe.get_doc("Agent", agent_name)
+    except frappe.DoesNotExistError:
+        agent_doc = None
+    if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+        frappe.throw(_("Agent not found or access denied."), frappe.PermissionError)
 
     if agent_doc.disabled:
         frappe.throw(
@@ -959,20 +1023,24 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
+    if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+        frappe.throw(
+            _("You are not authorized to use this agent."),
+            frappe.PermissionError
+        )
+
+    if frappe.session.user == "Guest":
+        # Guests may not redirect execution to a caller-chosen provider/model.
+        provider = None
+        model = None
+
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
         provider=provider,
     )
-
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(_("Access denied. This agent does not allow guest access."), frappe.PermissionError)
-
-    if not _is_user_allowed(agent_doc, frappe.session.user):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError
-        )
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -982,12 +1050,14 @@ def run_agent_sync(
     if agent_doc.persist_conversation:
         conversation = conv_manager.get_or_create_conversation(
             title=f"Chat with {agent_name}",
-            conversation_id=conversation_id
+            conversation_id=conversation_id,
+            project=project
         )
 
     else:
         conversation = conv_manager.create_new_conversation(
-            title=f"Chat with {agent_name}"
+            title=f"Chat with {agent_name}",
+            project=project
         )
 
     # if conversation.model:
@@ -1131,11 +1201,15 @@ def run_agent_sync(
 
     lock_key = _conversation_lock_key(conversation.name)
     lock_acquired = False
-    for _attempt in range(_DIRECT_LOCK_ATTEMPTS):
+    for attempt in range(_DIRECT_LOCK_ATTEMPTS):
         if frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
             lock_acquired = True
             break
-        time.sleep(_DIRECT_LOCK_RETRY_DELAY)
+        if attempt < _DIRECT_LOCK_ATTEMPTS - 1:
+            # Exponential backoff with jitter so concurrent direct-execution
+            # waiters on the same conversation don't all retry in lockstep.
+            backoff = _DIRECT_LOCK_RETRY_DELAY * (2 ** attempt)
+            time.sleep(backoff + random.uniform(0, _DIRECT_LOCK_RETRY_DELAY))
 
     if not lock_acquired:
         frappe.throw(
@@ -1218,16 +1292,7 @@ def get_agent_run_status(agent_run_id: str):
         frappe.throw(_("Agent Run not found: {0}").format(agent_run_id), frappe.DoesNotExistError)
 
     agent_doc = frappe.get_doc("Agent", run.agent)
-    if frappe.session.user == "Guest" and not agent_doc.allow_guest:
-        frappe.throw(
-            _("Access denied. This agent does not allow guest access."),
-            frappe.PermissionError,
-        )
-    if not _is_user_allowed(agent_doc, frappe.session.user):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError,
-        )
+    assert_agent_access(agent_doc, user=frappe.session.user)
 
     agent_message_id = None
     if run.status in ("Success", "Failed"):
@@ -1549,8 +1614,12 @@ def _execute_agent_run(
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
         }
-        run = RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
-        result = _run_async_safely(run)
+        async def _run_with_mcp_pool():
+            from huf.ai.mcp_client import mcp_session_pool
+            async with mcp_session_pool():
+                return await RunProvider.run(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
+
+        result = _run_async_safely(_run_with_mcp_pool())
 
         new_items = getattr(result, "new_items", []) or []
 
@@ -1574,7 +1643,11 @@ def _execute_agent_run(
                          "function": {
                              "name": tool_name,
                              "arguments": tool_args
-                        }
+                        },
+                        # Agent Tool Call docname — the unambiguous key the frontend
+                        # sends back to huf.ai.client_side_tool.submit_client_tool_result.
+                        # ``call_id`` (above) is kept for backward compatibility.
+                        "tool_call_ref": tool_call_id
                     })
 
                 msg_content = f"Requesting Tool: {tool_name}\nArguments: {tool_args}"
@@ -2423,6 +2496,7 @@ async def run_agent_stream(
     prompt_cache_options=None,
     skip_user_message: bool = False,
     files=None,
+    project: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2458,9 +2532,21 @@ async def run_agent_stream(
         channel_id = "sse_stream"
 
     try:
-        agent_doc = frappe.get_doc("Agent", agent_name)
+        # 0. Load the agent, keeping "doesn't exist" and "exists but Guest
+        # isn't allowed" indistinguishable to a Guest caller (same generic
+        # error) so agent names can't be enumerated by exception type.
+        try:
+            agent_doc = frappe.get_doc("Agent", agent_name)
+        except frappe.DoesNotExistError:
+            agent_doc = None
+        if agent_doc is None or (frappe.session.user == "Guest" and not agent_doc.allow_guest):
+            yield {
+                "type": "error",
+                "error": "Agent not found or access denied."
+            }
+            return
 
-        # 0. Disabled agents cannot run
+        # 0b. Disabled agents cannot run
         if agent_doc.disabled:
             yield {
                 "type": "error",
@@ -2468,16 +2554,18 @@ async def run_agent_stream(
             }
             return
 
-        # 1. Guest Check
-        if frappe.session.user == "Guest" and not agent_doc.allow_guest:
+        # 1. Guest + Permission Check (User/Role binding)
+        try:
+            assert_agent_access(agent_doc, user=frappe.session.user)
+        except frappe.PermissionError as e:
             yield {
                 "type": "error",
-                "error": "Access denied. This agent does not allow guest access."
+                "error": str(e) or "You are not authorized to use this agent."
             }
             return
 
-        # 2. Permission Check (User/Role binding)
-        if not _is_user_allowed(agent_doc, frappe.session.user):
+        # 1b. Capability check for logged-in users
+        if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
             yield {
                 "type": "error",
                 "error": "You are not authorized to use this agent."
@@ -2500,12 +2588,14 @@ async def run_agent_stream(
 
         if create_new or not agent_doc.persist_conversation:
             conversation = conv_manager.create_new_conversation(
-                title=f"Streaming chat with {agent_name}"
+                title=f"Streaming chat with {agent_name}",
+                project=project
             )
         else:
             conversation = conv_manager.get_or_create_conversation(
                 title=f"Streaming chat with {agent_name}",
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                project=project
             )
 
         # Model Validation
@@ -2531,6 +2621,11 @@ async def run_agent_stream(
                 exact_match = frappe.db.get_value("Agent Prompt", {"prompt_group": prompt_data.prompt_group, "version": int(prompt_version)}, "name")
                 if exact_match:
                     resolved_prompt_template = exact_match
+
+        # Guests may not override the agent's configured provider/model
+        if frappe.session.user == "Guest":
+            provider = None
+            model = None
 
         resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
             agent_doc,

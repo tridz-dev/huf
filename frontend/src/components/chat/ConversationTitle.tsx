@@ -6,7 +6,7 @@ import { updateConversationTitle } from "@/services/chatApi";
 import { useTypewriterText } from "@/hooks/useTypewriterText";
 
 const conversationTitleVariants = cva(
-    "px-1 w-full font-medium truncate text-zinc-900 bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
+    "px-1 w-full font-medium truncate text-ink bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-primary rounded-sm cursor-pointer",
     {
         variants:{
             variant:{
@@ -25,10 +25,11 @@ type ConversationTitleProps = {
     value: string,
     conversationId: string,
     animate?: boolean,
+    className?: string,
 } & VariantProps<typeof conversationTitleVariants>
 
 const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProps>(
-    function ConversationTitle({variant, value, conversationId, animate = false}, ref){
+    function ConversationTitle({variant, value, conversationId, animate = false, className}, ref){
     const [active, setActive] = useState(false);
     const [shouldAnimate, setShouldAnimate] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -159,7 +160,7 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProp
     if (!active) {
         return (
             <div
-                className={cn(conversationTitleVariants({ variant }), "relative min-w-0")}
+                className={cn(conversationTitleVariants({ variant }), "relative min-w-0", className)}
                 onDoubleClick={toggleInput}
                 role="button"
                 tabIndex={0}
@@ -180,7 +181,7 @@ const ConversationTitle = forwardRef<ConversationTitleRef, ConversationTitleProp
     return (
         <input
         ref={inputRef} 
-        className={cn(conversationTitleVariants({variant}))}
+        className={cn(conversationTitleVariants({variant}), className)}
         defaultValue={value}
         readOnly={!active}
         onDoubleClick={toggleInput}

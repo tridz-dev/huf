@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Plus, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Zap, Webhook, Clock, Database, Mail, Trash2, Loader2, CheckCircle2, XCircle, type LucideIcon } from 'lucide-react';
 import { FlowNodeData } from '../../types/flow.types';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -16,11 +16,9 @@ const iconMap: Record<string, LucideIcon> = {
   Zap
 };
 
-interface TriggerNodeProps extends NodeProps<FlowNodeData> {
-  onAddNode?: (sourceNodeId: string) => void;
-}
+type TriggerNodeProps = NodeProps<FlowNodeData>;
 
-export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeProps) => {
+export const TriggerNode = memo(({ id, data, selected }: TriggerNodeProps) => {
   const { deleteNode } = useFlowContext();
   const Icon = data.icon && iconMap[data.icon] ? iconMap[data.icon] : Zap;
   const statusClasses = getExecutionStatusClasses(data.status, selected, {
@@ -28,7 +26,7 @@ export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeP
   });
 
   return (
-    <div className="group relative">
+    <div className="relative">
       <Card className={cn(NODE_CARD_BASE, statusClasses)}>
         {selected && data.status !== 'running' && data.status !== 'waiting' && (
           <Button
@@ -79,6 +77,9 @@ export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeP
               <div className="text-xs text-signal-ink mt-1">Click to configure</div>
             )}
           </div>
+          <span className="ml-auto flex-shrink-0 rounded border border-line bg-panel/60 font-mono uppercase tracking-wider text-steel-soft font-medium px-1.5 py-0.5 text-[9px]">
+            Trigger
+          </span>
         </div>
       </Card>
       <Handle
@@ -86,19 +87,6 @@ export const TriggerNode = memo(({ id, data, selected, onAddNode }: TriggerNodeP
         position={Position.Bottom}
         className={NODE_HANDLE}
       />
-      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="default"
-          size="icon"
-          className="h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddNode?.(id);
-          }}
-        >
-          <Plus className="w-4 h-4" />
-        </Button>
-      </div>
     </div>
   );
 });

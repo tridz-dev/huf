@@ -84,7 +84,6 @@ function KnowledgeSourcesPage() {
 
   return (
     <PageFrame
-      subtitle="Manage knowledge sources for your AI agents"
       filters={
         <FilterBar
           searchPlaceholder="Search knowledge sources..."
@@ -114,12 +113,29 @@ function KnowledgeSourcesPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={BookOpen}
-            title="No knowledge sources"
-            description="No knowledge sources have been added yet."
-            action={{ label: 'New knowledge source', onClick: () => navigate('/knowledge/new') }}
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={BookOpen}
+              title="No knowledge sources found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={BookOpen}
+              title="No knowledge sources"
+              description="Add a source to let agents retrieve knowledge."
+              action={{ label: 'New knowledge source', onClick: () => navigate('/knowledge/new') }}
+            />
+          )
         }
         renderItem={(source) => {
           const statusLabel = getStatusLabel(source);
@@ -135,7 +151,7 @@ function KnowledgeSourcesPage() {
                 { label: 'Type', value: knowledgeTypeLabels[source.knowledge_type] ?? source.knowledge_type, icon: Database },
                 { label: 'Chunks', value: (source.total_chunks ?? 0).toLocaleString() },
                 {
-                  label: 'Last Indexed',
+                  label: 'Last indexed',
                   value: source.last_indexed_at ? formatTimeAgo(source.last_indexed_at) : 'Never',
                   icon: Calendar,
                 },

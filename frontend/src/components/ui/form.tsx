@@ -128,7 +128,13 @@ const FormDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => {
-  const { formDescriptionId } = useFormField();
+  const { error, formDescriptionId } = useFormField();
+
+  // When an error is present, FormMessage occupies this slot instead so the
+  // field's height never grows (description and error never stack).
+  if (error) {
+    return null;
+  }
 
   return (
     <p

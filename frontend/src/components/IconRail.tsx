@@ -39,7 +39,7 @@ export const IconRailButton = React.forwardRef<
       data-active={active || undefined}
       className={cn(
         // Mirrors the collapsed SidebarMenuButton variant exactly
-        "flex size-8 items-center justify-center rounded-none p-2 text-steel transition-colors",
+        "flex size-8 items-center justify-center rounded-md p-2 text-steel transition-colors",
         "hover:bg-paper hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         "data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:border-l-2 data-[active=true]:border-signal data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-line",
         className,

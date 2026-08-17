@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HUF UI System v3.0 (proposal preview)</title>
+<link rel="stylesheet" href="/assets/huf/css/huf-tokens-v3.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
+<style>
+  html { -webkit-font-smoothing: antialiased; }
+  body { margin: 0; background: #fbfbfd; color: #1d1d1f; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  * { box-sizing: border-box; }
+  a { color: #0a6dd9; text-decoration: none; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  .banner { position: sticky; top:0; z-index: 30; background:#1d1d1f; color:#fff; font-family: ui-monospace, monospace; font-size: 11px; letter-spacing:.05em; text-align:center; padding: 8px; }
+</style>
+</head>
+<body>
+<div class="banner">PROPOSAL PREVIEW &middot; static render of the imported v3.0 "Apple-quiet" UI system &middot; not wired into the live app &middot; served from huf-tokens-v3.css</div>
+<div style="max-width: 1080px; margin: 0 auto; padding: 0 32px 120px;">
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
+<style>
+  html { -webkit-font-smoothing: antialiased; }
+  body { margin: 0; background: #fbfbfd; color: #1d1d1f; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  * { box-sizing: border-box; }
+  a { color: #0a6dd9; text-decoration: none; }
+  a:hover { color: #084f9e; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  ::selection { background: #d7e6fb; }
+  input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid rgba(10,109,217,.4); outline-offset: 1px; }
+</style>
+</helmet>
+
+<div style="max-width: 1080px; margin: 0 auto; padding: 0 32px 120px;">
+
+  <header style="display: flex; flex-direction: column; gap: 14px; padding: 64px 0 28px;">
+    <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: .06em; color: #98989d; text-transform: uppercase;">HUF DESIGN.md v3.0 &middot; product ui</div>
+    <h1 style="margin: 0; font-size: 40px; line-height: 1.08; letter-spacing: -.022em; font-weight: 600;">System reference</h1>
+    <p style="margin: 0; max-width: 560px; font-size: 15px; line-height: 1.55; color: #6e6e73; text-wrap: pretty;">A quieter revision of the backend UI. System type stack, hairline structure, one accent. Surfaces carry hierarchy; color carries meaning only.</p>
+  </header>
+
+  <nav style="position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 18px; padding: 14px 0; margin-bottom: 44px; background: rgba(251,251,253,.86); backdrop-filter: saturate(180%) blur(14px); border-bottom: 1px solid #ececf0; font-size: 13px;">
+    <a href="#foundations" style="color: #6e6e73;" style-hover="color:#1d1d1f">Foundations</a>
+    <a href="#sidebar" style="color: #6e6e73;" style-hover="color:#1d1d1f">Sidebar</a>
+    <a href="#headers" style="color: #6e6e73;" style-hover="color:#1d1d1f">Headers</a>
+    <a href="#controls" style="color: #6e6e73;" style-hover="color:#1d1d1f">Controls</a>
+    <a href="#list" style="color: #6e6e73;" style-hover="color:#1d1d1f">List view</a>
+    <a href="#agents" style="color: #6e6e73;" style-hover="color:#1d1d1f">Agents</a>
+    <a href="#chat" style="color: #6e6e73;" style-hover="color:#1d1d1f">Chat</a>
+    <a href="#forms" style="color: #6e6e73;" style-hover="color:#1d1d1f">Forms</a>
+    <a href="#builder" style="color: #6e6e73;" style-hover="color:#1d1d1f">Form builder</a>
+  </nav>
+
+  <section id="foundations" style="display: flex; flex-direction: column; gap: 22px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">01 / FOUNDATIONS</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Foundations</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 590;">Neutrals</div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #fbfbfd; border: 1px solid #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">canvas<br />#FBFBFD</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #fff; border: 1px solid #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">surface<br />#FFFFFF</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #f4f4f7;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">sunken<br />#F4F4F7</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">hairline<br />#ECECF0</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #6e6e73;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">secondary<br />#6E6E73</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #1d1d1f;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">primary<br />#1D1D1F</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 590;">Semantic</div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #7A5AF0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">accent</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #1c7c54;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">success</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #8a5a00;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">warning</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="height: 44px; border-radius: 8px; background: #b3261e;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">danger</div>
+          </div>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #6e6e73;">Semantic colors appear as 10&ndash;12% tints behind text, never as fills larger than a badge. Accent is reserved for the single primary action in a view.</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 13px; font-weight: 590;">Type</div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid #f4f4f7;">
+            <div style="font-size: 28px; letter-spacing: -.02em; font-weight: 600;">Display</div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d; white-space: nowrap;">28 / 600 / -.02em</div>
+          </div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid #f4f4f7;">
+            <div style="font-size: 20px; letter-spacing: -.015em; font-weight: 590;">Page title</div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d; white-space: nowrap;">20 / 590</div>
+          </div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid #f4f4f7;">
+            <div style="font-size: 15px;">Body &mdash; reading text and descriptions</div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d; white-space: nowrap;">15 / 400</div>
+          </div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 10px; border-bottom: 1px solid #f4f4f7;">
+            <div style="font-size: 13px;">UI &mdash; labels, rows, buttons</div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d; white-space: nowrap;">13 / 400&ndash;590</div>
+          </div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; letter-spacing: .05em; color: #6e6e73;">META / TIMESTAMPS / IDS</div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d; white-space: nowrap;">11 / mono</div>
+          </div>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #6e6e73;">System UI stack: <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;">-apple-system, SF&nbsp;Pro&nbsp;Text, Helvetica&nbsp;Neue</span>. Mono for machine values only.</div>
+      </div>
+
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 590;">Shape &amp; depth</div>
+        <div style="display: flex; align-items: flex-end; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+            <div style="width: 56px; height: 40px; border-radius: 6px; background: #f4f4f7; border: 1px solid #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">6</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+            <div style="width: 56px; height: 40px; border-radius: 10px; background: #f4f4f7; border: 1px solid #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">10</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+            <div style="width: 56px; height: 40px; border-radius: 14px; background: #f4f4f7; border: 1px solid #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">14</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+            <div style="width: 56px; height: 40px; border-radius: 999px; background: #f4f4f7; border: 1px solid #ececf0;"></div>
+            <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">pill</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div style="flex: 1; height: 52px; border-radius: 10px; background: #fff; border: 1px solid #ececf0; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">flat</div>
+          <div style="flex: 1; height: 52px; border-radius: 10px; background: #fff; border: 1px solid #ececf0; box-shadow: 0 1px 2px rgba(0,0,0,.04); display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">raised</div>
+          <div style="flex: 1; height: 52px; border-radius: 10px; background: #fff; border: 1px solid #e4e4e8; box-shadow: 0 8px 24px -8px rgba(0,0,0,.16); display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">overlay</div>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #6e6e73;">Spacing steps: 4, 8, 12, 16, 24, 32, 48. Hairlines are 1px #ECECF0 &mdash; no double borders where two surfaces meet.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="sidebar" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">02 / NAVIGATION</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Sidebar</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">248px, sunken against the content surface. Group labels in mono uppercase. Active row is a filled pill, not a left bar &mdash; the softer shape reads calmer at rest. Counts and experimental markers sit right-aligned in muted grey.</p>
+    </div>
+    <div style="display: flex; background: #fff; border: 1px solid #ececf0; border-radius: 14px; overflow: hidden; min-height: 380px;">
+      <div style="width: 248px; flex: none; background: #f4f4f7; border-right: 1px solid #ececf0; padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;">
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 8px 14px;">
+          <div style="width: 24px; height: 24px; border-radius: 7px; background: #1d1d1f; color: #fff; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px;">H</div>
+          <div style="font-size: 13px; font-weight: 590;">Huf Workspace</div>
+          <i class="ti ti-selector" style="margin-left: auto; font-size: 14px; color: #98989d;"></i>
+        </div>
+        <div style="padding: 8px 8px 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">USE</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px; color: #1d1d1f;" style-hover="background:#ececf0"><i class="ti ti-apps" style="font-size: 16px; color: #6e6e73;"></i>Apps</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px; font-weight: 590; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.05);"><i class="ti ti-message-circle" style="font-size: 16px; color: #1d1d1f;"></i>Chat</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px;" style-hover="background:#ececf0"><i class="ti ti-history" style="font-size: 16px; color: #6e6e73;"></i>History</div>
+        <div style="padding: 14px 8px 4px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">BUILD</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px;" style-hover="background:#ececf0"><i class="ti ti-robot" style="font-size: 16px; color: #6e6e73;"></i>Agents<span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">7</span></div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px;" style-hover="background:#ececf0"><i class="ti ti-table" style="font-size: 16px; color: #6e6e73;"></i>Data<span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">12</span></div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px;" style-hover="background:#ececf0"><i class="ti ti-forms" style="font-size: 16px; color: #6e6e73;"></i>Forms<span style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">4</span></div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px; color: #98989d;"><i class="ti ti-sitemap" style="font-size: 16px;"></i>Flows<i class="ti ti-flask" style="margin-left: auto; font-size: 13px;"></i></div>
+        <div style="margin-top: auto; display: flex; flex-direction: column; gap: 2px;">
+          <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px; color: #6e6e73;"><i class="ti ti-settings" style="font-size: 16px;"></i>Settings</div>
+          <div style="display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px; font-size: 13px;">
+            <div style="width: 22px; height: 22px; border-radius: 999px; background: #ececf0; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #6e6e73;">MK</div>
+            <span style="color: #6e6e73;">Mira Kessler</span>
+          </div>
+        </div>
+      </div>
+      <div style="flex: 1; padding: 20px; display: flex; align-items: flex-start; justify-content: flex-start;">
+        <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">CONTENT</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="headers" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">03 / HEADERS</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Page headers</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">Two forms. Index pages get a title, one line of purpose, and a single primary action. Detail pages get a breadcrumb in sentence case, an inline status, and secondary actions in a right cluster.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 20px 22px; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;">
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <h3 style="margin: 0; font-size: 20px; letter-spacing: -.015em; font-weight: 590;">Data</h3>
+          <div style="font-size: 13px; color: #6e6e73;">Create and manage custom data tables.</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button style="display: flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: 13px; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-upload" style="font-size: 15px;"></i>Import</button>
+          <button style="display: flex; align-items: center; gap: 6px; padding: 7px 13px; font-size: 13px; font-weight: 500; color: #fff; background: #7A5AF0; border: none; border-radius: 8px;"><i class="ti ti-plus" style="font-size: 15px;"></i>New table</button>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 16px 22px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 7px; font-size: 12px; color: #98989d;">
+          <span>Agents</span><i class="ti ti-chevron-right" style="font-size: 13px;"></i><span style="color: #1d1d1f;">Hub Orchestrator</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h3 style="margin: 0; font-size: 18px; letter-spacing: -.01em; font-weight: 590;">Hub Orchestrator</h3>
+            <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: #e8f5ee; color: #1c7c54; font-size: 11px; font-weight: 500;"><span style="width: 5px; height: 5px; border-radius: 999px; background: #1c7c54;"></span>Active</span>
+            <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: #f4f4f7; color: #6e6e73; font-size: 11px;"><i class="ti ti-lock" style="font-size: 12px;"></i>System</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-dots" style="font-size: 16px; color: #6e6e73;"></i></button>
+            <button style="padding: 7px 13px; font-size: 13px; font-weight: 500; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" style-hover="background:#f4f4f7">Open in playground</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 20px; border-bottom: 1px solid #ececf0; margin-top: 2px;">
+          <div style="padding-bottom: 10px; font-size: 13px; font-weight: 590; box-shadow: inset 0 -1.5px 0 #1d1d1f;">General</div>
+          <div style="padding-bottom: 10px; font-size: 13px; color: #6e6e73;">Behavior</div>
+          <div style="padding-bottom: 10px; font-size: 13px; color: #6e6e73;">Tools &amp; MCP</div>
+          <div style="padding-bottom: 10px; font-size: 13px; color: #6e6e73;">Skills</div>
+          <div style="padding-bottom: 10px; font-size: 13px; color: #6e6e73;">Runs</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="controls" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">04 / CONTROLS</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Buttons, badges, chips</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 590;">Buttons</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+          <button style="padding: 7px 14px; font-size: 13px; font-weight: 500; color: #fff; background: #7A5AF0; border: none; border-radius: 8px;">Primary</button>
+          <button style="padding: 7px 14px; font-size: 13px; font-weight: 500; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" style-hover="background:#f4f4f7">Secondary</button>
+          <button style="padding: 7px 14px; font-size: 13px; background: transparent; border: none; border-radius: 8px; color: #6e6e73;" style-hover="background:#f4f4f7;color:#1d1d1f">Ghost</button>
+          <button style="padding: 7px 14px; font-size: 13px; font-weight: 500; color: #b3261e; background: #fdecea; border: none; border-radius: 8px;">Delete</button>
+          <button style="padding: 7px 14px; font-size: 13px; background: #f4f4f7; border: 1px solid #ececf0; border-radius: 8px; color: #b8b8bd;">Disabled</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 4px; border-top: 1px solid #f4f4f7;">
+          <button style="padding: 5px 10px; font-size: 12px; background: #fff; border: 1px solid #e4e4e8; border-radius: 7px;">Small</button>
+          <button style="padding: 9px 16px; font-size: 14px; background: #fff; border: 1px solid #e4e4e8; border-radius: 9px;">Large</button>
+          <button style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;"><i class="ti ti-refresh" style="font-size: 15px; color: #6e6e73;"></i></button>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #6e6e73;">One primary per view. Icon-only buttons always carry a tooltip.</div>
+      </div>
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 13px; font-weight: 590;">Badges &amp; chips</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: #e8f5ee; color: #1c7c54; font-size: 11px; font-weight: 500;"><span style="width: 5px; height: 5px; border-radius: 999px; background: #1c7c54;"></span>Active</span>
+          <span style="padding: 2px 8px; border-radius: 999px; background: #fdf3e0; color: #8a5a00; font-size: 11px; font-weight: 500;">Draft</span>
+          <span style="padding: 2px 8px; border-radius: 999px; background: #fdecea; color: #b3261e; font-size: 11px; font-weight: 500;">Failed</span>
+          <span style="padding: 2px 8px; border-radius: 999px; background: #f4f4f7; color: #6e6e73; font-size: 11px;">Paused</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; padding: 3px 7px; border-radius: 6px; background: #f4f4f7; color: #6e6e73;">gemini-3.6-flash</span>
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; padding: 3px 7px; border-radius: 6px; background: #f4f4f7; color: #6e6e73;">claude-sonnet-4.6</span>
+          <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px 3px 7px; border-radius: 999px; border: 1px solid #e4e4e8;">Google<i class="ti ti-x" style="font-size: 13px; color: #98989d;"></i></span>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #6e6e73;">Status pills are pills. Machine identifiers keep mono type and a 6px radius so they never read as interactive.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="list" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">05 / LIST VIEW</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">List view</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">Rows, not cards, whenever the user is comparing values. Toolbar holds search, filters, and view density. Hairline row separators, no zebra striping, no vertical rules.</p>
+    </div>
+    <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; overflow: hidden;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #ececf0;">
+        <div style="display: flex; align-items: center; gap: 7px; flex: 1; max-width: 260px; padding: 6px 10px; background: #f4f4f7; border-radius: 8px;">
+          <i class="ti ti-search" style="font-size: 15px; color: #98989d;"></i>
+          <input placeholder="Search agents" style="flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-size: 13px;" />
+        </div>
+        <button style="display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-filter" style="font-size: 14px; color: #6e6e73;"></i>Status</button>
+        <button style="display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-size: 12px; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-arrows-sort" style="font-size: 14px; color: #6e6e73;"></i>Last run</button>
+        <div style="margin-left: auto; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">7 AGENTS</div>
+      </div>
+      <div style="display: grid; grid-template-columns: 26px 1.6fr 1fr .9fr .8fr 34px; align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid #ececf0; background: #fbfbfd; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #98989d;">
+        <div></div><div>NAME</div><div>MODEL</div><div>OWNER</div><div>LAST RUN</div><div></div>
+      </div>
+      <div style="display: grid; grid-template-columns: 26px 1.6fr 1fr .9fr .8fr 34px; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid #f4f4f7; font-size: 13px;" style-hover="background:#fbfbfd">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">TP</div>
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Travel Planner Assistant</span>
+            <span style="flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #e8f5ee; color: #1c7c54;">Active</span>
+          </div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gemini-3.6-flash</div>
+          <div style="color: #6e6e73;">Mira K.</div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">22:24</div>
+          <div style="display: flex; justify-content: flex-end;"><i class="ti ti-dots" style="font-size: 16px; color: #c4c4c9;"></i></div>
+        </div>
+<div style="display: grid; grid-template-columns: 26px 1.6fr 1fr .9fr .8fr 34px; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid #f4f4f7; font-size: 13px;" style-hover="background:#fbfbfd">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">NC</div>
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Northflow Content Creator</span>
+            <span style="flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #e8f5ee; color: #1c7c54;">Active</span>
+          </div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">claude-sonnet-4.6</div>
+          <div style="color: #6e6e73;">Jon A.</div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">21:07</div>
+          <div style="display: flex; justify-content: flex-end;"><i class="ti ti-dots" style="font-size: 16px; color: #c4c4c9;"></i></div>
+        </div>
+<div style="display: grid; grid-template-columns: 26px 1.6fr 1fr .9fr .8fr 34px; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid #f4f4f7; font-size: 13px;" style-hover="background:#fbfbfd">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">HO</div>
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Hub Orchestrator</span>
+            <span style="flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #f4f4f7; color: #6e6e73;">System</span>
+          </div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gemini-3.6-pro</div>
+          <div style="color: #6e6e73;">Workspace</div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">19:40</div>
+          <div style="display: flex; justify-content: flex-end;"><i class="ti ti-dots" style="font-size: 16px; color: #c4c4c9;"></i></div>
+        </div>
+<div style="display: grid; grid-template-columns: 26px 1.6fr 1fr .9fr .8fr 34px; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid #f4f4f7; font-size: 13px;" style-hover="background:#fbfbfd">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">RS</div>
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Research Summarizer</span>
+            <span style="flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #fdf3e0; color: #8a5a00;">Draft</span>
+          </div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">gemini-3.6-flash</div>
+          <div style="color: #6e6e73;">Mira K.</div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">—</div>
+          <div style="display: flex; justify-content: flex-end;"><i class="ti ti-dots" style="font-size: 16px; color: #c4c4c9;"></i></div>
+        </div>
+<div style="display: grid; grid-template-columns: 26px 1.6fr 1fr .9fr .8fr 34px; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid #f4f4f7; font-size: 13px;" style-hover="background:#fbfbfd">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">IN</div>
+          <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+            <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Invoice Reader</span>
+            <span style="flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: #fdecea; color: #b3261e;">Failed</span>
+          </div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">claude-haiku-4</div>
+          <div style="color: #6e6e73;">Ops</div>
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #98989d;">18:12</div>
+          <div style="display: flex; justify-content: flex-end;"><i class="ti ti-dots" style="font-size: 16px; color: #c4c4c9;"></i></div>
+        </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; font-size: 12px; color: #98989d;">
+        <span>Showing 5 of 7</span>
+        <div style="display: flex; gap: 6px;">
+          <button style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #e4e4e8; border-radius: 7px;"><i class="ti ti-chevron-left" style="font-size: 14px; color: #6e6e73;"></i></button>
+          <button style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #e4e4e8; border-radius: 7px;"><i class="ti ti-chevron-right" style="font-size: 14px; color: #6e6e73;"></i></button>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; padding: 40px; background: #fff; border: 1px solid #ececf0; border-radius: 14px; text-align: center;">
+      <div style="width: 34px; height: 34px; border-radius: 10px; background: #f4f4f7; display: flex; align-items: center; justify-content: center;"><i class="ti ti-inbox" style="font-size: 18px; color: #98989d;"></i></div>
+      <div style="font-size: 14px; font-weight: 590;">No agents yet</div>
+      <div style="font-size: 13px; color: #6e6e73; max-width: 300px;">Agents you build appear here with their model, owner, and last run.</div>
+      <button style="margin-top: 4px; padding: 7px 13px; font-size: 13px; font-weight: 500; color: #fff; background: #7A5AF0; border: none; border-radius: 8px;">New agent</button>
+    </div>
+  </section>
+
+  <section id="agents" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">06 / AGENTS</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Agent cards &amp; picker</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">Cards are for browsing, where the description does the work. Monogram tile, name, one status dot, two lines of purpose, and a mono stat foot.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px;">
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;" style-hover="box-shadow:0 2px 10px -4px rgba(0,0,0,.12)">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div style="width: 28px; height: 28px; border-radius: 8px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">TP</div>
+            <div style="font-size: 13px; font-weight: 590; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Travel Planner</div>
+            <span style="margin-left: auto; width: 6px; height: 6px; border-radius: 999px; background: #1c7c54;"></span>
+          </div>
+          <div style="font-size: 12px; line-height: 1.5; color: #6e6e73; text-wrap: pretty;">Plans multi-city trips against the travel_cities table.</div>
+          <div style="display: flex; gap: 14px; padding-top: 10px; border-top: 1px solid #f4f4f7; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .05em; color: #98989d;">
+            <span>TOOLS 4</span><span>RUNS 128</span>
+          </div>
+        </div>
+<div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;" style-hover="box-shadow:0 2px 10px -4px rgba(0,0,0,.12)">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div style="width: 28px; height: 28px; border-radius: 8px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">NC</div>
+            <div style="font-size: 13px; font-weight: 590; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Northflow Content</div>
+            <span style="margin-left: auto; width: 6px; height: 6px; border-radius: 999px; background: #1c7c54;"></span>
+          </div>
+          <div style="font-size: 12px; line-height: 1.5; color: #6e6e73; text-wrap: pretty;">Instagram content strategist and idea manager.</div>
+          <div style="display: flex; gap: 14px; padding-top: 10px; border-top: 1px solid #f4f4f7; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .05em; color: #98989d;">
+            <span>TOOLS 2</span><span>RUNS 61</span>
+          </div>
+        </div>
+<div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px;" style-hover="box-shadow:0 2px 10px -4px rgba(0,0,0,.12)">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <div style="width: 28px; height: 28px; border-radius: 8px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">RS</div>
+            <div style="font-size: 13px; font-weight: 590; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Research Summarizer</div>
+            <span style="margin-left: auto; width: 6px; height: 6px; border-radius: 999px; background: #d4d4d9;"></span>
+          </div>
+          <div style="font-size: 12px; line-height: 1.5; color: #6e6e73; text-wrap: pretty;">Condenses long reports into a one-page brief.</div>
+          <div style="display: flex; gap: 14px; padding-top: 10px; border-top: 1px solid #f4f4f7; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .05em; color: #98989d;">
+            <span>TOOLS 3</span><span>RUNS 0</span>
+          </div>
+        </div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+      <div style="background: #fff; border: 1px solid #e4e4e8; border-radius: 12px; box-shadow: 0 8px 24px -8px rgba(0,0,0,.16); padding: 6px; max-width: 340px; display: flex; flex-direction: column; gap: 2px;">
+        <div style="display: flex; align-items: center; gap: 7px; padding: 7px 9px; margin-bottom: 2px; border-bottom: 1px solid #f4f4f7;">
+          <i class="ti ti-search" style="font-size: 15px; color: #98989d;"></i>
+          <input placeholder="Switch agent" style="flex: 1; min-width: 0; background: transparent; border: none; outline: none; font-size: 13px;" />
+        </div>
+        <div style="padding: 6px 9px 2px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #98989d;">RECENT</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; background: #f4f4f7; font-size: 13px;">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #fff; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">TP</div>
+          Travel Planner Assistant
+          <i class="ti ti-check" style="margin-left: auto; font-size: 15px; color: #1d1d1f;"></i>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; font-size: 13px;" style-hover="background:#f4f4f7">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #6e6e73;">NC</div>
+          Northflow Content Creator
+        </div>
+        <div style="padding: 8px 9px 2px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #98989d;">SYSTEM</div>
+        <div style="display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 8px; font-size: 13px; color: #6e6e73;" style-hover="background:#f4f4f7">
+          <div style="width: 22px; height: 22px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; color: #98989d;">HO</div>
+          Hub Orchestrator
+          <i class="ti ti-lock" style="margin-left: auto; font-size: 13px; color: #98989d;"></i>
+        </div>
+      </div>
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 13px; font-weight: 590;">Run ledger</div>
+        <div style="display: flex; flex-direction: column;">
+          <div style="display: grid; grid-template-columns: 90px 1fr 62px 48px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid #f4f4f7; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">
+            <span style="color: #98989d;">22:24:34</span><span>gemini-3.6-flash</span><span>1.8s</span><span style="color: #1c7c54;">ok</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 90px 1fr 62px 48px; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid #f4f4f7; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">
+            <span style="color: #98989d;">22:19:02</span><span>gemini-3.6-flash</span><span>2.3s</span><span style="color: #1c7c54;">ok</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 90px 1fr 62px 48px; gap: 10px; align-items: center; padding: 7px 0; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">
+            <span style="color: #98989d;">21:58:47</span><span>claude-sonnet-4.6</span><span>&mdash;</span><span style="color: #b3261e;">error</span>
+          </div>
+        </div>
+        <div style="font-size: 12px; line-height: 1.5; color: #6e6e73;">Machine output stays in mono at 11px. Dense rows, no cards &mdash; the ledger is scanned, not read.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="chat" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">07 / CHAT</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Chat</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">User turns are pills aligned right; agent turns are plain text on the canvas at 15px with a 68ch measure. Tool activity collapses into a single hairline row. The composer floats on a blurred base with the model chip inline.</p>
+    </div>
+    <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; overflow: hidden; display: flex; flex-direction: column;">
+      <div style="display: flex; align-items: center; gap: 9px; padding: 12px 18px; border-bottom: 1px solid #ececf0;">
+        <div style="width: 24px; height: 24px; border-radius: 7px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #6e6e73;">TP</div>
+        <div style="font-size: 13px; font-weight: 590;">Travel Planner Assistant</div>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; padding: 2px 7px; border-radius: 6px; background: #f4f4f7; color: #6e6e73;">gemini-3.6-flash</span>
+        <div style="margin-left: auto; display: flex; gap: 6px;">
+          <button style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-history" style="font-size: 16px; color: #6e6e73;"></i></button>
+          <button style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-dots" style="font-size: 16px; color: #6e6e73;"></i></button>
+        </div>
+      </div>
+      <div style="padding: 24px 18px; display: flex; flex-direction: column; gap: 22px; background: #fbfbfd;">
+        <div style="display: flex; justify-content: flex-end;">
+          <div style="max-width: 60%; padding: 9px 14px; border-radius: 16px 16px 4px 16px; background: #ececf0; font-size: 14px; line-height: 1.5;">Which three cities should we shortlist for the March trip?</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px; max-width: 68ch;">
+          <div style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #ececf0; border-radius: 8px; background: #fff; width: fit-content; font-size: 12px; color: #6e6e73;">
+            <i class="ti ti-table" style="font-size: 14px; color: #98989d;"></i>
+            <span>Read <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #1d1d1f;">travel_cities</span> &middot; 24 records</span>
+            <i class="ti ti-chevron-down" style="font-size: 14px; color: #98989d;"></i>
+          </div>
+          <div style="font-size: 15px; line-height: 1.6; color: #1d1d1f; text-wrap: pretty;">Lisbon, Ljubljana, and Palermo fit the March window best. All three sit in the 14&ndash;19&thinsp;&deg;C band, have direct flights under four hours, and are still below peak pricing.</div>
+          <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; background: #fff; border: 1px solid #ececf0; border-radius: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;"><span>Lisbon</span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">18&deg;C &middot; 2h50</span></div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;"><span>Ljubljana</span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">14&deg;C &middot; 1h40</span></div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px;"><span>Palermo</span><span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">19&deg;C &middot; 2h20</span></div>
+          </div>
+          <div style="display: flex; gap: 2px; padding-top: 2px;">
+            <button style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 7px;" style-hover="background:#ececf0"><i class="ti ti-copy" style="font-size: 15px; color: #98989d;"></i></button>
+            <button style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 7px;" style-hover="background:#ececf0"><i class="ti ti-thumb-up" style="font-size: 15px; color: #98989d;"></i></button>
+            <button style="width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 7px;" style-hover="background:#ececf0"><i class="ti ti-refresh" style="font-size: 15px; color: #98989d;"></i></button>
+          </div>
+        </div>
+      </div>
+      <div style="padding: 14px 18px 16px; border-top: 1px solid #ececf0; background: rgba(255,255,255,.9); backdrop-filter: blur(12px); display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: flex-end; gap: 10px; padding: 10px 12px; border: 1px solid #e4e4e8; border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); background: #fff;">
+          <textarea rows="1" placeholder="Message Travel Planner" style="flex: 1; min-width: 0; resize: none; border: none; outline: none; font-size: 14px; line-height: 1.5; background: transparent;"></textarea>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 8px;" style-hover="background:#f4f4f7"><i class="ti ti-paperclip" style="font-size: 16px; color: #98989d;"></i></button>
+            <button style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: #7A5AF0; border: none; border-radius: 8px;"><i class="ti ti-arrow-up" style="font-size: 16px; color: #fff;"></i></button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #98989d;">
+          <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; background: #f4f4f7; color: #6e6e73;">gemini-3.6-flash<i class="ti ti-chevron-down" style="font-size: 13px;"></i></span>
+          <span>Return to send &middot; Shift-Return for a new line</span>
+        </div>
+      </div>
+    </div>
+    <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 28px 22px; display: flex; flex-direction: column; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 11px;">
+        <div style="width: 32px; height: 32px; border-radius: 9px; background: #f4f4f7; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #6e6e73;">NC</div>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 15px; font-weight: 590; letter-spacing: -.01em;">Northflow Content Creator</div>
+          <div style="font-size: 13px; color: #6e6e73;">Instagram content strategist and idea manager.</div>
+        </div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px;">
+        <button style="text-align: left; padding: 12px 14px; font-size: 13px; line-height: 1.45; background: #fff; border: 1px solid #ececf0; border-radius: 10px;" style-hover="background:#fbfbfd;border-color:#e4e4e8">Suggest three topics for next week.</button>
+        <button style="text-align: left; padding: 12px 14px; font-size: 13px; line-height: 1.45; background: #fff; border: 1px solid #ececf0; border-radius: 10px;" style-hover="background:#fbfbfd;border-color:#e4e4e8">What makes a hook work?</button>
+        <button style="text-align: left; padding: 12px 14px; font-size: 13px; line-height: 1.45; background: #fff; border: 1px solid #ececf0; border-radius: 10px;" style-hover="background:#fbfbfd;border-color:#e4e4e8">Review this caption draft.</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="forms" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 72px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">08 / FORMS</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Forms</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">Labels above fields, 13px, never colons. Help text below in secondary grey; it replaces itself with the error, so the layout never shifts. Single column at 480px unless two fields are genuinely one thought.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; align-items: start;">
+      <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 18px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13px; font-weight: 500;">Agent name</label>
+          <input value="Travel Planner Assistant" style="width: 100%; padding: 8px 11px; font-size: 13px; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;" />
+          <div style="font-size: 12px; color: #98989d;">Shown to everyone in the workspace.</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13px; font-weight: 500;">Description</label>
+          <textarea rows="3" style="width: 100%; padding: 8px 11px; font-size: 13px; line-height: 1.5; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px; resize: vertical;">Plans multi-city trips against the travel_cities table.</textarea>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 500;">Provider</label>
+            <select style="width: 100%; padding: 8px 11px; font-size: 13px; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;">
+              <option>Google</option>
+              <option>Anthropic</option>
+            </select>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 500;">Model</label>
+            <select style="width: 100%; padding: 8px 11px; font-size: 13px; background: #fff; border: 1px solid #e4e4e8; border-radius: 8px;">
+              <option>gemini-3.6-flash</option>
+              <option>gemini-3.6-pro</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <label style="font-size: 13px; font-weight: 500;">Webhook URL</label>
+          <input value="notify.internal/hook" style="width: 100%; padding: 8px 11px; font-size: 13px; background: #fff; border: 1px solid #b3261e; border-radius: 8px;" />
+          <div style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #b3261e;"><i class="ti ti-alert-circle" style="font-size: 14px;"></i>Must start with https://</div>
+        </div>
+        <div style="display: flex; gap: 8px; padding-top: 4px; border-top: 1px solid #f4f4f7;">
+          <button style="padding: 7px 14px; font-size: 13px; font-weight: 500; color: #fff; background: #7A5AF0; border: none; border-radius: 8px;">Save changes</button>
+          <button style="padding: 7px 14px; font-size: 13px; background: transparent; border: none; border-radius: 8px; color: #6e6e73;" style-hover="background:#f4f4f7">Cancel</button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div style="background: #fff; border: 1px solid #ececf0; border-radius: 14px; padding: 22px; display: flex; flex-direction: column; gap: 18px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div style="font-size: 13px; font-weight: 500;">Streaming responses</div>
+              <div style="font-size: 12px; color: #98989d;">Show tokens as they arrive.</div>
+            </div>
+            <button style="flex: none; width: 42px; height: 26px; padding: 2px; border: none; border-radius: 999px; background: #1d1d1f; display: flex; justify-content: flex-end; transition: background .18s ease;">
+              <span style="width: 22px; height: 22px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.18);"></span>
+            </button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 7px;">
+            <div style="font-size: 13px; font-weight: 500;">Visibility</div>
+            <div style="display: flex; padding: 2px; background: #f4f4f7; border-radius: 9px;">
+              <button style="flex: 1; padding: 5px 10px; font-size: 12px; border: none; border-radius: 7px; background: transparent; box-shadow: none;">Private</button>
+              <button style="flex: 1; padding: 5px 10px; font-size: 12px; border: none; border-radius: 7px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12);">Team</button>
+              <button style="flex: 1; padding: 5px 10px; font-size: 12px; border: none; border-radius: 7px; background: transparent; box-shadow: none;">Public</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 9px;">
+            <div style="font-size: 13px; font-weight: 500;">Allowed tools</div>
+            <label style="display: flex; align-items: center; gap: 9px; font-size: 13px;"><input type="checkbox" checked style="width: 15px; height: 15px; accent-color: #1d1d1f;" />Data tables</label>
+            <label style="display: flex; align-items: center; gap: 9px; font-size: 13px;"><input type="checkbox" checked style="width: 15px; height: 15px; accent-color: #1d1d1f;" />Web search</label>
+            <label style="display: flex; align-items: center; gap: 9px; font-size: 13px; color: #98989d;"><input type="checkbox" style="width: 15px; height: 15px; accent-color: #1d1d1f;" />Code execution</label>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 7px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 500;">Temperature<span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #6e6e73;">0.4</span></div>
+            <input type="range" min="0" max="1" step="0.1" value="0.4" style="width: 100%; accent-color: #1d1d1f;" />
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; background: #fdf3e0; border-radius: 10px; font-size: 12px; line-height: 1.5; color: #8a5a00;">
+          <i class="ti ti-info-circle" style="font-size: 15px; flex: none; margin-top: 1px;"></i>
+          <span>Changing the model resets tool permissions. Notices use a tint and no border.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="builder" style="display: flex; flex-direction: column; gap: 18px; margin-bottom: 40px; scroll-margin-top: 72px;">
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .07em; color: #98989d;">09 / FORM BUILDER</div>
+      <h2 style="margin: 0; font-size: 24px; letter-spacing: -.015em; font-weight: 600;">Form builder</h2>
+      <p style="margin: 0; max-width: 620px; font-size: 13px; line-height: 1.6; color: #6e6e73;">Three panes: field palette, canvas, inspector. The canvas renders the real form at real size &mdash; no wireframe stand-ins. Selection is a 1.5px accent outline plus a drag handle; everything else stays quiet.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: 176px 1fr 232px; background: #fff; border: 1px solid #ececf0; border-radius: 14px; overflow: hidden; min-height: 440px;">
+      <div style="border-right: 1px solid #ececf0; padding: 14px 10px; display: flex; flex-direction: column; gap: 3px; background: #fbfbfd;">
+        <div style="padding: 4px 8px 6px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #98989d;">FIELDS</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-cursor-text" style="font-size: 15px; color: #6e6e73;"></i>Short text</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-align-left" style="font-size: 15px; color: #6e6e73;"></i>Paragraph</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-list-check" style="font-size: 15px; color: #6e6e73;"></i>Choice</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-calendar" style="font-size: 15px; color: #6e6e73;"></i>Date</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-paperclip" style="font-size: 15px; color: #6e6e73;"></i>File</div>
+        <div style="padding: 12px 8px 6px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #98989d;">LAYOUT</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-heading" style="font-size: 15px; color: #6e6e73;"></i>Section</div>
+        <div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; font-size: 13px; cursor: grab;" style-hover="background:#ececf0"><i class="ti ti-minus" style="font-size: 15px; color: #6e6e73;"></i>Divider</div>
+      </div>
+
+      <div style="background: #f4f4f7; padding: 22px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="width: 100%; max-width: 420px; background: #fff; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 3px;">
+            <div style="font-size: 16px; font-weight: 590; letter-spacing: -.01em;">Trip intake</div>
+            <div style="font-size: 12px; color: #6e6e73;">Six questions, about two minutes.</div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px; margin: -10px; border-radius: 10px; position: relative; outline: 1.5px solid #7A5AF0;">
+            <div style="position: absolute; top: 8px; right: 8px; display: flex; gap: 3px;">
+              <span style="width: 20px; height: 20px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center;"><i class="ti ti-grip-vertical" style="font-size: 13px; color: #98989d;"></i></span>
+              <span style="width: 20px; height: 20px; border-radius: 6px; background: #f4f4f7; display: flex; align-items: center; justify-content: center;"><i class="ti ti-trash" style="font-size: 13px; color: #98989d;"></i></span>
+            </div>
+            <label style="font-size: 13px; font-weight: 500;">Destination city</label>
+            <input placeholder="Lisbon" style="width: 100%; padding: 8px 11px; font-size: 13px; border: 1px solid #e4e4e8; border-radius: 8px;" />
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <label style="font-size: 13px; font-weight: 500;">Travel window</label>
+            <div style="display: flex; gap: 8px;">
+              <input placeholder="Start" style="flex: 1; min-width: 0; padding: 8px 11px; font-size: 13px; border: 1px solid #e4e4e8; border-radius: 8px;" />
+              <input placeholder="End" style="flex: 1; min-width: 0; padding: 8px 11px; font-size: 13px; border: 1px solid #e4e4e8; border-radius: 8px;" />
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <label style="font-size: 13px; font-weight: 500;">Trip type</label>
+            <label style="display: flex; align-items: center; gap: 9px; font-size: 13px;"><input type="radio" name="tt" checked style="accent-color: #1d1d1f;" />Leisure</label>
+            <label style="display: flex; align-items: center; gap: 9px; font-size: 13px;"><input type="radio" name="tt" style="accent-color: #1d1d1f;" />Work</label>
+          </div>
+          <div style="height: 34px; border: 1px dashed #d4d4d9; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #98989d;">Drop a field here</div>
+        </div>
+        <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #98989d;">CANVAS &middot; 420PX PREVIEW WIDTH</div>
+      </div>
+
+      <div style="border-left: 1px solid #ececf0; padding: 14px; display: flex; flex-direction: column; gap: 14px; background: #fbfbfd;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #98989d;">FIELD</div>
+          <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; padding: 2px 6px; border-radius: 5px; background: #ececf0; color: #6e6e73;">TEXT</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label style="font-size: 12px; color: #6e6e73;">Label</label>
+          <input value="Destination city" style="width: 100%; padding: 6px 9px; font-size: 12px; background: #fff; border: 1px solid #e4e4e8; border-radius: 7px;" />
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label style="font-size: 12px; color: #6e6e73;">Key</label>
+          <input value="destination_city" style="width: 100%; padding: 6px 9px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; background: #fff; border: 1px solid #e4e4e8; border-radius: 7px;" />
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label style="font-size: 12px; color: #6e6e73;">Placeholder</label>
+          <input value="Lisbon" style="width: 100%; padding: 6px 9px; font-size: 12px; background: #fff; border: 1px solid #e4e4e8; border-radius: 7px;" />
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px solid #ececf0;">
+          <span style="font-size: 12px;">Required</span>
+          <button style="width: 36px; height: 22px; padding: 2px; border: none; border-radius: 999px; background: #1d1d1f; display: flex; justify-content: flex-end; transition: background .18s ease;">
+            <span style="width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.18);"></span>
+          </button>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 12px;">Half width</span>
+          <button style="width: 36px; height: 22px; padding: 2px; border: none; border-radius: 999px; background: #d4d4d9; display: flex; justify-content: flex-start; transition: background .18s ease;">
+            <span style="width: 18px; height: 18px; border-radius: 999px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.18);"></span>
+          </button>
+        </div>
+        <div style="margin-top: auto; font-size: 11px; line-height: 1.5; color: #98989d;">Inspector controls run one size down from form controls: 12px labels, 7px radius, 6px vertical padding.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="padding-top: 28px; border-top: 1px solid #ececf0; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; letter-spacing: .06em; color: #c4c4c9;">HUF DESIGN.md v3.0</footer>
+</div>
+
+</div>
+</body>
+</html>

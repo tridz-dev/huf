@@ -105,7 +105,7 @@ export function SelectDocTypeFieldsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="max-w-lg">
         <DialogScrollHeader>
-          <DialogTitle>Select Fields to Add</DialogTitle>
+          <DialogTitle>Select fields to add</DialogTitle>
         </DialogScrollHeader>
 
         <DialogScrollBody className="pb-6 space-y-4">
@@ -142,7 +142,7 @@ export function SelectDocTypeFieldsDialog({
             onClick={handleAddFields}
             disabled={loading || selectedKeys.length === 0 || fieldOptions.length === 0}
           >
-            Add Fields
+            Add fields
           </Button>
         </DialogScrollFooter>
       </DialogScrollContent>

@@ -65,7 +65,11 @@ class HufUserRole(Document):
 		if self.enabled and target_frappe_role not in current_roles:
 			user_doc.append("roles", {"role": target_frappe_role})
 			# Synchronizing Frappe role membership on behalf of the system; the controller validates the operation.
-			user_doc.save(ignore_permissions=True)
+			frappe.flags.syncing_huf_roles = True
+			try:
+				user_doc.save(ignore_permissions=True)
+			finally:
+				frappe.flags.syncing_huf_roles = False
 		elif not self.enabled:
 			# Disabled Huf User Role → remove the Frappe role too.
 			if target_frappe_role not in {"System Manager"}:  # never strip System Manager
@@ -79,3 +83,67 @@ class HufUserRole(Document):
 
 		for role in all_huf_frappe_roles & current_roles:
 			user_doc.remove_roles(role)
+
+
+def sync_from_frappe_user(doc, method=None):
+	"""
+	Hooked to User on_update.
+	If an admin manually modifies Frappe roles on a User form, we sync
+	it back to Huf User Role so they don't diverge.
+	"""
+	if getattr(frappe.flags, "syncing_huf_roles", False):
+		return
+
+	user_roles = {r.role for r in doc.roles}
+	
+	highest_huf_role = None
+	if user_roles:
+		huf_roles = frappe.get_all(
+			"Huf Role", 
+			filters={"frappe_role": ("in", list(user_roles))},
+			fields=["name", "role_name", "role_weight"],
+			order_by="role_weight desc"
+		)
+		
+		if huf_roles:
+			highest_huf_role = huf_roles[0].role_name
+
+	if not highest_huf_role:
+		huf_role_name = frappe.db.get_value("Huf User Role", {"user": doc.name}, "name")
+		if huf_role_name:
+			huf_user_role = frappe.get_doc("Huf User Role", huf_role_name)
+			if huf_user_role.enabled:
+				frappe.flags.syncing_huf_roles = True
+				try:
+					huf_user_role.db_set("enabled", 0)
+					_bust_cache(doc.name)
+				finally:
+					frappe.flags.syncing_huf_roles = False
+		return
+
+	huf_role_name = frappe.db.get_value("Huf User Role", {"user": doc.name}, "name")
+	if huf_role_name:
+		huf_user_role = frappe.get_doc("Huf User Role", huf_role_name)
+		if huf_user_role.huf_role != highest_huf_role or not huf_user_role.enabled:
+			frappe.flags.syncing_huf_roles = True
+			try:
+				huf_user_role.db_set("huf_role", highest_huf_role)
+				huf_user_role.db_set("enabled", 1)
+				_bust_cache(doc.name)
+			finally:
+				frappe.flags.syncing_huf_roles = False
+	else:
+		frappe.flags.syncing_huf_roles = True
+		try:
+			new_huf_user_role = frappe.get_doc({
+				"doctype": "Huf User Role",
+				"user": doc.name,
+				"huf_role": highest_huf_role,
+				"enabled": 1,
+				"invited_by": frappe.session.user if frappe.session and frappe.session.user else "Administrator",
+				"invited_on": now_datetime(),
+			})
+			new_huf_user_role.insert(ignore_permissions=True)
+			_bust_cache(doc.name)
+		finally:
+			frappe.flags.syncing_huf_roles = False

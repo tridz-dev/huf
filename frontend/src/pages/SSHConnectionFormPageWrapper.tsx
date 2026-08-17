@@ -26,7 +26,7 @@ export function SSHConnectionFormPageWrapper() {
   }, [id, isNew]);
 
   const breadcrumbs = [
-    { label: 'SSH Connections', href: '/ssh-connections' },
+    { label: 'SSH connections', href: '/ssh-connections' },
     { label: connectionTitle },
   ];
 

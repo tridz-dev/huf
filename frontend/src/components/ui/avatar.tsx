@@ -5,12 +5,13 @@ import { cn } from '@/lib/utils';
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> & { shape?: 'circle' | 'square' }
+>(({ className, shape = 'circle', ...props }, ref) => (
   <AvatarPrimitive.Root
     ref={ref}
     className={cn(
-      'relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full',
+      'relative flex h-10 w-10 shrink-0 overflow-hidden',
+      shape === 'circle' ? 'rounded-full' : 'rounded-md',
       className
     )}
     {...props}
@@ -32,12 +33,13 @@ AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
 const AvatarFallback = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Fallback>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
->(({ className, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & { shape?: 'circle' | 'square' }
+>(({ className, shape = 'circle', ...props }, ref) => (
   <AvatarPrimitive.Fallback
     ref={ref}
     className={cn(
-      'flex h-full w-full items-center justify-center rounded-full bg-muted',
+      'flex h-full w-full items-center justify-center bg-muted',
+      shape === 'circle' ? 'rounded-full' : 'rounded-md',
       className
     )}
     {...props}

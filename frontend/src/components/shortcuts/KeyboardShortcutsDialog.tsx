@@ -34,13 +34,13 @@ export function KeyboardShortcutsDialog({ open, onOpenChange }: KeyboardShortcut
         <div className="flex flex-col gap-5">
           {groups.map((group) => (
             <div key={group.scope} className="flex flex-col gap-2">
-              <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-400">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-steel-soft">
                 {group.scope}
               </h3>
               <div className="flex flex-col gap-2">
                 {group.shortcuts.map((shortcut) => (
                   <div key={shortcut.id} className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-zinc-700">{shortcut.description}</span>
+                    <span className="text-sm text-ink">{shortcut.description}</span>
                     <ShortcutKey keys={formatBinding(shortcut.binding, platform)} />
                   </div>
                 ))}

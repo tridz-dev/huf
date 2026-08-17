@@ -37,7 +37,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
           name="capture_mode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Capture Mode</FormLabel>
+              <FormLabel>Capture mode</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger>
@@ -67,7 +67,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
           name="learning_agent"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Learning Agent</FormLabel>
+              <FormLabel>Learning agent</FormLabel>
               <FormControl>
                 <Combobox
                   options={agentOptions}
@@ -93,7 +93,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
         <SwitchField
           form={form}
           name="approval_required"
-          label="Approval Required"
+          label="Approval required"
           description="New memory records start as pending and must be approved by a user before becoming active. Turn this off to trust captured memory automatically."
         />
 
@@ -102,7 +102,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
           name="default_status"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Default Status</FormLabel>
+              <FormLabel>Default status</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger>
@@ -130,7 +130,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
           name="allowed_record_types"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Allowed Record Types</FormLabel>
+              <FormLabel>Allowed record types</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder={'One record type per line, e.g.\nfact\npreference\ninstruction'}

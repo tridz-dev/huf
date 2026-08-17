@@ -2,9 +2,12 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime, add_to_date
 from .agent_integration import run_agent_sync
+from .automation_runtime_flag import automation_runtime_is_new
 
 @frappe.whitelist()
 def run_scheduled_agents():
+    if automation_runtime_is_new():
+        return
     now = now_datetime().replace(microsecond=0)
     
     if frappe.session.user != "Administrator" and not frappe.has_permission("Agent Trigger", "write"):

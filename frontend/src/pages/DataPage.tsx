@@ -148,17 +148,17 @@ function DataPage() {
 				menuActions={[
 					{
 						icon: Settings,
-						label: 'Agent Access',
+						label: 'Agent access',
 						onClick: () => setAccessTable(table),
 					},
 					{
 						icon: Pencil,
-						label: 'Edit Table',
+						label: 'Edit table',
 						onClick: () => navigate(`/data/${table.name}/edit`),
 					},
 					{
 						icon: Trash2,
-						label: 'Delete Table',
+						label: 'Delete table',
 						variant: 'destructive',
 						onClick: () => setDeleteTable(table),
 					},
@@ -172,7 +172,6 @@ function DataPage() {
 	return (
 		<PageFrame
 			title="Data"
-			subtitle="Create and manage custom data tables"
 			filters={
 				<div className="flex items-center gap-2">
 					<FilterBar
@@ -185,12 +184,12 @@ function DataPage() {
 							type="single"
 							value={viewMode}
 							onValueChange={(value) => value && setViewModeOverride(value as 'flat' | 'grouped')}
-							className="rounded-none border border-line"
+							className="rounded border border-line"
 						>
-							<ToggleGroupItem value="flat" aria-label="Simple view" className="rounded-none" title="Simple view">
+							<ToggleGroupItem value="flat" aria-label="Simple view" className="rounded" title="Simple view">
 								<List className="w-4 h-4" />
 							</ToggleGroupItem>
-							<ToggleGroupItem value="grouped" aria-label="Grouped view" className="rounded-none" title="Grouped view">
+							<ToggleGroupItem value="grouped" aria-label="Grouped view" className="rounded" title="Grouped view">
 								<Layers className="w-4 h-4" />
 							</ToggleGroupItem>
 						</ToggleGroup>
@@ -204,12 +203,23 @@ function DataPage() {
 					columns={{ sm: 1, md: 2, lg: 3 }}
 					loading={initialLoading}
 					emptyState={
-						<EmptyState
-							icon={Database}
-							title="No data tables"
-							description="Create your first table to start managing structured data."
-							action={{ label: 'New table', onClick: () => navigate('/data/new') }}
-						/>
+						search ? (
+							<EmptyState
+								variant="no-results"
+								icon={Database}
+								title="No data tables found"
+								filterTerm={search}
+								secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+							/>
+						) : (
+							<EmptyState
+								variant="create"
+								icon={Database}
+								title="No data tables"
+								description="Create your first table to start managing structured data."
+								action={{ label: 'New table', onClick: () => navigate('/data/new') }}
+							/>
+						)
 					}
 					renderItem={() => <></>}
 					keyExtractor={() => ''}

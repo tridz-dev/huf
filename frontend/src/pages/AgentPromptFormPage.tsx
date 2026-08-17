@@ -470,13 +470,13 @@ export function AgentPromptFormPage() {
                           <Input
                             {...field}
                             className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-2xl error:border-destructive"
-                            placeholder="Prompt Title"
+                            placeholder="e.g. Customer support greeting"
                           />
                         ) : (
                           <InlineEditName
                             value={field.value}
                             onChange={field.onChange}
-                            placeholder="Prompt Title"
+                            placeholder="e.g. Customer support greeting"
                           />
                         )}
                       </FormControl>
@@ -532,11 +532,11 @@ export function AgentPromptFormPage() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={handleCreateNewVersion}>
                         <Copy className="mr-2 h-4 w-4" />
-                        Create New Version
+                        Create new version
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={handleForkPrompt}>
                         <GitFork className="mr-2 h-4 w-4" />
-                        Fork Prompt
+                        Fork prompt
                       </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -550,7 +550,7 @@ export function AgentPromptFormPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Prompt Details</CardTitle>
+                <CardTitle>Prompt details</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 sm:grid-cols-2">
                 <FormField
@@ -562,7 +562,7 @@ export function AgentPromptFormPage() {
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Prompt title"
+                          placeholder="e.g. Customer support greeting"
                         />
                       </FormControl>
                       <FormMessage />
@@ -627,7 +627,7 @@ export function AgentPromptFormPage() {
                     Comma-separated tags for search and filtering.
                   </p>
                 </div>
-                <div className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+                <div className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
                   <div className="space-y-0.5">
                     <Label className="text-base">Active</Label>
                     <p className="text-xs text-steel-soft">
@@ -659,7 +659,7 @@ export function AgentPromptFormPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Prompt Body</CardTitle>
+                <CardTitle>Prompt body</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-xs text-steel-soft mb-3">
@@ -679,7 +679,7 @@ export function AgentPromptFormPage() {
             {!isNew && docMeta ? (
               <Card>
                 <CardHeader>
-                  <CardTitle>Version Info</CardTitle>
+                  <CardTitle>Version info</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-2">
                   <Badge variant="outline">Version {docMeta.version ?? 1}</Badge>

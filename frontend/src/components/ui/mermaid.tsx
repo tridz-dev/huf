@@ -82,7 +82,7 @@ export function Mermaid({ chart, className }: MermaidProps) {
 	return (
 		<div
 			ref={containerRef}
-			className={cn('flex items-center justify-center overflow-auto bg-white rounded border p-4', className)}
+			className={cn('flex items-center justify-center overflow-auto bg-panel rounded border p-4', className)}
 			// biome-ignore lint/security/noDangerouslySetInnerHtml: Mermaid SVG output is sanitized by mermaid.js
 			dangerouslySetInnerHTML={{ __html: svg }}
 		/>

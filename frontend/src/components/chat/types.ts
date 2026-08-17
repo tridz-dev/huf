@@ -31,6 +31,10 @@ export type MessageType = {
     parameters: Record<string, unknown>;
     result: string | undefined;
     error: string | undefined;
+    /** Client-side wall-clock timestamp (ms) captured when the tool first entered a running state. Frontend-only approximation, not exact server timing. */
+    startedAt?: number;
+    /** Elapsed ms between startedAt and the tool reaching a terminal (output-available/output-error) state. */
+    durationMs?: number;
   }[];
   injected_memories?: string[];
   /** Provider thinking/reasoning text, shown collapsed above the answer. */

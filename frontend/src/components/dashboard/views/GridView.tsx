@@ -116,6 +116,7 @@ export function GridView<T>({
       <div className="py-12">
         {emptyState || (
           <EmptyState
+            variant="passive"
             title="No items"
             description="There are no items to display."
           />

@@ -1,0 +1,137 @@
+import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
+import { CapabilityBadges } from './CapabilityBadges';
+import { describeAppAction } from '@/services/capabilityApi';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type {
+  CapabilityDescriptor,
+  CapabilityParameter,
+  CapabilityParametersSchema,
+} from '@/types/capability.types';
+
+/**
+ * The backend sends `parameters_schema` as a JSON-Schema object
+ * ({type, properties, required}) for action capabilities, but some descriptors
+ * carry a flat parameter list. Accept both and always render a flat list.
+ */
+function normalizeParameters(
+  schema: CapabilityDescriptor['parameters_schema']
+): CapabilityParameter[] {
+  if (!schema) return [];
+  if (Array.isArray(schema)) return schema;
+
+  const { properties, required } = schema as CapabilityParametersSchema;
+  if (!properties) return [];
+
+  const requiredNames = new Set(required || []);
+  return Object.entries(properties).map(([name, spec]) => ({
+    name,
+    type: spec?.type || 'string',
+    required: requiredNames.has(name),
+    description: spec?.description,
+  }));
+}
+
+interface ActionDetailProps {
+  capability: CapabilityDescriptor;
+  onAdd: (capability: CapabilityDescriptor) => void;
+  onBack?: () => void;
+  className?: string;
+}
+
+export function ActionDetail({ capability, onAdd, onBack, className }: ActionDetailProps) {
+  const [detail, setDetail] = useState<CapabilityDescriptor>(capability);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    describeAppAction(capability.id)
+      .then((result) => {
+        if (!cancelled && result) {
+          setDetail(result);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error loading action details:', error);
+          const errorMessage = getFrappeErrorMessage(error);
+          toast.error(errorMessage || 'Failed to load action details');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [capability.id]);
+
+  const parameters = normalizeParameters(detail.parameters_schema);
+
+  return (
+    <div className={cn('flex flex-col gap-4', className)}>
+      {onBack && (
+        <Button variant="ghost" size="sm" className="self-start gap-1.5" onClick={onBack}>
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back
+        </Button>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <h3 className="text-base font-medium">{detail.title}</h3>
+        {detail.description && (
+          <p className="text-sm text-muted-foreground">{detail.description}</p>
+        )}
+        <CapabilityBadges capability={detail} />
+        {detail.function_path && (
+          <p className="mt-0.5 font-mono text-[10px] text-steel-soft">{detail.function_path}</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h4 className="text-sm font-medium">Parameters</h4>
+        {loading ? (
+          <div className="flex items-center gap-2 py-6 text-sm text-steel-soft">
+            <Spinner />
+            Loading parameters...
+          </div>
+        ) : parameters.length === 0 ? (
+          <p className="text-sm text-steel">This action takes no parameters.</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-line rounded-lg border">
+            {parameters.map((parameter) => (
+              <div key={parameter.name} className="flex flex-col gap-0.5 p-3">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs">{parameter.name}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-steel-soft">
+                    {parameter.type}
+                  </span>
+                  {parameter.required && (
+                    <span className="text-[10px] uppercase tracking-wide text-destructive">
+                      required
+                    </span>
+                  )}
+                </div>
+                {parameter.description && (
+                  <p className="text-xs text-muted-foreground">{parameter.description}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <Button onClick={() => onAdd(detail)} disabled={loading} className="self-start">
+        Add to Agent
+      </Button>
+    </div>
+  );
+}

@@ -21,7 +21,7 @@ export function SkeletonTable({
   className,
 }: SkeletonTableProps) {
   return (
-    <div className={cn('overflow-hidden rounded-none border border-line', className)}>
+    <div className={cn('overflow-hidden rounded-lg border border-line', className)}>
       <Table>
         <TableHeader>
           <TableRow>

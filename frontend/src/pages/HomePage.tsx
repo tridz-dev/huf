@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowRight, ChevronRight, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { PageFrame } from '../layouts/PageFrame';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { useNavigate } from 'react-router-dom';
@@ -215,48 +216,37 @@ function HomePage() {
   const metricsData = [
     {
       id: 'total-runs',
-      label: 'Total Agent Runs',
+      label: 'Total agent runs',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatNumber(metrics.totalRuns),
       info: 'Total number of agent executions in the last 7 days',
     },
     {
       id: 'success-rate',
-      label: 'Success Rate',
+      label: 'Success rate',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : `${metrics.successRate.toFixed(1)}%`,
       info: 'Percentage of successful agent runs without errors',
     },
     {
       id: 'avg-runtime',
-      label: 'Avg Runtime',
+      label: 'Avg runtime',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatDuration(metrics.avgRuntime),
       info: 'Average execution time across all agent runs',
     },
     {
       id: 'cost',
-      label: 'Total Cost',
+      label: 'Total cost',
       period: 'Last 7 days',
       value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
       info: 'Total API costs for LLM usage across all agents',
-      flag: true,
     },
   ];
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-6 space-y-6">
-        {/* HUF Page head */}
-        <div>
-          <h1 className="font-display font-bold text-[36px] uppercase text-ink leading-none tracking-tight">
-            Dashboard
-          </h1>
-          <p className="font-body text-steel text-[14.5px] mt-1">
-            Monitor your agents, flows, and system performance
-          </p>
-        </div>
-
+    <PageFrame title="Dashboard">
+      <div className="space-y-6">
         {/* HUF Gauge Strip */}
         <GaugeRow>
           {metricsData.map((metric) => (
@@ -266,7 +256,6 @@ function HomePage() {
               period={metric.period}
               value={metric.value}
               info={metric.info}
-              flag={metric.flag}
             />
           ))}
         </GaugeRow>
@@ -360,6 +349,6 @@ function HomePage() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </PageFrame>
   );
 }

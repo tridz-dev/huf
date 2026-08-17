@@ -10,6 +10,7 @@ import {
   DialogScrollHeader,
 } from '../ui/dialog-scroll';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -120,11 +121,11 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogScrollContent className="sm:max-w-[425px]">
         <DialogScrollHeader>
-          <DialogTitle>Flow Settings</DialogTitle>
+          <DialogTitle>Flow settings</DialogTitle>
         </DialogScrollHeader>
         <DialogScrollBody className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="name">Flow Name</Label>
+            <Label htmlFor="name">Flow name</Label>
             <Input
               id="name"
               value={name}
@@ -133,10 +134,10 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="description">Description (Optional)</Label>
-            <textarea
+            <Label htmlFor="description">Description (optional)</Label>
+            <Textarea
               id="description"
-              className="flex min-h-[80px] w-full rounded-none border border-input bg-paper px-3 py-2 text-sm ring-offset-background placeholder:text-steel-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="min-h-[80px]"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What does this flow do?"
@@ -159,7 +160,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="mode">Execution Mode</Label>
+              <Label htmlFor="mode">Execution mode</Label>
               <Select value={mode} onValueChange={(v) => setMode(v as 'normal' | 'agentic')}>
                 <SelectTrigger id="mode">
                   <SelectValue />
@@ -171,7 +172,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="max-hops">Max Hops</Label>
+              <Label htmlFor="max-hops">Max hops</Label>
               <Input
                 id="max-hops"
                 type="number"
@@ -189,14 +190,14 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
         </DialogScrollBody>
         <DialogScrollFooter className="items-center justify-between sm:justify-between">
           <Button
-            variant="outline"
+            variant="destructive-ghost"
             size="sm"
-            className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/50 gap-2"
+            className="gap-2"
             onClick={() => setShowDeleteConfirm(true)}
             disabled={isDeleting || isSaving}
           >
             {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-            Delete Flow
+            Delete flow
           </Button>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose} disabled={isDeleting || isSaving}>
@@ -204,7 +205,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
             </Button>
             <Button size="sm" onClick={handleSave} disabled={isSaving || isDeleting || !activeFlow} className="gap-2">
               {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Save Changes
+              Save changes
             </Button>
           </div>
         </DialogScrollFooter>
