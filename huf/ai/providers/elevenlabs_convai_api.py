@@ -191,13 +191,31 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
 
     client_data = data.get("conversation_initiation_client_data", {})
     lead_name = client_data.get("dynamic_variables", {}).get("lead_name", "User")
+    huf_conversation_id = client_data.get("dynamic_variables", {}).get("huf_conversation_id")
 
     cm = ConversationManager(
         agent_name=agent_name, channel="elevenlabs_voice", external_id=conversation_id
     )
 
     title = f"Voice Call: {lead_name}"
-    conversation = cm.get_or_create_conversation(title=title)
+    try:
+        conversation = cm.get_or_create_conversation(title=title, conversation_id=huf_conversation_id)
+    except frappe.PermissionError:
+        # huf_conversation_id is a client-echoed value from ElevenLabs' own
+        # conversation_initiation_client_data - it was ownership-checked once,
+        # synchronously, against the real caller in huf.ai.voice.api.start_session
+        # (see _check_conversation_access there), before ever being sent to
+        # ElevenLabs. By the time it comes back here the webhook itself runs as
+        # Guest and cannot re-verify who echoed it, so a stale/deleted/tampered
+        # value must degrade to a fresh conversation rather than aborting the
+        # whole webhook - losing the Agent Run audit record and call recording
+        # over a conversation-continuity mismatch would be strictly worse.
+        frappe.log_error(
+            f"huf_conversation_id '{huf_conversation_id}' rejected for agent '{agent_name}'; "
+            "falling back to a fresh conversation",
+            "Huf Webhook",
+        )
+        conversation = cm.get_or_create_conversation(title=title)
 
     start_time_unix = metadata.get("start_time_unix_secs")
     start_time = (
@@ -219,7 +237,7 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
             "response": analysis.get("transcript_summary", "Voice call completed."),
             "provider": provider.name,
             "model": model,
-            "total_cost": metadata.get("cost", 0),
+            "cost": metadata.get("cost", 0),
         }
     )
     # Guest webhook runs after signature validation; internal audit record created on behalf of the system.

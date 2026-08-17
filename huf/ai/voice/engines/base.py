@@ -42,6 +42,34 @@ class VoiceEngine(ABC):
 		"""
 		return []
 
+	@classmethod
+	def capabilities(cls) -> dict[str, bool]:
+		"""Return which Agent-level features this engine's sessions actually use.
+
+		Keys: "instructions" (does the engine send the Agent's instructions/
+		agent_prompt to the provider, or does the provider run its own
+		separately-configured prompt?), "tools" (can HUF tools reach a live
+		session via declare_client_tools?), "memory" (does the engine read
+		Agent memory into context?), "persistence" (are conversation turns
+		from this engine persisted as Agent Message/Agent Run records?),
+		"barge_in" (does the provider support the user interrupting the
+		agent mid-sentence?).
+
+		Callers (e.g. the Agent form UI) use this to explain, not hide, what
+		a given voice engine does and doesn't use from the rest of the
+		Agent's configuration - see huf/ai/voice/README.md once it exists.
+		Default is maximally conservative (everything False); concrete
+		engines override with their actual, verified answer - do not
+		default an engine to True for something not actually wired up.
+		"""
+		return {
+			"instructions": False,
+			"tools": False,
+			"memory": False,
+			"persistence": False,
+			"barge_in": False,
+		}
+
 	@abstractmethod
 	def health(self, agent_doc, config: dict[str, Any]) -> dict[str, Any]:
 		"""Check whether this engine is reachable/configured for the given agent."""
@@ -51,13 +79,24 @@ class VoiceEngine(ABC):
 		return []
 
 	@abstractmethod
-	def start_session(self, agent_doc, config: dict[str, Any], user_ref: Any) -> dict[str, Any]:
+	def start_session(
+		self, agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+	) -> dict[str, Any]:
 		"""Mint a new voice session for ``agent_doc`` and return session details.
 
 		``agent_doc`` is an already-resolved Agent document; ``user_ref`` is an
 		opaque reference to the caller (it may be a Frappe user id, a
 		publishable-key identity, or a server-secret caller identity - the
 		engine must treat it as opaque and MUST NOT interpret it).
+
+		``conversation_id``, when supplied, identifies an existing Agent
+		Conversation this voice session should join rather than starting a
+		fresh one. Engines are not required to use it directly (e.g. a
+		realtime sidecar-based engine stashes it for the sidecar process to
+		pick up later); they MUST NOT ignore-and-drop it silently if the
+		caller supplied one - either honor it or the calling layer
+		(``huf.ai.voice.api``) will handle conversation continuity generically
+		using the returned session envelope.
 
 		This method MUST NOT read ``frappe.session.user``. Authentication and
 		authorization are the caller's concern (see ``huf.ai.voice.api``), so

@@ -11,6 +11,7 @@
  ],
  "fields": [
   {
+   "description": "Deprecated: this global Agent ID is only used by the legacy get_signed_url/get_agent_id endpoints. The current voice system configures ElevenLabs Agent ID per-Agent (Agent > Voice tab > voice_config), not here.",
    "fieldname": "agent_id",
    "fieldtype": "Data",
    "label": "Agent ID"
