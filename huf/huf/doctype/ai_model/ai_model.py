@@ -15,6 +15,7 @@ MODEL_MODALITY_OPTIONS = {
 	"Embeddings",
 	"Vision",
 	"OCR",
+	"Speech-to-Speech",
 }
 
 

@@ -47,7 +47,7 @@ export const MemoryList: React.FC = () => {
       <div className="flex flex-col items-center justify-center min-h-[400px] text-destructive">
         <p>{error}</p>
         <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
-          Try Again
+          Try again
         </Button>
       </div>
     );

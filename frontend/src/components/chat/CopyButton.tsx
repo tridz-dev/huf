@@ -36,7 +36,7 @@ export function CopyButton({ content}: { content: string}) {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="!h-7 !w-7 text-steel-soft hover:text-ink"
           onClick={handleCopy}
           aria-label={copied ? 'Copied' : 'Copy response'}
         >

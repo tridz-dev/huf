@@ -5,6 +5,9 @@ import {
   Home, LayoutDashboard, MessageSquare, CircleHelp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 
 export interface AskUserOption {
   id?: string;
@@ -102,18 +105,22 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
         <div className="mt-2.5 space-y-2">
           {payload.kind === 'yes_no' && (
             <div className="flex gap-2">
-              <button
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => submit('Yes')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-line text-xs text-ink hover:border-signal hover:text-signal transition-colors"
+                className="h-auto gap-1.5 rounded-sm border-line bg-transparent px-3 py-1.5 text-xs font-normal text-ink hover:border-signal hover:bg-transparent hover:text-signal"
               >
                 <Check className="w-3.5 h-3.5" /> Yes
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => submit('No')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-line text-xs text-ink hover:border-signal hover:text-signal transition-colors"
+                className="h-auto gap-1.5 rounded-sm border-line bg-transparent px-3 py-1.5 text-xs font-normal text-ink hover:border-signal hover:bg-transparent hover:text-signal"
               >
                 <X className="w-3.5 h-3.5" /> No
-              </button>
+              </Button>
             </div>
           )}
 
@@ -124,10 +131,12 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                   const Icon = iconFor(opt.icon);
                   const active = selected.includes(opt.label);
                   return (
-                    <button
+                    <Button
                       key={opt.id ?? opt.label}
+                      type="button"
+                      variant="ghost"
                       onClick={() => toggleOption(opt.label)}
-                      className={`flex items-start gap-2 p-2 rounded-sm border text-left transition-colors ${
+                      className={`flex h-auto w-full items-start justify-start gap-2 rounded-sm border p-2 text-left font-normal transition-colors hover:bg-transparent ${
                         active
                           ? 'border-signal bg-paper-deep'
                           : 'border-line hover:border-steel-soft'
@@ -138,25 +147,28 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                         <span className={`block text-xs font-medium ${active ? 'text-ink' : 'text-steel'}`}>{opt.label}</span>
                         {opt.description && <span className="block text-[11px] text-steel-soft">{opt.description}</span>}
                       </span>
-                    </button>
+                    </Button>
                   );
                 })}
               </div>
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  type="button"
                   onClick={() => submit(selected.join(', '))}
                   disabled={selected.length === 0}
-                  className="px-3 py-1.5 rounded-sm bg-signal text-white text-xs disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal-ink transition-colors"
+                  className="h-auto rounded-sm bg-signal px-3 py-1.5 text-xs font-normal text-white hover:bg-signal-ink disabled:bg-paper-deep disabled:text-steel-soft disabled:opacity-100"
                 >
                   Submit
-                </button>
+                </Button>
                 {payload.allow_free_text && !showFreeText && (
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
                     onClick={() => setShowFreeText(true)}
-                    className="text-xs text-steel-soft hover:text-signal transition-colors"
+                    className="h-auto p-0 text-xs font-normal text-steel-soft hover:bg-transparent hover:text-signal"
                   >
                     Something else…
-                  </button>
+                  </Button>
                 )}
               </div>
             </>
@@ -165,15 +177,15 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
           {(isText || (isChoice && payload.allow_free_text && showFreeText)) && (
             <div className="space-y-1.5">
               {payload.kind === 'textarea' ? (
-                <textarea
+                <Textarea
                   value={text}
                   onChange={e => setText(e.target.value)}
                   rows={3}
                   placeholder="Type your answer..."
-                  className="w-full px-2.5 py-1.5 rounded-sm border border-line bg-paper text-xs text-ink placeholder:text-steel-soft resize-none outline-none focus:border-signal"
+                  className="min-h-0 resize-none bg-paper text-xs"
                 />
               ) : (
-                <input
+                <Input
                   type="text"
                   value={text}
                   onChange={e => setText(e.target.value)}
@@ -181,29 +193,32 @@ export function HubAskUser({ payload, onSubmit }: HubAskUserProps) {
                     if (e.key === 'Enter') { e.preventDefault(); submit(text); }
                   }}
                   placeholder="Type your answer..."
-                  className="w-full px-2.5 py-1.5 rounded-sm border border-line bg-paper text-xs text-ink placeholder:text-steel-soft outline-none focus:border-signal"
+                  className="bg-paper text-xs"
                 />
               )}
               {isText && (payload.suggested_answers?.length ?? 0) > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {payload.suggested_answers!.map(s => (
-                    <button
+                    <Button
                       key={s}
+                      type="button"
+                      variant="outline"
                       onClick={() => setText(s)}
-                      className="px-2 py-1 rounded-sm border border-line text-[11px] text-steel hover:border-signal hover:text-signal transition-colors"
+                      className="h-auto rounded-sm border-line bg-transparent px-2 py-1 text-[11px] font-normal text-steel hover:border-signal hover:bg-transparent hover:text-signal"
                     >
                       {s}
-                    </button>
+                    </Button>
                   ))}
                 </div>
               )}
-              <button
+              <Button
+                type="button"
                 onClick={() => submit(text)}
                 disabled={!text.trim()}
-                className="px-3 py-1.5 rounded-sm bg-signal text-white text-xs disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal-ink transition-colors"
+                className="h-auto rounded-sm bg-signal px-3 py-1.5 text-xs font-normal text-white hover:bg-signal-ink disabled:bg-paper-deep disabled:text-steel-soft disabled:opacity-100"
               >
                 Submit
-              </button>
+              </Button>
             </div>
           )}
         </div>

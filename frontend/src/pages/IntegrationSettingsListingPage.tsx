@@ -11,6 +11,7 @@ import {
 } from '@/services/integrationApi';
 import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegrationToAgentModal';
 import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogModal';
+import { ServiceToolCount } from '@/components/integrations/ServiceToolCount';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
 import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
@@ -116,11 +117,6 @@ export function IntegrationSettingsListingPage({
 
   return (
     <PageFrame
-      subtitle={
-        kind === 'channels'
-          ? 'Connect the messaging apps where people talk to your agents'
-          : 'Connect calendars, project tools, developer services, and business systems'
-      }
       filters={
         <FilterBar
           searchPlaceholder={kind === 'channels' ? 'Search channels...' : 'Search integrations...'}
@@ -152,25 +148,43 @@ export function IntegrationSettingsListingPage({
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Link}
-            title={kind === 'channels' ? 'No channels' : 'No integrations'}
-            description={
-              kind === 'channels'
-                ? 'No messaging channels have been connected yet.'
-                : 'No integrations have been connected yet.'
-            }
-            action={{
-              label: kind === 'channels' ? 'Add channel' : 'Add integration',
-              onClick: () => setCatalogOpen(true),
-            }}
-          />
+          search || categoryFilter !== 'all' ? (
+            <EmptyState
+              variant="no-results"
+              icon={Link}
+              title={kind === 'channels' ? 'No channels found' : 'No integrations found'}
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setCategoryFilter('all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Link}
+              title={kind === 'channels' ? 'No channels' : 'No integrations'}
+              description={
+                kind === 'channels'
+                  ? 'No messaging channels have been connected yet.'
+                  : 'No integrations have been connected yet.'
+              }
+              action={{
+                label: kind === 'channels' ? 'Add channel' : 'Add integration',
+                onClick: () => setCatalogOpen(true),
+              }}
+            />
+          )
         }
         renderItem={(setting) => {
           const category = serviceCategoryMap.get(setting.service);
           const identity = getServiceIdentity(setting.service);
           const metadata = [
             ...(category ? [{ label: 'Category', value: category }] : []),
+            { label: 'Tools', value: <ServiceToolCount service={setting.service} /> },
             ...(setting.is_default ? [{ label: 'Default', value: 'Yes', icon: Star }] : []),
             ...(setting.last_used
               ? [{ label: 'Last used', value: formatTimeAgo(setting.last_used) }]

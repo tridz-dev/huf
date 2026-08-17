@@ -266,8 +266,8 @@ export function SSHConnectionFormPage() {
             <InlineEditName
               value={form.watch('display_name') || (isNew ? 'New SSH Connection' : id!)}
               onChange={(name: string) => form.setValue('display_name', name, { shouldDirty: true })}
-              placeholder="Display Name"
-              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:uppercase [&_h1]:leading-tight"
+              placeholder="e.g. Production Web Server"
+              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"
             />
             <p className="font-mono text-[12px] text-steel mt-1">
               {isNew ? 'Create a new remote SSH target connection' : `ID ${id}`}
@@ -280,7 +280,7 @@ export function SSHConnectionFormPage() {
             <>
               <Button variant="outline" size="sm" onClick={handleTestConnection} disabled={testing} className="border-line hover:border-ink hover:bg-paper-deep">
                 {testing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Play className="h-4 w-4 mr-2 text-steel" />}
-                Test Connection
+                Test connection
               </Button>
               <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting || saving} className="border-line hover:border-ink hover:bg-paper-deep">
                 {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-destructive" />}
@@ -298,8 +298,8 @@ export function SSHConnectionFormPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card className="border-line bg-panel">
             <CardHeader>
-              <CardTitle className="font-display font-bold text-[18px] uppercase">Connection Details</CardTitle>
-              <CardDescription className="font-body text-[13px] text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
+              <CardTitle className="text-subtitle">Connection details</CardTitle>
+              <CardDescription className="font-body text-ui-text text-steel">Specify target hostname, port, and authentication credentials</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -307,7 +307,7 @@ export function SSHConnectionFormPage() {
                 name="display_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Display Name</FormLabel>
+                    <FormLabel>Display name</FormLabel>
                     <FormControl>
                       <Input placeholder="e.g. Production Web Worker 01" {...field} />
                     </FormControl>
@@ -323,7 +323,7 @@ export function SSHConnectionFormPage() {
                 render={({ field }) => (
                   <FormItem className="flex flex-row items-center justify-between border border-line bg-paper p-4">
                     <div className="space-y-0.5">
-                      <FormLabel className="text-base">Enable Connection</FormLabel>
+                      <FormLabel className="text-base">Enable connection</FormLabel>
                       <FormDescription>Disabled connections cannot be executed against by AI agents.</FormDescription>
                     </div>
                     <FormControl>
@@ -339,7 +339,7 @@ export function SSHConnectionFormPage() {
                   name="host"
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
-                      <FormLabel>Host / IP Address</FormLabel>
+                      <FormLabel>Host / IP address</FormLabel>
                       <FormControl>
                         <Input placeholder="192.168.1.10 or server.example.com" {...field} />
                       </FormControl>
@@ -368,7 +368,7 @@ export function SSHConnectionFormPage() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>SSH Username</FormLabel>
+                    <FormLabel>SSH username</FormLabel>
                     <FormControl>
                       <Input placeholder="root or ubuntu or deploy" {...field} />
                     </FormControl>
@@ -382,7 +382,7 @@ export function SSHConnectionFormPage() {
                 name="auth_method"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Authentication Method</FormLabel>
+                    <FormLabel>Authentication method</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -427,7 +427,7 @@ export function SSHConnectionFormPage() {
                     name="private_key"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Private Key (PEM format)</FormLabel>
+                        <FormLabel>Private key (PEM format)</FormLabel>
                         <FormControl>
                           <Textarea
                             placeholder={isNew ? '-----BEGIN OPENSSH PRIVATE KEY-----...' : 'Leave blank to keep existing private key'}
@@ -445,7 +445,7 @@ export function SSHConnectionFormPage() {
                     name="private_key_passphrase"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Passphrase (Optional)</FormLabel>
+                        <FormLabel>Passphrase (optional)</FormLabel>
                         <FormControl>
                           <Input
                             type="password"
@@ -465,11 +465,11 @@ export function SSHConnectionFormPage() {
           {!isNew && connectionDoc && (
             <Card className="border-line bg-panel">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 font-display font-bold text-[18px] uppercase">
+                <CardTitle className="flex items-center gap-2 text-subtitle">
                   <ShieldCheck className="h-5 w-5 text-steel-soft" strokeWidth={1.6} />
-                  Host Key Security & Status
+                  Host key security & status
                 </CardTitle>
-                <CardDescription className="font-body text-[13px] text-steel">Pinned host key verification prevents MITM attacks</CardDescription>
+                <CardDescription className="font-body text-ui-text text-steel">Pinned host key verification prevents MITM attacks</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2 border border-line bg-paper p-4 text-sm">
@@ -527,7 +527,7 @@ export function SSHConnectionFormPage() {
                     className="border-line hover:border-ink hover:bg-paper-deep"
                   >
                     {enrolling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                    Enroll / Update Host Key
+                    Enroll / update host key
                   </Button>
                   <span className="font-body text-xs text-steel">
                     Connects to target server to automatically fetch and pin its public host key fingerprint.

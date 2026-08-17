@@ -1,11 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-import ChatListing from "@/components/chat/ChatListing";
+import { ChatShellFrame } from "@/components/chat/rail/ChatShellFrame";
 import ChatWindow from "@/components/chat/ChatWindowV2";
-import { ArtifactsPanel } from "@/components/chat/ArtifactsPanel";
 import { ArtifactPreviewPane } from "@/components/chat/artifacts/ArtifactPreviewPane";
 import { useArtifactPane } from "@/components/chat/useArtifactPane";
 import { useConversationArtifacts } from "@/components/chat/useConversationArtifacts";
@@ -24,7 +20,7 @@ function ChatPage() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const toggleSidebar = useCallback(() => setSidebarOpen((prev) => !prev), []);
     const artifactPane = useArtifactPane();
-    const { artifacts: conversationArtifacts, loading: artifactsLoading, refetch: refetchArtifacts } =
+    const { artifacts: conversationArtifacts, refetch: refetchArtifacts } =
         useConversationArtifacts(chatId ?? undefined);
 
     // An agent tool (show_artifact) can open the preview pane on its own
@@ -33,6 +29,7 @@ function ChatPage() {
     // triggered server-side instead of by the user.
     const handleOpenArtifactPane = useCallback(
         async (event: OpenArtifactPaneEvent) => {
+            if (isMobile) return;
             if (event.conversation_id !== chatId) return;
 
             const known = conversationArtifacts.find((a) => a.name === event.artifact_id);
@@ -49,7 +46,7 @@ function ChatPage() {
                 artifactPane.open({ name: found.name, title: found.title, artifact_type: found.artifact_type });
             }
         },
-        [chatId, conversationArtifacts, refetchArtifacts, artifactPane.open]
+        [isMobile, chatId, conversationArtifacts, refetchArtifacts, artifactPane.open]
     );
 
     useChatSocket({
@@ -69,25 +66,26 @@ function ChatPage() {
         }
     }, [isMobile, chatId]);
 
-    // Auto-collapse the chat sidebar while the artifact preview pane is open,
-    // and restore it to whatever it was before the pane opened — not
-    // unconditionally re-opened, so a deliberately-collapsed sidebar stays
-    // collapsed (see PLAN_PANE_UX.md item 4).
-    const sidebarOpenBeforePaneRef = useRef<boolean | null>(null);
-    useEffect(() => {
+    // The rail, transcript, and artifact pane now coexist as three columns
+    // (see design spec section 28.2) — the pane no longer forces the rail
+    // closed, reversing the auto-collapse this effect used to do (previously
+    // tracked as PLAN_PANE_UX.md item 4).
+
+    // Toggles the artifact preview pane from the header glyph (spec 28): close
+    // if open, or open the first available conversation artifact if closed.
+    // ChatWindowHeader only renders the toggle when this callback is passed,
+    // so callers that end up with no artifacts to show should not pass one -
+    // see the conditional prop below.
+    const handleToggleArtifactPane = useCallback(() => {
         if (artifactPane.isOpen) {
-            if (sidebarOpenBeforePaneRef.current === null) {
-                sidebarOpenBeforePaneRef.current = sidebarOpen;
-            }
-            if (sidebarOpen) {
-                setSidebarOpen(false);
-            }
-        } else if (sidebarOpenBeforePaneRef.current !== null) {
-            setSidebarOpen(sidebarOpenBeforePaneRef.current);
-            sidebarOpenBeforePaneRef.current = null;
+            artifactPane.close();
+            return;
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [artifactPane.isOpen]);
+        const first = conversationArtifacts[0];
+        if (first) {
+            artifactPane.open({ name: first.name, title: first.title, artifact_type: first.artifact_type });
+        }
+    }, [artifactPane.isOpen, artifactPane.close, artifactPane.open, conversationArtifacts]);
 
     const handleConversationCreated = useCallback(
         (conversationId: string, agentName?: string) => {
@@ -100,63 +98,18 @@ function ChatPage() {
         [navigate]
     );
 
+    // The artifact pane renders as a third column, a sibling of the rail
+    // and the chat window - passed to ChatShellFrame as `rightPane` so the
+    // shared shell doesn't swallow it into the middle flex area. Produced
+    // files surface inline via the transcript's Outputs card (see
+    // OutputsCard.tsx, spec section 28.2) instead of a permanent right-hand
+    // list. Hidden on mobile to avoid crowding the chat window.
     return (
-        <section className="flex h-full overflow-hidden relative">
-            {/* Sidebar - overlay on mobile, inline on desktop */}
-            {isMobile ? (
-                sidebarOpen && (
-                    <div className="absolute inset-0 z-30 bg-sidebar">
-                        <ChatListing onClose={toggleSidebar} />
-                    </div>
-                )
-            ) : (
-                <div
-                    className={cn(
-                        "shrink-0 transition-all duration-200 ease-in-out overflow-hidden",
-                        sidebarOpen ? "w-80" : "w-0"
-                    )}
-                >
-                    <div className="w-80 h-full">
-                        <ChatListing />
-                    </div>
-                </div>
-            )}
-
-            {/* Chat window - always full width */}
-            <div className="flex-1 min-w-0 min-h-0 h-full relative">
-                {/* Desktop-only floating toggle */}
-                {!isMobile && (
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={toggleSidebar}
-                        className="absolute top-4 left-4 z-20 h-8 w-8 text-zinc-500 hover:text-zinc-900"
-                    >
-                        {sidebarOpen ? (
-                            <PanelLeftClose className="h-4 w-4" />
-                        ) : (
-                            <PanelLeftOpen className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">
-                            {sidebarOpen ? "Close sidebar" : "Open sidebar"}
-                        </span>
-                    </Button>
-                )}
-
-                <ChatWindow
-                    chatId={chatId}
-                    onConversationCreated={handleConversationCreated}
-                    sidebarOpen={sidebarOpen}
-                    onToggleSidebar={isMobile ? toggleSidebar : undefined}
-                />
-            </div>
-
-            {/* Right-side region: the preview pane and the artifacts list are
-                mutually exclusive - only one renders at a time (see
-                PLAN_PANE_UX.md item 2). Hidden on mobile to avoid crowding
-                the chat window. */}
-            {!isMobile && (
-                artifactPane.isOpen ? (
+        <ChatShellFrame
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={toggleSidebar}
+            rightPane={
+                !isMobile && artifactPane.isOpen ? (
                     <ArtifactPreviewPane
                         artifact={artifactPane.currentArtifact}
                         onClose={artifactPane.close}
@@ -165,14 +118,25 @@ function ChatPage() {
                         artifacts={conversationArtifacts}
                         onSelectArtifact={artifactPane.open}
                     />
-                ) : (
-                    <ArtifactsPanel
-                        artifacts={conversationArtifacts}
-                        loading={artifactsLoading}
-                        onOpenArtifact={artifactPane.open}
-                    />
-                )
-            )}
-        </section>
+                ) : null
+            }
+        >
+            <ChatWindow
+                chatId={chatId}
+                onConversationCreated={handleConversationCreated}
+                onToggleSidebar={isMobile ? toggleSidebar : undefined}
+                railCollapsed={!sidebarOpen}
+                onExpandRail={toggleSidebar}
+                artifactPaneOpen={artifactPane.isOpen}
+                onToggleArtifactPane={
+                    !isMobile && (artifactPane.isOpen || conversationArtifacts.length > 0)
+                        ? handleToggleArtifactPane
+                        : undefined
+                }
+                artifacts={conversationArtifacts}
+                onOpenArtifact={artifactPane.open}
+                activeArtifactName={artifactPane.currentArtifact?.name}
+            />
+        </ChatShellFrame>
     );
 }

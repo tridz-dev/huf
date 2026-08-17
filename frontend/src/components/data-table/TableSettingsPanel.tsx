@@ -59,7 +59,7 @@ export function TableSettingsPanel({
 	return (
 		<div className="space-y-4 relative">
 			<div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4">
-				<h3 className="font-medium text-sm">Table Settings</h3>
+				<h3 className="font-medium text-sm">Table settings</h3>
 				<p className="text-xs text-steel-soft mt-1">
 					Configure your table properties
 				</p>
@@ -67,7 +67,7 @@ export function TableSettingsPanel({
 
 			{/* Primary fields — what the table is */}
 			<div className="space-y-1.5">
-				<Label htmlFor="table-name" className="text-xs">
+				<Label htmlFor="table-name" size="sm">
 					Table Name *
 				</Label>
 				<Input
@@ -81,7 +81,7 @@ export function TableSettingsPanel({
 			</div>
 
 			<div className="space-y-1.5">
-				<Label htmlFor="table-description" className="text-xs">
+				<Label htmlFor="table-description" size="sm">
 					Description
 				</Label>
 				<Textarea
@@ -98,12 +98,12 @@ export function TableSettingsPanel({
 			    touch these beyond their defaults, so they get less visual weight and sit
 			    below the fields that define what the table actually is. */}
 			<div className="space-y-3 pt-2 border-t border-line">
-				<h4 className="text-xs font-medium text-steel-soft uppercase tracking-wide">
-					Additional Settings
+				<h4 className="text-xs font-medium text-steel-soft tracking-wide">
+					Additional settings
 				</h4>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-group" className="text-xs text-steel">
+					<Label htmlFor="table-group" size="sm" tone="muted">
 						Group
 					</Label>
 					<Input
@@ -128,7 +128,7 @@ export function TableSettingsPanel({
 				</div>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-icon" className="text-xs text-steel">
+					<Label htmlFor="table-icon" size="sm" tone="muted">
 						Icon
 					</Label>
 					<Select value={icon || '_none'} onValueChange={(v) => onIconChange(v === '_none' ? '' : v)}>
@@ -160,8 +160,8 @@ export function TableSettingsPanel({
 				</div>
 
 				<div className="space-y-1">
-					<Label htmlFor="table-autoname" className="text-xs text-steel">
-						Naming Method
+					<Label htmlFor="table-autoname" size="sm" tone="muted">
+						Naming method
 					</Label>
 					<Select value={autonameMethod} onValueChange={onAutonameMethodChange}>
 						<SelectTrigger className="h-7 text-xs">
@@ -169,16 +169,16 @@ export function TableSettingsPanel({
 						</SelectTrigger>
 						<SelectContent>
 							<SelectItem value="Autoincrement">Auto-increment (1, 2, 3...)</SelectItem>
-							<SelectItem value="Hash">Random Hash</SelectItem>
-							<SelectItem value="By Field">By Field Value</SelectItem>
+							<SelectItem value="Hash">Random hash</SelectItem>
+							<SelectItem value="By Field">By field value</SelectItem>
 						</SelectContent>
 					</Select>
 				</div>
 
 				{autonameMethod === 'By Field' && (
 					<div className="space-y-1">
-						<Label htmlFor="table-title-field" className="text-xs text-steel">
-							Title Field
+						<Label htmlFor="table-title-field" size="sm" tone="muted">
+							Title field
 						</Label>
 						<Select value={titleField} onValueChange={onTitleFieldChange}>
 							<SelectTrigger className="h-7 text-xs">

@@ -10,6 +10,7 @@
   "col_break_1",
   "is_system_role",
   "frappe_role",
+  "role_weight",
   "section_capabilities",
   "permissions"
  ],
@@ -46,6 +47,14 @@
    "label": "Frappe Role",
    "options": "Role",
    "description": "The underlying Frappe role that enforces DocType-level permissions."
+  },
+  {
+   "fieldname": "role_weight",
+   "fieldtype": "Int",
+   "label": "Role Weight",
+   "description": "Used to determine the highest role if a user is assigned multiple Frappe roles (higher weight takes precedence).",
+   "default": "0",
+   "in_list_view": 1
   },
   {
    "fieldname": "section_capabilities",

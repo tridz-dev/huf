@@ -2,12 +2,17 @@ import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } fr
 import { useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getConversationMessages, createAgentRunFeedback, getConversation, type ChatMessage } from "@/services/chatApi";
+import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent } from '@/hooks/useChatSocket';
+import { executeClientToolCall, resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ColdStartHero, StarterPromptGrid } from './EmptyChatState';
+import { OutputsCard } from './OutputsCard';
+import type { ArtifactPaneTarget } from './useArtifactPane';
+import type { ArtifactListItem } from '@/services/artifactPanelApi';
 import type { MessageType } from './types';
 import type { LoadingType } from './ChatInput';
 import { useChatAgentIdentity } from './useChatAgentIdentity';
@@ -30,16 +35,36 @@ import {
 interface ChatMessageListProps {
     chatId?: string | null;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
+    /** Conversation artifacts, fetched once by ChatPageV2's shared
+     * `useConversationArtifacts` and passed down for the end-of-transcript
+     * Outputs card (spec section 28.2) — not re-fetched here. */
+    artifacts?: ArtifactListItem[];
+    onOpenArtifact?: (target: ArtifactPaneTarget) => void;
+    activeArtifactName?: string;
+    /** Whether the artifact pane is open (spec 28.2 — ARTIFACT OPEN). The
+     * centre column tightens its padding/turn-gap and ChatInput collapses to
+     * a single-line composer when this is true. Sourced from ChatPageV2's
+     * `useArtifactPane`, threaded down through ChatWindowV2 — not
+     * re-derived here. */
+    artifactPaneOpen?: boolean;
 }
 
 export function ChatMessageList({
     chatId: chatIdProp,
     onConversationCreated,
+    artifacts,
+    onOpenArtifact,
+    activeArtifactName,
+    artifactPaneOpen,
 }: ChatMessageListProps) {
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const [searchParams] = useSearchParams();
     const chatId = chatIdProp ?? (routeChatId && routeChatId !== 'new' ? routeChatId : null);
     const isNewChat = !chatId;
+    // HUF Project a not-yet-created conversation should be created into.
+    // Only meaningful before the first message - once `chatId` exists the
+    // conversation's own `project` is authoritative (see ChatWindowHeader).
+    const newConversationProject = isNewChat ? searchParams.get('project') : null;
 
     const [messages, setMessages] = useState<MessageType[]>([]);
     const [status, setStatus] = useState<'submitted' | 'streaming' | 'ready' | 'error'>('ready');
@@ -54,6 +79,7 @@ export function ChatMessageList({
     const {
         agentName,
         agentDisplayName,
+        agentModel,
         agentDescription,
         agentColor,
         starterPrompts,
@@ -187,12 +213,35 @@ export function ChatMessageList({
         });
     }, [chatId]);
 
+    // Socket events are best-effort/at-least-once, and the same call can
+    // also arrive via the send-message HTTP response (see ChatInput), so
+    // de-duplication is shared across both channels in clientToolDispatcher.
+    // Clear tracked ids whenever the active conversation changes.
+    useEffect(() => {
+        resetClientToolCallTracking();
+    }, [chatId]);
+
+    // Handle backend-initiated client-side ("frontend") tool calls
+    const handleFrontendToolCall = useCallback((event: FrontendToolCallEvent) => {
+        if (event.conversation_id !== chatId) return;
+
+        const callId = event.tool_call_ref ?? event.call_id;
+        if (!callId) return;
+
+        void executeClientToolCall({
+            callId,
+            functionName: event.function_name,
+            toolParams: event.tool_params,
+        });
+    }, [chatId]);
+
     useChatSocket({
         conversationId: chatId,
         onToolUpdate: handleToolUpdate,
         onNewMessage: handleNewMessage,
         onAgentRunStatus: handleAgentRunStatus,
         onConversationTitleUpdated: handleConversationTitleUpdated,
+        onFrontendToolCall: handleFrontendToolCall,
     });
 
     useConversationTitlePostSuccessFallback({
@@ -327,6 +376,16 @@ export function ChatMessageList({
         [agentName, chatId]
     );
 
+    // Regenerate/retry: re-runs a prior user turn through the same send path
+    // as ChatInput (StarterPromptGrid uses the same imperative handle). This
+    // always appends a new user + assistant turn rather than mutating or
+    // removing the original messages — there's no endpoint to edit/replace
+    // history in place, and silently discarding a message the user might
+    // still want to see would be unsafe.
+    const handleRegenerate = useCallback((userContent: string) => {
+        chatInputRef.current?.send(userContent);
+    }, []);
+
     // Don't show loading state if we already have messages (e.g., during transition)
     const shouldShowLoading = initialLoading && messages.length === 0;
     const isColdStart = isNewChat && messages.length === 0;
@@ -334,10 +393,15 @@ export function ChatMessageList({
     return (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <div className="flex-1 overflow-y-auto min-h-0" ref={scrollContainerRef}>
-                <div className={isColdStart
-                    ? "max-w-4xl mx-auto px-6 py-4 h-full flex items-center justify-center"
-                    : "max-w-4xl mx-auto px-6 py-4 space-y-4"
-                }>
+                <div className={cn(
+                    "flex justify-center",
+                    artifactPaneOpen ? "py-[18px]" : (isColdStart ? "py-7" : "py-5")
+                )}>
+                <div className={cn(
+                    "w-full max-w-chat-wide",
+                    artifactPaneOpen ? "px-[22px]" : "px-[26px]",
+                    isColdStart && "flex flex-col"
+                )}>
                     {shouldShowLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <p className="text-sm text-muted-foreground">Loading messages...</p>
@@ -350,14 +414,20 @@ export function ChatMessageList({
                             </div>
                         </div>
                     ) : isColdStart ? (
-                        <ColdStartHero
-                            agentName={agentName}
-                            agentDisplayName={agentDisplayName}
-                            agentDescription={agentDescription}
-                            agentColor={agentColor}
-                        />
+                        <div className="w-full max-w-chat-measure flex flex-col gap-[14px]">
+                            <ColdStartHero
+                                agentName={agentName}
+                                agentDisplayName={agentDisplayName}
+                                agentDescription={agentDescription}
+                                agentColor={agentColor}
+                            />
+                            <StarterPromptGrid
+                                starterPrompts={starterPrompts}
+                                onSendStarter={(text) => chatInputRef.current?.send(text)}
+                            />
+                        </div>
                     ) : (
-                        <div className="mt-2 space-y-8">
+                        <div className={cn("flex flex-col", artifactPaneOpen ? "gap-[12px]" : "gap-chat-turn")}>
                             {(hasMore && !isNewChat && !newlyCreatedConversationIdRef.current && !isCreatingConversationRef.current) && (
                                 <div ref={sentinelRef} className="h-2 w-full opacity-0" aria-hidden="true" />
                             )}
@@ -366,36 +436,51 @@ export function ChatMessageList({
                                     Loading previous messages...
                                 </div>
                             )}
-                            {messages.map((message) => (
-                                <ChatMessageComponent 
-                                    key={message.key} 
-                                    message={message} 
-                                    agentName={agentName}
-                                    agentColor={agentColor}
-                                    showToolExecutionDetails={showToolExecutionDetails}
-                                    status={status}
-                                    loadingType={loadingType}
-                                    onFeedback={handleFeedback}
-                                    scrollToBottomAfterPaint={scrollToBottomAfterPaint}
+                            {messages.map((message, index) => {
+                                let precedingUserMessage: string | undefined;
+                                if (message.from === 'assistant') {
+                                    for (let i = index - 1; i >= 0; i--) {
+                                        if (messages[i].from === 'user') {
+                                            precedingUserMessage = messages[i].versions[0]?.content;
+                                            break;
+                                        }
+                                    }
+                                }
+                                return (
+                                    <ChatMessageComponent
+                                        key={message.key}
+                                        message={message}
+                                        agentModel={agentModel ?? undefined}
+                                        showToolExecutionDetails={showToolExecutionDetails}
+                                        status={status}
+                                        loadingType={loadingType}
+                                        onFeedback={handleFeedback}
+                                        scrollToBottomAfterPaint={scrollToBottomAfterPaint}
+                                        precedingUserMessage={precedingUserMessage}
+                                        onRegenerate={handleRegenerate}
+                                        onSendText={(text) => chatInputRef.current?.send(text)}
+                                    />
+                                );
+                            })}
+                            {artifacts && artifacts.length > 0 && onOpenArtifact && (
+                                <OutputsCard
+                                    artifacts={artifacts}
+                                    onOpenArtifact={onOpenArtifact}
+                                    activeArtifactName={activeArtifactName}
                                 />
-                            ))}
+                            )}
                         </div>
                     )}
                 </div>
+                </div>
             </div>
             <div className="max-w-4xl mx-auto w-full shrink-0">
-            {isColdStart && (
-                <div className="px-6 pb-2">
-                    <StarterPromptGrid
-                        starterPrompts={starterPrompts}
-                        onSendStarter={(text) => chatInputRef.current?.send(text)}
-                    />
-                </div>
-            )}
             <ChatInput
                 ref={chatInputRef}
                 chatId={chatId}
                 agentName={agentName}
+                agentModel={agentModel}
+                project={newConversationProject ?? undefined}
                 onConversationCreated={onConversationCreated}
                 onStatusChange={setStatus}
                 onLoadingTypeChange={setLoadingType}
@@ -406,6 +491,7 @@ export function ChatMessageList({
                 allowFileUpload={allowFileUpload}
                 maxUploadSizeMb={maxUploadSizeMb}
                 runImmediately={runImmediately}
+                artifactPaneOpen={artifactPaneOpen}
             />
             </div>
         </div>

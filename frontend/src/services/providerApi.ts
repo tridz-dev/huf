@@ -231,12 +231,28 @@ export interface ProviderConnectionTestResult {
 }
 
 /**
+ * Unsaved provider settings to probe instead of the stored ones. The provider
+ * form can never read back the saved API key, so a key the user just typed has
+ * to be sent explicitly or it would not be the thing under test.
+ */
+export interface ProviderConnectionTestOverrides {
+  api_key?: string;
+  api_base_url?: string;
+  provider_brand?: string;
+  is_local_llm?: 0 | 1;
+}
+
+/**
  * Probe a provider endpoint and its linked AI Models (Test Connection)
  */
-export async function testProviderConnection(providerName: string): Promise<ProviderConnectionTestResult> {
+export async function testProviderConnection(
+  providerName: string,
+  overrides?: ProviderConnectionTestOverrides,
+): Promise<ProviderConnectionTestResult> {
   try {
     const response = (await call.post('huf.ai.local_runtime.test_provider_connection', {
       provider_name: providerName,
+      ...overrides,
     })) as { message?: ProviderConnectionTestResult };
     return response?.message as ProviderConnectionTestResult;
   } catch (error) {
@@ -333,6 +349,9 @@ export interface AIModelDoc {
   input_cost_per_1m_tokens?: number | null;
   output_cost_per_1m_tokens?: number | null;
   cached_input_cost_per_1m_tokens?: number | null;
+  disable_ask_user?: number;
+  disable_rich_elements?: number;
+  disable_document_artifacts?: number;
 }
 
 /**

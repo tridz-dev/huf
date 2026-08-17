@@ -1,7 +1,8 @@
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
-import { PanelRightClose, Settings, Edit, Trash2 } from 'lucide-react';
+import { X, Settings, Edit, Trash2, Clock } from 'lucide-react';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -20,10 +21,47 @@ import {
 } from './ui/alert-dialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
-import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
+import { ScheduleIntervalType, DocEventType, ScheduleTriggerConfig } from '../types/flow.types';
 import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
+
+/**
+ * Computes a human-readable summary of a schedule trigger's cadence, e.g.
+ * "Runs every 5 minutes". Only handles the simple interval case (every N
+ * minutes/hours/days) since that can be described with plain arithmetic; the
+ * custom-cron case is intentionally left unhandled (returns null) because
+ * there's no cron-parsing library in this project to describe it reliably —
+ * showing a wrong or placeholder value would be worse than showing nothing.
+ *
+ * This deliberately does NOT claim to be an exact "next run" time: the
+ * backend does not expose a real next-execution timestamp to the frontend
+ * (no such field exists on ScheduleTriggerConfig or node data), so there is
+ * no honest way to compute when the schedule actually last fired or its real
+ * anchor point. Presenting "now + interval" as the next run time would be
+ * misleading, not just approximate — it would always read "in N minutes"
+ * regardless of the schedule's true state.
+ */
+function computeScheduleNextRun(config: ScheduleTriggerConfig): string | null {
+  if (config.intervalType === 'custom') {
+    return null;
+  }
+
+  const unitLabels: Record<'minutes' | 'hours' | 'days', string> = {
+    minutes: 'minute',
+    hours: 'hour',
+    days: 'day',
+  };
+  const unitLabel = unitLabels[config.intervalType as 'minutes' | 'hours' | 'days'];
+  if (!unitLabel) {
+    return null;
+  }
+
+  const interval = config.interval && config.interval > 0 ? config.interval : 1;
+  const pluralizedUnit = interval === 1 ? unitLabel : `${unitLabel}s`;
+
+  return `Runs every ${interval} ${pluralizedUnit}`;
+}
 
 interface ToolParameter {
   fieldname: string;
@@ -46,8 +84,6 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const { activeFlow, selectedNodeId, selectedEdgeId, updateNode, deleteNode, updateEdges } = useFlowContext();
   const selectedNode = activeFlow?.nodes.find((n) => n.id === selectedNodeId);
   const selectedEdge = activeFlow?.edges.find((e) => e.id === selectedEdgeId);
-  const [width, setWidth] = useState(380);
-  const [isResizing, setIsResizing] = useState(false);
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [agents, setAgents] = useState<Array<{ value: string; label: string }>>([]);
@@ -60,26 +96,6 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const [loadingToolDetails, setLoadingToolDetails] = useState(false);
   const [roles, setRoles] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
-  };
-
-  useEffect(() => {
-    if (!isResizing) return;
-    const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = window.innerWidth - e.clientX;
-      setWidth(Math.min(Math.max(320, newWidth), 600));
-    };
-    const handleMouseUp = () => setIsResizing(false);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing]);
 
   // Load agents when agent-run or router node selected
   useEffect(() => {
@@ -208,7 +224,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       return (
         <div className="space-y-3">
           <div>
-            <Label className="text-xs">Webhook URL (Auto-generated)</Label>
+            <Label size="sm">Webhook URL (Auto-generated)</Label>
             <div className="flex gap-2 mt-1">
               <Input
                 readOnly
@@ -228,7 +244,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </div>
           </div>
           <div>
-            <Label htmlFor="webhook-auth" className="text-xs">Authentication Key (Optional)</Label>
+            <Label htmlFor="webhook-auth" size="sm">Authentication key (optional)</Label>
             <Input
               id="webhook-auth"
               value={config.auth || ''}
@@ -237,7 +253,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             />
           </div>
           <div>
-            <Label htmlFor="method" className="text-xs">HTTP Method (Expected)</Label>
+            <Label htmlFor="method" size="sm">HTTP method (expected)</Label>
             <Select
               value={config.method || 'POST'}
               onValueChange={(value) => handleUpdateTriggerConfig('method', value)}
@@ -258,40 +274,51 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
     }
 
     if (config.type === 'schedule') {
+      const scheduleTypeSelect = (
+        <Select
+          value={config.intervalType}
+          onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
+        >
+          <SelectTrigger id="interval-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="minutes">Minutes</SelectItem>
+            <SelectItem value="hours">Hours</SelectItem>
+            <SelectItem value="days">Days</SelectItem>
+            <SelectItem value="custom">Custom (cron)</SelectItem>
+          </SelectContent>
+        </Select>
+      );
+
       return (
         <>
-          <div>
-            <Label htmlFor="interval-type">Schedule Type</Label>
-            <Select
-              value={config.intervalType}
-              onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
-            >
-              <SelectTrigger id="interval-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="minutes">Minutes</SelectItem>
-                <SelectItem value="hours">Hours</SelectItem>
-                <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="custom">Custom (Cron)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {config.intervalType !== 'custom' && (
+          {config.intervalType !== 'custom' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="interval">Every</Label>
+                <Input
+                  id="interval"
+                  type="number"
+                  min="1"
+                  value={config.interval || 1}
+                  onChange={(e) => handleUpdateTriggerConfig('interval', parseInt(e.target.value))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="interval-type">Unit</Label>
+                {scheduleTypeSelect}
+              </div>
+            </div>
+          ) : (
             <div>
-              <Label htmlFor="interval">Interval</Label>
-              <Input
-                id="interval"
-                type="number"
-                min="1"
-                value={config.interval || 1}
-                onChange={(e) => handleUpdateTriggerConfig('interval', parseInt(e.target.value))}
-              />
+              <Label htmlFor="interval-type">Schedule type</Label>
+              {scheduleTypeSelect}
             </div>
           )}
           {config.intervalType === 'custom' && (
             <div>
-              <Label htmlFor="cron">Cron Expression</Label>
+              <Label htmlFor="cron">Cron expression</Label>
               <Input
                 id="cron"
                 value={config.cronExpression || ''}
@@ -308,7 +335,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       return (
         <>
           <div>
-            <Label htmlFor="doctype">Document Type</Label>
+            <Label htmlFor="doctype">Document type</Label>
             <Combobox
               options={docTypes}
               value={config.doctype || ''}
@@ -320,7 +347,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             />
           </div>
           <div>
-            <Label htmlFor="event">Event Type</Label>
+            <Label htmlFor="event">Event type</Label>
             <Select
               value={config.event}
               onValueChange={(value) => handleUpdateTriggerConfig('event', value as DocEventType)}
@@ -332,9 +359,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 <SelectItem value="save">Save</SelectItem>
                 <SelectItem value="update">Update</SelectItem>
                 <SelectItem value="delete">Delete</SelectItem>
-                <SelectItem value="before-save">Before Save</SelectItem>
-                <SelectItem value="before-update">Before Update</SelectItem>
-                <SelectItem value="before-delete">Before Delete</SelectItem>
+                <SelectItem value="before-save">Before save</SelectItem>
+                <SelectItem value="before-update">Before update</SelectItem>
+                <SelectItem value="before-delete">Before delete</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -372,22 +399,19 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
   const isSheet = variant === 'sheet';
 
+  const scheduleNextRun =
+    selectedNode?.data.nodeType === 'trigger' && selectedNode.data.triggerConfig?.type === 'schedule'
+      ? computeScheduleNextRun(selectedNode.data.triggerConfig as ScheduleTriggerConfig)
+      : null;
+
   return (
     <div
       className={cn(
-        'relative bg-card flex flex-col',
+        'relative bg-card flex flex-col w-[300px]',
         isSheet ? 'h-full' : 'h-screen border-l border-border',
       )}
-      style={isSheet ? undefined : { width: `${width}px` }}
     >
-      {!isSheet && (
-      <div
-        className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 transition-colors"
-        onMouseDown={handleMouseDown}
-      />
-      )}
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
         {!selectedNode && !selectedEdge ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Settings className="w-12 h-12 text-muted-foreground mb-4" />
@@ -404,7 +428,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </div>
 
             <div>
-              <Label htmlFor="edge-label">Edge Label</Label>
+              <Label htmlFor="edge-label">Edge label</Label>
               <Input
                 id="edge-label"
                 value={(selectedEdge.label as string) || ''}
@@ -421,9 +445,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               />
             </div>
 
+            <div className="border-t border-border" />
+
             <div className="space-y-4">
               <div>
-                <Label htmlFor="edge-type" className="text-xs">Edge Type</Label>
+                <Label htmlFor="edge-type" size="sm">Edge type</Label>
                 <Select
                   value={selectedEdge.data?.edgeType || 'always'}
                   onValueChange={(value) => {
@@ -439,9 +465,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="always">Always (Default)</SelectItem>
-                    <SelectItem value="on_success">On Success</SelectItem>
-                    <SelectItem value="on_failure">On Failure</SelectItem>
+                    <SelectItem value="always">Always (default)</SelectItem>
+                    <SelectItem value="on_success">On success</SelectItem>
+                    <SelectItem value="on_failure">On failure</SelectItem>
                     <SelectItem value="expression">Expression</SelectItem>
                   </SelectContent>
                 </Select>
@@ -449,7 +475,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
               {selectedEdge.data?.edgeType === 'expression' && (
                 <div>
-                  <Label htmlFor="edge-expr" className="text-xs">Condition Expression</Label>
+                  <Label htmlFor="edge-expr" size="sm">Condition expression</Label>
                   <Input
                     id="edge-expr"
                     value={selectedEdge.data?.condition || ''}
@@ -467,7 +493,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               )}
 
               <div>
-                <Label htmlFor="edge-priority" className="text-xs">Priority</Label>
+                <Label htmlFor="edge-priority" size="sm">Priority</Label>
                 <Input
                   id="edge-priority"
                   type="number"
@@ -486,7 +512,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               </div>
 
               <div>
-                <Label htmlFor="edge-outcome" className="text-xs">Approval Outcome</Label>
+                <Label htmlFor="edge-outcome" size="sm">Approval outcome</Label>
                 <Select
                   value={selectedEdge.data?.meta?.outcome || 'none'}
                   onValueChange={(value) => {
@@ -520,15 +546,34 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           </>
         ) : selectedNode ? (
           <>
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="text-sm font-semibold">{selectedNode.data.label}</div>
-                <span className="text-xs text-muted-foreground">({selectedNode.data.nodeType})</span>
-              </div>
+            <div className="-mx-3.5 -mt-3.5 mb-0 h-10 px-3.5 flex items-center gap-2 border-b border-border shrink-0">
+              <span className="text-[13px] leading-none truncate" style={{ fontWeight: 590 }}>
+                {selectedNode.data.label}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                {selectedNode.data.nodeType}
+              </span>
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="hover:bg-accent"
+                onClick={onToggle}
+              >
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+              </Button>
             </div>
 
             <div>
-              <Label htmlFor="node-title">Node Title</Label>
+              <Label htmlFor="node-title">Node title</Label>
               <Input
                 id="node-title"
                 value={selectedNode.data.label}
@@ -537,11 +582,13 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               />
             </div>
 
+            <div className="border-t border-border" />
+
             {selectedNode.data.nodeType === 'trigger' && (
               <>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <Label>Trigger Type</Label>
+                    <Label>Trigger type</Label>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -585,9 +632,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'agent-run') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Agent Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Agent configuration</Label>
                     <div>
-                      <Label htmlFor="agent-name" className="text-xs">Agent</Label>
+                      <Label htmlFor="agent-name" size="sm">Agent</Label>
                       <Combobox
                         options={agents}
                         value={config.agent_name || ''}
@@ -601,22 +648,22 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="prompt-template" className="text-xs">Prompt Template</Label>
+                        <Label htmlFor="prompt-template" size="sm">Prompt template</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.prompt_template || '';
                           handleUpdateActionConfig('prompt_template', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
                         }} />
                       </div>
-                      <textarea
+                      <Textarea
                         id="prompt-template"
-                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-[80px] w-full"
                         value={config.prompt_template || ''}
                         onChange={(e) => handleUpdateActionConfig('prompt_template', e.target.value)}
                         placeholder="Enter prompt template. Use {{context.key}} for variables."
                       />
                     </div>
                     <div>
-                      <Label htmlFor="save-key" className="text-xs">Save Response To</Label>
+                      <Label htmlFor="save-key" size="sm">Save response to</Label>
                       <Input
                         id="save-key"
                         value={config.save_response_to_context || ''}
@@ -631,9 +678,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'tool-call') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Tool Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Tool configuration</Label>
                     <div>
-                      <Label htmlFor="tool-name" className="text-xs">Tool</Label>
+                      <Label htmlFor="tool-name" size="sm">Tool</Label>
                       <Combobox
                         options={tools}
                         value={config.tool_name || ''}
@@ -645,7 +692,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label className="text-xs font-semibold mb-2 block">Arguments</Label>
+                      <Label size="sm" weight="semibold" className="mb-2 block">Arguments</Label>
                       {loadingToolDetails ? (
                         <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">Loading parameters...</div>
                       ) : !selectedToolDetails ? (
@@ -657,7 +704,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                             return (
                               <div key={param.fieldname}>
                                 <div className="flex justify-between items-center mb-1">
-                                  <Label htmlFor={`arg-${param.fieldname}`} className="text-xs font-medium">
+                                  <Label htmlFor={`arg-${param.fieldname}`} size="sm">
                                     {param.label || param.fieldname} {param.required ? <span className="text-destructive">*</span> : ''}
                                   </Label>
                                   <div className="flex items-center gap-2">
@@ -683,7 +730,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                                     });
                                   }}
                                   placeholder={param.description || `Enter ${param.fieldname}...`}
-                                  className="h-8 text-xs font-mono"
+                                  size="sm"
+                                  className="font-mono"
                                 />
                                 {param.description && (
                                   <p className="text-[10px] text-muted-foreground mt-1">{param.description}</p>
@@ -697,7 +745,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       )}
                     </div>
                     <div>
-                      <Label htmlFor="save-result" className="text-xs">Save Result To Context</Label>
+                      <Label htmlFor="save-result" size="sm">Save result to context</Label>
                       <Input
                         id="save-result"
                         value={(config.output?.save_result_to_context) || ''}
@@ -712,12 +760,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'router') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">LLM Router Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">LLM router configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Connect edges from this node to other nodes. The LLM will use edge labels to decide where to route.
                     </div>
                     <div>
-                      <Label htmlFor="router-agent" className="text-xs">Routing Agent</Label>
+                      <Label htmlFor="router-agent" size="sm">Routing agent</Label>
                       <Combobox
                         options={agents}
                         value={config.router_agent_name || ''}
@@ -730,7 +778,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="conv-mode" className="text-xs">Conversation Mode</Label>
+                      <Label htmlFor="conv-mode" size="sm">Conversation mode</Label>
                       <Select
                         value={config.conversation_mode || 'flow_shared'}
                         onValueChange={(value) => handleUpdateActionConfig('conversation_mode', value)}
@@ -739,8 +787,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="flow_shared">Flow Shared (Default)</SelectItem>
-                          <SelectItem value="isolated">Isolated (No history)</SelectItem>
+                          <SelectItem value="flow_shared">Flow shared (default)</SelectItem>
+                          <SelectItem value="isolated">Isolated (no history)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -753,9 +801,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const approverUsers = (config as { approver_users?: string[] | string }).approver_users;
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Human Approval Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Human approval configuration</Label>
                     <div>
-                      <Label htmlFor="approval-title" className="text-xs">Title</Label>
+                      <Label htmlFor="approval-title" size="sm">Title</Label>
                       <Input
                         id="approval-title"
                         value={config.title || ''}
@@ -764,10 +812,10 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="approval-instructions" className="text-xs">Instructions</Label>
-                      <textarea
+                      <Label htmlFor="approval-instructions" size="sm">Instructions</Label>
+                      <Textarea
                         id="approval-instructions"
-                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-[60px] w-full"
                         value={config.instructions || ''}
                         onChange={(e) => handleUpdateActionConfig('instructions', e.target.value)}
                         placeholder="Detailed instructions for the approver"
@@ -775,22 +823,22 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="context-summary" className="text-xs">Context Summary</Label>
+                        <Label htmlFor="context-summary" size="sm">Context summary</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.context_summary || '';
                           handleUpdateActionConfig('context_summary', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
                         }} />
                       </div>
-                      <textarea
+                      <Textarea
                         id="context-summary"
-                        className="flex min-h-[50px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-[50px] w-full"
                         value={config.context_summary || ''}
                         onChange={(e) => handleUpdateActionConfig('context_summary', e.target.value)}
                         placeholder="e.g., Please review invoice for {{customer}} worth {{amount}}"
                       />
                     </div>
                     <div>
-                      <Label htmlFor="approval-type" className="text-xs">Approval Type</Label>
+                      <Label htmlFor="approval-type" size="sm">Approval type</Label>
                       <Select
                         value={approvalType}
                         onValueChange={(value) => handleUpdateActionConfig('approval_type', value)}
@@ -799,14 +847,14 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="role">By Role</SelectItem>
-                          <SelectItem value="user">By User</SelectItem>
+                          <SelectItem value="role">By role</SelectItem>
+                          <SelectItem value="user">By user</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                     {approvalType === 'role' && (
                       <div>
-                        <Label htmlFor="approver-role" className="text-xs">Approver Role</Label>
+                        <Label htmlFor="approver-role" size="sm">Approver role</Label>
                         <Combobox
                           options={roles}
                           value={(config as { approver_role?: string }).approver_role || ''}
@@ -820,7 +868,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     )}
                     {approvalType === 'user' && (
                       <div>
-                        <Label htmlFor="approver-users" className="text-xs">Approver Users (comma-separated emails)</Label>
+                        <Label htmlFor="approver-users" size="sm">Approver users (comma-separated emails)</Label>
                         <Input
                           id="approver-users"
                           value={Array.isArray(approverUsers)
@@ -834,7 +882,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       </div>
                     )}
                     <div>
-                      <Label htmlFor="ref-doctype" className="text-xs">Reference DocType (Optional)</Label>
+                      <Label htmlFor="ref-doctype" size="sm">Reference DocType (Optional)</Label>
                       <Combobox
                         options={docTypes}
                         value={config.reference_doctype || ''}
@@ -846,7 +894,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="ref-name" className="text-xs">Reference Document Name</Label>
+                        <Label htmlFor="ref-name" size="sm">Reference document name</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.reference_name || '';
                           handleUpdateActionConfig('reference_name', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
@@ -861,7 +909,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="save-decision" className="text-xs">Store Decision in Context Key</Label>
+                      <Label htmlFor="save-decision" size="sm">Store decision in context key</Label>
                       <Input
                         id="save-decision"
                         value={config.store_decision_in_context || ''}
@@ -876,28 +924,28 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'condition') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Condition (IF) Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Condition (IF) configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Evaluates a boolean expression against context. Routes to True or False branch node.
                     </div>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="condition-expr" className="text-xs">Expression</Label>
+                        <Label htmlFor="condition-expr" size="sm">Expression</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.expression || '';
                           handleUpdateActionConfig('expression', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
                         }} />
                       </div>
-                      <textarea
+                      <Textarea
                         id="condition-expr"
-                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-[60px] w-full font-mono"
                         value={config.expression || ''}
                         onChange={(e) => handleUpdateActionConfig('expression', e.target.value)}
                         placeholder='context["status"] == "approved"'
                       />
                     </div>
                     <div>
-                      <Label htmlFor="true-node" className="text-xs">True Branch (Node ID)</Label>
+                      <Label htmlFor="true-node" size="sm">True branch (node ID)</Label>
                       <Input
                         id="true-node"
                         value={config.true_node || ''}
@@ -906,7 +954,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="false-node" className="text-xs">False Branch (Node ID)</Label>
+                      <Label htmlFor="false-node" size="sm">False branch (node ID)</Label>
                       <Input
                         id="false-node"
                         value={config.false_node || ''}
@@ -921,10 +969,10 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'http-request') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">HTTP Request Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">HTTP request configuration</Label>
                     <div>
                       <div className="flex justify-between items-center mb-1">
-                        <Label htmlFor="http-url" className="text-xs">URL</Label>
+                        <Label htmlFor="http-url" size="sm">URL</Label>
                         <VariablePicker onSelect={(v) => {
                           const current = config.url || '';
                           handleUpdateActionConfig('url', current + (current.length && !current.endsWith(' ') ? ' ' : '') + v);
@@ -939,7 +987,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="http-method" className="text-xs">Method</Label>
+                      <Label htmlFor="http-method" size="sm">Method</Label>
                       <Select
                         value={config.method || 'GET'}
                         onValueChange={(value) => handleUpdateActionConfig('method', value)}
@@ -957,10 +1005,10 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       </Select>
                     </div>
                     <div>
-                      <Label htmlFor="http-headers" className="text-xs">Headers (JSON)</Label>
-                      <textarea
+                      <Label htmlFor="http-headers" size="sm">Headers (JSON)</Label>
+                      <Textarea
                         id="http-headers"
-                        className="flex min-h-[50px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-[50px] w-full font-mono"
                         value={typeof config.headers === 'object'
                           ? JSON.stringify(config.headers, null, 2)
                           : config.headers || ''}
@@ -975,10 +1023,10 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="http-body" className="text-xs">Body</Label>
-                      <textarea
+                      <Label htmlFor="http-body" size="sm">Body</Label>
+                      <Textarea
                         id="http-body"
-                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="min-h-[60px] w-full font-mono"
                         value={typeof config.body === 'object'
                           ? JSON.stringify(config.body, null, 2)
                           : config.body || ''}
@@ -993,7 +1041,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="http-timeout" className="text-xs">Timeout (seconds)</Label>
+                      <Label htmlFor="http-timeout" size="sm">Timeout (seconds)</Label>
                       <Input
                         id="http-timeout"
                         type="number"
@@ -1004,7 +1052,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="http-save" className="text-xs">Save Result To Context</Label>
+                      <Label htmlFor="http-save" size="sm">Save result to context</Label>
                       <Input
                         id="http-save"
                         value={config.save_result_to_context || ''}
@@ -1020,7 +1068,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const transformations = config.transformations || [];
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Transform Data Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Transform data configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Map, copy, or template data between context variables.
                     </div>
@@ -1042,7 +1090,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           </Button>
                         </div>
                         <div>
-                          <Label className="text-[10px]">Source Field</Label>
+                          <Label size="sm">Source field</Label>
                           <Input
                             value={t.source_field || ''}
                             onChange={(e) => {
@@ -1051,11 +1099,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                               handleUpdateActionConfig('transformations', updated);
                             }}
                             placeholder="e.g., api_response.data"
-                            className="h-7 text-xs"
+                            size="sm"
                           />
                         </div>
                         <div>
-                          <Label className="text-[10px]">Target Field</Label>
+                          <Label size="sm">Target field</Label>
                           <Input
                             value={t.target_field || ''}
                             onChange={(e) => {
@@ -1064,11 +1112,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                               handleUpdateActionConfig('transformations', updated);
                             }}
                             placeholder="e.g., processed_data"
-                            className="h-7 text-xs"
+                            size="sm"
                           />
                         </div>
                         <div>
-                          <Label className="text-[10px]">Operation</Label>
+                          <Label size="sm">Operation</Label>
                           <Select
                             value={t.operation || 'copy'}
                             onValueChange={(v) => {
@@ -1077,7 +1125,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                               handleUpdateActionConfig('transformations', updated);
                             }}
                           >
-                            <SelectTrigger className="h-7 text-xs">
+                            <SelectTrigger size="sm">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1109,12 +1157,12 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               if (config.type === 'loop') {
                 return (
                   <div className="space-y-3">
-                    <Label className="mb-2 block text-sm font-semibold">Loop Configuration</Label>
+                    <Label weight="semibold" className="mb-2 block">Loop configuration</Label>
                     <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
                       Iterate over an array in context. Each iteration sets the current item and index.
                     </div>
                     <div>
-                      <Label htmlFor="loop-iterate" className="text-xs">Iterate Over (Context Key)</Label>
+                      <Label htmlFor="loop-iterate" size="sm">Iterate over (context key)</Label>
                       <Input
                         id="loop-iterate"
                         value={config.iterate_over || ''}
@@ -1124,7 +1172,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-item" className="text-xs">Item Variable</Label>
+                      <Label htmlFor="loop-item" size="sm">Item variable</Label>
                       <Input
                         id="loop-item"
                         value={config.item_key || 'loop_item'}
@@ -1134,7 +1182,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-index" className="text-xs">Index Variable</Label>
+                      <Label htmlFor="loop-index" size="sm">Index variable</Label>
                       <Input
                         id="loop-index"
                         value={config.index_key || 'loop_index'}
@@ -1144,7 +1192,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-body" className="text-xs">Loop Body Node (Node ID)</Label>
+                      <Label htmlFor="loop-body" size="sm">Loop body node (node ID)</Label>
                       <Input
                         id="loop-body"
                         value={config.loop_node || ''}
@@ -1153,7 +1201,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-done" className="text-xs">Done Node (Node ID)</Label>
+                      <Label htmlFor="loop-done" size="sm">Done node (node ID)</Label>
                       <Input
                         id="loop-done"
                         value={config.done_node || ''}
@@ -1162,7 +1210,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       />
                     </div>
                     <div>
-                      <Label htmlFor="loop-max" className="text-xs">Max Iterations</Label>
+                      <Label htmlFor="loop-max" size="sm">Max iterations</Label>
                       <Input
                         id="loop-max"
                         type="number"
@@ -1179,7 +1227,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               // Fallback: show JSON for other action types
               return (
                 <div>
-                  <Label className="mb-2 block">Action Configuration</Label>
+                  <Label className="mb-2 block">Action configuration</Label>
                   <div className="p-3 rounded-md bg-muted/30 border border-border">
                     <code className="text-xs text-muted-foreground font-mono block overflow-x-auto">
                       {JSON.stringify(config, null, 2)}
@@ -1192,29 +1240,21 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
         ) : null}
       </div>
 
-      <div className="border-t border-border p-3 bg-card flex items-center justify-between gap-2">
-        <div className="flex-1">
-          {selectedNode && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => setShowDeleteConfirm(true)}
-            >
-              <Trash2 className="w-4 h-4 mr-1" />
-              Delete Node
-            </Button>
-          )}
+      {scheduleNextRun ? (
+        <div className="border-t border-border p-3 bg-card flex items-center gap-2">
+          <div className="flex items-center gap-1.5 min-w-0 rounded-md bg-[#fbfbfd] dark:bg-white/5 px-2 py-1">
+            <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
+            <span className="text-[12px] leading-none text-muted-foreground truncate">
+              {scheduleNextRun}
+            </span>
+          </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-accent" onClick={onToggle}>
-          <PanelRightClose className="w-4 h-4 text-muted-foreground" />
-        </Button>
-      </div>
+      ) : null}
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Node</AlertDialogTitle>
+            <AlertDialogTitle>Delete node</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete this node? Any edges connected to it will also be removed.
             </AlertDialogDescription>

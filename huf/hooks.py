@@ -119,6 +119,7 @@ after_app_install = [
 after_migrate = [
     "huf.install.after_migrate",
     "huf.ai.skills.hooks.sync_app_skills",
+    "huf.install.seed_voice_engines",
 ]
 
 # Uninstallation
@@ -184,25 +185,28 @@ permission_query_conditions = {
 
 doc_events = {
     "*": {
-        "validate": "huf.ai.agent_hooks.run_hooked_agents",
-        "before_insert": "huf.ai.agent_hooks.run_hooked_agents",
-        "after_insert": "huf.ai.agent_hooks.run_hooked_agents",
-        "before_save": "huf.ai.agent_hooks.run_hooked_agents",
-        "after_save": "huf.ai.agent_hooks.run_hooked_agents",
-        "before_submit": "huf.ai.agent_hooks.run_hooked_agents",
-        "after_submit": "huf.ai.agent_hooks.run_hooked_agents",
-        "before_cancel": "huf.ai.agent_hooks.run_hooked_agents",
-        "on_submit": "huf.ai.agent_hooks.run_hooked_agents",
-        "on_update": "huf.ai.agent_hooks.run_hooked_agents",
-        "before_rename": "huf.ai.agent_hooks.run_hooked_agents",
-        "after_rename": "huf.ai.agent_hooks.run_hooked_agents",
-        "on_trash": "huf.ai.agent_hooks.run_hooked_agents",
-        "after_delete": "huf.ai.agent_hooks.run_hooked_agents",
+        "validate": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "before_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "after_insert": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "before_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "after_save": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "before_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "after_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "before_cancel": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "on_submit": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "on_update": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "before_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "after_rename": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "on_trash": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+        "after_delete": ["huf.ai.agent_hooks.run_hooked_agents", "huf.ai.automation_hooks.run_hooked_automations"],
+    },
+    "User": {
+        "on_update": "huf.huf.doctype.huf_user_role.huf_user_role.sync_from_frappe_user",
     },
     "Agent Trigger": {
-        "after_insert": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
-        "on_update": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
-        "on_trash": "huf.ai.agent_hooks.clear_doc_event_agents_cache",
+        "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
+        "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
+        "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
     },
     "AI Provider": {
         "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
@@ -246,13 +250,15 @@ doc_events = {
 # }
 scheduler_events = {
     "all": [
-        "huf.ai.agent_scheduler.run_scheduled_agents"
+        "huf.ai.agent_scheduler.run_scheduled_agents",
+        "huf.ai.automation_scheduler.run_due_automations"
     ],
     "daily": [
         "huf.ai.knowledge.maintenance.cleanup_orphaned_files",
         "huf.ai.knowledge.maintenance.optimize_indexes",
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
+        "huf.ai.agent_chat.purge_trashed_conversations",
     ],
     "cron": {
         "*/1 * * * *": [
@@ -376,3 +382,12 @@ huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
 huf_knowledge_backends = {
     "redis": "huf.ai.knowledge.backends.redis_backend.RedisBackend",
 }
+
+# Voice Engines Hook
+# ------------------
+# Register additional voice engines with the hook-based engine registry (see
+# huf.ai.voice). Maps engine_key -> dotted path to a VoiceEngine subclass.
+# Built-in engine keys cannot be overridden by a hook. Built-in engines land
+# in a later phase, so this starts empty.
+
+huf_voice_engines = {}

@@ -19,7 +19,7 @@ interface ShortcutKeyProps {
 
 export function ShortcutKey({ children, keys, size = "md", className, hoverOnly }: ShortcutKeyProps) {
     const badgeClasses = cn(
-        "flex items-center gap-2 font-sans border border-zinc-300 rounded px-1",
+        "flex items-center gap-2 font-sans border border-line rounded px-1",
         size === "sm" && "text-[10px] px-1 leading-4",
         className
     )

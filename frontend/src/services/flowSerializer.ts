@@ -204,16 +204,16 @@ function buildNodeData(node: BackendNode): FlowNodeData {
 
 function getDefaultLabel(backendType: string): string {
     const labels: Record<string, string> = {
-        'trigger.webhook': 'Webhook Trigger',
-        'trigger.schedule': 'Schedule Trigger',
-        'trigger.doc-event': 'Document Event Trigger',
-        'agent.run': 'Run Agent',
-        'tool.call': 'Call Tool',
-        'router.llm': 'LLM Router',
-        'human.approval': 'Human Approval',
+        'trigger.webhook': 'Webhook trigger',
+        'trigger.schedule': 'Schedule trigger',
+        'trigger.doc-event': 'Document event trigger',
+        'agent.run': 'Run agent',
+        'tool.call': 'Call tool',
+        'router.llm': 'LLM router',
+        'human.approval': 'Human approval',
         'condition': 'Condition (IF)',
-        'http_request': 'HTTP Request',
-        'transform': 'Transform Data',
+        'http_request': 'HTTP request',
+        'transform': 'Transform data',
         'loop': 'Loop',
         'end': 'End',
     };

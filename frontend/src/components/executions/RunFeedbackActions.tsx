@@ -94,7 +94,7 @@ export function RunFeedbackActions({ agentRunId, agent, conversation }: RunFeedb
           type="button"
           variant="ghost"
           size="icon"
-          className={cn('h-7 w-7', selected === 'Thumbs Up' && 'text-emerald-600')}
+          className={cn('h-7 w-7', selected === 'Thumbs Up' && 'text-good')}
           disabled={submitting}
           onClick={() => submitFeedback('Thumbs Up')}
           aria-label="Mark response helpful"

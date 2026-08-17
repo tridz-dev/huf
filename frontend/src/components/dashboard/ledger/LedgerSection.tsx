@@ -97,7 +97,7 @@ export interface LedgerSectionProps {
 export function LedgerSection({ title, children, footer }: LedgerSectionProps) {
   return (
     <div className="border border-line border-t-0 bg-panel">
-      <div className="font-display font-bold text-[18px] uppercase tracking-[.02em] px-6 pt-[18px] pb-2.5">
+      <div className="font-display font-bold text-[18px] tracking-[.02em] px-6 pt-[18px] pb-2.5">
         {title}
       </div>
       <div>{children}</div>

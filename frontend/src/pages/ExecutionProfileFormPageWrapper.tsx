@@ -7,11 +7,11 @@ import { getExecutionProfile } from '../services/executionProfileApi';
 export function ExecutionProfileFormPageWrapper() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === 'new';
-  const [profileTitle, setProfileTitle] = useState<string>('New Execution Profile');
+  const [profileTitle, setProfileTitle] = useState<string>('New execution profile');
 
   useEffect(() => {
     if (isNew) {
-      setProfileTitle('New Execution Profile');
+      setProfileTitle('New execution profile');
       return;
     }
 
@@ -26,7 +26,7 @@ export function ExecutionProfileFormPageWrapper() {
   }, [id, isNew]);
 
   const breadcrumbs = [
-    { label: 'Code Execution', href: '/execution-profiles' },
+    { label: 'Code execution', href: '/execution-profiles' },
     { label: profileTitle },
   ];
 

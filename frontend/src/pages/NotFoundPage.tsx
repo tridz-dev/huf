@@ -27,7 +27,7 @@ function NotFoundPage() {
 
         <div className="flex gap-3 justify-center">
           <Button onClick={() => navigate(-1)} variant="outline">
-            Go Back
+            Go back
           </Button>
           <Button onClick={() => navigate('/')}>
             <Home className="w-4 h-4 mr-2" />

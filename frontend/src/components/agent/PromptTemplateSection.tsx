@@ -45,7 +45,7 @@ export function PromptTemplateSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prompt Template</CardTitle>
+        <CardTitle>Prompt template</CardTitle>
         <CardDescription>
           Define system prompt, goal, and constraints. Use &apos;Local&apos; for inline prompts or &apos;Template&apos; to link a reusable prompt from the library.
         </CardDescription>
@@ -56,7 +56,7 @@ export function PromptTemplateSection({
           name="agent_prompt"
           render={({ field }) => (
             <FormItem id="agent-prompt-field" className="sm:col-span-2">
-              <FormLabel>Agent Prompt</FormLabel>
+              <FormLabel>Agent prompt</FormLabel>
               <div className="flex items-center gap-2">
                 <FormControl>
                   <Combobox
@@ -124,9 +124,9 @@ export function PromptTemplateSection({
           control={form.control}
           name="prompt_version_locked"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center justify-between rounded-none border p-4 sm:col-span-2">
+            <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
               <div className="space-y-0.5 pr-4">
-                <FormLabel className="text-base">Lock Template Version</FormLabel>
+                <FormLabel className="text-base">Lock template version</FormLabel>
                 <FormDescription>
                   If checked, this agent will stay on the prompt version it was attached to, ignoring newer versions.
                 </FormDescription>
@@ -145,7 +145,7 @@ export function PromptTemplateSection({
             <FormItem>
               <FormLabel>Attached at Version</FormLabel>
               <FormControl>
-                <div className="flex min-h-10 items-center rounded-none border bg-paper-deep/40 px-3 text-sm text-steel">
+                <div className="flex min-h-10 items-center rounded-md border bg-paper-deep/40 px-3 text-sm text-steel">
                   {field.value ?? 'Will be recorded after template attachment'}
                 </div>
               </FormControl>

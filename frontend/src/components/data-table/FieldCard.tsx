@@ -37,7 +37,7 @@ export function FieldCard({
 				onDrop={(e) => onDrop(e, index)}
 				onClick={onSelect}
 				className={cn(
-					'group flex items-center gap-2 px-3 py-2 rounded-none border border-dashed cursor-pointer transition-colors',
+					'group flex items-center gap-2 px-3 py-2 rounded-md border border-dashed cursor-pointer transition-colors',
 					isSelected
 						? 'border-line-dark bg-paper-deep'
 						: 'border-steel/30 hover:border-steel/50'
@@ -92,7 +92,7 @@ export function FieldCard({
 			onDrop={(e) => onDrop(e, index)}
 			onClick={onSelect}
 			className={cn(
-				'group flex items-center gap-3 px-3 py-2.5 rounded-none border cursor-pointer transition-colors',
+				'group flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors',
 				isSelected
 					? 'border-line-dark bg-paper-deep text-ink font-medium '
 					: 'border-line hover:border-steel/50'
@@ -107,7 +107,7 @@ export function FieldCard({
 					)}
 				</div>
 				<div className="flex items-center gap-2 mt-0.5">
-					<Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+					<Badge variant="secondary" size="sm" className="px-1.5 py-0 h-4">
 						{field.fieldtype}
 					</Badge>
 					<span className="text-[10px] text-steel">{field.fieldname}</span>

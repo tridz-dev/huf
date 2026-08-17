@@ -68,7 +68,7 @@ export function FieldConfigPanel({
 			<div className="sticky top-0 z-10 bg-panel border-b border-line pb-3 -mx-1 px-1 mb-4 flex items-center justify-between">
 				<div>
 					<h3 className="font-medium text-sm">
-						{isLayout ? field.fieldtype : 'Field Properties'}
+						{isLayout ? field.fieldtype : 'Field properties'}
 					</h3>
 					<p className="text-xs text-steel mt-1">
 						{isLayout ? 'Layout element settings' : field.fieldtype}
@@ -87,7 +87,7 @@ export function FieldConfigPanel({
 
 			{properties.includes('label') && (
 				<div className="space-y-1.5">
-					<Label htmlFor="field-label" className="text-xs">
+					<Label htmlFor="field-label" size="sm">
 						Label
 					</Label>
 					<Input
@@ -107,7 +107,7 @@ export function FieldConfigPanel({
 
 			{properties.includes('options') && field.fieldtype === 'Select' && (
 				<div className="space-y-1.5">
-					<Label htmlFor="field-options" className="text-xs">
+					<Label htmlFor="field-options" size="sm">
 						Options (one per line)
 					</Label>
 					<Textarea
@@ -123,14 +123,14 @@ export function FieldConfigPanel({
 
 			{properties.includes('options') && field.fieldtype === 'Link' && (
 				<div className="space-y-1.5">
-					<Label htmlFor="field-link-target" className="text-xs">
-						Link Target
+					<Label htmlFor="field-link-target" size="sm">
+						Link target
 					</Label>
 					<Select
 						value={field.options || ''}
 						onValueChange={(value) => onUpdate({ options: value })}
 					>
-						<SelectTrigger className="h-8 text-sm">
+						<SelectTrigger size="sm">
 							<SelectValue placeholder="Select a table" />
 						</SelectTrigger>
 						<SelectContent>
@@ -147,13 +147,13 @@ export function FieldConfigPanel({
 			{(properties.includes('default') || properties.includes('description')) && (
 				<div className="space-y-3 pt-2 border-t border-line">
 					<h4 className="text-xs font-medium text-steel-soft uppercase tracking-wide">
-						Additional Settings
+						Additional settings
 					</h4>
 
 					{properties.includes('default') && (
 						<div className="space-y-1">
-							<Label htmlFor="field-default" className="text-xs text-steel">
-								Default Value
+							<Label htmlFor="field-default" size="sm" tone="muted">
+								Default value
 							</Label>
 							<Input
 								id="field-default"
@@ -167,8 +167,8 @@ export function FieldConfigPanel({
 
 					{properties.includes('description') && (
 						<div className="space-y-1">
-							<Label htmlFor="field-description" className="text-xs text-steel">
-								Help Text
+							<Label htmlFor="field-description" size="sm" tone="muted">
+								Help text
 							</Label>
 							<Input
 								id="field-description"
@@ -196,7 +196,7 @@ export function FieldConfigPanel({
 									onUpdate({ reqd: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-reqd" className="text-xs font-normal">
+							<Label htmlFor="field-reqd" size="sm" weight="normal">
 								Required
 							</Label>
 						</div>
@@ -211,7 +211,7 @@ export function FieldConfigPanel({
 									onUpdate({ unique: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-unique" className="text-xs font-normal">
+							<Label htmlFor="field-unique" size="sm" weight="normal">
 								Unique
 							</Label>
 						</div>
@@ -226,8 +226,8 @@ export function FieldConfigPanel({
 									onUpdate({ read_only: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-read-only" className="text-xs font-normal">
-								Read Only
+							<Label htmlFor="field-read-only" size="sm" weight="normal">
+								Read only
 							</Label>
 						</div>
 					)}
@@ -241,8 +241,8 @@ export function FieldConfigPanel({
 									onUpdate({ in_list_view: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-in-list-view" className="text-xs font-normal">
-								Show in List View
+							<Label htmlFor="field-in-list-view" size="sm" weight="normal">
+								Show in list view
 							</Label>
 						</div>
 					)}
@@ -256,7 +256,7 @@ export function FieldConfigPanel({
 									onUpdate({ non_negative: checked ? 1 : 0 })
 								}
 							/>
-							<Label htmlFor="field-non-negative" className="text-xs font-normal">
+							<Label htmlFor="field-non-negative" size="sm" weight="normal">
 								Non-negative only
 							</Label>
 						</div>

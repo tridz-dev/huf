@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   getConversations,
@@ -14,11 +14,28 @@ interface UseChatListOptions {
   refreshKey?: number;
   refreshOnRouteChange?: boolean;
   enabled?: boolean;
+  /**
+   * When set, scopes the chat list to conversations belonging to this HUF
+   * Project. Omit (undefined) to keep the existing global/unscoped behavior.
+   * Changing this value resets pagination and reloads from the first page.
+   */
+  project?: string;
 }
 
 export function useChatList(options: UseChatListOptions = {}) {
-  const { refreshKey, refreshOnRouteChange = false, enabled = true } = options;
+  const { refreshKey, refreshOnRouteChange = false, enabled = true, project } = options;
   const location = useLocation();
+
+  // Memoized so identity only changes when project actually changes -
+  // useInfiniteScroll resets pagination whenever initialParams changes.
+  const initialParams = useMemo(
+    () => ({
+      filters: (project
+        ? [["channel", "=", "Chat"], ["project", "=", project]]
+        : [["channel", "=", "Chat"]]) as ConversationListParams['filters'],
+    }),
+    [project]
+  );
 
   const {
     items: chats,
@@ -43,9 +60,7 @@ export function useChatList(options: UseChatListOptions = {}) {
       };
     },
     pageSize: 20,
-    initialParams: {
-      filters: [["channel", "=", "Chat"]]
-    },
+    initialParams,
     enabled, // Pass through enabled option
   });
 
@@ -56,7 +71,7 @@ export function useChatList(options: UseChatListOptions = {}) {
     }
   }, [refreshKey, reset]);
 
-  // Refresh when route changes (for ChatSidebarContent component)
+  // Refresh when route changes (for the chat rail's history list)
   useEffect(() => {
     if (refreshOnRouteChange) {
       reset();
@@ -72,5 +87,8 @@ export function useChatList(options: UseChatListOptions = {}) {
     sentinelRef,
     scrollRef,
     addItem,
+    /** Re-fetches from the first page - e.g. after a conversation is moved
+     * in/out of the Project this list is scoped to. */
+    refresh: reset,
   };
 }

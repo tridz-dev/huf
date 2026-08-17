@@ -1,0 +1,419 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:trigger_name",
+ "creation": "2026-08-08 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "trigger_name",
+  "automation",
+  "status",
+  "column_break_4hgn",
+  "disabled",
+  "section_break_type",
+  "trigger_type",
+  "section_break_schedule",
+  "schedule_type",
+  "cron_expression",
+  "run_at",
+  "scheduled_interval",
+  "column_break_sched1",
+  "timezone",
+  "start_at",
+  "end_at",
+  "misfire_policy",
+  "interval_count",
+  "last_execution",
+  "next_execution",
+  "section_break_docevent",
+  "reference_doctype",
+  "doc_event",
+  "prompt_field",
+  "column_break_docevent1",
+  "prompt_field_mode",
+  "condition",
+  "section_break_attachments",
+  "file_attachments",
+  "section_break_webhook",
+  "webhook_slug",
+  "webhook_key",
+  "allowed_methods",
+  "column_break_webhook1",
+  "auth_mode",
+  "signature_header",
+  "secret",
+  "response_mode",
+  "section_break_appevent",
+  "app_name",
+  "event_name",
+  "column_break_appevent1",
+  "event_source",
+  "payload_mapping",
+  "section_break_qam6",
+  "source_system",
+  "metadata",
+  "disabled_reason",
+  "is_virtual"
+ ],
+ "fields": [
+  {
+   "fieldname": "trigger_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Trigger Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "automation",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Automation",
+   "options": "Automation",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "hidden": 1,
+   "label": "Status",
+   "options": "\nDraft\nActive\nDisabled\nError"
+  },
+  {
+   "fieldname": "column_break_4hgn",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled"
+  },
+  {
+   "fieldname": "section_break_type",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "trigger_type",
+   "fieldtype": "Select",
+   "label": "Trigger Type",
+   "options": "\nSchedule\nDoc Event\nWebhook\nApp Event\nManual"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "section_break_schedule",
+   "fieldtype": "Section Break",
+   "label": "Schedule"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "schedule_type",
+   "fieldtype": "Select",
+   "label": "Schedule Type",
+   "options": "\nInterval\nCron\nOnce"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\" && doc.schedule_type == \"Cron\"",
+   "fieldname": "cron_expression",
+   "fieldtype": "Data",
+   "label": "Cron Expression"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\" && doc.schedule_type == \"Once\"",
+   "fieldname": "run_at",
+   "fieldtype": "Datetime",
+   "label": "Run At"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\" && doc.schedule_type == \"Interval\"",
+   "description": "Legacy interval field, preserved for migration compatibility.",
+   "fieldname": "scheduled_interval",
+   "fieldtype": "Select",
+   "label": "Scheduled Interval",
+   "options": "\nHourly\nDaily\nWeekly\nMonthly\nYearly"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "column_break_sched1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "timezone",
+   "fieldtype": "Data",
+   "label": "Timezone"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "start_at",
+   "fieldtype": "Datetime",
+   "label": "Start At"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "end_at",
+   "fieldtype": "Datetime",
+   "label": "End At"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "misfire_policy",
+   "fieldtype": "Select",
+   "label": "Misfire Policy",
+   "options": "\nSkip\nRun Immediately\nQueue"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\" && doc.schedule_type == \"Interval\"",
+   "description": "Legacy interval count field, preserved for migration compatibility.",
+   "fieldname": "interval_count",
+   "fieldtype": "Int",
+   "label": "Interval Count"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "last_execution",
+   "fieldtype": "Datetime",
+   "label": "Last Execution",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "fieldname": "next_execution",
+   "fieldtype": "Datetime",
+   "label": "Next Execution",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "section_break_docevent",
+   "fieldtype": "Section Break",
+   "label": "Doc Event"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference Doctype",
+   "options": "DocType"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "doc_event",
+   "fieldtype": "Select",
+   "label": "Doc Event",
+   "options": "\nbefore_insert\nafter_insert\nvalidate\nbefore_save\nafter_save\nbefore_submit\non_submit\non_update\nafter_submit\non_cancel\nbefore_rename\nafter_rename\non_trash\nafter_delete"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "description": "Enter the fieldname from the Reference DocType that contains the user's instructions.",
+   "fieldname": "prompt_field",
+   "fieldtype": "Select",
+   "label": "Prompt Field"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "column_break_docevent1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "prompt_field_mode",
+   "fieldtype": "Select",
+   "label": "Prompt Field Mode",
+   "options": "\nSupplement\nOverride"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\" || doc.trigger_type == \"App Event\"",
+   "fieldname": "condition",
+   "fieldtype": "Code",
+   "label": "Condition"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "fieldname": "section_break_attachments",
+   "fieldtype": "Section Break",
+   "label": "Attachments"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Doc Event\"",
+   "description": "Fetch files from specific DocFields or Child Tables",
+   "fieldname": "file_attachments",
+   "fieldtype": "Table",
+   "label": "File Attachments",
+   "options": "Automation Trigger Attachment"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "section_break_webhook",
+   "fieldtype": "Section Break",
+   "label": "Webhook"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "webhook_slug",
+   "fieldtype": "Data",
+   "label": "Webhook Slug"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "webhook_key",
+   "fieldtype": "Data",
+   "label": "Webhook Key"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "allowed_methods",
+   "fieldtype": "Select",
+   "label": "Allowed Methods",
+   "options": "\nGET\nPOST\nPUT\nPATCH\nDELETE\nANY"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "column_break_webhook1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "auth_mode",
+   "fieldtype": "Select",
+   "label": "Auth Mode",
+   "options": "\nNone\nWebhook Key\nSignature\nBasic Auth\nBearer Token"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\" && doc.auth_mode == \"Signature\"",
+   "fieldname": "signature_header",
+   "fieldtype": "Data",
+   "label": "Signature Header"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "secret",
+   "fieldtype": "Password",
+   "label": "Secret"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\"",
+   "fieldname": "response_mode",
+   "fieldtype": "Select",
+   "label": "Response Mode",
+   "options": "\nSync\nAsync"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"App Event\"",
+   "fieldname": "section_break_appevent",
+   "fieldtype": "Section Break",
+   "label": "App Event"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"App Event\"",
+   "fieldname": "app_name",
+   "fieldtype": "Data",
+   "label": "App Name"
+  },
+  {
+   "fieldname": "event_name",
+   "fieldtype": "Data",
+   "label": "Event Name"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"App Event\"",
+   "fieldname": "column_break_appevent1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"App Event\"",
+   "fieldname": "event_source",
+   "fieldtype": "Data",
+   "label": "Event Source"
+  },
+  {
+   "depends_on": "eval: doc.trigger_type == \"Webhook\" || doc.trigger_type == \"App Event\"",
+   "fieldname": "payload_mapping",
+   "fieldtype": "Code",
+   "label": "Payload Mapping"
+  },
+  {
+   "fieldname": "section_break_qam6",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "source_system",
+   "fieldtype": "Data",
+   "label": "Source System"
+  },
+  {
+   "fieldname": "metadata",
+   "fieldtype": "JSON",
+   "label": "MetaData"
+  },
+  {
+   "fieldname": "disabled_reason",
+   "fieldtype": "Small Text",
+   "label": "Disabled Reason"
+  },
+  {
+   "default": "0",
+   "fieldname": "is_virtual",
+   "fieldtype": "Check",
+   "label": "Is Virtual"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-08 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Automation Trigger",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

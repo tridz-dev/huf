@@ -284,6 +284,10 @@ def create_demo_ai_models():
         return entry
 
     models = [
+        # ElevenLabs
+        _m("eleven_multilingual_v2", "ElevenLabs", TTS),
+        _m("eleven_turbo_v2_5", "ElevenLabs", TTS),
+        _m("eleven_flash_v2_5", "ElevenLabs", TTS),
         # Hugging Face
         _m("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
         # Cohere
@@ -461,6 +465,45 @@ def create_demo_ai_models():
             if not existing.get("modalities"):
                 existing.modalities = m["modalities"]
                 existing.save(ignore_permissions=True)
+
+
+def seed_voice_engines():
+	"""Ensure a Voice Engine row exists for every engine discovered by the registry.
+
+	Idempotent and safe to call on after_migrate even when zero engines are
+	registered (the current state, since the registry starts empty). Existing
+	rows are left alone except for backfilling a missing label/kind, so user
+	edits are preserved.
+	"""
+	try:
+		from huf.ai.voice import get_engine, supported_engines
+
+		for engine_key in supported_engines():
+			engine = get_engine(engine_key)
+			label = getattr(engine, "label", engine_key)
+			kind = getattr(engine, "kind", None)
+
+			if not frappe.db.exists("Voice Engine", engine_key):
+				doc = frappe.new_doc("Voice Engine")
+				doc.engine_key = engine_key
+				doc.label = label
+				doc.kind = kind
+				doc.enabled = 1
+				doc.insert(ignore_permissions=True)
+				continue
+
+			existing = frappe.get_doc("Voice Engine", engine_key)
+			dirty = False
+			if not existing.get("label") and label:
+				existing.label = label
+				dirty = True
+			if not existing.get("kind") and kind:
+				existing.kind = kind
+				dirty = True
+			if dirty:
+				existing.save(ignore_permissions=True)
+	except Exception as e:
+		logger.warning(f"Failed to seed voice engines: {e!s}")
 
 
 def create_hub_orchestrator_agent():
@@ -823,24 +866,28 @@ def create_huf_roles():
 			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
 			"is_system_role": 1,
 			"frappe_role": "System Manager",
+			"role_weight": 100,
 		},
 		{
 			"role_name": "Huf Manager",
 			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
 			"is_system_role": 1,
 			"frappe_role": "Huf Manager",
+			"role_weight": 80,
 		},
 		{
 			"role_name": "Huf User",
 			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
 			"is_system_role": 1,
 			"frappe_role": "Huf User",
+			"role_weight": 50,
 		},
 		{
 			"role_name": "Huf Viewer",
 			"description": "Read-only access. Can view agents and own conversations only.",
 			"is_system_role": 1,
 			"frappe_role": "Huf Viewer",
+			"role_weight": 10,
 		},
 	]
 
@@ -860,6 +907,9 @@ def create_huf_roles():
 				if cap not in existing_caps:
 					doc.append("permissions", {"capability": cap})
 					changed = True
+			if doc.role_weight != meta.get("role_weight", 0):
+				doc.role_weight = meta.get("role_weight", 0)
+				changed = True
 			if changed:
 				doc.save(ignore_permissions=True)
 
