@@ -53,6 +53,9 @@ interface ModelFormData {
   input_cost_per_1m_tokens: string;
   output_cost_per_1m_tokens: string;
   cached_input_cost_per_1m_tokens: string;
+  disable_ask_user: boolean;
+  disable_rich_elements: boolean;
+  disable_document_artifacts: boolean;
 }
 
 const emptyFormData: ModelFormData = {
@@ -63,6 +66,9 @@ const emptyFormData: ModelFormData = {
   input_cost_per_1m_tokens: '',
   output_cost_per_1m_tokens: '',
   cached_input_cost_per_1m_tokens: '',
+  disable_ask_user: false,
+  disable_rich_elements: false,
+  disable_document_artifacts: false,
 };
 
 function parseModalityBadges(modalities?: string): string[] {
@@ -201,6 +207,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           details.cached_input_cost_per_1m_tokens != null
             ? String(details.cached_input_cost_per_1m_tokens)
             : '',
+        disable_ask_user: details.disable_ask_user === 1,
+        disable_rich_elements: details.disable_rich_elements === 1,
+        disable_document_artifacts: details.disable_document_artifacts === 1,
       });
     } catch (loadError) {
       toast.error('Failed to load model details');
@@ -254,6 +263,9 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       provider: formData.provider,
       modalities: formData.modalities.join(','),
       use_custom_pricing: formData.use_custom_pricing ? 1 : 0,
+      disable_ask_user: formData.disable_ask_user ? 1 : 0,
+      disable_rich_elements: formData.disable_rich_elements ? 1 : 0,
+      disable_document_artifacts: formData.disable_document_artifacts ? 1 : 0,
     };
 
     if (formData.use_custom_pricing) {
@@ -311,7 +323,6 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   return (
     <PageFrame
       title="Models"
-      subtitle="Manage AI models and their capabilities"
       filters={
         <FilterBar
           searchPlaceholder="Search models..."
@@ -332,12 +343,23 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Cpu}
-            title="No models"
-            description="Add a model to use with your AI providers."
-            action={{ label: 'Add model', onClick: handleAddModel }}
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Cpu}
+              title="No models found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Cpu}
+              title="No models"
+              description="Add a model to use with your AI providers."
+              action={{ label: 'Add model', onClick: handleAddModel }}
+            />
+          )
         }
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);
@@ -460,7 +482,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="use_custom_pricing">Enable Custom Pricing</Label>
+                    <Label htmlFor="use_custom_pricing">Enable custom pricing</Label>
                     <p className="text-xs text-steel-soft">
                       Check this to activate the custom prices below. When unchecked, LiteLLM&apos;s automatic pricing is used regardless of what is entered below.
                     </p>
@@ -477,7 +499,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 {formData.use_custom_pricing && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label htmlFor="input_cost">Input Cost per 1M Tokens (USD)</Label>
+                      <Label htmlFor="input_cost">Input cost per 1M tokens (USD)</Label>
                       <p className="text-xs text-steel-soft">
                         Cost in USD per 1 million prompt/input tokens. E.g. enter 2.50 for $2.50 per 1M tokens. Enter 0 for free/self-hosted models.
                       </p>
@@ -494,7 +516,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="output_cost">Output Cost per 1M Tokens (USD)</Label>
+                      <Label htmlFor="output_cost">Output cost per 1M tokens (USD)</Label>
                       <p className="text-xs text-steel-soft">
                         Cost in USD per 1 million completion/output tokens. E.g. enter 10.00 for $10.00 per 1M tokens.
                       </p>
@@ -529,6 +551,60 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div className="border-t pt-4 space-y-4">
+                <div>
+                  <Label>Chat Capability Overrides</Label>
+                  <p className="text-xs text-steel-soft mt-0.5">
+                    Force these chat capabilities off for every agent using this model, regardless of each agent&apos;s own setting — useful for small/local models where the extra prompt instructions or tools would waste context.
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="disable_ask_user">Disable Ask User</Label>
+                    <p className="text-xs text-steel-soft">
+                      Force off the ask_user structured-question tool for agents using this model.
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_ask_user"
+                    checked={formData.disable_ask_user}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, disable_ask_user: checked })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="disable_rich_elements">Disable Rich Elements</Label>
+                    <p className="text-xs text-steel-soft">
+                      Force off chart/HTML/SVG/mermaid/media rich-element instructions for agents using this model.
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_rich_elements"
+                    checked={formData.disable_rich_elements}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, disable_rich_elements: checked })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="disable_document_artifacts">Disable Document Artifacts</Label>
+                    <p className="text-xs text-steel-soft">
+                      Force off document-artifact authoring/export/redline for agents using this model.
+                    </p>
+                  </div>
+                  <Switch
+                    id="disable_document_artifacts"
+                    checked={formData.disable_document_artifacts}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, disable_document_artifacts: checked })
+                    }
+                  />
+                </div>
               </div>
             </div>
           )}

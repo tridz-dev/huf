@@ -2,6 +2,7 @@ import frappe
 import requests
 import hmac
 import hashlib
+import json
 import time
 from datetime import datetime, timedelta
 from huf.ai.conversation_manager import ConversationManager
@@ -27,7 +28,7 @@ def _get_settings():
     return agent_id, api_key
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def health():
     agent_id, api_key = _get_settings()
 
@@ -39,7 +40,7 @@ def health():
         },
     }
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 @rate_limit(limit=10, seconds=60)
 def get_signed_url():
     agent_id, api_key = _get_settings()
@@ -77,7 +78,7 @@ def get_signed_url():
     return {"signedUrl": data.get("signed_url")}
 
 
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 @rate_limit(limit=10, seconds=60)
 def get_agent_id():
     agent_id, _ = _get_settings()
@@ -126,7 +127,6 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
     secret = el_settings.get_password("webhook_secret")
     provider = frappe.get_doc("AI Provider", el_settings.provider)
     api_key = provider.get_password("api_key")
-    stored_agent_id = el_settings.agent_id
 
     if not secret:
         frappe.log_error("Webhook Secret missing in Elevenlabs Settings", "Huf Webhook")
@@ -143,18 +143,46 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
 
     incoming_agent_id = data.get("agent_id")
 
-    if incoming_agent_id != stored_agent_id:
-        frappe.log_error(
-            f"Agent ID mismatch. Expected {stored_agent_id}, got {incoming_agent_id}",
-            "Huf Webhook",
-        )
-        return {"status": "error", "message": "Agent ID mismatch"}
-    agent_name = frappe.db.get_value("Agent", {"provider": provider.name}, "name")
-    model = frappe.db.get_value("Agent", agent_name, "model")
+    # NOTE: `stored_agent_id` (the Elevenlabs Settings singleton) is no longer
+    # the authority here -- multiple Agents can share this AI Provider, each
+    # with its own ElevenLabs agent_id in its own voice_config. The per-Agent
+    # voice_config match below is authoritative; a singleton equality gate
+    # here would reject every webhook except the one Agent that happens to
+    # match the singleton.
+    agent_name = None
+    candidates = frappe.get_all(
+        "Agent",
+        filters={"voice_enabled": 1, "voice_engine": "elevenlabs_convai"},
+        fields=["name", "voice_config"],
+        ignore_permissions=True,
+    )
+    for candidate in candidates:
+        try:
+            voice_config = json.loads(candidate.voice_config or "{}")
+        except (TypeError, ValueError):
+            continue
+        if voice_config.get("agent_id") == incoming_agent_id:
+            agent_name = candidate.name
+            break
 
     if not agent_name:
-        frappe.log_error("No Huf Agent found with provider 'ElevenLabs'", "Huf Webhook")
+        frappe.log_error(
+            f"No Huf Agent found with voice_config.agent_id {incoming_agent_id}", "Huf Webhook"
+        )
         return {"status": "error", "message": "Internal Agent not found"}
+
+    from huf.ai.agent_access import assert_agent_access
+
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    try:
+        assert_agent_access(agent_doc, user="Guest")
+    except frappe.PermissionError:
+        frappe.log_error(
+            f"Agent '{agent_name}' does not allow guest access; rejecting ElevenLabs webhook",
+            "Huf Webhook",
+        )
+        return {"status": "error", "message": "Agent not accessible"}
+    model = frappe.db.get_value("Agent", agent_name, "model")
 
     conversation_id = data.get("conversation_id")
     transcript = data.get("transcript", [])

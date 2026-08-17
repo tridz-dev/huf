@@ -154,14 +154,13 @@ export function AgentSummaryPromptsPage() {
   });
 
   const statusOptions = [
-    { label: 'All Status', value: 'all' },
+    { label: 'All status', value: 'all' },
     { label: 'Active', value: 'active' },
     { label: 'Inactive', value: 'inactive' },
   ];
 
   return (
     <PageFrame
-      subtitle="Manage shared summary prompt templates for agents"
       filters={
         <FilterBar
           searchPlaceholder="Search summary prompts..."
@@ -186,12 +185,29 @@ export function AgentSummaryPromptsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : prompts.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No summary prompts"
-            description="Create a summary prompt template to share across agents."
-            action={{ label: 'New summary prompt', onClick: () => navigate('/summary-prompts/new') }}
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={FileText}
+              title="No summary prompts found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={FileText}
+              title="No summary prompts"
+              description="Create a summary prompt template to share across agents."
+              action={{ label: 'New summary prompt', onClick: () => navigate('/summary-prompts/new') }}
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

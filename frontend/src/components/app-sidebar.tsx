@@ -27,17 +27,11 @@ import {
  * (a list means any-of: one matching capability is enough).
  * Items with capability === null are always visible (e.g. Dashboard).
  */
-const dashboardNavItems = [
+export const dashboardNavItems = [
   {
     title: "Hub",
     url: "/",
     icon: Home,
-    capability: null,
-  },
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: ChartColumnIncreasing,
     capability: null,
   },
 ]
@@ -46,7 +40,7 @@ const dashboardNavItems = [
  * The "Use" side of the platform: end-user HUF Apps discovered from
  * installed provider apps. Build/Library/Monitor remain the manage side.
  */
-const useNavItems = [
+export const useNavItems = [
   {
     title: "Apps",
     url: "/apps",
@@ -62,7 +56,7 @@ const useNavItems = [
   },
 ]
 
-const buildNavItems = [
+export const buildNavItems = [
   {
     title: "Agents",
     url: "/agents",
@@ -97,7 +91,7 @@ const buildNavItems = [
  * prompt templates, Sources for retrieval knowledge stores backed by any
  * vector/FTS backend (RAG), Tables for structured/relational data.
  */
-const libraryNavItems = [
+export const libraryNavItems = [
   {
     title: "Prompts",
     url: "/prompts",
@@ -122,7 +116,13 @@ const libraryNavItems = [
   },
 ]
 
-const operateNavItems = [
+export const operateNavItems = [
+	{
+		title: "Dashboard",
+		url: "/dashboard",
+		icon: ChartColumnIncreasing,
+		capability: null,
+	},
 	{
 		title: "Executions",
 		url: "/executions",
@@ -143,16 +143,16 @@ const operateNavItems = [
  * primary navigation so the longer administration list never pushes the main
  * destinations off-screen.
  */
-const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; url: string; icon: LucideIcon; capability: string | string[] | null }> }> = [
+export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; url: string; icon: LucideIcon; capability: string | string[] | null }> }> = [
   {
     items: [
       { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
-      { title: "AI Providers & Models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
-      { title: "MCP Servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
+      { title: "AI providers & models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
+      { title: "MCP servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
-      { title: "Code Execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
-      { title: "SSH Connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
+      { title: "Code execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
+      { title: "SSH connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },
       {
         title: "Members",
         url: "/members",
@@ -162,6 +162,27 @@ const settingsNavGroups: Array<{ label?: string; items: Array<{ title: string; u
     ],
   },
 ]
+
+/**
+ * Filters nav items by capability against the current user's granted set.
+ * While permissions are loading, only uncapability-gated items are shown so
+ * the sidebar (or any other nav consumer, e.g. the command palette) doesn't
+ * flash/jump once capabilities resolve.
+ */
+export function filterItemsByCapability<T extends { capability: string | string[] | null }>(
+	items: T[],
+	hasCapability: (capability: string) => boolean,
+	isLoading: boolean,
+) {
+	if (isLoading) {
+		return items.filter((item) => item.capability === null)
+	}
+	return items.filter((item) => {
+		if (item.capability === null) return true
+		const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
+		return caps.some((cap) => hasCapability(cap))
+	})
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const location = useLocation()
@@ -181,17 +202,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
-	const filterItemsByCapability = <T extends { capability: string | string[] | null }>(items: T[]) => {
-		if (isLoading) {
-			return items.filter((item) => item.capability === null)
-		}
-		return items.filter((item) => {
-			if (item.capability === null) return true
-			const caps = Array.isArray(item.capability) ? item.capability : [item.capability]
-			return caps.some((cap) => hasCapability(cap))
-		})
-	}
-
 	const isPathInItems = (items: { url: string }[]) =>
 		items.some(
 			(item) =>
@@ -200,18 +210,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
 	// While permissions are loading show only uncapability-gated items so the
 	// sidebar doesn't flash/jump once capabilities resolve.
-	const dashboardItems = filterItemsByCapability(dashboardNavItems)
-	const useItems = filterItemsByCapability(useNavItems)
-	const buildItems = filterItemsByCapability(buildNavItems).map((item) =>
+	const dashboardItems = filterItemsByCapability(dashboardNavItems, hasCapability, isLoading)
+	const useItems = filterItemsByCapability(useNavItems, hasCapability, isLoading)
+	const buildItems = filterItemsByCapability(buildNavItems, hasCapability, isLoading).map((item) =>
 		item.title === "Agents" ? { ...item, count: agentCount } : item
 	)
-	const libraryItems = filterItemsByCapability(libraryNavItems)
-	const operateItems = filterItemsByCapability(operateNavItems)
+	const libraryItems = filterItemsByCapability(libraryNavItems, hasCapability, isLoading)
+	const operateItems = filterItemsByCapability(operateNavItems, hasCapability, isLoading)
   const settingsGroups = settingsNavGroups
     .map((group) => ({
       ...group,
       items: filterItemsByCapability(
         group.items as Array<(typeof group.items)[number] & { capability: string | string[] | null }>,
+        hasCapability,
+        isLoading,
       ),
     }))
     .filter((group) => group.items.length > 0)
@@ -241,7 +253,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="font-medium"
                 >
                   <ArrowLeft strokeWidth={1.6} />
-                  <span className="font-body text-[13.5px]">Settings</span>
+                  <span className="font-body text-[13.5px] group-data-[collapsible=icon]:hidden">
+                    Settings
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -252,7 +266,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ) : (
           <>
             {dashboardItems.length > 0 && <NavMain items={dashboardItems} />}
-            {useItems.length > 0 && <NavMain items={useItems} label="Use" />}
+            {useItems.length > 0 && <NavMain items={useItems} />}
             {buildItems.length > 0 && <NavMain items={buildItems} label="Build" />}
             {libraryItems.length > 0 && <NavMain items={libraryItems} label="Library" />}
             {operateItems.length > 0 && <NavMain items={operateItems} label="Monitor" />}
@@ -265,7 +279,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="Settings" onClick={() => setSettingsMode(true)}>
                 <Settings strokeWidth={1.6} />
-                <span className="font-body text-[13.5px]">Settings</span>
+                <span className="font-body text-[13.5px] group-data-[collapsible=icon]:hidden">Settings</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

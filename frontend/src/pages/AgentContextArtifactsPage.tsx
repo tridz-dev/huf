@@ -20,19 +20,19 @@ export { AgentContextArtifactsPage };
 export default AgentContextArtifactsPage;
 
 const ARTIFACT_TYPE_OPTIONS = [
-  { label: 'All Types', value: 'all' },
+  { label: 'All types', value: 'all' },
   { label: 'JSON', value: 'JSON' },
   { label: 'File', value: 'File' },
   { label: 'Text', value: 'Text' },
 ];
 
 const VISIBILITY_OPTIONS = [
-  { label: 'All Visibility', value: 'all' },
-  { label: 'User Visible', value: 'user_visible' },
-  { label: 'Model Visible', value: 'model_visible' },
-  { label: 'UI Only', value: 'ui_only' },
-  { label: 'Audit Only', value: 'audit_only' },
-  { label: 'Developer Only', value: 'developer_only' },
+  { label: 'All visibility', value: 'all' },
+  { label: 'User visible', value: 'user_visible' },
+  { label: 'Model visible', value: 'model_visible' },
+  { label: 'UI only', value: 'ui_only' },
+  { label: 'Audit only', value: 'audit_only' },
+  { label: 'Developer only', value: 'developer_only' },
 ];
 
 function AgentContextArtifactsPage() {
@@ -86,7 +86,6 @@ function AgentContextArtifactsPage() {
 
   return (
     <PageFrame
-      subtitle="Browse context artifacts stored for agent runs and conversations"
       filters={
         <FilterBar
           filters={[
@@ -118,11 +117,29 @@ function AgentContextArtifactsPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : artifacts.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No artifacts"
-            description="No context artifacts have been stored yet."
-          />
+          (filters.artifact_type && filters.artifact_type !== 'all') ||
+          (filters.visibility && filters.visibility !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={FileText}
+              title="No artifacts found"
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setFilter('artifact_type', 'all');
+                  setFilter('visibility', 'all');
+                  updateSearchParams({ type: 'all', visibility: 'all' });
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="passive"
+              icon={FileText}
+              title="No artifacts"
+              description="No context artifacts have been stored yet."
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

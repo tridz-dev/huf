@@ -226,7 +226,7 @@ export function KnowledgeInputsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogScrollContent className="max-w-2xl">
         <DialogScrollHeader>
-          <DialogTitle>Knowledge Inputs</DialogTitle>
+          <DialogTitle>Knowledge inputs</DialogTitle>
           <DialogDescription>
             Manage content inputs for this knowledge source
           </DialogDescription>
@@ -243,14 +243,14 @@ export function KnowledgeInputsModal({
               onClick={() => setShowCreate(!showCreate)}
             >
               <Plus className="w-4 h-4 mr-2" />
-              New Input
+              New input
             </Button>
           </div>
 
           {showCreate && (
-            <div className="rounded-none border p-4 space-y-4">
+            <div className="rounded-lg border p-4 space-y-4">
               <div className="space-y-2">
-                <Label>Input Type</Label>
+                <Label>Input type</Label>
                 <Select value={inputType} onValueChange={(v) => setInputType(v as KnowledgeInputType)}>
                   <SelectTrigger>
                     <SelectValue />
@@ -301,7 +301,7 @@ export function KnowledgeInputsModal({
 
               {inputType === 'Text' && (
                 <div className="space-y-2">
-                  <Label>Text Content</Label>
+                  <Label>Text content</Label>
                   <Textarea
                     placeholder="Paste text content here..."
                     className="min-h-[120px] resize-y"
@@ -353,7 +353,7 @@ export function KnowledgeInputsModal({
                 return (
                   <div
                     key={input.name}
-                    className="flex items-center gap-3 rounded-none border p-3"
+                    className="flex items-center gap-3 rounded-md border p-3"
                   >
                     <Icon className="w-4 h-4 text-steel-soft flex-shrink-0" />
                     <div className="flex-1 min-w-0">
@@ -361,7 +361,7 @@ export function KnowledgeInputsModal({
                         {getInputPreview(input)}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={getInputStatusVariant(input.status)} className="text-xs">
+                        <Badge variant={getInputStatusVariant(input.status)} size="sm">
                           {input.status}
                         </Badge>
                         {input.chunks_created > 0 && (

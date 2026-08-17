@@ -96,7 +96,7 @@ export type KnowledgeModeOption = (typeof knowledgeModes)[number]['value'];
  * Includes an "All" option plus source-level statuses and disabled.
  */
 export const knowledgeSourceFilterStatuses = [
-	{ label: 'All Status', value: 'all' },
+	{ label: 'All status', value: 'all' },
 	{ label: 'Ready', value: 'ready' },
 	{ label: 'Pending', value: 'pending' },
 	{ label: 'Indexing', value: 'indexing' },

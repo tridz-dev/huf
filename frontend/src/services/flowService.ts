@@ -99,7 +99,7 @@ class FlowService {
           type: 'trigger.webhook',
           config: {},
           _position: { x: 250, y: 100 },
-          _label: 'Select Trigger',
+          _label: 'Select trigger',
           _icon: 'Webhook',
         },
       ],
@@ -122,7 +122,7 @@ class FlowService {
           type: 'trigger',
           position: { x: 250, y: 100 },
           data: {
-            label: 'Select Trigger',
+            label: 'Select trigger',
             nodeType: 'trigger',
             description: 'Empty Trigger',
             configured: false,

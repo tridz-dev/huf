@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
 } from '../components/ui/alert-dialog';
 import { PageFrame } from '@/layouts/PageFrame';
+import { Button } from '@/components/ui/button';
 import { FilterBar, GridView, ItemCard, LoadMoreButton, EmptyState } from '../components/dashboard';
 import { ExperimentalBadge } from '../components/common/ExperimentalBadge';
 import { useInfiniteScroll } from '../hooks/useInfiniteScroll';
@@ -21,7 +22,7 @@ import { formatTimeAgo } from '../utils/time';
 import type { SkillDoc } from '../types/skill.types';
 
 const skillStatuses = [
-  { label: 'All Statuses', value: 'all' },
+  { label: 'All statuses', value: 'all' },
   { label: 'Active', value: 'Active' },
   { label: 'Draft', value: 'Draft' },
   { label: 'Error', value: 'Error' },
@@ -29,7 +30,7 @@ const skillStatuses = [
 ];
 
 const sourceTypes = [
-  { label: 'All Sources', value: 'all' },
+  { label: 'All sources', value: 'all' },
   { label: 'Local', value: 'Local' },
   { label: 'Git', value: 'Git' },
   { label: 'Common Destination', value: 'Common Destination' },
@@ -136,7 +137,7 @@ export function SkillsPage() {
     <PageFrame
       title="Skills"
       badge={<ExperimentalBadge />}
-      subtitle="Manage reusable skill bundles for your agents"
+      actions={<Button onClick={() => navigate('/skills/new')}>New skill</Button>}
       filters={
         <FilterBar
           searchPlaceholder="Search skills..."
@@ -172,12 +173,32 @@ export function SkillsPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Sparkles}
-            title="No skills"
-            description="Create a skill to get started."
-            action={{ label: 'New skill', onClick: () => navigate('/skills/new') }}
-          />
+          search ||
+          (filters.status && filters.status !== 'all') ||
+          (filters.source_type && filters.source_type !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={Sparkles}
+              title="No skills found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                  setFilter('source_type', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Sparkles}
+              title="No skills"
+              description="Create a skill to get started."
+              action={{ label: 'New skill', onClick: () => navigate('/skills/new') }}
+            />
+          )
         }
         renderItem={(skill) => (
           <ItemCard
@@ -209,7 +230,7 @@ export function SkillsPage() {
               },
               {
                 icon: Trash2,
-                label: 'Delete Skill',
+                label: 'Delete skill',
                 variant: 'destructive',
                 onClick: () => setDeleteSkillTarget(skill),
               },

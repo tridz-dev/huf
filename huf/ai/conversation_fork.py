@@ -34,6 +34,7 @@ def fork_conversation_impl(
     conversation_id: str | None = None,
     mode: str | None = None,
     title: str | None = None,
+    project: str | None = None,
 ) -> dict[str, Any]:
     """Create a new Agent Conversation forked from an existing one.
 
@@ -41,6 +42,8 @@ def fork_conversation_impl(
         conversation_id: Name of the source Agent Conversation.
         mode: One of ``full_history``, ``summary``, ``last_output``.
         title: Optional title for the new conversation.
+        project: Project to set on the forked conversation. Defaults to the
+            source conversation's project when not explicitly provided.
 
     Returns:
         dict with ``success``, ``conversation_id``, and ``title``.
@@ -74,6 +77,11 @@ def fork_conversation_impl(
         frappe.throw(_("Source conversation has no agent"))
 
     agent_doc = frappe.get_doc("Agent", agent_name)
+
+    from huf.ai.agent_access import assert_agent_access
+
+    assert_agent_access(agent_doc, user=frappe.session.user)
+
     provider = agent_doc.provider
     model = source.model or agent_doc.model
 
@@ -84,7 +92,8 @@ def fork_conversation_impl(
     )
 
     target_title = _default_fork_title(title, source.title)
-    target = cm.create_new_conversation(title=target_title)
+    target_project = project if project is not None else source.project
+    target = cm.create_new_conversation(title=target_title, project=target_project)
 
     try:
         if mode == "full_history":

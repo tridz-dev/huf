@@ -40,20 +40,20 @@ export function IntegrationServiceHeader({
       <div className="flex-1 space-y-2">
         <div className="flex items-center gap-3 flex-wrap">
           {isNew ? (
-            <h1 className="text-2xl font-bold">
-              New Integration Service
+            <h1 className="font-display text-title text-ink">
+              New integration service
             </h1>
           ) : (
             <InlineEditName
               value={title}
               onChange={onTitleChange}
-              placeholder="Integration Service Name"
+              placeholder="e.g. WhatsApp integration"
             />
           )}
           {!isNew && isBuiltin && <Badge variant="outline">Built-in</Badge>}
           <Badge variant="outline">
             <Link2 className="w-3 h-3 mr-1" />
-            Service Catalog
+            Service catalog
           </Badge>
         </div>
       </div>

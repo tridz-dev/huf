@@ -27,7 +27,7 @@ export function SkillsHeaderActions({ onImportSuccess }: SkillsHeaderActionsProp
         </Button>
         <Button size="sm" onClick={() => navigate('/skills/new')}>
           <Plus className="w-4 h-4 mr-2" />
-          New Skill
+          New skill
         </Button>
       </div>
       <SkillImportModal open={importOpen} onOpenChange={setImportOpen} onSuccess={onImportSuccess} />

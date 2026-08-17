@@ -1,8 +1,8 @@
 import type { FlowNodeData } from '../../types/flow.types';
 
-export const NODE_CARD_BASE = 'w-64 p-4 transition-colors duration-200 bg-panel border-line';
+export const NODE_CARD_BASE = 'w-[236px] p-4 transition-colors duration-200 bg-panel border-line';
 export const NODE_HANDLE = 'w-3 h-3 !bg-ink border-2 border-panel';
-export const NODE_ICON_WELL = 'w-10 h-10 rounded-none bg-paper-deep flex items-center justify-center';
+export const NODE_ICON_WELL = 'w-7 h-7 rounded-lg bg-paper-deep flex items-center justify-center';
 
 export function getExecutionStatusClasses(
   status: FlowNodeData['status'] | undefined,
@@ -22,10 +22,10 @@ export function getExecutionStatusClasses(
     return 'border-signal ring-1 ring-signal';
   }
   if (selected) {
-    return 'ring-2 ring-signal border-signal';
+    return 'border-[1.5px] border-signal shadow-sm';
   }
   if (options?.unconfigured) {
     return 'border-signal';
   }
-  return '';
+  return 'border-line';
 }

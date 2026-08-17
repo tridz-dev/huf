@@ -15,7 +15,8 @@ export interface ArtifactPaneTarget {
 }
 
 const WIDTH_STORAGE_KEY = 'huf-artifact-pane-width';
-const DEFAULT_WIDTH_VW = 50;
+// 42vw per design spec section 28.2.
+const DEFAULT_WIDTH_VW = 42;
 const MIN_WIDTH_VW = 30;
 const MAX_WIDTH_VW = 75;
 

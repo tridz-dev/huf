@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { DataTableFieldType } from '@/types/dataTable.types';
 
@@ -60,9 +61,9 @@ const GROUPS: FieldTypeGroup[] = [
 	{
 		label: 'Text',
 		types: [
-			{ type: 'Data', label: 'Short Text', icon: 'Type' },
-			{ type: 'Small Text', label: 'Medium Text', icon: 'FileText' },
-			{ type: 'Text', label: 'Long Text', icon: 'AlignLeft' },
+			{ type: 'Data', label: 'Short text', icon: 'Type' },
+			{ type: 'Small Text', label: 'Medium text', icon: 'FileText' },
+			{ type: 'Text', label: 'Long text', icon: 'AlignLeft' },
 		],
 	},
 	{
@@ -75,10 +76,10 @@ const GROUPS: FieldTypeGroup[] = [
 		],
 	},
 	{
-		label: 'Date & Time',
+		label: 'Date & time',
 		types: [
 			{ type: 'Date', label: 'Date', icon: 'Calendar' },
-			{ type: 'Datetime', label: 'Date & Time', icon: 'CalendarClock' },
+			{ type: 'Datetime', label: 'Date & time', icon: 'CalendarClock' },
 			{ type: 'Time', label: 'Time', icon: 'Clock' },
 			{ type: 'Duration', label: 'Duration', icon: 'Timer' },
 		],
@@ -122,25 +123,41 @@ const GROUPS: FieldTypeGroup[] = [
 interface FieldTypeSelectorProps {
 	onSelect: (type: DataTableFieldType) => void;
 	trigger: React.ReactNode;
+	value?: DataTableFieldType;
 }
 
-export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps) {
+export function FieldTypeSelector({ onSelect, trigger, value }: FieldTypeSelectorProps) {
 	const [open, setOpen] = useState(false);
+	const [query, setQuery] = useState('');
 
 	const handleSelect = (type: DataTableFieldType) => {
 		setOpen(false);
 		onSelect(type);
 	};
 
+	const normalizedQuery = query.trim().toLowerCase();
+	const filteredGroups = normalizedQuery
+		? GROUPS.map((group) => ({
+				...group,
+				types: group.types.filter((ft) => ft.label.toLowerCase().includes(normalizedQuery)),
+			})).filter((group) => group.types.length > 0)
+		: GROUPS;
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>{trigger}</PopoverTrigger>
-			<PopoverContent className="w-80 p-0 rounded-none border border-line bg-panel" align="center" side="top" collisionPadding={16}>
-				<div className="sticky top-0 z-10 bg-panel border-b border-line p-3">
-					<h4 className="font-medium text-sm">Choose Field Type</h4>
+			<PopoverContent className="w-80 p-0 rounded-lg border border-line bg-panel" align="center" side="top" collisionPadding={16}>
+				<div className="sticky top-0 z-10 bg-panel border-b border-line p-3 space-y-2">
+					<h4 className="font-medium text-sm">Choose field type</h4>
+					<Input
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						placeholder="Search field types"
+						className="h-8 text-xs"
+					/>
 				</div>
 				<div className="p-3 max-h-96 overflow-y-auto space-y-4">
-					{GROUPS.map((group) => (
+					{filteredGroups.map((group) => (
 						<div key={group.label}>
 							<p className="text-xs font-medium text-steel mb-2">
 								{group.label}
@@ -148,15 +165,18 @@ export function FieldTypeSelector({ onSelect, trigger }: FieldTypeSelectorProps)
 							<div className="grid grid-cols-2 gap-1">
 								{group.types.map((ft) => {
 									const Icon = ICON_MAP[ft.icon] || Type;
+									const isSelected = ft.type === value;
 									return (
 										<Button
 											key={ft.type}
 											variant="ghost"
 											size="sm"
-											className="justify-start gap-2 h-8 text-xs font-normal rounded-none"
+											className={`justify-start gap-2 h-[34px] text-xs font-normal rounded ${
+												isSelected ? 'border-[1.5px] border-signal bg-signal/[.06]' : 'border-[1.5px] border-transparent'
+											}`}
 											onClick={() => handleSelect(ft.type)}
 										>
-											<Icon className="w-3.5 h-3.5 text-steel shrink-0" />
+											<Icon className="w-[15px] h-[15px] text-steel shrink-0" />
 											{ft.label}
 										</Button>
 									);

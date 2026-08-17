@@ -16,14 +16,14 @@ export const FIELD_TYPE_GROUPS: FieldTypeGroup[] = [
 	{
 		label: 'Text',
 		types: [
-			{ type: 'Data', label: 'Short Text', icon: 'Type', description: 'Single line text' },
+			{ type: 'Data', label: 'Short text', icon: 'Type', description: 'Single line text' },
 			{
 				type: 'Small Text',
-				label: 'Medium Text',
+				label: 'Medium text',
 				icon: 'FileText',
 				description: 'Multi-line text',
 			},
-			{ type: 'Text', label: 'Long Text', icon: 'AlignLeft', description: 'Large text area' },
+			{ type: 'Text', label: 'Long text', icon: 'AlignLeft', description: 'Large text area' },
 		],
 	},
 	{
@@ -41,12 +41,12 @@ export const FIELD_TYPE_GROUPS: FieldTypeGroup[] = [
 		],
 	},
 	{
-		label: 'Date & Time',
+		label: 'Date & time',
 		types: [
 			{ type: 'Date', label: 'Date', icon: 'Calendar', description: 'Date picker' },
 			{
 				type: 'Datetime',
-				label: 'Date & Time',
+				label: 'Date & time',
 				icon: 'CalendarClock',
 				description: 'Date and time',
 			},

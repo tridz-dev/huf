@@ -63,7 +63,7 @@ export function CredentialsSchemaTab({ form }: CredentialsSchemaTabProps) {
 
       <Button type="button" variant="outline" onClick={handleAdd}>
         <Plus className="w-4 h-4 mr-2" />
-        Add Credential Field
+        Add credential field
       </Button>
 
       <FormMessage>{form.formState.errors.required_credentials?.message}</FormMessage>

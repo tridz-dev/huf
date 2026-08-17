@@ -26,6 +26,8 @@ import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
 import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
 import { IntegrationSettingsListingPage } from './IntegrationSettingsListingPage';
@@ -199,22 +201,23 @@ export default function GatewaysPage() {
       {(
         [
           { key: 'gateways' as const, label: 'Gateways' },
-          { key: 'credentials' as const, label: 'Channel Credentials' },
+          { key: 'credentials' as const, label: 'Channel credentials' },
         ]
       ).map((tab) => (
-        <button
+        <Button
           key={tab.key}
           type="button"
+          variant="ghost"
           onClick={() => setActiveTab(tab.key)}
           className={cn(
-            'px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
+            'h-auto rounded-none px-3 pb-2.5 text-sm font-medium border-b-2 -mb-px transition-colors hover:bg-transparent',
             activeTab === tab.key
               ? 'border-primary text-ink'
               : 'border-transparent text-steel hover:text-ink'
           )}
         >
           {tab.label}
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -236,7 +239,7 @@ export default function GatewaysPage() {
   }
 
   return (
-    <PageFrame subtitle="Let people reach Huf from WhatsApp, Messenger, Instagram, Telegram, and Slack — safely with clear AI routing.">
+    <PageFrame title="Gateways">
       {tabBar}
 
       {/* Overview Card */}
@@ -246,14 +249,14 @@ export default function GatewaysPage() {
             <Link2 className="h-6 w-6" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-lg font-semibold text-ink">Channel Gateways & Messaging Ingress</h1>
+            <h2 className="font-display text-base font-semibold text-ink">Channel gateways &amp; messaging ingress</h2>
             <p className="max-w-3xl text-sm text-steel leading-relaxed">
               Gateways serve as safe front doors from external messaging channels (WhatsApp, Messenger,
               Instagram, Telegram, Slack, Email) directly into Huf. Incoming messages are verified, checked
               against security admission policies, and routed to your designated Agents or Flows.
             </p>
             <div className="flex items-center gap-2 text-xs font-medium text-steel">
-              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <ShieldCheck className="h-4 w-4 text-good" />
               Live webhooks automatically authenticate signatures and enforce allowlists before executing AI tasks.
             </div>
           </div>
@@ -286,9 +289,9 @@ export default function GatewaysPage() {
           onSubmit={handleCreateGateway}
         >
           <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Gateway Name
-            <input
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            Gateway name
+            <Input
+              className="h-10 text-sm"
               value={gatewayName}
               onChange={(e) => setGatewayName(e.target.value)}
               placeholder="e.g. Support Inbox on WhatsApp"
@@ -297,20 +300,19 @@ export default function GatewaysPage() {
           </label>
 
           <label className="grid gap-1.5 text-xs font-medium text-ink">
-            Channel Provider
-            <div className="relative">
-              <select
-                className="h-10 w-full rounded-lg border border-input bg-background pl-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                value={provider}
-                onChange={(e) => setProvider(e.target.value as GatewayProvider)}
-              >
+            Channel provider
+            <Select value={provider} onValueChange={(v) => setProvider(v as GatewayProvider)}>
+              <SelectTrigger className="h-10 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
                 {uiProviders.map((p) => (
-                  <option key={p} value={p}>
+                  <SelectItem key={p} value={p}>
                     {p}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-            </div>
+              </SelectContent>
+            </Select>
           </label>
 
           <Button type="submit" disabled={creating} className="h-10">
@@ -328,6 +330,7 @@ export default function GatewaysPage() {
         columns={{ sm: 1, md: 2, lg: 3 }}
         emptyState={
           <EmptyState
+            variant="create"
             icon={Network}
             title="No gateways"
             description="Connect WhatsApp, Messenger, Instagram, Telegram, or Slack to let people message your agents."
@@ -357,13 +360,13 @@ export default function GatewaysPage() {
               }}
               metadata={[
                 { label: 'Channel', value: gateway.provider },
-                { label: 'Access Policy', value: gateway.direct_policy || 'Allow list' },
-                { label: 'Route Target', value: target || 'Unassigned' },
+                { label: 'Access policy', value: gateway.direct_policy || 'Allow list' },
+                { label: 'Route target', value: target || 'Unassigned' },
               ]}
               actions={[
                 {
                   icon: Settings,
-                  label: 'Configure Gateway',
+                  label: 'Configure gateway',
                   onClick: () => setEditingGateway(gateway),
                 },
               ]}
@@ -375,7 +378,7 @@ export default function GatewaysPage() {
 
       {/* Native In-App Gateway Settings Modal / Drawer */}
       {editingGateway && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-xl rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line pb-4">
@@ -388,12 +391,14 @@ export default function GatewaysPage() {
                   <p className="text-xs text-steel">{providerNames[editingGateway.provider] || editingGateway.provider}</p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setEditingGateway(null)}
-                className="rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink transition-colors"
+                className="h-auto w-auto rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink transition-colors"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
 
             {/* Form Fields */}
@@ -413,15 +418,15 @@ export default function GatewaysPage() {
                       setEditingGateway({ ...editingGateway, is_enabled: e.target.checked ? 1 : 0 })
                     }
                   />
-                  <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                  <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-panel after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-panel after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-good"></div>
                 </label>
               </div>
 
               {/* Run as user */}
               <label className="grid gap-1 text-xs font-medium text-ink">
                 Run as user
-                <input
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                <Input
+                  className="h-9 text-xs"
                   value={editingGateway.execution_user || ''}
                   onChange={(e) =>
                     setEditingGateway({ ...editingGateway, execution_user: e.target.value })
@@ -440,32 +445,40 @@ export default function GatewaysPage() {
                 const matches = integrationSettings.filter((s) => s.service === requiredService);
                 return (
                   <label className="grid gap-1 text-xs font-medium text-ink">
-                    Connected Integration
+                    Connected integration
                     {matches.length > 0 ? (
-                      <select
-                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                        value={editingGateway.integration_settings || ''}
-                        onChange={(e) =>
-                          setEditingGateway({ ...editingGateway, integration_settings: e.target.value })
+                      <Select
+                        value={editingGateway.integration_settings || '__none'}
+                        onValueChange={(v) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            integration_settings: v === '__none' ? '' : v,
+                          })
                         }
                       >
-                        <option value="">Choose credentials…</option>
-                        {matches.map((s) => (
-                          <option key={s.name} value={s.name}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Choose credentials…</SelectItem>
+                          {matches.map((s) => (
+                            <SelectItem key={s.name} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     ) : (
                       <div className="rounded-lg border border-dashed border-line bg-paper p-3 text-[11px] text-steel">
                         No {editingGateway.provider} credentials connected yet.{' '}
-                        <button
+                        <Button
                           type="button"
-                          className="font-medium text-primary hover:underline"
+                          variant="link"
+                          className="h-auto p-0 font-medium text-primary hover:underline"
                           onClick={() => setActiveTab('credentials')}
                         >
-                          Add one in Channel Credentials
-                        </button>
+                          Add one in Channel credentials
+                        </Button>
                         .
                       </div>
                     )}
@@ -479,8 +492,8 @@ export default function GatewaysPage() {
               {/* Description */}
               <label className="grid gap-1 text-xs font-medium text-ink">
                 Description
-                <input
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                <Input
+                  className="h-9 text-xs"
                   value={editingGateway.description || ''}
                   onChange={(e) => setEditingGateway({ ...editingGateway, description: e.target.value })}
                   placeholder="e.g. Primary WhatsApp channel for sales inquiries"
@@ -492,60 +505,78 @@ export default function GatewaysPage() {
                 <p className="text-xs font-semibold text-ink">AI Routing Target</p>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="grid gap-1 text-xs font-medium text-ink">
-                    Target Type
-                    <select
-                      className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                      value={editingGateway.default_target_type || ''}
-                      onChange={(e) =>
+                    Target type
+                    <Select
+                      value={editingGateway.default_target_type || '__none'}
+                      onValueChange={(v) =>
                         setEditingGateway({
                           ...editingGateway,
-                          default_target_type: e.target.value as any,
+                          default_target_type: (v === '__none' ? '' : v) as any,
                         })
                       }
                     >
-                      <option value="">None (Disabled)</option>
-                      <option value="Agent">Agent</option>
-                      <option value="Flow">Flow</option>
-                    </select>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">None (disabled)</SelectItem>
+                        <SelectItem value="Agent">Agent</SelectItem>
+                        <SelectItem value="Flow">Flow</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </label>
 
                   {editingGateway.default_target_type === 'Agent' && (
                     <label className="grid gap-1 text-xs font-medium text-ink">
-                      Select Agent
-                      <select
-                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                        value={editingGateway.default_agent || ''}
-                        onChange={(e) =>
-                          setEditingGateway({ ...editingGateway, default_agent: e.target.value })
+                      Select agent
+                      <Select
+                        value={editingGateway.default_agent || '__none'}
+                        onValueChange={(v) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            default_agent: v === '__none' ? '' : v,
+                          })
                         }
                       >
-                        <option value="">Choose Agent…</option>
-                        {agents.map((a) => (
-                          <option key={a.name} value={a.name}>
-                            {a.agent_name}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Choose agent…</SelectItem>
+                          {agents.map((a) => (
+                            <SelectItem key={a.name} value={a.name}>
+                              {a.agent_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
                   )}
 
                   {editingGateway.default_target_type === 'Flow' && (
                     <label className="grid gap-1 text-xs font-medium text-ink">
-                      Select Flow
-                      <select
-                        className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs"
-                        value={editingGateway.default_flow || ''}
-                        onChange={(e) =>
-                          setEditingGateway({ ...editingGateway, default_flow: e.target.value })
+                      Select flow
+                      <Select
+                        value={editingGateway.default_flow || '__none'}
+                        onValueChange={(v) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            default_flow: v === '__none' ? '' : v,
+                          })
                         }
                       >
-                        <option value="">Choose Flow…</option>
-                        {flows.map((f) => (
-                          <option key={f.name} value={f.name}>
-                            {f.title}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Choose flow…</SelectItem>
+                          {flows.map((f) => (
+                            <SelectItem key={f.name} value={f.name}>
+                              {f.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </label>
                   )}
                 </div>
@@ -553,22 +584,25 @@ export default function GatewaysPage() {
 
               {/* Direct Access Policy */}
               <label className="grid gap-1 text-xs font-medium text-ink">
-                Direct Message Security Policy
-                <select
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-xs"
+                Direct message security policy
+                <Select
                   value={editingGateway.direct_policy || 'Allow list'}
-                  onChange={(e) =>
+                  onValueChange={(v) =>
                     setEditingGateway({
                       ...editingGateway,
-                      direct_policy: e.target.value as GatewayPolicy,
+                      direct_policy: v as GatewayPolicy,
                     })
                   }
                 >
-                  <option value="Open">Open — Allow anyone to message</option>
-                  <option value="Allow list">Allow list — Require approved Gateway Access Entry</option>
-                  <option value="Pairing">Pairing — Require pairing request approval</option>
-                  <option value="Disabled">Disabled — Reject direct messages</option>
-                </select>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Allow list">Allow list — Require approved Gateway Access Entry</SelectItem>
+                    <SelectItem value="Pairing">Pairing — require pairing request approval</SelectItem>
+                    <SelectItem value="Disabled">Disabled — reject direct messages</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
 
               {/* Webhook Configuration Section */}
@@ -578,9 +612,9 @@ export default function GatewaysPage() {
                   Copy and paste this Webhook URL into Meta Developer Console or your channel configuration:
                 </p>
                 <div className="flex items-center gap-2">
-                  <input
+                  <Input
                     readOnly
-                    className="h-8 flex-1 rounded-md border border-input bg-background px-2.5 font-mono text-[11px] text-steel selection:bg-primary/20"
+                    className="h-8 flex-1 font-mono text-[11px] text-steel selection:bg-primary/20"
                     value={getWebhookUrl(editingGateway.name)}
                   />
                   <Button
@@ -591,7 +625,7 @@ export default function GatewaysPage() {
                   >
                     {copiedWebhook ? (
                       <>
-                        <Check className="mr-1 h-3.5 w-3.5 text-emerald-500" /> Copied
+                        <Check className="mr-1 h-3.5 w-3.5 text-good" /> Copied
                       </>
                     ) : (
                       <>
