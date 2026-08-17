@@ -82,7 +82,7 @@ class TestTelegramWebhookGatewayAdmission(IntegrationTestCase):
 			process_telegram_update("bot-settings", UPDATE)
 
 		mock_run_sync.assert_not_called()
-		mock_send.assert_called_once()
+		mock_send.assert_not_called()
 
 	def test_no_gateway_falls_back_to_legacy_agent_run(self):
 		settings_doc = self._settings_doc()

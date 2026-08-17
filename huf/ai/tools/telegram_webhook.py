@@ -170,13 +170,7 @@ def process_telegram_update(settings_name: str, update: dict):
                 # the integration being off, not as "no governance configured".
                 logger.warning(
                     f"Telegram Gateway for Integration Settings {settings_name} exists but is "
-                    "disabled; refusing to fall back to ungoverned legacy execution."
-                )
-                _send_telegram_message(
-                    settings,
-                    chat_id,
-                    "This bot is temporarily unavailable. Please try again later.",
-                    reply_to_message_id=message_id,
+                    "disabled; refusing to fall back to ungoverned legacy execution. No reply sent to sender."
                 )
                 return
 
