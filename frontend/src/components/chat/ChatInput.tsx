@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { ArrowUp, Plus, Square } from "lucide-react";
+import { ArrowUp, Mic, MicOff, Phone, PhoneOff, Plus, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   sendMessage,
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
+import { useVoiceCall } from '@/hooks/useVoiceCall';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -106,6 +107,32 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         status: 'uploading' | 'ready' | 'error';
         error?: string;
     } | null>(null);
+
+    // "Talk to this agent" voice call. The Agent object available here is
+    // just `agentName` (no `voice_enabled`/`voice_engine` — plumbing that in
+    // would require changes to how agent data flows into ChatInput), so the
+    // call button is always shown and relies on `start_session` throwing a
+    // clear backend error for agents without a voice engine configured,
+    // surfaced below via the same toast convention as the rest of this file.
+    const voiceCall = useVoiceCall(agentName, chatId ?? undefined);
+    const voiceCallErrorRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (voiceCall.status === 'error' && voiceCall.error && voiceCall.error !== voiceCallErrorRef.current) {
+            voiceCallErrorRef.current = voiceCall.error;
+            toast.error(voiceCall.error);
+        }
+        if (voiceCall.status !== 'error') {
+            voiceCallErrorRef.current = null;
+        }
+    }, [voiceCall.status, voiceCall.error]);
+
+    const handleStartVoiceCall = useCallback(() => {
+        void voiceCall.start();
+    }, [voiceCall]);
+
+    const handleEndVoiceCall = useCallback(() => {
+        void voiceCall.stop();
+    }, [voiceCall]);
 
     const clearRunTimeout = useCallback(() => {
         if (runTimeoutRef.current) {
@@ -913,6 +940,67 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         return null;
     }
 
+    if (voiceCall.status !== 'idle') {
+        const statusLabel =
+            voiceCall.status === 'connecting'
+                ? 'Connecting…'
+                : voiceCall.status === 'live'
+                    ? (voiceCall.isMuted ? 'Muted' : 'Live')
+                    : voiceCall.status === 'error'
+                        ? (voiceCall.error || 'Call error')
+                        : 'Call ended';
+
+        return (
+            <div className="flex-none px-[26px] pb-4">
+                <div className="flex items-center gap-2.5 rounded-chat-bubble border border-input bg-panel px-[13px] py-[11px]">
+                    <span
+                        className={cn(
+                            "size-2 shrink-0 rounded-full",
+                            voiceCall.status === 'live' && !voiceCall.isMuted && "bg-destructive animate-pulse",
+                            voiceCall.status === 'live' && voiceCall.isMuted && "bg-steel-soft",
+                            voiceCall.status === 'connecting' && "bg-steel-soft animate-pulse",
+                            (voiceCall.status === 'error' || voiceCall.status === 'ended') && "bg-steel-soft"
+                        )}
+                    />
+                    <span className="flex-1 text-[13px] text-ui-text truncate">{statusLabel}</span>
+                    {voiceCall.status === 'live' && (
+                        <button
+                            type="button"
+                            onClick={voiceCall.isMuted ? voiceCall.unmute : voiceCall.mute}
+                            className="shrink-0 text-steel hover:text-ink"
+                            aria-label={voiceCall.isMuted ? "Unmute microphone" : "Mute microphone"}
+                            title={voiceCall.isMuted ? "Unmute microphone" : "Mute microphone"}
+                        >
+                            {voiceCall.isMuted ? <MicOff className="size-[17px]" /> : <Mic className="size-[17px]" />}
+                        </button>
+                    )}
+                    {(voiceCall.status === 'live' || voiceCall.status === 'connecting') && (
+                        <Button
+                            type="button"
+                            onClick={handleEndVoiceCall}
+                            className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                            aria-label="End call"
+                            title="End call"
+                        >
+                            <PhoneOff className="size-3.5" />
+                        </Button>
+                    )}
+                    {(voiceCall.status === 'error' || voiceCall.status === 'ended') && (
+                        <Button
+                            type="button"
+                            onClick={handleStartVoiceCall}
+                            className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                            aria-label="Talk to this agent"
+                            title="Talk to this agent"
+                        >
+                            <Phone className="size-3.5" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex-none px-[26px] pb-4">
             <form onSubmit={handleSubmit}>
@@ -993,6 +1081,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     // control reads as the bare glyph spec 28.1 draws.
                                     className="shrink-0"
                                 />
+                            )}
+                            {!message.trim() && !pendingFile && voiceCall.status === 'idle' && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleStartVoiceCall}
+                                    disabled={isSubmitting}
+                                    className="shrink-0 bg-transparent text-steel hover:bg-transparent hover:text-ink"
+                                    aria-label="Talk to this agent"
+                                    title="Talk to this agent"
+                                >
+                                    <Phone className="size-[17px]" />
+                                </Button>
                             )}
                             {isStreamingResponse ? (
                                 <Button
