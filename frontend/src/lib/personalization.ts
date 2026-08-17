@@ -22,8 +22,13 @@ const THEME_MODES: Record<HufTheme, HufColorScheme> = {
 };
 
 function applyEffectiveTheme() {
-  const theme = getEffectiveTheme();
-  document.documentElement.setAttribute('data-theme', theme);
+  // No-op by design: the app now ships a single "apple-quiet" UI direction
+  // defined directly in src/index.css's :root, not a runtime-selected
+  // theme. Setting a data-theme attribute here would re-activate the old
+  // [data-theme="winter/midnight/summer/morning"] CSS blocks (still present
+  // as dead code, not a priority to remove) and override the new design.
+  // getTheme/setTheme/getColorScheme/etc below are kept so any UI that
+  // still calls them doesn't throw, but they no longer affect rendering.
 }
 
 export function getTheme(): HufTheme {

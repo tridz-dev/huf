@@ -15,6 +15,8 @@ export interface AgentConversationDoc {
   model?: string;
   last_activity?: string;
   modified?: string;
+  /** HUF Project this conversation belongs to, if any. */
+  project?: string;
 }
 
 /**
@@ -33,6 +35,8 @@ export interface ChatListItem {
    * UI-friendly label (e.g. "2m ago"). Populated by UI hooks.
    */
   timestampLabel?: string;
+  /** HUF Project this conversation belongs to, if any. */
+  project?: string;
 }
 
 type ConversationFilter = [keyof AgentConversationDoc | string, string, unknown];
@@ -96,6 +100,7 @@ function mapChatListItem(doc: AgentConversationDoc): ChatListItem {
     title: doc.title || 'Untitled Chat',
     agent: doc.agent || '',
     timestamp: doc.last_activity || doc.modified || undefined,
+    project: doc.project || undefined,
   };
 }
 
@@ -148,7 +153,7 @@ export async function getConversations(
       (search ? [['title', 'like', `%${search}%`]] : undefined);
 
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
       limit_start: start,
@@ -254,7 +259,7 @@ export async function getConversationsByAgent(
 
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
       filters: [
         ['agent', '=', agentName],
         ['channel', '=', 'Chat'],
@@ -287,7 +292,7 @@ export async function getAllConversationsForRecents(
 ): Promise<ChatListItem[]> {
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified'],
+      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
       filters: [['channel', '=', 'Chat']],
       orderBy: { field: 'modified', order: 'desc' },
       limit,
@@ -503,6 +508,26 @@ export async function prepareMessageWithFile(
 }
 
 /**
+ * A backend-initiated client-side ("frontend") tool call as it appears in
+ * the `client_side_tool_calls` array on the send-message / new-conversation
+ * HTTP response. Mirrors the same call the backend may also announce via the
+ * `frontend_tool_call_initiated` socket event -- see
+ * doc/domain/queue-first-execution-model.md design rule 4 (pending-state UI
+ * must reconcile via polling/response data, not rely on the socket alone).
+ */
+export interface ClientToolCallPayload {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    /** JSON-encoded arguments; must be parsed by the caller. */
+    arguments: string;
+  };
+  /** Agent Tool Call docname -- present alongside `id` for some call sites. */
+  tool_call_ref?: string;
+}
+
+/**
  * Start a new conversation
  */
 export interface NewConversationParams {
@@ -512,6 +537,8 @@ export interface NewConversationParams {
   skip_user_message?: boolean;
   files?: PrepareMessageWithFileFile[];
   modelOverride?: string;
+  /** HUF Project to associate the newly created conversation with, if any. */
+  project?: string;
 }
 
 export interface NewConversationResponse {
@@ -531,6 +558,7 @@ export interface NewConversationResponse {
       agent_run_id: string;
       conversation_id: string;
       session_id: string;
+      client_side_tool_calls?: ClientToolCallPayload[];
     };
   };
 }
@@ -560,6 +588,7 @@ export interface SendMessageResponse {
     status?: string;
     agent_message_id?: string;
     sequence?: number;
+    client_side_tool_calls?: ClientToolCallPayload[];
   };
 }
 
@@ -576,6 +605,7 @@ export async function newConversation(
       skip_user_message: params.skip_user_message ? 1 : 0,
       files: params.files,
       model_override: params.modelOverride ?? undefined,
+      project: params.project ?? undefined,
     });
     return result as NewConversationResponse;
   } catch (error) {
@@ -661,6 +691,34 @@ export async function updateConversationTitle(conversationId:string,title:string
     })
   }catch(e){
     handleFrappeError(e,"Error update conversation title")
+  }
+}
+
+export interface SubmitClientToolResultParams {
+  callId: string;
+  result?: unknown;
+  error?: string;
+}
+
+export interface SubmitClientToolResultResponse {
+  success: boolean;
+}
+
+/**
+ * Submit the result of a browser-executed ("frontend") tool call back to the backend.
+ */
+export async function submitClientToolResult(
+  params: SubmitClientToolResultParams
+): Promise<SubmitClientToolResultResponse> {
+  try {
+    const result = await call.post('huf.ai.client_side_tool.submit_client_tool_result', {
+      call_id: params.callId,
+      result: params.result,
+      error: params.error,
+    });
+    return (result?.message ?? result) as SubmitClientToolResultResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error submitting client tool result');
   }
 }
 

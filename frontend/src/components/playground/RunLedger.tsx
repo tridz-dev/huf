@@ -1,4 +1,5 @@
 import { Star } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { StatusDot } from '@/components/dashboard';
 import { cn } from '@/lib/utils';
 import type { LedgerEntry } from './ledgerStorage';
@@ -18,7 +19,7 @@ function formatTime(ranAt: number): string {
 export function RunLedger({ entries, latestEntryId, onRestore, onSaveAsTemplate }: RunLedgerProps) {
   return (
     <div className="rounded border border-line bg-panel">
-      <div className="border-b border-line px-3.5 py-2.5 font-display text-[14px] font-bold uppercase">
+      <div className="border-b border-line px-3.5 py-2.5 font-mono text-eyebrow font-medium uppercase text-steel">
         Run ledger
       </div>
 
@@ -63,18 +64,20 @@ export function RunLedger({ entries, latestEntryId, onRestore, onSaveAsTemplate 
                 <StatusDot variant={entry.status === 'ok' ? 'ok' : 'fail'} />
                 {entry.status}
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon-sm"
                 aria-label="Save prompt as template"
                 title="Save prompt as template"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSaveAsTemplate(entry);
                 }}
-                className="justify-self-end text-steel-soft transition-colors hover:text-signal"
+                className="h-auto w-auto justify-self-end p-0 text-steel-soft hover:bg-transparent hover:text-signal"
               >
                 <Star className="h-3.5 w-3.5" strokeWidth={1.8} />
-              </button>
+              </Button>
             </div>
           ))}
         </div>

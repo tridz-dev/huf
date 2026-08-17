@@ -414,28 +414,62 @@ def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
     return f"{prefix}/{model}"
 
 
+# Providers that need environment variables (LiteLLM requirement)
+_ENV_VAR_PROVIDERS = {
+    "openrouter": "OPENROUTER_API_KEY",
+    "xai": "XAI_API_KEY",  # Grok
+    "deepseek": "DEEPSEEK_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "dashscope": "DASHSCOPE_API_KEY",  # Alibaba
+    "google": "GEMINI_API_KEY",  # Alternative to api_key param
+    "cohere": "COHERE_API_KEY",
+    "perplexity": "PERPLEXITY_API_KEY",
+    "moonshot": "MOONSHOT_API_KEY",
+}
+
+
+# Some AI Provider `provider_brand` values don't match the LiteLLM-routing
+# prefix _normalize_model_name() derives from them (see its own
+# brand_prefix_map/provider_prefix_map) — e.g. brand "alibaba" routes through
+# the "dashscope" prefix, brand "grok" through "xai". Without this alias step,
+# _resolve_api_key() and _setup_api_key() would resolve DIFFERENT env var
+# names for the same provider (one via raw brand, one via the routed
+# prefix), so a real key sitting in the "correct" env var would never be
+# found. Keep in sync with _normalize_model_name()'s own brand mappings.
+_BRAND_TO_ENV_LOOKUP_KEY = {
+    "alibaba": "dashscope",
+    "grok": "xai",
+}
+
+
+def _env_var_name_for_provider(provider_brand: str) -> str:
+    """Resolve the conventional environment variable name for a provider.
+
+    Known providers (LiteLLM's own env var requirements) use the explicit
+    mapping in `_ENV_VAR_PROVIDERS`, after normalizing any brand alias that
+    routes to a differently-named prefix (see `_BRAND_TO_ENV_LOOKUP_KEY`).
+    Unknown/new providers fall back to the heuristic `PROVIDER_API_KEY`
+    shape, which already happens to match the standard env var names for
+    OpenAI/Anthropic (OPENAI_API_KEY, ANTHROPIC_API_KEY). Handles an
+    empty/None input gracefully, producing a harmless placeholder name that
+    won't match anything real.
+    """
+    provider_brand = provider_brand or ""
+    lookup_key = _BRAND_TO_ENV_LOOKUP_KEY.get(provider_brand, provider_brand)
+    if lookup_key in _ENV_VAR_PROVIDERS:
+        return _ENV_VAR_PROVIDERS[lookup_key]
+    return f"{provider_brand.upper().replace('-', '_')}_API_KEY"
+
+
 def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
     """
     Setup API key for LiteLLM based on provider requirements.
 
     Some providers need environment variables, others accept api_key parameter.
     """
-    # Providers that need environment variables (LiteLLM requirement)
-    env_var_providers = {
-        "openrouter": "OPENROUTER_API_KEY",
-        "xai": "XAI_API_KEY",  # Grok
-        "deepseek": "DEEPSEEK_API_KEY",
-        "mistral": "MISTRAL_API_KEY",
-        "dashscope": "DASHSCOPE_API_KEY",  # Alibaba
-        "google": "GEMINI_API_KEY",  # Alternative to api_key param
-        "cohere": "COHERE_API_KEY",
-        "perplexity": "PERPLEXITY_API_KEY",
-        "moonshot": "MOONSHOT_API_KEY",
-    }
-
-    if provider_name in env_var_providers:
+    if provider_name in _ENV_VAR_PROVIDERS:
         # Set environment variable for this request
-        os.environ[env_var_providers[provider_name]] = api_key
+        os.environ[_ENV_VAR_PROVIDERS[provider_name]] = api_key
         return
 
     # For known providers that accept an api_key parameter directly, prefer that.
@@ -445,8 +479,48 @@ def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
     # Set a heuristic env var as well so users don't have to wait for a code
     # change to try a new LiteLLM provider; the api_key param remains the primary
     # mechanism for providers that support it.
-    env_name = f"{provider_name.upper().replace('-', '_')}_API_KEY"
-    os.environ[env_name] = api_key
+    os.environ[_env_var_name_for_provider(provider_name)] = api_key
+
+
+# _setup_api_key() writes resolved DB keys into os.environ as a side effect
+# (LiteLLM/some provider SDKs only accept certain providers' keys via env
+# var, not a kwarg) and never clears them afterward. Reading live os.environ
+# in _resolve_api_key() would mean an AI Provider record WITH a stored key
+# could leave that key sitting in the process env, where a DIFFERENT AI
+# Provider record of the same brand but a genuinely blank key would then
+# silently "succeed" using the first record's key on a later call in the
+# same worker process — a real cross-record/cross-request leak, and worse
+# than the pre-fallback behavior (which correctly errored in that case).
+# Snapshotting the environment once at import time — before any request has
+# had a chance to run _setup_api_key() — means the fallback only ever sees
+# keys that were genuinely present in the process environment from the
+# start (e.g. an operator-set GEMINI_API_KEY), never ones this module wrote
+# itself.
+_BOOT_ENV = dict(os.environ)
+
+
+def _resolve_api_key(provider_doc) -> str:
+    """Resolve the API key for a provider, falling back to the environment.
+
+    Reads the stored `api_key` from the AI Provider doc first. If that's
+    blank, mirrors the DB-then-env fallback pattern used elsewhere in this
+    codebase (see `huf/ai/tools/credentials.py::require_credential`) by
+    checking the environment variable LiteLLM/the provider SDK would
+    conventionally use for this provider's brand — read from a boot-time
+    snapshot (see `_BOOT_ENV`), not live `os.environ`, so this can never
+    pick up a key `_setup_api_key()` wrote for a different request.
+    """
+    api_key = provider_doc.get_password("api_key")
+    if api_key:
+        return api_key
+
+    provider_brand = (provider_doc.get("provider_brand") or "").lower()
+    if not provider_brand:
+        # No brand to key an env var name off of — don't guess at a bare
+        # "_API_KEY" placeholder that could coincidentally exist.
+        return ""
+    env_var_name = _env_var_name_for_provider(provider_brand)
+    return _BOOT_ENV.get(env_var_name, "")
 
 
 def _resolve_api_base(provider_doc) -> str | None:
@@ -524,7 +598,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
 		# Get API key from AI Provider doc (same as current implementation)
         provider_doc = frappe.get_doc("AI Provider", provider)
-        api_key = provider_doc.get_password("api_key")
+        api_key = _resolve_api_key(provider_doc)
 
         if not api_key:
             frappe.throw("API key not configured in AI Provider.")
@@ -1124,7 +1198,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
         litellm.drop_params = True
         
         provider_doc = frappe.get_doc("AI Provider", provider)
-        api_key = provider_doc.get_password("api_key")
+        api_key = _resolve_api_key(provider_doc)
         
         normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
         provider_name = normalized_model.split("/")[0]
@@ -1176,7 +1250,7 @@ async def get_simple_completion_with_usage(
         litellm.drop_params = True
 
         provider_doc = frappe.get_doc("AI Provider", provider)
-        api_key = provider_doc.get_password("api_key")
+        api_key = _resolve_api_key(provider_doc)
 
         normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
         provider_name = normalized_model.split("/")[0]
@@ -1269,7 +1343,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
         # Get API key
         provider_doc = frappe.get_doc("AI Provider", provider)
-        api_key = provider_doc.get_password("api_key")
+        api_key = _resolve_api_key(provider_doc)
 
         if not api_key:
             yield {"type": "error", "error": "API key not configured in AI Provider."}

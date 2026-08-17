@@ -11,7 +11,6 @@ import ReactFlow, {
   applyNodeChanges,
   applyEdgeChanges,
   Node,
-  NodeProps,
   Panel,
   BackgroundVariant
 } from 'reactflow';
@@ -21,9 +20,13 @@ import { Button } from './ui/button';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
 import { EndNode } from './nodes/EndNode';
+import { AddStepGhostNode, AddStepGhostNodeData } from './nodes/AddStepGhostNode';
+import { InsertableEdge, InsertableEdgeData } from './edges/InsertableEdge';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
+import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { useFlowContext } from '../contexts/FlowContext';
 import { FlowNodeData, TriggerConfig, ActionConfig } from '../types/flow.types';
+import type { ActionOption } from '../types/modal.types';
 
 interface FlowCanvasProps {
   showLeftSidebar: boolean;
@@ -38,13 +41,21 @@ export function FlowCanvas({
   onToggleLeftSidebar,
   onToggleRightSidebar
 }: FlowCanvasProps) {
-  const { activeFlow, updateNodesAndEdges, updateNode, setSelectedNode, setSelectedEdge } = useFlowContext();
+  const {
+    activeFlow,
+    updateNodesAndEdges,
+    updateNode,
+    selectedNodeId,
+    setSelectedNode,
+    setSelectedEdge
+  } = useFlowContext();
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'trigger' | 'action'>('trigger');
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [sourceNodeForAction, setSourceNodeForAction] = useState<string | null>(null);
+  const [modalActionCategory, setModalActionCategory] = useState<ActionOption['category'] | null>(null);
 
   // Track if we're currently syncing from props to prevent feedback loops
   const isSyncingFromProps = useRef(false);
@@ -112,8 +123,20 @@ export function FlowCanvas({
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      // Ghost "Add step" placeholders are synthesized purely for rendering
+      // (see `ghostNodes` below) and are never part of the real `nodes`
+      // state that gets written back to the flow. ReactFlow still emits
+      // change events for them (e.g. dimension measurements), which would
+      // otherwise flow into applyNodeChanges/scheduleContextUpdate and mark
+      // the flow "unsaved" even though nothing real changed. Drop them here.
+      const realChanges = changes.filter((change) => {
+        const changeId = 'id' in change ? change.id : undefined;
+        return !changeId || !changeId.startsWith('ghost-');
+      });
+      if (realChanges.length === 0) return;
+
       setNodes((nds) => {
-        const updatedNodes = applyNodeChanges(changes, nds);
+        const updatedNodes = applyNodeChanges(realChanges, nds);
         // Schedule context update (debounced)
         if (!isSyncingFromProps.current) {
           scheduleContextUpdate(updatedNodes, undefined);
@@ -126,8 +149,17 @@ export function FlowCanvas({
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
+      // Ghost edges (connecting a real leaf node to its synthesized "Add
+      // step" placeholder) are render-only, same as ghost nodes above.
+      // Filter their change events out before they can dirty the flow.
+      const realChanges = changes.filter((change) => {
+        const changeId = 'id' in change ? change.id : undefined;
+        return !changeId || !changeId.startsWith('edge-ghost-');
+      });
+      if (realChanges.length === 0) return;
+
       setEdges((eds) => {
-        const updatedEdges = applyEdgeChanges(changes, eds);
+        const updatedEdges = applyEdgeChanges(realChanges, eds);
         // Schedule context update (debounced)
         if (!isSyncingFromProps.current) {
           scheduleContextUpdate(undefined, updatedEdges);
@@ -178,6 +210,7 @@ export function FlowCanvas({
 
   const handleAddNode = useCallback((sourceNodeId: string) => {
     setSourceNodeForAction(sourceNodeId);
+    setModalActionCategory(null);
     setModalMode('action');
     setIsModalOpen(true);
   }, []);
@@ -264,17 +297,17 @@ export function FlowCanvas({
           };
 
           const labelMap: Record<string, string> = {
-            'agent-run': 'Run Agent',
-            'tool-call': 'Call Tool',
-            transform: 'Transform Data',
+            'agent-run': 'Run agent',
+            'tool-call': 'Call tool',
+            transform: 'Transform data',
             router: 'Router',
             loop: 'Loop',
-            'human.approval': 'Human in Loop',
-            code: 'Execute Code',
-            email: 'Send Email',
-            webhook: 'Call Webhook',
-            file: 'File Operations',
-            date: 'Date Utility'
+            'human.approval': 'Human in loop',
+            code: 'Execute code',
+            email: 'Send email',
+            webhook: 'Call webhook',
+            file: 'File operations',
+            date: 'Date utility'
           };
 
           const newNode: Node<FlowNodeData> = {
@@ -320,6 +353,7 @@ export function FlowCanvas({
 
           setIsModalOpen(false);
           setSourceNodeForAction(null);
+          setModalActionCategory(null);
 
           return newEdges;
         });
@@ -331,11 +365,126 @@ export function FlowCanvas({
 
   const nodeTypesWithAddButton = useMemo(
     () => ({
-      trigger: (props: NodeProps<FlowNodeData>) => <TriggerNode {...props} onAddNode={handleAddNode} />,
-      action: (props: NodeProps<FlowNodeData>) => <ActionNode {...props} onAddNode={handleAddNode} />,
-      end: EndNode
+      trigger: TriggerNode,
+      action: ActionNode,
+      end: EndNode,
+      addStep: AddStepGhostNode
     }),
-    [handleAddNode]
+    []
+  );
+
+  const edgeTypesWithInsert = useMemo(() => ({ insertable: InsertableEdge }), []);
+
+  // Every node with no outgoing edge — the open ends of the graph, and the
+  // only places a new step can be appended without rewiring by hand.
+  const leafNodes = useMemo(() => {
+    if (nodes.length === 0) return [];
+    const sourceIds = new Set(edges.map((e) => e.source));
+    return nodes.filter((n) => n.data.nodeType !== 'end' && !sourceIds.has(n.id));
+  }, [nodes, edges]);
+
+  // Where a rail click inserts: after the selected node when there is one
+  // (handleSelectAction rewires the downstream edge), otherwise at the last
+  // open end of the graph — the same spot the trailing ghost card targets.
+  const insertionSourceId = useMemo(() => {
+    if (selectedNodeId) {
+      const selected = nodes.find((n) => n.id === selectedNodeId);
+      if (selected && selected.data.nodeType !== 'end') return selected.id;
+    }
+    return leafNodes.length > 0 ? leafNodes[leafNodes.length - 1].id : null;
+  }, [selectedNodeId, nodes, leafNodes]);
+
+  const railActiveCategory = useMemo<NodeRailCategory | null>(() => {
+    const selected = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) : undefined;
+    if (!selected) return null;
+    if (selected.data.nodeType === 'trigger') return 'trigger';
+    switch (selected.data.actionConfig?.type) {
+      case 'agent-run':
+        return 'agent';
+      case 'tool-call':
+        return 'tool';
+      case 'condition':
+      case 'router':
+      case 'loop':
+        return 'condition';
+      default:
+        return null;
+    }
+  }, [selectedNodeId, nodes]);
+
+  const railDisabledCategories = useMemo<NodeRailCategory[]>(
+    () => (insertionSourceId ? [] : ['agent', 'condition', 'tool', 'data']),
+    [insertionSourceId]
+  );
+
+  const handleRailSelect = useCallback(
+    (category: NodeRailCategory) => {
+      if (category === 'trigger') {
+        const existingTrigger = nodes.find((n) => n.data.nodeType === 'trigger');
+        setSourceNodeForAction(null);
+        setModalActionCategory(null);
+        setCurrentNodeId(existingTrigger?.id ?? null);
+        setModalMode('trigger');
+        setIsModalOpen(true);
+        return;
+      }
+      if (!insertionSourceId) return;
+      setSourceNodeForAction(insertionSourceId);
+      setModalActionCategory(NODE_RAIL_ACTION_CATEGORY[category]);
+      setModalMode('action');
+      setIsModalOpen(true);
+    },
+    [nodes, insertionSourceId]
+  );
+
+  // Persistent "Add step" ghost card trailing the end of each open branch
+  // (i.e. every node with no outgoing edge). Purely a render-time affordance —
+  // it is never written back to the flow's nodes/edges via updateNodesAndEdges.
+  const ghostNodes = useMemo<Node<AddStepGhostNodeData>[]>(() => {
+    return leafNodes.map((leaf) => ({
+      id: `ghost-${leaf.id}`,
+      type: 'addStep',
+      position: { x: leaf.position.x, y: leaf.position.y + 150 },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      data: { sourceNodeId: leaf.id, onAddNode: handleAddNode }
+    }));
+  }, [leafNodes, handleAddNode]);
+
+  const ghostEdges = useMemo<Edge[]>(
+    () =>
+      ghostNodes.map((ghost) => ({
+        id: `edge-${ghost.id}`,
+        source: ghost.data.sourceNodeId,
+        target: ghost.id,
+        type: 'default',
+        selectable: false,
+        focusable: false
+      })),
+    [ghostNodes]
+  );
+
+  const renderedNodes = useMemo(
+    () => [...nodes, ...(ghostNodes as unknown as Node<FlowNodeData>[])],
+    [nodes, ghostNodes]
+  );
+
+  // Real edges get the hover "+" insert affordance (mid-chain insertion);
+  // ghost edges (leading to the trailing "Add step" card) render as plain
+  // edges since that leaf already has its own persistent affordance.
+  const insertableEdges = useMemo<Edge<InsertableEdgeData>[]>(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        type: 'insertable',
+        data: { sourceNodeId: edge.source, onInsertNode: handleAddNode }
+      })),
+    [edges, handleAddNode]
+  );
+  const renderedEdges = useMemo(
+    () => [...insertableEdges, ...ghostEdges],
+    [insertableEdges, ghostEdges]
   );
 
   if (!activeFlow) {
@@ -352,10 +501,16 @@ export function FlowCanvas({
   }
 
   return (
-    <div className="flex-1 relative w-full h-full">
+    <div className="flex-1 flex w-full h-full overflow-hidden">
+      <FlowNodeRail
+        activeCategory={railActiveCategory}
+        disabledCategories={railDisabledCategories}
+        onSelect={handleRailSelect}
+      />
+      <div className="relative flex-1 h-full min-w-0">
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={renderedNodes}
+        edges={renderedEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -363,20 +518,23 @@ export function FlowCanvas({
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypesWithAddButton}
+        edgeTypes={edgeTypesWithInsert}
         fitView
         fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
         defaultViewport={{ x: 0, y: 0, zoom: 0.8 }}
         className="bg-background w-full h-full"
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={2} color="color-mix(in srgb, var(--muted-foreground) 35%, transparent)" />
-        <Controls className="!bottom-6" />
+        {/* showInteractive (lock toggle button) defaults to true, so it's already shown */}
+        <Controls className="!bottom-6 !rounded-lg !border !border-line !overflow-hidden !shadow-sm" />
         <MiniMap
           nodeColor={(node) => {
             if (node.type === 'trigger') return 'var(--primary)';
-            if (node.type === 'end') return '#10b981';
+            if (node.type === 'end') return 'var(--good)';
             return 'var(--muted)';
           }}
           className="!bg-background !border-border !bottom-6"
+          style={{ width: 120, height: 80, borderRadius: 8, border: '1px solid var(--border)', boxShadow: '0 1px 3px color-mix(in srgb, var(--foreground) 12%, transparent)' }}
         />
         <Panel position="top-right" className="m-2">
           <div className="flex gap-2">
@@ -391,7 +549,7 @@ export function FlowCanvas({
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Add Trigger
+                Add trigger
               </Button>
             )}
             <Button
@@ -437,14 +595,17 @@ export function FlowCanvas({
           </Panel>
         )}
       </ReactFlow>
+      </div>
 
       <NodeSelectionModal
         open={isModalOpen}
         mode={modalMode}
+        actionCategory={modalActionCategory}
         onClose={() => {
           setIsModalOpen(false);
           setCurrentNodeId(null);
           setSourceNodeForAction(null);
+          setModalActionCategory(null);
         }}
         onSaveTrigger={handleSaveTriggerConfig}
         onSaveAction={handleSelectAction}

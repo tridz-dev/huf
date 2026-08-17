@@ -73,6 +73,10 @@ def get_configured_providers():
             key = frappe.get_doc("AI Provider", p.name).get_password("api_key")
         except Exception:
             key = None
+            frappe.log_error(
+                message=f"Failed to read API key for AI Provider '{p.name}':\n\n{frappe.get_traceback()}",
+                title="AI Provider Key Read Error",
+            )
         if key:
             result.append({"name": p.name, "provider_brand": p.provider_brand})
     return result

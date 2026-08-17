@@ -176,6 +176,7 @@ class AgentStreamRenderer(BaseRenderer):
 		conversation_id = _get_param("conversation_id") or _get_param("conversation")
 		create_new = bool(_get_param("create_new", False))
 		skip_user_message = bool(_get_param("skip_user_message", False))
+		project = _get_param("project")
 		files = body.get("files")
 
 		create_new = bool(create_new)
@@ -226,6 +227,7 @@ class AgentStreamRenderer(BaseRenderer):
 					prompt_cache_options=prompt_cache_options,
 					skip_user_message=skip_user_message,
 					files=files,
+					project=project,
 				)
 				
 				# Convert async generator to sync

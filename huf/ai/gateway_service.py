@@ -287,6 +287,21 @@ def process_gateway_event(event_name: str) -> dict:
         event.db_set({"status": "Rejected", "error_message": "Gateway is disabled or has no Run as user"})
         return {"event_name": event.name, "status": "Rejected"}
 
+    if event.target_type == "Agent":
+        from huf.ai.agent_access import assert_agent_access
+
+        agent_doc = frappe.get_doc("Agent", event.target_agent)
+        try:
+            assert_agent_access(agent_doc, user="Guest")
+        except frappe.PermissionError:
+            event.db_set(
+                {
+                    "status": "Rejected",
+                    "error_message": "Agent does not allow guest/public access",
+                }
+            )
+            return {"event_name": event.name, "status": "Rejected"}
+
     try:
         frappe.set_user(gateway.execution_user)
         event.db_set("status", "Running")

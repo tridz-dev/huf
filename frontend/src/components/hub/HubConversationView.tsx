@@ -6,6 +6,7 @@ import { useUser } from '@/contexts/UserContext';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { HubAskUser, splitAskUserBlocks } from './HubAskUser';
 import { AutoGrowTextarea } from './AutoGrowTextarea';
+import { Button } from '@/components/ui/button';
 import { MessageContentWithArtifacts } from '@/components/chat/MessageContentWithArtifacts';
 import type { HubRemediation } from '@/services/hubApi';
 
@@ -70,13 +71,15 @@ export function HubConversationView({
       {/* Slim top bar — back to hub greeting without losing the conversation */}
       {onHome && (
         <div className="flex items-center px-3 py-2">
-          <button
+          <Button
             onClick={onHome}
             title="Back to home"
-            className="p-1.5 rounded-sm text-steel-soft hover:text-ink hover:bg-paper-deep transition-colors"
+            variant="ghost"
+            size="icon-sm"
+            className="h-auto w-auto rounded-sm p-1.5 text-steel-soft hover:bg-paper-deep hover:text-ink"
           >
             <Home className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
       )}
       {/* Messages */}
@@ -109,16 +112,16 @@ export function HubConversationView({
                   </div>
                 )}
                 {msg.content === '__NO_PROVIDER__' ? (
-                  <div className="inline-block max-w-[85%] px-4 py-3 rounded-sm bg-amber-50 border border-amber-200 text-left">
-                    <p className="text-sm font-medium text-amber-800 mb-1">No AI Provider configured</p>
+                  <div className="inline-block max-w-[85%] px-4 py-3 rounded-sm bg-warning border border-warning text-left">
+                    <p className="text-sm font-medium text-warning mb-1">No AI Provider configured</p>
                     {remediation && remediation.length > 0 ? (
-                      <ul className="text-xs text-amber-700 mb-3 space-y-1">
+                      <ul className="text-xs text-warning mb-3 space-y-1">
                         {remediation.map((item) => (
                           <li key={item.code}>{item.message}</li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="text-xs text-amber-700 mb-3">Add a provider and model to start using Hub Orchestrator.</p>
+                      <p className="text-xs text-warning mb-3">Add a provider and model to start using Hub Orchestrator.</p>
                     )}
                     <a href={remediation?.[0]?.action_route || '/models'} className="text-xs px-3 py-1.5 rounded-sm bg-signal text-white hover:bg-signal-ink transition-colors inline-block">
                       Add Provider →
@@ -188,12 +191,12 @@ export function HubConversationView({
               className="w-full px-4 py-3 pr-24 text-sm resize-none outline-none bg-transparent text-ink placeholder:text-steel-soft min-h-[52px]"
             />
             <div className="absolute right-2 bottom-2 flex items-center gap-1">
-              <button onClick={onNewChat} className="p-1.5 rounded-sm text-steel-soft hover:text-signal-ink hover:bg-paper-deep transition-colors" title="New chat">
+              <Button onClick={onNewChat} variant="ghost" size="icon-sm" className="h-auto w-auto rounded-sm p-1.5 text-steel-soft hover:bg-paper-deep hover:text-signal-ink" title="New chat">
                 <Plus className="w-4 h-4" />
-              </button>
-              <button onClick={onSend} disabled={!inputValue.trim()} className="p-1.5 rounded-sm bg-signal text-white disabled:bg-paper-deep disabled:text-steel-soft hover:bg-signal-ink transition-colors">
+              </Button>
+              <Button onClick={onSend} disabled={!inputValue.trim()} variant="ghost" size="icon-sm" className="h-auto w-auto rounded-sm bg-signal p-1.5 text-white hover:bg-signal-ink hover:text-white disabled:bg-paper-deep disabled:text-steel-soft">
                 <Send className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <SlashCommandMenu isVisible={showSlashMenu} query={slashQuery} onSelect={onSlashSelect} placement="above" />
           </div>

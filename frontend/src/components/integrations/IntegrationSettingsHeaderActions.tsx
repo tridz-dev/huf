@@ -15,7 +15,7 @@ export function IntegrationSettingsHeaderActions({
     <div className="flex items-center gap-2">
       {kind === 'integrations' && <Button variant="outline" size="sm" onClick={() => navigate('/integration-services')}>
         <Layers className="w-4 h-4 mr-2" />
-        Service Catalog
+        Service catalog
       </Button>}
       <Button variant="display" onClick={onAddIntegration} size="sm">
         <Plus className="w-4 h-4 mr-2" />

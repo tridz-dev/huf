@@ -47,7 +47,7 @@ export const Plan = ({
 }: PlanProps) => (
   <PlanContext.Provider value={{ isStreaming }}>
     <Collapsible asChild data-slot="plan" {...props}>
-      <Card className={cn("shadow-none", className)}>{children}</Card>
+      <Card className={cn("shadow-md", className)}>{children}</Card>
     </Collapsible>
   </PlanContext.Provider>
 );

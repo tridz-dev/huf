@@ -6,6 +6,7 @@ import type { ParameterData } from '@/components/tools/ParameterCard';
 import type { HttpHeaderData } from '@/components/tools/HttpHeaderCard';
 import type { ToolFormData } from '@/types/toolTemplate.types';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { invalidateServiceTools } from './serviceToolsCache';
 
 /** Tool parameter row after ID enrichment (returned by getToolFunction) */
 export type ToolFunctionParameter = ParameterData & { id: string };
@@ -78,7 +79,7 @@ export async function getToolTypes(): Promise<AgentToolType[]> {
 export async function getToolFunctions(toolTypeFilter?: string): Promise<AgentToolFunctionRef[]> {
   try {
     const options = {
-      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype", "service"],
+      fields: ["name", "tool_name", "description", "tool_type", "types", "reference_doctype", "service", "function_path"],
       limit: 1000,
       filters: [] as Array<{ field: string; operator: string; value: string }>,
     };
@@ -226,6 +227,9 @@ export async function updateToolFunction(name: string, data: {
     }
 
     const updatedTool = await db.updateDoc(doctype['Agent Tool Function'], name, toolData);
+    // A tool's name/description/service association may have changed —
+    // invalidate rather than try to patch every cached service's list.
+    invalidateServiceTools();
     return {
       name: updatedTool.name,
       tool_name: updatedTool.tool_name as string,
@@ -314,6 +318,9 @@ export async function createToolFunction(data: {
     }
 
     const newTool = await db.createDoc(doctype['Agent Tool Function'], toolData);
+    // A brand-new tool could belong to any service's group — invalidate so
+    // the next "Add to Agent" / tool-count lookup picks it up.
+    invalidateServiceTools();
     return {
       name: newTool.name,
       tool_name: newTool.tool_name as string,

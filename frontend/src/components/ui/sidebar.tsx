@@ -25,9 +25,9 @@ import {
 } from "@/components/ui/tooltip"
 
 const SIDEBAR_STORAGE_KEY = "sidebar:state"
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH = "15.5rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
-const SIDEBAR_WIDTH_ICON = "3rem"
+const SIDEBAR_WIDTH_ICON = "4rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
 
 type SidebarContextProps = {
@@ -139,7 +139,10 @@ export const SidebarProvider = React.forwardRef<
 
     return (
       <SidebarContext.Provider value={contextValue}>
-        <TooltipProvider delayDuration={0}>
+        {/* The collapsed rail hides names, so its tooltips are the only label.
+            The design system asks for them after ~400ms: instant tooltips fire
+            on every pass of the cursor down a 64px rail and become noise. */}
+        <TooltipProvider delayDuration={400}>
           <div
             style={
               {
@@ -184,6 +187,15 @@ export const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+
+    // Collapsed-to-icon rail sizing, resolved here so both the spacer and the
+    // fixed rail share one source of truth. "floating"/"inset" variants add
+    // their own 1rem of padding, hence the wider value.
+    const collapsedToIcon = state === "collapsed" && collapsible === "icon"
+    const railIconWidth =
+      variant === "floating" || variant === "inset"
+        ? `calc(${SIDEBAR_WIDTH_ICON} + 1rem + 2px)`
+        : SIDEBAR_WIDTH_ICON
 
     if (collapsible === "none") {
       return (
@@ -233,25 +245,34 @@ export const Sidebar = React.forwardRef<
         data-variant={variant}
         data-side={side}
       >
+        {/*
+          Width is driven from React state via an inline style rather than the
+          upstream `group-data-[collapsible=icon]:w-[…]` utilities. Those
+          utilities generate correct CSS and their selectors demonstrably match
+          the element, yet the collapsed width never won at runtime — even with
+          `!important`, and even after removing every competing class. Rather
+          than keep guessing at that, the collapsed rail now sizes itself from
+          the same `state` the rest of the component already trusts, which is
+          deterministic and cannot be out-specified.
+        */}
         <div
+          style={{ width: collapsedToIcon ? railIconWidth : SIDEBAR_WIDTH }}
           className={cn(
-            "relative w-[--sidebar-width] bg-transparent transition-[width] duration-200 ease-linear",
+            "relative bg-transparent transition-[width] duration-200 ease-linear",
             "group-data-[collapsible=offcanvas]:w-0",
             "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
-              ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon]"
           )}
         />
         <div
+          style={{ width: collapsedToIcon ? railIconWidth : SIDEBAR_WIDTH }}
           className={cn(
-            "fixed inset-y-0 z-50 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex",
+            "fixed inset-y-0 z-50 hidden h-svh transition-[left,right,width] duration-200 ease-linear md:flex",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
             variant === "floating" || variant === "inset"
-              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
-              : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              ? "p-2"
+              : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className
           )}
           {...props}
@@ -289,7 +310,7 @@ export const SidebarTrigger = React.forwardRef<
       {...props}
     >
       <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">Toggle sidebar</span>
     </Button>
   )
 })
@@ -305,10 +326,10 @@ export const SidebarRail = React.forwardRef<
     <button
       ref={ref}
       data-sidebar="rail"
-      aria-label="Toggle Sidebar"
+      aria-label="Toggle sidebar"
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      title="Toggle sidebar"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
         "[[data-side=left]_&]:cursor-w-resize [[data-side=right]_&]:cursor-e-resize",
@@ -351,7 +372,7 @@ export const SidebarInput = React.forwardRef<
       ref={ref}
       data-sidebar="input"
       className={cn(
-        "h-8 w-full bg-background shadow-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+        "h-8 w-full bg-background shadow-sm focus-visible:ring-2 focus-visible:ring-sidebar-ring",
         className
       )}
       {...props}
@@ -433,7 +454,12 @@ export const SidebarGroup = React.forwardRef<
       data-sidebar="group"
       className={cn(
         "relative flex w-full min-w-0 flex-col px-2 py-0.5",
-        "group-data-[collapsible=icon]:mt-1.5 group-data-[collapsible=icon]:pt-1.5 group-data-[collapsible=icon]:first:mt-0 group-data-[collapsible=icon]:first:pt-0.5 group-data-[collapsible=icon]:first:border-t-0 group-data-[collapsible=icon]:border-t group-data-[collapsible=icon]:border-sidebar-border",
+        // Collapsed rail: group labels are hidden, so a centred 26px hairline
+        // separates groups instead of a full-width rule (spec §11). Rendered as
+        // a ::before flex item with 7px margins; suppressed on the first group.
+        "group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-0",
+        "group-data-[collapsible=icon]:before:my-[7px] group-data-[collapsible=icon]:before:h-px group-data-[collapsible=icon]:before:w-[26px] group-data-[collapsible=icon]:before:bg-line group-data-[collapsible=icon]:before:content-['']",
+        "group-data-[collapsible=icon]:first:before:hidden",
         className
       )}
       {...props}
@@ -453,7 +479,7 @@ export const SidebarGroupLabel = React.forwardRef<
       ref={ref}
       data-sidebar="group-label"
       className={cn(
-        "flex h-6 shrink-0 items-center rounded-none px-2 font-mono text-[10px] uppercase tracking-widest text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
+        "flex h-6 shrink-0 items-center rounded-md px-2 font-mono text-eyebrow uppercase text-steel-soft outline-none ring-sidebar-ring transition-[margin,opacity] duration-200 ease-linear focus-visible:ring-2 [&>svg]:size-4 [&>svg]:shrink-0",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
@@ -505,7 +531,12 @@ export const SidebarMenu = React.forwardRef<
   <ul
     ref={ref}
     data-sidebar="menu"
-    className={cn("flex w-full min-w-0 flex-col gap-0.5", className)}
+    className={cn(
+      "flex w-full min-w-0 flex-col gap-0.5",
+      // Collapsed rail: 4px between icon tiles, tiles centred in the 64px rail.
+      "group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1",
+      className,
+    )}
     {...props}
   />
 ))
@@ -525,8 +556,8 @@ export const SidebarMenuItem = React.forwardRef<
 SidebarMenuItem.displayName = "SidebarMenuItem"
 
 const sidebarMenuButtonVariants = cva(
-  // HUF: no rounded corners, signal-orange left-edge active state (not pill)
-  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-none p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:border-l-2 data-[active=true]:border-signal data-[active=true]:ring-1 data-[active=true]:ring-inset data-[active=true]:ring-line data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
+  // Filled pill shape with raised shadow on active state — calm, integrated appearance
+  "peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-paper hover:text-ink focus-visible:ring-2 active:bg-panel active:text-ink disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-panel data-[active=true]:text-ink data-[active=true]:font-semibold data-[active=true]:shadow-md data-[active=true]:relative group-data-[collapsible=icon]:data-[active=true]:before:absolute group-data-[collapsible=icon]:data-[active=true]:before:left-0 group-data-[collapsible=icon]:data-[active=true]:before:top-2 group-data-[collapsible=icon]:data-[active=true]:before:bottom-2 group-data-[collapsible=icon]:data-[active=true]:before:w-[2px] group-data-[collapsible=icon]:data-[active=true]:before:rounded-full group-data-[collapsible=icon]:data-[active=true]:before:bg-signal group-data-[collapsible=icon]:data-[active=true]:before:content-[''] data-[state=open]:hover:bg-paper data-[state=open]:hover:text-ink group-data-[collapsible=icon]:!h-[34px] group-data-[collapsible=icon]:!w-[38px] group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!gap-0 group-data-[collapsible=icon]:!rounded-[9px] group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:[&>svg]:!size-[18px] [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-steel [&>svg]:data-[active=true]:text-ink",
   {
     variants: {
       variant: {
@@ -576,7 +607,19 @@ export const SidebarMenuButton = React.forwardRef<
         data-sidebar="menu-button"
         data-size={size}
         data-active={isActive}
-        className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+        className={cn(
+          sidebarMenuButtonVariants({ variant, size }),
+          className,
+          // Collapsed tile geometry (spec §11: 38x34, 9px radius, 18px icon)
+          // applied from React state and placed LAST so it wins the
+          // tailwind-merge pass. The equivalent
+          // `group-data-[collapsible=icon]:!…` utilities generate valid CSS
+          // whose selectors match this element, but never took effect at
+          // runtime — see PARITY_AUDIT.md. Driving it from `state` removes the
+          // dependency on that unexplained behaviour entirely.
+          state === "collapsed" &&
+            "h-[34px] w-[38px] justify-center gap-0 rounded-[9px] p-0 [&>svg]:size-[18px]",
+        )}
         {...props}
       />
     )

@@ -160,7 +160,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 						size="sm"
 						onClick={handleDelete}
 						disabled={deleting}
-						className="text-destructive border-destructive/40 rounded-none"
+						className="text-destructive border-destructive/40 rounded"
 					>
 						{deleting && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
 						<Trash2 className="w-3.5 h-3.5 mr-1.5" />
@@ -171,7 +171,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
                     <Button
                         size="sm"
                         onClick={() => setIsEditing(true)}
-                        className="rounded-none"
+                        className="rounded"
                     >
                         Edit
                     </Button>
@@ -181,7 +181,7 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
                         size="sm"
                         onClick={handleSave}
                         disabled={( !isDirty && !isNew ) || saving || !hasSchema}
-                        className="rounded-none"
+                        className="rounded"
                     >
                         {saving && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
                         Save
@@ -264,8 +264,8 @@ export function DataRecordViewPage({ schema, onHeaderActionsChange }: DataRecord
 					<div className="space-y-6">
 						{hasTabs ? (
 							<Tabs defaultValue="tab-0" className="w-full">
-								<TabsList className="w-full justify-start rounded-none border-b border-line bg-transparent p-0">
-									{tabGroups.map((tab, index) => <TabsTrigger key={index} value={`tab-${index}`} className="rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-ink">{tab.label || `Tab ${index + 1}`}</TabsTrigger>)}
+								<TabsList className="w-full justify-start rounded border-b border-line bg-transparent p-0">
+									{tabGroups.map((tab, index) => <TabsTrigger key={index} value={`tab-${index}`} className="rounded border-b-2 border-transparent px-4 py-2 data-[state=active]:border-ink">{tab.label || `Tab ${index + 1}`}</TabsTrigger>)}
 								</TabsList>
 								{tabGroups.map((tab, index) => <TabsContent key={index} value={`tab-${index}`} className="mt-4 space-y-6">{tab.sections.map(renderSection)}</TabsContent>)}
 							</Tabs>

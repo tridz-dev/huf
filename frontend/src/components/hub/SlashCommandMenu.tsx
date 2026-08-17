@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Workflow, Bot, Users, Database, DollarSign, BookOpen, Settings, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface Command {
   id: string;
@@ -68,12 +69,13 @@ export function SlashCommandMenu({ isVisible, query, onSelect, placement = 'belo
       >
         <div className="overflow-y-auto py-1" style={{ maxHeight: 280 }}>
           {filtered.map((cmd, i) => (
-            <button
+            <Button
               key={cmd.id}
+              variant="ghost"
               ref={el => { itemRefs.current[i] = el; }}
               onClick={() => onSelect(cmd.id)}
               onMouseEnter={() => setSelectedIndex(i)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${i === selectedIndex ? 'bg-paper-deep' : 'hover:bg-paper-deep'}`}
+              className={`h-auto w-full items-center justify-start gap-3 rounded-none px-3 py-2.5 text-left ${i === selectedIndex ? 'bg-paper-deep' : 'hover:bg-paper-deep'}`}
             >
               <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${i === selectedIndex ? 'bg-panel border border-signal text-signal-ink' : 'bg-paper-deep text-steel'}`}>
                 <cmd.icon className="w-4 h-4" />
@@ -87,7 +89,7 @@ export function SlashCommandMenu({ isVisible, query, onSelect, placement = 'belo
                 <p className="text-xs text-steel-soft truncate">{cmd.description}</p>
               </div>
               {i === selectedIndex && <ArrowRight className="w-4 h-4 text-signal flex-shrink-0" />}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="px-3 py-2 border-t border-line bg-paper flex items-center gap-4 text-[11px] text-steel-soft">

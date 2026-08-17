@@ -43,7 +43,7 @@ export function FlowRunHistory({ flowId, open, onOpenChange, onSelectRun }: Flow
                     <div className="flex items-center justify-between">
                         <SheetTitle className="flex items-center gap-2">
                             <PlayCircle className="w-5 h-5 text-muted-foreground" />
-                            Run History
+                            Run history
                         </SheetTitle>
                         <Button variant="ghost" size="icon" onClick={fetchRuns} disabled={loading} title="Refresh">
                             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

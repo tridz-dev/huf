@@ -91,7 +91,7 @@ export function ExecutionProfilesPage() {
     () => [
       {
         accessorKey: 'profile_name',
-        header: ({ column }) => <SortHeader column={column} label="Profile Name" />,
+        header: ({ column }) => <SortHeader column={column} label="Profile name" />,
         cell: ({ row }) => (
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-steel-soft shrink-0" strokeWidth={1.6} />
@@ -175,15 +175,14 @@ export function ExecutionProfilesPage() {
   });
 
   const statusOptions = [
-    { label: 'All Status', value: 'all' },
+    { label: 'All status', value: 'all' },
     { label: 'Active', value: 'enabled' },
     { label: 'Disabled', value: 'disabled' },
   ];
 
   return (
     <PageFrame
-      title="Execution Profiles"
-      subtitle="Manage sandboxed code execution environments, resource limits, and approval policies."
+      title="Execution profiles"
       filters={
         <FilterBar
           searchPlaceholder="Search execution profiles..."
@@ -207,11 +206,29 @@ export function ExecutionProfilesPage() {
             <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
           </div>
         ) : profiles.length === 0 ? (
-          <EmptyState
-            icon={ShieldCheck}
-            title="No execution profiles"
-            description="No execution profiles have been configured yet."
-          />
+          !!search || (filters.status && filters.status !== 'all') ? (
+            <EmptyState
+              variant="no-results"
+              icon={ShieldCheck}
+              title="No execution profiles found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('status', 'all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={ShieldCheck}
+              title="No execution profiles"
+              description="Configure a profile to control where agent code runs."
+              action={{ label: 'New execution profile', onClick: () => navigate('/execution-profiles/new') }}
+            />
+          )
         ) : (
           <div className="border border-line bg-panel">
             <Table>

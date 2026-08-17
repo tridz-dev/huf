@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getAgentPrompts, type AgentPromptDoc } from '@/services/agentPromptApi';
@@ -94,25 +95,28 @@ export function TemplatePickerDialog({
           ) : (
             <div className="divide-y divide-line">
               {filtered.map((prompt) => (
-                <button
+                <Button
                   key={prompt.name}
                   type="button"
+                  variant="ghost"
                   onClick={() => handleSelect(prompt)}
-                  className="w-full px-3 py-2 text-left transition-colors hover:bg-paper-deep"
+                  className="h-auto w-full items-start justify-start rounded-none px-3 py-2 text-left"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-medium">{prompt.title}</span>
-                    <Badge variant="outline" className="shrink-0 text-xs">
-                      {prompt.visibility || 'Private'}
-                    </Badge>
+                  <div className="w-full min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-medium">{prompt.title}</span>
+                      <Badge variant="outline" size="sm" className="shrink-0">
+                        {prompt.visibility || 'Private'}
+                      </Badge>
+                    </div>
+                    {prompt.description ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-steel">{prompt.description}</p>
+                    ) : null}
+                    {prompt.tags ? (
+                      <p className="mt-1 text-xs text-steel-soft">{prompt.tags}</p>
+                    ) : null}
                   </div>
-                  {prompt.description ? (
-                    <p className="mt-0.5 line-clamp-2 text-xs text-steel">{prompt.description}</p>
-                  ) : null}
-                  {prompt.tags ? (
-                    <p className="mt-1 text-xs text-steel-soft">{prompt.tags}</p>
-                  ) : null}
-                </button>
+                </Button>
               ))}
             </div>
           )}

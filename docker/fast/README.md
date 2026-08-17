@@ -72,7 +72,7 @@ Log in at http://localhost:8000/huf:
 - **User:** `Administrator`
 - **Password:** `fasterdocker-admin`
 
-The image ships with a disabled **Demo Assistant** agent and a **Demo Assistant Prompt** so you can see HUF's AI layer immediately. Enable the agent and add your OpenAI API key to start chatting.
+The image ships with an enabled **Demo Assistant** agent (Google's `gemini-3.5-flash-lite`) and a **Demo Assistant Prompt** so you can see HUF's AI layer immediately. Add your Google AI Provider API key to start chatting.
 
 Restart only the app (keeps the MariaDB volume):
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ interface SkillsTabProps {
 
 export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
   const [selectedSkill, setSelectedSkill] = useState('');
+  const comboboxRef = useRef<HTMLDivElement>(null);
 
   const handleAdd = () => {
     if (!selectedSkill || skills.some((s) => s.skill === selectedSkill)) return;
@@ -62,7 +63,7 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2" ref={comboboxRef}>
           <div className="flex-1">
             <Combobox
               options={skillOptions}
@@ -75,7 +76,7 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
           </div>
           <Button type="button" size="sm" variant="outline" onClick={handleAdd} disabled={!selectedSkill}>
             <Plus className="w-4 h-4 mr-2" />
-            Add Skill
+            Add skill
           </Button>
         </div>
 
@@ -85,6 +86,16 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
             <p className="text-xs text-muted-foreground mb-4">
               Attach skills to give this agent access to bundled tools, knowledge, prompts, and MCP servers.
             </p>
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              <Button
+                onClick={() => comboboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+                variant="outline"
+                type="button"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add skill
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">

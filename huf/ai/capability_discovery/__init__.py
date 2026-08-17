@@ -1,0 +1,1 @@
+"""HUF App Capability Discovery."""

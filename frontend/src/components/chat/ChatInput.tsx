@@ -1,20 +1,20 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { CornerDownLeft, Paperclip } from "lucide-react";
+import { ArrowUp, Plus, Square } from "lucide-react";
 import { Button } from "../ui/button";
-import { Textarea } from "../ui/textarea";
-import { ShortcutKey } from "../ui/shortcut-key";
 import {
   sendMessage,
   streamingAvailable,
   setStreamingAvailable,
 } from "@/services/streamChatApi";
 import { transcribeAudio, prepareMessageWithFile, uploadFileAttachment } from "@/services/chatApi";
-import type { PrepareMessageWithFileFile, TranscribeAudioResponse } from "@/services/chatApi";
+import type { PrepareMessageWithFileFile, TranscribeAudioResponse, ClientToolCallPayload } from "@/services/chatApi";
+import { executeClientToolCallsFromResponse } from "@/lib/clientToolDispatcher";
 import { SpeechInput } from "@/components/ai-elements/speech-input";
 import { ChatAttachmentCard } from "@/components/chat/ChatAttachmentCard";
 import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
+import { cn } from "@/lib/utils";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
@@ -35,6 +35,12 @@ export interface ChatInputHandle {
 interface ChatInputProps {
     chatId: string | null;
     agentName: string;
+    /** Current agent/conversation model, shown as an inline chip next to the keyboard hint. */
+    agentModel?: string | null;
+    /** HUF Project a brand-new conversation (no `chatId` yet) should be
+     * created into. Ignored once a conversation already exists - its own
+     * `project` is authoritative from then on. */
+    project?: string;
     onConversationCreated?: (conversationId: string, agentName?: string) => void;
     onStatusChange: (status: 'submitted' | 'streaming' | 'ready' | 'error') => void;
     onLoadingTypeChange?: (type: LoadingType) => void;
@@ -50,11 +56,18 @@ interface ChatInputProps {
      * queue-first.
      */
     runImmediately?: boolean;
+    /** Spec 28.2 — ARTIFACT OPEN: when the artifact pane is open, the
+     * composer collapses to a single-line box (no control row, no
+     * disclaimer). Sending still works via Return; the attach/mic/send
+     * controls are simply out of view until the pane is closed again. */
+    artifactPaneOpen?: boolean;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
     chatId,
     agentName,
+    agentModel,
+    project,
     onConversationCreated,
     onStatusChange,
     onLoadingTypeChange,
@@ -65,9 +78,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     allowFileUpload = false,
     maxUploadSizeMb,
     runImmediately = false,
+    artifactPaneOpen = false,
 }: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // True only while the current turn is actually going over SSE — the only
+    // path with a real in-flight request a "Stop" button can cancel. The
+    // queue-first REST path resolves as a quick ack, not a long stream.
+    const [isStreamingResponse, setIsStreamingResponse] = useState(false);
+    // User-triggered cancellation for the in-flight streaming request. Not
+    // the internal 3s connectivity guard in streamChatApi.ts — that guard
+    // has its own job and is untouched by this.
+    const abortControllerRef = useRef<AbortController | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const isAudioRecordingFlowRef = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +179,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             updateAssistantReasoning?: (reasoning: string) => void;
             skipUserMessage?: boolean;
             files?: PrepareMessageWithFileFile[];
+            signal?: AbortSignal;
         }) => {
             // Queue-first by default: turns go through the REST path and
             // reconcile from run lifecycle socket events. SSE streaming is the
@@ -181,6 +204,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         conversationId: params.conversationId,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
+                        // Only relevant the first time a conversation is created -
+                        // once `conversationId` exists the project is already set
+                        // on the document (moving it happens via ConversationMenu).
+                        project: params.conversationId ? undefined : project,
                     },
                     {
                         useStreaming,
@@ -188,6 +215,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         onReasoningDelta: useStreaming ? trackReasoningActivity : undefined,
                         skipUserMessage: params.skipUserMessage,
                         files: params.files,
+                        signal: params.signal,
                     }
                 );
                 const msg = response.message as Record<string, unknown>;
@@ -195,6 +223,16 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 // bubble or an endless loading state. `new_conversation` nests the
                 // run ack under `msg.run`; `send_message_to_conversation` flattens it.
                 const runAck = msg?.run as Record<string, unknown> | undefined;
+                // Second delivery path for client-side tool calls, alongside the
+                // `frontend_tool_call_initiated` socket event: the queue-first
+                // design treats realtime events as best-effort, so a dropped
+                // socket event must not be the only way a tool call gets run.
+                // `send_message_to_conversation` flattens `client_side_tool_calls`
+                // at the top level; `new_conversation` nests it under `msg.run`.
+                const clientSideToolCalls =
+                    (msg?.client_side_tool_calls as ClientToolCallPayload[] | undefined) ??
+                    (runAck?.client_side_tool_calls as ClientToolCallPayload[] | undefined);
+                executeClientToolCallsFromResponse(clientSideToolCalls);
                 const runSuccess = (msg?.success as boolean | undefined) ?? (runAck?.success as boolean | undefined);
                 if (runSuccess === false) {
                     const errorText =
@@ -233,7 +271,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 clearRunTimeout();
             }
         },
-        [agentName, runImmediately, armRunTimeout, clearRunTimeout]
+        [agentName, project, runImmediately, armRunTimeout, clearRunTimeout]
     );
 
     const syncAssistantMessageId = useCallback(
@@ -284,6 +322,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
         setIsSubmitting(true);
         onStatusChange('submitted');
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        const willStream = streamingAvailable && runImmediately;
+        setIsStreamingResponse(willStream);
 
         const userMessageKey = `user-${Date.now()}`;
         const userMessage: MessageType = {
@@ -331,6 +373,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 assistantMessageId,
                 updateAssistantContent,
                 updateAssistantReasoning,
+                signal: controller.signal,
             });
             if (runTimedOutRef.current) {
                 // Hang guard already converted the bubble to an error card.
@@ -383,12 +426,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             });
         } finally {
             setIsSubmitting(false);
+            setIsStreamingResponse(false);
+            abortControllerRef.current = null;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError, runImmediately]);
 
     useImperativeHandle(ref, () => ({
         send: sendTextMessage,
     }));
+
+    const handleStop = useCallback(() => {
+        abortControllerRef.current?.abort();
+    }, []);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -407,6 +456,9 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
             setIsSubmitting(true);
             onStatusChange('submitted');
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+            setIsStreamingResponse(streamingAvailable && runImmediately);
 
             const userMessageKey = `user-${Date.now()}`;
             const userMessage: MessageType = {
@@ -500,6 +552,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     updateAssistantReasoning,
                     skipUserMessage: true,
                     files: prepareRes.files,
+                    signal: controller.signal,
                 });
                 if (runTimedOutRef.current) {
                     // Hang guard already converted the bubble to an error card.
@@ -569,12 +622,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 });
             } finally {
                 setIsSubmitting(false);
+                setIsStreamingResponse(false);
+                abortControllerRef.current = null;
             }
             return;
         }
 
         await sendTextMessage(message.trim());
-    }, [message, agentName, pendingFile, isSubmitting, sendTextMessage, onStatusChange, chatId, onConversationCreated, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError]);
+    }, [message, agentName, pendingFile, isSubmitting, sendTextMessage, onStatusChange, chatId, onConversationCreated, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError, runImmediately]);
 
     const handleAudioRecorded = useCallback(async (blob: Blob): Promise<string> => {
         const filename = `recording-${Date.now()}.webm`;
@@ -859,10 +914,13 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     }
 
     return (
-        <div className="px-6 pb-6 pt-2">
-            <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-                <div className="w-full border border-zinc-200 rounded-xl shadow-2xl focus-within:ring-1 focus-within:ring-ring transition-all">
-                    <Textarea
+        <div className="flex-none px-[26px] pb-4">
+            <form onSubmit={handleSubmit}>
+                <div className={cn(
+                    "rounded-chat-bubble border border-input bg-panel",
+                    artifactPaneOpen && "px-[12px] py-[10px]"
+                )}>
+                    <textarea
                         ref={textareaRef}
                         value={message}
                         onChange={(e) => {
@@ -871,9 +929,12 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         }}
                         rows={2}
                         onKeyDown={handleKeyDown}
-                        placeholder="Type your message..."
-                        className="p-4 w-full min-h-[60px] max-h-[200px] resize-none focus-visible:ring-0 border-none shadow-none"
-                        style={{ 
+                        placeholder="Write a message…"
+                        className={cn(
+                            "flex w-full min-h-[60px] max-h-[200px] resize-none rounded bg-transparent text-[13px] text-ui-text placeholder:text-steel-soft border-none shadow-none outline-none focus-visible:outline-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50",
+                            artifactPaneOpen ? "p-0" : "px-[13px] pb-1 pt-[11px]"
+                        )}
+                        style={{
                             height: `${MIN_HEIGHT}px`
                         }}
                         disabled={isSubmitting}
@@ -893,14 +954,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             />
                         </div>
                     )}
-                    <div className="px-3 pb-3 w-full flex items-center justify-end gap-x-2 mt-2">
-                            <span className="flex items-center gap-x-1 text-[10px] text-zinc-400">
-                                Use
-                                <ShortcutKey>
-                                    Shift + Enter
-                                </ShortcutKey>
-                                for new line
-                            </span>
+                    {!artifactPaneOpen && (
+                    <div className="flex items-center gap-2.5 px-2.5 pb-2 pt-1.5">
                             {allowFileUpload && (
                                 <>
                                     <input
@@ -911,18 +966,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                         onChange={handleFileSelected}
                                         disabled={isSubmitting || pendingFile?.status === 'uploading'}
                                     />
-                                    <Button
+                                    <button
                                         type="button"
-                                        variant="secondary"
-                                        size="icon"
-                                        className="shrink-0 rounded-full"
+                                        className="shrink-0 text-steel disabled:pointer-events-none disabled:opacity-50"
                                         disabled={isSubmitting || pendingFile?.status === 'uploading'}
                                         onClick={() => fileInputRef.current?.click()}
                                         aria-label="Attach file"
                                     >
-                                        <Paperclip className="size-4" />
-                                    </Button>
+                                        <Plus className="size-[17px]" />
+                                    </button>
                                 </>
+                            )}
+                            <span className="flex-1" />
+                            {agentModel && (
+                                <span className="text-[12px] text-steel">{agentModel}</span>
                             )}
                             {!message.trim() && !pendingFile && (
                                 <SpeechInput
@@ -931,25 +988,44 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     preferServerStt={true}
                                     disabled={isSubmitting}
                                     size="icon"
-                                    className="shrink-0 rounded-full"
+                                    // The box stays (a 17px hit target is too small
+                                    // to tap); it is transparent when idle so the
+                                    // control reads as the bare glyph spec 28.1 draws.
+                                    className="shrink-0"
                                 />
                             )}
-                            <Button
-                                type="submit"
-                                disabled={
-                                    pendingFile?.status === 'uploading' ||
-                                    ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
-                                        isSubmitting)
-                                }
-                                size="icon"
-                                className="shrink-0"
-                            >
-                                <CornerDownLeft/>
-                            </Button>
+                            {isStreamingResponse ? (
+                                <Button
+                                    type="button"
+                                    onClick={handleStop}
+                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                                    aria-label="Stop generating response"
+                                >
+                                    <Square className="size-3.5" fill="currentColor" />
+                                </Button>
+                            ) : (
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        pendingFile?.status === 'uploading' ||
+                                        ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
+                                            isSubmitting)
+                                    }
+                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                                    aria-label="Send message"
+                                >
+                                    <ArrowUp className="size-[15px]" />
+                                </Button>
+                            )}
                         </div>
+                    )}
                 </div>
             </form>
-            <p className="mt-3 text-[10px] text-zinc-400 text-center">AI output can be inaccurate. Double check important info.</p>
+            {!artifactPaneOpen && (
+                <div className="mt-[7px] text-center text-[11px] text-steel-soft">
+                    AI output can be inaccurate. Double check important info.
+                </div>
+            )}
         </div>
     );
 });

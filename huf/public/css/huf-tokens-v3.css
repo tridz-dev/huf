@@ -1,0 +1,148 @@
+/*
+ * HUF Design Tokens — "Apple-quiet" v3.0 (PROPOSED — pending manual review)
+ * ==========================================================================
+ * Source: claude.ai/design project "Apple-like UI design system"
+ *   → "HUF UI System.dc.html" (imported via claude_design MCP)
+ *   https://claude.ai/design/p/d3e50367-c17a-4d03-9048-88373d6979a6
+ *
+ * Status: DRAFT / NOT WIRED UP. This is a sibling file to huf-tokens.css,
+ * not a replacement — the current v2.0 "Instrument / Control-Room" system
+ * (Big Shoulders + IBM Plex, 2px radius, no shadows, see /DESIGN.md) is
+ * still canonical and unaffected by this file.
+ *
+ * This v3 direction is a much quieter, Apple-system-font take: rounded
+ * (6-14px+pill) surfaces, soft shadows allowed, single system UI font
+ * instead of the three-typeface display/body/mono split. It is a
+ * meaningfully different visual language, not an incremental tweak —
+ * treat as a proposal to react to, not something to merge silently.
+ * See docs/design-system-v3-apple-quiet-review.md for the full
+ * component-by-component comparison against v2.0 and the list of gaps.
+ *
+ * Usage (once/if adopted):
+ *   <link rel="stylesheet" href="/assets/huf/css/huf-tokens-v3.css">
+ *   Scope with `.huf-v3-root` the same way huf-tokens.css uses `.huf-root`.
+ */
+
+:root {
+  /* Surfaces */
+  --huf3-canvas:   #FBFBFD;  /* app background */
+  --huf3-surface:  #FFFFFF;  /* cards, panels */
+  --huf3-sunken:   #F4F4F7;  /* recessed fills, sidebar, inputs-on-canvas */
+  --huf3-hairline: #ECECF0;  /* borders between surfaces, dividers */
+  --huf3-border:   #E4E4E8;  /* control borders (inputs, buttons) */
+
+  /* Text */
+  --huf3-ink:          #1D1D1F;  /* primary text */
+  --huf3-secondary:    #6E6E73;  /* body copy, descriptions */
+  --huf3-muted:        #98989D;  /* placeholders, meta, disabled-adjacent */
+  --huf3-disabled:     #B8B8BD;  /* disabled control text */
+  --huf3-disabled-line:#C4C4C9;  /* disabled icon/hairline */
+
+  /* Links & selection */
+  --huf3-link:           #0A6DD9;
+  --huf3-link-hover:     #084F9E;
+  --huf3-selection:      #D7E6FB;
+  --huf3-focus-ring:     rgba(10, 109, 217, .4);
+
+  /* Accent (theme-selectable — options captured from source component props) */
+  --huf3-accent:         #7A5AF0;  /* default in source; pick per product */
+  --huf3-accent-blue:    #0A6DD9;
+  --huf3-accent-ink:     #1D1D1F;
+  --huf3-accent-green:   #1C7C54;
+  --huf3-accent-purple:  #7A5AF0;
+
+  /* Semantic (10-12% tints behind text; never a fill larger than a badge) */
+  --huf3-success:      #1C7C54;
+  --huf3-success-tint: #E8F5EE;
+  --huf3-warning:      #8A5A00;
+  --huf3-warning-tint: #FDF3E0;
+  --huf3-danger:       #B3261E;
+  --huf3-danger-tint:  #FDECEA;
+  --huf3-neutral-tint: #F4F4F7;
+  --huf3-neutral-fg:   #6E6E73;
+
+  /* Shape */
+  --huf3-radius-sm:   6px;   /* small controls, icon tiles, mono chips */
+  --huf3-radius-md:   8px;   /* inputs, buttons */
+  --huf3-radius-lg:   10px;  /* segmented controls, notice tiles */
+  --huf3-radius-xl:   14px;  /* cards, panels */
+  --huf3-radius-pill: 999px; /* badges, switches, avatar */
+
+  /* Elevation — "flat / raised / overlay", the only three steps used */
+  --huf3-shadow-flat:    none;
+  --huf3-shadow-raised:  0 1px 2px rgba(0, 0, 0, .05);
+  --huf3-shadow-overlay: 0 8px 24px -8px rgba(0, 0, 0, .16);
+  --huf3-shadow-knob:    0 1px 2px rgba(0, 0, 0, .18); /* switch/toggle thumb */
+
+  /* Spacing scale */
+  --huf3-space-1: 4px;
+  --huf3-space-2: 8px;
+  --huf3-space-3: 12px;
+  --huf3-space-4: 16px;
+  --huf3-space-5: 24px;
+  --huf3-space-6: 32px;
+  --huf3-space-7: 48px;
+
+  /* Typography — single system stack, no display/body/mono three-way split */
+  --huf3-font:      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --huf3-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale: size / weight / letter-spacing */
+  --huf3-text-display-size: 28px; --huf3-text-display-weight: 600; --huf3-text-display-tracking: -.02em;
+  --huf3-text-title-size:   20px; --huf3-text-title-weight:   590; --huf3-text-title-tracking:   -.015em;
+  --huf3-text-body-size:    15px; --huf3-text-body-weight:    400;
+  --huf3-text-ui-size:      13px; --huf3-text-ui-weight-min:  400; --huf3-text-ui-weight-max: 590;
+  --huf3-text-meta-size:    11px; /* mono — ids, timestamps, model names */
+  --huf3-text-eyebrow-size: 10px; --huf3-text-eyebrow-tracking: .07em;
+}
+
+/* ------------------------------------------------------------------ */
+/* Opt-in root, mirroring huf-tokens.css's .huf-root convention.       */
+/* ------------------------------------------------------------------ */
+.huf-v3-root {
+  background-color: var(--huf3-canvas);
+  color: var(--huf3-ink);
+  font-family: var(--huf3-font);
+}
+
+/* Card: white surface, hairline border, 14px radius, no shadow at rest */
+.huf3-card {
+  background: var(--huf3-surface);
+  border: 1px solid var(--huf3-hairline);
+  border-radius: var(--huf3-radius-xl);
+  box-shadow: var(--huf3-shadow-flat);
+}
+
+/* Button base */
+.huf3-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-family: var(--huf3-font);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--huf3-radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.huf3-btn--primary { color: #fff; background: var(--huf3-accent); }
+.huf3-btn--secondary { background: var(--huf3-surface); border-color: var(--huf3-border); color: var(--huf3-ink); }
+.huf3-btn--ghost { background: transparent; color: var(--huf3-secondary); }
+.huf3-btn--danger { background: var(--huf3-danger-tint); color: var(--huf3-danger); }
+.huf3-btn:disabled { background: var(--huf3-sunken); border-color: var(--huf3-hairline); color: var(--huf3-disabled); cursor: default; }
+
+/* Badge / status pill */
+.huf3-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--huf3-radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+}
+.huf3-badge--success { background: var(--huf3-success-tint); color: var(--huf3-success); }
+.huf3-badge--warning { background: var(--huf3-warning-tint); color: var(--huf3-warning); }
+.huf3-badge--danger  { background: var(--huf3-danger-tint);  color: var(--huf3-danger); }
+.huf3-badge--neutral { background: var(--huf3-neutral-tint); color: var(--huf3-neutral-fg); }

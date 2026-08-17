@@ -22,10 +22,25 @@ import {
 interface ConversationDataPanelProps {
   conversationId: string;
   canWrite: boolean;
+  /** Controlled open state. When provided the panel renders no trigger of its own
+   * and the caller (e.g. a menu item) is responsible for opening it. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ConversationDataPanel({ conversationId, canWrite }: ConversationDataPanelProps) {
-  const [open, setOpen] = useState(false);
+export function ConversationDataPanel({
+  conversationId,
+  canWrite,
+  open: openProp,
+  onOpenChange,
+}: ConversationDataPanelProps) {
+  const controlled = openProp !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlled ? openProp : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (!controlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ConversationDataItem[]>([]);
   const [newKey, setNewKey] = useState('');
@@ -67,15 +82,17 @@ export function ConversationDataPanel({ conversationId, canWrite }: Conversation
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Database className="h-4 w-4" />
-          Conversation Data
-        </Button>
-      </SheetTrigger>
+      {!controlled && (
+        <SheetTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2">
+            <Database className="h-4 w-4" />
+            Conversation data
+          </Button>
+        </SheetTrigger>
+      )}
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>Conversation Data</SheetTitle>
+          <SheetTitle>Conversation data</SheetTitle>
           <SheetDescription>
             Key/value memory items stored for this conversation.
             {!canWrite && ' Read-only for this agent.'}
@@ -108,7 +125,7 @@ export function ConversationDataPanel({ conversationId, canWrite }: Conversation
 
         {canWrite && (
           <div className="mt-6 space-y-3 border-t pt-4">
-            <Label className="text-sm font-medium">Add / update item</Label>
+            <Label>Add / update item</Label>
             <Input placeholder="Key" value={newKey} onChange={(e) => setNewKey(e.target.value)} />
             <Input placeholder="Value" value={newValue} onChange={(e) => setNewValue(e.target.value)} />
             <Button onClick={handleAdd} disabled={saving} size="sm" className="gap-2">

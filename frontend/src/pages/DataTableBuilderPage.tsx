@@ -367,7 +367,7 @@ export function DataTableBuilderPage() {
 			<div className="flex-1 flex overflow-hidden relative">
 				{/* Left: Builder Canvas */}
 				<div className="flex-1 overflow-y-auto p-6 bg-paper">
-					<div className="max-w-2xl mx-auto rounded-none border border-line bg-panel p-6">
+					<div className="max-w-2xl mx-auto rounded-lg border border-line bg-panel p-6">
 						<TableBuilderCanvas
 							fields={state.fields}
 							selectedFieldIndex={state.selectedFieldIndex}
@@ -398,7 +398,7 @@ export function DataTableBuilderPage() {
 							type="button"
 							size="icon"
 							variant="outline"
-							className="fixed bottom-20 right-4 z-20 rounded-none bg-panel"
+							className="fixed bottom-20 right-4 z-20 rounded bg-panel"
 							onClick={() => setIsSidebarOpen(true)}
 						>
 							<Settings2 className="w-4 h-4" />
@@ -407,7 +407,7 @@ export function DataTableBuilderPage() {
 							<SheetContent side="right" className="w-full sm:max-w-sm p-4 overflow-y-auto">
 								<SheetHeader>
 									<SheetTitle>
-										{selectedField ? 'Field Settings' : 'Table Settings'}
+										{selectedField ? 'Field settings' : 'Table settings'}
 									</SheetTitle>
 								</SheetHeader>
 								<div className="mt-4">
@@ -424,21 +424,28 @@ export function DataTableBuilderPage() {
 			</div>
 
 			{/* Bottom action bar */}
-			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel">
-				<Button
-					variant="outline"
-					onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}
-				>
-					Cancel
-				</Button>
-				<Button onClick={handleSave} disabled={saving}>
-					{saving ? (
-						<Loader2 className="w-4 h-4 mr-2 animate-spin" />
-					) : (
-						<Save className="w-4 h-4 mr-2" />
-					)}
-					{isEdit ? 'Save Changes' : 'Create Table'}
-				</Button>
+			<div className="border-t border-line px-6 py-4 flex items-center justify-between bg-panel/[.92] backdrop-blur-[12px]">
+				{state.isDirty ? (
+					<span className="text-xs text-steel-soft">Unsaved changes</span>
+				) : (
+					<span />
+				)}
+				<div className="flex items-center gap-2">
+					<Button
+						variant="outline"
+						onClick={() => navigate(isEdit ? `/data/${tableId}` : '/data')}
+					>
+						Cancel
+					</Button>
+					<Button onClick={handleSave} disabled={saving}>
+						{saving ? (
+							<Loader2 className="w-4 h-4 mr-2 animate-spin" />
+						) : (
+							<Save className="w-4 h-4 mr-2" />
+						)}
+						{isEdit ? 'Save changes' : 'Create table'}
+					</Button>
+				</div>
 			</div>
 
 			<UnsavedChangesDialog blocker={blocker} />

@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { Info } from 'lucide-react'
 import {
 	FormField,
 	FormItem,
@@ -8,11 +9,28 @@ import {
 } from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { UseFormReturn } from 'react-hook-form'
 import type { AgentFormValues } from './types'
 import type { AgentOrchestrationPlanRow } from '@/types/agent.types'
 import { toast } from 'sonner'
 import { DefaultPlanTable } from './DefaultPlanTable'
+
+function LabelWithInfo({ label, tooltip }: { label: string; tooltip: string }) {
+	return (
+		<div className="flex items-center gap-1.5">
+			<FormLabel className="text-base">{label}</FormLabel>
+			<TooltipProvider>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Info className="h-3.5 w-3.5 text-muted-foreground" />
+					</TooltipTrigger>
+					<TooltipContent className="max-w-xs">{tooltip}</TooltipContent>
+				</Tooltip>
+			</TooltipProvider>
+		</div>
+	)
+}
 
 interface BehaviorTabProps {
 	form: UseFormReturn<AgentFormValues>
@@ -33,6 +51,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 	const persistConversationEnabled = form.watch('persist_conversation')
 	const enableMultiRun = form.watch('enable_multi_run')
 	const defaultPlan = form.watch('default_plan') || []
+	const allowChat = form.watch('allow_chat')
 
 	const updateRow = useCallback(
 		(index: number, field: keyof AgentOrchestrationPlanRow, value: string) => {
@@ -75,7 +94,7 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 		<>
 			<Card>
 				<CardHeader>
-					<CardTitle>Conversation Settings</CardTitle>
+					<CardTitle>Conversation settings</CardTitle>
 					<CardDescription>Configure conversation behaviour</CardDescription>
 				</CardHeader>
 				<CardContent className="grid gap-4 sm:grid-cols-2">
@@ -83,14 +102,14 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="allow_chat"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Allow Chat</FormLabel>
+									<FormLabel className="text-base">Allow chat</FormLabel>
 									<FormDescription>
 										If checked, this agent can be interacted with in the Agent Chat window.
 									</FormDescription>
 									{!field.value && (
-										<p className="text-xs font-medium text-amber-600">
+										<p className="text-xs font-medium text-warning">
 											Chat and streaming are disabled for this agent.
 										</p>
 									)}
@@ -120,13 +139,13 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="persist_conversation"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Persist History</FormLabel>
-									<FormDescription>
-										If checked, the conversation history with this agent will be saved and loaded for
-										future sessions.
-									</FormDescription>
+									<LabelWithInfo
+										label="Persist history"
+										tooltip="If checked, the conversation history with this agent will be saved and loaded for future sessions."
+									/>
+									<FormDescription>Saves conversation history for future sessions.</FormDescription>
 								</div>
 								<FormControl className="ml-1">
 									<Switch
@@ -147,12 +166,13 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="persist_user_history"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Persist per User (Doc/Schedule)</FormLabel>
-									<FormDescription>
-										When checked, Doc Event and Scheduled runs create / maintain conversation history per initiating user (or trigger owner). If unchecked, a single shared history is used.
-									</FormDescription>
+									<LabelWithInfo
+										label="Persist per user (legacy Doc Event only)"
+										tooltip="Applies only to Doc Event runs on the legacy Agent Trigger model: creates/maintains conversation history per initiating user (or trigger owner) when checked, otherwise a single shared history is used. Scheduled runs never read this field. Automations built on the newer Automation model set conversation identity per-Automation via Conversation Mode instead — this toggle has no effect there."
+									/>
+									<FormDescription>Legacy Doc Event history scoping — does not apply to Scheduled runs or to the newer Automation model.</FormDescription>
 								</div>
 								<FormControl className="ml-1">
 									<Switch checked={field.value} onCheckedChange={field.onChange} />
@@ -165,12 +185,13 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 						control={form.control}
 						name="enable_multi_run"
 						render={({ field }) => (
-							<FormItem className="flex flex-row items-center justify-between rounded-none border p-4">
+							<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
 								<div className="space-y-0.5">
-									<FormLabel className="text-base">Enable Multi Run</FormLabel>
-									<FormDescription>
-										Enables multi-step planning and execution. If enabled, the agent will analyze the request to create a step-by-step plan (or use a Default Plan) and execute them sequentially.
-									</FormDescription>
+									<LabelWithInfo
+										label="Enable multi run"
+										tooltip="Enables multi-step planning and execution. If enabled, the agent will analyze the request to create a step-by-step plan (or use a Default Plan) and execute them sequentially."
+									/>
+									<FormDescription>Enables multi-step planning and execution.</FormDescription>
 								</div>
 								<FormControl>
 									<Switch
@@ -192,10 +213,76 @@ export function BehaviorTab({ form, locked = false }: BehaviorTabProps) {
 				</CardContent>
 			</Card>
 
+			{allowChat && (
+				<Card className="mt-6">
+					<CardHeader>
+						<CardTitle>Chat Response Capabilities</CardTitle>
+						<CardDescription>
+							Control which extra response modes this agent's model can use beyond plain text. Turn any of these off to conserve prompt context for small, local, or API-only models — the AI Model can also force one off for every agent that uses it, from that model's own settings.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="grid gap-4 sm:grid-cols-2">
+						<FormField
+							control={form.control}
+							name="allow_ask_user"
+							render={({ field }) => (
+								<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+									<div className="space-y-0.5">
+										<FormLabel className="text-base">Allow Ask User</FormLabel>
+										<FormDescription>
+											Let the agent ask structured clarifying questions (buttons, choices, yes/no) via the ask_user tool instead of only plain text. Has no effect unless ask_user is also attached as a tool below.
+										</FormDescription>
+									</div>
+									<FormControl>
+										<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+									</FormControl>
+								</FormItem>
+							)}
+						/>
+
+						<FormField
+							control={form.control}
+							name="allow_rich_elements"
+							render={({ field }) => (
+								<FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+									<div className="space-y-0.5">
+										<FormLabel className="text-base">Allow Rich Elements</FormLabel>
+										<FormDescription>
+											Let the agent render inline charts, HTML/SVG/mermaid previews, and generated media instead of plain markdown text.
+										</FormDescription>
+									</div>
+									<FormControl>
+										<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+									</FormControl>
+								</FormItem>
+							)}
+						/>
+
+						<FormField
+							control={form.control}
+							name="allow_document_artifacts"
+							render={({ field }) => (
+								<FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
+									<div className="space-y-0.5">
+										<FormLabel className="text-base">Allow Document Artifacts</FormLabel>
+										<FormDescription>
+											Let the agent author long-form documents as artifacts (Markdown/HTML), and export or redline them when those tools are attached.
+										</FormDescription>
+									</div>
+									<FormControl>
+										<Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+									</FormControl>
+								</FormItem>
+							)}
+						/>
+					</CardContent>
+				</Card>
+			)}
+
 			{enableMultiRun && (
 				<Card className="mt-6">
 					<CardHeader>
-						<CardTitle>Default Plan</CardTitle>
+						<CardTitle>Default plan</CardTitle>
 						<CardDescription>
 							Define the default orchestration steps for multi-run execution.
 						</CardDescription>

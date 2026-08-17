@@ -19,6 +19,7 @@
   "pass_parameters_as_json",
   "function_path",
   "function_name",
+  "blocking",
   "header_section",
   "http_headers",
   "section_break_ajuk",
@@ -28,7 +29,10 @@
   "parameters_section",
   "parameters",
   "params",
-  "function_definition"
+  "function_definition",
+  "seeding_metadata_section",
+  "source_app",
+  "source_file"
  ],
  "fields": [
   {
@@ -171,6 +175,14 @@
    "fieldname": "function_name",
    "fieldtype": "Data",
    "label": "Function Name"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.types=='Client Side Tool'",
+   "description": "When checked, the agent waits (up to a fixed timeout) for the browser to report a result before continuing. Uncheck for fire-and-forget client-side tools where the agent should not wait for a result.",
+   "fieldname": "blocking",
+   "fieldtype": "Check",
+   "label": "Blocking"
   },
   {
    "fieldname": "section_break_ajuk",

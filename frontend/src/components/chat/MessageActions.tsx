@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart2, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { BarChart2, RefreshCw, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -20,9 +20,13 @@ interface MessageActionsProps {
   agentMessageId?: string;
   agentRunId?: string;
   onFeedback: (feedback: 'Thumbs Up' | 'Thumbs Down', options?: { agentMessageId?: string; comments?: string }) => void;
+  /** Re-runs the user turn that produced this response. Omitted when the source turn is unknown. */
+  onRegenerate?: () => void;
+  /** True while a turn is already in flight, to prevent overlapping runs. */
+  regenerateDisabled?: boolean;
 }
 
-export function MessageActions({ content, agentMessageId, agentRunId, onFeedback }: MessageActionsProps) {
+export function MessageActions({ content, agentMessageId, agentRunId, onFeedback, onRegenerate, regenerateDisabled }: MessageActionsProps) {
   const [commentDialogOpen, setCommentDialogOpen] = useState(false);
   const [commentText, setCommentText] = useState('');
 
@@ -36,13 +40,13 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
 
   return (
     <>
-      <div className="mt-3 flex items-center gap-2 text-muted-foreground">
+      <div className="mt-3 flex items-center gap-[14px] text-muted-foreground">
         <CopyButton content={content} />
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="!h-7 !w-7 text-steel-soft hover:text-ink"
           onClick={() => onFeedback('Thumbs Up', { agentMessageId })}
           aria-label="Mark response helpful"
         >
@@ -52,18 +56,32 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="!h-7 !w-7 text-steel-soft hover:text-ink"
           onClick={() => setCommentDialogOpen(true)}
           aria-label="Mark response not helpful"
         >
           <ThumbsDown className="h-4 w-4" />
         </Button>
+        {onRegenerate && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="!h-7 !w-7 text-steel-soft hover:text-ink"
+            onClick={onRegenerate}
+            disabled={regenerateDisabled}
+            aria-label="Regenerate response"
+            title="Regenerate response"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        )}
         {agentRunId && (
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
+            className="!h-7 !w-7 text-steel-soft hover:text-ink"
             asChild
             aria-label="View context & cache metrics"
           >
