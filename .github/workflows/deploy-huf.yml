@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - pre-develop
+      - develop
       #- stage-1
       #- stage-2
-      #- develop
       #- test-1
 
 jobs:
