@@ -197,6 +197,71 @@ class TestGatewayIngress(unittest.TestCase):
         assert admitted is False
         assert reason == "Room messages must mention the gateway"
 
+    @patch("huf.ai.gateway_service.frappe")
+    def test_room_open_policy_admits_without_an_access_entry(self, mock_frappe):
+        """Regression: `Open` used to AND against `== "Allow list"`, making it
+        unconditionally False -- stricter than `Allow list`, the inverse of
+        what the label promises."""
+        admitted, _ = gateway_service._admission(
+            gateway(room_policy="Open", room_sender_policy="Open", mention_required=0),
+            {"sender_id": "42", "conversation_id": "room:1", "is_room": True, "mentioned": False},
+        )
+        assert admitted is True
+        mock_frappe.get_all.assert_not_called()
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_room_allow_list_still_requires_an_approved_access_entry(self, mock_frappe):
+        mock_frappe.get_all.return_value = []
+        admitted, _ = gateway_service._admission(
+            gateway(room_policy="Allow list", room_sender_policy="Open", mention_required=0),
+            {"sender_id": "42", "conversation_id": "room:1", "is_room": True, "mentioned": False},
+        )
+        assert admitted is False
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_room_disabled_policy_never_admits(self, mock_frappe):
+        admitted, _ = gateway_service._admission(
+            gateway(room_policy="Disabled", room_sender_policy="Open", mention_required=0),
+            {"sender_id": "42", "conversation_id": "room:1", "is_room": True, "mentioned": False},
+        )
+        assert admitted is False
+        mock_frappe.get_all.assert_not_called()
+
+
+class TestApproveGatewayAccessEntry(unittest.TestCase):
+    @patch("huf.ai.gateway_service.now_datetime", return_value=datetime(2026, 7, 26, 0, 0, 0))
+    @patch("huf.ai.gateway_service.frappe")
+    def test_approval_clears_expires_at(self, mock_frappe, mock_now):
+        """Regression: approval used to leave the pairing-request TTL on
+        `expires_at`, so `_has_access_entry`'s `expires_at >= now` filter made
+        an approved entry silently stop matching once that TTL elapsed."""
+        entry = MagicMock(state="Pending", expires_at=None)
+        entry.name = "ACCESS-001"
+        mock_frappe.get_doc.return_value = entry
+        mock_frappe.has_permission.return_value = True
+        mock_frappe.session.user = "admin@example.com"
+
+        result = gateway_service.approve_gateway_access_entry("ACCESS-001")
+
+        assert result == {"name": "ACCESS-001", "state": "Approved"}
+        entry.db_set.assert_called_once_with(
+            {
+                "state": "Approved",
+                "approved_by": "admin@example.com",
+                "approved_at": mock_now.return_value,
+                "expires_at": None,
+            }
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_approval_denied_without_write_permission(self, mock_frappe):
+        mock_frappe.has_permission.return_value = False
+        mock_frappe.PermissionError = PermissionError
+        mock_frappe.throw.side_effect = PermissionError("Not permitted")
+
+        with self.assertRaises(PermissionError):
+            gateway_service.approve_gateway_access_entry("ACCESS-001")
+
 
 class TestGatewayReplyDelivery(unittest.TestCase):
     @patch("huf.ai.gateway_service.frappe")

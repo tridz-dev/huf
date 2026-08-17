@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   Copy,
   Link2,
@@ -35,6 +36,7 @@ import { IntegrationSettingsHeaderActions } from '@/components/integrations/Inte
 import { getIntegrationSettings } from '@/services/integrationApi';
 import type { IntegrationSettingsDoc } from '@/types/integration.types';
 import { cn } from '@/lib/utils';
+import { formatTimeAgo } from '@/utils/time';
 
 const PROVIDER_SERVICE: Partial<Record<GatewayProvider, string>> = {
   WhatsApp: 'whatsapp',
@@ -370,6 +372,18 @@ export default function GatewaysPage() {
                   onClick: () => setEditingGateway(gateway),
                 },
               ]}
+              footer={
+                <div className="flex items-center gap-1.5 text-[11px] text-steel">
+                  {gateway.last_error ? (
+                    <>
+                      <AlertTriangle className="h-3 w-3 shrink-0 text-destructive" />
+                      <span className="line-clamp-1 text-destructive">{gateway.last_error}</span>
+                    </>
+                  ) : (
+                    <span>Last event: {formatTimeAgo(gateway.last_event_at)}</span>
+                  )}
+                </div>
+              }
             />
           );
         }}

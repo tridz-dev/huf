@@ -136,6 +136,19 @@ def _create_pairing_request(gateway, sender_id: str, conversation_id: str | None
     return pairing_code
 
 
+def _policy_admits(policy: str | None, gateway, entry_type: str, external_id: str) -> bool:
+    """Evaluate one admission policy value against its matching access entry.
+
+    ``Open`` admits unconditionally, ``Allow list`` requires an approved
+    ``Gateway Access Entry``, and anything else (``Disabled``/unset) denies.
+    """
+    if policy == "Open":
+        return True
+    if policy == "Allow list":
+        return _has_access_entry(gateway, entry_type, external_id)
+    return False
+
+
 def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     sender_id, conversation_id = str(context.get("sender_id") or ""), str(context.get("conversation_id") or "")
     is_room = bool(context.get("is_room"))
@@ -146,8 +159,8 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
             return False, f"Sender pairing approval is required. Pairing code: {code}"
         return (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id), "Sender is not approved for this gateway")
 
-    room_ok = gateway.room_policy == "Allow list" and _has_access_entry(gateway, "Room", conversation_id)
-    sender_ok = gateway.room_sender_policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id)
+    room_ok = _policy_admits(gateway.room_policy, gateway, "Room", conversation_id)
+    sender_ok = _policy_admits(gateway.room_sender_policy, gateway, "Sender", sender_id)
     mentioned = bool(context.get("mentioned"))
     if gateway.mention_required and not mentioned:
         return False, "Room messages must mention the gateway"
@@ -162,7 +175,12 @@ def approve_gateway_access_entry(entry_name: str) -> dict:
     entry = frappe.get_doc("Gateway Access Entry", entry_name)
     if entry.state != "Pending" or (entry.expires_at and entry.expires_at < now_datetime()):
         frappe.throw(_("This pairing request is not active."))
-    entry.db_set({"state": "Approved", "approved_by": frappe.session.user, "approved_at": now_datetime()})
+    # expires_at held the pairing-request TTL, not an approval TTL. Leaving it
+    # set means _has_access_entry's `expires_at >= now` filter makes this
+    # newly-approved entry silently stop matching once that TTL elapses.
+    entry.db_set(
+        {"state": "Approved", "approved_by": frappe.session.user, "approved_at": now_datetime(), "expires_at": None}
+    )
     return {"name": entry.name, "state": "Approved"}
 
 
