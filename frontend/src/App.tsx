@@ -77,6 +77,9 @@ const IntegrationSettingsListingPageWrapper = lazy(
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
+const GatewayDetailsPageWrapper = lazy(
+  () => import('./pages/GatewayDetailsPageWrapper'),
+);
 const IntegrationServicesListingPageWrapper = lazy(
   () => import('./pages/IntegrationServicesListingPageWrapper'),
 );
@@ -653,6 +656,16 @@ function AppShell() {
                     <GatewaysPage />
                   </Suspense>
                 </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/gateways/:settingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <GatewayDetailsPageWrapper />
+                </Suspense>
               </ProtectedRoute>
             }
           />

@@ -24,6 +24,8 @@ export interface IntegrationServiceDoc {
   name: string;
   service_name: string;
   category: string;
+  // Determines which UI surface owns the service (Integrations vs Gateways)
+  surface?: 'Integration' | 'Gateway';
   description?: string;
   documentation_url?: string;
   required_credentials?: string | CredentialSchemaItem[];

@@ -14,7 +14,8 @@ import { ServiceCatalogModal } from '@/components/integrations/ServiceCatalogMod
 import { ServiceToolCount } from '@/components/integrations/ServiceToolCount';
 import type { IntegrationSettingsDoc, IntegrationServiceDoc } from '@/types/integration.types';
 import { formatTimeAgo } from '@/utils/time';
-import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
+import { getServiceIdentity } from '@/data/serviceIdentity';
+import { getServiceSurfaceMap, type ServiceSurface } from '@/services/serviceSurfaceCache';
 
 interface IntegrationSettingsListingPageProps {
   catalogOpenKey?: number;
@@ -31,10 +32,17 @@ export function IntegrationSettingsListingPage({
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [addToAgentOpen, setAddToAgentOpen] = useState(false);
   const [selectedSetting, setSelectedSetting] = useState<IntegrationSettingsDoc | null>(null);
+  const [serviceSurfaceMap, setServiceSurfaceMap] = useState<Map<string, ServiceSurface> | null>(null);
 
   useEffect(() => {
     getIntegrationServices().then(setServices).catch(() => {
       // Non-fatal; cards still render without category labels
+    });
+  }, []);
+
+  useEffect(() => {
+    getServiceSurfaceMap().then(setServiceSurfaceMap).catch(() => {
+      // Non-fatal; defaults to treating every service as an Integration
     });
   }, []);
 
@@ -98,14 +106,18 @@ export function IntegrationSettingsListingPage({
     autoLoad: true,
   });
 
+  const detailsRoute = (name: string) =>
+    `${kind === 'channels' ? '/gateways' : '/integrations'}/${encodeURIComponent(name)}`;
+
   const settings = useMemo(() => {
     const byKind = allSettings.filter((item) => {
-      const isMessaging = messagingServiceNames.has(item.service.toLowerCase());
-      return kind === 'channels' ? isMessaging : !isMessaging;
+      const surface = serviceSurfaceMap?.get(item.service.toLowerCase()) || 'Integration';
+      const isGateway = surface === 'Gateway';
+      return kind === 'channels' ? isGateway : !isGateway;
     });
     if (categoryFilter === 'all') return byKind;
     return byKind.filter((item) => serviceCategoryMap.get(item.service) === categoryFilter);
-  }, [allSettings, categoryFilter, kind, serviceCategoryMap]);
+  }, [allSettings, categoryFilter, kind, serviceCategoryMap, serviceSurfaceMap]);
 
   useEffect(() => {
     if (error) {
@@ -216,10 +228,10 @@ export function IntegrationSettingsListingPage({
                 {
                   icon: Settings,
                   label: 'Configure',
-                  onClick: () => navigate(`/integrations/${encodeURIComponent(setting.name)}`),
+                  onClick: () => navigate(detailsRoute(setting.name)),
                 },
               ]}
-              onClick={() => navigate(`/integrations/${encodeURIComponent(setting.name)}`)} 
+              onClick={() => navigate(detailsRoute(setting.name))}
             />
           );
         }}

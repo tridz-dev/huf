@@ -1047,34 +1047,140 @@ def register_integration_services():
 		{
 			"service_name": "slack",
 			"category": "Communication",
+			"surface": "Gateway",
 			"description": "Slack messaging and channel management",
 			"required_credentials": [{"key": "token", "label": "Slack Bot Token", "required": True}]
 		},
 		{
 			"service_name": "discord",
 			"category": "Communication",
+			"surface": "Gateway",
 			"description": "Discord bot for messaging and channel management",
 			"required_credentials": [{"key": "bot_token", "label": "Discord Bot Token", "required": True}]
 		},
 		{
 			"service_name": "telegram",
 			"category": "Communication",
+			"surface": "Gateway",
 			"description": "Telegram bot for messaging",
 			"required_credentials": [{"key": "token", "label": "Telegram Bot Token", "required": True}]
 		},
-		
+		{
+			"service_name": "whatsapp",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "WhatsApp Business messaging via the Meta Cloud API",
+			"required_credentials": [
+				{"key": "phone_number_id", "label": "Phone Number ID", "required": True},
+				{"key": "access_token", "label": "Meta Permanent/System Access Token", "required": True},
+				{"key": "webhook_verify_token", "label": "Webhook Verify Token", "required": True},
+				{"key": "app_secret", "label": "Meta App Secret (for HMAC signature verification)", "required": False}
+			]
+		},
+		{
+			"service_name": "messenger",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Facebook Messenger for Page messaging",
+			"required_credentials": [
+				{"key": "page_id", "label": "Facebook Page ID", "required": True},
+				{"key": "access_token", "label": "Facebook Page Access Token", "required": True},
+				{"key": "webhook_verify_token", "label": "Webhook Verify Token", "required": True},
+				{"key": "app_secret", "label": "Meta App Secret (for HMAC signature verification)", "required": False}
+			]
+		},
+		{
+			"service_name": "instagram",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Instagram Direct messaging via the Meta Graph API",
+			"required_credentials": [
+				{"key": "instagram_account_id", "label": "Instagram Professional Account ID / Page ID", "required": True},
+				{"key": "access_token", "label": "Facebook / Instagram Page Access Token", "required": True},
+				{"key": "webhook_verify_token", "label": "Webhook Verify Token", "required": True},
+				{"key": "app_secret", "label": "Meta App Secret (for HMAC signature verification)", "required": False}
+			]
+		},
+		{
+			"service_name": "email",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Inbound/outbound email messaging",
+			"required_credentials": [
+				{"key": "webhook_secret", "label": "Webhook Verification Secret (Optional)", "required": False},
+				{"key": "sender_email", "label": "Default Outbound Sender Email (Optional)", "required": False}
+			]
+		},
+		{
+			"service_name": "sms",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "SMS messaging via Twilio or Frappe SMS Settings",
+			"required_credentials": [
+				{"key": "account_sid", "label": "Twilio Account SID (or 'frappe_sms' to use Frappe SMS Settings)", "required": False},
+				{"key": "auth_token", "label": "Twilio Auth Token (Optional if using Frappe SMS)", "required": False},
+				{"key": "from_number", "label": "Twilio Phone Number (+1... / Sender ID)", "required": False}
+			]
+		},
+		{
+			"service_name": "google_chat",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Google Chat space messaging via incoming webhooks",
+			"required_credentials": [
+				{"key": "webhook_url", "label": "Google Chat Incoming Webhook URL (Optional)", "required": False},
+				{"key": "verification_token", "label": "Verification Token (Optional)", "required": False}
+			]
+		},
+		{
+			"service_name": "microsoft_teams",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Microsoft Teams bot for messaging",
+			"required_credentials": [
+				{"key": "app_id", "label": "Microsoft App ID", "required": True},
+				{"key": "app_password", "label": "Microsoft App Secret / Password", "required": True}
+			]
+		},
+		{
+			"service_name": "vk",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "VKontakte community messaging",
+			"required_credentials": [
+				{"key": "community_token", "label": "Community access token", "required": True},
+				{"key": "callback_secret", "label": "Callback API secret", "required": True},
+				{"key": "confirmation_string", "label": "Callback confirmation string", "required": True}
+			]
+		},
+		{
+			"service_name": "wecom",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "WeCom (WeChat Work) application messaging",
+			"required_credentials": [
+				{"key": "corp_id", "label": "Corporation ID", "required": True},
+				{"key": "agent_id", "label": "Application Agent ID", "required": True},
+				{"key": "corp_secret", "label": "Application Secret", "required": True},
+				{"key": "callback_token", "label": "Callback Token", "required": True},
+				{"key": "encoding_aes_key", "label": "Callback EncodingAESKey", "required": True}
+			]
+		},
+
 		# Developer Tools
 		{
 			"service_name": "github",
 			"category": "Developer",
+			"surface": "Integration",
 			"description": "GitHub API for repository and issue management",
 			"required_credentials": [{"key": "access_token", "label": "GitHub Access Token", "required": True}]
 		},
-		
+
 		# Project Management Tools
 		{
 			"service_name": "jira",
 			"category": "Project Management",
+			"surface": "Integration",
 			"description": "Jira issue tracking and project management",
 			"required_credentials": [
 				{"key": "server_url", "label": "Jira Server URL", "required": True},
@@ -1082,11 +1188,12 @@ def register_integration_services():
 				{"key": "token", "label": "API Token", "required": True}
 			]
 		},
-		
+
 		# Google Workspace Tools
 		{
 			"service_name": "gmail",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Gmail email management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1097,6 +1204,7 @@ def register_integration_services():
 		{
 			"service_name": "google_calendar",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Calendar event management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1107,6 +1215,7 @@ def register_integration_services():
 		{
 			"service_name": "google_drive",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Drive file management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1117,6 +1226,7 @@ def register_integration_services():
 		{
 			"service_name": "google_sheets",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Sheets management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1127,6 +1237,7 @@ def register_integration_services():
 		{
 			"service_name": "google_maps",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Maps directions and geocoding",
 			"required_credentials": [
 				{"key": "api_key", "label": "Google Maps API Key", "required": True}
@@ -1135,6 +1246,7 @@ def register_integration_services():
 		{
 			"service_name": "google_meet",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Meet meeting space creation",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1145,6 +1257,7 @@ def register_integration_services():
 		{
 			"service_name": "serpapi",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "SerpApi search data: hotels, reviews (Google Maps, TripAdvisor, Yelp), and YouTube",
 			"required_credentials": [
 				{"key": "api_key", "label": "SerpApi API Key", "required": True}
@@ -1160,6 +1273,7 @@ def register_integration_services():
 				# Update existing service
 				doc = frappe.get_doc("Integration Service", service_data["service_name"])
 				doc.category = service_data["category"]
+				doc.surface = service_data.get("surface", "Integration")
 				doc.description = service_data["description"]
 				doc.required_credentials = json.dumps(service_data["required_credentials"])
 				doc.is_builtin = 1
@@ -1170,6 +1284,7 @@ def register_integration_services():
 					"doctype": "Integration Service",
 					"service_name": service_data["service_name"],
 					"category": service_data["category"],
+					"surface": service_data.get("surface", "Integration"),
 					"description": service_data["description"],
 					"required_credentials": json.dumps(service_data["required_credentials"]),
 					"is_builtin": 1
