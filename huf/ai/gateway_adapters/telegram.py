@@ -108,6 +108,10 @@ class TelegramGatewayAdapter(GatewayAdapter):
 			for entity in (message.get("entities") or [])
 		)
 
+		username = str(sender.get("username") or "").strip()
+		first_name = str(sender.get("first_name") or "").strip()
+		display_name = f"@{username}" if username else first_name
+
 		return NormalizedGatewayEvent(
 			provider_event_id=provider_event_id,
 			sender_id=sender_id,
@@ -117,6 +121,7 @@ class TelegramGatewayAdapter(GatewayAdapter):
 			is_room=chat_type in {"group", "supergroup"},
 			mentioned=mentioned,
 			raw_payload=update,
+			display_name=display_name,
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
