@@ -143,25 +143,33 @@ export function buildCredentialsPayload(
 ): IntegrationCredentialRow[] {
   const existingMap = credentialsToMap(existingCredentials);
 
-  return schema.map((item) => {
+  return schema.flatMap((item) => {
     const formValue = formValues[item.key]?.trim() ?? '';
     const existingRow = existingCredentials?.find((c) => c.key === item.key);
+    const isRequired = item.required !== false;
 
     if (isNew) {
-      return {
+      if (!isRequired && !formValue) {
+        return [];
+      }
+      return [{
         key: item.key,
         value: formValue,
         description: item.label,
-      };
+      }];
     }
 
     // On edit: blank field keeps existing value
     const value = formValue || existingMap[item.key] || '';
-    return {
+    if (!isRequired && !value) {
+      return [];
+    }
+
+    return [{
       ...(existingRow?.name ? { name: existingRow.name } : {}),
       key: item.key,
       value,
       description: item.label,
-    };
+    }];
   });
 }

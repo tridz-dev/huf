@@ -3,6 +3,7 @@
 
 import secrets
 from datetime import datetime, timedelta
+import json
 
 import frappe
 from frappe.model.document import Document
@@ -22,12 +23,51 @@ class IntegrationSettings(Document):
 		"""Validate that credentials are provided when service is set."""
 		if not self.service:
 			frappe.throw("Integration Service is required")
-		
+
+		self._prune_empty_optional_credentials()
+		self._validate_required_credentials()
+
 		# Ensure at least one credential is provided
 		if not self.credentials:
 			frappe.throw("At least one credential is required")
 
 		self._ensure_telegram_webhook_config()
+
+	def _get_service_credential_schema(self) -> list[dict]:
+		raw = frappe.db.get_value("Integration Service", self.service, "required_credentials")
+		if not raw:
+			return []
+		try:
+			return json.loads(raw) if isinstance(raw, str) else raw
+		except (TypeError, json.JSONDecodeError):
+			return []
+
+	@staticmethod
+	def _credential_has_value(cred) -> bool:
+		if cred.value:
+			return True
+		if cred.name:
+			return bool(cred.get_password("value", raise_exception=False))
+		return False
+
+	def _prune_empty_optional_credentials(self):
+		schema = {item.get("key"): item for item in self._get_service_credential_schema() if item.get("key")}
+		pruned = []
+		for cred in self.credentials:
+			required = schema.get(cred.key, {}).get("required", True)
+			if required or self._credential_has_value(cred):
+				pruned.append(cred)
+		self.credentials = pruned
+
+	def _validate_required_credentials(self):
+		present = {cred.key for cred in self.credentials if self._credential_has_value(cred)}
+		missing = [
+			item.get("label") or item["key"]
+			for item in self._get_service_credential_schema()
+			if item.get("key") and item.get("required", True) and item["key"] not in present
+		]
+		if missing:
+			frappe.throw(f"Missing required credentials: {', '.join(missing)}")
 	
 	def on_update(self):
 		"""Optional auto-setup of Telegram webhook after save.

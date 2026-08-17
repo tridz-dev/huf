@@ -1027,10 +1027,78 @@ def register_integration_services():
 			"category": "Project Management",
 			"description": "Jira issue tracking and project management",
 			"required_credentials": [
-				{"key": "server_url", "label": "Jira Server URL", "required": True},
-				{"key": "username", "label": "Username", "required": True},
-				{"key": "token", "label": "API Token", "required": True}
-			]
+				{"key": "base_url", "label": "Jira Base URL", "required": True},
+				{"key": "email", "label": "Account Email", "required": True},
+				{"key": "api_token", "label": "API Token", "required": True},
+			],
+		},
+		{
+			"service_name": "linear",
+			"category": "Project Management",
+			"description": "Linear issue tracking and project management",
+			"required_credentials": [
+				{"key": "api_key", "label": "Linear API Key", "required": True},
+			],
+		},
+		{
+			"service_name": "clickup",
+			"category": "Project Management",
+			"description": "ClickUp task and project management",
+			"required_credentials": [
+				{"key": "api_key", "label": "ClickUp API Key", "required": True},
+			],
+		},
+		{
+			"service_name": "trello",
+			"category": "Project Management",
+			"description": "Trello boards, lists, and cards",
+			"required_credentials": [
+				{"key": "api_key", "label": "Trello API Key", "required": True},
+				{"key": "token", "label": "Trello Token", "required": True},
+			],
+		},
+		{
+			"service_name": "notion",
+			"category": "Project Management",
+			"description": "Notion pages and database queries",
+			"required_credentials": [
+				{"key": "api_key", "label": "Notion Integration Token", "required": True},
+				{
+					"key": "database_id",
+					"label": "Default Database ID",
+					"required": False,
+					"secret": False,
+					"description": "Optional default database when tools omit database_id",
+				},
+			],
+		},
+		{
+			"service_name": "zendesk",
+			"category": "Other",
+			"description": "Zendesk support ticket management",
+			"required_credentials": [
+				{"key": "username", "label": "Agent Email", "required": True},
+				{"key": "password", "label": "API Token", "required": True},
+				{"key": "company_name", "label": "Zendesk Subdomain", "required": True},
+			],
+		},
+		{
+			"service_name": "calcom",
+			"category": "Other",
+			"description": "Cal.com scheduling and bookings",
+			"required_credentials": [
+				{"key": "api_key", "label": "Cal.com API Key", "required": True},
+			],
+		},
+		{
+			"service_name": "zoom",
+			"category": "Communication",
+			"description": "Zoom meeting management via Server-to-Server OAuth",
+			"required_credentials": [
+				{"key": "account_id", "label": "Zoom Account ID", "required": True},
+				{"key": "client_id", "label": "Zoom Client ID", "required": True},
+				{"key": "client_secret", "label": "Zoom Client Secret", "required": True},
+			],
 		},
 		
 		# Google Workspace Tools
