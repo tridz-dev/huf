@@ -83,6 +83,11 @@ class NormalizedGatewayEvent:
 	is_room: bool = False
 	mentioned: bool = False
 	raw_payload: Mapping[str, Any] = field(default_factory=dict)
+	# Optional human-readable sender name (e.g. Telegram @handle or first
+	# name). Defaults to "" so adapters that don't populate it -- every
+	# adapter but Telegram today -- need no changes; a pending pairing entry
+	# then falls back to the bare "Sender <id>" label.
+	display_name: str = ""
 
 	def __post_init__(self) -> None:
 		for name in ("provider_event_id", "sender_id", "conversation_id"):

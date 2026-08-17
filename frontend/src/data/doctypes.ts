@@ -22,6 +22,7 @@ export const doctype = {
   Gateway: "Gateway",
   "Gateway Binding": "Gateway Binding",
   "Gateway Event": "Gateway Event",
+  "Gateway Access Entry": "Gateway Access Entry",
   "Integration Service": "Integration Service",
   "Elevenlabs Settings": "Elevenlabs Settings",
   "Groq Settings": "Groq Settings",

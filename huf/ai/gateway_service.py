@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 from typing import Any
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
 
 
@@ -73,7 +75,9 @@ def _has_access_entry(gateway, entry_type: str, external_id: str) -> bool:
     return bool(entries)
 
 
-def _create_pairing_request(gateway, sender_id: str, conversation_id: str | None = None) -> str:
+def _create_pairing_request(
+    gateway, sender_id: str, conversation_id: str | None = None, display_name: str | None = None
+) -> str:
     """Create a live pairing request with a short pairing code (PAIR-XXXX)."""
     if not sender_id:
         return ""
@@ -92,8 +96,6 @@ def _create_pairing_request(gateway, sender_id: str, conversation_id: str | None
     if existing:
         return existing[0].get("pairing_code") or ""
 
-    import secrets
-
     code_suffix = secrets.token_hex(2).upper()
     pairing_code = f"PAIR-{code_suffix}"
 
@@ -107,31 +109,35 @@ def _create_pairing_request(gateway, sender_id: str, conversation_id: str | None
             "pairing_code": pairing_code,
             "state": "Pending",
             "expires_at": add_to_date(now_datetime(), minutes=int(gateway.pairing_ttl_minutes or 60)),
-            "display_label": f"Sender {sender_id}",
+            "display_label": display_name.strip() if display_name and display_name.strip() else f"Sender {sender_id}",
         }
     ).insert(ignore_permissions=True)
 
-    try:
-        if gateway.integration_settings:
-            int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
-            creds = {}
-            for row in getattr(int_doc, "credentials", []):
-                creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
+    # pairing_reply_enabled defaults to 1 (on) but doesn't exist on Gateway
+    # docs created before this field was added; getattr keeps those enabled
+    # rather than silently going quiet.
+    if getattr(gateway, "pairing_reply_enabled", 1):
+        try:
+            if gateway.integration_settings:
+                int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
+                creds = {}
+                for row in getattr(int_doc, "credentials", []):
+                    creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
 
-            from huf.ai.gateway_webhook import _adapter_class_for_provider
-            from huf.ai.gateway_adapters.types import GatewayReply
+                from huf.ai.gateway_webhook import _adapter_class_for_provider
+                from huf.ai.gateway_adapters.types import GatewayReply
 
-            adapter_cls = _adapter_class_for_provider(gateway.provider)
-            adapter = adapter_cls(creds)
-            target_conv = conversation_id or sender_id
-            reply_msg = (
-                f"🔒 Access approval required.\n\n"
-                f"Your pairing code is: `{pairing_code}`\n\n"
-                f"Please share this code with the bot administrator to get approved."
-            )
-            adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
-    except Exception as exc:
-        frappe.logger("huf").warning(f"Failed to send pairing code message: {exc}")
+                adapter_cls = _adapter_class_for_provider(gateway.provider)
+                adapter = adapter_cls(creds)
+                target_conv = conversation_id or sender_id
+                reply_msg = (
+                    f"🔒 Access approval required.\n\n"
+                    f"Your pairing code is: `{pairing_code}`\n\n"
+                    f"Please share this code with the bot administrator to get approved."
+                )
+                adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
+        except Exception as exc:
+            frappe.logger("huf").warning(f"Failed to send pairing code message: {exc}")
 
     return pairing_code
 
@@ -155,7 +161,10 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     if not is_room:
         policy = gateway.direct_policy or "Allow list"
         if policy == "Pairing":
-            code = _create_pairing_request(gateway, sender_id, conversation_id=conversation_id)
+            display_name = str(context.get("display_name") or "") or None
+            code = _create_pairing_request(
+                gateway, sender_id, conversation_id=conversation_id, display_name=display_name
+            )
             return False, f"Sender pairing approval is required. Pairing code: {code}"
         return (policy == "Allow list" and _has_access_entry(gateway, "Sender", sender_id), "Sender is not approved for this gateway")
 
@@ -167,21 +176,138 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     return room_ok and sender_ok, "Room or sender is not approved for this gateway"
 
 
+def _find_pending_entry_by_code(pairing_code: str) -> str | None:
+    """Constant-time-compare a candidate code against every Pending entry's
+    stored code, rather than an indexed equality filter, per the rate-limiting
+    plan for this brute-forceable endpoint (see approve_gateway_pairing)."""
+    pending = frappe.get_all(
+        "Gateway Access Entry",
+        filters={"state": "Pending"},
+        fields=["name", "pairing_code"],
+    )
+    for row in pending:
+        if row.pairing_code and secrets.compare_digest(row.pairing_code, pairing_code):
+            return row.name
+    return None
+
+
 @frappe.whitelist(methods=["POST"])
-def approve_gateway_access_entry(entry_name: str) -> dict:
-    """Approve a pending pairing request; only system administrators may widen admission."""
+@rate_limit(limit=20, seconds=60)
+def approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None) -> dict:
+    """Approve a pending Gateway Access Entry by its PAIR-XXXX code or doc name.
+
+    This is the canonical approval path, consolidating the previously
+    unreachable ``gateway_pairing_tools.approve_pairing_code`` and the
+    Desk-only, doc-name-only ``approve_gateway_access_entry`` into one
+    whitelisted function reachable both ways. Looks up by ``pairing_code``
+    first (case-normalized, constant-time compared since a pairing code is
+    guessable and this endpoint is otherwise unauthenticated-by-code), then
+    falls back to matching by document name for backward compatibility with
+    existing entry_name-based callers.
+    """
     if not frappe.has_permission("Gateway Access Entry", "write"):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
+    if not code_or_entry_name or not code_or_entry_name.strip():
+        frappe.throw(_("A pairing code or entry name is required."))
+
+    code_clean = code_or_entry_name.strip().upper()
+    entry_name = _find_pending_entry_by_code(code_clean)
+    if not entry_name:
+        raw_name = code_or_entry_name.strip()
+        if frappe.db.exists("Gateway Access Entry", raw_name):
+            entry_name = raw_name
+
+    if not entry_name:
+        frappe.throw(_("No pending pairing request found matching '{0}'.").format(code_or_entry_name))
+
     entry = frappe.get_doc("Gateway Access Entry", entry_name)
     if entry.state != "Pending" or (entry.expires_at and entry.expires_at < now_datetime()):
         frappe.throw(_("This pairing request is not active."))
+
     # expires_at held the pairing-request TTL, not an approval TTL. Leaving it
     # set means _has_access_entry's `expires_at >= now` filter makes this
     # newly-approved entry silently stop matching once that TTL elapses.
-    entry.db_set(
-        {"state": "Approved", "approved_by": frappe.session.user, "approved_at": now_datetime(), "expires_at": None}
+    updates = {
+        "state": "Approved",
+        "approved_by": frappe.session.user,
+        "approved_at": now_datetime(),
+        "expires_at": None,
+    }
+    if notes:
+        updates["notes"] = notes
+    entry.db_set(updates)
+
+    notification_status = "Not attempted"
+    try:
+        gw_doc = frappe.get_doc("Gateway", entry.gateway)
+        if gw_doc.integration_settings:
+            int_doc = frappe.get_doc("Integration Settings", gw_doc.integration_settings)
+            creds = {}
+            for row in getattr(int_doc, "credentials", []):
+                creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
+
+            from huf.ai.gateway_webhook import _adapter_class_for_provider
+            from huf.ai.gateway_adapters.types import GatewayReply
+
+            adapter_cls = _adapter_class_for_provider(gw_doc.provider)
+            adapter = adapter_cls(creds)
+            welcome_text = (
+                "🎉 Your access pairing request has been approved!\n\n"
+                "You can now interact directly with this assistant."
+            )
+            adapter.send_reply(GatewayReply(conversation_id=entry.external_id, text=welcome_text))
+            notification_status = "Welcome message sent to sender"
+    except Exception as exc:
+        notification_status = f"Approval saved, welcome message notice: {exc}"
+
+    return {
+        "name": entry.name,
+        "state": "Approved",
+        "gateway": entry.gateway,
+        "provider": entry.provider,
+        "external_id": entry.external_id,
+        "notification_status": notification_status,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def approve_gateway_access_entry(entry_name: str) -> dict:
+    """Backward-compatible alias; approve_gateway_pairing is now canonical."""
+    result = approve_gateway_pairing(entry_name)
+    return {"name": result["name"], "state": result["state"]}
+
+
+@frappe.whitelist(methods=["GET"])
+def list_gateway_access_entries(gateway: str | None = None, state: str = "Pending") -> list[dict]:
+    """List Gateway Access Entries, defaulting to the pending-approval queue."""
+    if not frappe.has_permission("Gateway Access Entry", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    filters: dict[str, Any] = {}
+    if state:
+        filters["state"] = state
+    if gateway:
+        filters["gateway"] = gateway
+    return frappe.get_all(
+        "Gateway Access Entry",
+        filters=filters,
+        fields=[
+            "name", "gateway", "provider", "entry_type", "external_id", "pairing_code",
+            "state", "expires_at", "display_label", "approved_by", "approved_at",
+            "revoked_at", "notes", "creation",
+        ],
+        order_by="creation desc",
+        limit_page_length=0,
     )
-    return {"name": entry.name, "state": "Approved"}
+
+
+@frappe.whitelist(methods=["POST"])
+def revoke_gateway_access_entry(entry_name: str) -> dict:
+    """Revoke an entry, pending or previously approved, denying it going forward."""
+    if not frappe.has_permission("Gateway Access Entry", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+    entry = frappe.get_doc("Gateway Access Entry", entry_name)
+    entry.db_set({"state": "Revoked", "revoked_at": now_datetime()})
+    return {"name": entry.name, "state": "Revoked"}
 
 
 def resolve_gateway_route(gateway_name: str, context: dict[str, Any]) -> dict:

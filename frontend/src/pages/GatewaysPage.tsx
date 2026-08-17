@@ -1,18 +1,23 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { type ColumnDef } from '@tanstack/react-table';
+import { toast } from 'sonner';
 import {
   AlertTriangle,
   Check,
   Copy,
+  KeyRound,
   Link2,
   Network,
   Plus,
   Settings,
   ShieldCheck,
   Trash2,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { GridView, ItemCard, EmptyState } from '@/components/dashboard';
+import { DataListView } from '@/components/dashboard/DataListView';
 import {
   getGateways,
   updateGateway,
@@ -23,11 +28,18 @@ import {
   type GatewayProvider,
   type GatewayPolicy,
 } from '@/services/gatewayApi';
+import {
+  listGatewayAccessEntries,
+  approveGatewayPairing,
+  revokeGatewayAccessEntry,
+  type GatewayAccessEntry,
+} from '@/services/gatewayAccessApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { useUser } from '@/contexts/UserContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getProviderBrandIcon } from '@/components/common/BrandIcons';
 import { IntegrationSettingsProvider } from '@/contexts/IntegrationSettingsContext';
@@ -45,7 +57,7 @@ const PROVIDER_SERVICE: Partial<Record<GatewayProvider, string>> = {
   Telegram: 'telegram',
 };
 
-type GatewaysTab = 'gateways' | 'credentials';
+type GatewaysTab = 'gateways' | 'pending-access' | 'credentials';
 
 const providerNames: Record<GatewayProvider, string> = {
   WhatsApp: 'WhatsApp Business Number',
@@ -99,9 +111,154 @@ export default function GatewaysPage() {
   const [saving, setSaving] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
 
+  // Pending access (pairing approval) state
+  const [pendingEntries, setPendingEntries] = useState<GatewayAccessEntry[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [pendingGatewayFilter, setPendingGatewayFilter] = useState('all');
+  const [approveCodeInput, setApproveCodeInput] = useState('');
+  const [approvingCode, setApprovingCode] = useState(false);
+  const [rowActionName, setRowActionName] = useState<string | null>(null);
+
   useEffect(() => {
     loadData();
+    loadPendingEntries();
   }, []);
+
+  useEffect(() => {
+    loadPendingEntries();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingGatewayFilter]);
+
+  async function loadPendingEntries() {
+    setPendingLoading(true);
+    try {
+      const entries = await listGatewayAccessEntries({
+        gateway: pendingGatewayFilter === 'all' ? undefined : pendingGatewayFilter,
+        state: 'Pending',
+      });
+      setPendingEntries(entries);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not load pending access requests.');
+    } finally {
+      setPendingLoading(false);
+    }
+  }
+
+  async function handleApproveByCode(event: FormEvent) {
+    event.preventDefault();
+    const code = approveCodeInput.trim();
+    if (!code) return;
+    setApprovingCode(true);
+    try {
+      await approveGatewayPairing(code);
+      toast.success(`Approved ${code}. The sender's next message will now go through.`);
+      setApproveCodeInput('');
+      loadPendingEntries();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : `Could not approve ${code}.`);
+    } finally {
+      setApprovingCode(false);
+    }
+  }
+
+  async function handleApproveEntry(entry: GatewayAccessEntry) {
+    setRowActionName(entry.name);
+    try {
+      await approveGatewayPairing(entry.pairing_code || entry.name);
+      toast.success(`Approved ${entry.display_label || entry.external_id}.`);
+      setPendingEntries((prev) => prev.filter((e) => e.name !== entry.name));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not approve this request.');
+    } finally {
+      setRowActionName(null);
+    }
+  }
+
+  async function handleRevokeEntry(entry: GatewayAccessEntry) {
+    if (!confirm(`Revoke the pairing request from ${entry.display_label || entry.external_id}?`)) return;
+    setRowActionName(entry.name);
+    try {
+      await revokeGatewayAccessEntry(entry.name);
+      toast.success('Access request revoked.');
+      setPendingEntries((prev) => prev.filter((e) => e.name !== entry.name));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not revoke this request.');
+    } finally {
+      setRowActionName(null);
+    }
+  }
+
+  const pendingColumns = useMemo<ColumnDef<GatewayAccessEntry>[]>(
+    () => [
+      {
+        accessorKey: 'display_label',
+        header: 'Sender',
+        cell: ({ row }) => (
+          <span className="text-sm font-medium text-ink">
+            {row.original.display_label || `Sender ${row.original.external_id}`}
+          </span>
+        ),
+      },
+      {
+        accessorKey: 'gateway',
+        header: 'Gateway',
+        cell: ({ row }) => <span className="text-xs text-steel">{row.original.gateway}</span>,
+      },
+      {
+        accessorKey: 'provider',
+        header: 'Channel',
+        cell: ({ row }) => <span className="text-xs text-steel">{row.original.provider}</span>,
+      },
+      {
+        accessorKey: 'pairing_code',
+        header: 'Pairing code',
+        cell: ({ row }) => (
+          <span className="font-mono text-xs text-ink">{row.original.pairing_code || '—'}</span>
+        ),
+      },
+      {
+        accessorKey: 'creation',
+        header: 'Requested',
+        cell: ({ row }) => <span className="text-xs text-steel">{formatTimeAgo(row.original.creation)}</span>,
+      },
+      {
+        accessorKey: 'expires_at',
+        header: 'Expires',
+        cell: ({ row }) => <span className="text-xs text-steel">{formatTimeAgo(row.original.expires_at)}</span>,
+      },
+      {
+        id: 'actions',
+        header: '',
+        cell: ({ row }) => {
+          const entry = row.original;
+          const busy = rowActionName === entry.name;
+          return (
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2.5 text-xs"
+                disabled={busy}
+                onClick={() => handleApproveEntry(entry)}
+              >
+                <UserCheck className="mr-1 h-3.5 w-3.5" /> Approve
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2.5 text-xs text-destructive hover:text-destructive"
+                disabled={busy}
+                onClick={() => handleRevokeEntry(entry)}
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" /> Revoke
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [rowActionName]
+  );
 
   async function loadData() {
     setLoading(true);
@@ -203,6 +360,7 @@ export default function GatewaysPage() {
       {(
         [
           { key: 'gateways' as const, label: 'Gateways' },
+          { key: 'pending-access' as const, label: 'Pending access', badge: pendingEntries.length },
           { key: 'credentials' as const, label: 'Channel credentials' },
         ]
       ).map((tab) => (
@@ -218,7 +376,17 @@ export default function GatewaysPage() {
               : 'border-transparent text-steel hover:text-ink'
           )}
         >
-          {tab.label}
+          <span className="flex items-center gap-1.5">
+            {tab.label}
+            {'badge' in tab && (tab.badge ?? 0) > 0 && (
+              <Badge
+                variant="destructive"
+                className="h-4 min-w-[16px] px-1 py-0 flex items-center justify-center"
+              >
+                {tab.badge! > 9 ? '9+' : tab.badge}
+              </Badge>
+            )}
+          </span>
         </Button>
       ))}
     </div>
@@ -237,6 +405,74 @@ export default function GatewaysPage() {
           </div>
         </div>
       </IntegrationSettingsProvider>
+    );
+  }
+
+  if (activeTab === 'pending-access') {
+    return (
+      <PageFrame title="Gateways">
+        {tabBar}
+
+        <form
+          className="mb-6 grid gap-3 rounded-xl border border-line bg-panel p-5 shadow-xs sm:grid-cols-[1fr_auto] sm:items-end"
+          onSubmit={handleApproveByCode}
+        >
+          <label className="grid gap-1.5 text-xs font-medium text-ink">
+            Approve by pairing code
+            <Input
+              className="h-10 font-mono text-sm uppercase"
+              value={approveCodeInput}
+              onChange={(e) => setApproveCodeInput(e.target.value)}
+              placeholder="PAIR-XXXX"
+            />
+            <span className="text-[11px] font-normal text-steel">
+              Paste the code the sender shared with you to approve them without finding their row below.
+            </span>
+          </label>
+          <Button type="submit" disabled={approvingCode || !approveCodeInput.trim()} className="h-10">
+            <KeyRound className="mr-1.5 h-4 w-4" />
+            {approvingCode ? 'Approving…' : 'Approve code'}
+          </Button>
+        </form>
+
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-base text-ink">Pending pairing requests</h2>
+            <p className="text-xs text-steel">
+              Senders who messaged a gateway with a Pairing policy wait here until approved.
+            </p>
+          </div>
+          <label className="grid gap-1 text-xs font-medium text-ink">
+            <Select value={pendingGatewayFilter} onValueChange={setPendingGatewayFilter}>
+              <SelectTrigger className="h-9 w-[220px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All gateways</SelectItem>
+                {gateways.map((gw) => (
+                  <SelectItem key={gw.name} value={gw.name}>
+                    {gw.gateway_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
+        </div>
+
+        <DataListView
+          columns={pendingColumns}
+          data={pendingEntries}
+          loading={pendingLoading}
+          emptyState={
+            <EmptyState
+              variant="passive"
+              icon={ShieldCheck}
+              title="No pending access requests"
+              description="When someone DMs a Pairing-policy gateway, their request will show up here for approval."
+            />
+          }
+        />
+      </PageFrame>
     );
   }
 
