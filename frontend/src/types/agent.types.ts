@@ -242,6 +242,7 @@ export interface AgentDoc {
 
   // Agent specific fields
   agent_name: string;
+  agent_modality?: "Text" | "Voice" | "Both";
   provider: string;
   model: string;
   provider_brand?: string | null;

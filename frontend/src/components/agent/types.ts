@@ -2,8 +2,9 @@ import * as z from 'zod';
 
 export const agentFormSchema = z.object({
   agent_name: z.string().min(1, 'Agent name is required'),
-  provider: z.string().min(1, 'Provider is required'),
-  model: z.string().min(1, 'Model is required'),
+  agent_modality: z.enum(['Text', 'Voice', 'Both']).default('Both'),
+  provider: z.string().optional(),
+  model: z.string().optional(),
   temperature: z.number().min(0).max(2),
   top_p: z.number().min(0).max(1),
   disabled: z.boolean(),
@@ -115,6 +116,22 @@ export const agentFormSchema = z.object({
   allow_rich_elements: z.boolean().optional(),
   allow_document_artifacts: z.boolean().optional(),
 }).superRefine((values, ctx) => {
+  if (values.agent_modality !== 'Voice') {
+    if (!values.provider?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["provider"],
+        message: 'Provider is required',
+      });
+    }
+    if (!values.model?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["model"],
+        message: 'Model is required',
+      });
+    }
+  }
   if (values.prompt_mode === "Template" && !values.agent_prompt?.trim()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
