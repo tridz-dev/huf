@@ -42,7 +42,12 @@ That stash IS the contract between the engine and this sidecar:
           "agent": <Agent docname>,
           "model": <AI Model docname>,
           "api_key_provider": <AI Provider docname>,
+          "conversation_id": <Agent Conversation docname or None>,
       }
+
+  ``conversation_id`` is optional: when present the sidecar joins that
+  existing Agent Conversation for transcript persistence, otherwise it
+  starts a fresh one at connect time.
 
 - TTL: short (the engine uses 300s). An expired or missing stash means the
   session was never minted, already ended, or timed out - the WebSocket is
@@ -64,6 +69,8 @@ import aiohttp
 import frappe
 from fastapi import FastAPI, WebSocket
 from fastapi.websockets import WebSocketDisconnect
+
+from huf.ai.voice.persistence import get_or_create_voice_conversation, record_voice_turn
 
 app = FastAPI(title="HUF Realtime Voice Sidecar")
 
@@ -137,7 +144,14 @@ async def _pump_browser_to_provider(browser: WebSocket, provider: aiohttp.Client
 			await provider.send_bytes(message["bytes"])
 
 
-async def _pump_provider_to_browser(browser: WebSocket, provider: aiohttp.ClientWebSocketResponse) -> None:
+async def _pump_provider_to_browser(
+	browser: WebSocket,
+	provider: aiohttp.ClientWebSocketResponse,
+	*,
+	agent_name: str | None = None,
+	cm=None,
+	conversation=None,
+) -> None:
 	"""Forward every provider frame back to the browser.
 
 	Tool-call events (``response.function_call_arguments.done`` and friends)
@@ -150,6 +164,8 @@ async def _pump_provider_to_browser(browser: WebSocket, provider: aiohttp.Client
 	async for frame in provider:
 		if frame.type == aiohttp.WSMsgType.TEXT:
 			await browser.send_text(frame.data)
+			if cm and conversation and agent_name:
+				_try_persist_agent_turn(frame.data, cm, conversation, agent_name)
 		elif frame.type == aiohttp.WSMsgType.BINARY:
 			await browser.send_bytes(frame.data)
 		elif frame.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSING, aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
@@ -160,9 +176,10 @@ async def _pump_provider_to_browser(browser: WebSocket, provider: aiohttp.Client
 async def realtime_bridge(websocket: WebSocket, session_id: str) -> None:
 	"""Bridge one browser WebSocket to one provider realtime WebSocket.
 
-	Lifecycle: accept -> establish frappe context -> resolve the session stash
-	and credentials -> dial the provider -> pump both directions until either
-	side closes -> tear the frappe context down.
+	Lifecycle: accept -> establish frappe context -> resolve the session stash,
+	the Agent Conversation to persist into, and credentials -> dial the
+	provider -> pump both directions until either side closes -> tear the
+	frappe context down.
 	"""
 	await websocket.accept()
 
@@ -190,17 +207,43 @@ async def realtime_bridge(websocket: WebSocket, session_id: str) -> None:
 			await websocket.close(code=CLOSE_SESSION_NOT_FOUND, reason="Unknown or expired voice session")
 			return
 
+		agent_name = session.get("agent")
+		conversation_id = session.get("conversation_id")
+		cm, conversation = None, None
+		if agent_name:
+			try:
+				cm, conversation = get_or_create_voice_conversation(agent_name, conversation_id)
+			except Exception:
+				# Persistence is best-effort: a broken/inaccessible conversation_id
+				# must never block the call itself from connecting.
+				cm, conversation = None, None
+
 		api_key, model_id = _resolve_provider_credentials(session)
 		if not api_key or not model_id:
 			await websocket.close(code=CLOSE_UPSTREAM_FAILED, reason="Voice session is missing provider credentials")
 			return
 
-		await _proxy_openai_realtime(websocket, api_key=api_key, model_id=model_id)
+		await _proxy_openai_realtime(
+			websocket,
+			api_key=api_key,
+			model_id=model_id,
+			agent_name=agent_name,
+			cm=cm,
+			conversation=conversation,
+		)
 	finally:
 		frappe.destroy()
 
 
-async def _proxy_openai_realtime(websocket: WebSocket, *, api_key: str, model_id: str) -> None:
+async def _proxy_openai_realtime(
+	websocket: WebSocket,
+	*,
+	api_key: str,
+	model_id: str,
+	agent_name: str | None = None,
+	cm=None,
+	conversation=None,
+) -> None:
 	"""Dial OpenAI's Realtime API and pump frames both ways until either closes.
 
 	``aiohttp`` is used for the upstream leg because it is already a declared
@@ -220,7 +263,15 @@ async def _proxy_openai_realtime(websocket: WebSocket, *, api_key: str, model_id
 			) as provider:
 				pumps = [
 					asyncio.create_task(_pump_browser_to_provider(websocket, provider)),
-					asyncio.create_task(_pump_provider_to_browser(websocket, provider)),
+					asyncio.create_task(
+						_pump_provider_to_browser(
+							websocket,
+							provider,
+							agent_name=agent_name,
+							cm=cm,
+							conversation=conversation,
+						)
+					),
 				]
 				try:
 					# Either direction finishing means the call is over; cancel
@@ -246,6 +297,23 @@ async def _safe_close(websocket: WebSocket, code: int, reason: str) -> None:
 	try:
 		await websocket.close(code=code, reason=reason)
 	except RuntimeError:
+		pass
+
+
+def _try_persist_agent_turn(raw_frame: str, cm, conversation, agent_name: str) -> None:
+	"""Best-effort: persist an agent-spoken turn if this frame is a completed transcript event.
+
+	Never raises - a parse failure or persistence error here must never affect
+	the live audio relay, which has already happened by the time this runs
+	(see the call site in _pump_provider_to_browser).
+	"""
+	import json as _json
+
+	try:
+		event = _json.loads(raw_frame)
+		if event.get("type") == "response.audio_transcript.done":
+			record_voice_turn(cm, conversation, agent_name, role="agent", content=event.get("transcript", ""))
+	except Exception:
 		pass
 
 
