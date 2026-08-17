@@ -54,17 +54,6 @@ const SerpApiIcon: ServiceIcon = ({ className }) =>
     ),
   );
 
-export const messagingServiceNames = new Set([
-  'telegram',
-  'slack',
-  'whatsapp',
-  'discord',
-  'microsoft_teams',
-  'teams',
-  'wecom',
-  'vk',
-]);
-
 const serviceIdentities: Record<string, { title: string; icon: ServiceIcon }> = {
   telegram: { title: 'Telegram', icon: SiTelegram },
   slack: { title: 'Slack', icon: FaSlack },

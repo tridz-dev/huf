@@ -1,21 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Workflow } from 'lucide-react';
-import { getServiceIdentity, messagingServiceNames } from './serviceIdentity';
+import { getServiceIdentity } from './serviceIdentity';
 
 describe('service identities', () => {
-  it('classifies the supported messaging channels', () => {
-    expect([...messagingServiceNames].sort()).toEqual([
-      'discord',
-      'microsoft_teams',
-      'slack',
-      'teams',
-      'telegram',
-      'vk',
-      'wecom',
-      'whatsapp',
-    ]);
-  });
-
   it.each([
     ['telegram', 'Telegram'],
     ['slack', 'Slack'],

@@ -43,12 +43,26 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { createFormSubmitHandler, type TabFieldMapping } from '@/utils/formValidation';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
-export function IntegrationSettingsDetailsPage() {
+interface IntegrationSettingsDetailsPageProps {
+  /**
+   * Which UI surface this record belongs to — determined by the wrapper that
+   * renders this page (IntegrationSettingsDetailsPageWrapper for /integrations,
+   * GatewayDetailsPageWrapper for /gateways). Passed explicitly rather than
+   * looked up async via getServiceSurface() so the very first render (and the
+   * post-save/-delete navigation) never races a not-yet-loaded surface cache.
+   */
+  surface?: 'Integration' | 'Gateway';
+}
+
+export function IntegrationSettingsDetailsPage({
+  surface = 'Integration',
+}: IntegrationSettingsDetailsPageProps = {}) {
   const { settingId } = useParams<{ settingId: string }>();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const isNew = settingId === 'new';
   const initialService = searchParams.get('service') || '';
+  const listRoute = surface === 'Gateway' ? '/gateways' : '/integrations';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -190,7 +204,7 @@ export function IntegrationSettingsDetailsPage() {
     if (isNew) {
       if (!initialService) {
         toast.error('Please select a service from the catalog');
-        navigate('/integrations');
+        navigate(listRoute);
         return;
       }
       form.reset({
@@ -245,7 +259,7 @@ export function IntegrationSettingsDetailsPage() {
         toast.error(getFrappeErrorMessage(error) || 'Failed to load integration');
       })
       .finally(() => setLoading(false));
-  }, [isNew, initialService, settingId, form, navigate, loadServiceSchema]);
+  }, [isNew, initialService, settingId, form, navigate, loadServiceSchema, listRoute]);
 
   useEffect(() => {
     if (isTelegram) {
@@ -316,7 +330,7 @@ export function IntegrationSettingsDetailsPage() {
       if (isNew) {
         const created = await createIntegrationSetting(payload);
         toast.success('Integration created successfully');
-        navigate(`/integrations/${encodeURIComponent(created.name)}`, { replace: true });
+        navigate(`${listRoute}/${encodeURIComponent(created.name)}`, { replace: true });
       } else if (settingId) {
         const updated = await updateIntegrationSetting(settingId, payload);
         toast.success('Integration updated successfully');
@@ -344,7 +358,7 @@ export function IntegrationSettingsDetailsPage() {
     } finally {
       setSaving(false);
     }
-  }, [credentialSchema, form, isNew, navigate, settingId]);
+  }, [credentialSchema, form, isNew, navigate, settingId, listRoute]);
 
   const handleFormSubmit = useMemo(
     () => createFormSubmitHandler(form, activeTab, tabFieldMapping, tabLabels, onSubmit),
@@ -366,7 +380,7 @@ export function IntegrationSettingsDetailsPage() {
     try {
       await deleteIntegrationSetting(settingId);
       toast.success('Integration deleted');
-      navigate('/integrations');
+      navigate(listRoute);
     } catch (error) {
       toast.error(getFrappeErrorMessage(error) || 'Failed to delete integration');
     } finally {

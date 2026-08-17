@@ -2,6 +2,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
+
 
 class Gateway(Document):
     """A configured inbound/outbound messaging account.
@@ -21,7 +23,14 @@ class Gateway(Document):
         if self.direct_policy == "Open":
             frappe.throw(_("Public direct-message gateways are not available in this release."))
 
-        expected_service = {"VK": "vk", "WeCom": "wecom", "WhatsApp": "whatsapp", "Telegram": "telegram"}.get(self.provider)
+        # Every provider gets the same "linked Integration Settings must match
+        # this provider's service" check now, via the one canonical
+        # provider -> service_name transform (see provider_to_service_id).
+        # This used to only cover 4 of 12 providers (VK, WeCom, WhatsApp,
+        # Telegram); the other 8 previously had no such validation at all.
+        # Gated on is_enabled, same as before, so a disabled gateway with a
+        # stale/mismatched linked integration still saves.
+        expected_service = provider_to_service_id(self.provider) if self.provider else None
         if expected_service and self.is_enabled:
             if not self.integration_settings:
                 frappe.throw(_("Enabled {0} gateways need a connected integration.").format(self.provider))

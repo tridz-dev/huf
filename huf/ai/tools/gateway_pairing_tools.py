@@ -14,6 +14,8 @@ import frappe
 from frappe import _
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
+
 
 def setup_gateway(
 	provider: str,
@@ -75,14 +77,14 @@ def setup_gateway(
 	existing_gateway = frappe.db.get_value("Gateway", gateway_name, "integration_settings")
 	if existing_gateway and frappe.db.exists("Integration Settings", existing_gateway):
 		int_doc = frappe.get_doc("Integration Settings", existing_gateway)
-		int_doc.service = provider.lower().replace(" ", "_")
+		int_doc.service = provider_to_service_id(provider)
 		int_doc.is_active = 1
 		int_doc.credentials = []
 	else:
 		int_doc = frappe.get_doc(
 			{
 				"doctype": "Integration Settings",
-				"service": provider.lower().replace(" ", "_"),
+				"service": provider_to_service_id(provider),
 				"is_active": 1,
 			}
 		)

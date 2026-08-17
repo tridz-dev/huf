@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { type ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
 import {
@@ -49,6 +50,7 @@ import { getIntegrationSettings } from '@/services/integrationApi';
 import type { IntegrationSettingsDoc } from '@/types/integration.types';
 import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/utils/time';
+import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 
 const PROVIDER_SERVICE: Partial<Record<GatewayProvider, string>> = {
   WhatsApp: 'whatsapp',
@@ -58,6 +60,13 @@ const PROVIDER_SERVICE: Partial<Record<GatewayProvider, string>> = {
 };
 
 type GatewaysTab = 'gateways' | 'pending-access' | 'credentials';
+
+const GATEWAYS_TABS: GatewaysTab[] = ['gateways', 'pending-access', 'credentials'];
+const DEFAULT_GATEWAYS_TAB: GatewaysTab = 'gateways';
+
+function parseGatewaysTab(value: string | null): GatewaysTab {
+  return GATEWAYS_TABS.includes(value as GatewaysTab) ? (value as GatewaysTab) : DEFAULT_GATEWAYS_TAB;
+}
 
 const providerNames: Record<GatewayProvider, string> = {
   WhatsApp: 'WhatsApp Business Number',
@@ -91,7 +100,23 @@ const uiProviders: GatewayProvider[] = [
 
 export default function GatewaysPage() {
   const { user } = useUser();
-  const [activeTab, setActiveTab] = useState<GatewaysTab>('gateways');
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseGatewaysTab(searchParams.get('tab'));
+  const setActiveTab = (tab: GatewaysTab) => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === DEFAULT_GATEWAYS_TAB) {
+          next.delete('tab');
+        } else {
+          next.set('tab', tab);
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
   const [catalogOpenKey, setCatalogOpenKey] = useState(0);
   const [gateways, setGateways] = useState<GatewayDoc[]>([]);
   const [integrationSettings, setIntegrationSettings] = useState<IntegrationSettingsDoc[]>([]);
@@ -291,7 +316,12 @@ export default function GatewaysPage() {
         gateway_name: gatewayName.trim(),
         provider,
         is_enabled: requiresIntegration ? 0 : 1,
-        direct_policy: 'Allow list',
+        // 'Allow list' with zero access entries silently rejects every inbound DM and never
+        // generates a pairing request, so a fresh gateway would go totally silent with a
+        // permanently empty Pending access tab. 'Pairing' is safe and self-explaining out of
+        // the box: the sender gets a code, the admin gets a request to approve. This also
+        // matches setup_gateway()'s own default on the backend.
+        direct_policy: 'Pairing',
         execution_user: user?.name,
       })) as GatewayDoc;
       setGateways((current) => [created, ...current]);
@@ -583,6 +613,9 @@ export default function GatewaysPage() {
               ? gateway.default_flow
               : 'No default route';
 
+          const readiness = getGatewayReadiness(gateway);
+          const outstandingItems = readiness.items.filter((item) => !item.done && item.id !== 'receiving-traffic');
+
           return (
             <ItemCard
               title={gateway.gateway_name}
@@ -592,33 +625,57 @@ export default function GatewaysPage() {
                 </div>
               }
               description={gateway.description || providerNames[gateway.provider] || `${gateway.provider} channel`}
-              status={{
-                label: gateway.is_enabled ? 'Active' : 'Disabled',
-                variant: gateway.is_enabled ? 'default' : 'secondary',
-              }}
+              status={
+                readiness.ready
+                  ? { label: 'Active', variant: 'default' }
+                  : {
+                      label: `Not receiving messages — ${readiness.blockingCount} thing${readiness.blockingCount === 1 ? '' : 's'} left`,
+                      variant: 'secondary',
+                    }
+              }
               metadata={[
                 { label: 'Channel', value: gateway.provider },
-                { label: 'Access policy', value: gateway.direct_policy || 'Allow list' },
+                { label: 'Access policy', value: gateway.direct_policy || 'Pairing' },
                 { label: 'Route target', value: target || 'Unassigned' },
               ]}
               actions={[
                 {
                   icon: Settings,
                   label: 'Configure gateway',
-                  onClick: () => setEditingGateway(gateway),
+                  onClick: () => {
+                    if (gateway.integration_settings) {
+                      navigate(`/gateways/${encodeURIComponent(gateway.integration_settings)}`);
+                    } else {
+                      // No linked Integration Settings record yet (credentials not connected) —
+                      // fall back to the gateway-level config modal so the user can still reach
+                      // enable/route-target/policy settings and get pointed at Channel credentials.
+                      setEditingGateway(gateway);
+                    }
+                  },
                 },
               ]}
               footer={
-                <div className="flex items-center gap-1.5 text-[11px] text-steel">
-                  {gateway.last_error ? (
-                    <>
-                      <AlertTriangle className="h-3 w-3 shrink-0 text-destructive" />
-                      <span className="line-clamp-1 text-destructive">{gateway.last_error}</span>
-                    </>
-                  ) : (
-                    <span>Last event: {formatTimeAgo(gateway.last_event_at)}</span>
-                  )}
-                </div>
+                readiness.ready ? (
+                  <div className="flex items-center gap-1.5 text-[11px] text-steel">
+                    {gateway.last_error ? (
+                      <>
+                        <AlertTriangle className="h-3 w-3 shrink-0 text-destructive" />
+                        <span className="line-clamp-1 text-destructive">{gateway.last_error}</span>
+                      </>
+                    ) : (
+                      <span>Last event: {formatTimeAgo(gateway.last_event_at)}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {outstandingItems.map((item) => (
+                      <div key={item.id} className="flex items-center gap-1.5 text-[11px] text-steel">
+                        <AlertTriangle className="h-3 w-3 shrink-0 text-destructive" />
+                        <span className="line-clamp-1">{item.hint || item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
               }
             />
           );
