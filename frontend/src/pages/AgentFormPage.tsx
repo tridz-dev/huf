@@ -96,6 +96,7 @@ function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
 function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
   return {
     agent_name: agent.agent_name || '',
+    agent_modality: (agent.agent_modality as AgentFormValues['agent_modality']) || 'Both',
     provider: agent.provider || '',
     model: agent.model || '',
     temperature: agent.temperature ?? 1,
@@ -205,7 +206,7 @@ export function AgentFormPage() {
   const tabConfig = useMemo(() => ({
     general: {
       label: 'General',
-      fields: ['agent_name', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
+      fields: ['agent_name', 'agent_modality', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -304,7 +305,7 @@ export function AgentFormPage() {
   const tabLabels = Object.fromEntries(
     Object.entries(tabConfig).map(([key, config]) => [key, config.label])
   );
-  
+
   // State to track active tab from URL hash
   const [activeTab, setActiveTab] = useState<string>(() => {
     const hashFromUrl = window.location.hash.slice(1); // Remove the # symbol
@@ -382,6 +383,7 @@ export function AgentFormPage() {
     resolver: zodResolver(agentFormSchema),
       defaultValues: {
         agent_name: '',
+        agent_modality: 'Both',
         provider: '',
         model: '',
         temperature: 1,
@@ -459,6 +461,30 @@ export function AgentFormPage() {
   const watchProvider = form.watch('provider');
   const watchDisabled = form.watch('disabled');
   const isDirty = form.formState.isDirty;
+
+  // Voice-only agents don't use text-model tools/knowledge/skills; text-only
+  // agents have no use for the Voice tab. Tabs stay registered in tabConfig
+  // (field mapping / section-save still works) but are hidden from the tab bar.
+  const watchModality = form.watch('agent_modality');
+  const hiddenTabs = useMemo(() => {
+    const hidden = new Set<string>();
+    if (watchModality === 'Voice') {
+      hidden.add('tools');
+      hidden.add('knowledge');
+      hidden.add('skills');
+    } else if (watchModality === 'Text') {
+      hidden.add('voice');
+    }
+    return hidden;
+  }, [watchModality]);
+
+  // If the modality change hides the currently active tab, fall back to General.
+  useEffect(() => {
+    if (hiddenTabs.has(activeTab)) {
+      setActiveTab(defaultTab);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [hiddenTabs, activeTab, defaultTab]);
   
   // Check if tools have changed by comparing tool names
   const toolsChanged = useMemo(() => {
@@ -1451,6 +1477,7 @@ export function AgentFormPage() {
       // Convert form values (booleans) to AgentDoc format (numbers 0/1)
       const agentData: AgentUpdatePayload = {
         agent_name: values.agent_name,
+        agent_modality: values.agent_modality,
         provider: values.provider,
         model: values.model,
         temperature: values.temperature,
@@ -1647,6 +1674,7 @@ export function AgentFormPage() {
         // Reset form state with the created agent's values
         form.reset({
           agent_name: newAgent.agent_name || '',
+          agent_modality: (newAgent.agent_modality as AgentFormValues['agent_modality']) || 'Both',
           provider: newAgent.provider || '',
           model: newAgent.model || '',
           temperature: newAgent.temperature ?? 1,
@@ -1748,6 +1776,7 @@ export function AgentFormPage() {
         // Reset form state with the updated values to mark form as clean
         form.reset({
           agent_name: values.agent_name,
+          agent_modality: values.agent_modality,
           provider: values.provider,
           model: values.model,
           temperature: values.temperature,
@@ -2297,7 +2326,7 @@ export function AgentFormPage() {
           <form onSubmit={handleFormSubmit} className="space-y-6">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
               <TabsList layout="overflow" className="w-full">
-                {Object.entries(tabConfig).map(([tabKey, config]) => (
+                {Object.entries(tabConfig).filter(([tabKey]) => !hiddenTabs.has(tabKey)).map(([tabKey, config]) => (
                   <TabsTrigger
                     key={tabKey}
                     value={tabKey}

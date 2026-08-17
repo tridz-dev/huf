@@ -129,6 +129,7 @@ class Agent(Document):
         self._validate_allowed_users_and_roles()
         self._update_mcp_tool_counts()
         self._ensure_publishable_key()
+        self._sync_modality_voice_flag()
 
     def _ensure_publishable_key(self):
         """Auto-generate a publishable key when embedding is enabled.
@@ -138,6 +139,19 @@ class Agent(Document):
         """
         if self.embed_enabled and not self.publishable_key:
             self.publishable_key = f"pk_{frappe.generate_hash(length=32)}"
+
+    def _sync_modality_voice_flag(self):
+        """Keep voice_enabled consistent with agent_modality.
+
+        Runs on every validate() so it self-heals if agent_modality is changed
+        without the older voice_enabled checkbox being updated, which would
+        otherwise leave a Text agent silently voice-reachable or a Voice-only
+        agent with no working channel.
+        """
+        if self.agent_modality == "Text":
+            self.voice_enabled = 0
+        elif self.agent_modality == "Voice":
+            self.voice_enabled = 1
 
     def _validate_skills(self):
         """Prevent duplicate skills from being attached to an agent."""
