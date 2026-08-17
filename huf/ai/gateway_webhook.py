@@ -81,6 +81,7 @@ def _event_context(event) -> dict[str, Any]:
 		"message_text": event.message_text,
 		"is_room": event.is_room,
 		"mentioned": event.mentioned,
+		"display_name": getattr(event, "display_name", "") or "",
 	}
 
 
