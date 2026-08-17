@@ -633,7 +633,10 @@ export default function GatewaysPage() {
                 readiness.ready
                   ? { label: 'Active', variant: 'default' }
                   : {
-                      label: `Not receiving messages — ${readiness.blockingCount} thing${readiness.blockingCount === 1 ? '' : 's'} left`,
+                      // Keep this short: the status slot sits inline beside the card title and
+                      // a full sentence here overlaps it. The specifics are listed in the
+                      // card footer, so this only needs to signal "not live, N to fix".
+                      label: `${readiness.blockingCount} to set up`,
                       variant: 'secondary',
                     }
               }
