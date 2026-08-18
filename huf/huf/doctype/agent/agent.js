@@ -59,15 +59,6 @@ frappe.ui.form.on("Agent", {
 	refresh(frm) {
 		toggle_starter_prompt_add(frm);
 		if (!frm.is_new()) {
-			frm.add_custom_button(__("Go to Agent Console"), () => {
-				frappe.route_options = {
-					agent_name: frm.doc.name,
-					provider: frm.doc.provider,
-					model: frm.doc.model,
-				};
-				frappe.set_route("Form", "Agent Console");
-			});
-
 			if (frm.doc.allow_chat) {
 				frm.add_custom_button(__("Go to Agent Chat"), () => {
 					frappe.new_doc("Agent Chat", {

@@ -32,6 +32,8 @@ export const doctype = {
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Memory Policy": "Memory Policy",
+  "Network Access Policy": "Network Access Policy",
+  "Network Access Policy Rule": "Network Access Policy Rule",
   Skill: "Skill",
   "Skill Category": "Skill Category",
   "Agent Skill": "Agent Skill",

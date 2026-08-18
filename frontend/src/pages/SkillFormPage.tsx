@@ -30,12 +30,13 @@ import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles, Download } from 'lucide-react';
 import { getSkill, createSkill, updateSkill, exportSkillAsHuf } from '@/services/skillApi';
-import { db } from '@/lib/frappe-sdk';
-import { doctype } from '@/data/doctypes';
 import { getToolFunctions } from '@/services/toolApi';
 import { getKnowledgeSources } from '@/services/knowledgeApi';
 import { getAgentPrompts } from '@/services/agentPromptApi';
 import { getMCPServers } from '@/services/mcpApi';
+import { getCategories, type CategoryDoc } from '@/services/categoryApi';
+import { CategoryTab } from '@/components/category/CategoryTab';
+import { CategoryModal } from '@/components/category/CategoryModal';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { createFormSubmitHandler, type TabFieldMapping } from '@/utils/formValidation';
 import type { SkillDoc, SkillTool, SkillKnowledge, SkillPrompt, SkillMcpServer } from '@/types/skill.types';
@@ -62,8 +63,6 @@ const skillFormSchema = z.object({
 });
 
 type SkillFormValues = z.infer<typeof skillFormSchema>;
-
-type CategoryOption = { value: string; label: string };
 
 function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
   return value === true || value === 1 ? 1 : 0;
@@ -211,7 +210,10 @@ export function SkillFormPage() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryDoc | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryDoc | null>(null);
+  const [allCategories, setAllCategories] = useState<CategoryDoc[]>([]);
 
   const [tools, setTools] = useState<SkillTool[]>([]);
   const [initialTools, setInitialTools] = useState<SkillTool[]>([]);
@@ -256,22 +258,14 @@ export function SkillFormPage() {
       getKnowledgeSources(),
       getAgentPrompts(),
       getMCPServers(),
-      db.getDocList(doctype['Skill Category'], {
-        fields: ['name', 'category_name'],
-        limit: 1000,
-      }),
+      getCategories(undefined, 'skill'),
     ])
       .then(([toolsData, ksData, promptData, mcpData, categoryData]) => {
         setToolOptions((toolsData as AgentToolFunctionRef[]) || []);
         setKnowledgeOptions(((ksData as { items: KnowledgeSourceDoc[] }).items) || []);
         setPromptOptions((promptData as AgentPromptDoc[]) || []);
         setMcpOptions((mcpData as MCPServerDoc[]) || []);
-        setCategories(
-          (categoryData as Array<{ name: string; category_name?: string }>).map((c) => ({
-            value: c.name,
-            label: c.category_name || c.name,
-          }))
-        );
+        setAllCategories(categoryData);
       })
       .catch((error) => {
         console.error('Error loading skill options:', error);
@@ -309,6 +303,22 @@ export function SkillFormPage() {
       setLoading(false);
     }
   }, [id, isNew, loadSkill]);
+
+  useEffect(() => {
+    const skillCategoryValue = form.watch('skill_category');
+    if (allCategories.length > 0 && skillCategoryValue) {
+      const match = allCategories.find((c) => c.name === skillCategoryValue);
+      if (match) {
+        setSelectedCategory(match);
+      }
+    }
+  }, [allCategories, form]);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      form.setValue('skill_category', selectedCategory.name, { shouldDirty: false });
+    }
+  }, [selectedCategory, form]);
 
   const onSubmit = useCallback(
     async (values: SkillFormValues) => {
@@ -485,25 +495,19 @@ export function SkillFormPage() {
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="skill_category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <FormControl>
-                            <Combobox
-                              options={categories}
-                              value={field.value || ''}
-                              onValueChange={field.onChange}
-                              placeholder="Select category..."
-                              searchPlaceholder="Search categories..."
-                              emptyText="No categories found"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                    <CategoryTab
+                      selectedCategory={selectedCategory}
+                      onAddCategory={() => {
+                        setEditingCategory(null);
+                        setCategoryModalOpen(true);
+                      }}
+                      onRemoveCategory={() =>
+                        setSelectedCategory(null)
+                      }
+                      onEditCategory={(category) => {
+                        setEditingCategory(category);
+                        setCategoryModalOpen(true);
+                      }}
                     />
                     <FormField
                       control={form.control}
@@ -830,6 +834,22 @@ export function SkillFormPage() {
               </TabsContent>
             </Tabs>
           </form>
+          <CategoryModal
+            open={categoryModalOpen}
+            onOpenChange={(open) => {
+              setCategoryModalOpen(open);
+              if (!open) setEditingCategory(null);
+            }}
+            categories={allCategories}
+            selected={selectedCategory}
+            onSave={setSelectedCategory}
+            refreshCategories={async () => {
+              const data = await getCategories(undefined, 'skill');
+              setAllCategories(data);
+            }}
+            editCategory={editingCategory}
+            onEditComplete={() => setEditingCategory(null)}
+          />
         </Form>
       </div>
     </div>
