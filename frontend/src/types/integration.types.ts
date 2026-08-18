@@ -11,6 +11,7 @@ export interface IntegrationCredentialRow {
   key: string;
   value?: string;
   description?: string;
+  is_mandatory?: 0 | 1;
 }
 
 export interface IntegrationRecipientRow {
@@ -24,6 +25,8 @@ export interface IntegrationServiceDoc {
   name: string;
   service_name: string;
   category: string;
+  // Determines which UI surface owns the service (Integrations vs Gateways)
+  surface?: 'Integration' | 'Gateway';
   description?: string;
   documentation_url?: string;
   required_credentials?: string | CredentialSchemaItem[];
@@ -152,16 +155,17 @@ export function buildCredentialsPayload(
         key: item.key,
         value: formValue,
         description: item.label,
+        is_mandatory: item.required ? 1 : 0,
       };
     }
 
-    // On edit: blank field keeps existing value
     const value = formValue || existingMap[item.key] || '';
     return {
       ...(existingRow?.name ? { name: existingRow.name } : {}),
       key: item.key,
       value,
       description: item.label,
+      is_mandatory: item.required ? 1 : 0,
     };
   });
 }
