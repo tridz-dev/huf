@@ -772,16 +772,6 @@ function AppShell() {
             element={<Navigate to="/members?view=roles" replace />}
           />
           <Route
-            path="/roles/new"
-            element={
-              <ProtectedRoute>
-                <Suspense fallback={<PageLoader />}>
-                  <HufRoleFormPage />
-                </Suspense>
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/roles/:id"
             element={
               <ProtectedRoute>
