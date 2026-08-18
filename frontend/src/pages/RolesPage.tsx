@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ShieldCheck, Lock, Code2, ChevronRight, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ShieldCheck, Lock, Code2, ChevronRight, ChevronDown, Plus } from 'lucide-react';
 import { getHufRoles, type HufRole } from '@/services/permissionsApi';
 import {
   Table,
@@ -9,6 +10,7 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -161,6 +163,7 @@ interface RolesPageProps {
 }
 
 export default function RolesPage({ embedded = false }: RolesPageProps) {
+  const navigate = useNavigate();
   const [roles, setRoles] = useState<HufRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -180,6 +183,13 @@ export default function RolesPage({ embedded = false }: RolesPageProps) {
     setExpanded((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   }
 
+  const createRoleButton = (
+    <Button size="sm" onClick={() => navigate('/roles/new')} className="shrink-0">
+      <Plus className="h-4 w-4 mr-1.5" />
+      Create role
+    </Button>
+  );
+
   const matrix = loading ? (
     <div className="text-sm text-steel-soft py-12 text-center">Loading…</div>
   ) : roles.length === 0 ? (
@@ -192,12 +202,16 @@ export default function RolesPage({ embedded = false }: RolesPageProps) {
             <TableHead className="w-[220px]">Capability</TableHead>
             {roles.map((role) => (
               <TableHead key={role.role_name} className="normal-case">
-                <span className="inline-flex items-center gap-1 font-sans text-[12px] font-medium text-ink normal-case tracking-normal">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/roles/${encodeURIComponent(role.role_name)}`)}
+                  className="inline-flex items-center gap-1 font-sans text-[12px] font-medium text-ink normal-case tracking-normal hover:text-signal-ink transition-colors"
+                >
                   {role.role_name}
                   {role.is_system_role === 1 && (
                     <Lock className="h-3 w-3 text-steel-soft shrink-0" />
                   )}
-                </span>
+                </button>
               </TableHead>
             ))}
           </TableRow>
@@ -287,20 +301,28 @@ export default function RolesPage({ embedded = false }: RolesPageProps) {
   );
 
   if (embedded) {
-    return matrix;
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end">{createRoleButton}</div>
+        {matrix}
+      </div>
+    );
   }
 
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 max-w-6xl mx-auto">
-        <div className="mb-6">
-          <h1 className="font-display text-title text-ink flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6" />
-            Roles
-          </h1>
-          <p className="text-sm text-steel-soft mt-1">
-            Compare capability levels across Huf roles. System roles cannot be deleted.
-          </p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-title text-ink flex items-center gap-2">
+              <ShieldCheck className="h-6 w-6" />
+              Roles
+            </h1>
+            <p className="text-sm text-steel-soft mt-1">
+              Compare capability levels across Huf roles. System roles cannot be edited or deleted.
+            </p>
+          </div>
+          {createRoleButton}
         </div>
 
         {matrix}

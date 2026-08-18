@@ -19,12 +19,15 @@ export interface GetCategoriesParams {
   [key: string]: unknown;
 }
 
-type CategoryType = 'prompt' | 'summary';
+type CategoryType = 'prompt' | 'summary' | 'skill';
 
 function getCategoryDoctype(category_type: CategoryType = 'prompt') {
-  return category_type === 'summary'
-    ? doctype['Agent Summary Prompt Category']
-    : doctype['Agent Prompt Category'];
+  if (category_type === 'summary') {
+    return doctype['Agent Summary Prompt Category'];
+  } else if (category_type === 'skill') {
+    return doctype['Skill Category'];
+  }
+  return doctype['Agent Prompt Category'];
 }
 
 export async function getCategories(

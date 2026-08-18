@@ -100,6 +100,7 @@ import {
   setStreamingAvailable,
 } from './services/streamChatApi';
 const MembersPage = lazy(() => import('./pages/MembersPage'));
+const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
 
 function ChatOnlyRedirectGuard() {
   const location = useLocation();
@@ -745,6 +746,26 @@ function AppShell() {
           <Route
             path="/roles"
             element={<Navigate to="/members?view=roles" replace />}
+          />
+          <Route
+            path="/roles/new"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <HufRoleFormPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roles/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <HufRoleFormPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
           />
           <Route
             path="*"
