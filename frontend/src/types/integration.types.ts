@@ -11,6 +11,7 @@ export interface IntegrationCredentialRow {
   key: string;
   value?: string;
   description?: string;
+  is_mandatory?: 0 | 1;
 }
 
 export interface IntegrationRecipientRow {
@@ -154,6 +155,7 @@ export function buildCredentialsPayload(
         key: item.key,
         value: formValue,
         description: item.label,
+        is_mandatory: item.required ? 1 : 0,
       };
     }
 
@@ -164,6 +166,7 @@ export function buildCredentialsPayload(
       key: item.key,
       value,
       description: item.label,
+      is_mandatory: item.required ? 1 : 0,
     };
   });
 }
