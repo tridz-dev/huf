@@ -48,9 +48,7 @@ _ADAPTER_LOCATIONS: dict[str, tuple[str, str]] = {
 	"microsoft_teams": ("huf.ai.gateway_adapters.teams", "TeamsGatewayAdapter"),
 	"vk": ("huf.ai.gateway_adapters.vk", "VKGatewayAdapter"),
 	"wecom": ("huf.ai.gateway_adapters.wecom", "WeComGatewayAdapter"),
-	# "slack" is deliberately absent: Slack has no GatewayAdapter (it is
-	# handled by the separate huf.ai.gateways.slack_events endpoint). See
-	# get_adapter_class()'s docstring.
+	"slack": ("huf.ai.gateway_adapters.slack", "SlackGatewayAdapter"),
 }
 
 default_registry = GatewayAdapterRegistry()
@@ -62,7 +60,7 @@ def get_adapter_class(provider_id: str):
 	Imports and registers the adapter's module on first use for that
 	``provider_id``; subsequent calls are served from ``default_registry``
 	without re-importing. Raises ``KeyError`` for a ``provider_id`` with no
-	known adapter (e.g. ``"slack"``), matching ``GatewayAdapterRegistry.get``'s
+	known adapter (e.g. ``"unknown_provider"``), matching ``GatewayAdapterRegistry.get``'s
 	contract.
 	"""
 	if provider_id not in default_registry:
