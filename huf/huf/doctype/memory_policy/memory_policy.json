@@ -79,6 +79,7 @@
   },
   {
    "default": "Agent",
+   "description": "The bucket memory records are grouped under (a single conversation, a user, a role, an agent, a workspace, a site, or globally). Combined with the Allow *Scope Write toggles below to decide who can write into that bucket.",
    "fieldname": "scope_type",
    "fieldtype": "Select",
    "label": "Scope Type",
@@ -86,7 +87,7 @@
    "reqd": 1
   },
   {
-   "description": "Optional default scope key for this policy. If empty, runtime context decides.",
+   "description": "Optional fixed scope key. If empty, the runtime context (current user, agent, or site) decides the key at conversation time.",
    "fieldname": "scope_key",
    "fieldtype": "Data",
    "label": "Scope Key"
@@ -98,6 +99,7 @@
   },
   {
    "default": "Manual",
+   "description": "Manual: only explicit user or tool-call writes create memory. Agent Suggested: a background job proposes records after each run and they always land as Draft for approval. Automatic: same background extraction, but records follow this policy's normal Approval Required / Default Status handling below.",
    "fieldname": "capture_mode",
    "fieldtype": "Select",
    "label": "Capture Mode",
@@ -109,16 +111,18 @@
    "fieldtype": "Link",
    "label": "Learning Agent",
    "options": "Agent",
-   "description": "Optional dedicated agent to handle background memory extraction"
+   "description": "Optional dedicated agent that runs background memory extraction (used when Capture Mode is Agent Suggested or Automatic) instead of the conversation's own agent."
   },
   {
    "default": "1",
+   "description": "When checked, every newly captured record is forced to Draft status regardless of Default Status below, and must be approved by a user before it becomes Active. Turn off to trust captured memory automatically.",
    "fieldname": "approval_required",
    "fieldtype": "Check",
    "label": "Approval Required"
   },
   {
    "default": "Draft",
+   "description": "Status assigned to newly captured records when Approval Required is off. Ignored (records are always Draft) while Approval Required is checked.",
    "fieldname": "default_status",
    "fieldtype": "Select",
    "label": "Default Status",
@@ -126,7 +130,7 @@
    "reqd": 1
   },
   {
-   "description": "Optional newline-separated allowed record types. Empty means all types are allowed.",
+   "description": "Optional newline-separated list of record types this policy may capture. Each line must exactly match one of Memory Record's Record Type options (currently: Fact, Preference, Research Note, Decision, Extracted Data, State, Summary, Policy Hint, Observation, Insight, Custom). A value that does not match one of those options is never usable: every save attempt using it is silently rejected (the agent's tool call returns a normal failure result, not an error, so nothing looks broken in the UI, and no record is ever created). Leave empty to allow all record types.",
    "fieldname": "allowed_record_types",
    "fieldtype": "Small Text",
    "label": "Allowed Record Types"
@@ -138,6 +142,7 @@
   },
   {
    "default": "Tool Only",
+   "description": "Controls whether and how memory is pulled back into the agent's context at read time. Never: memory is never added to the prompt. Relevant Only: only records relevant to the current turn are auto-injected. Always: every active memory record for the scope is auto-injected on every turn. Tool Only: nothing is auto-injected; the agent must call a memory search tool to read it.",
    "fieldname": "inject_mode",
    "fieldtype": "Select",
    "label": "Inject Mode",
@@ -146,6 +151,7 @@
   },
   {
    "default": "5",
+   "description": "Maximum number of memory records auto-injected into the prompt for a single turn (only applies when Inject Mode is Relevant Only or Always). 0 means inject nothing.",
    "fieldname": "max_records",
    "fieldtype": "Int",
    "label": "Max Records",
@@ -153,6 +159,7 @@
   },
   {
    "default": "1000",
+   "description": "Maximum tokens of memory content allowed into the prompt per turn (only applies when Inject Mode is Relevant Only or Always). Records are added until this budget is used up, then the rest are dropped.",
    "fieldname": "token_budget",
    "fieldtype": "Int",
    "label": "Token Budget",
@@ -165,30 +172,35 @@
   },
   {
    "default": "0",
+   "description": "Lets the agent itself write memory records via a tool call, not just users. If unchecked, every write attempt under this policy is blocked, regardless of the scope toggles below.",
    "fieldname": "allow_agent_write",
    "fieldtype": "Check",
    "label": "Allow Agent Write"
   },
   {
    "default": "1",
+   "description": "Permits writing memory records scoped to the current user (Scope Type = User).",
    "fieldname": "allow_user_scope_write",
    "fieldtype": "Check",
    "label": "Allow User Scope Write"
   },
   {
    "default": "0",
+   "description": "Permits writing memory records scoped to a role (Scope Type = Role), shared across every user with that role.",
    "fieldname": "allow_role_scope_write",
    "fieldtype": "Check",
    "label": "Allow Role Scope Write"
   },
   {
    "default": "1",
+   "description": "Permits writing memory records scoped to the agent (Scope Type = Agent), shared across all of that agent's conversations.",
    "fieldname": "allow_agent_scope_write",
    "fieldtype": "Check",
    "label": "Allow Agent Scope Write"
   },
   {
    "default": "0",
+   "description": "Permits writing memory records scoped globally to this site (Scope Type = Site), visible to every user and agent on it. Use sparingly.",
    "fieldname": "allow_site_scope_write",
    "fieldtype": "Check",
    "label": "Allow Site Scope Write"
@@ -200,12 +212,14 @@
   },
   {
    "default": "0",
+   "description": "When checked, memory records saved under this policy are automatically copied into a Knowledge Source once they meet or exceed both Min Confidence and Min Importance below, making them retrievable outside the memory system.",
    "fieldname": "auto_promote_to_knowledge",
    "fieldtype": "Check",
    "label": "Auto Promote to Knowledge"
   },
   {
    "depends_on": "eval:doc.auto_promote_to_knowledge==1",
+   "description": "Required when Auto Promote to Knowledge is enabled. The Knowledge Source that qualifying memory records are projected into.",
    "fieldname": "knowledge_source",
    "fieldtype": "Link",
    "label": "Knowledge Source",
@@ -213,6 +227,7 @@
   },
   {
    "default": "0.8",
+   "description": "Minimum confidence score (0-1) a memory record must have to be auto-promoted. A record is promoted only when it meets or exceeds both this and Min Importance.",
    "fieldname": "promotion_min_confidence",
    "fieldtype": "Float",
    "label": "Min Confidence",
@@ -220,6 +235,7 @@
   },
   {
    "default": "0.6",
+   "description": "Minimum importance score (0-1) a memory record must have to be auto-promoted. A record is promoted only when it meets or exceeds both this and Min Confidence.",
    "fieldname": "promotion_min_importance",
    "fieldtype": "Float",
    "label": "Min Importance",
@@ -232,6 +248,7 @@
   },
   {
    "default": "0",
+   "description": "Number of days before memory records saved under this policy expire and are archived. 0 means records never expire automatically.",
    "fieldname": "ttl_days",
    "fieldtype": "Int",
    "label": "TTL Days",

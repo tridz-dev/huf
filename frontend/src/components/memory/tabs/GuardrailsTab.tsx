@@ -37,7 +37,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
             form={form}
             name="allow_agent_write"
             label="Allow agent write"
-            description="Lets the agent itself write memory records (via a tool call), not just users."
+            description="Lets the agent itself write memory records (via a tool call), not just users. If off, every write attempt under this policy is blocked, regardless of the scope toggles below."
           />
           <SwitchField
             form={form}
@@ -78,7 +78,7 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
             form={form}
             name="auto_promote_to_knowledge"
             label="Auto promote to knowledge"
-            description="Automatically copies memory records that clear the confidence and importance thresholds below into a Knowledge Source, making them retrievable outside the memory system."
+            description="Automatically copies memory records that meet or exceed both Min Confidence and Min Importance below into a Knowledge Source, making them retrievable outside the memory system."
           />
 
           {watchAutoPromote && (
@@ -128,6 +128,8 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
                       </FormControl>
                       <FormDescription>
                         Minimum confidence score (0-1) a memory record must have to be promoted.
+                        A record is promoted only when it meets or exceeds both this and Min
+                        Importance.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -152,6 +154,8 @@ export function GuardrailsTab({ form, knowledgeSourceOptions }: GuardrailsTabPro
                       </FormControl>
                       <FormDescription>
                         Minimum importance score (0-1) a memory record must have to be promoted.
+                        A record is promoted only when it meets or exceeds both this and Min
+                        Confidence.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
