@@ -30,8 +30,11 @@ interface ChannelTabProps {
   isNew: boolean;
 }
 
-function getWebhookUrl(gatewayName: string) {
+function getWebhookUrl(gatewayName: string, provider?: string) {
   const host = window.location.origin;
+  if (provider === 'Slack') {
+    return `${host}/api/method/huf.ai.gateways.slack_events.handle_slack_event?gateway_name=${encodeURIComponent(gatewayName)}`;
+  }
   return `${host}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=${encodeURIComponent(gatewayName)}`;
 }
 
@@ -96,7 +99,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
 
   const handleCopyWebhook = () => {
     if (!gateway) return;
-    navigator.clipboard.writeText(getWebhookUrl(gateway.name));
+    navigator.clipboard.writeText(getWebhookUrl(gateway.name, gateway.provider));
     setCopied(true);
     toast.success('Webhook URL copied');
     setTimeout(() => setCopied(false), 2000);
@@ -280,7 +283,7 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           Console).
         </p>
         <div className="flex items-center gap-2">
-          <Input readOnly className="font-mono text-xs" value={getWebhookUrl(gateway.name)} />
+          <Input readOnly className="font-mono text-xs" value={getWebhookUrl(gateway.name, gateway.provider)} />
           <Button type="button" size="sm" variant="outline" onClick={handleCopyWebhook}>
             {copied ? (
               <>
