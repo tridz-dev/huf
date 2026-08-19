@@ -7,17 +7,20 @@ import {
   FormDescription,
   FormMessage,
 } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { linkRoutes } from '@/lib/link-routes';
 import { SwitchField } from '../SwitchField';
 import {
   memoryCaptureModes,
   memoryDefaultStatuses,
+  memoryRecordTypes,
   type MemoryPolicyFormValues,
 } from '../memoryPolicyFormSchema';
+
+const recordTypeOptions = memoryRecordTypes.map((type) => ({ value: type, label: type }));
 
 interface CaptureTabProps {
   form: UseFormReturn<MemoryPolicyFormValues>;
@@ -133,23 +136,20 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
             <FormItem>
               <FormLabel>Allowed record types</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder={'One record type per line, e.g.\nFact\nPreference\nDecision'}
-                  className="min-h-[80px] resize-y font-mono text-sm"
-                  {...field}
+                <MultiSelectCombobox
+                  options={recordTypeOptions}
+                  values={field.value}
+                  onValuesChange={field.onChange}
+                  placeholder="All record types allowed"
+                  searchPlaceholder="Search record types..."
+                  emptyText="No record types found."
                 />
               </FormControl>
               <FormDescription>
                 <span className="block">
-                  Optional newline-separated list of record types this policy may capture. Each
-                  line must exactly match one of Memory Record&apos;s Record Type options —
-                  currently: Fact, Preference, Research Note, Decision, Extracted Data, State,
-                  Summary, Policy Hint, Observation, Insight, Custom.
-                </span>
-                <span className="block">
-                  A value that doesn&apos;t match one of those exactly is never usable: every save
-                  attempt using it is silently rejected (the tool call returns a normal failure
-                  result, not an error, so nothing looks broken here — no record is ever created).
+                  Which of Memory Record&apos;s Record Type values this policy may capture.
+                  Pick from the list — it&apos;s the same set the backend enforces, so nothing
+                  selected here can ever fail with a &quot;not allowed by policy&quot; error.
                 </span>
                 <span className="block">Leave empty to allow all record types.</span>
               </FormDescription>
