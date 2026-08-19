@@ -161,6 +161,8 @@ def _admission(gateway, context: dict[str, Any]) -> tuple[bool, str]:
     if not is_room:
         policy = gateway.direct_policy or "Allow list"
         if policy == "Pairing":
+            if _has_access_entry(gateway, "Sender", sender_id):
+                return True, ""
             display_name = str(context.get("display_name") or "") or None
             code = _create_pairing_request(
                 gateway, sender_id, conversation_id=conversation_id, display_name=display_name
@@ -239,26 +241,40 @@ def approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None) -
 
     notification_status = "Not attempted"
     try:
+        from huf.ai.gateway_webhook import get_gateway_adapter
+        from huf.ai.gateway_adapters.types import GatewayReply
+
         gw_doc = frappe.get_doc("Gateway", entry.gateway)
         if gw_doc.integration_settings:
-            int_doc = frappe.get_doc("Integration Settings", gw_doc.integration_settings)
-            creds = {}
-            for row in getattr(int_doc, "credentials", []):
-                creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
+            adapter = get_gateway_adapter(gw_doc)
+            
+            target_conv = entry.external_id
+            target_thread = None
+            recent_events = frappe.get_all(
+                "Gateway Event",
+                filters={"gateway": entry.gateway, "sender_id": entry.external_id},
+                fields=["conversation_id", "thread_id"],
+                order_by="creation desc",
+                limit=1
+            )
+            if recent_events and recent_events[0].conversation_id:
+                target_conv = recent_events[0].conversation_id
+                target_thread = recent_events[0].thread_id
 
-            from huf.ai.gateway_webhook import _adapter_class_for_provider
-            from huf.ai.gateway_adapters.types import GatewayReply
-
-            adapter_cls = _adapter_class_for_provider(gw_doc.provider)
-            adapter = adapter_cls(creds)
             welcome_text = (
                 "🎉 Your access pairing request has been approved!\n\n"
                 "You can now interact directly with this assistant."
             )
-            adapter.send_reply(GatewayReply(conversation_id=entry.external_id, text=welcome_text))
+            adapter.send_reply(GatewayReply(
+                conversation_id=target_conv, 
+                text=welcome_text,
+                thread_id=target_thread or None,
+                reply_to_provider_message_id=target_thread or None,
+            ))
             notification_status = "Welcome message sent to sender"
     except Exception as exc:
         notification_status = f"Approval saved, welcome message notice: {exc}"
+        frappe.log_error("Failed to send welcome message on frontend approval", f"{exc}\n{frappe.get_traceback()}")
 
     return {
         "name": entry.name,
