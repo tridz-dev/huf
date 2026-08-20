@@ -43,6 +43,7 @@ from frappe.utils import get_datetime
 AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 	"general": (
 		"agent_name",
+		"agent_modality",
 		"provider",
 		"model",
 		"temperature",

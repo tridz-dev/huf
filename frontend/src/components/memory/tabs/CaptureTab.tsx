@@ -7,17 +7,20 @@ import {
   FormDescription,
   FormMessage,
 } from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { linkRoutes } from '@/lib/link-routes';
 import { SwitchField } from '../SwitchField';
 import {
   memoryCaptureModes,
   memoryDefaultStatuses,
+  memoryRecordTypes,
   type MemoryPolicyFormValues,
 } from '../memoryPolicyFormSchema';
+
+const recordTypeOptions = memoryRecordTypes.map((type) => ({ value: type, label: type }));
 
 interface CaptureTabProps {
   form: UseFormReturn<MemoryPolicyFormValues>;
@@ -55,7 +58,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
               <FormDescription>
                 <span className="block"><strong>Manual</strong> — only explicit user or tool-call writes create memory.</span>
                 <span className="block"><strong>Agent Suggested</strong> — a background job proposes memory records after each run; they always land as Draft for approval.</span>
-                <span className="block"><strong>Automatic</strong> — same background extraction, but records follow this policy's normal Approval Required / Default Status handling.</span>
+                <span className="block"><strong>Automatic</strong> — same background extraction, but records follow this policy's Approval Required / Default Status handling below.</span>
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -94,7 +97,7 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
           form={form}
           name="approval_required"
           label="Approval required"
-          description="New memory records start as pending and must be approved by a user before becoming active. Turn this off to trust captured memory automatically."
+          description="New memory records are forced to Draft status regardless of Default Status below, and must be approved by a user before becoming active. Turn this off to trust captured memory automatically."
         />
 
         <FormField
@@ -118,7 +121,8 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
                 </SelectContent>
               </Select>
               <FormDescription>
-                Status assigned to newly captured memory records before any approval step runs.
+                Status assigned to newly captured records when Approval Required is off. Ignored
+                (records are always Draft) while Approval Required is checked.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -132,15 +136,22 @@ export function CaptureTab({ form, agentOptions }: CaptureTabProps) {
             <FormItem>
               <FormLabel>Allowed record types</FormLabel>
               <FormControl>
-                <Textarea
-                  placeholder={'One record type per line, e.g.\nfact\npreference\ninstruction'}
-                  className="min-h-[80px] resize-y font-mono text-sm"
-                  {...field}
+                <MultiSelectCombobox
+                  options={recordTypeOptions}
+                  values={field.value}
+                  onValuesChange={field.onChange}
+                  placeholder="All record types allowed"
+                  searchPlaceholder="Search record types..."
+                  emptyText="No record types found."
                 />
               </FormControl>
               <FormDescription>
-                Optional newline-separated list of record types this policy may capture. Leave
-                empty to allow all types.
+                <span className="block">
+                  Which of Memory Record&apos;s Record Type values this policy may capture.
+                  Pick from the list — it&apos;s the same set the backend enforces, so nothing
+                  selected here can ever fail with a &quot;not allowed by policy&quot; error.
+                </span>
+                <span className="block">Leave empty to allow all record types.</span>
               </FormDescription>
               <FormMessage />
             </FormItem>

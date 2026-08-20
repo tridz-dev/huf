@@ -42,6 +42,16 @@ class ElevenLabsConvaiEngine(VoiceEngine):
 			},
 		]
 
+	@classmethod
+	def capabilities(cls) -> dict[str, bool]:
+		return {
+			"instructions": False,  # the ElevenLabs ConvAI agent runs its own dashboard-configured prompt
+			"tools": True,  # via declare_client_tools below
+			"memory": False,
+			"persistence": True,  # via the post-call webhook, see elevenlabs_convai_api.py
+			"barge_in": True,  # ElevenLabs ConvAI supports user interruption natively
+		}
+
 	def _get_api_key(self) -> str | None:
 		if not frappe.db.exists("DocType", SETTINGS_DOCTYPE):
 			return None
@@ -94,7 +104,9 @@ class ElevenLabsConvaiEngine(VoiceEngine):
 		]
 
 	@rate_limit(limit=10, seconds=60)
-	def start_session(self, agent_doc, config: dict[str, Any], user_ref: Any) -> dict[str, Any]:
+	def start_session(
+		self, agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+	) -> dict[str, Any]:
 		# agent_id comes only from the per-Agent voice_config resolved upstream in
 		# huf.ai.voice.api - never from user_ref or any browser-supplied value.
 		agent_id = (config or {}).get("agent_id")
@@ -123,11 +135,19 @@ class ElevenLabsConvaiEngine(VoiceEngine):
 			frappe.throw(f"ElevenLabs API error ({response.status_code})", frappe.ValidationError)
 
 		data = response.json()
-		return {
+		result = {
 			"engine": "elevenlabs_convai",
 			"signed_url": data.get("signed_url"),
 			"agent_id": agent_id,
 		}
+		# ElevenLabs has no server-side way to receive this at mint time; a client must send
+		# {"huf_conversation_id": conversation_id} as a dynamic_variable in its own
+		# conversation_initiation_client_data when it opens the WebSocket, and the post-call
+		# webhook reads it back to find the right conversation - see elevenlabs_convai_api.py.
+		if conversation_id:
+			result["conversation_id"] = conversation_id
+			result["dynamic_variables"] = {"huf_conversation_id": conversation_id}
+		return result
 
 	# No documented ElevenLabs REST endpoint exists to explicitly end an active
 	# Conversational AI conversation; the browser closing the WebSocket ends it.

@@ -14,6 +14,7 @@ import json
 from typing import Any
 
 import frappe
+from frappe.rate_limiter import rate_limit
 
 from huf.ai.tool_registry import PermissionAwareToolRegistry
 from huf.ai.voice.engines.base import VoiceEngine
@@ -60,6 +61,16 @@ class LitellmRealtimeEngine(VoiceEngine):
 			},
 		]
 
+	@classmethod
+	def capabilities(cls) -> dict[str, bool]:
+		return {
+			"instructions": False,  # the sidecar relays raw provider frames; it does not send Agent.instructions - see sidecar/app.py
+			"tools": True,  # via declare_client_tools below (client-side tools only)
+			"memory": False,
+			"persistence": True,  # best-effort transcript capture in the sidecar - see sidecar/app.py
+			"barge_in": True,  # OpenAI Realtime supports server-side VAD interruption by default
+		}
+
 	def health(self, agent_doc, config: dict[str, Any]) -> dict[str, Any]:
 		model_name = (config or {}).get("model")
 		if not model_name:
@@ -86,7 +97,10 @@ class LitellmRealtimeEngine(VoiceEngine):
 
 		return {"ok": True, "message": "LiteLLM realtime model is configured."}
 
-	def start_session(self, agent_doc, config: dict[str, Any], user_ref: Any) -> dict[str, Any]:
+	@rate_limit(limit=10, seconds=60)
+	def start_session(
+		self, agent_doc, config: dict[str, Any], user_ref: Any, *, conversation_id: str | None = None
+	) -> dict[str, Any]:
 		# model comes only from the per-Agent voice_config resolved upstream in
 		# huf.ai.voice.api - never from user_ref or any browser-supplied value.
 		# This method MUST NOT read frappe.session.user (see base.VoiceEngine
@@ -110,14 +124,18 @@ class LitellmRealtimeEngine(VoiceEngine):
 			"agent": agent_doc.name,
 			"model": model_name,
 			"api_key_provider": provider_name,
+			"conversation_id": conversation_id,
 		}
 		frappe.cache().set_value(cache_key, payload, expires_in_sec=SESSION_CACHE_EXPIRY_SEC)
 
-		return {
+		result = {
 			"engine": "litellm_realtime",
 			"session_id": session_id,
 			"sidecar_ws_path": f"/voice/realtime/{session_id}",
 		}
+		if conversation_id:
+			result["conversation_id"] = conversation_id
+		return result
 
 	def end_session(self, session_id: str) -> None:
 		# Deletes the stashed cache key so a browser reconnect after an

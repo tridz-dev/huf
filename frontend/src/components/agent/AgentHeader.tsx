@@ -65,6 +65,7 @@ export function AgentHeader({
   totalRun,
 }: AgentHeaderProps) {
   const watchModel = form.watch('model');
+  const isVoiceOnly = form.watch('agent_modality') === 'Voice';
   const navigate = useNavigate();
 
   const handleOpenChat = () => {
@@ -104,9 +105,11 @@ export function AgentHeader({
               System
             </Badge>
           )}
+          {!isVoiceOnly && (
           <Badge variant="chip">
             {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
           </Badge>
+          )}
           {activeTriggerCount > 0 && (
             <span className="text-xs text-steel-soft flex items-center gap-1">
               <Clock className="w-3 h-3 shrink-0" />
@@ -121,10 +124,10 @@ export function AgentHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!isNew && (<Button 
-          variant="outline" 
-          size="icon-sm" 
-          onClick={onRunTest} 
+        {!isNew && !isVoiceOnly && (<Button
+          variant="outline"
+          size="icon-sm"
+          onClick={onRunTest}
           type="button"
           disabled={runningTest || isNew}
           title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
