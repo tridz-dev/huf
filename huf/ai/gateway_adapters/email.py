@@ -59,7 +59,7 @@ class EmailGatewayAdapter(GatewayAdapter):
 			payload = request.query
 
 		sender_id = payload.get("from") or payload.get("sender") or ""
-		conversation_id = payload.get("to") or payload.get("recipient") or sender_id
+		conversation_id = sender_id
 		message_text = payload.get("body") or payload.get("text") or payload.get("subject") or ""
 		event_id = payload.get("message_id") or payload.get("id") or str(hash(f"{sender_id}:{message_text}"))
 
@@ -129,7 +129,7 @@ def on_communication_inserted(doc, method=None):
 	for gw in gateways:
 		context = {
 			"sender_id": doc.sender or "",
-			"conversation_id": doc.recipients or doc.sender or "",
+			"conversation_id": doc.sender or "",
 			"thread_id": doc.in_reply_to or None,
 			"message_text": doc.content or doc.subject or "",
 		}
