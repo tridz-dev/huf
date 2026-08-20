@@ -41,13 +41,9 @@ _ADAPTER_LOCATIONS: dict[str, tuple[str, str]] = {
 	"telegram": ("huf.ai.gateway_adapters.telegram", "TelegramGatewayAdapter"),
 	"messenger": ("huf.ai.gateway_adapters.messenger", "MessengerGatewayAdapter"),
 	"instagram": ("huf.ai.gateway_adapters.instagram", "InstagramGatewayAdapter"),
-	"discord": ("huf.ai.gateway_adapters.discord", "DiscordGatewayAdapter"),
 	"email": ("huf.ai.gateway_adapters.email", "EmailGatewayAdapter"),
-	"sms": ("huf.ai.gateway_adapters.sms", "SMSGatewayAdapter"),
 	"google_chat": ("huf.ai.gateway_adapters.google_chat", "GoogleChatGatewayAdapter"),
 	"microsoft_teams": ("huf.ai.gateway_adapters.teams", "TeamsGatewayAdapter"),
-	"vk": ("huf.ai.gateway_adapters.vk", "VKGatewayAdapter"),
-	"wecom": ("huf.ai.gateway_adapters.wecom", "WeComGatewayAdapter"),
 	"slack": ("huf.ai.gateway_adapters.slack", "SlackGatewayAdapter"),
 }
 

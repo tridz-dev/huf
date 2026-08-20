@@ -1858,7 +1858,6 @@ ALL_INTEGRATION_TOOLS = (
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
-	+ _with_service(DISCORD_TOOLS, "discord")
 	+ _with_service(TELEGRAM_TOOLS, "telegram")
 	+ _with_service(GITHUB_TOOLS, "github")
 	+ _with_service(GMAIL_TOOLS, "gmail")

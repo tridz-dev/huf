@@ -7,7 +7,6 @@ describe('service identities', () => {
     ['telegram', 'Telegram'],
     ['slack', 'Slack'],
     ['whatsapp', 'WhatsApp'],
-    ['discord', 'Discord'],
     ['teams', 'Microsoft Teams'],
     ['github', 'GitHub'],
     ['jira', 'Jira'],
