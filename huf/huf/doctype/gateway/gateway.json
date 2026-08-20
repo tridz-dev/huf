@@ -8,7 +8,7 @@
  "field_order": ["gateway_name", "provider", "is_enabled", "integration_settings", "execution_user", "description", "section_admission", "direct_policy", "room_policy", "room_sender_policy", "mention_required", "pairing_ttl_minutes", "pairing_reply_enabled", "section_default_route", "default_target_type", "default_agent", "default_flow", "section_status", "last_event_at", "last_error"],
  "fields": [
   {"fieldname":"gateway_name","fieldtype":"Data","in_list_view":1,"label":"Gateway name","reqd":1,"unique":1},
-  {"fieldname":"provider","fieldtype":"Select","in_list_view":1,"label":"Channel","options":"WhatsApp\nMessenger\nInstagram\nTelegram\nSlack\nDiscord\nEmail\nSMS\nGoogle Chat\nVK\nWeCom\nMicrosoft Teams","reqd":1},
+  {"fieldname":"provider","fieldtype":"Select","in_list_view":1,"label":"Channel","options":"WhatsApp\nMessenger\nInstagram\nTelegram\nSlack\nEmail\nGoogle Chat\nMicrosoft Teams","reqd":1},
   {"default":"1","fieldname":"is_enabled","fieldtype":"Check","in_list_view":1,"label":"Enabled"},
   {"description":"Existing integration that owns this channel's credentials. VK and WeCom gateways require it; use its Password credential rows for the adapter's documented keys.","fieldname":"integration_settings","fieldtype":"Link","label":"Connected integration","options":"Integration Settings"},
   {"description":"The least-privileged Huf user used when this gateway starts an Agent or Flow. Never use Administrator.","fieldname":"execution_user","fieldtype":"Link","label":"Run as user","options":"User"},

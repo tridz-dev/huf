@@ -1051,13 +1051,7 @@ def register_integration_services():
 			"description": "Slack messaging and channel management",
 			"required_credentials": [{"key": "token", "label": "Slack Bot Token", "required": True}]
 		},
-		{
-			"service_name": "discord",
-			"category": "Communication",
-			"surface": "Gateway",
-			"description": "Discord bot for messaging and channel management",
-			"required_credentials": [{"key": "bot_token", "label": "Discord Bot Token", "required": True}]
-		},
+
 		{
 			"service_name": "telegram",
 			"category": "Communication",
@@ -1111,17 +1105,7 @@ def register_integration_services():
 				{"key": "sender_email", "label": "Default Outbound Sender Email (Optional)", "required": False}
 			]
 		},
-		{
-			"service_name": "sms",
-			"category": "Communication",
-			"surface": "Gateway",
-			"description": "SMS messaging via Twilio or Frappe SMS Settings",
-			"required_credentials": [
-				{"key": "account_sid", "label": "Twilio Account SID (or 'frappe_sms' to use Frappe SMS Settings)", "required": False},
-				{"key": "auth_token", "label": "Twilio Auth Token (Optional if using Frappe SMS)", "required": False},
-				{"key": "from_number", "label": "Twilio Phone Number (+1... / Sender ID)", "required": False}
-			]
-		},
+
 		{
 			"service_name": "google_chat",
 			"category": "Communication",
@@ -1142,30 +1126,7 @@ def register_integration_services():
 				{"key": "app_password", "label": "Microsoft App Secret / Password", "required": True}
 			]
 		},
-		{
-			"service_name": "vk",
-			"category": "Communication",
-			"surface": "Gateway",
-			"description": "VKontakte community messaging",
-			"required_credentials": [
-				{"key": "community_token", "label": "Community access token", "required": True},
-				{"key": "callback_secret", "label": "Callback API secret", "required": True},
-				{"key": "confirmation_string", "label": "Callback confirmation string", "required": True}
-			]
-		},
-		{
-			"service_name": "wecom",
-			"category": "Communication",
-			"surface": "Gateway",
-			"description": "WeCom (WeChat Work) application messaging",
-			"required_credentials": [
-				{"key": "corp_id", "label": "Corporation ID", "required": True},
-				{"key": "agent_id", "label": "Application Agent ID", "required": True},
-				{"key": "corp_secret", "label": "Application Secret", "required": True},
-				{"key": "callback_token", "label": "Callback Token", "required": True},
-				{"key": "encoding_aes_key", "label": "Callback EncodingAESKey", "required": True}
-			]
-		},
+
 
 		# Developer Tools
 		{

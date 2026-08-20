@@ -3,7 +3,6 @@ import type { ComponentType } from 'react';
 import { Cloud, Workflow } from 'lucide-react';
 import { FaMicrosoft, FaSlack } from 'react-icons/fa';
 import {
-  SiDiscord,
   SiGithub,
   SiGmail,
   SiGooglecalendar,
@@ -13,8 +12,6 @@ import {
   SiGooglesheets,
   SiJira,
   SiTelegram,
-  SiVk,
-  SiWechat,
   SiWhatsapp,
 } from 'react-icons/si';
 
@@ -58,11 +55,8 @@ const serviceIdentities: Record<string, { title: string; icon: ServiceIcon }> = 
   telegram: { title: 'Telegram', icon: SiTelegram },
   slack: { title: 'Slack', icon: FaSlack },
   whatsapp: { title: 'WhatsApp', icon: SiWhatsapp },
-  discord: { title: 'Discord', icon: SiDiscord },
   microsoft_teams: { title: 'Microsoft Teams', icon: FaMicrosoft },
   teams: { title: 'Microsoft Teams', icon: FaMicrosoft },
-  wecom: { title: 'WeCom', icon: SiWechat },
-  vk: { title: 'VK', icon: SiVk },
   github: { title: 'GitHub', icon: SiGithub },
   jira: { title: 'Jira', icon: SiJira },
   gmail: { title: 'Gmail', icon: SiGmail },
