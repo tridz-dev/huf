@@ -146,27 +146,29 @@ export function buildCredentialsPayload(
 ): IntegrationCredentialRow[] {
   const existingMap = credentialsToMap(existingCredentials);
 
-  return schema.map((item) => {
-    const formValue = formValues[item.key]?.trim() ?? '';
-    const existingRow = existingCredentials?.find((c) => c.key === item.key);
+  return schema
+    .map((item): IntegrationCredentialRow => {
+      const formValue = formValues[item.key]?.trim() ?? '';
+      const existingRow = existingCredentials?.find((c) => c.key === item.key);
 
-    if (isNew) {
+      if (isNew) {
+        return {
+          key: item.key,
+          value: formValue,
+          description: item.label,
+          is_mandatory: item.required ? 1 : 0,
+        };
+      }
+
+      // On edit: blank field keeps existing value
+      const value = formValue || existingMap[item.key] || '';
       return {
+        ...(existingRow?.name ? { name: existingRow.name } : {}),
         key: item.key,
-        value: formValue,
+        value,
         description: item.label,
         is_mandatory: item.required ? 1 : 0,
       };
-    }
-
-    // On edit: blank field keeps existing value
-    const value = formValue || existingMap[item.key] || '';
-    return {
-      ...(existingRow?.name ? { name: existingRow.name } : {}),
-      key: item.key,
-      value,
-      description: item.label,
-      is_mandatory: item.required ? 1 : 0,
-    };
-  });
+    })
+    .filter((row) => row.value !== undefined && row.value !== '');
 }
