@@ -376,6 +376,33 @@
     height: 100%;
     width: 100%;
   }
+
+  /* Universal auto-hide scrollbar: the thumb is transparent until the
+     scrollable element itself is hovered, so lists (chat rail, chat pane,
+     tables, modals, ...) don't sit with a visible scrollbar at rest. Applies
+     everywhere by default; opt out per-element with .scrollbar-hidden (fully
+     hidden) if a spot needs no scrollbar affordance at all. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *:hover {
+    scrollbar-color: var(--steel-soft) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: var(--r-full);
+  }
+  *:hover::-webkit-scrollbar-thumb {
+    background-color: var(--steel-soft);
+  }
 }
 
 @layer components {
