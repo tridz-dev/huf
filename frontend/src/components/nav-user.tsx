@@ -61,7 +61,7 @@ export function NavUser() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center"
             >
-              <div className="flex h-[30px] w-[30px] flex-none items-center justify-center border border-ink bg-paper-deep text-ink overflow-hidden">
+              <div className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-line text-ink overflow-hidden">
                 {user.user_image ? (
                   <img
                     src={user.user_image}
@@ -126,7 +126,7 @@ export function NavUser() {
               ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-700">
+            <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
               <LogOut className="mr-2 h-4 w-4" />
               Log out
             </DropdownMenuItem>

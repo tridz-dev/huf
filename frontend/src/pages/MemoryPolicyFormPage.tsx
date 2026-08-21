@@ -20,7 +20,11 @@ import {
 } from '@/services/memoryPolicyApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { MemoryPolicyDoc } from '@/types/memory';
-import { memoryPolicyFormSchema, type MemoryPolicyFormValues } from '@/components/memory/memoryPolicyFormSchema';
+import {
+  memoryPolicyFormSchema,
+  memoryRecordTypes,
+  type MemoryPolicyFormValues,
+} from '@/components/memory/memoryPolicyFormSchema';
 import { PolicyTab } from '@/components/memory/tabs/PolicyTab';
 import { CaptureTab } from '@/components/memory/tabs/CaptureTab';
 import { RetrievalTab } from '@/components/memory/tabs/RetrievalTab';
@@ -44,7 +48,18 @@ function mapDocToFormValues(doc: Partial<MemoryPolicyDoc>): MemoryPolicyFormValu
     learning_agent: doc.learning_agent || undefined,
     approval_required: doc.approval_required === undefined ? true : doc.approval_required === 1,
     default_status: doc.default_status || 'Draft',
-    allowed_record_types: doc.allowed_record_types || '',
+    // Split legacy free-text storage into the array the picker expects. Any
+    // stale value that no longer matches a real record type (e.g. from before
+    // this became a picker) is simply dropped from the selection here — the
+    // backend re-validates on save regardless.
+    allowed_record_types: (doc.allowed_record_types
+      ? doc.allowed_record_types
+          .split('\n')
+          .map((t) => t.trim())
+          .filter((t): t is (typeof memoryRecordTypes)[number] =>
+            (memoryRecordTypes as readonly string[]).includes(t)
+          )
+      : []),
     inject_mode: doc.inject_mode || 'Tool Only',
     max_records: doc.max_records ?? 5,
     token_budget: doc.token_budget ?? 1000,
@@ -202,7 +217,9 @@ function MemoryPolicyFormPage() {
         learning_agent: values.learning_agent || null,
         approval_required: values.approval_required ? 1 : 0,
         default_status: values.default_status,
-        allowed_record_types: values.allowed_record_types || null,
+        allowed_record_types: values.allowed_record_types.length
+          ? values.allowed_record_types.join('\n')
+          : null,
         inject_mode: values.inject_mode,
         max_records: values.max_records,
         token_budget: values.token_budget,
@@ -285,13 +302,13 @@ function MemoryPolicyFormPage() {
                   value={form.watch('policy_name')}
                   onChange={(e) => form.setValue('policy_name', e.target.value, { shouldDirty: true })}
                   className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-                  placeholder="Policy Name"
+                  placeholder="e.g. Support agent memory"
                 />
               ) : (
                 <InlineEditName
                   value={form.watch('policy_name')}
                   onChange={(value) => form.setValue('policy_name', value, { shouldDirty: true })}
-                  placeholder="Policy Name"
+                  placeholder="e.g. Support agent memory"
                 />
               )}
               <Badge variant={form.watch('enabled') ? 'default' : 'secondary'}>

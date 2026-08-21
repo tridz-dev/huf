@@ -474,6 +474,8 @@ def _resolve_tts_config(
             )
         provider_name = provider_doc.provider_name.lower()
         voice = tool_voice or _get_default_voice(provider_name)
+        if voice and provider_name == "openai":
+            voice = voice.lower()
         normalized = _normalize_model_name(tool_model, agent_doc.provider)
         return {
             "tts_model":     normalized,
@@ -510,6 +512,8 @@ def _resolve_tts_config(
             or _get_default_voice(provider_name)
             or tool_voice
         )
+        if voice and provider_name == "openai":
+            voice = voice.lower()
 
         normalized = _normalize_model_name(
             tts_model_doc.model_name, tts_model_doc.provider
@@ -545,6 +549,8 @@ def _resolve_tts_config(
         )
 
     voice = tool_voice or _get_default_voice(provider_name)
+    if voice and provider_name == "openai":
+        voice = voice.lower()
     normalized = _normalize_model_name(tts_model, agent_doc.provider)
     return {
         "tts_model":     normalized,

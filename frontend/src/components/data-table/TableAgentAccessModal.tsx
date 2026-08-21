@@ -149,7 +149,7 @@ export function TableAgentAccessModal({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogScrollContent className="sm:max-w-md">
 				<DialogScrollHeader>
-					<DialogTitle>Give agents access to "{table?.table_name}"</DialogTitle>
+					<DialogTitle>Configure agent table permissions for "{table?.table_name}"</DialogTitle>
 					<DialogDescription>
 						Pick an agent and choose what it can do with this table.
 					</DialogDescription>

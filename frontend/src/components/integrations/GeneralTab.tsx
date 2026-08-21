@@ -33,7 +33,7 @@ export function GeneralTab({
         name="service"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Integration Service</FormLabel>
+            <FormLabel>Integration service</FormLabel>
             <FormControl>
               <Input
                 {...field}

@@ -33,7 +33,7 @@ function IntegrationSettingsDetailsPageWrapper() {
 
   return (
     <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <IntegrationSettingsDetailsPage />
+      <IntegrationSettingsDetailsPage surface="Integration" />
     </UnifiedLayout>
   );
 }

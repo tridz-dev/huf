@@ -3,6 +3,13 @@ import { handleFrappeError } from '@/lib/frappe-error';
 import { doctype } from '@/data/doctypes';
 import { fetchPaginatedCount } from './utilsApi';
 
+export interface ExecutionProfilePermissionRow {
+  name?: string;
+  capability: string;
+  reference_doctype?: string;
+  is_read_only?: 0 | 1;
+}
+
 export interface ExecutionProfileDoc {
   name: string;
   profile_name: string;
@@ -16,6 +23,7 @@ export interface ExecutionProfileDoc {
   max_cpu_seconds?: number;
   max_memory_mb?: number;
   max_output_bytes?: number;
+  permissions?: ExecutionProfilePermissionRow[];
   modified?: string;
 }
 
@@ -53,6 +61,7 @@ export async function getExecutionProfiles(
           'max_cpu_seconds',
           'max_memory_mb',
           'max_output_bytes',
+          'permissions',
           'modified',
         ],
         limit: 100,
@@ -89,6 +98,7 @@ export async function getExecutionProfiles(
         'max_cpu_seconds',
         'max_memory_mb',
         'max_output_bytes',
+        'permissions',
         'modified',
       ],
       filters: filters.length > 0 ? (filters as never) : undefined,
@@ -108,7 +118,7 @@ export async function getExecutionProfiles(
       total,
     };
   } catch (error) {
-    handleFrappeError(error, 'Error fetching Execution Profiles');
+    handleFrappeError(error, 'Error fetching execution profiles');
     throw error;
   }
 }

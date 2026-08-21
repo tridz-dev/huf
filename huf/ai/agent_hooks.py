@@ -5,6 +5,7 @@ from frappe.utils.safe_exec import get_safe_globals, safe_eval
 from uuid import uuid4
 from frappe.utils import now_datetime
 import json
+from .automation_runtime_flag import automation_runtime_is_new
 
 CACHE_KEY = "huf:doc_event_agents"
 
@@ -78,6 +79,9 @@ def clear_doc_event_agents_cache(doc=None, method=None):
 
 
 def run_hooked_agents(doc, method=None, *args, **kwargs):
+    if automation_runtime_is_new():
+        return
+
     if not method:
         return
 

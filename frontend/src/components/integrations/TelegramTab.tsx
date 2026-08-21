@@ -59,7 +59,7 @@ export function TelegramTab({
         name="telegram_agent"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Responding Agent</FormLabel>
+            <FormLabel>Responding agent</FormLabel>
             <FormControl>
               <LinkFieldControl value={field.value} linkTo={linkRoutes.agent}>
                 <Select onValueChange={field.onChange} value={field.value || ''}>

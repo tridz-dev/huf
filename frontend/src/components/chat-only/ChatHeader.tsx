@@ -38,7 +38,7 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
   };
 
   return (
-    <header className="h-14 shrink-0 border-b border-zinc-200 bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/75">
+    <header className="h-14 shrink-0 border-b border-line bg-panel/90 backdrop-blur supports-[backdrop-filter]:bg-panel/75">
       <div className="mx-auto flex h-full w-full max-w-5xl items-center justify-between gap-3 px-3 sm:px-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -46,26 +46,27 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold text-zinc-950">HufAI</span>
+              <span className="truncate text-sm font-semibold text-ink">HufAI</span>
               {showAgentSwitcher ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     {/* Outer button is the 44px tap target (-my-2 keeps it from
                         stretching the header row); the visible pill stays h-7 so
                         the HufAI/Chat stack fits the h-14 strip. */}
-                    <button
+                    <Button
                       type="button"
-                      className="group -my-2 flex min-h-11 min-w-0 max-w-[160px] items-center rounded-full px-1 sm:max-w-[220px]"
+                      variant="ghost"
+                      className="group -my-2 h-auto min-h-11 max-w-[160px] min-w-0 items-center rounded-full px-1 hover:bg-transparent sm:max-w-[220px]"
                     >
-                      <span className="flex h-7 min-w-0 items-center gap-1 truncate rounded-full border border-zinc-200 px-2.5 text-xs text-zinc-600 transition-colors group-hover:bg-zinc-100">
+                      <span className="flex h-7 min-w-0 items-center gap-1 truncate rounded-full border border-line px-2.5 text-xs text-steel transition-colors group-hover:bg-paper-deep">
                         <span className="truncate">{agentLabel}</span>
-                        <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+                        <ChevronDown className="size-3.5 shrink-0 text-steel-soft" />
                       </span>
                       <span className="sr-only">Switch assistant</span>
-                    </button>
+                    </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-64">
-                    <DropdownMenuLabel className="text-xs font-normal text-zinc-500">
+                    <DropdownMenuLabel className="text-xs font-normal text-steel">
                       Assistants
                     </DropdownMenuLabel>
                     {agents.map((agent) => (
@@ -102,13 +103,13 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
                 </DropdownMenu>
               ) : (
                 agentLabel && (
-                  <span className="hidden max-w-[180px] truncate rounded-full border border-zinc-200 px-2 py-0.5 text-xs text-zinc-600 sm:inline">
+                  <span className="hidden max-w-[180px] truncate rounded-full border border-line px-2 py-0.5 text-xs text-steel sm:inline">
                     {agentLabel}
                   </span>
                 )
               )}
             </div>
-            <p className="truncate text-xs text-zinc-500">Chat</p>
+            <p className="truncate text-xs text-steel">Chat</p>
           </div>
         </div>
 
@@ -120,7 +121,7 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
                 <span className="hidden max-w-32 truncate text-sm font-medium sm:inline">
                   {displayName}
                 </span>
-                <ChevronsUpDown className="hidden size-4 text-zinc-500 sm:block" />
+                <ChevronsUpDown className="hidden size-4 text-steel sm:block" />
                 <span className="sr-only">Open user menu</span>
               </Button>
             </DropdownMenuTrigger>
@@ -137,7 +138,7 @@ export function ChatHeader({ agents = [], currentAgentName }: ChatHeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout} className="text-red-500 focus:text-red-700">
+              <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                 <LogOut className="mr-2 size-4" />
                 Log out
               </DropdownMenuItem>

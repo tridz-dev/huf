@@ -4,24 +4,38 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  // HUF: no pill, no fill, mono label — border + text only
-  'inline-flex items-center rounded-none border px-2 py-0.5 font-mono text-[10.5px] uppercase tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+  // HUF: three chip families — mono/uppercase machine-id pills (default/secondary/destructive/success/outline),
+  // filled sentence-case status pills (pill-*) for agent/run/tool status,
+  // and compact model-name chips (chip) with 6px radius and normal-case text.
+  'inline-flex items-center border px-2 py-0.5 text-[10.5px] transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
   {
     variants: {
       variant: {
         default:
-          'border-line bg-paper-deep text-steel',
+          'rounded-full border-line bg-paper-deep text-steel font-mono uppercase tracking-wide',
         secondary:
-          'border-line bg-paper-deep text-steel',
+          'rounded-full border-line bg-paper-deep text-steel font-mono uppercase tracking-wide',
         destructive:
-          'border-signal-ink/40 bg-transparent text-signal-ink',
+          'rounded-full border-signal-ink/40 bg-transparent text-signal-ink font-mono uppercase tracking-wide',
         success:
-          'border-good/40 bg-transparent text-good',
-        outline: 'border-line text-steel',
+          'rounded-full border-good/40 bg-transparent text-good font-mono uppercase tracking-wide',
+        outline: 'rounded-full border-line text-steel font-mono uppercase tracking-wide',
+        'pill-success': 'rounded-full border-transparent bg-good-tint text-good font-sans normal-case tracking-normal text-[11px] font-medium',
+        'pill-warning': 'rounded-full border-transparent bg-warning-tint text-warning font-sans normal-case tracking-normal text-[11px] font-medium',
+        'pill-danger': 'rounded-full border-transparent bg-destructive-tint text-destructive font-sans normal-case tracking-normal text-[11px] font-medium',
+        'pill-neutral': 'rounded-full border-transparent bg-paper-deep text-steel font-sans normal-case tracking-normal text-[11px] font-medium',
+        chip: 'rounded-sm border-transparent bg-paper-deep text-steel font-mono normal-case tracking-normal',
+      },
+      // 30 callsites overrode Badge's size, nearly all with text-xs or
+      // text-[10px]. One sanctioned compact step instead of ad hoc values.
+      size: {
+        default: '',
+        sm: 'text-[10px] px-1.5 py-0',
       },
     },
     defaultVariants: {
       variant: 'default',
+      size: 'default',
     },
   }
 );
@@ -30,9 +44,9 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
+function Badge({ className, variant, size, ...props }: BadgeProps) {
   return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+    <div className={cn(badgeVariants({ variant, size }), className)} {...props} />
   );
 }
 

@@ -19,6 +19,9 @@ export type AIModel = {
   cached_input_cost_per_1m_tokens?: number | null;
   supports_reasoning?: number;
   reasoning_config_override?: string;
+  disable_ask_user?: number;
+  disable_rich_elements?: number;
+  disable_document_artifacts?: number;
 };
 
 export type ToolType =
@@ -239,6 +242,7 @@ export interface AgentDoc {
 
   // Agent specific fields
   agent_name: string;
+  agent_modality?: "Text" | "Voice" | "Both";
   provider: string;
   model: string;
   provider_brand?: string | null;
@@ -272,7 +276,7 @@ export interface AgentDoc {
   total_run?: number; // Total number of runs
   agent_color?: string | null; // Hex color code for agent background
   show_tool_execution_details?: 0 | 1; // 0 or 1
-  allow_guest?: number; // 0 or 1
+  allow_guest?: boolean;
   is_system?: number; // 0 or 1 — system agents are locked and hidden from non-admins
   allowed_users?: AgentPermissionUserRow[];
   allowed_roles?: AgentPermissionRoleRow[];
@@ -311,6 +315,12 @@ export interface AgentDoc {
   enable_memory_search_tool?: number; // 0 or 1
   enable_memory_write_tool?: number; // 0 or 1
 
+  // Voice
+  voice_enabled?: number; // 0 or 1
+  voice_engine?: string | null; // Link to Voice Engine
+  voice_config?: string | null; // JSON-encoded engine-specific config
+  voice_greeting?: string | null;
+
   // Advanced model overrides
   image_generation_model?: string | null;
   tts_model?: string | null;
@@ -326,6 +336,9 @@ export interface AgentDoc {
   // Execution policy (advanced): run turns directly instead of queue-first
   run_immediately?: 0 | 1;
   allow_ssh?: 0 | 1;
+  allow_ask_user?: 0 | 1;
+  allow_rich_elements?: 0 | 1;
+  allow_document_artifacts?: 0 | 1;
   ssh_connections?: Array<{
     name?: string;
     ssh_connection: string;

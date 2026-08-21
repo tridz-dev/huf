@@ -6,10 +6,15 @@
  "field_order": [
   "overview_tab",
   "title",
+  "status",
+  "pinned",
+  "trashed_at",
+  "archived_at",
   "agent",
   "model",
   "column_break_9v4t",
   "is_active",
+  "project",
   "session_id",
   "created_at",
   "last_activity",
@@ -35,6 +40,33 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Title",
+   "read_only": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "options": "Active\nHidden\nArchived\nTrashed\nDeleted",
+   "default": "Active",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status"
+  },
+  {
+   "fieldname": "pinned",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Pinned"
+  },
+  {
+   "fieldname": "trashed_at",
+   "fieldtype": "Datetime",
+   "label": "Trashed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "archived_at",
+   "fieldtype": "Datetime",
+   "label": "Archived At",
    "read_only": 1
   },
   {
@@ -129,6 +161,14 @@
    "label": "Total Cost",
    "precision": "6",
    "read_only": 1
+  },
+  {
+   "description": "The HUF Project this conversation is associated with.",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "HUF Project",
+   "search_index": 1
   },
   {
    "description": "Unique identifier for the session, often linked to a browser session or API client.",

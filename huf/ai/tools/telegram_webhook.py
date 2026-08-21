@@ -155,7 +155,26 @@ def process_telegram_update(settings_name: str, update: dict):
 
         gateway_name = frappe.db.get_value("Gateway", {"integration_settings": settings_name, "provider": "Telegram", "is_enabled": 1})
         if not gateway_name:
-            # Fallback for old way if no gateway configured
+            # IMPORTANT: only fall back to the ungoverned legacy path when NO Gateway
+            # has ever been configured for this Integration Settings. If a Gateway
+            # exists but is simply disabled, we must NOT fall through here -- doing so
+            # would mean disabling a gateway makes the integration MORE permissive
+            # (no admission policy, no pairing, no allow-list, no Gateway Event audit
+            # row, and the agent runs as Administrator). Do not "simplify" this back
+            # to a single is_enabled lookup.
+            any_gateway_exists = frappe.db.exists(
+                "Gateway", {"integration_settings": settings_name, "provider": "Telegram"}
+            )
+            if any_gateway_exists:
+                # A Gateway is configured but intentionally disabled. Treat this as
+                # the integration being off, not as "no governance configured".
+                logger.warning(
+                    f"Telegram Gateway for Integration Settings {settings_name} exists but is "
+                    "disabled; refusing to fall back to ungoverned legacy execution. No reply sent to sender."
+                )
+                return
+
+            # Fallback for old way if no gateway configured at all
             try:
                 from huf.ai.agent_integration import run_agent_sync
 

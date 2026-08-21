@@ -8,7 +8,7 @@ HUF is a complete, self-hosted AI layer built on open standards. It gives teams 
 
 <br/>
 
-<img width="1905" height="928" alt="HUF Dashboard" src="./huf/public/Images/HUF Home.png" />
+<img width="1905" height="928" alt="HUF Dashboard" src="./huf/public/Images/HUF Agent Home.png" />
 
 <br/>
 

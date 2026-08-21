@@ -284,6 +284,10 @@ def create_demo_ai_models():
         return entry
 
     models = [
+        # ElevenLabs
+        _m("eleven_multilingual_v2", "ElevenLabs", TTS),
+        _m("eleven_turbo_v2_5", "ElevenLabs", TTS),
+        _m("eleven_flash_v2_5", "ElevenLabs", TTS),
         # Hugging Face
         _m("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
         # Cohere
@@ -461,6 +465,45 @@ def create_demo_ai_models():
             if not existing.get("modalities"):
                 existing.modalities = m["modalities"]
                 existing.save(ignore_permissions=True)
+
+
+def seed_voice_engines():
+	"""Ensure a Voice Engine row exists for every engine discovered by the registry.
+
+	Idempotent and safe to call on after_migrate even when zero engines are
+	registered (the current state, since the registry starts empty). Existing
+	rows are left alone except for backfilling a missing label/kind, so user
+	edits are preserved.
+	"""
+	try:
+		from huf.ai.voice import get_engine, supported_engines
+
+		for engine_key in supported_engines():
+			engine = get_engine(engine_key)
+			label = getattr(engine, "label", engine_key)
+			kind = getattr(engine, "kind", None)
+
+			if not frappe.db.exists("Voice Engine", engine_key):
+				doc = frappe.new_doc("Voice Engine")
+				doc.engine_key = engine_key
+				doc.label = label
+				doc.kind = kind
+				doc.enabled = 1
+				doc.insert(ignore_permissions=True)
+				continue
+
+			existing = frappe.get_doc("Voice Engine", engine_key)
+			dirty = False
+			if not existing.get("label") and label:
+				existing.label = label
+				dirty = True
+			if not existing.get("kind") and kind:
+				existing.kind = kind
+				dirty = True
+			if dirty:
+				existing.save(ignore_permissions=True)
+	except Exception as e:
+		logger.warning(f"Failed to seed voice engines: {e!s}")
 
 
 def create_hub_orchestrator_agent():
@@ -823,24 +866,28 @@ def create_huf_roles():
 			"description": "Full system control. Can manage providers, users, roles, agents, tools, flows, and knowledge.",
 			"is_system_role": 1,
 			"frappe_role": "System Manager",
+			"role_weight": 100,
 		},
 		{
 			"role_name": "Huf Manager",
 			"description": "Operational control. Can create and manage agents, flows, and knowledge. Cannot manage users or system settings.",
 			"is_system_role": 1,
 			"frappe_role": "Huf Manager",
+			"role_weight": 80,
 		},
 		{
 			"role_name": "Huf User",
 			"description": "End user. Can use agents, chat, and flows. Cannot create or configure them.",
 			"is_system_role": 1,
 			"frappe_role": "Huf User",
+			"role_weight": 50,
 		},
 		{
 			"role_name": "Huf Viewer",
 			"description": "Read-only access. Can view agents and own conversations only.",
 			"is_system_role": 1,
 			"frappe_role": "Huf Viewer",
+			"role_weight": 10,
 		},
 	]
 
@@ -860,6 +907,9 @@ def create_huf_roles():
 				if cap not in existing_caps:
 					doc.append("permissions", {"capability": cap})
 					changed = True
+			if doc.role_weight != meta.get("role_weight", 0):
+				doc.role_weight = meta.get("role_weight", 0)
+				changed = True
 			if changed:
 				doc.save(ignore_permissions=True)
 
@@ -997,34 +1047,101 @@ def register_integration_services():
 		{
 			"service_name": "slack",
 			"category": "Communication",
+			"surface": "Gateway",
 			"description": "Slack messaging and channel management",
 			"required_credentials": [{"key": "token", "label": "Slack Bot Token", "required": True}]
 		},
-		{
-			"service_name": "discord",
-			"category": "Communication",
-			"description": "Discord bot for messaging and channel management",
-			"required_credentials": [{"key": "bot_token", "label": "Discord Bot Token", "required": True}]
-		},
+
 		{
 			"service_name": "telegram",
 			"category": "Communication",
+			"surface": "Gateway",
 			"description": "Telegram bot for messaging",
 			"required_credentials": [{"key": "token", "label": "Telegram Bot Token", "required": True}]
 		},
-		
+		{
+			"service_name": "whatsapp",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "WhatsApp Business messaging via the Meta Cloud API",
+			"required_credentials": [
+				{"key": "phone_number_id", "label": "Phone Number ID", "required": True},
+				{"key": "access_token", "label": "Meta Permanent/System Access Token", "required": True},
+				{"key": "webhook_verify_token", "label": "Webhook Verify Token", "required": True},
+				{"key": "app_secret", "label": "Meta App Secret (for HMAC signature verification)", "required": False}
+			]
+		},
+		{
+			"service_name": "messenger",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Facebook Messenger for Page messaging",
+			"required_credentials": [
+				{"key": "page_id", "label": "Facebook Page ID", "required": True},
+				{"key": "access_token", "label": "Facebook Page Access Token", "required": True},
+				{"key": "webhook_verify_token", "label": "Webhook Verify Token", "required": True},
+				{"key": "app_secret", "label": "Meta App Secret (for HMAC signature verification)", "required": False}
+			]
+		},
+		{
+			"service_name": "instagram",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Instagram Direct messaging via the Meta Graph API",
+			"required_credentials": [
+				{"key": "instagram_account_id", "label": "Instagram Professional Account ID / Page ID", "required": True},
+				{"key": "access_token", "label": "Facebook / Instagram Page Access Token", "required": True},
+				{"key": "webhook_verify_token", "label": "Webhook Verify Token", "required": True},
+				{"key": "app_secret", "label": "Meta App Secret (for HMAC signature verification)", "required": False}
+			]
+		},
+		{
+			"service_name": "email",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Inbound/outbound email messaging",
+			"required_credentials": [
+				{"key": "webhook_secret", "label": "Webhook Verification Secret (Optional)", "required": False},
+				{"key": "sender_email", "label": "Default Outbound Sender Email (Optional)", "required": False}
+			]
+		},
+
+		{
+			"service_name": "google_chat",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Google Chat space messaging via incoming webhooks",
+			"required_credentials": [
+				{"key": "webhook_url", "label": "Google Chat Incoming Webhook URL (Optional)", "required": False},
+				{"key": "verification_token", "label": "Verification Token (Optional)", "required": False}
+			]
+		},
+		{
+			"service_name": "microsoft_teams",
+			"category": "Communication",
+			"surface": "Gateway",
+			"description": "Microsoft Teams bot for messaging",
+			"required_credentials": [
+				{"key": "app_id", "label": "Microsoft App ID", "required": True},
+				{"key": "app_password", "label": "Microsoft App Secret / Password", "required": True}
+			]
+		},
+
+
 		# Developer Tools
 		{
 			"service_name": "github",
 			"category": "Developer",
+			"surface": "Integration",
 			"description": "GitHub API for repository and issue management",
 			"required_credentials": [{"key": "access_token", "label": "GitHub Access Token", "required": True}]
 		},
-		
+
 		# Project Management Tools
 		{
 			"service_name": "jira",
 			"category": "Project Management",
+			"surface": "Integration",
 			"description": "Jira issue tracking and project management",
 			"required_credentials": [
 				{"key": "server_url", "label": "Jira Server URL", "required": True},
@@ -1032,11 +1149,12 @@ def register_integration_services():
 				{"key": "token", "label": "API Token", "required": True}
 			]
 		},
-		
+
 		# Google Workspace Tools
 		{
 			"service_name": "gmail",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Gmail email management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1047,6 +1165,7 @@ def register_integration_services():
 		{
 			"service_name": "google_calendar",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Calendar event management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1057,6 +1176,7 @@ def register_integration_services():
 		{
 			"service_name": "google_drive",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Drive file management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1067,6 +1187,7 @@ def register_integration_services():
 		{
 			"service_name": "google_sheets",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Sheets management",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1077,6 +1198,7 @@ def register_integration_services():
 		{
 			"service_name": "google_maps",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Maps directions and geocoding",
 			"required_credentials": [
 				{"key": "api_key", "label": "Google Maps API Key", "required": True}
@@ -1085,6 +1207,7 @@ def register_integration_services():
 		{
 			"service_name": "google_meet",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "Google Meet meeting space creation",
 			"required_credentials": [
 				{"key": "client_id", "label": "Google Client ID", "required": True},
@@ -1095,6 +1218,7 @@ def register_integration_services():
 		{
 			"service_name": "serpapi",
 			"category": "Google",
+			"surface": "Integration",
 			"description": "SerpApi search data: hotels, reviews (Google Maps, TripAdvisor, Yelp), and YouTube",
 			"required_credentials": [
 				{"key": "api_key", "label": "SerpApi API Key", "required": True}
@@ -1110,6 +1234,7 @@ def register_integration_services():
 				# Update existing service
 				doc = frappe.get_doc("Integration Service", service_data["service_name"])
 				doc.category = service_data["category"]
+				doc.surface = service_data.get("surface", "Integration")
 				doc.description = service_data["description"]
 				doc.required_credentials = json.dumps(service_data["required_credentials"])
 				doc.is_builtin = 1
@@ -1120,6 +1245,7 @@ def register_integration_services():
 					"doctype": "Integration Service",
 					"service_name": service_data["service_name"],
 					"category": service_data["category"],
+					"surface": service_data.get("surface", "Integration"),
 					"description": service_data["description"],
 					"required_credentials": json.dumps(service_data["required_credentials"]),
 					"is_builtin": 1

@@ -58,6 +58,16 @@ dependencies = [
     "weasyprint>=68.0",
 ]
 
+[project.optional-dependencies]
+# Realtime voice sidecar (huf/ai/voice/sidecar/app.py). Deliberately optional:
+# the sidecar is a standalone ASGI process an operator opts into running, not
+# something a normal huf install under gunicorn needs. Install with
+# `pip install -e ".[realtime]"` on the bench that runs the sidecar.
+realtime = [
+    "fastapi",
+    "uvicorn[standard]",
+]
+
 [build-system]
 requires = ["flit_core >=3.4,<4"]
 build-backend = "flit_core.buildapi"

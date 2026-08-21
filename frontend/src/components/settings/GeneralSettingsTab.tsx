@@ -21,6 +21,10 @@ export default GeneralSettingsTab;
 const DEFAULT_THEME: HufTheme = 'winter';
 const DEFAULT_OPACITY = 55;
 
+// Theme switching is disabled — the app ships a single apple-quiet UI direction now
+// (see src/index.css :root); re-enable if runtime theme switching returns.
+const THEME_PICKER_ENABLED = false;
+
 const THEMES: { id: HufTheme; label: string; preview: string[] }[] = [
   {
     id: 'winter',
@@ -107,52 +111,55 @@ function GeneralSettingsTab({
         Personalize the HUF interface. These preferences are stored locally in your browser.
       </p>
 
+      {THEME_PICKER_ENABLED && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Theme</CardTitle>
+            <CardDescription>
+              Choose a color theme. The whole interface updates instantly because every surface,
+              border, and accent reads from the same set of CSS custom properties.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {THEMES.map(({ id, label, preview }) => (
+                <Button
+                  key={id}
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleThemeChange(id)}
+                  className={cn(
+                    'h-auto flex-col items-start gap-2 rounded-lg border-2 p-3 text-left',
+                    theme === id
+                      ? 'border-ink'
+                      : 'border-line hover:border-steel-soft',
+                  )}
+                >
+                  <div className="flex gap-1">
+                    {preview.map((color) => (
+                      <span
+                        key={color}
+                        className="w-4 h-4 rounded-sm"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs font-medium text-ink">{label}</span>
+                </Button>
+              ))}
+            </div>
+
+            <Button variant="ghost" size="sm" onClick={handleResetTheme} className="-ml-2">
+              <RotateCcw className="w-4 h-4 mr-1.5" />
+              Reset to Winter
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Theme</CardTitle>
-          <CardDescription>
-            Choose a color theme. The whole interface updates instantly because every surface,
-            border, and accent reads from the same set of CSS custom properties.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {THEMES.map(({ id, label, preview }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleThemeChange(id)}
-                className={cn(
-                  'flex flex-col gap-2 p-3 rounded-lg border-2 text-left transition-all',
-                  theme === id
-                    ? 'border-ink'
-                    : 'border-line hover:border-steel-soft',
-                )}
-              >
-                <div className="flex gap-1">
-                  {preview.map((color) => (
-                    <span
-                      key={color}
-                      className="w-4 h-4 rounded-sm"
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-                <span className="text-xs font-medium text-ink">{label}</span>
-              </button>
-            ))}
-          </div>
-
-          <Button variant="ghost" size="sm" onClick={handleResetTheme} className="-ml-2">
-            <RotateCcw className="w-4 h-4 mr-1.5" />
-            Reset to Winter
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Hub Scenery</CardTitle>
+          <CardTitle>Hub scenery</CardTitle>
           <CardDescription>
             Toggle a full-page background image on the Hub. The choice and opacity are remembered
             in localStorage, and the preview below updates live on this page.

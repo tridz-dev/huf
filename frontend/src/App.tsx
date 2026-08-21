@@ -18,17 +18,18 @@ import { AgentPromptsHeaderActions } from './components/AgentPromptsHeaderAction
 import { AgentSummaryPromptsHeaderActions } from './components/AgentSummaryPromptsHeaderActions';
 import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHeaderActions';
 import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
-import { UsersHeaderActions } from './components/UsersHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
+import { CommandPalette } from './components/CommandPalette';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
+const AutomationFormPageWrapper = lazy(() => import('./pages/AutomationFormPageWrapper'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
 const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
@@ -37,12 +38,24 @@ const ExecutionProfilesPage = lazy(() => import('./pages/ExecutionProfilesPage')
 const ExecutionProfileFormPageWrapper = lazy(() => import('./pages/ExecutionProfileFormPageWrapper'));
 const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
 const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
+const NetworkAccessPoliciesPage = lazy(() => import('./pages/NetworkAccessPoliciesPage'));
+const NetworkAccessPolicyFormPage = lazy(() => import('./pages/NetworkAccessPolicyFormPage'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
 const AiProvidersPageWrapper = lazy(() => import('./pages/AiProvidersPageWrapper'));
 const ChatPage = lazy(() => import('./pages/ChatPageV2'));
 const ChatOnlyPage = lazy(() => import('./pages/ChatOnlyPage'));
+const ChatProjectsPage = lazy(() =>
+  import('./pages/chat/ChatProjectsPage').then((m) => ({ default: m.ChatProjectsPage }))
+);
+const ChatProjectPage = lazy(() => import('./pages/chat/ChatProjectPage'));
+const ChatArtifactsPage = lazy(() =>
+  import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatArtifactsPage }))
+);
+const ChatScheduledPage = lazy(() =>
+  import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatScheduledPage }))
+);
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
@@ -66,6 +79,9 @@ const IntegrationSettingsListingPageWrapper = lazy(
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
+const GatewayDetailsPageWrapper = lazy(
+  () => import('./pages/GatewayDetailsPageWrapper'),
+);
 const IntegrationServicesListingPageWrapper = lazy(
   () => import('./pages/IntegrationServicesListingPageWrapper'),
 );
@@ -85,9 +101,8 @@ import {
   checkStreamingAvailable,
   setStreamingAvailable,
 } from './services/streamChatApi';
-const UsersPage = lazy(() => import('./pages/UsersPage'));
-const RolesPage = lazy(() => import('./pages/RolesPage'));
 const MembersPage = lazy(() => import('./pages/MembersPage'));
+const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
 
 function ChatOnlyRedirectGuard() {
   const location = useLocation();
@@ -193,6 +208,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/automations/:automationId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AutomationFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/prompts"
             element={
               <ProtectedRoute>
@@ -276,6 +301,28 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <SSHConnectionFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/network-policies"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <NetworkAccessPoliciesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/network-policies/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <NetworkAccessPolicyFormPage />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -391,9 +438,57 @@ function AppShell() {
             path="/chat"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/projects"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatProjectsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/projects/:projectId"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatProjectPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/artifacts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/scheduled"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout hideHeader hideRail>
+                  <Suspense fallback={<PageLoader />}>
+                    <ChatScheduledPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
@@ -403,7 +498,7 @@ function AppShell() {
             path="/chat/:chatId"
             element={
               <ProtectedRoute>
-                <UnifiedLayout hideHeader>
+                <UnifiedLayout hideHeader hideRail>
                   <Suspense fallback={<PageLoader />}>
                     <ChatPage />
                   </Suspense>
@@ -590,6 +685,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/gateways/:settingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <GatewayDetailsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/integration-services"
             element={
               <ProtectedRoute>
@@ -661,23 +766,18 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/users"
-            element={
-              <ProtectedRoute>
-                <UnifiedLayout headerActions={<UsersHeaderActions />}>
-                  <UsersPage />
-                </UnifiedLayout>
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/users" element={<Navigate to="/members" replace />} />
           <Route
             path="/roles"
+            element={<Navigate to="/members?view=roles" replace />}
+          />
+          <Route
+            path="/roles/:id"
             element={
               <ProtectedRoute>
-                <UnifiedLayout>
-                  <RolesPage />
-                </UnifiedLayout>
+                <Suspense fallback={<PageLoader />}>
+                  <HufRoleFormPage />
+                </Suspense>
               </ProtectedRoute>
             }
           />
@@ -698,6 +798,7 @@ function AppShell() {
             </AnimatePresence>
           </Suspense>
           <Toaster />
+          <CommandPalette />
         </PermissionsProvider>
       </UserProvider>
     </SocketProvider>

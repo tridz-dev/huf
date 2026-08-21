@@ -3,6 +3,31 @@
 The Agent DocType remains the canonical runtime aggregate. These endpoints
 only change the editor transport boundary: callers load and save one cohesive
 section at a time instead of round-tripping every field and child table.
+
+INTENTIONAL PERMISSION SPLIT: ``update_agent_section``'s write-permission gate
+(``agent_doc.check_permission("write")``, which for the Agent DocType routes
+through ``huf.permissions.has_capability(user, "agent.edit")``) is a
+deliberately separate axis from execution-time access control
+(``huf.ai.agent_access.check_agent_access`` / ``assert_agent_access``, which
+gates on ``allow_guest`` / ``allowed_users`` / ``allowed_roles``). Config-edit
+answers "who may build/configure agents" -- an authoring concern; execution
+access answers "who may run this specific agent" -- an audience concern. The
+two are not synchronized and are not meant to be: a user with the
+``agent.edit`` capability but excluded from an agent's ``allowed_users`` /
+``allowed_roles`` CANNOT run that agent, and conversely a user listed in
+``allowed_users`` without the ``agent.edit`` capability CANNOT modify the
+agent's configuration sections via ``update_agent_section``.
+
+Note the asymmetry: ``get_agent_section`` (read) is NOT capability-gated.
+``Agent.has_permission()`` routes "write"/"save"/"create"/"delete" through
+capability checks, but everything else (including "read") falls through to
+``check_agent_access`` -- the SAME allowlist check that governs execution.
+So a user in ``allowed_users`` (who can run the agent) can also read its
+configuration sections, even without ``agent.edit``; they just cannot save
+changes to them. This is deliberate, not an oversight -- it was reviewed and
+confirmed in the Agent Permissions audit
+(Tracks/AgentPermissionsAudit/AGENT_PERMISSIONS_AUDIT.md, finding F13, OQ7).
+Do not "fix" this by unifying the two checks.
 """
 
 from __future__ import annotations
@@ -18,6 +43,7 @@ from frappe.utils import get_datetime
 AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 	"general": (
 		"agent_name",
+		"agent_modality",
 		"provider",
 		"model",
 		"temperature",
@@ -40,6 +66,7 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"last_run",
 		"total_run",
 		"allow_chat",
+		"owner",
 	),
 	"behavior": (
 		"allow_chat",
@@ -47,11 +74,34 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"persist_user_history",
 		"enable_multi_run",
 		"default_plan",
+		"allow_ask_user",
+		"allow_rich_elements",
+		"allow_document_artifacts",
 	),
 	"tools": ("agent_tool", "agent_mcp_server"),
 	"knowledge": ("agent_knowledge",),
 	"skills": ("agent_skill",),
-	"permissions": ("allow_guest", "allowed_users", "allowed_roles"),
+	"permissions": (
+		"allow_guest", 
+		"allowed_users", 
+		"allowed_roles",
+		"enable_conversation_data",
+		"conversation_data_api_permission",
+		"allow_code_execution",
+		"execution_profile",
+		"execution_shared_dir_limit_mb",
+		"allow_ssh",
+		"ssh_connections",
+	),
+	"voice": (
+		"voice_enabled",
+		"voice_engine",
+		"voice_config",
+		"voice_greeting",
+		"tts_model",
+		"tts_voice",
+		"stt_model",
+	),
 	"advanced": (
 		"context_strategy",
 		"summary_model",
@@ -68,7 +118,6 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"max_context_chars",
 		"enable_conversation_data",
 		"inject_conversation_data",
-		"conversation_data_api_permission",
 		"autonaming_of_conversation_title",
 		"enable_memory",
 		"memory_policy",
@@ -81,17 +130,9 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"agent_color",
 		"show_tool_execution_details",
 		"image_generation_model",
-		"tts_model",
-		"tts_voice",
-		"stt_model",
 		"allow_file_upload",
 		"enable_ocr",
 		"max_upload_size_mb",
-		"allow_code_execution",
-		"execution_profile",
-		"execution_shared_dir_limit_mb",
-		"allow_ssh",
-		"ssh_connections",
 	),
 }
 
@@ -101,6 +142,7 @@ READ_ONLY_FIELDS = {
 	"total_run",
 	"copied_from_prompt",
 	"copied_from_summary_prompt",
+	"owner",
 }
 
 

@@ -17,7 +17,7 @@ export function SkeletonCard({ className }: SkeletonCardProps) {
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-5/6" />
             </div>
-            <Skeleton className="h-5 w-16 rounded-none ml-2" />
+            <Skeleton className="h-5 w-16 rounded ml-2" />
           </div>
         </CardHeader>
 
@@ -34,7 +34,7 @@ export function SkeletonCard({ className }: SkeletonCardProps) {
           </div>
           <div className="mt-auto pt-1">
             <div className="flex gap-2">
-              <Skeleton className="h-8 w-8 rounded-none" />
+              <Skeleton className="h-8 w-8 rounded" />
             </div>
           </div>
         </CardContent>

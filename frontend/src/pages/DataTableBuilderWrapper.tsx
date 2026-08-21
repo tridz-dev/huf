@@ -7,7 +7,7 @@ import { getTableSchema } from '../services/dataTableApi';
 export function DataTableBuilderWrapper() {
 	const { tableId } = useParams<{ tableId: string }>();
 	const isEdit = !!tableId && tableId !== 'new';
-	const [tableName, setTableName] = useState<string>(isEdit ? 'Edit Table' : 'New Table');
+	const [tableName, setTableName] = useState<string>(isEdit ? 'Edit table' : 'New table');
 
 	useEffect(() => {
 		if (isEdit) {
@@ -27,7 +27,7 @@ export function DataTableBuilderWrapper() {
 				{ label: tableName, href: `/data/${tableId}` },
 				{ label: 'Edit' },
 			]
-		: [{ label: 'Data', href: '/data' }, { label: 'New Table' }];
+		: [{ label: 'Data', href: '/data' }, { label: 'New table' }];
 
 	return (
 		<UnifiedLayout breadcrumbs={breadcrumbs}>

@@ -46,7 +46,7 @@ export const defaultIntegrationServiceFormValues: IntegrationServiceFormValues =
   required_credentials: [
     {
       key: 'api_key',
-      label: 'API Key',
+      label: 'API key',
       required: true,
       description: '',
     },

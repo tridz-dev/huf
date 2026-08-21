@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UseFormReturn } from 'react-hook-form';
-import type { AIProvider, AIModel } from '@/types/agent.types';
+import type { AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { formatTimeAgo } from '@/utils/time';
 import { InlineEditName } from '@/components/common/InlineEditName';
@@ -20,7 +20,6 @@ import { InlineEditName } from '@/components/common/InlineEditName';
 interface AgentHeaderProps {
   form: UseFormReturn<AgentFormValues>;
   watchDisabled: boolean;
-  providers: AIProvider[];
   models: AIModel[];
   activeTriggerCount: number;
   isNew: boolean;
@@ -46,7 +45,6 @@ interface AgentHeaderProps {
 export function AgentHeader({
   form,
   watchDisabled,
-  providers,
   models,
   activeTriggerCount,
   isNew,
@@ -66,8 +64,8 @@ export function AgentHeader({
   lastRun,
   totalRun,
 }: AgentHeaderProps) {
-  const watchProvider = form.watch('provider');
   const watchModel = form.watch('model');
+  const isVoiceOnly = form.watch('agent_modality') === 'Voice';
   const navigate = useNavigate();
 
   const handleOpenChat = () => {
@@ -88,53 +86,48 @@ export function AgentHeader({
               value={form.watch('agent_name')}
               onChange={(e) => form.setValue('agent_name', e.target.value, { shouldDirty: true })}
               className="text-2xl font-bold h-auto border-0 px-0 focus-visible:ring-0 max-w-md"
-              placeholder="Agent Name"
+              placeholder="e.g. Customer support agent"
             />
           ) : (
             <InlineEditName
               value={form.watch('agent_name')}
               onChange={(value) => form.setValue('agent_name', value, { shouldDirty: true })}
-              placeholder="Agent Name"
+              placeholder="e.g. Customer support agent"
             />
           )}
-          <Badge variant={watchDisabled ? 'secondary' : 'default'}>
+          <Badge variant={watchDisabled ? 'pill-neutral' : 'pill-success'}>
+            <span className={`w-1.5 h-1.5 rounded-full mr-1 ${watchDisabled ? 'bg-steel-soft' : 'bg-good'}`} />
             {watchDisabled ? 'Disabled' : 'Active'}
           </Badge>
           {isSystem && (
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="pill-neutral" className="gap-1">
               <Lock className="w-3 h-3" />
               System
             </Badge>
           )}
-          <Badge variant="outline">
-            {providers.find(p => p.name === watchProvider)?.provider_name || watchProvider || 'Provider'}
-          </Badge>
-          <Badge variant="outline">
+          {!isVoiceOnly && (
+          <Badge variant="chip">
             {models.find(m => m.name === watchModel)?.model_name || watchModel || 'Model'}
           </Badge>
-        </div>
-        <div className="flex flex-col gap-1 text-sm text-steel">
+          )}
           {activeTriggerCount > 0 && (
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 shrink-0" />
-              <span>
-                {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
-              </span>
-            </div>
+            <span className="text-xs text-steel-soft flex items-center gap-1">
+              <Clock className="w-3 h-3 shrink-0" />
+              {activeTriggerCount} active {activeTriggerCount === 1 ? 'trigger' : 'triggers'}
+            </span>
           )}
           {!isNew && (lastRun !== undefined || totalRun !== undefined) && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-              <span>Last run: {lastRun ? formatTimeAgo(lastRun) : 'Never'}</span>
-              <span>Total runs: {totalRun ?? 0}</span>
-            </div>
+            <span className="text-xs text-steel-soft ml-1">
+              Last run {lastRun ? formatTimeAgo(lastRun) : 'never'} &middot; {totalRun ?? 0} runs
+            </span>
           )}
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {!isNew && (<Button 
-          variant="outline" 
-          size="icon-sm" 
-          onClick={onRunTest} 
+        {!isNew && !isVoiceOnly && (<Button
+          variant="outline"
+          size="icon-sm"
+          onClick={onRunTest}
           type="button"
           disabled={runningTest || isNew}
           title={isNew ? 'Save agent first to run test' : runningTest ? 'Running...' : 'Run test'}
@@ -178,7 +171,7 @@ export function AgentHeader({
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onViewLogs}>
                   <FileText className="w-4 h-4 mr-2" />
-                  View Logs
+                  View logs
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
                   <Trash2 className="w-4 h-4 mr-2" />

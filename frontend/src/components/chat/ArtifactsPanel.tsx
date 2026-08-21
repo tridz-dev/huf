@@ -12,6 +12,7 @@ import {
   PanelRightOpen,
   Video,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { formatTimeAgo } from '@/utils/time';
 import { exportArtifactFromPanel, type ArtifactListItem } from '@/services/artifactPanelApi';
 import type { ArtifactPaneTarget } from '@/components/chat/useArtifactPane';
@@ -36,7 +37,9 @@ const ARTIFACT_TYPE_ICONS: Record<string, LucideIcon> = {
   text: FileText,
 };
 
-function getArtifactIcon(artifactType: string): LucideIcon {
+/** Exported for reuse by `OutputsCard`, which shows the same per-type icon
+ * mapping in its transcript-embedded outputs list. */
+export function getArtifactIcon(artifactType: string): LucideIcon {
   return ARTIFACT_TYPE_ICONS[artifactType] ?? FileText;
 }
 
@@ -102,11 +105,12 @@ export function ArtifactsPanel({ artifacts, loading, onOpenArtifact }: Artifacts
 
   if (collapsed) {
     return (
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setCollapsed(false)}
         aria-label="Expand artifacts panel"
-        className="relative flex w-10 shrink-0 flex-col items-center gap-2 border-l border-line bg-panel py-4 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+        className="relative h-auto w-10 shrink-0 flex-col items-center gap-2 rounded-none border-l border-line bg-panel py-4 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
       >
         <PanelRightOpen className="size-4" />
         <span className="rotate-180 text-xs font-medium tracking-wide [writing-mode:vertical-rl]">
@@ -117,12 +121,12 @@ export function ArtifactsPanel({ artifacts, loading, onOpenArtifact }: Artifacts
             {count}
           </span>
         )}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="flex h-full w-72 shrink-0 flex-col border-l border-line bg-panel">
+    <div className="flex h-full w-80 shrink-0 flex-col border-l border-line bg-panel">
       <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-3">
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-semibold">Artifacts</h2>
@@ -132,14 +136,16 @@ export function ArtifactsPanel({ artifacts, loading, onOpenArtifact }: Artifacts
             </span>
           )}
         </div>
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={() => setCollapsed(true)}
           aria-label="Collapse artifacts panel"
-          className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="h-auto w-auto rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <PanelRightClose className="size-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -205,16 +211,18 @@ export function ArtifactsPanel({ artifacts, loading, onOpenArtifact }: Artifacts
                     )}
                     {isDoc && (
                       <div className="flex gap-1 shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon-sm"
                           onClick={(e) => handleExport(artifact.name, 'pdf', e)}
                           disabled={isPdfExporting}
                           aria-label="Download as PDF"
-                          className="p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="h-auto w-auto rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                           title="Download as PDF"
                         >
                           <Download className="size-4" />
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>

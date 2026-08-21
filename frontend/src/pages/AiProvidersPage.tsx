@@ -57,7 +57,7 @@ const STARTER_PATHS: Record<StarterPath, {
     providerName: 'OpenRouter',
     providerBrand: 'openrouter',
     modelName: 'openrouter/free',
-    title: 'Try OpenRouter Free',
+    title: 'Try OpenRouter free',
     description: 'Start with a zero-cost router that selects an available free model for each request.',
     caution: 'Best for learning and demos. Free models rotate often, have lower limits, and are not a production reliability tier. Visit openrouter.ai/models?max_price=0 to pick a specific free model.',
     signupUrl: 'https://openrouter.ai/keys',
@@ -327,7 +327,19 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setTestingConnection(true);
     setConnectionTest(null);
     try {
-      const result = await testProviderConnection(selectedProvider.name);
+      // Test what's in the form, not what was last saved. The API key is a
+      // Password field, so it never comes back when the form is opened —
+      // without sending the in-progress values, a key the user just typed
+      // would never be the thing actually tested. These are used for the
+      // probe only and are not persisted, so Cancel still discards edits.
+      // `api_key` is omitted when blank so the saved key is used instead.
+      const result = await testProviderConnection(selectedProvider.name, {
+        ...(formData.api_key ? { api_key: formData.api_key } : {}),
+        api_base_url: formData.api_base_url.trim(),
+        provider_brand:
+          formData.provider_brand || suggestBrandFromProviderName(formData.provider_name) || 'other',
+        is_local_llm: formData.is_local_llm ? 1 : 0,
+      });
       setConnectionTest(result);
     } catch (error) {
       toast.error('Connection test failed', {
@@ -408,8 +420,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
 
   return (
     <PageFrame
-      title="AI Providers"
-      subtitle="Connect AI providers and external services"
+      title="AI providers"
       filters={
         <FilterBar
           searchPlaceholder="Search providers..."
@@ -419,11 +430,11 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       }
     >
       <ProviderModelTabs />
-      <div className="border border-line bg-panel p-4 space-y-3">
+      <div className="bg-[color-mix(in_srgb,var(--signal)_6%,white)] rounded-xl p-4 space-y-3">
         <div className="flex items-start gap-3">
           <Sparkles className="h-4 w-4 mt-0.5 text-signal shrink-0" />
           <div>
-            <h3 className="font-display font-bold text-[15px] uppercase text-ink">Get started with AI</h3>
+            <h3 className="text-[14px] font-semibold text-ink">Get started with AI</h3>
             <p className="font-body text-[13px] text-steel mt-0.5">
               Pick a free-friendly starter path, add its key, and Huf will prepare a model for your first agent.
             </p>
@@ -444,7 +455,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               </Button>
             </div>
           ) : (Object.entries(STARTER_PATHS) as [StarterPath, typeof STARTER_PATHS[StarterPath]][]).map(([path, starter]) => (
-            <Button key={path} variant="outline" className="h-auto flex-1 justify-between whitespace-normal text-left border-line hover:border-ink hover:bg-paper-deep" onClick={() => setStarterPath(path)}>
+            <Button key={path} variant="ghost" className="h-auto flex-1 justify-between whitespace-normal text-left rounded-md bg-panel hover:bg-panel hover:shadow-md" onClick={() => setStarterPath(path)}>
               <span>
                 <span className="block font-body font-medium text-[13px] text-ink">{starter.title}</span>
                 <span className="mt-1 block font-mono text-[11px] text-steel-soft">{starter.modelName}</span>
@@ -465,12 +476,23 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          <EmptyState
-            icon={Cloud}
-            title="No providers"
-            description="Add an AI provider to connect models and start building agents."
-            action={{ label: 'Add provider', onClick: handleAddProvider }}
-          />
+          search ? (
+            <EmptyState
+              variant="no-results"
+              icon={Cloud}
+              title="No providers found"
+              filterTerm={search}
+              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Cloud}
+              title="No providers"
+              description="Add an AI provider to connect models and start building agents."
+              action={{ label: 'Add provider', onClick: handleAddProvider }}
+            />
+          )
         }
         renderItem={(provider) => {
           const providerModels = models.filter(m => m.provider === provider.name);
@@ -492,10 +514,15 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 { label: 'Models', value: `${modelCount}`, icon: undefined },
                 { label: 'Brand', value: resolveProviderBrand(provider.provider_brand, provider.provider_name) || 'other', icon: undefined },
               ]}
-              badges={providerModels.slice(0, 3).map(model => ({
-                label: model.model_name,
-                variant: 'secondary' as const,
-              }))}
+              badges={[
+                ...providerModels.slice(0, 3).map(model => ({
+                  label: model.model_name,
+                  variant: 'secondary' as const,
+                })),
+                ...(providerModels.length > 3
+                  ? [{ label: `+${providerModels.length - 3} more`, variant: 'outline' as const }]
+                  : []),
+              ]}
               actions={[
                 {
                   icon: Settings,
@@ -527,7 +554,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto min-h-[500px]">
           <DialogHeader>
             <DialogTitle>
-              {isEditing ? `Configure ${selectedProvider?.provider_name || 'Provider'}` : 'Add Provider'}
+              {isEditing ? `Configure ${selectedProvider?.provider_name || 'Provider'}` : 'Add provider'}
             </DialogTitle>
             <DialogDescription>
               {isEditing ? 'Update provider configuration settings' : 'Create a new AI provider'}
@@ -543,7 +570,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               {!isEditing && (
                 <div className="space-y-2">
                   <Label htmlFor="provider_name">
-                    Provider Name <span className="text-destructive">*</span>
+                    Provider name <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="provider_name"
@@ -577,8 +604,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                     setFormData({ ...formData, is_local_llm: checked === true })
                   }
                 />
-                <Label htmlFor="is_local_llm" className="font-normal cursor-pointer">
-                  Is Local LLM (self-hosted endpoint)
+                <Label htmlFor="is_local_llm" weight="normal" className="cursor-pointer">
+                  Is local LLM (self-hosted endpoint)
                 </Label>
               </div>
 
@@ -615,7 +642,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               {isEditing && (
                 <div className="space-y-3 rounded-md border p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <Label className="text-sm">Connection</Label>
+                    <Label>Connection</Label>
                     <Button
                       type="button"
                       variant="outline"
@@ -637,12 +664,12 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-start gap-2">
                         {connectionTest.provider.ok ? (
-                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+                          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-good" />
                         ) : (
                           <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
                         )}
                         <div className="min-w-0">
-                          <span className={connectionTest.provider.ok ? 'text-green-700' : 'text-destructive'}>
+                          <span className={connectionTest.provider.ok ? 'text-good' : 'text-destructive'}>
                             {connectionTest.provider.ok ? 'Endpoint reachable' : 'Endpoint unreachable'}
                           </span>
                           {connectionTest.provider.error && (
@@ -653,7 +680,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                       {connectionTest.models.map((model) => (
                         <div key={model.name} className="flex items-start gap-2">
                           {model.ok ? (
-                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-good" />
                           ) : (
                             <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
                           )}
@@ -661,7 +688,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                             <div className="flex flex-wrap items-center gap-1">
                               <span className="font-medium">{model.name}</span>
                               {model.capabilities?.map((cap) => (
-                                <Badge key={cap} variant="secondary" className="text-xs">
+                                <Badge key={cap} variant="secondary" size="sm">
                                   {cap}
                                 </Badge>
                               ))}

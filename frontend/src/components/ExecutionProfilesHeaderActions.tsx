@@ -12,7 +12,7 @@ export function ExecutionProfilesHeaderActions() {
   return (
     <Button variant="display" onClick={handleNewProfile}>
       <Plus className="mr-2 h-4 w-4" />
-      New Execution Profile
+      New execution profile
     </Button>
   );
 }

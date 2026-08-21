@@ -1,6 +1,8 @@
 import frappe
 from frappe import _
 from frappe.utils import now
+
+from huf.permissions import has_capability
 import json
 from collections import defaultdict
 from typing import Any
@@ -342,7 +344,7 @@ class ConversationManager:
         else:
             self.session_id = f"{channel}:{frappe.session.user}"
 
-    def create_new_conversation(self, title=None):
+    def create_new_conversation(self, title=None, project=None):
         """Always create a fresh conversation"""
         title = title or f"Conversation with {self.agent_name}"
         conv = frappe.get_doc({
@@ -355,7 +357,8 @@ class ConversationManager:
             "created_at": now(),
             "last_activity": now(),
             "is_active": 1,
-            "model": frappe.db.get_value("Agent", self.agent_name, "model")
+            "model": frappe.db.get_value("Agent", self.agent_name, "model"),
+            "project": project
         })
         if not frappe.has_permission("Agent Conversation", "create"):
             frappe.throw(
@@ -365,15 +368,34 @@ class ConversationManager:
         conv.insert()
         return conv
 
-    def get_or_create_conversation(self, title=None, conversation_id=None):
-        """Get active conversation or create new one"""
+    def get_or_create_conversation(self, title=None, conversation_id=None, project=None):
+        """Get active conversation or create new one.
+
+        ``project`` only takes effect when a brand-new Agent Conversation is
+        created here; an existing conversation (found by ``conversation_id``
+        or by the active session lookup) keeps whatever project it already
+        has.
+        """
         if conversation_id:
+            # An explicit conversation_id is authoritative: a missing id and an
+            # inaccessible one must fail identically (generic error), otherwise
+            # callers can enumerate conversation ids (existence oracle).
             try:
                 conversation = frappe.get_doc("Agent Conversation", conversation_id)
-                if conversation.is_active:
-                    return conversation
+                accessible = conversation.agent == self.agent_name and (
+                    conversation.owner == frappe.session.user
+                    or conversation.session_id == self.session_id
+                    or has_capability(frappe.session.user, "chat.view_all")
+                )
             except frappe.DoesNotExistError:
-                pass
+                conversation, accessible = None, False
+            if not accessible:
+                frappe.throw(
+                    _("Conversation not found or access denied."),
+                    frappe.PermissionError
+                )
+            if conversation.is_active:
+                return conversation
 
         # Try to get existing active conversation
         conversation = frappe.get_all(
@@ -402,7 +424,8 @@ class ConversationManager:
             "created_at": now(),
             "last_activity": now(),
             "is_active": 1,
-            "model": frappe.db.get_value("Agent", self.agent_name, "model")
+            "model": frappe.db.get_value("Agent", self.agent_name, "model"),
+            "project": project
         })
         if not frappe.has_permission("Agent Conversation", "create"):
             frappe.throw(

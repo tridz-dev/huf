@@ -9,6 +9,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getIntegrationServices } from '@/services/integrationApi';
@@ -16,7 +18,7 @@ import { parseRequiredCredentials } from '@/types/integration.types';
 import type { IntegrationServiceDoc } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { toast } from 'sonner';
-import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
+import { getServiceIdentity } from '@/data/serviceIdentity';
 
 interface ServiceCatalogModalProps {
   open: boolean;
@@ -55,8 +57,8 @@ export function ServiceCatalogModal({
   const filteredServices = useMemo(() => {
     const query = search.trim().toLowerCase();
     return services.filter((service) => {
-      const isMessaging = messagingServiceNames.has(service.service_name.toLowerCase());
-      const matchesKind = kind === 'channels' ? isMessaging : !isMessaging;
+      const isGateway = (service.surface || 'Integration') === 'Gateway';
+      const matchesKind = kind === 'channels' ? isGateway : !isGateway;
       const matchesCategory = category === 'all' || service.category === category;
       const matchesSearch =
         !query ||
@@ -71,12 +73,13 @@ export function ServiceCatalogModal({
     onOpenChange(false);
     setSearch('');
     setCategory('all');
-    navigate(`/integrations/new?service=${encodeURIComponent(serviceName)}`);
+    const base = kind === 'channels' ? '/gateways' : '/integrations';
+    navigate(`${base}/new?service=${encodeURIComponent(serviceName)}`);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[960px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>{kind === 'channels' ? 'Add Channel' : 'Add Integration'}</DialogTitle>
           <DialogDescription>
@@ -94,17 +97,18 @@ export function ServiceCatalogModal({
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat === 'all' ? 'All categories' : cat}
-              </option>
-            ))}
-          </select>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger className="w-auto min-w-[10rem]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat === 'all' ? 'All categories' : cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0 py-2">
@@ -163,16 +167,17 @@ export function ServiceCatalogModal({
         </div>
 
         {kind === 'integrations' && <div className="flex items-center justify-between gap-3 pt-2 border-t">
-          <button
+          <Button
             type="button"
-            className="text-sm text-primary hover:underline"
+            variant="link"
+            className="h-auto p-0 text-sm"
             onClick={() => {
               onOpenChange(false);
               navigate('/integration-services/new');
             }}
           >
             Create custom service
-          </button>
+          </Button>
         </div>}
       </DialogContent>
     </Dialog>

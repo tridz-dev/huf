@@ -23,6 +23,10 @@ def get_permission_query_conditions(user):
     if "System Manager" in frappe.get_roles(user):
         return None
 
+    from huf.permissions import has_capability
+    if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
+        return "`tabAgent`.is_system = 0"
+
     user_roles = frappe.get_roles(user)
     user_roles_str = "', '".join([r.replace("'", "''") for r in user_roles])
 
@@ -122,7 +126,32 @@ class Agent(Document):
         self._validate_advanced_models()
         self._validate_skills()
         self._validate_starter_prompts()
+        self._validate_allowed_users_and_roles()
         self._update_mcp_tool_counts()
+        self._ensure_publishable_key()
+        self._sync_modality_voice_flag()
+
+    def _ensure_publishable_key(self):
+        """Auto-generate a publishable key when embedding is enabled.
+
+        Runs on every validate() so it self-heals if the key is ever cleared
+        while embed_enabled stays on. Never regenerates an existing key.
+        """
+        if self.embed_enabled and not self.publishable_key:
+            self.publishable_key = f"pk_{frappe.generate_hash(length=32)}"
+
+    def _sync_modality_voice_flag(self):
+        """Keep voice_enabled consistent with agent_modality.
+
+        Runs on every validate() so it self-heals if agent_modality is changed
+        without the older voice_enabled checkbox being updated, which would
+        otherwise leave a Text agent silently voice-reachable or a Voice-only
+        agent with no working channel.
+        """
+        if self.agent_modality == "Text":
+            self.voice_enabled = 0
+        elif self.agent_modality == "Voice":
+            self.voice_enabled = 1
 
     def _validate_skills(self):
         """Prevent duplicate skills from being attached to an agent."""
@@ -131,6 +160,59 @@ class Agent(Document):
             if row.skill in seen:
                 frappe.throw(_("Skill {0} is attached more than once.").format(row.skill))
             seen.add(row.skill)
+
+    def _validate_allowed_users_and_roles(self):
+        """Warn (without blocking the save) about dangling or disabled references
+        in the access allowlists.
+
+        Deliberately non-blocking: agents saved before this validation existed
+        may already carry a since-deleted User/Role in allowed_users/allowed_roles,
+        and an unrelated edit (e.g. fixing a typo in the prompt) must not become
+        unsaveable because of pre-existing dangling data. This surfaces the issue
+        to the admin instead of silently degrading the allowlist or hard-blocking.
+        """
+        missing_users = []
+        disabled_users = []
+        missing_roles = []
+
+        for row in self.get("allowed_users", []):
+            if not row.user:
+                continue
+            if not frappe.db.exists("User", row.user):
+                missing_users.append(row.user)
+            elif frappe.db.get_value("User", row.user, "enabled") == 0:
+                disabled_users.append(row.user)
+
+        for row in self.get("allowed_roles", []):
+            if not row.role:
+                continue
+            if not frappe.db.exists("Role", row.role):
+                missing_roles.append(row.role)
+
+        if missing_users:
+            frappe.msgprint(
+                _("The following allowed users no longer exist and will never match: {0}").format(
+                    ", ".join(missing_users)
+                ),
+                title=_("Dangling Allowed Users"),
+                indicator="orange",
+            )
+        if disabled_users:
+            frappe.msgprint(
+                _("The following allowed users are disabled and will not be able to access this agent: {0}").format(
+                    ", ".join(disabled_users)
+                ),
+                title=_("Disabled Users in Allowed Users"),
+                indicator="orange",
+            )
+        if missing_roles:
+            frappe.msgprint(
+                _("The following allowed roles no longer exist and will never match: {0}").format(
+                    ", ".join(missing_roles)
+                ),
+                title=_("Dangling Allowed Roles"),
+                indicator="orange",
+            )
 
     def _validate_starter_prompts(self):
         """Enforce a maximum of 3 starter prompts and required prompt text."""
@@ -189,6 +271,19 @@ class Agent(Document):
             "model",
             "disabled",
             "allow_chat",
+            # The remaining Behavior-tab fields: BehaviorTab.tsx already locks
+            # the whole tab (all four switches) on the frontend via the same
+            # `systemLocked` prop that gates allow_chat, so a locked system
+            # agent's persist/multi-run behavior reads as protected in the
+            # UI. Before this fix, only allow_chat was actually enforced here
+            # server-side -- a non-admin could still PATCH persist_conversation,
+            # persist_user_history, or enable_multi_run directly via the API on
+            # a "locked" system agent, bypassing the frontend-only lock on the
+            # other three. Listed explicitly so backend enforcement matches
+            # what the frontend already implies is locked.
+            "persist_conversation",
+            "persist_user_history",
+            "enable_multi_run",
         )
         changed = [field for field in protected_fields if self.has_value_changed(field)]
 
@@ -198,6 +293,15 @@ class Agent(Document):
             previous_tools = [row.as_dict() for row in before.get("agent_tool") or []]
             if frappe.as_json(current_tools) != frappe.as_json(previous_tools):
                 changed.append("agent_tool")
+
+            # default_plan is the Behavior tab's other locked-when-system field
+            # (only shown/editable when enable_multi_run is on) -- diff it the
+            # same way agent_tool is diffed, since has_value_changed() does not
+            # cover child tables.
+            current_plan = [row.as_dict() for row in self.get("default_plan") or []]
+            previous_plan = [row.as_dict() for row in before.get("default_plan") or []]
+            if frappe.as_json(current_plan) != frappe.as_json(previous_plan):
+                changed.append("default_plan")
 
         if changed:
             frappe.throw(
@@ -479,6 +583,7 @@ class Agent(Document):
 
     
     def has_permission(self, permission_type=None, verbose=False):
+        from huf.ai.agent_access import check_agent_access
         from huf.permissions import has_capability
         user = frappe.session.user
 
@@ -489,30 +594,17 @@ class Agent(Document):
         # Strict Capability Checks for Mutating Actions
         if permission_type == "create":
             return has_capability(user, "agent.create")
-        
+
         if permission_type in ("write", "save"):
             return has_capability(user, "agent.edit")
 
         if permission_type == "delete":
             return has_capability(user, "agent.delete")
 
-        # Access/Read Permissions
-        if self.owner == user:
-            return True
+        if permission_type == "read" or permission_type is None:
+            if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
+                return True
 
-        # Fetch the restrictions from the child tables
-        allowed_users = [d.user for d in self.allowed_users]
-        allowed_roles = [d.role for d in self.allowed_roles]
-
-        # If both lists are empty, anyone can access (standard Huf behavior)
-        if not allowed_users and not allowed_roles:
-            return True
-
-        if user in allowed_users:
-            return True
-
-        my_roles = frappe.get_roles(user)
-        if set(my_roles).intersection(allowed_roles):
-            return True
-
-        return False
+        # Access/Read Permissions — delegated to the shared helper so this
+        # stays in sync with huf.ai.agent_integration's access checks.
+        return check_agent_access(self, user)

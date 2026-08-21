@@ -30,12 +30,13 @@ import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
 import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles, Download } from 'lucide-react';
 import { getSkill, createSkill, updateSkill, exportSkillAsHuf } from '@/services/skillApi';
-import { db } from '@/lib/frappe-sdk';
-import { doctype } from '@/data/doctypes';
 import { getToolFunctions } from '@/services/toolApi';
 import { getKnowledgeSources } from '@/services/knowledgeApi';
 import { getAgentPrompts } from '@/services/agentPromptApi';
 import { getMCPServers } from '@/services/mcpApi';
+import { getCategories, type CategoryDoc } from '@/services/categoryApi';
+import { CategoryTab } from '@/components/category/CategoryTab';
+import { CategoryModal } from '@/components/category/CategoryModal';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { createFormSubmitHandler, type TabFieldMapping } from '@/utils/formValidation';
 import type { SkillDoc, SkillTool, SkillKnowledge, SkillPrompt, SkillMcpServer } from '@/types/skill.types';
@@ -62,8 +63,6 @@ const skillFormSchema = z.object({
 });
 
 type SkillFormValues = z.infer<typeof skillFormSchema>;
-
-type CategoryOption = { value: string; label: string };
 
 function normalizeFlag(value: boolean | number | undefined): 0 | 1 {
   return value === true || value === 1 ? 1 : 0;
@@ -211,7 +210,10 @@ export function SkillFormPage() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryDoc | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryDoc | null>(null);
+  const [allCategories, setAllCategories] = useState<CategoryDoc[]>([]);
 
   const [tools, setTools] = useState<SkillTool[]>([]);
   const [initialTools, setInitialTools] = useState<SkillTool[]>([]);
@@ -256,22 +258,14 @@ export function SkillFormPage() {
       getKnowledgeSources(),
       getAgentPrompts(),
       getMCPServers(),
-      db.getDocList(doctype['Skill Category'], {
-        fields: ['name', 'category_name'],
-        limit: 1000,
-      }),
+      getCategories(undefined, 'skill'),
     ])
       .then(([toolsData, ksData, promptData, mcpData, categoryData]) => {
         setToolOptions((toolsData as AgentToolFunctionRef[]) || []);
         setKnowledgeOptions(((ksData as { items: KnowledgeSourceDoc[] }).items) || []);
         setPromptOptions((promptData as AgentPromptDoc[]) || []);
         setMcpOptions((mcpData as MCPServerDoc[]) || []);
-        setCategories(
-          (categoryData as Array<{ name: string; category_name?: string }>).map((c) => ({
-            value: c.name,
-            label: c.category_name || c.name,
-          }))
-        );
+        setAllCategories(categoryData);
       })
       .catch((error) => {
         console.error('Error loading skill options:', error);
@@ -309,6 +303,22 @@ export function SkillFormPage() {
       setLoading(false);
     }
   }, [id, isNew, loadSkill]);
+
+  useEffect(() => {
+    const skillCategoryValue = form.watch('skill_category');
+    if (allCategories.length > 0 && skillCategoryValue) {
+      const match = allCategories.find((c) => c.name === skillCategoryValue);
+      if (match) {
+        setSelectedCategory(match);
+      }
+    }
+  }, [allCategories, form]);
+
+  useEffect(() => {
+    if (selectedCategory) {
+      form.setValue('skill_category', selectedCategory.name, { shouldDirty: false });
+    }
+  }, [selectedCategory, form]);
 
   const onSubmit = useCallback(
     async (values: SkillFormValues) => {
@@ -413,7 +423,7 @@ export function SkillFormPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <Sparkles className="w-6 h-6 text-muted-foreground" />
             <div>
-              <h1 className="text-2xl font-bold">{isNew ? 'New Skill' : form.watch('title') || 'Skill'}</h1>
+              <h1 className="font-display text-title text-ink">{isNew ? 'New Skill' : form.watch('title') || 'Skill'}</h1>
               <p className="text-sm text-muted-foreground">{isNew ? 'Create a reusable skill bundle' : form.watch('skill_name')}</p>
             </div>
             <Badge variant={watchStatus === 'Active' ? 'default' : 'secondary'}>{watchStatus}</Badge>
@@ -445,7 +455,7 @@ export function SkillFormPage() {
             <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
               <TabsList layout="scroll" className="w-full">
                 {Object.entries(tabConfig).map(([tabKey, config]) => (
-                  <TabsTrigger key={tabKey} value={tabKey} className="shrink-0 px-3 sm:min-w-[110px]">
+                  <TabsTrigger key={tabKey} value={tabKey} className="shrink-0">
                     {config.label}
                   </TabsTrigger>
                 ))}
@@ -463,7 +473,7 @@ export function SkillFormPage() {
                       name="skill_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Skill Name</FormLabel>
+                          <FormLabel>Skill name</FormLabel>
                           <FormControl>
                             <Input placeholder="my-skill" {...field} disabled={!isNew} />
                           </FormControl>
@@ -479,31 +489,25 @@ export function SkillFormPage() {
                         <FormItem>
                           <FormLabel>Title</FormLabel>
                           <FormControl>
-                            <Input placeholder="My Skill" {...field} />
+                            <Input placeholder="e.g. Email parser" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={form.control}
-                      name="skill_category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <FormControl>
-                            <Combobox
-                              options={categories}
-                              value={field.value || ''}
-                              onValueChange={field.onChange}
-                              placeholder="Select category..."
-                              searchPlaceholder="Search categories..."
-                              emptyText="No categories found"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+                    <CategoryTab
+                      selectedCategory={selectedCategory}
+                      onAddCategory={() => {
+                        setEditingCategory(null);
+                        setCategoryModalOpen(true);
+                      }}
+                      onRemoveCategory={() =>
+                        setSelectedCategory(null)
+                      }
+                      onEditCategory={(category) => {
+                        setEditingCategory(category);
+                        setCategoryModalOpen(true);
+                      }}
                     />
                     <FormField
                       control={form.control}
@@ -559,7 +563,7 @@ export function SkillFormPage() {
                       name="source_type"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Source Type</FormLabel>
+                          <FormLabel>Source type</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
@@ -582,7 +586,7 @@ export function SkillFormPage() {
                       name="provider_app"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Provider App</FormLabel>
+                          <FormLabel>Provider app</FormLabel>
                           <FormControl>
                             <Input placeholder="huf" {...field} />
                           </FormControl>
@@ -609,7 +613,7 @@ export function SkillFormPage() {
                       name="source_path"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Source Path</FormLabel>
+                          <FormLabel>Source path</FormLabel>
                           <FormControl>
                             <Input placeholder="skills" {...field} />
                           </FormControl>
@@ -622,7 +626,7 @@ export function SkillFormPage() {
                       name="source_ref"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Source Ref</FormLabel>
+                          <FormLabel>Source ref</FormLabel>
                           <FormControl>
                             <Input placeholder="main" {...field} />
                           </FormControl>
@@ -636,7 +640,7 @@ export function SkillFormPage() {
                       render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
                           <div className="space-y-0.5">
-                            <FormLabel className="text-base">Auto Load</FormLabel>
+                            <FormLabel className="text-base">Auto load</FormLabel>
                             <FormDescription>Load this skill automatically when attached</FormDescription>
                           </div>
                           <FormControl>
@@ -746,13 +750,13 @@ export function SkillFormPage() {
                         </Select>
                         <Input
                           type="number"
-                          placeholder="Max chunks"
+                          placeholder="e.g. 5"
                           value={ks.max_chunks ?? 5}
                           onChange={(e) => updateKnowledge(index, { max_chunks: Number(e.target.value) })}
                         />
                         <Input
                           type="number"
-                          placeholder="Token budget"
+                          placeholder="e.g. 2000"
                           value={ks.token_budget ?? 2000}
                           onChange={(e) => updateKnowledge(index, { token_budget: Number(e.target.value) })}
                         />
@@ -802,7 +806,7 @@ export function SkillFormPage() {
 
               <TabsContent value="mcp" className="space-y-4">
                 <ChildTableCard
-                  title="MCP Servers"
+                  title="MCP servers"
                   description="MCP servers bundled with this skill"
                   icon={Plug}
                   emptyText="No MCP servers linked yet."
@@ -830,6 +834,22 @@ export function SkillFormPage() {
               </TabsContent>
             </Tabs>
           </form>
+          <CategoryModal
+            open={categoryModalOpen}
+            onOpenChange={(open) => {
+              setCategoryModalOpen(open);
+              if (!open) setEditingCategory(null);
+            }}
+            categories={allCategories}
+            selected={selectedCategory}
+            onSave={setSelectedCategory}
+            refreshCategories={async () => {
+              const data = await getCategories(undefined, 'skill');
+              setAllCategories(data);
+            }}
+            editCategory={editingCategory}
+            onEditComplete={() => setEditingCategory(null)}
+          />
         </Form>
       </div>
     </div>

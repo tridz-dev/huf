@@ -24,7 +24,7 @@ export function IntegrationServiceFormPageWrapper() {
   }, [serviceId, isNew]);
 
   const breadcrumbs = [
-    { label: 'Integration Catalog', href: '/integration-services' },
+    { label: 'Integration catalog', href: '/integration-services' },
     { label: title },
   ];
 

@@ -26,7 +26,14 @@ def _requests_post(url: str, *, headers: Mapping[str, str], json_data: Any, time
 class TeamsGatewayAdapter(GatewayAdapter):
 	"""Handle Microsoft Teams Bot Framework activities, replies, and Adaptive Cards."""
 
-	provider_id = "teams"
+	# NOTE: must equal provider_to_service_id("Microsoft Teams") == "microsoft_teams"
+	# (see huf.ai.gateway_adapters.provider_ids). This already matches the
+	# Integration Service catalog entry (huf/install.py) and
+	# huf.ai.tools.teams_webhook.TEAMS_SERVICE; it was previously "teams",
+	# which the canonical transform would never have produced and which
+	# would have made Microsoft Teams gateways unresolvable once webhook
+	# routing switched to registry-based lookup.
+	provider_id = "microsoft_teams"
 	credential_schema = GatewayCredentialSchema(
 		(
 			GatewayCredentialField("app_id", "Microsoft App ID"),

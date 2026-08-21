@@ -86,7 +86,7 @@ export function CredentialSchemaCard({
             checked={item.required !== false}
             onCheckedChange={(checked) => handleChange('required', checked === true)}
           />
-          <Label htmlFor={`cred-required-${index}`} className="font-normal">
+          <Label htmlFor={`cred-required-${index}`} weight="normal">
             Required credential
           </Label>
         </div>
