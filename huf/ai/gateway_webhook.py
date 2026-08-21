@@ -8,35 +8,26 @@ adapter package or required credentials are unavailable.
 
 from __future__ import annotations
 
-from importlib import import_module
 from typing import Any
 
 import frappe
 from frappe import _
 
-
-_ADAPTER_CLASSES = {
-	"WhatsApp": ("huf.ai.gateway_adapters.whatsapp", "WhatsAppGatewayAdapter"),
-	"Telegram": ("huf.ai.gateway_adapters.telegram", "TelegramGatewayAdapter"),
-	"Messenger": ("huf.ai.gateway_adapters.messenger", "MessengerGatewayAdapter"),
-	"Instagram": ("huf.ai.gateway_adapters.instagram", "InstagramGatewayAdapter"),
-	"Discord": ("huf.ai.gateway_adapters.discord", "DiscordGatewayAdapter"),
-	"Email": ("huf.ai.gateway_adapters.email", "EmailGatewayAdapter"),
-	"SMS": ("huf.ai.gateway_adapters.sms", "SMSGatewayAdapter"),
-	"Google Chat": ("huf.ai.gateway_adapters.google_chat", "GoogleChatGatewayAdapter"),
-	"Microsoft Teams": ("huf.ai.gateway_adapters.teams", "TeamsGatewayAdapter"),
-	"VK": ("huf.ai.gateway_adapters.vk", "VKGatewayAdapter"),
-	"WeCom": ("huf.ai.gateway_adapters.wecom", "WeComGatewayAdapter"),
-}
+from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
+from huf.ai.gateway_adapters.registered import get_adapter_class
 
 
 def _adapter_class_for_provider(provider: str):
+	"""Resolve a ``Gateway.provider`` display value to its adapter class.
+
+	Routes through the shared ``provider_to_service_id`` transform and the
+	``GatewayAdapterRegistry`` (via ``get_adapter_class``, which imports the
+	adapter's module lazily on first use) rather than a hardcoded map.
+	"""
 	try:
-		module_name, class_name = _ADAPTER_CLASSES[provider]
+		return get_adapter_class(provider_to_service_id(provider))
 	except KeyError as exc:
 		raise frappe.ValidationError(_("No installed Gateway Adapter supports this channel.")) from exc
-	try:
-		return getattr(import_module(module_name), class_name)
 	except (ImportError, AttributeError) as exc:
 		raise frappe.ValidationError(
 			_("The Gateway Adapter package for this channel is not installed.")

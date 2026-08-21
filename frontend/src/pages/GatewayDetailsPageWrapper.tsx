@@ -4,12 +4,12 @@ import { UnifiedLayout } from '@/layouts/UnifiedLayout';
 import { IntegrationSettingsDetailsPage } from './IntegrationSettingsDetailsPage';
 import { getIntegrationSetting } from '@/services/integrationApi';
 
-export { IntegrationSettingsDetailsPageWrapper };
-export default IntegrationSettingsDetailsPageWrapper;
+export { GatewayDetailsPageWrapper };
+export default GatewayDetailsPageWrapper;
 
-function IntegrationSettingsDetailsPageWrapper() {
+function GatewayDetailsPageWrapper() {
   const { settingId } = useParams<{ settingId: string }>();
-  const [title, setTitle] = useState('New Integration');
+  const [title, setTitle] = useState('New Channel');
   const isNew = settingId === 'new';
 
   useEffect(() => {
@@ -19,21 +19,21 @@ function IntegrationSettingsDetailsPageWrapper() {
           setTitle(doc.name);
         })
         .catch(() => {
-          setTitle('Integration');
+          setTitle('Channel');
         });
     } else {
-      setTitle('New Integration');
+      setTitle('New Channel');
     }
   }, [settingId, isNew]);
 
   const breadcrumbs = [
-    { label: 'Integrations', href: '/integrations' },
+    { label: 'Gateways', href: '/gateways' },
     { label: title },
   ];
 
   return (
     <UnifiedLayout breadcrumbs={breadcrumbs}>
-      <IntegrationSettingsDetailsPage surface="Integration" />
+      <IntegrationSettingsDetailsPage surface="Gateway" />
     </UnifiedLayout>
   );
 }

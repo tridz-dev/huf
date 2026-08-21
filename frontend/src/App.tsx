@@ -38,6 +38,8 @@ const ExecutionProfilesPage = lazy(() => import('./pages/ExecutionProfilesPage')
 const ExecutionProfileFormPageWrapper = lazy(() => import('./pages/ExecutionProfileFormPageWrapper'));
 const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
 const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
+const NetworkAccessPoliciesPage = lazy(() => import('./pages/NetworkAccessPoliciesPage'));
+const NetworkAccessPolicyFormPage = lazy(() => import('./pages/NetworkAccessPolicyFormPage'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
 const FlowCanvasPageWrapper = lazy(() => import('./pages/FlowCanvasPageWrapper'));
 const DataPage = lazy(() => import('./pages/DataPage'));
@@ -77,6 +79,9 @@ const IntegrationSettingsListingPageWrapper = lazy(
 const IntegrationSettingsDetailsPageWrapper = lazy(
   () => import('./pages/IntegrationSettingsDetailsPageWrapper'),
 );
+const GatewayDetailsPageWrapper = lazy(
+  () => import('./pages/GatewayDetailsPageWrapper'),
+);
 const IntegrationServicesListingPageWrapper = lazy(
   () => import('./pages/IntegrationServicesListingPageWrapper'),
 );
@@ -97,6 +102,7 @@ import {
   setStreamingAvailable,
 } from './services/streamChatApi';
 const MembersPage = lazy(() => import('./pages/MembersPage'));
+const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
 
 function ChatOnlyRedirectGuard() {
   const location = useLocation();
@@ -295,6 +301,28 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <SSHConnectionFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/network-policies"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <NetworkAccessPoliciesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/network-policies/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <NetworkAccessPolicyFormPage />
                 </Suspense>
               </ProtectedRoute>
             }
@@ -657,6 +685,16 @@ function AppShell() {
             }
           />
           <Route
+            path="/gateways/:settingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <GatewayDetailsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/integration-services"
             element={
               <ProtectedRoute>
@@ -732,6 +770,16 @@ function AppShell() {
           <Route
             path="/roles"
             element={<Navigate to="/members?view=roles" replace />}
+          />
+          <Route
+            path="/roles/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <HufRoleFormPage />
+                </Suspense>
+              </ProtectedRoute>
+            }
           />
           <Route
             path="*"

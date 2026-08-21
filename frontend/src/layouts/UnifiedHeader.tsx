@@ -11,6 +11,8 @@ import {
 } from '../components/ui/breadcrumb';
 import { BreadcrumbItem as BreadcrumbItemType } from './UnifiedLayout';
 import { ApprovalsBell } from '../components/ApprovalsBell';
+import { ExecutionApprovalsBell } from '../components/ExecutionApprovalsBell';
+import { usePermissions } from '../contexts/PermissionsContext';
 
 interface UnifiedHeaderProps {
   actions?: ReactNode;
@@ -90,6 +92,7 @@ export function AncestryCrumb({
 
 export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftContent }: UnifiedHeaderProps) {
   const location = useLocation();
+  const { hasCapability } = usePermissions();
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -151,6 +154,9 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
 
       <div className="flex items-center gap-2">
         <ApprovalsBell />
+        {(hasCapability('execution.approve') || hasCapability('ssh.approve')) && (
+          <ExecutionApprovalsBell />
+        )}
         {actions}
       </div>
     </div>

@@ -281,31 +281,6 @@ A single DocType providing a real-time chat interface for conversational agents.
 -   Only available for agents with `allow_chat` enabled
 -   Server Actions: `huf.ai.agent_chat.get_agent_chat_messages`, `huf.ai.agent_chat.send_agent_chat_message`
 
-#### 9. Agent Console
-
-A singleton DocType providing a simple interface for testing and debugging agents without requiring the full chat interface.
-
--   **Python Class**: `AgentConsole(Document)`
--   **File**: `huf/huf/doctype/agent_console/agent_console.py`
-
-**Fields:**
-
-| Label          | Fieldname      | Type      | Description                                                              |
-| :------------- | :------------- | :-------- | :----------------------------------------------------------------------- |
-| **Agent**      | `agent_name`   | Link      | Link to the `Agent` to test.                                             |
-| **Prompt**     | `prompt`       | Code      | The prompt/input to send to the agent for testing.                       |
-| **Response**   | `response`     | Code      | The agent's response (read-only, auto-populated).                        |
-| **Provider**   | `provider`     | Data      | Provider name (read-only, fetched from agent).                           |
-| **Model**      | `model`        | Data      | Model name (read-only, fetched from agent).                              |
-
-**Features:**
--   Simple form-based interface for quick agent testing
--   Direct execution of agent prompts
--   Display of agent responses in code format
--   Server Action: `huf.ai.agent_integration.run_agent_sync` (whitelisted)
-
-**Note**: This is a singleton DocType (`issingle: 1`), meaning there is only one instance in the system used as a testing console.
-
 #### 10. Agent Trigger
 
 Defines how and when agents are triggered for execution. This DocType replaces the old `condition` field in the Agent DocType with a comprehensive trigger management system.

@@ -113,9 +113,6 @@ This is the **planned default** permission matrix to add in Frappe (via Role Per
 | **Agent Chat** | Huf Manager | 1 | 1 | 1 | 1 |
 | Agent Chat | Huf User | 1 | 1 | 1 | 0 |
 | Agent Chat | Huf Viewer | 0 | 1 | 0 | 0 |
-| **Agent Console** (singleton) | Huf Manager | 0 | 1 | 1 | 0 |
-| Agent Console | Huf User | 0 | 1 | 1 | 0 |
-| Agent Console | Huf Viewer | 0 | 0 | 0 | 0 |
 | **Agent Prompt** | Huf Manager | 1 | 1 | 1 | 1 |
 | Agent Prompt | Huf User | 0 | 1 | 0 | 0 |
 | Agent Prompt | Huf Viewer | 0 | 0 | 0 | 0 |
@@ -153,7 +150,7 @@ This is the **planned default** permission matrix to add in Frappe (via Role Per
 - **AI Provider / AI Model**: Full create/write/delete is reserved for System Manager (e.g. `system.providers.manage`, `system.models.manage`). Huf Manager gets read-only by default; grant write/create/delete only to a role that has the corresponding capability if you expose provider/model management in the app.
 - **Huf Role / Huf User Role**: Managing roles and user assignments is gated by capabilities `roles.manage` and `users.manage` in APIs. The matrix above gives Huf Manager full CRUD on Huf User Role so they can manage users from the Desk; restrict if you want only Huf Admin to do that.
 - **Child tables** (Agent User, Agent Role, Agent Tool, Agent Knowledge, Agent MCP Server, Agent Function Params, Agent Tool HTTP Header, MCP Server Header, MCP Server Tool, Huf Role Permission, etc.): No separate permission rows needed; access follows the parent DocType.
-- **Singletons** (Agent Settings, Agent Console, Elevenlabs Settings, OpenAI Settings, Groq Settings): Agent Settings and Agent Console are in the table. Provider-specific settings (Elevenlabs, OpenAI, Groq) are typically System Manager only unless you explicitly add a role.
+- **Singletons** (Agent Settings, Elevenlabs Settings, OpenAI Settings, Groq Settings): Agent Settings is in the table. Provider-specific settings (Elevenlabs, OpenAI, Groq) are typically System Manager only unless you explicitly add a role.
 
 ---
 

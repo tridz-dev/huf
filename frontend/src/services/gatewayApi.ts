@@ -11,12 +11,8 @@ export type GatewayProvider =
   | 'Instagram'
   | 'Telegram'
   | 'Slack'
-  | 'Discord'
   | 'Email'
-  | 'SMS'
   | 'Google Chat'
-  | 'VK'
-  | 'WeCom'
   | 'Microsoft Teams';
 
 export type GatewayPolicy = 'Disabled' | 'Pairing' | 'Allow list' | 'Open';
