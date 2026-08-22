@@ -34,6 +34,36 @@ def _escape_mermaid_label(label: str) -> str:
 	return escaped
 
 
+def _escape_artifact_attr(value: str) -> str:
+	"""Sanitize a value that will be templated into an `<artifact ...>` tag
+	attribute (e.g. title="...").
+
+	The frontend's artifact parser (frontend/src/utils/artifactParser.ts)
+	extracts the outer `<artifact ...>` tag with a plain regex, not an HTML/DOM
+	parser: `ARTIFACT_REGEX` stops at the first `>` and `ATTR_REGEX` stops at
+	the first matching quote. An unescaped `"` or `>` in a templated value
+	(e.g. an LLM- or user-supplied chart/diagram title) would truncate or
+	corrupt the tag boundary, leaking the rest of the artifact body as raw
+	text into the chat. Strip the characters that matter to that regex rather
+	than trying to HTML-encode them (this isn't HTML, so entities like
+	`&quot;` would just render literally).
+	"""
+	if not value:
+		return value
+	return value.replace('"', "'").replace("<", "(").replace(">", ")")
+
+
+def _escape_jsx_attr(value: str) -> str:
+	"""Sanitize a value templated into a double-quoted JSX attribute
+	(e.g. dataKey="...", fill="..."). Prevents a caller-supplied field name or
+	color from closing the attribute early and injecting additional JSX
+	attributes/props into the generated chart component.
+	"""
+	if not value:
+		return value
+	return value.replace('"', "'").replace("{", "(").replace("}", ")")
+
+
 def handle_render_mermaid(diagram_type=None, nodes=None, edges=None, title=None, **kwargs) -> str:
 	"""Template structured nodes/edges into a Mermaid <artifact> tag.
 
@@ -97,7 +127,7 @@ def handle_render_mermaid(diagram_type=None, nodes=None, edges=None, title=None,
 
 	_sanity_check_mermaid_dsl(dsl)
 
-	artifact_title = title or "Diagram"
+	artifact_title = _escape_artifact_attr((title or "Diagram").strip())
 	return f'<artifact type="mermaid" title="{artifact_title}">\n{dsl}\n</artifact>'
 
 
@@ -172,7 +202,7 @@ def handle_render_chart(chart_type=None, data=None, series_keys=None, x_key="lab
 				raise ValueError(f"data[{i}] is missing series_key field {key!r}")
 
 	data_declaration = f"const data = {json.dumps(data)};"
-	artifact_title = title or f"{chart_type.capitalize()} Chart"
+	artifact_title = _escape_artifact_attr((title or f"{chart_type.capitalize()} Chart").strip())
 
 	if chart_type == "pie":
 		jsx = _build_pie_jsx(series_keys[0], colors)
@@ -191,15 +221,17 @@ def _build_axis_chart_jsx(chart_type: str, x_key: str, series_keys: list, colors
 
 	series_lines = []
 	for i, key in enumerate(series_keys):
-		color = palette[i % len(palette)]
-		series_lines.append(f'      <{series_component} dataKey="{key}" fill="{color}" stroke="{color}" />')
+		color = _escape_jsx_attr(str(palette[i % len(palette)]))
+		safe_key = _escape_jsx_attr(str(key))
+		series_lines.append(f'      <{series_component} dataKey="{safe_key}" fill="{color}" stroke="{color}" />')
 	series_jsx = "\n".join(series_lines)
 
+	safe_x_key = _escape_jsx_attr(str(x_key))
 	return (
 		"<Card style={{ padding: 12 }}>\n"
 		'  <ResponsiveContainer width="100%" height={320}>\n'
 		f"    <{container} data={{data}}>\n"
-		f'      <XAxis dataKey="{x_key}" />\n'
+		f'      <XAxis dataKey="{safe_x_key}" />\n'
 		"      <YAxis />\n"
 		"      <Tooltip />\n"
 		"      <Legend />\n"
@@ -213,13 +245,14 @@ def _build_axis_chart_jsx(chart_type: str, x_key: str, series_keys: list, colors
 def _build_pie_jsx(value_key: str, colors) -> str:
 	palette = colors or _DEFAULT_PIE_COLORS
 	colors_declaration = f"const colors = {json.dumps(palette)};"
+	safe_value_key = _escape_jsx_attr(str(value_key))
 
 	return (
 		f"{colors_declaration}\n\n"
 		"<Card style={{ padding: 12 }}>\n"
 		'  <ResponsiveContainer width="100%" height={320}>\n'
 		"    <PieChart>\n"
-		f'      <Pie data={{data}} dataKey="{value_key}" nameKey="label" outerRadius={{120}}>\n'
+		f'      <Pie data={{data}} dataKey="{safe_value_key}" nameKey="label" outerRadius={{120}}>\n'
 		"        {data.map((entry, index) => (\n"
 		'          <Cell key={`cell-${index}`} fill={colors[index % colors.length] || "#8884d8"} />\n'
 		"        ))}\n"
