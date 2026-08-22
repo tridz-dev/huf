@@ -61,6 +61,8 @@ def teams_event_context(activity: dict[str, Any]) -> tuple[str, dict[str, Any]]:
 
 def _gateway_settings(gateway_name: str):
 	gateway = frappe.get_doc("Gateway", gateway_name)
+	if not gateway.is_enabled:
+		raise frappe.DoesNotExistError
 	if gateway.provider != "Microsoft Teams":
 		raise frappe.ValidationError(_("Gateway is not a Microsoft Teams gateway."))
 	if not gateway.integration_settings:

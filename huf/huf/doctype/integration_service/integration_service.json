@@ -8,6 +8,7 @@
  "field_order": [
   "service_name",
   "category",
+  "surface",
   "description",
   "documentation_url",
   "required_credentials",
@@ -29,6 +30,15 @@
    "label": "Category",
    "options": "Communication\nProject Management\nSearch\nData Sources\nFinance\nGoogle\nDeveloper\nCloud\nMedia\nOther",
    "reqd": 1
+  },
+  {
+   "default": "Integration",
+   "description": "Which UI surface owns this service: ordinary Integrations, or a messaging Gateway/channel. Deliberately not reqd: pre-existing user-created services predate this field and would fail validation on their next save. Empty is read as Integration.",
+   "fieldname": "surface",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Surface",
+   "options": "Integration\nGateway"
   },
   {
    "fieldname": "description",

@@ -79,6 +79,7 @@ export function AdvancedTab({
 	loadingMemoryPolicies = false,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
+	const isVoiceOnly = form.watch('agent_modality') === 'Voice';
 	const contextStrategy = form.watch('context_strategy');
 	const summaryPromptMode = form.watch('summary_prompt_mode');
 	const enableConversationData = form.watch('enable_conversation_data');
@@ -99,6 +100,7 @@ export function AdvancedTab({
 
 	return (
 		<div className="space-y-12">
+			{!isVoiceOnly && (<>
 			<FormSettingsSection
 				title="Conversation strategy"
 				description="Define the rules for how the agent manages its memory window when a conversation grows long and approaches token limits."
@@ -717,6 +719,7 @@ export function AdvancedTab({
 					</>
 				)}
 			</FormSettingsSection>
+			</>)}
 
 			<FormSettingsSection
 				title="Huf UI"
@@ -773,6 +776,7 @@ This includes whether each tool call is completed and its corresponding result.`
 				/>
 			</FormSettingsSection>
 
+			{!isVoiceOnly && (
 			<FormSettingsSection
 				title="Model modality settings"
 				description="Optional: select a dedicated model for image generation."
@@ -810,7 +814,9 @@ This includes whether each tool call is completed and its corresponding result.`
 					/>
 				</div>
 			</FormSettingsSection>
+			)}
 
+			{!isVoiceOnly && (
 			<FormSettingsSection
 				title="Document upload"
 				description="Let users attach documents or images in chat for this agent."
@@ -888,6 +894,7 @@ This includes whether each tool call is completed and its corresponding result.`
 					)}
 				</div>
 			</FormSettingsSection>
+			)}
 		</div>
 	);
 }

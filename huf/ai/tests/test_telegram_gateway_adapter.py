@@ -89,6 +89,34 @@ class TestTelegramGatewayAdapter(unittest.TestCase):
 		self.assertTrue(event.is_room)
 		self.assertTrue(event.mentioned)
 
+	def test_normalize_captures_username_as_display_name(self):
+		payload = self.message_payload(
+			message={
+				"message_id": 12,
+				"chat": {"id": 999, "type": "private"},
+				"from": {"id": 111, "username": "janedoe", "first_name": "Jane"},
+				"text": "hi",
+			}
+		)
+		event = self.adapter.normalize_inbound(self.request(payload))
+		self.assertEqual(event.display_name, "@janedoe")
+
+	def test_normalize_falls_back_to_first_name_without_username(self):
+		payload = self.message_payload(
+			message={
+				"message_id": 13,
+				"chat": {"id": 999, "type": "private"},
+				"from": {"id": 111, "first_name": "Jane"},
+				"text": "hi",
+			}
+		)
+		event = self.adapter.normalize_inbound(self.request(payload))
+		self.assertEqual(event.display_name, "Jane")
+
+	def test_normalize_display_name_defaults_to_empty_string(self):
+		event = self.adapter.normalize_inbound(self.request(self.message_payload()))
+		self.assertEqual(event.display_name, "")
+
 	def test_normalize_rejects_unverified_request(self):
 		with self.assertRaises(ValueError):
 			self.adapter.normalize_inbound(self.request(self.message_payload(), secret="wrong"))

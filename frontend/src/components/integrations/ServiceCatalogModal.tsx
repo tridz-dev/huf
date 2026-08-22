@@ -18,7 +18,7 @@ import { parseRequiredCredentials } from '@/types/integration.types';
 import type { IntegrationServiceDoc } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { toast } from 'sonner';
-import { getServiceIdentity, messagingServiceNames } from '@/data/serviceIdentity';
+import { getServiceIdentity } from '@/data/serviceIdentity';
 
 interface ServiceCatalogModalProps {
   open: boolean;
@@ -57,8 +57,8 @@ export function ServiceCatalogModal({
   const filteredServices = useMemo(() => {
     const query = search.trim().toLowerCase();
     return services.filter((service) => {
-      const isMessaging = messagingServiceNames.has(service.service_name.toLowerCase());
-      const matchesKind = kind === 'channels' ? isMessaging : !isMessaging;
+      const isGateway = (service.surface || 'Integration') === 'Gateway';
+      const matchesKind = kind === 'channels' ? isGateway : !isGateway;
       const matchesCategory = category === 'all' || service.category === category;
       const matchesSearch =
         !query ||
@@ -73,7 +73,8 @@ export function ServiceCatalogModal({
     onOpenChange(false);
     setSearch('');
     setCategory('all');
-    navigate(`/integrations/new?service=${encodeURIComponent(serviceName)}`);
+    const base = kind === 'channels' ? '/gateways' : '/integrations';
+    navigate(`${base}/new?service=${encodeURIComponent(serviceName)}`);
   };
 
   return (

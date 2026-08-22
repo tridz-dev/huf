@@ -14,6 +14,24 @@ export const memoryCaptureModes = ['Manual', 'Agent Suggested', 'Automatic'] as 
 export const memoryDefaultStatuses = ['Draft', 'Active'] as const;
 export const memoryInjectModes = ['Never', 'Relevant Only', 'Always', 'Tool Only'] as const;
 
+// Must exactly match Memory Record's `record_type` Select field options
+// (huf/huf/doctype/memory_record/memory_record.json). The backend also
+// validates this dynamically at save time (memory_policy.py), so a drift
+// here only affects what the picker offers, not what's ultimately enforced.
+export const memoryRecordTypes = [
+  'Fact',
+  'Preference',
+  'Research Note',
+  'Decision',
+  'Extracted Data',
+  'State',
+  'Summary',
+  'Policy Hint',
+  'Observation',
+  'Insight',
+  'Custom',
+] as const;
+
 export const memoryPolicyFormSchema = z.object({
   policy_name: z.string().min(1, 'Policy name is required'),
   description: z.string().optional(),
@@ -27,7 +45,7 @@ export const memoryPolicyFormSchema = z.object({
   learning_agent: z.string().optional(),
   approval_required: z.boolean().default(true),
   default_status: z.enum(memoryDefaultStatuses).default('Draft'),
-  allowed_record_types: z.string().optional(),
+  allowed_record_types: z.array(z.enum(memoryRecordTypes)).default([]),
 
   inject_mode: z.enum(memoryInjectModes).default('Tool Only'),
   max_records: z.number().int().min(0).default(5),

@@ -130,6 +130,86 @@ class TestAgent(IntegrationTestCase):
         with self.assertRaises(frappe.ValidationError):
             agent.before_rename("__test_system_agent__", "__renamed_system_agent__")
 
+    def test_modality_text_forces_voice_disabled(self):
+        """A Text-modality agent must self-heal voice_enabled back to 0 on validate."""
+        model, provider = _any_model_and_provider()
+        if not model:
+            self.skipTest("no AI Model records on this site")
+
+        agent = frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": "__test_modality_text__",
+                "agent_modality": "Text",
+                "voice_enabled": 1,
+                "provider": provider,
+                "model": model,
+                "instructions": "modality text probe",
+            }
+        )
+        try:
+            agent.insert(ignore_permissions=True)
+            self.assertEqual(agent.voice_enabled, 0)
+        finally:
+            frappe.db.delete("Agent", {"agent_name": "__test_modality_text__"})
+            frappe.db.commit()
+
+    def test_modality_voice_forces_voice_enabled(self):
+        """A Voice-modality agent must self-heal voice_enabled back to 1 on validate."""
+        agent = frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": "__test_modality_voice__",
+                "agent_modality": "Voice",
+                "voice_enabled": 0,
+                "instructions": "modality voice probe",
+            }
+        )
+        try:
+            agent.insert(ignore_permissions=True)
+            self.assertEqual(agent.voice_enabled, 1)
+        finally:
+            frappe.db.delete("Agent", {"agent_name": "__test_modality_voice__"})
+            frappe.db.commit()
+
+    def test_modality_both_leaves_voice_enabled_untouched(self):
+        """A Both-modality agent must not have voice_enabled overwritten by validate."""
+        model, provider = _any_model_and_provider()
+        if not model:
+            self.skipTest("no AI Model records on this site")
+
+        agent_on = frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": "__test_modality_both_on__",
+                "agent_modality": "Both",
+                "voice_enabled": 1,
+                "provider": provider,
+                "model": model,
+                "instructions": "modality both probe (voice_enabled=1)",
+            }
+        )
+        agent_off = frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": "__test_modality_both_off__",
+                "agent_modality": "Both",
+                "voice_enabled": 0,
+                "provider": provider,
+                "model": model,
+                "instructions": "modality both probe (voice_enabled=0)",
+            }
+        )
+        try:
+            agent_on.insert(ignore_permissions=True)
+            agent_off.insert(ignore_permissions=True)
+            self.assertEqual(agent_on.voice_enabled, 1)
+            self.assertEqual(agent_off.voice_enabled, 0)
+        finally:
+            frappe.db.delete("Agent", {"agent_name": "__test_modality_both_on__"})
+            frappe.db.delete("Agent", {"agent_name": "__test_modality_both_off__"})
+            frappe.db.commit()
+
 
 class TestSystemAgentLocking(IntegrationTestCase):
     """Guards for system-agent (is_system=1) locking: immutability and list hiding.
