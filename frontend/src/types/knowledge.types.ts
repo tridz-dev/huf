@@ -1,4 +1,14 @@
-export type KnowledgeType = 'sqlite_fts' | 'sqlite_vec' | 'chroma' | 'pgvector' | 'redis' | 'zvec';
+export type KnowledgeType =
+	| 'sqlite_fts'
+	| 'sqlite_vec'
+	| 'sqlite_hybrid'
+	| 'chroma'
+	| 'pgvector'
+	| 'redis'
+	| 'zvec'
+	| 'weaviate'
+	| 'faiss'
+	| 'pinecone';
 
 export type ChromaMode = 'File' | 'Server';
 export type KnowledgeScope = 'Site' | 'Workspace' | 'Agent' | 'Global';
