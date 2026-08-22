@@ -94,7 +94,42 @@ def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_gue
     return {"allowed": True}
 
 
-def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
+# Tools that must always be built eagerly for a lazy-discovery agent: the
+# discovery tools themselves (without them the agent could never unlock
+# anything else) plus the small set of always-on utility tools.
+_LAZY_DISCOVERY_TOOL_NAMES = {"list_tool_groups", "search_tools", "describe_tool_group", "load_tools"}
+_LAZY_DISCOVERY_ALWAYS_EAGER_TOOL_NAMES = _LAZY_DISCOVERY_TOOL_NAMES | {
+    "get_conversation_data", "set_conversation_data", "load_conversation_data",
+    "ask_user", "get_result_context",
+}
+
+
+def _get_lazy_discovered_tool_names(kwargs: dict) -> set:
+    """Tool names already unlocked via lazy discovery for the current conversation.
+
+    Fails safe (empty set) whenever no conversation context is available or
+    conversation_data can't be read, so lazy-tool agents never break outside
+    a conversation run (e.g. no conversation_id in this run context yet).
+    """
+    conversation_id = (kwargs or {}).get("conversation_id")
+    if not conversation_id:
+        return set()
+
+    try:
+        data_json = frappe.db.get_value("Agent Conversation", conversation_id, "conversation_data")
+        state = _load_state(data_json)
+        for item in state["items"]:
+            if item.get("name") == "_lazy_tools":
+                discovered = (item.get("value") or {}).get("discovered") or []
+                return set(discovered)
+    except Exception as e:
+        logger.debug(f"Could not resolve lazy-discovered tools for {conversation_id}: {e!s}")
+        return set()
+
+    return set()
+
+
+def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[FunctionTool]:
     """
     Create function tools for Huf Agent
 
@@ -106,8 +141,16 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
     agent.model when omitted) — passed through to the permission-aware
     registry so an AI Model's capability overrides (see huf.ai.capability_discovery)
     can gate tools like ask_user regardless of the agent's own setting.
+
+    When agent.enable_lazy_tools is set, native tools not yet unlocked via the
+    lazy-discovery flow (see huf.ai.tools.lazy_discovery) are skipped entirely
+    instead of being built, to save tokens on the tool schema payload sent to
+    the model. This is gated on kwargs["conversation_id"]; callers that don't
+    pass one get the fail-safe (nothing discovered yet) rather than an error.
     """
     tools = []
+    lazy_enabled = bool(getattr(agent, "enable_lazy_tools", False))
+    discovered_tool_names = _get_lazy_discovered_tool_names(kwargs) if lazy_enabled else set()
 
     # Load MCP tools from linked MCP servers
     if hasattr(agent, "agent_mcp_server") and agent.agent_mcp_server:
@@ -127,6 +170,16 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
 
     for function_doc in allowed_tool_docs:
         try:
+            if lazy_enabled:
+                tool_name = function_doc.tool_name or ""
+                is_always_eager = (
+                    tool_name in _LAZY_DISCOVERY_ALWAYS_EAGER_TOOL_NAMES
+                    or "memory" in tool_name.lower()
+                )
+                if not is_always_eager and tool_name not in discovered_tool_names:
+                    # Deferred: skip building this tool entirely (don't even
+                    # fetch its schema) until the model discovers it.
+                    continue
 
             function_path = None
             if function_doc.types in ["Custom Function", "App Provided"]:
