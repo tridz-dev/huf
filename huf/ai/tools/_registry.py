@@ -1841,6 +1841,48 @@ DOCUMENT_ARTIFACT_TOOLS = [
 	},
 ]
 
+# ---------------------------------------------------------------------------
+# Render Tools — structured JSON in, existing <artifact> markup out. Replace
+# hand-authoring Mermaid DSL / Recharts JSX with a small structured payload.
+# ---------------------------------------------------------------------------
+
+RENDER_TOOLS = [
+	{
+		"tool_name": "render_mermaid",
+		"description": (
+			"Renders a Mermaid diagram from structured nodes/edges. Call this instead of "
+			"writing Mermaid syntax yourself. Returns the complete <artifact type=\"mermaid\"> "
+			"tag - relay it verbatim in your response."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_render_mermaid",
+		"category": "Render Tools",
+		"parameters": [
+			_p("diagram_type", required=True, description="One of: 'graph TD', 'graph LR', 'flowchart TD', 'flowchart LR'"),
+			_p("nodes", type="json", required=True, description="JSON list of nodes [{id, label}], e.g. [{\"id\": \"a\", \"label\": \"Start\"}]"),
+			_p("edges", type="json", description="JSON list of edges [{from, to, label}], e.g. [{\"from\": \"a\", \"to\": \"b\", \"label\": \"next\"}]. from/to must match declared node ids"),
+			_p("title", description="Artifact title (default 'Diagram')"),
+		],
+	},
+	{
+		"tool_name": "render_chart",
+		"description": (
+			"Renders a bar/line/pie/area chart from structured data. Call this instead of "
+			"hand-writing Recharts JSX yourself. Returns the complete "
+			"<artifact type=\"chart\" language=\"jsx\"> tag - relay it verbatim in your response."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_render_chart",
+		"category": "Render Tools",
+		"parameters": [
+			_p("chart_type", required=True, description="One of: 'bar', 'line', 'pie', 'area'"),
+			_p("data", type="json", required=True, description="JSON list of row objects, each containing at least the x_key field and every series_key field"),
+			_p("series_keys", type="json", description="JSON list of field names to plot as series/values (default ['value'])"),
+			_p("x_key", description="Field used for the category/x axis, ignored for 'pie' (default 'label')"),
+			_p("colors", type="json", description="Optional JSON list of hex colors, mainly used for pie slices"),
+			_p("title", description="Artifact title (default '<Chart Type> Chart')"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -1855,6 +1897,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS
 	+ DOCUMENT_ARTIFACT_TOOLS
+	+ RENDER_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
