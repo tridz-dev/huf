@@ -304,3 +304,48 @@ export async function getPendingApprovals(): Promise<PendingApproval[]> {
         handleFrappeError(error, 'Error fetching pending approvals');
     }
 }
+
+// ─── Flow -> Procedure conversion ───────────────────────────────────────
+
+/** Preview of converting a flow into a deterministic procedure */
+export interface FlowConversionAnalysis {
+    convertible: boolean;
+    reason?: string;
+    reads?: string[];
+    writes?: string[];
+    atomic_operations?: number;
+    estimated_round_trip_reduction_pct?: number;
+}
+
+/** Result of actually creating the procedure from a flow */
+export interface FlowConversionResult extends FlowConversionAnalysis {
+    name: string;
+    procedure_id: string;
+    version: number;
+    status: string;
+    tier: string;
+}
+
+/** Read-only preview: is this flow convertible, and what would it look like? Creates nothing. */
+export async function analyzeFlowConversion(flowId: string): Promise<FlowConversionAnalysis> {
+    try {
+        const result = await call.get('huf.ai.flow_api.analyze_flow_conversion', {
+            flow_id: flowId,
+        });
+        return result.message as FlowConversionAnalysis;
+    } catch (error) {
+        handleFrappeError(error, `Error analyzing flow ${flowId} for conversion`);
+    }
+}
+
+/** Convert a deterministic flow into a Draft procedure. Never activates it. */
+export async function convertFlowToProcedure(flowId: string): Promise<FlowConversionResult> {
+    try {
+        const result = await call.post('huf.ai.flow_api.convert_flow_to_procedure', {
+            flow_id: flowId,
+        });
+        return result.message as FlowConversionResult;
+    } catch (error) {
+        handleFrappeError(error, `Error converting flow ${flowId} to a procedure`);
+    }
+}
