@@ -3,12 +3,14 @@
  * huf/ai/tools/frappe_generic.py::handle_render_frappe_view, mode="list") as
  * a paginated table, columns derived from `meta.fields`.
  *
- * Pagination here is a client-side stub: the artifact payload is a single
- * static snapshot (the backend does not round-trip limit_start/
- * limit_page_length into the payload for list mode - see the NOTE on
- * FrappeViewPayload), so `onPageChange` just reports the page the caller
- * asked for. Wiring it to actually re-invoke the tool and refresh `data` is
- * a follow-up.
+ * Pagination re-fetches through `frappe.client.get_list` directly (via
+ * frappe-js-sdk's `db.getDocList`, the same whitelisted, permission-checked
+ * REST method the rest of the frontend already uses for Frappe list data -
+ * see dataTableApi.ts) rather than round-tripping through the agent/tool
+ * layer, since the artifact snapshot doesn't carry enough context (agent,
+ * conversation) to safely reinvoke a tool call from a plain page/filter
+ * click. `frappe.client.get_list` applies the same permission-query
+ * conditions our backend tool does, so this is not a permission relaxation.
  */
 
 import { useMemo, useState } from 'react';
@@ -22,23 +24,25 @@ import {
 } from '@tanstack/react-table';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, ExternalLink, Loader2 } from 'lucide-react';
+import { db, call } from '@/lib/frappe-sdk';
 import type { FrappeFieldMeta, FrappeViewPayload } from '@/types/artifact.types';
 import { formatFrappeCellValue, isDisplayField } from './frappeFieldFormat';
 import { deskListUrl } from './frappeDeskUrl';
 
 export interface FrappeListViewProps {
 	payload: FrappeViewPayload;
-	/** Called with the next limit_start when the pager is used. Wiring this
-	 * to an actual refetch against the backend tool is a follow-up. */
-	onPageChange?: (limitStart: number, limitPageLength: number) => void;
 }
 
-export function FrappeListView({ payload, onPageChange }: FrappeListViewProps) {
-	const rows = useMemo(
-		() => (Array.isArray(payload.data) ? payload.data : [payload.data]),
-		[payload.data]
+export function FrappeListView({ payload }: FrappeListViewProps) {
+	const [rows, setRows] = useState<Record<string, unknown>[]>(() =>
+		Array.isArray(payload.data) ? payload.data : [payload.data]
 	);
+	const [limitStart, setLimitStart] = useState(payload.limit_start ?? 0);
+	const [totalCount, setTotalCount] = useState(payload.total_count ?? rows.length);
+	const [loading, setLoading] = useState(false);
+	const [fetchError, setFetchError] = useState<string | null>(null);
+	const limitPageLength = payload.limit_page_length ?? rows.length ?? 20;
 
 	const displayFields = useMemo<FrappeFieldMeta[]>(() => {
 		const metaFields = payload.meta?.fields ?? [];
@@ -49,6 +53,33 @@ export function FrappeListView({ payload, onPageChange }: FrappeListViewProps) {
 			: metaFields.filter(isDisplayField);
 		return base.slice(0, 8);
 	}, [payload.meta, payload.fields]);
+
+	const fetchPage = async (nextLimitStart: number) => {
+		setLoading(true);
+		setFetchError(null);
+		try {
+			const fieldNames = displayFields.map((f) => f.fieldname);
+			const result = await db.getDocList(payload.doctype, {
+				fields: fieldNames.length ? fieldNames : undefined,
+				filters: (payload.filters as never) ?? undefined,
+				limit_start: nextLimitStart,
+				limit: limitPageLength,
+			});
+			setRows(result as unknown as Record<string, unknown>[]);
+			setLimitStart(nextLimitStart);
+			const countResponse = await call.get('frappe.client.get_count', {
+				doctype: payload.doctype,
+				...(payload.filters ? { filters: JSON.stringify(payload.filters) } : {}),
+			});
+			const count = Number(countResponse?.message);
+			if (!Number.isNaN(count)) setTotalCount(count);
+		} catch (error) {
+			console.error('Failed to fetch Frappe list page:', error);
+			setFetchError('Could not load this page - showing the last loaded data.');
+		} finally {
+			setLoading(false);
+		}
+	};
 
 	const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
 		return displayFields.map((field) => ({
@@ -82,15 +113,13 @@ export function FrappeListView({ payload, onPageChange }: FrappeListViewProps) {
 		state: { sorting },
 	});
 
-	const limitStart = payload.limit_start ?? 0;
-	const limitPageLength = payload.limit_page_length ?? rows.length ?? 20;
-	const totalCount = payload.total_count ?? rows.length;
 	const hasPrev = limitStart > 0;
 	const hasNext = limitStart + limitPageLength < totalCount;
 
 	return (
 		<div className="space-y-3">
-			<div className="flex justify-end">
+			<div className="flex items-center justify-between">
+				{fetchError ? <span className="text-xs text-destructive">{fetchError}</span> : <span />}
 				<a
 					href={deskListUrl(payload.doctype)}
 					target="_blank"
@@ -144,11 +173,12 @@ export function FrappeListView({ payload, onPageChange }: FrappeListViewProps) {
 						: '0 records'}
 				</span>
 				<div className="flex items-center gap-2">
+					{loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-steel" />}
 					<Button
 						variant="outline"
 						size="sm"
-						disabled={!hasPrev}
-						onClick={() => onPageChange?.(Math.max(0, limitStart - limitPageLength), limitPageLength)}
+						disabled={!hasPrev || loading}
+						onClick={() => fetchPage(Math.max(0, limitStart - limitPageLength))}
 					>
 						<ChevronLeft className="h-3.5 w-3.5" />
 						Prev
@@ -156,8 +186,8 @@ export function FrappeListView({ payload, onPageChange }: FrappeListViewProps) {
 					<Button
 						variant="outline"
 						size="sm"
-						disabled={!hasNext}
-						onClick={() => onPageChange?.(limitStart + limitPageLength, limitPageLength)}
+						disabled={!hasNext || loading}
+						onClick={() => fetchPage(limitStart + limitPageLength)}
 					>
 						Next
 						<ChevronRight className="h-3.5 w-3.5" />

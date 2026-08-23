@@ -4,12 +4,13 @@
  * as a table (same shape as FrappeListView) with a filter bar above it: one
  * simple input per filterable field from `meta.fields`.
  *
- * Like FrappeListView's pager, `onFilterChange` is a stub - it reports the
- * filters the user typed, wiring them to an actual tool re-invocation and
- * refetch is a follow-up.
+ * Filter edits re-fetch through `frappe.client.get_list` (via frappe-js-sdk's
+ * `db.getDocList`, debounced) the same way FrappeListView's pager does - see
+ * that file's header comment for why this goes through the framework's own
+ * whitelisted list method rather than back through the agent/tool layer.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
 	type ColumnDef,
 	getCoreRowModel,
@@ -22,24 +23,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowUpDown, Filter, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, Filter, ExternalLink, Loader2 } from 'lucide-react';
+import { db, call } from '@/lib/frappe-sdk';
 import type { FrappeFieldMeta, FrappeViewPayload } from '@/types/artifact.types';
 import { formatFrappeCellValue, isDisplayField } from './frappeFieldFormat';
 import { deskListUrl } from './frappeDeskUrl';
 
 export interface FrappeReportViewProps {
 	payload: FrappeViewPayload;
-	/** Called with the full filter map whenever a filter input changes.
-	 * Actually re-running the query against the backend tool is a
-	 * follow-up - this component only tracks and reports filter state. */
-	onFilterChange?: (filters: Record<string, string>) => void;
 }
 
-export function FrappeReportView({ payload, onFilterChange }: FrappeReportViewProps) {
-	const rows = useMemo(
-		() => (Array.isArray(payload.data) ? payload.data : [payload.data]),
-		[payload.data]
+export function FrappeReportView({ payload }: FrappeReportViewProps) {
+	const [rows, setRows] = useState<Record<string, unknown>[]>(() =>
+		Array.isArray(payload.data) ? payload.data : [payload.data]
 	);
+	const [totalCount, setTotalCount] = useState(payload.total_count ?? rows.length);
+	const [loading, setLoading] = useState(false);
+	const [fetchError, setFetchError] = useState<string | null>(null);
+	const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
 	const displayFields = useMemo<FrappeFieldMeta[]>(() => {
 		const metaFields = payload.meta?.fields ?? [];
@@ -53,13 +54,48 @@ export function FrappeReportView({ payload, onFilterChange }: FrappeReportViewPr
 
 	const [filters, setFilters] = useState<Record<string, string>>({});
 
+	const runQuery = async (nextFilters: Record<string, string>) => {
+		setLoading(true);
+		setFetchError(null);
+		try {
+			const fieldNames = displayFields.map((f) => f.fieldname);
+			const activeFilters = Object.entries(nextFilters)
+				.filter(([, value]) => value.trim() !== '')
+				.map(([fieldname, value]) => [fieldname, 'like', `%${value}%`] as [string, 'like', string]);
+			const result = await db.getDocList(payload.doctype, {
+				fields: fieldNames.length ? fieldNames : undefined,
+				filters: activeFilters.length ? (activeFilters as never) : undefined,
+				limit: payload.limit_page_length ?? 100,
+			});
+			setRows(result as unknown as Record<string, unknown>[]);
+			const countResponse = await call.get('frappe.client.get_count', {
+				doctype: payload.doctype,
+				...(activeFilters.length ? { filters: JSON.stringify(activeFilters) } : {}),
+			});
+			const count = Number(countResponse?.message);
+			if (!Number.isNaN(count)) setTotalCount(count);
+		} catch (error) {
+			console.error('Failed to re-run Frappe report query:', error);
+			setFetchError('Could not apply filters - showing the last loaded data.');
+		} finally {
+			setLoading(false);
+		}
+	};
+
 	const updateFilter = (fieldname: string, value: string) => {
 		setFilters((prev) => {
 			const next = { ...prev, [fieldname]: value };
-			onFilterChange?.(next);
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+			debounceRef.current = setTimeout(() => runQuery(next), 400);
 			return next;
 		});
 	};
+
+	useEffect(() => {
+		return () => {
+			if (debounceRef.current) clearTimeout(debounceRef.current);
+		};
+	}, []);
 
 	const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(() => {
 		return displayFields.map((field) => ({
@@ -175,8 +211,10 @@ export function FrappeReportView({ payload, onFilterChange }: FrappeReportViewPr
 					</TableBody>
 				</Table>
 			</div>
-			<div className="text-xs text-steel-soft">
-				{payload.total_count ?? rows.length} record(s)
+			<div className="flex items-center gap-2 text-xs text-steel-soft">
+				{loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+				<span>{totalCount} record(s)</span>
+				{fetchError && <span className="text-destructive">{fetchError}</span>}
 			</div>
 		</div>
 	);
