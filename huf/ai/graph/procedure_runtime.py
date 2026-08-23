@@ -49,6 +49,7 @@ doesn't opt into a persisting store.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -70,6 +71,13 @@ from huf.ai.graph.executor import (
 	RoutingMode,
 )
 from huf.ai.graph.expressions import evaluate_bool, parse_expression
+from huf.ai.graph.scheduler import (
+	DEFAULT_MAX_GRAPH_CONCURRENCY,
+	DEFAULT_MAX_TOOL_CONCURRENCY,
+	BranchResult,
+	ParallelLimitExceeded,
+	run_parallel_branches,
+)
 from huf.ai.graph.transforms import Limits as TransformLimits
 from huf.ai.graph.transforms import run_transform
 from huf.ai.output_budget import OutputBudget, OutputBudgetExceeded, enforce_output_budget
@@ -257,6 +265,11 @@ class _VisitRecorder:
 
 	def __init__(self, on_visit: Callable[[NodeSpec, Outcome], None] | None = None):
 		self.visits: list[tuple[str, str]] = []
+		self.pairs: list[tuple[NodeSpec, Outcome]] = []
+		"""``(NodeSpec, Outcome)`` per visit -- used by T-30 to replay a branch worker's
+		visits, in canonical order, into the run's real recorder (see
+		``huf.ai.graph.scheduler`` module docstring, "Threading model").
+		"""
 		self._on_visit = on_visit
 		self._starts: dict[str, float] = {}
 
@@ -265,6 +278,7 @@ class _VisitRecorder:
 
 	def node_end(self, node: NodeSpec, outcome: Outcome) -> None:
 		self.visits.append((node.id, node.type))
+		self.pairs.append((node, outcome))
 		if self._on_visit is not None:
 			self._on_visit(node, outcome)
 
@@ -298,6 +312,34 @@ class _Runner:
 		self.write_count = 0
 		self.tool_call_count = 0
 
+		# -- T-30 concurrency bounds -------------------------------------------------
+		# One graph-wide semaphore for the whole run (shared by every parallel node,
+		# including nested ones inside a branch running on a worker thread -- see
+		# scheduler.py's module docstring, "Max graph concurrency").
+		max_graph_concurrency = limits.get("max_graph_concurrency") or DEFAULT_MAX_GRAPH_CONCURRENCY
+		self.graph_semaphore = threading.BoundedSemaphore(max_graph_concurrency)
+		self.max_tool_concurrency = limits.get("max_tool_concurrency") or DEFAULT_MAX_TOOL_CONCURRENCY
+		self._tool_semaphores: dict[str, threading.BoundedSemaphore] = {}
+		self._tool_semaphores_lock = threading.Lock()
+		# tool_call_count / external_call_count / write_count above are mutated from
+		# whichever thread executes a tool.call node. A parallel branch's tool.call
+		# handlers run one at a time within that branch's own worker thread, but two
+		# branches can call _charge_external_call concurrently, so these counters need
+		# their own lock -- a plain `+= 1` is not atomic in general.
+		self._counters_lock = threading.Lock()
+
+	def _tool_semaphore(self, tool_id: str) -> threading.BoundedSemaphore:
+		"""Per-tool (and, absent a distinct connector concept in this codebase's tool
+		metadata, per-connector -- see scheduler.py) concurrency cap. Lazily created,
+		one semaphore per tool_id, shared by every thread that calls this tool.
+		"""
+		with self._tool_semaphores_lock:
+			sem = self._tool_semaphores.get(tool_id)
+			if sem is None:
+				sem = threading.BoundedSemaphore(self.max_tool_concurrency)
+				self._tool_semaphores[tool_id] = sem
+			return sem
+
 	# -- shared budgets, fail closed (I7) ---------------------------------
 
 	def _check_wall_time(self) -> None:
@@ -309,10 +351,12 @@ class _Runner:
 			raise ProcedureLimitExceeded(f"max_wall_time_ms exceeded ({elapsed_ms:.0f} > {max_ms})")
 
 	def _charge_external_call(self) -> None:
-		self.external_call_count += 1
+		with self._counters_lock:
+			self.external_call_count += 1
+			count = self.external_call_count
 		cap = self.limits.get("max_external_calls")
-		if cap is not None and self.external_call_count > cap:
-			raise ProcedureLimitExceeded(f"max_external_calls exceeded ({self.external_call_count} > {cap})")
+		if cap is not None and count > cap:
+			raise ProcedureLimitExceeded(f"max_external_calls exceeded ({count} > {cap})")
 
 	def _transform_limits(self) -> TransformLimits:
 		kwargs: dict[str, int] = {}
@@ -341,14 +385,16 @@ class _Runner:
 			"output": self._handle_output,
 		}
 
-	def _sub_executor(self, node_ids: list[str]) -> tuple[GraphProgram, GraphExecutor]:
+	def _sub_executor(
+		self, node_ids: list[str], *, listener: ExecutionListener | None = None
+	) -> tuple[GraphProgram, GraphExecutor]:
 		program = build_subprogram(self.version, node_ids)
 		# +2 headroom over the chain length: the chain itself is the hop budget for a
 		# nested sub-program, distinct from and never charged against the run's own
 		# max_hops (mirrors the executor's foreach/main-chain budget separation, F-3).
 		policy = ExecutionPolicy(max_hops=len(node_ids) + 2)
 		executor = GraphExecutor(
-			program, self.handlers(), router=_router_for(program), policy=policy, listener=self.recorder
+			program, self.handlers(), router=_router_for(program), policy=policy, listener=listener or self.recorder
 		)
 		return program, executor
 
@@ -363,14 +409,19 @@ class _Runner:
 			return Outcome.failed(f"tool.call node '{node.id}' has no tool_id after resolution")
 
 		self._charge_external_call()
-		self.tool_call_count += 1
+		with self._counters_lock:
+			self.tool_call_count += 1
 
+		tool_sem = self._tool_semaphore(tool_id)
+		tool_sem.acquire()
 		try:
 			invocation = self.tool_invoker(tool_id, args)
 		except ProcedureLimitExceeded:
 			raise
 		except Exception as exc:  # noqa: BLE001 -- a denied/raising invoker fails this node, not the process
 			return Outcome.failed(f"tool.call '{tool_id}' raised: {exc}")
+		finally:
+			tool_sem.release()
 
 		if not invocation.success:
 			return Outcome.failed(invocation.error or f"tool.call '{tool_id}' failed")
@@ -488,27 +539,118 @@ class _Runner:
 
 		return Outcome.succeeded(results)
 
-	def _handle_parallel(self, node: NodeSpec, context: GraphContext, state: ExecutionState) -> Outcome:
-		"""``parallel`` is parsed and validated here but EXECUTES SEQUENTIALLY.
+	def _branch_context_copy(self, context: GraphContext) -> GraphContext:
+		"""A private, independent :class:`GraphContext` for one branch's worker thread.
 
-		Real bounded concurrency (a thread/async pool honouring ``max_parallel_calls``) is
-		task T-30. This handler runs each branch's chain to completion, one branch after
-		another, in declaration order -- there is no concurrency in this implementation at
-		all, deliberately: doing anything less explicit here (e.g. a thread pool that
-		"happens to" work) would misrepresent what T-23 delivers. See
-		``test_parallel_node_executes_sequentially`` for the executable proof.
+		Copies ``data`` / ``node_outputs`` / ``foreach_frames`` so a worker thread never
+		mutates a dict a sibling worker (or the orchestrating thread) can see -- see
+		scheduler.py's module docstring, "Determinism". A shallow copy is sufficient: node
+		handlers replace values wholesale (``context.set``/``record_output``), they never
+		mutate a nested container in place.
+		"""
+		branch_context = GraphContext(
+			dict(context.data), run_id=context.run_id, mode=context.mode, metadata=dict(context.metadata)
+		)
+		branch_context.node_outputs = dict(context.node_outputs)
+		branch_context.foreach_frames = list(context.foreach_frames)
+		return branch_context
+
+	def _run_branch(self, index: int, branch_ids: list[str], context: GraphContext) -> BranchResult:
+		"""Runs entirely on whatever thread calls it (a worker thread, under T-30's
+		bounded pool). Frappe-free -- see scheduler.py's module docstring. Records node
+		visits into a private, local listener; never touches the run's real recorder.
+		"""
+		branch_context = self._branch_context_copy(context)
+		original_output_keys = set(branch_context.node_outputs)
+		original_data = dict(branch_context.data)
+
+		local_recorder = _VisitRecorder(on_visit=None)
+		_, sub_executor = self._sub_executor(branch_ids, listener=local_recorder)
+		sub_state = ExecutionState(cursor=branch_ids[0] if branch_ids else None)
+
+		try:
+			sub_result = sub_executor.execute(branch_context, sub_state)
+		except ProcedureLimitExceeded as exc:
+			return BranchResult(index=index, ok=False, error=str(exc))
+
+		pairs = local_recorder.pairs
+		if sub_result.status != ExecutionResult.SUCCESS:
+			return BranchResult(index=index, ok=False, visits=pairs, error=sub_result.error)
+
+		node_outputs_diff = {
+			k: v for k, v in branch_context.node_outputs.items() if k not in original_output_keys
+		}
+		data_diff = {
+			k: v for k, v in branch_context.data.items() if k not in original_data or original_data[k] != v
+		}
+		return BranchResult(index=index, ok=True, visits=pairs, node_outputs=node_outputs_diff, data_diff=data_diff)
+
+	def _handle_parallel(self, node: NodeSpec, context: GraphContext, state: ExecutionState) -> Outcome:
+		"""Bounded, deterministic concurrent fan-out over ``config.branches`` (T-30).
+
+		Branches run on real OS threads, bounded by ``config.max_parallel_calls`` (falling
+		back to ``contract.limits.max_parallel_calls``) and this run's graph-wide
+		concurrency semaphore. Results are always reassembled and merged back into
+		``context`` in ascending branch-index (declaration) order regardless of which
+		thread finished first -- see ``huf.ai.graph.scheduler`` for the full threading
+		model and determinism argument, and ``test_procedure_runtime.py`` for the
+		jittered-completion-order determinism proof.
 		"""
 		cfg = node.config
 		branches = cfg.get("branches", [])
-		completed = 0
-		for branch_ids in branches:
-			_, sub_executor = self._sub_executor(branch_ids)
-			sub_state = ExecutionState(cursor=branch_ids[0] if branch_ids else None)
-			sub_result = sub_executor.execute(context, sub_state)
-			if sub_result.status != ExecutionResult.SUCCESS:
-				return Outcome.failed(f"parallel '{node.id}' branch {completed} failed: {sub_result.error}")
-			completed += 1
-		return Outcome.succeeded({"branches_completed": completed, "join": cfg.get("join", "all")})
+		if not branches:
+			return Outcome.succeeded({"branches_completed": 0, "join": cfg.get("join", "all")})
+
+		max_parallel_calls = cfg.get("max_parallel_calls") or self.limits.get("max_parallel_calls") or len(branches)
+		timeout_s = None
+		timeout_ms = cfg.get("timeout_ms") or self.limits.get("max_wall_time_ms")
+		if timeout_ms:
+			timeout_s = timeout_ms / 1000.0
+
+		branch_fns = [
+			(lambda branch_ids=branch_ids, idx=idx: self._run_branch(idx, branch_ids, context))
+			for idx, branch_ids in enumerate(branches)
+		]
+
+		try:
+			kwargs = {"max_parallel_calls": max_parallel_calls, "graph_semaphore": self.graph_semaphore}
+			if timeout_s is not None:
+				kwargs["timeout_s"] = timeout_s
+			results = run_parallel_branches(branch_fns, **kwargs)
+		except ParallelLimitExceeded as exc:
+			# Fail closed (I7 / T-30 "Done when"): a deliberate breach of max_parallel_calls
+			# is rejected before any branch starts, never silently serialized or queued.
+			raise ProcedureLimitExceeded(str(exc)) from exc
+
+		# Replay every branch's locally-recorded visits, and merge its context diffs, in
+		# ascending branch-index order -- the only order this method ever produces,
+		# regardless of actual completion order (determinism).
+		failure: BranchResult | None = None
+		for result in results:
+			for visit_node, visit_outcome in result.visits:
+				self.recorder.node_end(visit_node, visit_outcome)
+			if not result.ok:
+				if failure is None:
+					failure = result
+				continue
+			for key, value in result.node_outputs.items():
+				context.node_outputs[key] = value
+			for key, value in result.data_diff.items():
+				if key in context.data and context.data[key] != value:
+					# Two branches wrote different values under the same context key.
+					# Picking either would make the run's output depend on completion
+					# order -- fail closed instead (see scheduler.py docstring).
+					raise ProcedureLimitExceeded(
+						f"parallel '{node.id}' branches wrote conflicting values for context key '{key}'"
+					)
+				context.data[key] = value
+				context.dirty = True
+
+		if failure is not None:
+			reason = "timed out" if failure.timed_out else failure.error
+			return Outcome.failed(f"parallel '{node.id}' branch {failure.index} failed: {reason}")
+
+		return Outcome.succeeded({"branches_completed": len(results), "join": cfg.get("join", "all")})
 
 
 def execute_procedure(

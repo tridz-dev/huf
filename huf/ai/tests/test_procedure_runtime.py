@@ -24,7 +24,11 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import json
+import random
 import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -289,58 +293,202 @@ class TestForeachBounded(unittest.TestCase):
 		self.assertIn("max_iterations", outcome.error)
 
 
-class TestParallelExecutesSequentially(unittest.TestCase):
-	def test_parallel_node_executes_sequentially(self):
-		"""Both branches run to completion and their outputs are addressable by node id --
-		but the fake invoker's call log proves order is strictly sequential (branch A's
-		call lands before branch B's), which is what "parses/validates here, executes
-		sequentially -- real concurrency is T-30" means operationally.
-		"""
-		graph = {
-			"schema_version": "1.0.0",
-			"profile": "procedure",
-			"entry": "customer",
-			"contract": _contract(),
-			"nodes": [
-				{
-					"id": "customer",
-					"type": "tool.call",
-					"config": {"tool_id": "fetch_customer", "input": {}},
-					"next": "fan_out",
-				},
-				{
-					"id": "fan_out",
-					"type": "parallel",
-					"config": {"branches": [["branch_a"], ["branch_b"]], "join": "all"},
-					"next": "out",
-				},
-				{
-					"id": "branch_a",
-					"type": "tool.call",
-					"config": {"tool_id": "fetch_invoices", "input": {}},
-				},
-				{
-					"id": "branch_b",
-					"type": "tool.call",
-					"config": {"tool_id": "fetch_payments", "input": {}},
-				},
-				{
-					"id": "out",
-					"type": "output",
-					"config": {"value": {"invoices": {"$from": "branch_a"}, "payments": {"$from": "branch_b"}}},
-				},
-			],
+def _fan_out_graph(branch_ids: list[str] = ("branch_a", "branch_b")) -> dict:
+	branches_cfg = [[b] for b in branch_ids]
+	nodes = [
+		{
+			"id": "customer",
+			"type": "tool.call",
+			"config": {"tool_id": "fetch_customer", "input": {}},
+			"next": "fan_out",
+		},
+		{
+			"id": "fan_out",
+			"type": "parallel",
+			"config": {"branches": branches_cfg, "join": "all"},
+			"next": "out",
+		},
+	]
+	for b in branch_ids:
+		nodes.append({"id": b, "type": "tool.call", "config": {"tool_id": f"fetch_{b}", "input": {}}})
+	nodes.append(
+		{
+			"id": "out",
+			"type": "output",
+			"config": {"value": {b: {"$from": b} for b in branch_ids}},
 		}
+	)
+	return {
+		"schema_version": "1.0.0",
+		"profile": "procedure",
+		"entry": "customer",
+		"contract": _contract(),
+		"nodes": nodes,
+	}
+
+
+class JitteredInvoker:
+	"""Like ``FakeInvoker`` but sleeps a small, randomized amount before returning --
+	used to force branches of a ``parallel`` node to complete in a different wall-clock
+	order on (almost) every call, so a determinism test that passes despite this jitter is
+	actually proving something about result reassembly, not just getting lucky with thread
+	scheduling. Thread-safe: ``calls`` append is protected by a lock, matching this track's
+	rule against relying on MagicMock-only affordances for fixture logic.
+	"""
+
+	def __init__(self, table: dict[str, object], *, max_delay_s: float = 0.02):
+		self.table = table
+		self.max_delay_s = max_delay_s
+		self.calls: list[tuple[str, dict]] = []
+		self._lock = threading.Lock()
+
+	def __call__(self, tool_id: str, args: dict) -> ToolInvocation:
+		time.sleep(random.uniform(0, self.max_delay_s))
+		with self._lock:
+			self.calls.append((tool_id, copy.deepcopy(args)))
+		if tool_id not in self.table:
+			return ToolInvocation(tool_id, args, success=False, error=f"no such tool {tool_id!r}")
+		value = self.table[tool_id]
+		result = value(args) if callable(value) else value
+		return ToolInvocation(tool_id, args, success=True, result=result)
+
+
+class TestParallelConcurrentExecution(unittest.TestCase):
+	def test_parallel_branches_both_complete_and_are_addressable(self):
+		graph = _fan_out_graph()
 		invoker = FakeInvoker(
-			{"fetch_customer": {"id": "C1"}, "fetch_invoices": ["INV-1"], "fetch_payments": ["PAY-1"]}
+			{"fetch_customer": {"id": "C1"}, "fetch_branch_a": ["INV-1"], "fetch_branch_b": ["PAY-1"]}
 		)
 		outcome = execute_procedure(_pin(graph), {}, tool_invoker=invoker)
 		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
-		self.assertEqual(outcome.output, {"invoices": ["INV-1"], "payments": ["PAY-1"]})
-		# Sequential proof: branch_a's tool call is fully recorded before branch_b's.
-		called_tools = [t for t, _ in invoker.calls]
-		self.assertEqual(called_tools, ["fetch_customer", "fetch_invoices", "fetch_payments"])
+		self.assertEqual(outcome.output, {"branch_a": ["INV-1"], "branch_b": ["PAY-1"]})
 		self.assertEqual(outcome.tool_call_count, 3)
+		called_tools = {t for t, _ in invoker.calls}
+		self.assertEqual(called_tools, {"fetch_customer", "fetch_branch_a", "fetch_branch_b"})
+
+	def test_determinism_under_jittered_completion_order(self):
+		"""Run the same graph 30 times with randomized per-call delays so branches finish
+		in varying wall-clock order across runs, and assert the final output and the
+		recorded node-visit sequence are byte-identical every time.
+		"""
+		graph = _fan_out_graph(["branch_a", "branch_b", "branch_c", "branch_d"])
+		outputs = []
+		visit_sequences = []
+		for _ in range(30):
+			invoker = JitteredInvoker(
+				{
+					"fetch_customer": {"id": "C1"},
+					"fetch_branch_a": ["A"],
+					"fetch_branch_b": ["B"],
+					"fetch_branch_c": ["C"],
+					"fetch_branch_d": ["D"],
+				}
+			)
+			visits: list[tuple[str, str]] = []
+			outcome = execute_procedure(
+				_pin(graph),
+				{},
+				tool_invoker=invoker,
+				on_visit=lambda node, outcome, visits=visits: visits.append((node.id, node.type)),
+			)
+			self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+			outputs.append(json.dumps(outcome.output, sort_keys=True))
+			visit_sequences.append(visits)
+
+		self.assertEqual(len(set(outputs)), 1, "output differed across runs under jittered completion order")
+		first = visit_sequences[0]
+		for other in visit_sequences[1:]:
+			self.assertEqual(other, first, "node-visit order differed across runs under jittered completion order")
+
+	def test_branch_count_exceeding_max_parallel_calls_is_rejected_not_queued(self):
+		"""A deliberate concurrency-limit breach fails the node closed before any branch
+		starts -- it is never silently serialized and never queued past the cap.
+		"""
+		branch_ids = [f"branch_{i}" for i in range(5)]
+		graph = _fan_out_graph(branch_ids)
+		graph["nodes"][1]["config"]["max_parallel_calls"] = 2
+		invoker = FakeInvoker({"fetch_customer": {"id": "C1"}, **{f"fetch_{b}": [b] for b in branch_ids}})
+		outcome = execute_procedure(_pin(graph), {}, tool_invoker=invoker)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertIn("max_parallel_calls", outcome.error)
+		# Rejected before any branch tool.call happened -- only fetch_customer (the
+		# main-chain node before the parallel node) was ever invoked.
+		called_tools = [t for t, _ in invoker.calls]
+		self.assertEqual(called_tools, ["fetch_customer"])
+
+	def test_branch_count_within_contract_max_parallel_calls_falls_back_and_succeeds(self):
+		branch_ids = ["branch_a", "branch_b"]
+		graph = _fan_out_graph(branch_ids)
+		graph["contract"]["limits"]["max_parallel_calls"] = 2
+		invoker = FakeInvoker({"fetch_customer": {"id": "C1"}, "fetch_branch_a": ["A"], "fetch_branch_b": ["B"]})
+		outcome = execute_procedure(_pin(graph), {}, tool_invoker=invoker)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+
+	def test_one_failing_branch_fails_the_parallel_node_closed(self):
+		graph = _fan_out_graph(["branch_a", "branch_b"])
+		invoker = FakeInvoker({"fetch_customer": {"id": "C1"}, "fetch_branch_a": ["A"]})  # branch_b's tool missing
+		outcome = execute_procedure(_pin(graph), {}, tool_invoker=invoker)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertIn("branch", outcome.error)
+
+	def test_tool_invoker_never_called_from_more_than_max_tool_concurrency_threads_at_once(self):
+		"""Per-tool concurrency cap: a graph fanning out many branches that all call the
+		SAME tool_id must never have more than ``max_tool_concurrency`` calls to that tool
+		in flight simultaneously.
+		"""
+		branch_ids = [f"branch_{i}" for i in range(6)]
+		graph = _fan_out_graph(branch_ids)
+		for node in graph["nodes"]:
+			if node["id"] in branch_ids:
+				node["config"]["tool_id"] = "shared_tool"  # every branch hits the same tool
+		graph["contract"]["limits"]["max_tool_concurrency"] = 2
+		graph["contract"]["limits"]["max_parallel_calls"] = len(branch_ids)
+
+		in_flight = {"count": 0, "max_seen": 0}
+		lock = threading.Lock()
+
+		def _shared_tool(_args):
+			with lock:
+				in_flight["count"] += 1
+				in_flight["max_seen"] = max(in_flight["max_seen"], in_flight["count"])
+			time.sleep(0.03)
+			with lock:
+				in_flight["count"] -= 1
+			return "ok"
+
+		invoker = FakeInvoker({"fetch_customer": {"id": "C1"}, "shared_tool": _shared_tool})
+		outcome = execute_procedure(_pin(graph), {}, tool_invoker=invoker)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+		self.assertLessEqual(in_flight["max_seen"], 2)
+
+
+class TestFrappeThreadConfinement(unittest.TestCase):
+	def test_on_visit_is_never_invoked_off_the_calling_thread(self):
+		"""The threading model (huf.ai.graph.scheduler module docstring) requires that
+		``on_visit`` -- the frappe-writing callback in ``run_agent_procedure_run`` -- is
+		only ever called from the thread that called ``execute_procedure``, never from a
+		branch worker thread. This test double raises if called off that thread, standing
+		in for a real ``frappe.db``-touching ``on_visit``.
+		"""
+		main_thread = threading.current_thread()
+		violations = []
+
+		def _on_visit(node, outcome):
+			if threading.current_thread() is not main_thread:
+				violations.append(node.id)
+
+		graph = _fan_out_graph(["branch_a", "branch_b", "branch_c"])
+		invoker = JitteredInvoker(
+			{
+				"fetch_customer": {"id": "C1"},
+				"fetch_branch_a": ["A"],
+				"fetch_branch_b": ["B"],
+				"fetch_branch_c": ["C"],
+			}
+		)
+		outcome = execute_procedure(_pin(graph), {}, tool_invoker=invoker, on_visit=_on_visit)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+		self.assertEqual(violations, [], "on_visit was invoked off the calling (owning) thread")
 
 
 class TestOutputBudgetFailsClosed(unittest.TestCase):
