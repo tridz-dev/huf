@@ -158,6 +158,31 @@ class ProcedureOutcome:
 
 	tool_call_count: int = 0
 
+	tool_invocations: list[dict] = field(default_factory=list)
+	"""One entry per ``tool.call`` node actually invoked (attempted), in order:
+	``{"node_id", "tool_id", "args", "success", "result", "error"}``. This is the raw
+	material :mod:`huf.ai.graph.fallback` (T-32) uses to tell a committed write from a
+	pending one on a mid-run failure -- ``node_visits`` alone only has ``(id, type)`` and
+	cannot answer "did this write actually go through". Never used to reconstruct
+	authorization or telemetry (I1/I5 remain the tool_invoker's job); this is purely a
+	record of what was asked and what came back.
+	"""
+
+	node_type: str | None = None
+	"""Type of the node named by ``node_id``. Filled in even when that node never reached
+	``node_end`` (a raised ``ProcedureLimitExceeded``/``RoutingError``) -- ``node_visits``
+	alone cannot answer "what kind of node was this" in that case, so
+	:mod:`huf.ai.graph.fallback` reads this field rather than re-deriving it.
+	"""
+
+	node_outputs: dict = field(default_factory=dict)
+	"""``{node_id: output}`` for every node visited so far, success or fail -- a direct
+	copy of ``GraphContext.node_outputs`` at the point the run stopped. Populated on every
+	terminal status (including a raised ``ProcedureLimitExceeded``/``RoutingError``), so
+	:mod:`huf.ai.graph.fallback` has the same partial state a mid-run failure leaves behind
+	without re-deriving it from ``node_visits`` (which only has ids/types, not values).
+	"""
+
 	SUCCESS = "success"
 	FAILED = "failed"
 	NOT_APPLICABLE = "not_applicable"
@@ -272,9 +297,18 @@ class _VisitRecorder:
 		"""
 		self._on_visit = on_visit
 		self._starts: dict[str, float] = {}
+		self.last_started: tuple[str, str] | None = None
+		"""``(node_id, node_type)`` of the most recent ``node_start`` -- distinct from
+		``visits[-1]``: a handler that raises ``ProcedureLimitExceeded`` (e.g. an
+		``output`` node's budget check) never reaches ``node_end``, so it never lands in
+		``visits`` at all. :func:`execute_procedure`'s outer except clause uses this to
+		attribute the failure to the node that was actually executing, not the previous
+		one that already completed successfully.
+		"""
 
 	def node_start(self, node: NodeSpec) -> None:
 		self._starts[node.id] = time.monotonic()
+		self.last_started = (node.id, node.type)
 
 	def node_end(self, node: NodeSpec, outcome: Outcome) -> None:
 		self.visits.append((node.id, node.type))
@@ -311,6 +345,7 @@ class _Runner:
 		self.external_call_count = 0
 		self.write_count = 0
 		self.tool_call_count = 0
+		self.tool_invocations: list[dict] = []
 
 		# -- T-30 concurrency bounds -------------------------------------------------
 		# One graph-wide semaphore for the whole run (shared by every parallel node,
@@ -419,9 +454,30 @@ class _Runner:
 		except ProcedureLimitExceeded:
 			raise
 		except Exception as exc:  # noqa: BLE001 -- a denied/raising invoker fails this node, not the process
+			self.tool_invocations.append(
+				{
+					"node_id": node.id,
+					"tool_id": tool_id,
+					"args": args,
+					"success": False,
+					"result": None,
+					"error": f"tool.call '{tool_id}' raised: {exc}",
+				}
+			)
 			return Outcome.failed(f"tool.call '{tool_id}' raised: {exc}")
 		finally:
 			tool_sem.release()
+
+		self.tool_invocations.append(
+			{
+				"node_id": node.id,
+				"tool_id": tool_id,
+				"args": args,
+				"success": invocation.success,
+				"result": invocation.result,
+				"error": invocation.error,
+			}
+		)
 
 		if not invocation.success:
 			return Outcome.failed(invocation.error or f"tool.call '{tool_id}' failed")
@@ -702,12 +758,23 @@ def execute_procedure(
 	try:
 		result = executor.execute(context, state)
 	except (ProcedureLimitExceeded, RoutingError) as exc:
+		failing_node_id = recorder.last_started[0] if recorder.last_started else None
+		failing_node_type = recorder.last_started[1] if recorder.last_started else None
+		if failing_node_id is None and recorder.visits:
+			failing_node_id, failing_node_type = recorder.visits[-1]
 		return ProcedureOutcome(
 			status=ProcedureOutcome.FAILED,
 			error=str(exc),
+			node_id=failing_node_id,
+			node_type=failing_node_type,
 			node_visits=recorder.visits,
 			tool_call_count=runner.tool_call_count,
+			tool_invocations=runner.tool_invocations,
+			node_outputs=dict(context.node_outputs),
 		)
+
+	terminal_node = program.node(result.node_id)
+	terminal_node_type = terminal_node.type if terminal_node is not None else None
 
 	if result.status == ExecutionResult.SUCCESS:
 		output = context.node_outputs.get(result.node_id)
@@ -715,18 +782,24 @@ def execute_procedure(
 			status=ProcedureOutcome.SUCCESS,
 			output=output,
 			node_id=result.node_id,
+			node_type=terminal_node_type,
 			hop_count=result.hop_count,
 			node_visits=recorder.visits,
 			tool_call_count=runner.tool_call_count,
+			tool_invocations=runner.tool_invocations,
+			node_outputs=dict(context.node_outputs),
 		)
 
 	return ProcedureOutcome(
 		status=ProcedureOutcome.FAILED,
 		error=result.error,
 		node_id=result.node_id,
+		node_type=terminal_node_type,
 		hop_count=result.hop_count,
 		node_visits=recorder.visits,
 		tool_call_count=runner.tool_call_count,
+		tool_invocations=runner.tool_invocations,
+		node_outputs=dict(context.node_outputs),
 	)
 
 
