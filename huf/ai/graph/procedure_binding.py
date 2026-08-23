@@ -77,6 +77,13 @@ class BoundProcedure:
 	procedure_name: str
 	input_schema: dict
 	priority: int = 0
+	fallback_enabled: bool = False
+	"""``Agent Procedure Binding.fallback_enabled``. Controls only how much *detail* a
+	failure hands back to the calling Agent (structured GOAL.md ss2.4 payload vs. a plain
+	error) -- never whether a failure is survivable. Under either setting
+	:func:`invoke_bound_procedure` returns a result dict; it never lets an exception out
+	(I9).
+	"""
 
 
 def _parse_schema(raw) -> dict:
@@ -107,7 +114,7 @@ def get_bound_procedures_for_agent(agent_name: str) -> list[BoundProcedure]:
 	bindings = frappe.get_all(
 		"Agent Procedure Binding",
 		filters={"agent": agent_name, "enabled": 1},
-		fields=["name", "procedure", "procedure_id", "priority", "modified"],
+		fields=["name", "procedure", "procedure_id", "priority", "fallback_enabled", "modified"],
 		order_by="priority desc, modified desc",
 	)
 	if not bindings:
@@ -154,6 +161,7 @@ def get_bound_procedures_for_agent(agent_name: str) -> list[BoundProcedure]:
 				procedure_name=procedure.procedure_name or procedure.procedure_id,
 				input_schema=_parse_schema(procedure.input_schema),
 				priority=binding.priority or 0,
+				fallback_enabled=bool(binding.get("fallback_enabled")),
 			)
 		)
 
@@ -173,27 +181,67 @@ def invoke_bound_procedure(bound: BoundProcedure, args: dict, *, agent_run_id: s
 	``huf.ai.graph.procedure_runtime.run_agent_procedure_run`` -- the same function every
 	other Procedure Run goes through, so the run lock, I1 authorization and I5 telemetry
 	are never skipped for a bound invocation.
+
+	**Never raises** (I9 -- "a failing Procedure never fails the Agent"). Every path,
+	including a run that could not even be inserted, returns a result dict the caller can
+	branch on:
+
+	  ``{"ok": bool, "status": str, "run": str|None, "output": any, "error": str|None,
+	    "fallback": dict|None, "fallback_enabled": bool}``
+
+	``ok`` is the single field a caller must branch on; ``status`` is the finer-grained
+	``ProcedureOutcome`` status (or ``"error"`` when the invocation itself blew up before
+	producing an outcome). ``bound.fallback_enabled`` decides ONLY whether ``fallback``
+	carries the structured GOAL.md ss2.4 payload (``True``) or stays ``None`` so the caller
+	sees a plain, catchable error result (``False``). It never decides survivability: the
+	Agent keeps running either way and can fall back to atomic tools.
 	"""
-	from huf.ai.graph.procedure_runtime import run_agent_procedure_run
+	from huf.ai.graph.procedure_runtime import ProcedureOutcome, run_agent_procedure_run
 
-	run = frappe.get_doc(
-		{
-			"doctype": "Agent Procedure Run",
-			"procedure": bound.procedure,
-			"agent_run": agent_run_id,
-			"input_payload": json.dumps(args or {}, default=str),
+	run_name = None
+	try:
+		run = frappe.get_doc(
+			{
+				"doctype": "Agent Procedure Run",
+				"procedure": bound.procedure,
+				"agent_run": agent_run_id,
+				"input_payload": json.dumps(args or {}, default=str),
+			}
+		)
+		run.insert(ignore_permissions=True)
+		run_name = run.name
+
+		agent_doc = frappe.get_cached_doc("Agent", bound.agent) if bound.agent else None
+		outcome = run_agent_procedure_run(run.name, agent_doc=agent_doc)
+	except Exception as exc:  # noqa: BLE001 -- I9: converted to a return value, never re-raised
+		frappe.logger("huf").warning(
+			f"Bound procedure {bound.procedure_id} ({bound.binding_name}) raised; "
+			f"degrading to agentic execution.\n{frappe.get_traceback()}"
+		)
+		return {
+			"ok": False,
+			"status": "error",
+			"run": run_name,
+			"output": None,
+			"error": str(exc),
+			"fallback": None,
+			"fallback_enabled": bool(bound.fallback_enabled),
 		}
-	)
-	run.insert(ignore_permissions=True)
 
-	agent_doc = frappe.get_cached_doc("Agent", bound.agent) if bound.agent else None
-	outcome = run_agent_procedure_run(run.name, agent_doc=agent_doc)
+	ok = outcome.status == ProcedureOutcome.SUCCESS
+	# The structured payload is withheld -- not the survivability. With fallback disabled
+	# the caller still gets ok=False plus a plain error string, which is a normal,
+	# catchable result, not an exception.
+	fallback = outcome.fallback if (bound.fallback_enabled and not ok) else None
 
 	return {
-		"run": run.name,
+		"ok": ok,
 		"status": outcome.status,
+		"run": run_name,
 		"output": outcome.output,
 		"error": outcome.error,
+		"fallback": fallback,
+		"fallback_enabled": bool(bound.fallback_enabled),
 	}
 
 
@@ -244,7 +292,9 @@ def _make_binding_tool(bound: BoundProcedure, *, agent_run_id: str | None = None
 				f"Error invoking bound procedure {bound.procedure_id} ({bound.binding_name}): {e!s}\n"
 				f"{frappe.get_traceback()}"
 			)
-			return _json.dumps({"error": str(e)})
+			# Same actionable shape invoke_bound_procedure returns, so the model never
+			# sees two different failure vocabularies from one tool (I9).
+			return _json.dumps({"ok": False, "status": "error", "error": str(e), "fallback": None})
 
 	return FunctionTool(
 		name=_tool_name_for(bound),

@@ -183,6 +183,19 @@ class ProcedureOutcome:
 	without re-deriving it from ``node_visits`` (which only has ids/types, not values).
 	"""
 
+	fallback: dict | None = None
+	"""The :mod:`huf.ai.graph.fallback` payload for a non-SUCCESS terminal status, attached
+	by :func:`run_agent_procedure_run` (never by the frappe-free
+	:func:`execute_procedure`, which has no procedure/version identity to put in it).
+
+	Deliberately a returned field rather than a new DocType column: the persisted halves
+	of this payload already live in the ``Agent Procedure Run`` recovery fields
+	(``completed_steps`` / ``failed_step`` / ``committed_writes`` / ``pending_writes`` /
+	``intermediate_outputs`` / ``error`` / ``safe_recovery_actions``), and T-32 forbids a
+	second, parallel set of state fields. ``None`` on SUCCESS, and on any failure whose
+	payload could not be built -- a caller must branch on presence, never assume it.
+	"""
+
 	SUCCESS = "success"
 	FAILED = "failed"
 	NOT_APPLICABLE = "not_applicable"
@@ -429,7 +442,11 @@ class _Runner:
 		# max_hops (mirrors the executor's foreach/main-chain budget separation, F-3).
 		policy = ExecutionPolicy(max_hops=len(node_ids) + 2)
 		executor = GraphExecutor(
-			program, self.handlers(), router=_router_for(program), policy=policy, listener=listener or self.recorder
+			program,
+			self.handlers(),
+			router=_router_for(program),
+			policy=policy,
+			listener=listener or self.recorder,
 		)
 		return program, executor
 
@@ -639,7 +656,9 @@ class _Runner:
 		data_diff = {
 			k: v for k, v in branch_context.data.items() if k not in original_data or original_data[k] != v
 		}
-		return BranchResult(index=index, ok=True, visits=pairs, node_outputs=node_outputs_diff, data_diff=data_diff)
+		return BranchResult(
+			index=index, ok=True, visits=pairs, node_outputs=node_outputs_diff, data_diff=data_diff
+		)
 
 	def _handle_parallel(self, node: NodeSpec, context: GraphContext, state: ExecutionState) -> Outcome:
 		"""Bounded, deterministic concurrent fan-out over ``config.branches`` (T-30).
@@ -657,7 +676,9 @@ class _Runner:
 		if not branches:
 			return Outcome.succeeded({"branches_completed": 0, "join": cfg.get("join", "all")})
 
-		max_parallel_calls = cfg.get("max_parallel_calls") or self.limits.get("max_parallel_calls") or len(branches)
+		max_parallel_calls = (
+			cfg.get("max_parallel_calls") or self.limits.get("max_parallel_calls") or len(branches)
+		)
 		timeout_s = None
 		timeout_ms = cfg.get("timeout_ms") or self.limits.get("max_wall_time_ms")
 		if timeout_ms:
@@ -808,6 +829,83 @@ def execute_procedure(
 # ---------------------------------------------------------------------------
 
 
+def persist_fallback_state(run, result) -> dict:
+	"""Write the fallback payload onto the run's EXISTING recovery fields, and return it.
+
+	``run`` is an ``Agent Procedure Run`` document (or, in tests, any object with the same
+	attributes -- this function is deliberately frappe-free and never saves: the caller
+	owns the single ``run.save()``, and no explicit ``frappe.db.commit()`` is ever issued
+	here). ``result`` is a :class:`huf.ai.graph.fallback.BoundResult`.
+
+	The whole point of this function is the branch below. A ``PROCEDURE_NOT_APPLICABLE``
+	result is clean, pre-execution and provably side-effect-free (``execute_procedure``
+	returns it before the node loop is ever entered), so it writes NONE of the
+	partial-state fields -- not even as empty lists. Writing ``completed_steps = "[]"`` /
+	``committed_writes = "[]"`` would leave a retry path unable to distinguish "a run
+	happened and touched nothing" from "no run happened at all", and that ambiguity is
+	exactly how a retry duplicates a write (T-32). Absent stays absent.
+	"""
+	from huf.ai.graph.fallback import PROCEDURE_NOT_APPLICABLE
+
+	payload = result.payload
+
+	if result.fallback_class == PROCEDURE_NOT_APPLICABLE:
+		# Clean rejection: the ONLY thing recorded is the outcome itself. No
+		# completed_steps, no failed_step, no committed_writes, no pending_writes, no
+		# intermediate_outputs, no safe_recovery_actions -- see docstring.
+		run.output_payload = json.dumps(payload, default=str)
+		return payload
+
+	run.completed_steps = json.dumps(payload["completed_steps"], default=str)
+	run.failed_step = payload["failed_step"]
+	run.committed_writes = json.dumps(payload["committed_writes"], default=str)
+	run.pending_writes = json.dumps(payload["pending_writes"], default=str)
+	# Already budget-bounded by fallback.build_mid_run_fallback via
+	# huf.ai.output_budget.enforce_output_budget -- persisted exactly as handed over. Never
+	# re-read outcome.node_outputs directly here: that would put the raw, unbounded blob on
+	# the DocType and defeat I7.
+	run.intermediate_outputs = json.dumps(payload["intermediate_outputs"], default=str)
+	run.error = json.dumps(
+		{
+			"error": payload["error"],
+			"failed_step": payload["failed_step"],
+			"status": payload["status"],
+		},
+		default=str,
+	)
+	run.safe_recovery_actions = json.dumps(payload["safe_recovery_actions"], default=str)
+	return payload
+
+
+def _build_fallback_for_run(run, graph: dict, outcome: "ProcedureOutcome"):
+	"""Build the fallback payload for a non-SUCCESS ``outcome``, never raising (I9).
+
+	Returns the ``BoundResult``, or ``None`` if the payload could not be built at all. A
+	fallback that itself blew up must not become the thing that kills the Agent -- the run
+	still gets its plain status/error written by the caller in that case.
+	"""
+	from huf.ai.graph import fallback as _fallback
+	from huf.ai.graph import permissions as _permissions
+
+	try:
+		return _fallback.build_fallback(
+			procedure_id=run.procedure_id or run.procedure,
+			version=run.pinned_fingerprint,
+			run=run.name,
+			graph=graph,
+			outcome=outcome,
+			classify_tool=_permissions.default_tool_classifier,
+		)
+	except Exception:  # noqa: BLE001 -- I9: fallback construction never fails the Agent
+		import frappe
+
+		frappe.logger("huf").warning(
+			f"Could not build fallback payload for Agent Procedure Run {run.name}; "
+			f"persisting the plain failure only.\n{frappe.get_traceback()}"
+		)
+		return None
+
+
 def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutcome":
 	"""Advance one ``Agent Procedure Run`` to completion.
 
@@ -941,11 +1039,23 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 					result=outcome.output,
 				)
 		elif outcome.status == ProcedureOutcome.NOT_APPLICABLE:
+			# Clean, pre-execution rejection: the run "completed" having done nothing.
+			# persist_fallback_state writes only output_payload for this class -- the
+			# partial-state recovery fields stay untouched (I9 / T-32).
 			run.status = "Completed"
 			run.output_payload = json.dumps({"status": "not_applicable"})
+			result = _build_fallback_for_run(run, graph, outcome)
+			if result is not None:
+				outcome.fallback = persist_fallback_state(run, result)
 		else:
 			run.status = "Failed"
 			run.error = json.dumps({"error": outcome.error, "node_id": outcome.node_id})
+			result = _build_fallback_for_run(run, graph, outcome)
+			if result is not None:
+				# Overwrites run.error with the structured form and fills the
+				# completed_steps / failed_step / committed_writes / pending_writes /
+				# intermediate_outputs / safe_recovery_actions recovery fields.
+				outcome.fallback = persist_fallback_state(run, result)
 
 		run.save(ignore_permissions=True)
 		return outcome
