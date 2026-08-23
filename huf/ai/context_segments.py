@@ -97,6 +97,89 @@ def compute_segment_tokens(agent_doc, agent, resolved_model, resolved_provider, 
     }
 
 
+def compute_tools_breakdown(pricing_model, tools, tool_sources):
+    """Sub-type the combined `segment_tokens["tools"]` total by tool origin.
+
+    `segment_tokens["tools"]` stays an int (or None) — this is a SIBLING
+    structure, not a replacement, so the frontend composition bar (which
+    reads segments.tools as a plain number) and historical usage_snapshot
+    rows are unaffected.
+
+    Args:
+        pricing_model: model name already normalized via
+            huf.ai.providers.litellm._normalize_model_name — the same
+            value compute_segment_tokens() uses for its token_counter calls.
+        tools: the agent's tool list (e.g. `agent.tools`), same object
+            compute_segment_tokens() serializes for the combined total.
+        tool_sources: dict of {tool_name: source}, source one of
+            user_configured | builtin_registry | internal_capability |
+            knowledge | mcp. Built by AgentManager._setup_tools() in
+            agent_integration.py, which is the only place that still knows
+            where each tool came from.
+
+    Returns:
+        None if the breakdown could not be computed at all (e.g. tools
+        couldn't be serialized). Otherwise a dict:
+            {
+              "by_source": {<source>: int|None, ...},
+              "per_tool": {<tool_name>: int|None, ...},
+            }
+        Only sources actually present among `tools` are included in
+        by_source. An individual tool's count is `None` (not 0) if only
+        that tool's serialization/counting failed — same None-means-unknown
+        discipline as the rest of this module; see the module docstring.
+        Never raises.
+
+    Note: per_tool values are counted from each tool serialized on its own,
+    while segment_tokens["tools"] counts the whole tools array serialized
+    together as one JSON document. The per-tool sum will not exactly equal
+    the combined total (JSON array framing, comma separators, etc.) — a
+    small discrepancy here is expected, not a bug.
+    """
+    try:
+        tools = tools or []
+        if not tools:
+            return None
+
+        by_source = {}
+        per_tool = {}
+
+        for tool in tools:
+            tool_name = getattr(tool, "name", None)
+            if not tool_name:
+                continue
+
+            source = (tool_sources or {}).get(tool_name)
+            if not source:
+                continue
+
+            try:
+                single_schema = serialize_tools([tool])
+                single_text = frappe.as_json(single_schema) if single_schema else None
+            except Exception:
+                single_text = None
+
+            count = _count(pricing_model, single_text) if single_text is not None else None
+
+            per_tool[tool_name] = count
+            if source not in by_source:
+                by_source[source] = 0 if count is not None else None
+            elif by_source[source] is not None and count is not None:
+                by_source[source] += count
+            else:
+                by_source[source] = None
+
+        if not by_source and not per_tool:
+            return None
+
+        return {
+            "by_source": by_source,
+            "per_tool": per_tool,
+        }
+    except Exception:
+        return None
+
+
 def compute_prefix_breakpoints(agent_doc, agent, resolved_model, resolved_provider, history):
     """Fingerprint the cache-control breakpoints this run's settings would gate.
 

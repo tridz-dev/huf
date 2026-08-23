@@ -111,13 +111,76 @@ class AgentManager:
         self.model_override = model_override
         # self.file_handler = file_handler
         self.tools = []
+        # Maps tool name -> one of the five `tools_breakdown.by_source` origins
+        # (user_configured | builtin_registry | internal_capability | knowledge |
+        # mcp). Populated by _setup_tools() and read by compute_tools_breakdown()
+        # at the two agent_integration call sites — see context_segments.py.
+        self.tool_sources = {}
         self._setup_client()
         self._setup_tools()
 
+    def _classify_agent_tool_sources(self, tool_names):
+        """Classify tools produced by create_agent_tools() into source buckets.
+
+        create_agent_tools() merges several origins into a single flat list
+        with no surviving type tag: user-authored `Agent Tool Function`
+        docs, tools seeded from the registry/app-discovery pipeline (synced
+        via huf.ai.tool_registry.sync_discovered_tools, which stamps
+        `types = "App Provided"` — see huf/ai/tool_registry.py), the
+        always-on `ask_user` builder tool, and a handful of tools built
+        directly in code with no backing `Agent Tool Function` doc at all
+        (get_conversation_data/set_conversation_data/load_conversation_data,
+        get_result_context). ask_user is itself seeded the same
+        "App Provided" way but is explicitly an internal capability, not a
+        registry integration, so it is special-cased ahead of the doc
+        lookup.
+
+        Tools with no backing doc are bucketed as internal_capability too:
+        they are intrinsic to the agent runtime (not a user choice, not a
+        registry integration), the same category ask_user and list_skills
+        belong to.
+
+        Classifies the whole batch in ONE query rather than one per tool:
+        _setup_tools() runs on every agent run, and this is observability
+        data, so it must not add a query per tool to a hot path.
+        """
+        sources = {}
+        lookup_names = [name for name in tool_names if name and name != "ask_user"]
+
+        types_by_name = {}
+        if lookup_names:
+            try:
+                rows = frappe.get_all(
+                    "Agent Tool Function",
+                    filters={"tool_name": ["in", lookup_names]},
+                    fields=["tool_name", "types"],
+                    limit_page_length=0,
+                )
+                types_by_name = {row["tool_name"]: row.get("types") for row in rows}
+            except Exception as e:
+                # Classification is observability; never fail a run over it.
+                logger.warning(f"Failed to classify tool sources: {e!s}")
+
+        for tool_name in tool_names:
+            if not tool_name:
+                continue
+            if tool_name == "ask_user":
+                sources[tool_name] = "internal_capability"
+                continue
+            tool_type = types_by_name.get(tool_name)
+            if tool_type == "App Provided":
+                sources[tool_name] = "builtin_registry"
+            elif tool_type:
+                sources[tool_name] = "user_configured"
+            else:
+                sources[tool_name] = "internal_capability"
+
+        return sources
 
     def _setup_tools(self):
         """Create SDK Tools from existing functions, skills, and MCP servers."""
         self.tools=[]
+        self.tool_sources = {}
 
         try:
             from huf.ai.sdk_tools import create_agent_tools
@@ -129,6 +192,11 @@ class AgentManager:
             )
             if agent_tools:
                 self.tools.extend(agent_tools)
+                self.tool_sources.update(
+                    self._classify_agent_tool_sources(
+                        [getattr(tool, "name", None) for tool in agent_tools]
+                    )
+                )
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
 
@@ -159,6 +227,10 @@ class AgentManager:
                 tool_map = {tool.name: tool for tool in self.tools}
                 for tool in merged_mcp_tools:
                     tool_map[tool.name] = tool
+                    # An MCP server tool always wins the source tag for its
+                    # name, mirroring tool_map's own overwrite-by-name
+                    # semantics immediately below.
+                    self.tool_sources[tool.name] = "mcp"
                 self.tools = list(tool_map.values())
         except Exception as e:
             logger.warning(f"Failed to load skill MCP tools: {e!s}")
@@ -171,6 +243,7 @@ class AgentManager:
                 existing_names = {tool.name for tool in self.tools}
                 if list_skills_tool.name not in existing_names:
                     self.tools.append(list_skills_tool)
+                    self.tool_sources[list_skills_tool.name] = "internal_capability"
         except Exception as e:
             logger.warning(f"Failed to load skills listing tool: {e!s}")
 
@@ -197,6 +270,7 @@ class AgentManager:
                         top_k=top_k,
                     )
                 self.tools.append(knowledge_search_tool)
+                self.tool_sources[knowledge_search_tool.name] = "knowledge"
 
             # 2. Get Knowledge Sources Tool
             sources_tool_def = create_get_knowledge_sources_tool(self.agent_doc.agent_name)
@@ -206,6 +280,7 @@ class AgentManager:
                     """List all knowledge sources available to this agent."""
                     return handle_get_knowledge_sources(agent_name=self.agent_doc.agent_name)
                 self.tools.append(get_knowledge_sources_tool)
+                self.tool_sources[get_knowledge_sources_tool.name] = "knowledge"
 
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
@@ -1621,12 +1696,21 @@ def _execute_agent_run(
         else:
             enhanced_prompt = base_prompt
 
-        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        from huf.ai.context_segments import (
+            compute_segment_tokens,
+            compute_prefix_breakpoints,
+            compute_tools_breakdown,
+        )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
         prefix_breakpoints = compute_prefix_breakpoints(
             agent_doc, agent, resolved_model_name, resolved_provider, history
+        )
+        tools_breakdown = compute_tools_breakdown(
+            _normalize_model_name(resolved_model_name, resolved_provider),
+            getattr(agent, "tools", None),
+            manager.tool_sources,
         )
 
         context = {
@@ -1896,6 +1980,7 @@ def _execute_agent_run(
                     "total_tokens": total_tokens,
                     "completeness": "provider_reported" if usage else "estimated",
                     "segment_tokens": segment_tokens,
+                    "tools_breakdown": tools_breakdown,
                     "prefix_breakpoints": prefix_breakpoints,
                 }),
                 "cost_source": "provider_reported" if getattr(result, "cost", None) is not None else "unknown",
@@ -2770,12 +2855,21 @@ async def run_agent_stream(
         else:
             enhanced_prompt = base_prompt
 
-        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        from huf.ai.context_segments import (
+            compute_segment_tokens,
+            compute_prefix_breakpoints,
+            compute_tools_breakdown,
+        )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
         prefix_breakpoints = compute_prefix_breakpoints(
             agent_doc, agent, resolved_model_name, resolved_provider, history
+        )
+        tools_breakdown = compute_tools_breakdown(
+            _normalize_model_name(resolved_model_name, resolved_provider),
+            getattr(agent, "tools", None),
+            manager.tool_sources,
         )
 
         context["conversation_history"] = history
@@ -2984,6 +3078,7 @@ async def run_agent_stream(
                             "total_tokens": total_tokens,
                             "completeness": "provider_reported" if usage else "estimated",
                             "segment_tokens": segment_tokens,
+                            "tools_breakdown": tools_breakdown,
                             "prefix_breakpoints": prefix_breakpoints,
                         }),
                         "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
