@@ -1947,11 +1947,16 @@ def _execute_agent_run(
                 )
                 cost = 0.0
 
-            try:
-                # usage is normally a plain dict here, so getattr() would always miss;
-                # read the normalised payload and fall back to the parts.
-                total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
+            # Computed OUTSIDE the try below: the conversation-metrics update
+            # swallows its exceptions, and total_tokens is read again by the
+            # Agent Run write further down. Leaving the assignment inside the
+            # try would let a failure there surface as a NameError at the later
+            # read instead of the warning this except is meant to produce.
+            # usage is normally a plain dict here, so getattr() would always miss;
+            # read the normalised payload and fall back to the parts.
+            total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
+            try:
                 frappe.db.sql("""
                     UPDATE `tabAgent Conversation`
                     SET
