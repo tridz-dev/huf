@@ -116,16 +116,31 @@ class _FakeFrappeModule:
 
 
 def _install_fake_frappe() -> _FakeFrappeModule:
+	# Snapshot whatever currently sits at sys.modules["frappe"] -- on a real bench run this
+	# is the genuine frappe package -- so it can be restored exactly, not clobbered. A bare
+	# unconditional overwrite here previously left a plain MagicMock() behind for the rest
+	# of the process (see _restore_real_stub's old body), which any later code doing a
+	# deferred `import frappe` inside a function body would pick up from the sys.modules
+	# cache: `frappe.get_doc(...)` silently became `MagicMock().get_doc(...)`, breaking
+	# unrelated tests elsewhere in the same `bench run-tests` run.
+	global _PREVIOUS_FRAPPE_MODULE
+	_PREVIOUS_FRAPPE_MODULE = sys.modules.get("frappe")
 	fake = _FakeFrappeModule()
 	sys.modules["frappe"] = fake
 	return fake
 
 
 def _restore_real_stub() -> None:
-	# Match conftest.py's own contract: leave a MagicMock() behind afterwards so any test
-	# module collected later that does `import frappe` at module scope still gets
-	# something importable.
-	sys.modules["frappe"] = MagicMock()
+	# Restore exactly what was there before _install_fake_frappe ran -- the real frappe
+	# module on a bench, or nothing (module absent) on a standalone run -- instead of
+	# permanently replacing sys.modules["frappe"] with a MagicMock.
+	if _PREVIOUS_FRAPPE_MODULE is None:
+		sys.modules.pop("frappe", None)
+	else:
+		sys.modules["frappe"] = _PREVIOUS_FRAPPE_MODULE
+
+
+_PREVIOUS_FRAPPE_MODULE = None
 
 
 class IdempotencyKeyDerivationTests(unittest.TestCase):
