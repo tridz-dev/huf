@@ -31,11 +31,11 @@ Plus one that blocks conversation analytics specifically: **`Agent Run.conversat
 
 ### 1.1 Where token usage originates
 
-HUF talks to LLM providers almost exclusively through **LiteLLM** (`huf/ai/providers/litellm.py`). `RunProvider.run()` (`huf/ai/run.py:20-78`) always tries `litellm.run()` first; on a generic `Exception` (`run.py:46-52`) it falls back to a same-named legacy module `huf/ai/providers/<provider>.py` (`run.py:54-73`). `RunProvider.run_stream()` (`run.py:80-116`) has **no fallback at all** — LiteLLM or `frappe.throw`.
+HUF talks to LLM providers almost exclusively through **LiteLLM** (`huf/ai/providers/litellm.py`). `RunProvider.run()` (`huf/ai/run.py:15-78`) always tries `litellm.run()` first; on a generic `Exception` (`run.py:46-52`) it falls back to a same-named legacy module `huf/ai/providers/<provider>.py` (`run.py:54-73`). `RunProvider.run_stream()` (`run.py:80-116`) has **no fallback at all** — LiteLLM or `frappe.throw`.
 
 The legacy modules are effectively dead code for usage accounting. Verified: `openrouter.py:51,74-75`, `anthropic.py:77,101-102`, and `google.py:87,106-108` each initialise `total_usage = {"input_tokens": 0, "output_tokens": 0}` and extract **no cache fields and no cost**. Whenever a fallback triggers, cache and cost data silently vanish with nothing recording that the degraded path was taken.
 
-**One Agent Run is not one model call.** `litellm.py:738` sets `MAX_ROUNDS = getattr(agent, "max_turns", 10) or 10`, and the loop at `litellm.py:745` performs one real LLM completion per round; if the model returns tool calls they execute, results are appended to `messages` (`litellm.py:1062`, `1166`), and the loop continues with a **growing** message list. Usage is accumulated across rounds and returned once after the loop (`litellm.py:1067`, `1170`) — never persisted per-round.
+**One Agent Run is not one model call.** `litellm.py:738` sets `MAX_ROUNDS = getattr(agent, "max_turns", 10) or 10`, and the loop at `litellm.py:745` performs one real LLM completion per round. If the model returns tool calls, the assistant's tool-call request message is appended first (`litellm.py:1062`), the tools execute, and their results are appended (`litellm.py:1166`) — so the loop continues with a **growing** message list carrying both halves of every exchange. Usage is accumulated across rounds and returned once after the loop (`litellm.py:1067`, `1170`) — never persisted per-round.
 
 ### 1.2 How input/output/cache tokens are obtained and normalized
 
@@ -51,10 +51,12 @@ LiteLLM normalises OpenAI's `prompt_tokens_details` and Anthropic's separate cac
 |---|---|---|
 | a | `litellm.py:912-929` | round token counts for `calculate_cost` |
 | b | `litellm.py:998-1047` | accumulation into `total_usage` |
-| c | `agent_integration.py:1789-1852` | persistence, sync path |
-| d | `agent_integration.py:2889-2965` | persistence, streaming path — a line-for-line copy of (c) |
+| c | `agent_integration.py:1789-1852` | re-extraction from `result.usage`, sync path (the DB write itself is separately at `:1907-1927`) |
+| d | `agent_integration.py:2889-2965` | re-extraction, streaming path — near-duplicate of (c), but *not* identical: its dict fallback reads `usage.get("prompt_tokens", 0)` (`:2903`) where the sync block reads `usage.get("input_tokens", 0)` (`:1792`), and it computes `total_tokens` inline (`:2949`, `:2962`) where the sync block does not |
 
-Cache **write** breakpoints (`cache_control` blocks) are emitted only for `provider_name == "anthropic"` (`litellm.py:169-177`); OpenAI and Gemini instead receive native pass-through knobs (`prompt_cache_retention`, `cached_content`) as `completion_kwargs`. Up to three regions can be marked: static prefix, agent instructions, and the last conversation-history message (`_format_conversation_history`, `litellm.py:180-213`).
+The divergence noted in row (d) is not cosmetic — it is D5 (§2.1) caught in the act: two copies of the same logic have already drifted to different fallback keys, which is exactly how a defect like D1 survives in one path and not the other.
+
+Cache **write** breakpoints (`cache_control` blocks) are emitted only for `provider_name == "anthropic"` (`litellm.py:169-177`); OpenAI and Gemini instead receive native pass-through knobs (`prompt_cache_retention`, `cached_content`) as `completion_kwargs`. Up to three regions can be marked: the static prefix and agent instructions, marked inline in `run()`/`run_stream()` (`litellm.py:659-680`), and the last conversation-history message, marked in `_format_conversation_history` (`litellm.py:180-213`).
 
 ### 1.3 The existing context-composition breakdown — `context_segments.py`
 
@@ -110,7 +112,7 @@ Consequences:
 - **Agent Run (1) → Agent Message (N, optional)** via `Agent Message.agent_run`.
 - **Agent Run** is self-referential via `parent_run`/`is_child`, with `run_kind` ∈ `agent | tool | orchestrator`.
 - **Agent Tool Call** stores `tool`, `tool_args`, `tool_result`, `status`, and a `resource_usage` JSON (CPU/wall/memory — *not* LLM tokens). No token fields; an LLM-invoking tool's usage lands on a separate child `Agent Run`.
-- **`Agent Run.conversation` is populated for `run_kind` `agent` and `orchestrator`, but is null by construction for `run_kind="tool"`**: `_create_flow_agent_run()` (`flow_engine.py:1349-1388`) builds the doc dict at `:1365-1377` with only `agent`, `flow_run`, `flow_node_id`, `flow_id`, `run_kind` — no `conversation` key — and the later `db_set` (`:648-655`) never adds one. The sibling `Agent Tool Call` audit doc *does* get `"conversation"` (`flow_engine.py:622`), so the linkage exists but not on the row carrying the tokens.
+- **`Agent Run.conversation` is populated for `run_kind` `agent` and `orchestrator`, but is null by construction for `run_kind="tool"`**: `_create_flow_agent_run()` (`flow_engine.py:1349-1388`) builds the doc dict at `:1365-1377` with only `agent`, `flow_run`, `flow_node_id`, `flow_id`, `run_kind` — no `conversation` key — and the later `run_doc.db_set({...})` (`:653-660`) never adds one. The sibling `Agent Tool Call` audit doc *does* get `"conversation"` (`flow_engine.py:622`), so the linkage exists but not on the row carrying the tokens.
 
 ### 1.7 Existing analytics APIs
 
@@ -165,7 +167,7 @@ Three findings overturned the initial draft of this document and are called out 
 | **D7** | `cache_creation_tokens`, `total_tokens`, `cache_skipped_unsupported_model` exist only inside `usage_snapshot` JSON — no flat columns. | verified | Cannot be summed in SQL or by the rollup engine; the rollup consequently ignores cache writes entirely. |
 | **D8** | Rollup has no `conversation` dimension (`_dimension_key`, `:29-30`) and no composition fields. | verified | Conversation analytics cannot reuse the otherwise-correct rollup engine without schema change. |
 | **D9** | `context_window` hardcoded to 200000 for every model (`agent_run_context_api.py:17,48`); `AI Model` has no such field. | verified | "How close to the limit" is currently decorative, not measured. |
-| **D10** | `tools` segment is one combined count. `agent.tools` merges user `Agent Tool Function` tools, registry/builder tools, `ask_user`, `list_skills`, knowledge tools, and MCP tools (`agent_integration.py:116-204`, `:130-155`, `:159-201`) with **no type tag surviving into `tools_text`**. | verified | "Which tools cost the most context" and "user vs system tool overhead" are unanswerable. |
+| **D10** | `tools` segment is one combined count. `agent.tools` is merged in `_setup_tools` (`agent_integration.py:116-204`) from user `Agent Tool Function` tools plus registry/builder tools and `ask_user` (all via `create_agent_tools()`, called at `:121-124`), MCP server tools (`:130-155`), `list_skills` (`:159-168`), and knowledge tools (`:170-204`) — with **no type tag surviving into `tools_text`**. | verified | "Which tools cost the most context" and "user vs system tool overhead" are unanswerable. |
 | **D11** | Client-side aggregation on the primary landing page: 10,000-row fetch reduced in-browser. | `dashboardApi.ts:73-89`, `HomePage.tsx:32,43,72` | Non-scalable and divergent from the rollup path; two aggregation strategies coexist. |
 | **D12** | Server computes `series` + `breakdowns` that no component renders; `breakdowns` groups only by provider despite `agent`/`model` being available. | `agent_run_analytics_api.py:65-68,74-79`; `ExecutionAnalyticsDashboard.tsx:58` | Trend/attribution questions have no UI even where the data already exists. |
 | **D13** | `wasted_writes_tokens` is hardcoded `None`; `prefix_stability` is a hash comparison never reconciled against provider-reported cache tokens (`context_segments.py:17-19` states per-breakpoint attribution is deliberately not attempted). | verified | Two of four displayed cache stats are unbacked by provider truth; one is always blank. |
@@ -357,6 +359,8 @@ Confirm composition reconciles with provider-reported tokens across each provide
 ## Appendix — Verification Notes
 
 Findings were established by direct code reads, not inference. Claims carrying specific risk were independently re-verified, and the following were **corrected** against an earlier draft: the existence and completeness of `context_segments.py` (§2.0 C1); the rollup's actual cron schedule (C2); the hardcoded context window (C3); and the frontend component inventory (§7.1 — `PageFrame` not `PageLayout`, `app-sidebar.tsx` not `AppSidebar.tsx`, and the absence of any first-party chart).
+
+Every file:line citation in this document was then re-checked against the tree in a separate pass, which corrected seven imprecise references (line ranges for `run.py`'s `RunProvider.run`, `flow_engine.py`'s `db_set`, the cache-region and tool-merge citations) and two mischaracterisations (the `agent_integration.py` blocks in §1.2 are usage *extraction*, not persistence; the sync and streaming copies are near-duplicates that have already drifted, not line-for-line identical). The D1–D4 defect claims were re-verified exactly as stated. Line numbers are accurate as of `pre-develop` at the time of writing and will drift as the files change — treat the named symbols, not the numbers, as the durable reference.
 
 Two claims in circulation were found **false** and should not be repeated: that a context breakdown needs to be built from scratch, and that recharts is already in use in the product UI (it is used only inside the AI-artifact sandbox renderer).
 
