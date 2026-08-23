@@ -16,6 +16,7 @@ Run with:
 import sys
 import types
 import unittest
+from unittest.mock import patch
 
 
 def _install_standalone_frappe_stub():
