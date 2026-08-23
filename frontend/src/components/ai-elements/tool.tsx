@@ -468,54 +468,178 @@ export const ToolGroup = ({ calls, onApprove, onDeny, runStatus, isHistorical, c
         <ChevronRightIcon className="ml-1 size-[13px] shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-0.5 space-y-0.5 border-line/60 border-l pl-3 outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in">
-        {calls.map((call, index) => {
-          const isApprovalNeeded = call.state === "approval-requested";
-          const summary = isApprovalNeeded
-            ? "needs approval"
-            : call.errorText
-              ? call.errorText.length > 80
-                ? `${call.errorText.slice(0, 80)}…`
-                : call.errorText
-              : call.output !== undefined
-                ? summarizeToolPayload(call.output)
-                : summarizeToolPayload(call.input);
+        <ToolGroupCallRows calls={calls} onApprove={onApprove} onDeny={onDeny} />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+};
 
-          return (
-            <div key={index} className="flex min-w-0 items-center gap-2 py-[2px] leading-[18px]">
-              <span className="w-4 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
-                {index + 1}
-              </span>
-              {isApprovalNeeded ? (
-                <ShieldAlertIcon className="size-[11px] shrink-0 text-warning" />
-              ) : (
-                <span className={cn("size-[5px] shrink-0 rounded-full", STATUS_DOT_CLASSES[call.state])} />
+/**
+ * The per-call rows shown inside an expanded `ToolGroup` — factored out so
+ * `ProcedureRunRow` can reuse the exact same atomic-call rendering inside
+ * its own expander instead of duplicating this markup.
+ */
+function ToolGroupCallRows({
+  calls,
+  onApprove,
+  onDeny,
+}: {
+  calls: ToolGroupCall[];
+  onApprove?: (callId: string) => void;
+  onDeny?: (callId: string) => void;
+}) {
+  return (
+    <>
+      {calls.map((call, index) => {
+        const isApprovalNeeded = call.state === "approval-requested";
+        const summary = isApprovalNeeded
+          ? "needs approval"
+          : call.errorText
+            ? call.errorText.length > 80
+              ? `${call.errorText.slice(0, 80)}…`
+              : call.errorText
+            : call.output !== undefined
+              ? summarizeToolPayload(call.output)
+              : summarizeToolPayload(call.input);
+
+        return (
+          <div key={index} className="flex min-w-0 items-center gap-2 py-[2px] leading-[18px]">
+            <span className="w-4 shrink-0 text-right font-mono text-[10px] text-muted-foreground">
+              {index + 1}
+            </span>
+            {isApprovalNeeded ? (
+              <ShieldAlertIcon className="size-[11px] shrink-0 text-warning" />
+            ) : (
+              <span className={cn("size-[5px] shrink-0 rounded-full", STATUS_DOT_CLASSES[call.state])} />
+            )}
+            <span className="max-w-[40%] shrink-0 truncate font-mono text-[12px] text-foreground">
+              {call.name}
+            </span>
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate font-mono text-[11px]",
+                isApprovalNeeded ? "text-warning" : call.errorText ? "text-destructive" : "text-muted-foreground"
               )}
-              <span className="max-w-[40%] shrink-0 truncate font-mono text-[12px] text-foreground">
-                {call.name}
+            >
+              {summary}
+            </span>
+            {isApprovalNeeded ? (
+              <ApprovalActions
+                onApprove={call.callId ? () => onApprove?.(call.callId!) : undefined}
+                onDeny={call.callId ? () => onDeny?.(call.callId!) : undefined}
+              />
+            ) : (
+              call.durationMs !== undefined && (
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                  {formatDuration(call.durationMs)}
+                </span>
+              )
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+export type ProcedureRunRowProps = Omit<ComponentProps<typeof Collapsible>, "open" | "onOpenChange"> & {
+  /** The underlying atomic `Agent Tool Call`s (still emitted per I5), shown when expanded. */
+  calls: ToolGroupCall[];
+  /** Pinned `Agent Procedure` name, e.g. "Customer financial context". */
+  procedureName: string;
+  /** Pinned `Agent Procedure` version, when known. */
+  version?: number;
+  /** Total elapsed ms for the procedure run, when known. */
+  durationMs?: number;
+  /** Called when the user clicks through to the shared graph viewer. Omit to hide the affordance. */
+  onOpenGraph?: () => void;
+  onApprove?: (callId: string) => void;
+  onDeny?: (callId: string) => void;
+  runStatus?: "Queued" | "Started" | "Success" | "Failed";
+  isHistorical?: boolean;
+};
+
+/**
+ * The D8 "one collapsed row, not a new surface" pattern: a procedure
+ * execution — however many model turns and atomic tool calls it took —
+ * renders as a single transcript row:
+ *
+ *   Ran "<name>" · N steps · <duration>
+ *
+ * Expanding it reveals the underlying `Agent Tool Call` rows (still emitted
+ * per invariant I5, nothing hidden, only folded) using the exact same
+ * per-call row rendering as `ToolGroup`. Clicking the procedure name opens
+ * the shared graph viewer for this run's pinned procedure definition.
+ */
+export const ProcedureRunRow = ({
+  calls,
+  procedureName,
+  version,
+  durationMs,
+  onOpenGraph,
+  onApprove,
+  onDeny,
+  runStatus,
+  isHistorical,
+  className,
+  ...props
+}: ProcedureRunRowProps) => {
+  const isRunning = runStatus === "Queued" || runStatus === "Started";
+  const [open, setOpen] = useState(!isHistorical && isRunning);
+  const [userToggled, setUserToggled] = useState(false);
+
+  useEffect(() => {
+    if (!isRunning && !userToggled) setOpen(false);
+  }, [isRunning, userToggled]);
+
+  const stepCount = calls.length;
+
+  return (
+    <Collapsible
+      className={cn("not-prose mb-1 w-full", className)}
+      open={open}
+      onOpenChange={(next) => {
+        setUserToggled(true);
+        setOpen(next);
+      }}
+      {...props}
+    >
+      <div className="flex min-w-0 items-center gap-1.5">
+        <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-[7px] px-[7px] py-[3px] -ml-[7px] text-left leading-[24px] transition-colors hover:bg-muted/60">
+          <Layers2Icon className="size-[13px] shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate text-[12.5px] font-medium text-foreground">
+            Ran &ldquo;{procedureName}
+            {version !== undefined ? ` v${version}` : ""}&rdquo;
+          </span>
+          <span className="shrink-0 text-muted-foreground/50">&middot;</span>
+          <span className="shrink-0 text-[12px] text-muted-foreground">
+            {stepCount} step{stepCount === 1 ? "" : "s"}
+          </span>
+          {durationMs !== undefined && (
+            <>
+              <span className="shrink-0 text-muted-foreground/50">&middot;</span>
+              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                {formatDuration(durationMs)}
               </span>
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate font-mono text-[11px]",
-                  isApprovalNeeded ? "text-warning" : call.errorText ? "text-destructive" : "text-muted-foreground"
-                )}
-              >
-                {summary}
-              </span>
-              {isApprovalNeeded ? (
-                <ApprovalActions
-                  onApprove={call.callId ? () => onApprove?.(call.callId!) : undefined}
-                  onDeny={call.callId ? () => onDeny?.(call.callId!) : undefined}
-                />
-              ) : (
-                call.durationMs !== undefined && (
-                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                    {formatDuration(call.durationMs)}
-                  </span>
-                )
-              )}
-            </div>
-          );
-        })}
+            </>
+          )}
+          <ChevronRightIcon className="ml-auto size-[13px] shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+        </CollapsibleTrigger>
+        {onOpenGraph && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenGraph();
+            }}
+            className="shrink-0 text-[11px] text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+          >
+            View graph
+          </button>
+        )}
+      </div>
+      <CollapsibleContent className="mt-0.5 space-y-0.5 border-line/60 border-l pl-3 outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in">
+        <ToolGroupCallRows calls={calls} onApprove={onApprove} onDeny={onDeny} />
       </CollapsibleContent>
     </Collapsible>
   );
