@@ -30,6 +30,13 @@ class TestFaissBackend(unittest.TestCase):
 		self._previous_site = getattr(frappe.local, "site", None)
 		frappe.local.site = "test_site"
 		# frappe.throw/msgprint and logging need these bound outside a site context.
+		# Save and restore them: replacing frappe.local.flags with a fresh _dict drops
+		# `currently_saving`, and because _dict returns None for a missing key rather than
+		# raising, every later Document.insert() in the SAME process then dies in
+		# set_user_and_timestamp with "NoneType has no attribute append". That leak was
+		# costing this suite dozens of unrelated errors per run.
+		self._previous_flags = getattr(frappe.local, "flags", None)
+		self._previous_message_log = getattr(frappe.local, "message_log", None)
 		frappe.local.flags = frappe._dict()
 		frappe.local.message_log = []
 
@@ -60,6 +67,11 @@ class TestFaissBackend(unittest.TestCase):
 				del frappe.local.site
 		else:
 			frappe.local.site = self._previous_site
+
+		if self._previous_flags is not None:
+			frappe.local.flags = self._previous_flags
+		if self._previous_message_log is not None:
+			frappe.local.message_log = self._previous_message_log
 
 	def _initialize(self, config=None, index_exists=False, sidecar=None):
 		"""Initialize the backend with faiss, FaissVectorStore, and the FS mocked."""
