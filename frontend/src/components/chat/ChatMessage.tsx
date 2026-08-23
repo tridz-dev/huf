@@ -153,15 +153,17 @@ export function ChatMessage({
         durationMs: tool.durationMs,
     });
 
-    // Best-effort click-through to the shared graph viewer (D8): reuses the
-    // existing Flow canvas route rather than introducing a new page/route.
-    // The viewer currently renders Flow Definitions; wiring it to render an
-    // Agent Procedure's pinned definition by id is tracked separately and
-    // not yet complete, so this navigates to the same route shape the graph
-    // viewer already uses, keyed by the procedure id.
+    // Click-through to the graph viewer (D8): most runs execute an Agent Procedure
+    // (this row only renders for procedure-backed runs), so route to the Procedure
+    // detail page, which now exists. Fall back to the Flow canvas only if a run
+    // somehow carries a source Flow id but no procedure id.
     const openProcedureGraph = (procedureRunId: string) => {
         const summary = procedureRunSummaries[procedureRunId];
-        navigate(`/flows/${encodeURIComponent(summary?.procedureId ?? procedureRunId)}`);
+        if (summary?.procedureId) {
+            navigate(`/procedures/${encodeURIComponent(summary.procedureId)}`);
+        } else {
+            navigate(`/flows/${encodeURIComponent(procedureRunId)}`);
+        }
     };
 
     // Skip rendering ALL tool-related messages when tool execution details are hidden

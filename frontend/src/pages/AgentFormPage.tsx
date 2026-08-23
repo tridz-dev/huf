@@ -1376,7 +1376,9 @@ export function AgentFormPage() {
 
   useEffect(() => {
     // General is the bootstrap request above; only secondary sections are lazy-loaded here.
-    if (!id || isNew || activeTab === 'general' || activeTab === 'triggers') return;
+    // Procedures has no corresponding Agent doctype section -- ProcedureBindingsTab fetches
+    // its own data (Agent Procedure Binding records) directly, so there is nothing to load here.
+    if (!id || isNew || activeTab === 'general' || activeTab === 'triggers' || activeTab === 'procedures') return;
     const section = activeTab as AgentConfigSection;
     if (loadedSections.has(section)) return;
 
