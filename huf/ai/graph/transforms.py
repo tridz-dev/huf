@@ -34,12 +34,12 @@ closed (returns a typed error) rather than silently truncating.
 
 from __future__ import annotations
 
-import ast
 import json
 import math
-import operator
 from dataclasses import dataclass
 from typing import Any, Callable
+
+from huf.ai.graph.expressions import evaluate_predicate as eval_row_predicate
 
 # --------------------------------------------------------------------------------------------------
 # Limits and results
@@ -168,124 +168,14 @@ def resolve_path(row: Any, path: str) -> Any:
 
 
 # --------------------------------------------------------------------------------------------------
-# Minimal, total, frappe-free predicate evaluator for `filter`'s `where: Expression`.
+# Row predicate evaluation for `filter`'s `where: Expression`.
 #
-# graph-ir.md section 4 defines a shared reference/expression grammar owned by T-13
-# (huf/ai/graph/expressions.py, a sibling task, not a dependency of T-12). T-12 does not depend on
-# T-13, so `filter` needs its own self-contained evaluator for the row-scoped subset of that grammar:
-# `row["field"]` subscripting, comparisons, boolean connectives, and literals -- the same restricted
-# AST-walker shape as flow_eval.py's safe_eval_expression (GT-03/D1), extended so a raising or
-# type-mismatched predicate resolves False for that row rather than aborting the whole op (per the
-# `filter` row in graph-ir.md section 5's table). This is deliberately a subset of T-13's eventual
-# evaluator, not a replacement for it -- transforms.py only ever needs boolean row predicates.
+# The restricted grammar of graph-ir.md section 4 is owned by huf/ai/graph/expressions.py (T-13).
+# `filter` delegates to it rather than carrying a second AST walker: one grammar, one allow-list,
+# one place to audit. `evaluate_predicate` is total -- any parse failure, disallowed construct or
+# runtime error resolves to False for that row, so a bad predicate never aborts the op (per the
+# `filter` row in graph-ir.md section 5's semantics table).
 # --------------------------------------------------------------------------------------------------
-
-MAX_WHERE_EXPRESSION_LENGTH = 500
-
-_BIN_OPS: dict[type, Callable[[Any, Any], Any]] = {
-	ast.Add: operator.add,
-	ast.Sub: operator.sub,
-	ast.Mult: operator.mul,
-	ast.Mod: operator.mod,
-}
-
-_CMP_OPS: dict[type, Callable[[Any, Any], Any]] = {
-	ast.Eq: operator.eq,
-	ast.NotEq: operator.ne,
-	ast.Lt: operator.lt,
-	ast.LtE: operator.le,
-	ast.Gt: operator.gt,
-	ast.GtE: operator.ge,
-	ast.In: lambda a, b: a in b,
-	ast.NotIn: lambda a, b: a not in b,
-	ast.Is: operator.is_,
-	ast.IsNot: operator.is_not,
-}
-
-
-class _RowEvalError(Exception):
-	"""Internal-only: any AST shape or runtime error the evaluator refuses. Caught at the boundary."""
-
-
-def _eval_row_expr(node: ast.AST, row: dict) -> Any:
-	if isinstance(node, ast.Constant):
-		return node.value
-	if isinstance(node, ast.List):
-		return [_eval_row_expr(e, row) for e in node.elts]
-	if isinstance(node, ast.Tuple):
-		return tuple(_eval_row_expr(e, row) for e in node.elts)
-	if isinstance(node, ast.Dict):
-		return {
-			_eval_row_expr(k, row): _eval_row_expr(v, row)
-			for k, v in zip(node.keys, node.values, strict=True)
-		}
-	if isinstance(node, ast.Name):
-		if node.id == "row":
-			return row
-		if node.id == "None":
-			return None
-		if node.id == "True":
-			return True
-		if node.id == "False":
-			return False
-		raise _RowEvalError(f"unknown name: {node.id}")
-	if isinstance(node, ast.Subscript):
-		value = _eval_row_expr(node.value, row)
-		key = _eval_row_expr(node.slice, row)
-		if isinstance(value, dict):
-			return value.get(key)
-		if isinstance(value, (list, tuple)) and isinstance(key, int):
-			if -len(value) <= key < len(value):
-				return value[key]
-			return None
-		return None
-	if isinstance(node, ast.BoolOp):
-		values = [_eval_row_expr(v, row) for v in node.values]
-		if isinstance(node.op, ast.And):
-			result = True
-			for v in values:
-				result = result and v
-			return result
-		result = False
-		for v in values:
-			result = result or v
-		return result
-	if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-		return not _eval_row_expr(node.operand, row)
-	if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
-		operand = _eval_row_expr(node.operand, row)
-		return -operand
-	if isinstance(node, ast.BinOp) and type(node.op) in _BIN_OPS:
-		left = _eval_row_expr(node.left, row)
-		right = _eval_row_expr(node.right, row)
-		return _BIN_OPS[type(node.op)](left, right)
-	if isinstance(node, ast.Compare):
-		left = _eval_row_expr(node.left, row)
-		for op_node, comparator in zip(node.ops, node.comparators, strict=True):
-			right = _eval_row_expr(comparator, row)
-			fn = _CMP_OPS.get(type(op_node))
-			if fn is None:
-				raise _RowEvalError(f"unsupported comparison: {type(op_node).__name__}")
-			if not fn(left, right):
-				return False
-			left = right
-		return True
-	raise _RowEvalError(f"unsupported expression node: {type(node).__name__}")
-
-
-def eval_row_predicate(expression: str, row: dict) -> bool:
-	"""Evaluate ``expression`` (graph-ir.md section 4.1's `row` root, a restricted subset) against one
-	row. TOTAL: any parse failure, disallowed construct, or runtime error (type mismatch, etc.)
-	resolves to ``False`` for that row -- per the `filter` semantics table, this never aborts the op.
-	"""
-
-	if not isinstance(expression, str) or not expression or len(expression) > MAX_WHERE_EXPRESSION_LENGTH:
-		return False
-	try:
-		tree = ast.parse(expression, mode="eval")
-		return bool(_eval_row_expr(tree.body, row if isinstance(row, dict) else {}))
-	except Exception:
-		return False
 
 
 # --------------------------------------------------------------------------------------------------
