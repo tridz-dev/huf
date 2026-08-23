@@ -32,6 +32,24 @@ def _install_standalone_frappe_stub():
 	if existing is not None and hasattr(existing, "__file__"):
 		return
 
+	fake = _make_frappe_double()
+	sys.modules["frappe"] = fake
+	sys.modules["frappe.utils"] = fake.utils
+	sys.modules["frappe.utils.file_manager"] = fake.utils.file_manager
+	sys.modules["frappe.model"] = fake.model
+	sys.modules["frappe.model.document"] = fake.model.document
+
+
+def _make_frappe_double():
+	"""Build a self-contained ``frappe`` stand-in.
+
+	Tests patch this ONTO the module under test; they must never assign to attributes of the
+	real ``frappe`` module. Doing so replaces them for the entire test session -- an earlier
+	version of this file set ``frappe.conf = {}`` in setUp, which on a bench turned the real
+	``frappe.conf`` into a plain dict and killed roughly 80 unrelated tests later in the run,
+	all of them dying inside ``log_query`` on ``frappe.conf.allow_tests``.
+	"""
+
 	fake = types.ModuleType("frappe")
 
 	class _DB:
@@ -114,11 +132,7 @@ def _install_standalone_frappe_stub():
 	fake_model.document = fake_document
 	fake.model = fake_model
 
-	sys.modules["frappe"] = fake
-	sys.modules["frappe.utils"] = fake_utils
-	sys.modules["frappe.utils.file_manager"] = fake_file_manager
-	sys.modules["frappe.model"] = fake_model
-	sys.modules["frappe.model.document"] = fake_document
+	return fake
 
 
 _install_standalone_frappe_stub()
@@ -132,9 +146,16 @@ class ArtifactQuotaTests(unittest.TestCase):
 	"""F-17: per-artifact, per-conversation-count and per-conversation-bytes caps."""
 
 	def setUp(self):
-		frappe.db.counts = {}
-		frappe.db.sql_results = {}
-		frappe.conf = {}
+		# Patch the module under test, never the real frappe module. Assigning
+		# frappe.db / frappe.conf directly replaces them for the WHOLE test session: on a
+		# bench that turned frappe.conf into a plain dict, and every later test doing SQL
+		# then died in log_query on frappe.conf.allow_tests. Roughly 80 unrelated tests
+		# failed from this one line.
+		double = _make_frappe_double()
+		patcher = patch.object(context_artifacts, "frappe", double)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		self.frappe = double
 
 	def test_allows_a_small_artifact_under_all_caps(self):
 		# no exception
@@ -147,7 +168,7 @@ class ArtifactQuotaTests(unittest.TestCase):
 			)
 
 	def test_rejects_when_conversation_is_already_at_the_count_cap(self):
-		frappe.db.counts["Agent Context Artifact"] = context_artifacts.DEFAULT_MAX_ARTIFACTS_PER_CONVERSATION
+		self.frappe.db.counts["Agent Context Artifact"] = context_artifacts.DEFAULT_MAX_ARTIFACTS_PER_CONVERSATION
 		with self.assertRaises(context_artifacts.ArtifactQuotaExceeded):
 			context_artifacts._check_artifact_quotas("CONV-1", incoming_bytes=10)
 
@@ -156,12 +177,12 @@ class ArtifactQuotaTests(unittest.TestCase):
 			"SELECT COALESCE(SUM(payload_bytes), 0) FROM `tabAgent Context Artifact` WHERE conversation=%s",
 			("CONV-1",),
 		)
-		frappe.db.sql_results[query_key] = [[context_artifacts.DEFAULT_MAX_CONVERSATION_BYTES - 10]]
+		self.frappe.db.sql_results[query_key] = [[context_artifacts.DEFAULT_MAX_CONVERSATION_BYTES - 10]]
 		with self.assertRaises(context_artifacts.ArtifactQuotaExceeded):
 			context_artifacts._check_artifact_quotas("CONV-1", incoming_bytes=20)
 
 	def test_conf_overrides_are_honoured(self):
-		frappe.conf["huf_context_artifact_max_bytes"] = 50
+		self.frappe.conf["huf_context_artifact_max_bytes"] = 50
 		with self.assertRaises(context_artifacts.ArtifactQuotaExceeded):
 			context_artifacts._check_artifact_quotas("CONV-1", incoming_bytes=100)
 
@@ -170,38 +191,41 @@ class PurgeExpiredArtifactsTests(unittest.TestCase):
 	"""F-16: the daily scheduler entry deletes expired artifacts and their Files."""
 
 	def setUp(self):
-		frappe.get_all_results = []
-		frappe.deleted_docs = []
-		frappe.db.values = {}
-		frappe.log_error.calls = []
+		# Patch the module under test; never assign to the real frappe module (see
+		# _make_frappe_double's docstring for what that cost us).
+		double = _make_frappe_double()
+		patcher = patch.object(context_artifacts, "frappe", double)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		self.frappe = double
 
 	def test_deletes_artifact_and_its_file(self):
-		frappe.get_all_results = [{"name": "ART-0001", "payload_file": "/files/foo.json"}]
-		frappe.db.values[("File", "{'file_url': '/files/foo.json'}", "name")] = "FILE-0001"
+		self.frappe.get_all_results = [{"name": "ART-0001", "payload_file": "/files/foo.json"}]
+		self.frappe.db.values[("File", "{'file_url': '/files/foo.json'}", "name")] = "FILE-0001"
 
 		purged = context_artifacts.purge_expired_context_artifacts()
 
 		self.assertEqual(purged, 1)
-		self.assertIn(("File", "FILE-0001"), frappe.deleted_docs)
-		self.assertIn(("Agent Context Artifact", "ART-0001"), frappe.deleted_docs)
+		self.assertIn(("File", "FILE-0001"), self.frappe.deleted_docs)
+		self.assertIn(("Agent Context Artifact", "ART-0001"), self.frappe.deleted_docs)
 
 	def test_artifact_with_no_payload_file_is_still_deleted(self):
-		frappe.get_all_results = [{"name": "ART-0002", "payload_file": None}]
+		self.frappe.get_all_results = [{"name": "ART-0002", "payload_file": None}]
 
 		purged = context_artifacts.purge_expired_context_artifacts()
 
 		self.assertEqual(purged, 1)
-		self.assertNotIn(("File", None), frappe.deleted_docs)
-		self.assertIn(("Agent Context Artifact", "ART-0002"), frappe.deleted_docs)
+		self.assertNotIn(("File", None), self.frappe.deleted_docs)
+		self.assertIn(("Agent Context Artifact", "ART-0002"), self.frappe.deleted_docs)
 
 	def test_one_failure_does_not_stop_the_rest(self):
 		def _flaky_delete(doctype, name, ignore_permissions=False, delete_permanently=False):
 			if name == "ART-BAD":
 				raise RuntimeError("boom")
-			frappe.deleted_docs.append((doctype, name))
+			self.frappe.deleted_docs.append((doctype, name))
 
-		frappe.delete_doc = _flaky_delete
-		frappe.get_all_results = [
+		self.frappe.delete_doc = _flaky_delete
+		self.frappe.get_all_results = [
 			{"name": "ART-BAD", "payload_file": None},
 			{"name": "ART-OK", "payload_file": None},
 		]
@@ -209,20 +233,24 @@ class PurgeExpiredArtifactsTests(unittest.TestCase):
 		purged = context_artifacts.purge_expired_context_artifacts()
 
 		self.assertEqual(purged, 1)
-		self.assertIn(("Agent Context Artifact", "ART-OK"), frappe.deleted_docs)
-		self.assertTrue(frappe.log_error.calls)
+		self.assertIn(("Agent Context Artifact", "ART-OK"), self.frappe.deleted_docs)
+		self.assertTrue(self.frappe.log_error.calls)
 
 
 class DeleteConversationArtifactsTests(unittest.TestCase):
 	"""F-16: the on_trash cascade deletes every artifact/File for a conversation."""
 
 	def setUp(self):
-		frappe.get_all_results = []
-		frappe.deleted_docs = []
-		frappe.db.values = {}
+		# Patch the module under test; never assign to the real frappe module (see
+		# _make_frappe_double's docstring for what that cost us).
+		double = _make_frappe_double()
+		patcher = patch.object(context_artifacts, "frappe", double)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		self.frappe = double
 
 	def test_deletes_every_artifact_for_the_conversation(self):
-		frappe.get_all_results = [
+		self.frappe.get_all_results = [
 			{"name": "ART-0001", "payload_file": None},
 			{"name": "ART-0002", "payload_file": None},
 		]
@@ -233,8 +261,8 @@ class DeleteConversationArtifactsTests(unittest.TestCase):
 			deleted = context_artifacts.delete_conversation_artifacts("CONV-1")
 
 		self.assertEqual(deleted, 2)
-		self.assertIn(("Agent Context Artifact", "ART-0001"), frappe.deleted_docs)
-		self.assertIn(("Agent Context Artifact", "ART-0002"), frappe.deleted_docs)
+		self.assertIn(("Agent Context Artifact", "ART-0001"), self.frappe.deleted_docs)
+		self.assertIn(("Agent Context Artifact", "ART-0002"), self.frappe.deleted_docs)
 		remove_dir.assert_called_once_with("CONV-1")
 
 
