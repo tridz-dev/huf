@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import frappe
 
+from huf.ai.graph import permissions
 from huf.ai.graph.permissions import (
 	ToolPermission,
 	authorize_tool_call,
@@ -342,17 +343,38 @@ class TestEnvelopeDeclares(unittest.TestCase):
 		self.assertFalse(envelope_declares(envelope, ptype="create", doctype="ToDo"))
 
 
+class _FrappeDouble:
+	"""Minimal stand-in for the ``frappe`` module as ``permissions.py`` uses it.
+
+	Deliberately a plain object, not a MagicMock: it behaves the same with or without a bench,
+	so this test proves the same thing in both environments.
+	"""
+
+	PermissionError = PermissionError
+
+	def __init__(self, tool_doc):
+		self._tool_doc = tool_doc
+
+	def get_cached_doc(self, doctype, name):
+		return self._tool_doc
+
+	def throw(self, msg, exc_class=None, *args, **kwargs):
+		raise (exc_class or Exception)(msg)
+
+	@staticmethod
+	def _(msg, *args, **kwargs):
+		return msg
+
+
 class TestAuthorizeToolCallI1Intersection(unittest.TestCase):
 	"""Proves the module's central claim: the compiled envelope is NEVER a runtime substitute (I2)."""
 
 	def setUp(self):
-		# frappe is a MagicMock (see conftest.py) shared across this test module; give it real
-		# exception semantics for the duration of each test so assertRaises works like it does
-		# against the real frappe in a bench.
-		frappe.PermissionError = PermissionError
-		frappe.throw.side_effect = self._raise_from_throw
-		self.addCleanup(self._reset_frappe_mock)
-
+		# This test must behave identically whether frappe is the conftest MagicMock (no bench)
+		# or the real module (bench run-tests). So: patch attributes rather than assigning to
+		# them, and never rely on MagicMock-only affordances like .side_effect. An earlier
+		# version assigned frappe.get_cached_doc.side_effect directly, which passed against the
+		# stub and errored on a real bench where no Agent Tool Function record exists.
 		self.tool_doc = type("FakeToolDoc", (), {
 			"types": "Get Document",
 			"reference_doctype": "Sales Invoice",
@@ -362,7 +384,10 @@ class TestAuthorizeToolCallI1Intersection(unittest.TestCase):
 			"function_path": "",
 			"tool_name": "get_sales_invoice",
 		})()
-		frappe.get_cached_doc.side_effect = lambda doctype, name: self.tool_doc
+
+		patcher = patch.object(permissions, "frappe", _FrappeDouble(self.tool_doc))
+		patcher.start()
+		self.addCleanup(patcher.stop)
 
 		self.agent_doc = type("FakeAgent", (), {"name": "Test Agent"})()
 
@@ -372,15 +397,6 @@ class TestAuthorizeToolCallI1Intersection(unittest.TestCase):
 			"http": "none",
 			"code": "none",
 		}
-
-	@staticmethod
-	def _raise_from_throw(msg, exc_class=None, *args, **kwargs):
-		raise (exc_class or Exception)(msg)
-
-	@staticmethod
-	def _reset_frappe_mock():
-		frappe.throw.side_effect = None
-		frappe.get_cached_doc.side_effect = None
 
 	def test_allows_when_envelope_declares_and_live_check_passes(self):
 		with patch.object(PermissionAwareToolRegistry, "_can_use_tool", return_value=True), \
