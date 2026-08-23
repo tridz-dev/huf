@@ -1,33 +1,67 @@
 """Tests for huf.ai.tool_invocation (T-10).
 
-Frappe-free by design, following the huf.ai.tools.execution_sandbox /
-test_execution_sandbox_isolation.py precedent: the module under test needs
-frappe only for a handful of narrow calls (frappe.session.user,
-frappe.db.get_value, frappe.get_doc, frappe.logger, frappe.get_traceback),
-so this suite installs a small controlled fake into sys.modules before
-import instead of depending on a live bench. Run with either:
+The module under test is imported normally (``from huf.ai import tool_invocation``) so this
+suite exercises the real ``sdk_tools``/``tool_types`` wiring on both a real Frappe bench and
+standalone. Frappe itself is never mutated globally: each test patches the ``frappe`` name
+*on the module under test* (``patch.object(tool_invocation, "frappe", <double>)``), scoped to
+that test via ``setUp``/``addCleanup``, using a plain hand-written double rather than a
+MagicMock -- so the same test proves the same thing whether frappe is the real bench package
+or not. This mirrors the pattern in ``huf.ai.tests.test_graph_permissions``
+(``_FrappeDouble`` / ``TestAuthorizeToolCallI1Intersection``).
+
+The only sys.modules surgery in this file is a narrow, standalone-only stub that makes ``huf``
+(and its transitive ``import frappe`` at module-load time, e.g. in ``huf.ai.tool_registry``)
+importable without a real bench. On a real bench 'frappe' already has a ``__file__`` and this
+stub is a no-op. Run with either:
 
     python -m unittest huf.ai.tests.test_tool_invocation -v
     pytest huf/ai/tests/test_tool_invocation.py -v
 
-Covers the security fixes T-10 exists to make (seam audit F-21 / invariant
-I1): the ignore_permissions strip is unconditional, the guest/mutating-type
-gate applies uniformly to real Agent Tool Function docs AND to the bare
-alias fallback, and the guest-doctype-pin refusal path is preserved. Also
-covers what must be preserved byte-for-byte: signature-aware argument
-filtering, _merge_run_context's blank-string-counts-as-absent semantics,
-and the extra_args overwrite-vs-setdefault standardization documented in
+Covers the security fixes T-10 exists to make (seam audit F-21 / invariant I1): the
+ignore_permissions strip is unconditional, the guest/mutating-type gate applies uniformly to
+real Agent Tool Function docs AND to the bare alias fallback, and the guest-doctype-pin
+refusal path is preserved. Also covers what must be preserved byte-for-byte: signature-aware
+argument filtering, _merge_run_context's blank-string-counts-as-absent semantics, and the
+extra_args overwrite-vs-setdefault standardization documented in
 tool_invocation.build_extra_args.
 """
 
 import asyncio
-import importlib.util
-import os
 import sys
 import types
 import unittest
-from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+
+def _install_standalone_frappe_stub():
+	"""Make ``huf`` importable without a real Frappe bench.
+
+	``huf/__init__.py`` does an unconditional ``import frappe``, and ``huf.ai.tool_types``
+	pulls in ``huf.ai.tool_registry``, which does ``import frappe`` / ``from frappe import
+	_`` / ``from frappe.utils import now_datetime`` at module load time. On a real bench
+	'frappe' is already the genuine package (has a ``__file__``); never touch that. This
+	stub only exists for the frappe-free local/CI path.
+	"""
+	existing = sys.modules.get("frappe")
+	if existing is not None and hasattr(existing, "__file__"):
+		return
+
+	fake = MagicMock(name="frappe")
+	fake.PermissionError = PermissionError
+	fake._ = lambda msg, *a, **k: msg
+	fake.whitelist = lambda *a, **k: (lambda f: f)
+
+	fake_utils = types.ModuleType("frappe.utils")
+	fake_utils.now_datetime = lambda: None
+	fake.utils = fake_utils
+
+	sys.modules["frappe"] = fake
+	sys.modules["frappe.utils"] = fake_utils
+
+
+_install_standalone_frappe_stub()
+
+from huf.ai import tool_invocation as ti  # noqa: E402 -- must follow the stub install above
 
 
 class _FakeSession:
@@ -78,107 +112,45 @@ class _FakeDoc:
 		return self
 
 
-class _FakeFrappe(SimpleNamespace):
-	pass
+class _ToolInvocationFrappeDouble:
+	"""Minimal stand-in for the ``frappe`` module as ``tool_invocation.py`` uses it.
 
+	Deliberately a plain object, not a MagicMock: it behaves the same with or without a
+	bench, so tests built against it prove the same thing in both environments.
+	"""
 
-def _install_fake_frappe():
-	# On a real bench (bench run-tests) 'frappe' is already the genuine
-	# package -- a proper module with a __file__ -- imported by the test
-	# runner itself before this module loads. Never clobber that; this
-	# suite's fake is only for the frappe-free local/CI path (no bench, no
-	# live site), matching the huf.ai.tools.execution_sandbox precedent.
-	existing = sys.modules.get("frappe")
-	if existing is not None and hasattr(existing, "__file__"):
-		return existing
+	def __init__(self, user="Administrator"):
+		self.session = _FakeSession(user)
+		self.db = _FakeDB()
+		self.docs: list[_FakeDoc] = []
 
-	fake = _FakeFrappe()
-	fake.session = _FakeSession()
-	fake.db = _FakeDB()
-	fake._docs = []
-
-	def get_doc(data):
+	def get_doc(self, data):
 		doc = _FakeDoc(data)
-		fake._docs.append(doc)
+		self.docs.append(doc)
 		return doc
 
-	fake.get_doc = get_doc
-	fake.logger = lambda *a, **k: MagicMock()
-	fake.get_traceback = lambda: ""
-	fake.set_user = lambda user: setattr(fake.session, "user", user)
-
-	sys.modules["frappe"] = fake
-	return fake
-
-
-_FAKE_FRAPPE = _install_fake_frappe()
-
-
-def _install_module_under_test():
-	"""On a real bench, import the module normally through the real huf
-	package so this suite also exercises the actual sdk_tools/tool_types
-	wiring. Locally (no bench, frappe not installed), load
-	huf/ai/tool_invocation.py directly from disk, bypassing
-	``huf/__init__.py`` (which does a real ``import frappe`` at package
-	load time), stubbing the two narrow constants tool_invocation needs
-	from ``huf.ai.tool_types`` rather than pulling in the real
-	``huf.ai.tool_registry`` module and its own frappe/DB dependencies.
-	"""
-	if hasattr(sys.modules.get("frappe"), "__file__"):
-		from huf.ai import tool_invocation as _real_module
-		return _real_module
-
-	if "huf" not in sys.modules:
-		sys.modules["huf"] = types.ModuleType("huf")
-	if "huf.ai" not in sys.modules:
-		sys.modules["huf.ai"] = types.ModuleType("huf.ai")
-
-	tool_types_stub = types.ModuleType("huf.ai.tool_types")
-	tool_types_stub.MUTATING_TOOL_TYPES = {
-		"Create Document", "Create Multiple Documents",
-		"Update Document", "Update Multiple Documents",
-		"Delete Document", "Delete Multiple Documents",
-		"Submit Document", "Cancel Document",
-		"Set Value", "POST", "Run Agent",
-		"Attach File to Document", "Builder",
-	}
-	tool_types_stub._GUEST_DOCTYPE_PINNED_TYPES = {
-		"Get Document", "Get Multiple Documents", "Get List",
-		"Create Document", "Create Multiple Documents",
-		"Update Document", "Update Multiple Documents",
-		"Delete Document", "Delete Multiple Documents",
-		"Attach File to Document",
-	}
-	sys.modules["huf.ai.tool_types"] = tool_types_stub
-
-	module_path = os.path.join(os.path.dirname(__file__), "..", "tool_invocation.py")
-	spec = importlib.util.spec_from_file_location("huf.ai.tool_invocation", module_path)
-	module = importlib.util.module_from_spec(spec)
-	sys.modules["huf.ai.tool_invocation"] = module
-	spec.loader.exec_module(module)
-	return module
-
-
-ti = _install_module_under_test()
-
-
-def _reset_frappe(user="Administrator"):
-	_FAKE_FRAPPE.session.user = user
-	_FAKE_FRAPPE.db.tool_function_rows.clear()
-	_FAKE_FRAPPE.db.mcp_rows.clear()
-	_FAKE_FRAPPE._docs.clear()
+	def get_traceback(self):
+		return ""
 
 
 def _run(coro):
 	return asyncio.run(coro)
 
 
-class ResolveToolDocTests(unittest.TestCase):
-	def setUp(self):
-		_reset_frappe()
+class _FrappeDoubleTestCase(unittest.TestCase):
+	"""Base class that patches ``tool_invocation.frappe`` with a fresh double per test."""
 
+	def setUp(self):
+		super().setUp()
+		self.frappe = _ToolInvocationFrappeDouble()
+		patcher = patch.object(ti, "frappe", self.frappe)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+
+
+class ResolveToolDocTests(_FrappeDoubleTestCase):
 	def test_resolves_real_agent_tool_function(self):
-		_FAKE_FRAPPE.db.tool_function_rows["my_tool"] = {
+		self.frappe.db.tool_function_rows["my_tool"] = {
 			"name": "ATF-00042",
 			"tool_name": "my_tool",
 			"types": "Get Document",
@@ -210,7 +182,7 @@ class ResolveToolDocTests(unittest.TestCase):
 		# A real Agent Tool Function named e.g. "get_document" (matching an
 		# alias name) must resolve to the real doc's fields, not the
 		# synthetic alias -- the alias is only a fallback.
-		_FAKE_FRAPPE.db.tool_function_rows["get_document"] = {
+		self.frappe.db.tool_function_rows["get_document"] = {
 			"name": "ATF-00099",
 			"tool_name": "get_document",
 			"types": "Get Document",
@@ -289,50 +261,45 @@ class BuildExtraArgsTests(unittest.TestCase):
 		self.assertEqual(extra, {"tool_name": "webhook_call"})
 
 
-class CheckToolPermissionTests(unittest.TestCase):
-	def setUp(self):
-		_reset_frappe()
-
+class CheckToolPermissionTests(_FrappeDoubleTestCase):
 	def test_non_guest_always_allowed(self):
-		_FAKE_FRAPPE.session.user = "Administrator"
+		self.frappe.session.user = "Administrator"
 		result = ti.check_tool_permission("Delete Document", allowed_for_guest=False)
 		self.assertTrue(result["allowed"])
 
 	def test_guest_blocked_from_mutating_type(self):
-		_FAKE_FRAPPE.session.user = "Guest"
+		self.frappe.session.user = "Guest"
 		result = ti.check_tool_permission("Delete Document", allowed_for_guest=False)
 		self.assertFalse(result["allowed"])
 		self.assertIn("Guest users cannot use", result["error"])
 
 	def test_guest_allowed_when_explicitly_permitted(self):
-		_FAKE_FRAPPE.session.user = "Guest"
+		self.frappe.session.user = "Guest"
 		result = ti.check_tool_permission("Delete Document", allowed_for_guest=True)
 		self.assertTrue(result["allowed"])
 
 	def test_guest_allowed_for_non_mutating_type_by_default(self):
-		_FAKE_FRAPPE.session.user = "Guest"
+		self.frappe.session.user = "Guest"
 		result = ti.check_tool_permission("Get Document", allowed_for_guest=False)
 		self.assertTrue(result["allowed"])
 
 
-class InvokeToolSecurityTests(unittest.TestCase):
+class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 	"""The core of T-10: closing F-21 structurally, for both a real Agent
 	Tool Function doc and the bare-name alias path.
 	"""
 
 	def setUp(self):
-		_reset_frappe()
+		super().setUp()
 		# A fake handler module reachable via get_function_from_name's
 		# module-import mechanism would require a real importable module;
 		# instead we monkeypatch tool_invocation.get_function_from_name
 		# directly, since it is a thin re-export by design.
 		self._orig_get_function = ti.get_function_from_name
-
-	def tearDown(self):
-		ti.get_function_from_name = self._orig_get_function
+		self.addCleanup(setattr, ti, "get_function_from_name", self._orig_get_function)
 
 	def _register_tool(self, tool_name, types, reference_doctype=None, allowed_for_guest=0):
-		_FAKE_FRAPPE.db.tool_function_rows[tool_name] = {
+		self.frappe.db.tool_function_rows[tool_name] = {
 			"name": f"ATF-{tool_name}",
 			"tool_name": tool_name,
 			"types": types,
@@ -373,7 +340,7 @@ class InvokeToolSecurityTests(unittest.TestCase):
 			return {"ok": True}
 
 		ti.get_function_from_name = lambda path: fake_handler
-		_FAKE_FRAPPE.session.user = "Administrator"
+		self.frappe.session.user = "Administrator"
 
 		result = _run(ti.invoke_tool(
 			"delete_document",
@@ -385,7 +352,7 @@ class InvokeToolSecurityTests(unittest.TestCase):
 
 	def test_guest_blocked_from_mutating_alias_with_no_backing_doc(self):
 		ti.get_function_from_name = lambda path: (lambda **kw: {"ok": True})
-		_FAKE_FRAPPE.session.user = "Guest"
+		self.frappe.session.user = "Guest"
 
 		result = _run(ti.invoke_tool("delete_document", {"name": "TASK-0001"}))
 
@@ -395,7 +362,7 @@ class InvokeToolSecurityTests(unittest.TestCase):
 	def test_guest_pinned_type_without_pin_is_refused(self):
 		ti.get_function_from_name = lambda path: (lambda **kw: {"ok": True})
 		self._register_tool("open_lookup", "Get Document", reference_doctype=None, allowed_for_guest=1)
-		_FAKE_FRAPPE.session.user = "Guest"
+		self.frappe.session.user = "Guest"
 
 		result = _run(ti.invoke_tool("open_lookup", {"name": "TASK-0001"}))
 
@@ -412,7 +379,7 @@ class InvokeToolSecurityTests(unittest.TestCase):
 
 		ti.get_function_from_name = lambda path: fake_handler
 		self._register_tool("public_faq", "Get Document", reference_doctype="FAQ", allowed_for_guest=1)
-		_FAKE_FRAPPE.session.user = "Guest"
+		self.frappe.session.user = "Guest"
 
 		result = _run(ti.invoke_tool("public_faq", {"name": "FAQ-1"}))
 
@@ -439,13 +406,10 @@ class InvokeToolSecurityTests(unittest.TestCase):
 		self.assertEqual(captured.get("reference_doctype"), "Task")
 
 
-class SignatureFilteringTests(unittest.TestCase):
+class SignatureFilteringTests(_FrappeDoubleTestCase):
 	"""Preserved byte-for-byte: filter to declared params unless the handler
 	accepts **kwargs.
 	"""
-
-	def setUp(self):
-		_reset_frappe()
 
 	def test_filters_to_declared_params(self):
 		captured = {}
@@ -455,7 +419,7 @@ class SignatureFilteringTests(unittest.TestCase):
 			return {"ok": True}
 
 		ti.get_function_from_name = lambda path: fake_handler
-		_FAKE_FRAPPE.db.tool_function_rows["strict_tool"] = {
+		self.frappe.db.tool_function_rows["strict_tool"] = {
 			"name": "ATF-strict", "tool_name": "strict_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": "Task", "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,
@@ -476,7 +440,7 @@ class SignatureFilteringTests(unittest.TestCase):
 			return {"ok": True}
 
 		ti.get_function_from_name = lambda path: fake_handler
-		_FAKE_FRAPPE.db.tool_function_rows["loose_tool"] = {
+		self.frappe.db.tool_function_rows["loose_tool"] = {
 			"name": "ATF-loose", "tool_name": "loose_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,
@@ -512,17 +476,14 @@ class MergeRunContextTests(unittest.TestCase):
 		self.assertEqual(args["call_id"], "already-set")
 
 
-class TelemetryTests(unittest.TestCase):
+class TelemetryTests(_FrappeDoubleTestCase):
 	"""GT-05/I5: telemetry owned by the service, opt-in per call so the
 	LLM path (which already has its own, elsewhere) doesn't get doubled.
 	"""
 
-	def setUp(self):
-		_reset_frappe()
-
 	def test_telemetry_off_by_default_creates_no_doc(self):
 		ti.get_function_from_name = lambda path: (lambda **kw: {"ok": True})
-		_FAKE_FRAPPE.db.tool_function_rows["quiet_tool"] = {
+		self.frappe.db.tool_function_rows["quiet_tool"] = {
 			"name": "ATF-quiet", "tool_name": "quiet_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,
@@ -530,11 +491,11 @@ class TelemetryTests(unittest.TestCase):
 
 		_run(ti.invoke_tool("quiet_tool", {"name": "X"}))
 
-		self.assertEqual(len(_FAKE_FRAPPE._docs), 0)
+		self.assertEqual(len(self.frappe.docs), 0)
 
 	def test_telemetry_on_creates_started_then_finalizes_completed(self):
 		ti.get_function_from_name = lambda path: (lambda **kw: {"value": 42})
-		_FAKE_FRAPPE.db.tool_function_rows["loud_tool"] = {
+		self.frappe.db.tool_function_rows["loud_tool"] = {
 			"name": "ATF-loud", "tool_name": "loud_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,
@@ -544,8 +505,8 @@ class TelemetryTests(unittest.TestCase):
 		result = _run(ti.invoke_tool("loud_tool", {"name": "X"}, ctx=ctx, telemetry=True))
 
 		self.assertTrue(result.success)
-		self.assertEqual(len(_FAKE_FRAPPE._docs), 1)
-		doc = _FAKE_FRAPPE._docs[0]
+		self.assertEqual(len(self.frappe.docs), 1)
+		doc = self.frappe.docs[0]
 		self.assertEqual(doc.inserted_with, {"ignore_permissions": True})
 		self.assertEqual(doc.data["status"], "Completed")
 		self.assertEqual(doc.data["agent_run"], "RUN-1")
@@ -557,7 +518,7 @@ class TelemetryTests(unittest.TestCase):
 			raise ValueError("boom")
 
 		ti.get_function_from_name = lambda path: raising_handler
-		_FAKE_FRAPPE.db.tool_function_rows["failing_tool"] = {
+		self.frappe.db.tool_function_rows["failing_tool"] = {
 			"name": "ATF-fail", "tool_name": "failing_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,
@@ -566,21 +527,18 @@ class TelemetryTests(unittest.TestCase):
 		result = _run(ti.invoke_tool("failing_tool", {"name": "X"}, telemetry=True))
 
 		self.assertFalse(result.success)
-		self.assertEqual(_FAKE_FRAPPE._docs[0].data["status"], "Failed")
-		self.assertIn("boom", _FAKE_FRAPPE._docs[0].data["error_message"])
+		self.assertEqual(self.frappe.docs[0].data["status"], "Failed")
+		self.assertIn("boom", self.frappe.docs[0].data["error_message"])
 
 
-class InvokeToolSyncTests(unittest.TestCase):
+class InvokeToolSyncTests(_FrappeDoubleTestCase):
 	"""flow_tool_executor's use case: a synchronous caller, no ambient
 	event loop, no per-call new_event_loop hazard (seam audit §3).
 	"""
 
-	def setUp(self):
-		_reset_frappe()
-
 	def test_sync_wrapper_runs_to_completion(self):
 		ti.get_function_from_name = lambda path: (lambda **kw: {"value": 1})
-		_FAKE_FRAPPE.db.tool_function_rows["sync_tool"] = {
+		self.frappe.db.tool_function_rows["sync_tool"] = {
 			"name": "ATF-sync", "tool_name": "sync_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,
@@ -596,7 +554,7 @@ class InvokeToolSyncTests(unittest.TestCase):
 			return {"async": True}
 
 		ti.get_function_from_name = lambda path: async_handler
-		_FAKE_FRAPPE.db.tool_function_rows["async_tool"] = {
+		self.frappe.db.tool_function_rows["async_tool"] = {
 			"name": "ATF-async", "tool_name": "async_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
 			"function_name": None, "allowed_for_guest": 0, "blocking": 0, "base_url": None,

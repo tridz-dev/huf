@@ -12,10 +12,47 @@ Run with:
   bench --site <site> run-tests --app huf --module huf.ai.tests.test_graph_permissions
 """
 
+import sys
+import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-import frappe
+
+def _install_standalone_frappe_stub():
+	"""Make ``huf`` (and everything it transitively imports at module load time --
+	``huf.ai.tool_registry``, which does ``import frappe`` / ``from frappe import _`` /
+	``from frappe.utils import now_datetime`` at its top level) importable without a real
+	Frappe bench.
+
+	On a real bench 'frappe' is already the genuine package (has a ``__file__``); never
+	touch that. This stub only exists for the frappe-free local/CI path, matching the
+	precedent set by ``huf.ai.tests.test_docker_execution`` / ``test_flow_engine`` /
+	``test_mcp_oauth`` (each installs its own narrow fake rather than trusting
+	``conftest.py`` -- ``conftest.py``'s stub runs too late here: importing this test
+	module as part of the ``huf.ai.tests`` package first imports ``huf/__init__.py``,
+	which does ``import frappe`` unconditionally, before ``conftest.py``'s own body has a
+	chance to run).
+	"""
+	existing = sys.modules.get("frappe")
+	if existing is not None and hasattr(existing, "__file__"):
+		return
+
+	fake = MagicMock(name="frappe")
+	fake.PermissionError = PermissionError
+	fake._ = lambda msg, *a, **k: msg
+	fake.whitelist = lambda *a, **k: (lambda f: f)
+
+	fake_utils = types.ModuleType("frappe.utils")
+	fake_utils.now_datetime = lambda: None
+	fake.utils = fake_utils
+
+	sys.modules["frappe"] = fake
+	sys.modules["frappe.utils"] = fake_utils
+
+
+_install_standalone_frappe_stub()
+
+import frappe  # noqa: E402 -- must follow the standalone stub install above
 
 from huf.ai.graph import permissions
 from huf.ai.graph.permissions import (
@@ -350,7 +387,14 @@ class _FrappeDouble:
 	so this test proves the same thing in both environments.
 	"""
 
-	PermissionError = PermissionError
+	# Must be the SAME class object as the ``frappe.PermissionError`` this test file's own
+	# ``import frappe`` resolves to (the real frappe.exceptions.PermissionError on a bench,
+	# our stub's builtin PermissionError standalone) -- not a fresh/builtin PermissionError
+	# of its own. authorize_tool_call raises via this double's .throw(), and the test
+	# asserts on the real ``frappe.PermissionError`` imported at module scope; if these are
+	# two different classes, assertRaises(frappe.PermissionError) never matches what
+	# actually gets raised even though the deny path fired correctly.
+	PermissionError = frappe.PermissionError
 
 	def __init__(self, tool_doc):
 		self._tool_doc = tool_doc
