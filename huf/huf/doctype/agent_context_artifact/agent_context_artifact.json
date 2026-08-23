@@ -13,6 +13,7 @@
   "summary",
   "payload_json",
   "payload_file",
+  "payload_bytes",
   "reference_doctype",
   "reference_name",
   "visibility",
@@ -25,7 +26,8 @@
    "fieldname": "conversation",
    "fieldtype": "Link",
    "label": "Conversation",
-   "options": "Agent Conversation"
+   "options": "Agent Conversation",
+   "search_index": 1
   },
   {
    "fieldname": "agent_run",
@@ -55,6 +57,14 @@
    "fieldname": "payload_file",
    "fieldtype": "Attach",
    "label": "Payload File"
+  },
+  {
+   "description": "Byte size of the payload at creation (File content length, or the UTF-8 length of the inline/spilled JSON or Text). Denormalized so per-conversation quota checks (T-11b, F-17) do not have to re-read every attached File.",
+   "fieldname": "payload_bytes",
+   "fieldtype": "Int",
+   "hidden": 1,
+   "label": "Payload Bytes",
+   "read_only": 1
   },
   {
    "fieldname": "reference_doctype",
@@ -90,7 +100,8 @@
   {
    "fieldname": "expires_on",
    "fieldtype": "Datetime",
-   "label": "Expires On"
+   "label": "Expires On",
+   "search_index": 1
   }
  ],
  "grid_page_length": 50,
