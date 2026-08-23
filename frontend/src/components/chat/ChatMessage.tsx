@@ -11,6 +11,7 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import type { ToolUIPart } from 'ai';
 import { HubAskUser, splitAskUserBlocks } from '../hub/HubAskUser';
 import { MessageActions } from './MessageActions';
+import { ProposeProcedureAction } from './ProposeProcedureAction';
 import { MessageLoadingState } from './MessageLoadingState';
 import { ChatErrorCard } from './ChatErrorCard';
 import { CopyButton } from './CopyButton';
@@ -228,6 +229,11 @@ export function ChatMessage({
                             </ToolContent>
                         </Tool>
                     ) : null}
+                    {isAssistant && message.runStatus !== 'Started' && message.runStatus !== 'Queued' && runId && (
+                        <div className="flex items-center gap-[14px] text-muted-foreground">
+                            <ProposeProcedureAction agentRunName={runId} />
+                        </div>
+                    )}
                 </div>
             ) : (
                     <Message from={message.from} className={cn(isUser && "max-w-[68%]", !isUser && "!max-w-full")}>
