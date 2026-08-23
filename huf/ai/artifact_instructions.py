@@ -81,7 +81,10 @@ Example calls:
 - Form mode: render_frappe_view(doctype="Task", mode="form", name="TASK-001")
 - Report mode: render_frappe_view(doctype="Sales Invoice", mode="report", filters={"status": "Draft"})
 
-The tool returns complete <artifact> tags — relay them as-is in your response.
+The tool returns complete <artifact> tags — relay them as-is in your response. Copy the
+JSON body character-for-character; do not retype it, reformat it, or rename any of its
+keys (in particular, the record/rows key is always "data" — never rename it to "doc" or
+anything else).
 
 GENERAL RULES:
 - Only use the tags above (plus the chart artifact format described separately). Unknown types render as plain text.
