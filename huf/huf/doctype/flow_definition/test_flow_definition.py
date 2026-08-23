@@ -14,16 +14,40 @@ from frappe.tests import UnitTestCase
 
 from huf.huf.doctype.flow_definition import flow_definition as fd_module
 
-OLD_FORMAT_DEFINITION = {
-	"schema_version": 1,
-	"id": "test-auto-convert-flow",
-	"version": 1,
-	"entry": "n1",
-	"nodes": [{"id": "n1", "type": "end"}],
-	"edges": [],
-	"settings": {},
-	"metadata": {},
-}
+def _valid_definition(flow_id):
+	"""A schema-valid, shared-IR-shape Flow definition (post gap2 migration:
+	nodes carry their own ``next``, no top-level ``edges``, ``schema_version``
+	is the string ``"1.0.0"``). ``flow_definition.py``'s own ``validate()`` now
+	rejects anything else at save time, before the auto-convert checkbox logic
+	ever runs -- these tests exercise the checkbox, not schema validation
+	(see test_flow_definition_schema.py for that)."""
+	return {
+		"schema_version": "1.0.0",
+		"profile": "flow",
+		"id": flow_id,
+		"fingerprint": "0" * 64,
+		"entry": "start",
+		"nodes": [
+			{
+				"id": "start",
+				"type": "trigger.webhook",
+				"config": {"method": "POST"},
+				"next": "finish",
+			},
+			{
+				"id": "finish",
+				"type": "output",
+				"config": {"value": {"$from": "start"}},
+			},
+		],
+		"contract": {
+			"input_schema": {"type": "object"},
+			"output_schema": {"type": "object"},
+			"applies_when": [],
+			"permission_envelope": {"read": [], "write": [], "http": "none", "code": "none"},
+			"limits": {"fail_closed": True},
+		},
+	}
 
 
 def _ensure_saving_flag():
@@ -46,7 +70,7 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 	def _make_flow(self, flow_id, definition=None, auto_convert=0):
 		import json
 
-		definition = dict(definition or OLD_FORMAT_DEFINITION)
+		definition = dict(definition) if definition else _valid_definition(flow_id)
 		definition["id"] = flow_id
 
 		_ensure_saving_flag()
@@ -70,16 +94,23 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 				mock_convert.assert_not_called()
 
 	def test_checkbox_on_non_convertible_flow_sets_note_and_does_not_throw(self):
-		"""The realistic case today: Flow Definition still stores the pre-refactor
-		id/edges/end shape, so convert_flow_to_procedure legitimately refuses. The save
-		itself must still succeed -- the checkbox is a best-effort convenience, not a
-		save-time gate.
+		"""A schema-valid Flow (post gap2 migration, every Flow that saves is
+		schema-valid) can still be non-deterministic -- e.g. it contains an
+		agent.run/router.llm/human.approval node -- and convert_flow_to_procedure
+		legitimately refuses on those grounds. The save itself must still succeed --
+		the checkbox is a best-effort convenience, not a save-time gate.
 		"""
-		doc = self._make_flow("test-auto-convert-refused", auto_convert=1)
-		doc.reload()
-		self.assertIsNone(doc.converted_procedure)
-		self.assertTrue(doc.conversion_note)
-		self.assertIn("Not converted", doc.conversion_note)
+		with patch.object(fd_module, "commit_if_background"):
+			with patch("huf.ai.flow_api.convert_flow_to_procedure") as mock_convert:
+				mock_convert.return_value = {
+					"convertible": False,
+					"reason": "Not convertible: contains an agent.run node.",
+				}
+				doc = self._make_flow("test-auto-convert-refused", auto_convert=1)
+				doc.reload()
+				self.assertIsNone(doc.converted_procedure)
+				self.assertTrue(doc.conversion_note)
+				self.assertIn("agent.run", doc.conversion_note)
 
 	def test_checkbox_on_convertible_flow_records_procedure_and_note(self):
 		with patch.object(fd_module, "commit_if_background"):
