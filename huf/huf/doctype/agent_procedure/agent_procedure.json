@@ -1,0 +1,308 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-23 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "procedure_id",
+  "procedure_name",
+  "version",
+  "column_break_gen1",
+  "status",
+  "tier",
+  "schema_version",
+  "fingerprint",
+  "definition_tab",
+  "definition_json",
+  "contract_section",
+  "input_schema",
+  "output_schema",
+  "column_break_contract1",
+  "applicability",
+  "permission_envelope",
+  "flags_section",
+  "is_read_only",
+  "contains_writes",
+  "contains_code",
+  "provenance_tab",
+  "provenance",
+  "created_from_agent",
+  "created_from_runs",
+  "confidence",
+  "settings_tab",
+  "is_system",
+  "column_break_set1",
+  "updated_by",
+  "updated_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "description": "Logical identity of the procedure, shared across all its versions. Not unique alone -- the docname (procedure_id-vN) is the unique key.",
+   "fieldname": "procedure_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Procedure ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "procedure_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Procedure Name",
+   "reqd": 1
+  },
+  {
+   "description": "Set automatically on insert: max(version) for this procedure_id, plus one. Immutable after insert -- this row IS that version (I6).",
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_gen1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nTesting\nActive\nDisabled\nArchived"
+  },
+  {
+   "default": "Draft",
+   "description": "D12 locking tier. System: admin-only, shipped templates. Compiled: nobody hand-edits, admin activates. Draft: author edits.",
+   "fieldname": "tier",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Tier",
+   "options": "System\nCompiled\nDraft"
+  },
+  {
+   "default": "1.0.0",
+   "description": "Graph IR schema_version (spec/graph-ir.md section 2), not this DocType's own change history.",
+   "fieldname": "schema_version",
+   "fieldtype": "Data",
+   "label": "Schema Version",
+   "read_only": 1
+  },
+  {
+   "description": "sha256 hex digest over the canonical form of definition_json (spec/graph-ir.md section 7). Identifies content; never recomputed or edited after insert.",
+   "fieldname": "fingerprint",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Fingerprint",
+   "length": 64,
+   "read_only": 1
+  },
+  {
+   "fieldname": "definition_tab",
+   "fieldtype": "Tab Break",
+   "label": "Definition"
+  },
+  {
+   "description": "The full graph document (spec/graph-ir.md section 2), profile=\"procedure\". Immutable after insert -- a content change always produces a new version row (I6), never an update to this one.",
+   "fieldname": "definition_json",
+   "fieldtype": "JSON",
+   "label": "Definition JSON",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contract_section",
+   "fieldtype": "Section Break",
+   "label": "Contract (denormalized from definition_json.contract)"
+  },
+  {
+   "fieldname": "input_schema",
+   "fieldtype": "JSON",
+   "label": "Input Schema",
+   "read_only": 1
+  },
+  {
+   "fieldname": "output_schema",
+   "fieldtype": "JSON",
+   "label": "Output Schema",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_contract1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "definition_json.contract.applies_when -- the predicate list evaluated before node 0.",
+   "fieldname": "applicability",
+   "fieldtype": "JSON",
+   "label": "Applicability",
+   "read_only": 1
+  },
+  {
+   "description": "definition_json.contract.permission_envelope -- compiled READ/WRITE/HTTP/CODE ceiling (I1: still intersected with user/agent/tool/profile at runtime).",
+   "fieldname": "permission_envelope",
+   "fieldtype": "JSON",
+   "label": "Permission Envelope",
+   "read_only": 1
+  },
+  {
+   "fieldname": "flags_section",
+   "fieldtype": "Section Break",
+   "label": "Flags"
+  },
+  {
+   "default": "0",
+   "description": "Derived: not contains_writes.",
+   "fieldname": "is_read_only",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Read Only",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Derived: permission_envelope.write is non-empty. I8: a write procedure is never auto-activated.",
+   "fieldname": "contains_writes",
+   "fieldtype": "Check",
+   "label": "Contains Writes",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Derived: permission_envelope.code is not \"none\"/empty.",
+   "fieldname": "contains_code",
+   "fieldtype": "Check",
+   "label": "Contains Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "provenance_tab",
+   "fieldtype": "Tab Break",
+   "label": "Provenance"
+  },
+  {
+   "description": "Free-form record of how this version came to exist (e.g. mined-from-runs metadata, compiler version, author notes). Out of scope: the compiler itself (T-02/T-20 only define the field).",
+   "fieldname": "provenance",
+   "fieldtype": "JSON",
+   "label": "Provenance"
+  },
+  {
+   "fieldname": "created_from_agent",
+   "fieldtype": "Link",
+   "label": "Created From Agent",
+   "options": "Agent"
+  },
+  {
+   "description": "List of Agent Run names this version was mined/compiled from, if applicable.",
+   "fieldname": "created_from_runs",
+   "fieldtype": "JSON",
+   "label": "Created From Runs"
+  },
+  {
+   "description": "0-1 confidence score from the compiler/promotion process (T-50 validation harness reads/writes this in later waves).",
+   "fieldname": "confidence",
+   "fieldtype": "Float",
+   "label": "Confidence"
+  },
+  {
+   "fieldname": "settings_tab",
+   "fieldtype": "Tab Break",
+   "label": "Settings"
+  },
+  {
+   "default": "0",
+   "description": "Derived from tier (System/Compiled => 1, Draft => 0) at validate time. Drives huf.ai.system_records locking -- never set directly.",
+   "fieldname": "is_system",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is System",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_set1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "updated_by",
+   "fieldtype": "Link",
+   "label": "Updated By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "updated_at",
+   "fieldtype": "Datetime",
+   "label": "Updated At",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Procedure",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
