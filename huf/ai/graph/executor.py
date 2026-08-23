@@ -521,6 +521,17 @@ class Router:
 				raise RoutingError(f"Node '{node.id}' of type '{node.type}' did not resolve a successor")
 			return next_id
 		if self._default_resolver is None:
+			# Fail closed by default (I7). Without this, a caller that supplies no resolver would
+			# follow a FAILED node's ``next`` pointer exactly as if it had succeeded, so `validate`
+			# would not be a gate at all. Callers wanting different failure semantics -- Flow routes
+			# on_failure edges, for instance -- supply their own resolver.
+			if outcome.status == "failed":
+				on_error = node.raw.get("on_error")
+				if on_error:
+					return on_error
+				raise RoutingError(
+					f"Node '{node.id}' of type '{node.type}' failed and declares no on_error successor"
+				)
 			return node.raw.get("next")
 		return self._default_resolver(node, outcome, context)
 
