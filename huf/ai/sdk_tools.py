@@ -435,6 +435,16 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     "reference_name": {
                         "type": "string",
                         "description": "The name/ID of the referenced record"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "For Agent Context Artifact: line offset to start reading the "
+                        "payload from (0-based). Ignored for other reference types."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "For Agent Context Artifact: maximum number of lines of the "
+                        "payload to return. Ignored for other reference types."
                     }
                 },
                 "required": ["reference_doctype", "reference_name"]
@@ -641,12 +651,25 @@ ALLOWED_RESULT_CONTEXT_DOCTYPES = frozenset({
 })
 
 
-def handle_get_result_context(reference_doctype: str, reference_name: str, **kwargs):
+def handle_get_result_context(
+    reference_doctype: str,
+    reference_name: str,
+    offset: int = None,
+    limit: int = None,
+    **kwargs,
+):
     """
     Get the full result context of an out-of-band message reference by its handle.
 
     Only explicitly allow-listed DocTypes are exposed, and the caller must have
-    Frappe read permission on the requested document.
+    Frappe read permission on the requested document. Permission is re-checked
+    here against the *reader* on every call (I1, I2) -- a handle stored in an
+    earlier message is never itself authority, only a pointer.
+
+    ``offset``/``limit`` (line-based) bound how much of an ``Agent Context
+    Artifact``'s payload is read back in a single call -- see
+    ``huf.ai.context_artifacts.read_context_artifact_payload``. They are
+    ignored for ``Agent Tool Call``.
     """
     try:
         if not reference_doctype or not reference_name:
@@ -679,13 +702,23 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
                 "error_message": doc.error_message
             }
 
-        # If it's Agent Context Artifact, retrieve payload
+        # If it's Agent Context Artifact, retrieve payload. Fix for F-12: every
+        # artifact that exists in production is artifact_type="File" with an
+        # empty payload_json, so returning payload_json alone (the old
+        # behaviour) returned nothing -- drill-down had never worked end to
+        # end. read_context_artifact_payload reads payload_file when present,
+        # bounded by offset/limit so a large artifact still can't re-enter
+        # context unbounded (I7).
         if reference_doctype == "Agent Context Artifact":
+            from huf.ai.context_artifacts import read_context_artifact_payload
+
+            payload = read_context_artifact_payload(doc, offset=offset, limit=limit)
             return {
                 "success": True,
                 "artifact_type": doc.artifact_type,
                 "summary": doc.summary,
-                "payload_json": doc.payload_json,
+                "payload_file": doc.payload_file,
+                "payload": payload,
                 "reference_doctype": doc.reference_doctype,
                 "reference_name": doc.reference_name
             }

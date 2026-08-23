@@ -165,6 +165,7 @@ permission_query_conditions = {
     "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
     "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
     "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
+    "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
 }
 #
 # has_permission = {
