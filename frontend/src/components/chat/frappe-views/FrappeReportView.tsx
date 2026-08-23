@@ -22,9 +22,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowUpDown, Filter } from 'lucide-react';
+import { ArrowUpDown, Filter, ExternalLink } from 'lucide-react';
 import type { FrappeFieldMeta, FrappeViewPayload } from '@/types/artifact.types';
 import { formatFrappeCellValue, isDisplayField } from './frappeFieldFormat';
+import { deskListUrl } from './frappeDeskUrl';
 
 export interface FrappeReportViewProps {
 	payload: FrappeViewPayload;
@@ -94,6 +95,28 @@ export function FrappeReportView({ payload, onFilterChange }: FrappeReportViewPr
 
 	return (
 		<div className="space-y-3">
+			<div className="flex justify-end">
+				{/* TODO(frappe-views): this artifact mode is not backed by a real
+				 * Frappe Report/Query Report entity - handle_render_frappe_view's
+				 * mode="report" branch is just handle_list_records against
+				 * payload.doctype with different pagination defaults, and the
+				 * payload carries no report name to route /app/query-report/<name>
+				 * to. erpnext_reports.py's handle_list_reports (a separate tool)
+				 * returns report names but no report_type, and isn't wired into
+				 * this payload either, so we can't disambiguate Query Report vs.
+				 * Report Builder here. Linking to the underlying doctype's Desk
+				 * list view instead, same as list mode - see PLAN.md's Phase 4
+				 * finding for the full writeup. */}
+				<a
+					href={deskListUrl(payload.doctype)}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1 text-xs text-steel hover:text-ink"
+				>
+					Open in Desk
+					<ExternalLink className="h-3 w-3" />
+				</a>
+			</div>
 			<div className="rounded-lg border border-line bg-panel p-3">
 				<div className="flex items-center gap-1.5 mb-2 text-xs text-steel">
 					<Filter className="h-3.5 w-3.5" />
