@@ -29,6 +29,7 @@ from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableE
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
 
 class _LazyLogger:
@@ -1700,6 +1701,7 @@ def _execute_agent_run(
             compute_segment_tokens,
             compute_prefix_breakpoints,
             compute_tools_breakdown,
+            reconcile_composition,
         )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
@@ -1965,13 +1967,55 @@ def _execute_agent_run(
                     f"Failed to update conversation metrics: {str(e)}"
                 )
 
+            # usage_dict carries the richer provider-usage shape (see
+            # providers/litellm.py _finalize_usage_totals); fields absent from
+            # it (older provider shapes, or a usage payload that failed to
+            # normalise) are written as None, never coerced to 0 — a 0 would
+            # silently distort every downstream average.
+            usage_payload = usage_dict or {}
+            billed_input_tokens = usage_payload.get("billed_input_tokens")
+            if billed_input_tokens is None:
+                billed_input_tokens = input_tokens
+            peak_context_tokens = usage_payload.get("peak_context_tokens")
+            round_count = usage_payload.get("round_count")
+            tool_exchange_tokens = usage_payload.get("tool_exchange_tokens")
+            round_prompt_tokens = usage_payload.get("round_prompt_tokens") or []
+            # round_prompt_tokens[0] is the round-1, pre-call prompt size —
+            # the same measurement point as segment_tokens. Comparing against
+            # the run's summed billed_input_tokens instead would flag a
+            # divergence on every multi-round run and make the warning useless.
+            round1_prompt_tokens = round_prompt_tokens[0] if round_prompt_tokens else None
+            composition_reconciliation = reconcile_composition(
+                segment_tokens, tool_exchange_tokens, round1_prompt_tokens
+            )
+
+            # Snapshotted at write time so later AI Model edits cannot rewrite
+            # history for this run.
+            provider_brand = (
+                frappe.get_cached_value("AI Provider", resolved_provider, "provider_brand")
+                if resolved_provider
+                else None
+            )
+            model_context_window = resolve_model_context_window(
+                resolved_model, resolved_provider, provider_brand
+            )
+
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "cached_tokens": cached_tokens,
+                "cache_creation_tokens": cache_creation_tokens,
                 "cost": cost,
+                "billed_input_tokens": billed_input_tokens,
+                "peak_context_tokens": peak_context_tokens,
+                "total_tokens": total_tokens,
+                "cache_skipped_unsupported_model": 1 if cache_skipped_unsupported_model else 0,
+                "round_count": round_count,
+                "model_context_window": model_context_window,
+                "provider_path": getattr(result, "provider_path", None),
+                "execution_mode": "sync",
                 "usage_snapshot": json.dumps({
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
                     "cache_read_tokens": cached_tokens if usage else None,
@@ -1982,6 +2026,12 @@ def _execute_agent_run(
                     "segment_tokens": segment_tokens,
                     "tools_breakdown": tools_breakdown,
                     "prefix_breakpoints": prefix_breakpoints,
+                    "billed_input_tokens": billed_input_tokens,
+                    "peak_context_tokens": peak_context_tokens,
+                    "round_count": round_count,
+                    "tool_exchange_tokens": tool_exchange_tokens,
+                    "round_prompt_tokens": round_prompt_tokens,
+                    "composition_reconciliation": composition_reconciliation,
                 }),
                 "cost_source": "provider_reported" if getattr(result, "cost", None) is not None else "unknown",
                 "cost_calculation_status": "calculated" if cost is not None else "unavailable",
@@ -2859,6 +2909,7 @@ async def run_agent_stream(
             compute_segment_tokens,
             compute_prefix_breakpoints,
             compute_tools_breakdown,
+            reconcile_composition,
         )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
@@ -2967,6 +3018,7 @@ async def run_agent_stream(
                     cache_creation_tokens = 0
                     cache_skipped_unsupported_model = False
                     total_tokens = 0
+                    usage_dict = None
 
                     if usage:
 
@@ -3058,6 +3110,41 @@ async def run_agent_stream(
                     r_res_stream = context.get("reasoning_resolution") if context else None
                     r_snap_stream = json.dumps(r_res_stream.to_dict()) if r_res_stream else None
 
+                    # usage_dict carries the richer provider-usage shape (see
+                    # providers/litellm.py _finalize_usage_totals); fields absent
+                    # from it (no usage on this chunk, an older provider shape,
+                    # or a payload that failed to normalise) are written as
+                    # None, never coerced to 0 — a 0 would silently distort
+                    # every downstream average.
+                    usage_payload = usage_dict or {}
+                    billed_input_tokens = usage_payload.get("billed_input_tokens")
+                    if billed_input_tokens is None:
+                        billed_input_tokens = input_tokens
+                    peak_context_tokens = usage_payload.get("peak_context_tokens")
+                    round_count = usage_payload.get("round_count")
+                    tool_exchange_tokens = usage_payload.get("tool_exchange_tokens")
+                    round_prompt_tokens = usage_payload.get("round_prompt_tokens") or []
+                    # round_prompt_tokens[0] is the round-1, pre-call prompt size —
+                    # the same measurement point as segment_tokens. Comparing
+                    # against the run's summed billed_input_tokens instead would
+                    # flag a divergence on every multi-round run and make the
+                    # warning useless.
+                    round1_prompt_tokens = round_prompt_tokens[0] if round_prompt_tokens else None
+                    composition_reconciliation = reconcile_composition(
+                        segment_tokens, tool_exchange_tokens, round1_prompt_tokens
+                    )
+
+                    # Snapshotted at write time so later AI Model edits cannot
+                    # rewrite history for this run.
+                    provider_brand = (
+                        frappe.get_cached_value("AI Provider", resolved_provider, "provider_brand")
+                        if resolved_provider
+                        else None
+                    )
+                    model_context_window = resolve_model_context_window(
+                        resolved_model, resolved_provider, provider_brand
+                    )
+
                     stream_run_update = {
                         "status": "Success",
                         "response": full_response,
@@ -3067,9 +3154,18 @@ async def run_agent_stream(
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
                         "cached_tokens": cached_tokens,
+                        "cache_creation_tokens": cache_creation_tokens,
                         "cost": cost,
+                        "billed_input_tokens": billed_input_tokens,
+                        "peak_context_tokens": peak_context_tokens,
+                        "total_tokens": total_tokens,
+                        "cache_skipped_unsupported_model": 1 if cache_skipped_unsupported_model else 0,
+                        "round_count": round_count,
+                        "model_context_window": model_context_window,
+                        "provider_path": "litellm",
+                        "execution_mode": "stream",
                         "usage_snapshot": json.dumps({
-                            "schema_version": 1,
+                            "schema_version": 2,
                             "input_tokens": input_tokens,
                             "output_tokens": output_tokens,
                             "cache_read_tokens": cached_tokens if usage else None,
@@ -3080,6 +3176,12 @@ async def run_agent_stream(
                             "segment_tokens": segment_tokens,
                             "tools_breakdown": tools_breakdown,
                             "prefix_breakpoints": prefix_breakpoints,
+                            "billed_input_tokens": billed_input_tokens,
+                            "peak_context_tokens": peak_context_tokens,
+                            "round_count": round_count,
+                            "tool_exchange_tokens": tool_exchange_tokens,
+                            "round_prompt_tokens": round_prompt_tokens,
+                            "composition_reconciliation": composition_reconciliation,
                         }),
                         "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
                         "cost_calculation_status": "calculated" if cost is not None else "unavailable",
