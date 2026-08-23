@@ -1,4 +1,3 @@
-import type { Filter } from 'frappe-js-sdk/lib/db/types';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
@@ -15,17 +14,6 @@ export interface DashboardFlowItem {
   runCount: number;
   lastRunAt: string | null;
 }
-
-/**
- * Agent Run document for metrics calculation
- */
-export interface AgentRunMetricsDoc {
-  status?: string;
-  start_time?: string | null;
-  end_time?: string | null;
-  cost?: number | null;
-}
-
 
 /**
  * Get date filters for last 7 days
@@ -63,28 +51,6 @@ export async function getAgentRunsCountLast7Days(): Promise<number> {
   } catch (error) {
     handleFrappeError(error, 'Error fetching agent runs count for last 7 days');
     return 0;
-  }
-}
-
-/**
- * Fetch all agent runs for metrics calculation (last 7 days)
- * Returns runs with status, start_time, end_time, and total_cost fields
- */
-export async function getAgentRunsForMetrics(): Promise<AgentRunMetricsDoc[]> {
-  try {
-    const filters = getLast7DaysFilters();
-    
-    // Fetch all runs (use a very high limit or fetch in batches)
-    const runs = await db.getDocList(doctype['Agent Run'], {
-      fields: ['status', 'start_time', 'end_time', 'cost'],
-      filters: filters as Filter<Record<string, unknown>>[],
-      limit: 10000, // High limit to get all runs
-      orderBy: { field: 'creation', order: 'desc' },
-    });
-    
-    return runs as AgentRunMetricsDoc[];
-  } catch (error) {
-    handleFrappeError(error, 'Error fetching agent runs for metrics');
   }
 }
 
