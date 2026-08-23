@@ -36,6 +36,11 @@ class TestEnsureErpnextDemoMasters(FrappeTestCase):
 	second time -- every record is guarded by a frappe.db.exists check."""
 
 	def test_idempotent_on_second_call(self):
+		# frappe.flags.currently_saving is normally initialised per web request;
+		# outside one (as in a bench test run) it can be None depending on test
+		# ordering, and Document.insert() unconditionally appends to it.
+		if getattr(frappe.flags, "currently_saving", None) is None:
+			frappe.flags.currently_saving = []
 		first = ensure_erpnext_demo_masters()
 		self.assertIsNone(first["skipped_reason"])
 		self.assertTrue(len(first["created"]) > 0 or len(first["already_present"]) > 0)
