@@ -1841,6 +1841,66 @@ DOCUMENT_ARTIFACT_TOOLS = [
 	},
 ]
 
+LAZY_DISCOVERY_TOOLS = [
+	{
+		"tool_name": "list_tool_groups",
+		"description": (
+			"List the groups your available tools are organized into (by service), with a tool "
+			"count and a one-line summary for each group. Use this first when you have many tools "
+			"and are not sure which ones are relevant yet - then call describe_tool_group on a "
+			"promising group to see its individual tools, and load_tools to actually make the ones "
+			"you need callable. If you already know roughly what you're looking for, call "
+			"search_tools instead and skip straight to load_tools."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_list_tool_groups",
+		"category": "Tool Discovery",
+		"parameters": [],
+	},
+	{
+		"tool_name": "search_tools",
+		"description": (
+			"Search for tools by keyword or description across everything you're permitted to use. "
+			"Use this when you know roughly what you want to do (e.g. 'send an email', 'create an "
+			"invoice') but don't know the exact tool name. Returns matching tools with their service "
+			"and description - call load_tools with the tool_name(s) you want before using them."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_search_tools",
+		"category": "Tool Discovery",
+		"parameters": [
+			_p("query", required=True, description="Keywords describing the action or capability you're looking for"),
+			_p("limit", type="integer", description="Max results to return (default 10)"),
+		],
+	},
+	{
+		"tool_name": "describe_tool_group",
+		"description": (
+			"List every tool in a specific service group (as returned by list_tool_groups), with "
+			"each tool's full description. Use this after list_tool_groups to see the individual "
+			"tools within a group you're interested in, then call load_tools with the tool_name(s) "
+			"you need."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_describe_tool_group",
+		"category": "Tool Discovery",
+		"parameters": [
+			_p("service", required=True, description="The service/group name, as returned by list_tool_groups"),
+		],
+	},
+	{
+		"tool_name": "load_tools",
+		"description": (
+			"Make the named tools callable for the rest of this conversation. Call this after "
+			"list_tool_groups + describe_tool_group, or after search_tools, once you know exactly "
+			"which tool(s) you need. Returns each accepted tool's description and parameters so you "
+			"can call it immediately, plus any requested names you're not permitted to use."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_load_tools",
+		"category": "Tool Discovery",
+		"parameters": [
+			_p("tool_names", type="json", required=True, description="List of tool_name strings to load"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -1855,6 +1915,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS
 	+ DOCUMENT_ARTIFACT_TOOLS
+	+ LAZY_DISCOVERY_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

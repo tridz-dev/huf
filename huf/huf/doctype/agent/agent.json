@@ -103,6 +103,7 @@
   "agent_behaviors_section",
   "autonaming_of_conversation_title",
   "enable_conversation_data",
+  "enable_lazy_tools",
   "column_break_fl05",
   "conversation_lifecycle_section",
   "conversation_retention_policy",
@@ -767,6 +768,13 @@
    "fieldname": "enable_conversation_data",
    "fieldtype": "Check",
    "label": "Allow Conversation Data Management"
+  },
+  {
+   "default": "0",
+   "description": "Enable lazy discovery of tools to reduce token usage by loading tools on-demand instead of eager loading.",
+   "fieldname": "enable_lazy_tools",
+   "fieldtype": "Check",
+   "label": "Enable Lazy Tool Discovery"
   },
   {
    "default": "1",
