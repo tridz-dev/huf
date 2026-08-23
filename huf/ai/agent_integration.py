@@ -93,8 +93,9 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 
 class AgentManager:
     """Manages the creation and execution of agents."""
-    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None):
+    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None):
         self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
+        self.conversation_id = conversation_id
         (
             self.effective_provider,
             self.effective_model,
@@ -119,7 +120,12 @@ class AgentManager:
 
         try:
             from huf.ai.sdk_tools import create_agent_tools
-            agent_tools = create_agent_tools(self.agent_doc, model_name=self.effective_model)
+            agent_tools = create_agent_tools(
+                self.agent_doc,
+                model_name=self.effective_model,
+                conversation_id=self.conversation_id,
+                agent_name=self.agent_doc.name,
+            )
             if agent_tools:
                 self.tools.extend(agent_tools)
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
@@ -1487,6 +1493,7 @@ def _execute_agent_run(
             agent_name,
             provider_override=resolved_provider,
             model_override=resolved_model,
+            conversation_id=conversation_id,
         )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
@@ -2702,6 +2709,7 @@ async def run_agent_stream(
             agent_name,
             provider_override=resolved_provider,
             model_override=resolved_model,
+            conversation_id=conversation.name,
         )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
