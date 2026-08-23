@@ -1,5 +1,5 @@
 import type { Filter } from 'frappe-js-sdk/lib/db/types';
-import { db } from '@/lib/frappe-sdk';
+import { call, db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import type { PaginationParams, PaginatedResponse } from '@/types/pagination';
@@ -144,5 +144,44 @@ export async function getAgentProcedureVersionHistory(
   } catch (error) {
     handleFrappeError(error, `Error fetching version history for ${procedureId}`);
     return [];
+  }
+}
+
+export interface ProcedureValidationRunResult {
+  run_name: string;
+  status: string;
+  passed: boolean;
+  error?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface ProcedureValidationResult {
+  procedure_name: string;
+  is_read_only: boolean;
+  contains_writes: boolean;
+  runs: ProcedureValidationRunResult[];
+  promotion: {
+    approved: boolean;
+    reasons: string[];
+  };
+  diagnostics: string[];
+}
+
+/** Runs the T-50 validation harness (`huf.ai.graph.validation_harness`) against this
+ * Procedure's real run history and returns its promotion decision. See
+ * `huf.ai.procedure_validation_api.run_validation_harness` for what is and is not measured. */
+export async function runProcedureValidation(
+  procedureName: string,
+  runs?: number
+): Promise<ProcedureValidationResult | undefined> {
+  try {
+    const result = await call.get('huf.ai.procedure_validation_api.run_validation_harness', {
+      procedure_name: procedureName,
+      ...(runs ? { runs } : {}),
+    });
+    return (result?.message ?? result) as ProcedureValidationResult;
+  } catch (error) {
+    handleFrappeError(error, `Error running validation harness for ${procedureName}`);
   }
 }

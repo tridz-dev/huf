@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, PlayCircle, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,83 @@ import {
   getAgentProcedure,
   getAgentProcedureVersionHistory,
   getSourceFlowId,
+  runProcedureValidation,
   type AgentProcedureDoc,
+  type ProcedureValidationResult,
 } from '@/services/agentProcedureApi';
 import { formatTimeAgo } from '@/utils/time';
 
-export { AgentProcedureDetailPage };
+export { AgentProcedureDetailPage, ProcedureValidationResultCard };
 export default AgentProcedureDetailPage;
+
+/** Standalone display of one `run_validation_harness` result. Kept separate from
+ * `AgentProcedureDetailPage` so any other surface (e.g. a future test-run drawer or a
+ * standalone "Test" flow) can render the same result without pulling in the whole detail
+ * page. */
+function ProcedureValidationResultCard({ result }: { result: ProcedureValidationResult }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {result.promotion.approved ? (
+            <CheckCircle2 className="w-4 h-4 text-green-600" />
+          ) : (
+            <XCircle className="w-4 h-4 text-amber-600" />
+          )}
+          Validation harness result
+        </CardTitle>
+        <CardDescription>
+          {result.promotion.approved ? 'Promotion approved' : 'Not approved for promotion'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        {result.promotion.reasons.length > 0 && (
+          <div>
+            <div className="text-steel mb-1">Reasons</div>
+            <ul className="list-disc pl-5 space-y-1">
+              {result.promotion.reasons.map((reason, i) => (
+                <li key={i}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div>
+          <div className="text-steel mb-1">Runs evaluated ({result.runs.length})</div>
+          {result.runs.length === 0 ? (
+            <div className="text-steel-soft">No terminal runs found for this procedure.</div>
+          ) : (
+            <div className="space-y-1">
+              {result.runs.map((run) => (
+                <div key={run.run_name} className="flex items-center gap-2">
+                  {run.passed ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                  ) : (
+                    <XCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  )}
+                  <span className="font-mono">{run.run_name}</span>
+                  <Badge variant="outline">{run.status}</Badge>
+                  {run.error && <span className="text-steel-soft truncate">{run.error}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {result.diagnostics.length > 0 && (
+          <div>
+            <div className="text-steel mb-1">Diagnostics</div>
+            <ul className="list-disc pl-5 space-y-1 text-steel-soft">
+              {result.diagnostics.map((note, i) => (
+                <li key={i}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function formatJson(raw?: string): string {
   if (!raw) return '';
@@ -45,6 +116,8 @@ function AgentProcedureDetailPage() {
   const [procedure, setProcedure] = useState<AgentProcedureDoc | null>(null);
   const [versions, setVersions] = useState<AgentProcedureDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [testRunning, setTestRunning] = useState(false);
+  const [testResult, setTestResult] = useState<ProcedureValidationResult | null>(null);
 
   useEffect(() => {
     if (!procedureId) {
@@ -97,6 +170,17 @@ function AgentProcedureDetailPage() {
   const sourceFlowId = getSourceFlowId(procedure);
   const validation = validationStatus(procedure);
 
+  async function handleRunTest() {
+    if (!procedure) return;
+    setTestRunning(true);
+    try {
+      const result = await runProcedureValidation(procedure.name);
+      setTestResult(result ?? null);
+    } finally {
+      setTestRunning(false);
+    }
+  }
+
   return (
     <div className="h-full overflow-auto">
       <div className="p-6 space-y-6 max-w-4xl mx-auto">
@@ -115,6 +199,14 @@ function AgentProcedureDetailPage() {
               </CardTitle>
               <CardDescription className="mt-1">{procedure.name}</CardDescription>
             </div>
+            <Button variant="outline" onClick={handleRunTest} disabled={testRunning}>
+              {testRunning ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <PlayCircle className="w-4 h-4 mr-2" />
+              )}
+              Test
+            </Button>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2 text-sm">
             <div>
@@ -176,6 +268,8 @@ function AgentProcedureDetailPage() {
             <CardDescription>{validation.label}</CardDescription>
           </CardHeader>
         </Card>
+
+        {testResult && <ProcedureValidationResultCard result={testResult} />}
 
         <Card>
           <CardHeader>
