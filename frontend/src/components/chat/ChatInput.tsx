@@ -951,17 +951,29 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         : 'Call ended';
 
         return (
-            <div className="flex-none px-[26px] pb-4">
-                <div className="flex items-center gap-2.5 rounded-chat-bubble border border-input bg-panel px-[13px] py-[11px]">
-                    <span
-                        className={cn(
-                            "size-2 shrink-0 rounded-full",
-                            voiceCall.status === 'live' && !voiceCall.isMuted && "bg-destructive animate-pulse",
-                            voiceCall.status === 'live' && voiceCall.isMuted && "bg-steel-soft",
-                            voiceCall.status === 'connecting' && "bg-steel-soft animate-pulse",
-                            (voiceCall.status === 'error' || voiceCall.status === 'ended') && "bg-steel-soft"
+            <div className="flex-none px-[26px] pb-4 animate-drop motion-reduce:animate-none">
+                <div
+                    key={voiceCall.status}
+                    className="flex items-center gap-2.5 rounded-chat-bubble border border-input bg-panel px-[13px] py-[11px] transition-colors duration-300 animate-drop motion-reduce:animate-none"
+                >
+                    {/* Orb: glows/pulses while the agent's audio is live and unmuted,
+                        a subtler idle pulse while connecting, and a static muted/idle
+                        look otherwise — mirrors the loading-state visual language in
+                        MessageLoadingState.tsx (icon + shimmer) at a glance-able size. */}
+                    <span className="relative flex size-7 shrink-0 items-center justify-center">
+                        {voiceCall.status === 'live' && !voiceCall.isMuted && (
+                            <span className="absolute inset-0 rounded-full bg-destructive/40 animate-ping motion-reduce:animate-none" />
                         )}
-                    />
+                        <span
+                            className={cn(
+                                "relative rounded-full transition-all duration-300 ease-out",
+                                voiceCall.status === 'live' && !voiceCall.isMuted && "size-3.5 bg-destructive shadow-md",
+                                voiceCall.status === 'live' && voiceCall.isMuted && "size-2.5 bg-steel-soft opacity-70",
+                                voiceCall.status === 'connecting' && "size-2.5 bg-steel-soft animate-pulse motion-reduce:animate-none",
+                                (voiceCall.status === 'error' || voiceCall.status === 'ended') && "size-2 bg-steel-soft"
+                            )}
+                        />
+                    </span>
                     <span className="flex-1 text-[13px] text-ui-text truncate">{statusLabel}</span>
                     {voiceCall.status === 'live' && (
                         <button
@@ -1002,7 +1014,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     }
 
     return (
-        <div className="flex-none px-[26px] pb-4">
+        <div className="flex-none px-[26px] pb-4 animate-drop motion-reduce:animate-none">
             <form onSubmit={handleSubmit}>
                 <div className={cn(
                     "rounded-chat-bubble border border-input bg-panel",
