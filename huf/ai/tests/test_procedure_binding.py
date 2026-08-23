@@ -277,6 +277,9 @@ class TestInvokeBoundProcedure(unittest.TestCase):
 			return _Outcome()
 
 		fake_runtime.run_agent_procedure_run = fake_run_agent_procedure_run
+		# invoke_bound_procedure also imports ProcedureOutcome (added when the fallback
+		# protocol was wired in), so the stub module has to provide it or the import fails.
+		fake_runtime.ProcedureOutcome = _Outcome
 
 		with patch.object(procedure_binding, "frappe", fake_frappe), \
 			patch.dict(sys.modules, {"huf.ai.graph.procedure_runtime": fake_runtime}):
