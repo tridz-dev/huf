@@ -121,6 +121,34 @@ def compute_fingerprint(definition: dict) -> str:
 	return hashlib.sha256(canonical_json_bytes(definition)).hexdigest()
 
 
+class ProcedureTamperError(Exception):
+	"""Raised when a stored fingerprint does not match its stored definition."""
+
+
+def verify_fingerprint(definition: dict, stored_fingerprint: str, *, label: str = "procedure") -> None:
+	"""Fail closed if ``definition`` does not hash to ``stored_fingerprint``.
+
+	Version identity is structural -- the docname is ``procedure_id-vN``, so the primary key
+	makes a colliding version impossible to insert. But nothing at the database level stops
+	``frappe.db.set_value`` or raw SQL from rewriting ``definition_json`` in place on an already
+	Active row, and the Document-lifecycle guards do not run for either. That is the residual
+	hole in I6.
+
+	Recomputing the hash at load time closes it in the way that matters: tampering cannot be
+	prevented by a controller, but it can be made detectable and made to fail closed. Call this
+	wherever a stored definition is about to be trusted.
+	"""
+
+	if not stored_fingerprint:
+		return
+	actual = compute_fingerprint(definition)
+	if actual != stored_fingerprint:
+		raise ProcedureTamperError(
+			f"{label} definition does not match its recorded fingerprint "
+			f"(recorded {stored_fingerprint[:12]}..., actual {actual[:12]}...); refusing to execute"
+		)
+
+
 def extract_contract_fields(definition: dict) -> dict:
 	"""Pull the denormalized query-convenience fields out of ``definition['contract']``.
 

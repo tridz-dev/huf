@@ -834,6 +834,7 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	from huf.ai.procedure_lock import ProcedureRunLock
 
 	from huf.ai.graph.cache import get_cached_result, set_cached_result
+	from huf.ai.procedure_versioning import verify_fingerprint
 
 	run = frappe.get_doc("Agent Procedure Run", run_name)
 
@@ -842,6 +843,11 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 		graph = json.loads(graph)
 	if not isinstance(graph, dict):
 		frappe.throw(f"Agent Procedure Run {run_name} has no pinned definition to execute")
+
+	# I6: the pinned definition is trusted from here on, so prove it was not rewritten under us.
+	# Document guards do not run for frappe.db.set_value or raw SQL; recomputing the hash makes
+	# that tampering detectable and fails the run closed rather than executing an altered graph.
+	verify_fingerprint(graph, run.pinned_fingerprint, label=f"Agent Procedure Run {run_name}")
 
 	is_read_only = bool(frappe.db.get_value("Agent Procedure", run.procedure, "is_read_only"))
 	fingerprint_for_cache = run.pinned_fingerprint or _fingerprint(graph)
