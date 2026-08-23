@@ -97,10 +97,8 @@ export type FrappeViewMode = 'list' | 'form' | 'report';
  * artifacts. `data` is a record array for list/report mode and a single
  * record object for form mode - narrow on `mode` before using it.
  *
- * NOTE: unlike handle_list_records's raw JSON, handle_render_frappe_view does
- * NOT copy limit_start/limit_page_length into the payload for list/report
- * mode (only total_count) - see frappe_generic.py lines ~490-522. Views must
- * track pagination client-side rather than reading it off this payload.
+ * `limit_start`/`limit_page_length` are present for list/report mode only
+ * (mirrors handle_list_records's raw JSON); absent for form mode.
  */
 export interface FrappeViewPayload {
 	doctype: string;
