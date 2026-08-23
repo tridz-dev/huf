@@ -15,7 +15,12 @@
   "completed_at",
   "output_section",
   "output_json",
-  "error"
+  "error",
+  "idempotency_section",
+  "operation_key",
+  "idempotency_key",
+  "column_break_idem1",
+  "recovery_mode"
  ],
  "fields": [
   {
@@ -81,6 +86,35 @@
    "fieldname": "error",
    "fieldtype": "Small Text",
    "label": "Error"
+  },
+  {
+   "fieldname": "idempotency_section",
+   "fieldtype": "Section Break",
+   "label": "Idempotency (T-40, D5)"
+  },
+  {
+   "description": "Human-legible operation identity, e.g. '<procedure>:<node>:<target>'. Not run-scoped (D5) -- companion to idempotency_key, never used for dedup matching itself.",
+   "fieldname": "operation_key",
+   "fieldtype": "Data",
+   "label": "Operation Key"
+  },
+  {
+   "description": "Content-derived dedup key (D5): sha256(procedure version + procedure name + normalised inputs + target document identity). Not run-scoped -- the same key across two different Agent Procedure Runs is what proves cross-run idempotency, not just retry-within-a-run safety.",
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Idempotency Key"
+  },
+  {
+   "fieldname": "column_break_idem1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Declared in the graph (node.config.recovery), never inferred at runtime (GOAL.md 2.3): retry / resume / abort / compensate. Only set for write-classified tool.call steps.",
+   "fieldname": "recovery_mode",
+   "fieldtype": "Select",
+   "label": "Recovery Mode",
+   "options": "\nretry\nresume\nabort\ncompensate"
   }
  ],
  "index_web_pages_for_search": 1,

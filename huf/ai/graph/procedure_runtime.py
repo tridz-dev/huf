@@ -71,6 +71,12 @@ from huf.ai.graph.executor import (
 	RoutingMode,
 )
 from huf.ai.graph.expressions import evaluate_bool, parse_expression
+from huf.ai.graph.idempotency import (
+	DEDUP_WINDOW_SECONDS,
+	derive_operation_key,
+	release_idempotency_key,
+	reserve_idempotency_key,
+)
 from huf.ai.graph.scheduler import (
 	DEFAULT_MAX_GRAPH_CONCURRENCY,
 	DEFAULT_MAX_TOOL_CONCURRENCY,
@@ -84,6 +90,11 @@ from huf.ai.output_budget import OutputBudget, OutputBudgetExceeded, enforce_out
 
 __all__ = [
 	"PROCEDURE_NODE_TYPES",
+	"RECOVERY_ABORT",
+	"RECOVERY_COMPENSATE",
+	"RECOVERY_MODES",
+	"RECOVERY_RESUME",
+	"RECOVERY_RETRY",
 	"ProcedureExecutionError",
 	"ProcedureLimitExceeded",
 	"ProcedureOutcome",
@@ -101,6 +112,39 @@ __all__ = [
 # this module; there is also no handler registered for any of them here, so even a graph
 # that slipped past validation would fail with "Unknown node type", never silently execute.
 PROCEDURE_NODE_TYPES = ("tool.call", "transform", "condition", "foreach", "parallel", "validate", "output")
+
+# Matches huf.ai.graph.permissions._WRITE_PTYPES / huf.ai.graph.fallback._WRITE_PTYPES.
+# Duplicated here (not imported) to keep this module frappe-free and free of the
+# permissions/fallback import cycle -- see the ``classify_tool`` parameter docstring below.
+_WRITE_PTYPES = {"write", "create", "delete", "submit", "cancel"}
+
+# Recovery semantics a mutating tool.call node must declare (T-40, GOAL.md ss2.3). An LLM
+# never decides these after a failure -- they are read straight off ``node.config["recovery"]``,
+# which T-24's validator is expected to require for any write-classified tool.call node.
+#   retry      -- transient-fault-shaped failures may be retried once, inline, before the
+#                 node is considered failed (bounded: exactly one extra attempt, never a
+#                 loop). Safe only because the idempotency key makes a retried write a
+#                 no-op if the first attempt actually committed.
+#   resume     -- fail this node closed; the run as a whole is resumable by re-invoking the
+#                 Procedure (not by resuming a saved mid-node cursor -- see
+#                 procedure_runtime.py module docstring and benchmarks/benchmark-3-crm-
+#                 followup/expected-procedure.md "Checkpointing and recovery"): already-
+#                 completed steps are individually idempotent no-ops on replay.
+#   abort      -- fail this node closed, no retry, no implied resume guidance beyond the
+#                 normal fallback payload. The default when a node declares no recovery
+#                 mode at all is treated as abort for backward-compatible fail-closed
+#                 behaviour, but a write-classified node MUST declare one explicitly (see
+#                 _handle_tool_call) -- silent default-to-abort only applies to non-write
+#                 tool.call nodes, which never reach this check.
+#   compensate -- on failure, best-effort invoke ``node.config["on_compensate"]`` (a
+#                 tool_id + static args) before failing the node closed, and release this
+#                 node's idempotency reservation so a subsequent attempt is not blocked by
+#                 the window it just gave up on.
+RECOVERY_RETRY = "retry"
+RECOVERY_RESUME = "resume"
+RECOVERY_ABORT = "abort"
+RECOVERY_COMPENSATE = "compensate"
+RECOVERY_MODES = (RECOVERY_RETRY, RECOVERY_RESUME, RECOVERY_ABORT, RECOVERY_COMPENSATE)
 
 
 class ProcedureExecutionError(Exception):
@@ -288,27 +332,40 @@ class _VisitRecorder:
 	visit). Frappe-free -- ``on_visit`` is injected, never assumed.
 	"""
 
-	def __init__(self, on_visit: Callable[[NodeSpec, Outcome], None] | None = None):
+	# ``pairs``: (NodeSpec, Outcome) per visit -- used by T-30 to replay a branch worker's
+	# visits, in canonical order, into the run's real recorder (see huf.ai.graph.scheduler
+	# module docstring, "Threading model").
+	#
+	# ``last_started``: (node_id, node_type) of the most recent node_start -- distinct
+	# from visits[-1]: a handler that raises ProcedureLimitExceeded (e.g. an output node's
+	# budget check) never reaches node_end, so it never lands in visits at all.
+	# execute_procedure's outer except clause uses this to attribute the failure to the
+	# node that was actually executing, not the previous one that already completed
+	# successfully.
+	#
+	# ``on_start``: T-40 -- fired from node_start, BEFORE the node's handler (and any side
+	# effect it performs) runs, so a caller can persist a "step started" checkpoint ahead
+	# of the side effect (GOAL.md ss2.2).
+	def __init__(
+		self,
+		on_visit: Callable[[NodeSpec, Outcome], None] | None = None,
+		on_start: Callable[[NodeSpec], None] | None = None,
+	):
 		self.visits: list[tuple[str, str]] = []
 		self.pairs: list[tuple[NodeSpec, Outcome]] = []
-		"""``(NodeSpec, Outcome)`` per visit -- used by T-30 to replay a branch worker's
-		visits, in canonical order, into the run's real recorder (see
-		``huf.ai.graph.scheduler`` module docstring, "Threading model").
-		"""
 		self._on_visit = on_visit
+		self._on_start = on_start
 		self._starts: dict[str, float] = {}
 		self.last_started: tuple[str, str] | None = None
-		"""``(node_id, node_type)`` of the most recent ``node_start`` -- distinct from
-		``visits[-1]``: a handler that raises ``ProcedureLimitExceeded`` (e.g. an
-		``output`` node's budget check) never reaches ``node_end``, so it never lands in
-		``visits`` at all. :func:`execute_procedure`'s outer except clause uses this to
-		attribute the failure to the node that was actually executing, not the previous
-		one that already completed successfully.
-		"""
 
 	def node_start(self, node: NodeSpec) -> None:
 		self._starts[node.id] = time.monotonic()
 		self.last_started = (node.id, node.type)
+		if self._on_start is not None:
+			# T-40 checkpointing (GOAL.md ss2.2): "step started" is its own persisted
+			# checkpoint, distinct from and BEFORE "result persisted" (node_end/on_visit
+			# below) -- see run_agent_procedure_run's on_node_start for what gets written.
+			self._on_start(node)
 
 	def node_end(self, node: NodeSpec, outcome: Outcome) -> None:
 		self.visits.append((node.id, node.type))
@@ -336,6 +393,9 @@ class _Runner:
 		limits: Mapping[str, Any],
 		recorder: _VisitRecorder,
 		wall_clock_start: float,
+		classify_tool: Callable[[str], Any] | None = None,
+		procedure_name: str = "",
+		dedup_window_seconds: int = DEDUP_WINDOW_SECONDS,
 	):
 		self.version = version
 		self.tool_invoker = tool_invoker
@@ -346,6 +406,16 @@ class _Runner:
 		self.write_count = 0
 		self.tool_call_count = 0
 		self.tool_invocations: list[dict] = []
+		# -- T-40 idempotency / recovery ---------------------------------------------
+		# ``classify_tool`` is duck-typed: any callable returning an object with a
+		# ``.ptype`` attribute (huf.ai.graph.permissions.ToolPermission satisfies this;
+		# so does a hand-written test fake). Left None, every tool.call is treated as
+		# non-write -- this is the frappe-free core's default and keeps every existing
+		# read-only-graph test byte-for-byte unchanged (T-40 warning: never widen what
+		# counts as a write by inferring it, only by classification the caller supplies).
+		self.classify_tool = classify_tool
+		self.procedure_name = procedure_name
+		self.dedup_window_seconds = dedup_window_seconds
 
 		# -- T-30 concurrency bounds -------------------------------------------------
 		# One graph-wide semaphore for the whole run (shared by every parallel node,
@@ -435,11 +505,43 @@ class _Runner:
 
 	# -- node handlers ------------------------------------------------------
 
+	def _is_write_tool(self, tool_id: str) -> bool:
+		if self.classify_tool is None:
+			return False
+		try:
+			perm = self.classify_tool(tool_id)
+		except Exception:  # noqa: BLE001 -- unclassifiable is treated as a write, fail closed (mirrors fallback.py)
+			return True
+		ptype = getattr(perm, "ptype", None)
+		return bool(ptype in _WRITE_PTYPES)
+
+	def _invoke_tool_once(self, tool_id: str, args: dict) -> ToolInvocation:
+		tool_sem = self._tool_semaphore(tool_id)
+		tool_sem.acquire()
+		try:
+			return self.tool_invoker(tool_id, args)
+		finally:
+			tool_sem.release()
+
+	def _record_invocation(
+		self, node_id: str, tool_id: str, args: dict, invocation: ToolInvocation, **extra: Any
+	) -> None:
+		entry = {
+			"node_id": node_id,
+			"tool_id": tool_id,
+			"args": args,
+			"success": invocation.success,
+			"result": invocation.result,
+			"error": invocation.error,
+		}
+		entry.update(extra)
+		self.tool_invocations.append(entry)
+
 	def _handle_tool_call(self, node: NodeSpec, context: GraphContext, state: ExecutionState) -> Outcome:
 		self._check_wall_time()
 		resolved = context.resolve(node.config)
 		tool_id = resolved.get("tool_id")
-		args = resolved.get("input") or {}
+		args = dict(resolved.get("input") or {})
 		if not tool_id:
 			return Outcome.failed(f"tool.call node '{node.id}' has no tool_id after resolution")
 
@@ -447,41 +549,148 @@ class _Runner:
 		with self._counters_lock:
 			self.tool_call_count += 1
 
-		tool_sem = self._tool_semaphore(tool_id)
-		tool_sem.acquire()
+		is_write = self._is_write_tool(tool_id)
+
+		# -- T-40 idempotency: every write node carries operation_key + idempotency_key,
+		# content-derived, per D5 -- never inferred, never run-scoped (see idempotency.py).
+		idempotency_key = None
+		operation_key = None
+		recovery = None
+		reserved = False
+		if is_write:
+			idempotency_key = args.get("idempotency_key")
+			if not idempotency_key:
+				return Outcome.failed(
+					f"tool.call node '{node.id}' invokes write tool '{tool_id}' without an "
+					"idempotency_key (D5: every write node must carry one, content-derived -- "
+					"procedure version + procedure name + normalised inputs + target document "
+					"identity). Refusing to invoke."
+				)
+			recovery = node.config.get("recovery")
+			if recovery not in RECOVERY_MODES:
+				# I8/GOAL.md ss2.3: an LLM never decides transactional semantics after a
+				# failure -- so this module never guesses one either. A write node with no
+				# declared recovery mode is a graph-authoring defect, fail closed before the
+				# side effect ever fires (T-24's validator is expected to catch this earlier;
+				# this is defence in depth, mirroring the output-budget backstop above).
+				return Outcome.failed(
+					f"tool.call node '{node.id}' invokes write tool '{tool_id}' without a valid "
+					f"'recovery' mode in ({', '.join(RECOVERY_MODES)}) (GOAL.md ss2.3). Refusing "
+					"to invoke."
+				)
+			operation_key = args.get("operation_key") or derive_operation_key(
+				procedure_name=self.procedure_name, node_id=node.id, target_identity=str(idempotency_key)
+			)
+			reserved = reserve_idempotency_key(str(idempotency_key), window_seconds=self.dedup_window_seconds)
+			if not reserved:
+				# Another attempt (this run, a retried job, or a second invocation entirely --
+				# see idempotency.py) already holds this key within the dedup window. This
+				# node is a duplicate invocation, not a failure: report it as an idempotent
+				# no-op success rather than invoking the tool a second time or failing the run.
+				self._record_invocation(
+					node.id,
+					tool_id,
+					args,
+					ToolInvocation(tool_id=tool_id, args=args, success=True, result=None, error=None),
+					operation_key=operation_key,
+					idempotency_key=idempotency_key,
+					recovery=recovery,
+					duplicate=True,
+				)
+				return Outcome.succeeded({"duplicate": True, "idempotency_key": idempotency_key})
+
 		try:
-			invocation = self.tool_invoker(tool_id, args)
+			invocation = self._invoke_tool_once(tool_id, args)
 		except ProcedureLimitExceeded:
 			raise
 		except Exception as exc:  # noqa: BLE001 -- a denied/raising invoker fails this node, not the process
-			self.tool_invocations.append(
-				{
-					"node_id": node.id,
-					"tool_id": tool_id,
-					"args": args,
-					"success": False,
-					"result": None,
-					"error": f"tool.call '{tool_id}' raised: {exc}",
-				}
+			invocation = ToolInvocation(
+				tool_id=tool_id, args=args, success=False, result=None, error=f"tool.call '{tool_id}' raised: {exc}"
 			)
-			return Outcome.failed(f"tool.call '{tool_id}' raised: {exc}")
-		finally:
-			tool_sem.release()
 
-		self.tool_invocations.append(
-			{
-				"node_id": node.id,
-				"tool_id": tool_id,
-				"args": args,
-				"success": invocation.success,
-				"result": invocation.result,
-				"error": invocation.error,
-			}
+		if is_write and not invocation.success and recovery == RECOVERY_RETRY:
+			# Bounded: exactly one extra attempt, never a loop. Safe only because the
+			# reservation above already guarantees a genuinely-committed first attempt
+			# cannot be duplicated by this retry (the tool's own idempotency_key arg is the
+			# same value both times).
+			try:
+				invocation = self._invoke_tool_once(tool_id, args)
+			except ProcedureLimitExceeded:
+				raise
+			except Exception as exc:  # noqa: BLE001
+				invocation = ToolInvocation(
+					tool_id=tool_id,
+					args=args,
+					success=False,
+					result=None,
+					error=f"tool.call '{tool_id}' raised on retry: {exc}",
+				)
+
+		if is_write:
+			if not invocation.success and recovery == RECOVERY_COMPENSATE:
+				self._run_compensation(node, context, args)
+			# Release the reservation on EVERY path -- success, failure, or compensated --
+			# not just failure. The reservation's job is narrower than "block this key for
+			# the rest of the dedup window": it exists to close the race between two
+			# attempts that are truly CONCURRENT (both pass ``reserve``'s ``nx`` check
+			# before either has finished), which is the one gap the graph's own
+			# read-before-write (``existing_check`` in benchmark-3's shape) cannot close by
+			# itself. Holding it for the full window on a SUCCESSFUL write would also block
+			# every legitimate SEQUENTIAL replay within that window from ever reaching the
+			# tool again -- and a sequential replay is exactly what a checkpoint-resume or
+			# a duplicate-invocation-after-full-success needs to be able to do (the graph's
+			# own existing_check is what turns that replay into a correct idempotent no-op,
+			# but only if it is actually allowed to run). ``window_seconds`` (D5's
+			# proposed 24h) is therefore best understood as an orphan-reservation TTL, not
+			# a hold duration this module normally waits out: it only ever matters if a
+			# worker crashes between ``reserve`` and this release, leaving a stuck
+			# reservation that must still self-heal eventually rather than block that key
+			# forever.
+			release_idempotency_key(str(idempotency_key))
+
+		self._record_invocation(
+			node.id,
+			tool_id,
+			args,
+			invocation,
+			operation_key=operation_key,
+			idempotency_key=idempotency_key,
+			recovery=recovery,
 		)
 
 		if not invocation.success:
 			return Outcome.failed(invocation.error or f"tool.call '{tool_id}' failed")
 		return Outcome.succeeded(invocation.result)
+
+	def _run_compensation(self, node: NodeSpec, context: GraphContext, failed_args: dict) -> None:
+		"""Best-effort compensating action for a ``recovery: compensate`` node.
+
+		Never raises into the caller -- a compensation failure must not mask the original
+		failure it is trying to clean up after (I9-adjacent: this module must still return a
+		normal FAILED outcome, not an unhandled exception). ``node.config["on_compensate"]``
+		declares ``{"tool_id": ..., "input": {...}}``, resolved against the same context the
+		failed call used -- static, graph-declared, never inferred at runtime.
+		"""
+		compensate_cfg = node.config.get("on_compensate")
+		if not compensate_cfg:
+			return
+		try:
+			compensate_tool_id = compensate_cfg.get("tool_id")
+			compensate_args = dict(context.resolve(compensate_cfg.get("input") or {}))
+			if compensate_tool_id:
+				self.tool_invoker(compensate_tool_id, compensate_args)
+		except Exception as exc:  # noqa: BLE001 -- compensation is best-effort, never fatal
+			self.tool_invocations.append(
+				{
+					"node_id": node.id,
+					"tool_id": compensate_cfg.get("tool_id"),
+					"args": compensate_cfg.get("input") or {},
+					"success": False,
+					"result": None,
+					"error": f"compensation raised: {exc}",
+					"compensation_for": failed_args.get("idempotency_key"),
+				}
+			)
 
 	def _handle_transform(self, node: NodeSpec, context: GraphContext, state: ExecutionState) -> Outcome:
 		resolved_input = context.resolve(node.config.get("input") or {})
@@ -716,6 +925,10 @@ def execute_procedure(
 	tool_invoker: ToolInvoker,
 	run_id: str | None = None,
 	on_visit: Callable[[NodeSpec, Outcome], None] | None = None,
+	on_node_start: Callable[[NodeSpec], None] | None = None,
+	classify_tool: Callable[[str], Any] | None = None,
+	procedure_name: str = "",
+	dedup_window_seconds: int = DEDUP_WINDOW_SECONDS,
 ) -> ProcedureOutcome:
 	"""Execute a pinned Procedure graph to completion, frappe-free.
 
@@ -724,6 +937,17 @@ def execute_procedure(
 	authorization (I1) and ``Agent Tool Call`` telemetry (I5) build a ``tool_invoker`` that
 	provides them -- see :func:`run_agent_procedure_run` -- rather than this function
 	reaching for Frappe itself.
+
+	``on_node_start`` (T-40): fired before a node's handler runs, distinct from and earlier
+	than ``on_visit`` -- lets a caller persist a "step started" checkpoint (GOAL.md ss2.2)
+	ahead of any side effect the node performs, so a crash between the two leaves a durable
+	"this step was in flight" record rather than silence.
+
+	``classify_tool`` / ``procedure_name`` / ``dedup_window_seconds`` (T-40): the write-node
+	idempotency/recovery machinery in ``_Runner._handle_tool_call``. Left at their defaults
+	(``classify_tool=None``), every ``tool.call`` is treated as non-write and this function's
+	behaviour is byte-for-byte unchanged from before T-40 -- callers must opt in explicitly
+	by passing a real classifier (see :func:`run_agent_procedure_run`).
 	"""
 	graph = version.graph
 	contract = graph.get("contract") or {}
@@ -739,13 +963,16 @@ def execute_procedure(
 		if not evaluate_bool(parsed, context.reference_roots()):
 			return ProcedureOutcome(status=ProcedureOutcome.NOT_APPLICABLE)
 
-	recorder = _VisitRecorder(on_visit=on_visit)
+	recorder = _VisitRecorder(on_visit=on_visit, on_start=on_node_start)
 	runner = _Runner(
 		version,
 		tool_invoker=tool_invoker,
 		limits=limits,
 		recorder=recorder,
 		wall_clock_start=time.monotonic(),
+		classify_tool=classify_tool,
+		procedure_name=procedure_name,
+		dedup_window_seconds=dedup_window_seconds,
 	)
 
 	program = build_program(version)
@@ -808,6 +1035,28 @@ def execute_procedure(
 # ---------------------------------------------------------------------------
 
 
+def _pending_approval_name(tool_result: Any) -> str | None:
+	"""Detect the "Pending Approval" shape a tool returns instead of throwing (T-40).
+
+	Reuses the EXISTING approval mechanism (``huf.ai.tools.code_execution``'s
+	``Agent Execution Approval`` + Redis-parked payload, 24h TTL) rather than building a
+	parallel one -- see that module's ``run_python`` handler around lines 590-655, which
+	returns ``{"success": True, "status": "Pending Approval", "approval": <name>, ...}``
+	instead of executing when the profile's ``approval_mode`` is "Ask Every Time". A tool
+	invoked through a Procedure hits the exact same code path (``invoke_tool_sync`` calls
+	the same registered handler) and gets the exact same shape back -- this function is
+	the Procedure-runtime-side recognition of that shape, not a new approval concept.
+	"""
+	if isinstance(tool_result, dict) and tool_result.get("status") == "Pending Approval":
+		approval = tool_result.get("approval")
+		if approval:
+			return str(approval)
+	return None
+
+
+_APPROVAL_PENDING_PREFIX = "approval_pending:"
+
+
 def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutcome":
 	"""Advance one ``Agent Procedure Run`` to completion.
 
@@ -826,12 +1075,14 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	this function is the reader half of that contract.
 	"""
 	import frappe
+	from frappe.utils import now_datetime
 
 	from huf.ai import tool_invocation as _tool_invocation
 	from huf.ai.graph import permissions as _permissions
 	from huf.ai.graph.executor import fingerprint as _fingerprint
 	from huf.ai.graph.validator import validate_procedure_graph
 	from huf.ai.procedure_lock import ProcedureRunLock
+	from huf.ai.transaction import commit_if_background
 
 	from huf.ai.graph.cache import get_cached_result, set_cached_result
 
@@ -894,18 +1145,62 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 			)
 			ctx = _tool_invocation.RunContext(agent_run_id=run.agent_run, conversation_id=None)
 			result = _tool_invocation.invoke_tool_sync(tool_id, args, ctx=ctx, telemetry=True)
+			approval_name = _pending_approval_name(result.result) if result.success else None
+			if approval_name:
+				# T-40 approval passthrough (GOAL.md ss2.5): the underlying tool did NOT
+				# perform its side effect -- it parked behind ``Agent Execution Approval``
+				# and returned a "Pending Approval" acknowledgement instead. Reporting this
+				# tool.call node as a normal success would let the graph proceed as if the
+				# write happened (e.g. a downstream ``validate verify_*`` node would read
+				# stale/absent state); reporting it as a normal failure would lose the
+				# approval linkage. Encode it distinctly (see _APPROVAL_PENDING_PREFIX) so
+				# the status-mapping below can tell "blocked on a human" apart from "broke".
+				return ToolInvocation(
+					tool_id=tool_id,
+					args=args,
+					success=False,
+					result=result.result,
+					error=f"{_APPROVAL_PENDING_PREFIX}{approval_name}",
+				)
 			return ToolInvocation(
 				tool_id=tool_id, args=args, success=result.success, result=result.result, error=result.error
 			)
 
-		def on_visit(node: NodeSpec, outcome: Outcome) -> None:
+		def on_node_start(node: NodeSpec) -> None:
+			# T-40 checkpoint 1/2 (GOAL.md ss2.2 "step started"): persisted BEFORE the
+			# node's handler (and any side effect it performs) runs. A crash between this
+			# save and the matching on_visit save below leaves a durable "Running" row a
+			# resume/audit pass can see -- never silence.
 			row = run.append("steps", {})
 			row.node_id = node.id
 			row.node_type = node.type
-			row.status = "Failed" if outcome.status == "failed" else "Completed"
+			row.status = "Running"
 			row.attempt = 1
+			row.started_at = now_datetime()
+			run.save(ignore_permissions=True)
+			commit_if_background()
+
+		def on_visit(node: NodeSpec, outcome: Outcome) -> None:
+			# T-40 checkpoint 2/2 ("result persisted -> step completed"): find the Running
+			# row on_node_start just checkpointed for this node and complete it in place --
+			# never append a second row, or a resume reading ``run.steps`` would see two
+			# rows for one visit and miscount "already done".
+			row = None
+			for candidate in reversed(run.steps):
+				if candidate.node_id == node.id and candidate.status == "Running":
+					row = candidate
+					break
+			if row is None:
+				row = run.append("steps", {})
+				row.node_id = node.id
+				row.node_type = node.type
+				row.attempt = 1
+			row.status = "Failed" if outcome.status == "failed" else "Completed"
+			row.completed_at = now_datetime()
 			row.output_json = json.dumps(outcome.output, default=str) if outcome.output is not None else None
 			row.error = outcome.error
+			run.save(ignore_permissions=True)
+			commit_if_background()
 
 		input_payload = run.input_payload
 		if isinstance(input_payload, str):
@@ -913,11 +1208,34 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 
 		run.status = "Running"
 		run.save(ignore_permissions=True)
+		commit_if_background()
 
 		outcome = execute_procedure(
-			version, input_payload or {}, tool_invoker=tool_invoker, run_id=run.name, on_visit=on_visit
+			version,
+			input_payload or {},
+			tool_invoker=tool_invoker,
+			run_id=run.name,
+			on_visit=on_visit,
+			on_node_start=on_node_start,
+			classify_tool=_permissions.default_tool_classifier,
+			procedure_name=run.procedure_id or run.procedure,
 		)
 
+		# T-40 idempotency/recovery audit trail: backfill operation_key / idempotency_key /
+		# recovery_mode onto the step rows on_visit already checkpointed above. This pass
+		# is annotation only -- it never changes a row's status/output/error, which are
+		# already durable from the per-node checkpoint; it exists because that metadata is
+		# only known inside ``_Runner._handle_tool_call`` (via ``outcome.tool_invocations``,
+		# not the ``Outcome`` object ``on_visit`` receives).
+		invocations_by_node = {inv["node_id"]: inv for inv in outcome.tool_invocations if inv.get("idempotency_key")}
+		for row in run.steps:
+			inv = invocations_by_node.get(row.node_id)
+			if inv is not None:
+				row.operation_key = inv.get("operation_key")
+				row.idempotency_key = inv.get("idempotency_key")
+				row.recovery_mode = inv.get("recovery")
+
+		approval_name = None
 		if outcome.status == ProcedureOutcome.SUCCESS:
 			run.status = "Completed"
 			run.output_payload = json.dumps(outcome.output, default=str)
@@ -937,9 +1255,73 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 		elif outcome.status == ProcedureOutcome.NOT_APPLICABLE:
 			run.status = "Completed"
 			run.output_payload = json.dumps({"status": "not_applicable"})
+		elif outcome.error and outcome.error.startswith(_APPROVAL_PENDING_PREFIX):
+			# Approval passthrough (GOAL.md ss2.5, I8): a write behind "Ask Every Time" is
+			# NOT a failure -- it is this run correctly refusing to bypass the approval
+			# boundary. "Paused" (an existing Agent Procedure Run status) is the honest
+			# terminal state: nothing was skipped, nothing was faked as complete, and the
+			# run is resumable (re-invoke run_agent_procedure_run) once a human decides the
+			# Agent Execution Approval record -- the same resolution path
+			# huf.ai.tools.code_execution already implements, not a new one.
+			approval_name = outcome.error[len(_APPROVAL_PENDING_PREFIX) :]
+			run.status = "Paused"
+			run.error = json.dumps(
+				{
+					"error": "blocked on Agent Execution Approval -- not a failure",
+					"node_id": outcome.node_id,
+					"approval": approval_name,
+				}
+			)
 		else:
 			run.status = "Failed"
 			run.error = json.dumps({"error": outcome.error, "node_id": outcome.node_id})
 
+		# GOAL.md ss2.4 partial-failure state -- populated for both Paused and Failed
+		# terminal states so a caller (T-32's fallback builder, or a human resuming this
+		# run) never has to re-derive "what already happened" from the step table alone.
+		if run.status in ("Paused", "Failed"):
+			completed_steps, failed_step = _completed_steps_for_run(run, outcome)
+			run.completed_steps = json.dumps(completed_steps, default=str)
+			run.failed_step = failed_step
+			committed_writes = [
+				{"node_id": inv["node_id"], "tool_id": inv["tool_id"], "success": inv["success"]}
+				for inv in outcome.tool_invocations
+				if not inv.get("duplicate")
+			]
+			run.committed_writes = json.dumps(committed_writes, default=str)
+			run.intermediate_outputs = json.dumps(outcome.node_outputs, default=str)
+			if approval_name:
+				run.safe_recovery_actions = json.dumps(
+					[
+						f"Resolve Agent Execution Approval {approval_name} (approve or reject).",
+						"Re-invoke run_agent_procedure_run for this run once resolved -- steps already "
+						"completed are individually idempotent no-ops on replay, no manual cleanup needed.",
+					]
+				)
+			else:
+				run.safe_recovery_actions = json.dumps(
+					[
+						"Re-invoke run_agent_procedure_run for this run -- completed steps are "
+						"individually idempotent no-ops on replay (D5 content-derived idempotency_key).",
+					]
+				)
+
 		run.save(ignore_permissions=True)
+		commit_if_background()
 		return outcome
+
+
+def _completed_steps_for_run(run, outcome: "ProcedureOutcome") -> tuple[list[dict], str | None]:
+	"""Split ``run.steps`` (already checkpointed) into completed vs. the failed/pending step.
+
+	Reads the persisted step table rather than ``outcome.node_visits`` alone -- the step
+	table is what a resume actually sees on the next invocation, so this is the same view
+	GOAL.md ss2.4's ``completed_steps`` / ``failed_step`` fields are meant to expose.
+	"""
+	completed = [
+		{"node_id": row.node_id, "node_type": row.node_type}
+		for row in run.steps
+		if row.status == "Completed"
+	]
+	failed_step = outcome.node_id
+	return completed, failed_step
