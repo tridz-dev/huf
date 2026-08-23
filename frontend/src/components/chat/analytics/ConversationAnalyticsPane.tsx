@@ -67,6 +67,10 @@ function formatPercent(ratio: number): string {
   return `${(ratio * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
 }
 
+function formatDurationMs(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
 function runKindBreakdown(byKind: Record<ConversationRunKind, number>): string {
   return (Object.keys(RUN_KIND_LABEL) as ConversationRunKind[])
     .map((kind) => [kind, byKind[kind] ?? 0] as const)
@@ -187,6 +191,17 @@ function AnalyticsSections({ data }: { data: ConversationAnalyticsResponse }) {
         <GaugeRow className="mt-2">
           <MetricGauge label="Cache read" value={formatTokens(totals.cache_read_tokens)} unit="tokens" />
           <MetricGauge label="Cache write" value={formatTokens(totals.cache_write_tokens)} unit="tokens" />
+          {totals.average_duration_ms !== null ? (
+            <MetricGauge
+              label="Avg duration"
+              value={formatDurationMs(totals.average_duration_ms)}
+              info={`Averaged over ${formatCount(totals.duration_count)} of ${formatCount(totals.run_count)} run(s) with a recorded end time`}
+            />
+          ) : (
+            <div className="px-[18px] py-4 min-w-0">
+              <EmptyStat label="Avg duration" caption="No completed runs yet" />
+            </div>
+          )}
         </GaugeRow>
       </section>
 
@@ -215,6 +230,13 @@ function AnalyticsSections({ data }: { data: ConversationAnalyticsResponse }) {
                     label="Context fullness"
                     caption="Not measured"
                   />
+                </div>
+              )}
+              {current.duration_ms !== null ? (
+                <MetricGauge label="This turn" value={formatDurationMs(current.duration_ms)} />
+              ) : (
+                <div className="px-[18px] py-4 min-w-0">
+                  <EmptyStat label="This turn" caption="Not measured" />
                 </div>
               )}
             </GaugeRow>
