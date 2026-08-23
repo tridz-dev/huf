@@ -11,20 +11,30 @@ import { handleFrappeError } from '@/lib/frappe-error';
 // source here is a single Agent Run's tool-call trace rather than a Flow
 // graph.
 
-/** How one compiled step's argument was bound, for the review dialog. */
-export interface ProcedureProposalArgBinding {
-  /** 'input' = from a declared input field, 'step' = from a prior step's output, 'constant' = fixed value. */
-  source: 'input' | 'step' | 'constant';
-  /** Input field name, source step id, or the literal constant value depending on `source`. */
-  value: unknown;
+/**
+ * A reference to another value in the graph, as emitted by the backend compiler:
+ * `{"$from": "input.city"}` (a field the user supplies when running the procedure) or
+ * `{"$from": "step2_search_web"}` (an earlier node's recorded output). Any other value in
+ * a node's `config.input` is a literal constant baked into the procedure.
+ */
+export interface ProcedureGraphRef {
+  $from: string;
 }
 
-/** One compiled step in the proposed procedure graph, for readable rendering. */
-export interface ProcedureProposalStep {
-  id?: string;
-  tool?: string;
-  name?: string;
-  args?: Record<string, ProcedureProposalArgBinding | unknown>;
+/**
+ * One node of the compiled graph. The backend emits `type: "tool.call"` nodes carrying
+ * `config.tool_id` / `config.input`, chained by `next`, terminating in a single
+ * `type: "output"` node -- see huf/ai/procedure_proposal.py::compile_procedure_from_trace.
+ */
+export interface ProcedureProposalNode {
+  id: string;
+  type: string;
+  next?: string;
+  config?: {
+    tool_id?: string;
+    input?: Record<string, ProcedureGraphRef | unknown>;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
@@ -41,7 +51,8 @@ export interface ProcedureProposalInputField {
  * used by Flow/Procedure definitions (huf/ai/graph/graph_ir.schema.json), but this
  * dialog treats it as opaque/readable data, never as something to edit structurally. */
 export type ProcedureProposalGraph = {
-  steps?: ProcedureProposalStep[];
+  entry?: string;
+  nodes?: ProcedureProposalNode[];
   [key: string]: unknown;
 };
 

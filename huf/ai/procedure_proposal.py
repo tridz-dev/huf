@@ -266,8 +266,9 @@ def _bind_argument_value(
 		return value, None
 
 	raise ProcedureNotProposableError(  # noqa: TRY003 -- user-facing refusal reason, not exception boilerplate
-		f"This run made a judgment call at step {step_index} (tool {tool_id!r}, argument "
-		f"{arg_name!r}) that can't be safely generalized into a deterministic procedure."
+		f"This run made a judgment call at step {step_index} ({tool_id}) when it chose the value "
+		f"for {arg_name}. That value was not taken from your request and did not come from an "
+		"earlier step, so it cannot be repeated reliably next time."
 	)
 
 
@@ -365,16 +366,18 @@ def compile_procedure_from_trace(
 			return ProposalResult(
 				proposable=False,
 				reason=(
-					f"Step {i} (tool {call.get('tool')!r}) did not finish cleanly "
-					f"(status={call.get('status')!r}); a procedure cannot be compiled from a run "
-					"that did not complete every tool call it made."
+					f"Step {i} ({call.get('tool')}) did not finish cleanly - it ended as "
+					f"{call.get('status')}. A procedure can only be built from an answer where "
+					"every step completed, so that repeating it gives the same result."
 				),
 				step_count=len(tool_calls),
 			)
 		if not call.get("tool"):
 			return ProposalResult(
 				proposable=False,
-				reason=f"Step {i} has no recorded tool name; cannot compile.",
+				reason=(
+					f"Step {i} did not record which action it took, so it cannot be repeated."
+				),
 				step_count=len(tool_calls),
 			)
 
@@ -389,7 +392,10 @@ def compile_procedure_from_trace(
 		if not isinstance(args, dict):
 			return ProposalResult(
 				proposable=False,
-				reason=f"Step {i} (tool {tool_id!r}) recorded non-object arguments; cannot compile.",
+				reason=(
+					f"Step {i} ({tool_id}) recorded its settings in a form that cannot be turned "
+					"into repeatable inputs."
+				),
 				step_count=len(tool_calls),
 			)
 
@@ -467,10 +473,10 @@ def compile_procedure_from_trace(
 	validation = validate_graph(procedure_graph, "procedure", classify_tool=classify_tool)
 	if not validation.ok:
 		reason = (
-			"The compiled procedure did not pass validation. "
-			f"{len(validation.errors)} problem(s) found; first: {validation.errors[0]}"
+			"These steps did not pass the safety checks a saved procedure has to meet "
+			f"({len(validation.errors)} problem(s) found). First one: {validation.errors[0]}"
 			if validation.errors
-			else "The compiled procedure did not pass validation."
+			else "These steps did not pass the safety checks a saved procedure has to meet."
 		)
 		return ProposalResult(proposable=False, reason=reason, step_count=len(tool_calls))
 

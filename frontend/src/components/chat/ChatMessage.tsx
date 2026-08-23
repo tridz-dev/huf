@@ -232,7 +232,7 @@ export function ChatMessage({
                         </Tool>
                     ) : null}
                     {isAssistant && message.runStatus !== 'Started' && message.runStatus !== 'Queued' && runId && (
-                        <div className="flex items-center gap-[14px] text-muted-foreground">
+                        <div className="mt-1 flex items-center gap-[14px] text-muted-foreground">
                             <ProposeProcedureAction agentRunName={runId} />
                         </div>
                     )}
