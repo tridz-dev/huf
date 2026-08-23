@@ -92,6 +92,7 @@ const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
+const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
@@ -569,6 +570,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GeneralSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/developer"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DeveloperSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
