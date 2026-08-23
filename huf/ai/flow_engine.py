@@ -1,15 +1,37 @@
 """
-Huf Flow Engine v0.2
+Huf Flow Engine -- the ``FlowRuntime`` adapter over the shared graph executor.
 
-Core graph orchestration engine that:
-- Loads and validates FlowDefinition JSON
-- Creates FlowRun instances
-- Executes nodes (agent.run, tool.call, router.llm, human.approval,
-  http_request, condition, transform, loop, end)
-- Evaluates edges (always, on_success, on_failure, expression)
-- Persists FlowRun state after each step
-- Publishes Frappe Realtime events for live UI tracking
-- Supports normal and agentic execution modes
+Execution itself lives in :mod:`huf.ai.graph.executor`, which both this module
+and (T-23) ``ProcedureRuntime`` drive. This module is the Flow-profile adapter:
+it owns the ``Flow Definition`` / ``Flow Run`` documents, the twelve Flow node
+executors, Flow's realtime events, and Flow's approval lifecycle -- and nothing
+about how a graph is walked.
+
+What changed in T-22, and why (defect ids are from the track plan):
+
+* **F-1 -- versioning.** ``Flow Definition.version`` was an integer bumped on
+  every save, with no content identity, and ``run_flow`` re-fetched the
+  *current* definition every time -- so a run resumed after an edit executed
+  the new graph. A run now pins an immutable, content-addressed
+  :class:`~huf.ai.graph.executor.PinnedVersion` (see :func:`_pinned_version`)
+  and executes that exact graph for its whole life.
+* **F-2 -- interpolation.** Four divergent ``{{...}}`` implementations with
+  different semantics per node type are gone. There is exactly one:
+  :func:`_interpolate_string` (dotted paths) and its recursive form
+  :func:`_substitute_dict`, used by every node type. Graph-IR configs use the
+  executor's single structured reference form, ``{"$from": "node.path"}``.
+* **F-3 -- loops.** Loop iteration no longer burns the run's hop budget; a
+  bounded foreach carries its own iteration budget in the executor.
+* **F-4 -- concurrency.** ``run_flow`` takes a distributed lock, and the
+  executor refuses to advance a run that is not in an advanceable state, so
+  two concurrent callers cannot both move the same cursor.
+* **F-9 -- context.** ``context_json`` was re-parsed at roughly fifteen call
+  sites. It is now parsed once per run into a
+  :class:`~huf.ai.graph.executor.GraphContext` carried by
+  :class:`FlowRunContext` and threaded through every executor.
+* **I5 -- telemetry.** ``Agent Tool Call`` records are emitted by
+  ``huf.ai.tool_invocation`` (through ``flow_tool_executor``), not assembled
+  here. Exactly one record per atomic operation.
 """
 
 import json
@@ -17,6 +39,8 @@ import json
 import frappe
 from frappe import _
 from frappe.utils import now_datetime
+from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
+from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
 from huf.ai.flow_eval import safe_eval_expression
 from huf.ai.flow_orchestrator import (
@@ -26,22 +50,137 @@ from huf.ai.flow_orchestrator import (
 	parse_decision,
 )
 from huf.ai.flow_tool_executor import execute as execute_tool
+from huf.ai.flow_tool_executor import tool_run_context
+from huf.ai.graph.executor import (
+	ExecutionPolicy,
+	ExecutionResult,
+	ExecutionState,
+	GraphContext,
+	GraphExecutor,
+	GraphProgram,
+	NodeSpec,
+	Outcome,
+	PauseRequest,
+	PinnedVersion,
+	RoutingError,
+	RoutingMode,
+	Router,
+)
+from huf.ai.tool_invocation import RunContext
 from huf.ai.transaction import commit_if_background
-from frappe.desk.doctype.notification_log.notification_log import enqueue_create_notification
-from frappe.desk.doctype.notification_settings.notification_settings import is_email_notifications_enabled
 
 
 DEFAULT_MAX_HOPS = 100
 
+RUN_LOCK_TTL_SECONDS = 600
+"""How long a run lock survives if its holder dies mid-execution."""
+
+WAITING_STATUSES = ("Waiting User", "Waiting Approval")
+
+ADVANCEABLE_STATUSES = ("Running", "Queued")
+
+#: How each Flow node type resolves its successor. One table, consulted in one
+#: place by the executor's Router -- replacing the pre-T-22 split between the
+#: ``_execute_node`` dispatch table and a type-switch inside ``_execute_loop``
+#: (structural knot 3).
+NODE_ROUTING = {
+	"condition": RoutingMode.SELF_ROUTED,
+	"router.llm": RoutingMode.SELF_ROUTED,
+	"loop": RoutingMode.SELF_ROUTED_OPTIONAL,
+	"end": RoutingMode.TERMINAL,
+}
+
+#: Node types whose handler may be paused by another subsystem writing the
+#: ``Flow Run`` status (an agent asking the user a question, for instance).
+#: For these -- and only these -- the adapter converts that external state
+#: into a typed pause outcome, so the executor core still sees a value rather
+#: than a status string it has to reload (structural knot 2).
+EXTERNALLY_PAUSABLE_TYPES = ("agent.run", "router.llm")
+
 
 # ---------------------------------------------------------------------------
-# Public entry points
+# Run-scoped context (F-9, structural knot 1)
+# ---------------------------------------------------------------------------
+
+
+class FlowRunContext(dict):
+	"""Everything a node executor needs about the run it is part of.
+
+	It subclasses ``dict`` and carries the definition's ``settings`` as its
+	mapping content, so it is drop-in wherever a bare ``settings`` dict used
+	to be passed -- including from tests that pass ``{}``. What it adds is the
+	run-scoped state the executors used to dig out of the ``Flow Run``
+	Document one field at a time: the parsed context, the pinned version, the
+	flow id, the mode, the shared conversation (structural knot 1), and the
+	fact that the context is parsed exactly once per run (F-9).
+	"""
+
+	def __init__(self, settings=None, *, flow_run=None, version=None, context=None):
+		super().__init__(settings or {})
+		self.flow_run = flow_run
+		self.version = version
+		self.context = context if context is not None else GraphContext()
+		self.flow_id = getattr(flow_run, "flow_id", None)
+		self.run_id = getattr(flow_run, "name", None)
+		self.mode = (getattr(flow_run, "mode", "") or "normal").lower()
+		self.conversation = getattr(flow_run, "conversation", None)
+
+	@property
+	def definition(self) -> dict:
+		return self.version.graph if self.version else {}
+
+	@property
+	def edges(self) -> list:
+		return self.definition.get("edges", [])
+
+	def save_context(self) -> None:
+		"""Write the in-memory context back to the ``Flow Run``."""
+		if self.flow_run is None:
+			return
+		self.flow_run.db_set("context_json", self.context.to_json())
+		self.context.dirty = False
+
+
+def _run_context(settings) -> FlowRunContext | None:
+	"""The run context, when the caller threaded one through."""
+	return settings if isinstance(settings, FlowRunContext) else None
+
+
+def _context_of(flow_run, settings) -> GraphContext:
+	"""The run's :class:`GraphContext`, parsed once where one exists.
+
+	Callers that predate the run context (and the frappe-free tests) get a
+	context built from the document on the spot, so every executor has
+	exactly one way to read run state either way.
+	"""
+	run_ctx = _run_context(settings)
+	if run_ctx is not None:
+		return run_ctx.context
+	return GraphContext.from_json(getattr(flow_run, "context_json", None))
+
+
+def _persist_context(flow_run, ctx: GraphContext, settings=None) -> None:
+	"""Persist the context blob and commit if we are in a background job."""
+	run_ctx = _run_context(settings)
+	if run_ctx is not None:
+		run_ctx.save_context()
+	else:
+		flow_run.db_set("context_json", ctx.to_json())
+	commit_if_background()
+
+
+# ---------------------------------------------------------------------------
+# Version identity (F-1)
 # ---------------------------------------------------------------------------
 
 
 def load_definition(flow_id: str) -> dict:
 	"""
 	Load and return a parsed FlowDefinition.
+
+	This returns whatever the definition record currently holds. Execution
+	never calls it mid-run: a run resolves its graph once, through
+	:func:`_pinned_version`, and keeps it (F-1).
 
 	Args:
 	    flow_id: The flow_id (= FlowDefinition name)
@@ -57,6 +196,84 @@ def load_definition(flow_id: str) -> dict:
 	return defn
 
 
+def _pinned_version(flow_run) -> PinnedVersion:
+	"""The exact graph this run executes, for the whole life of the run.
+
+	If the run already carries a pinned snapshot, that snapshot is returned
+	verbatim -- an edit to the ``Flow Definition`` since the run started
+	cannot change what this run executes. If it does not (a run created
+	before pinning existed, or a site whose ``Flow Run`` schema predates the
+	snapshot field), the current definition is pinned now and recorded, so
+	the very next step is already immune.
+	"""
+	pinned = PinnedVersion.from_json(getattr(flow_run, "pinned_definition", None))
+	if pinned is not None:
+		return pinned
+
+	version = PinnedVersion.pin(load_definition(getattr(flow_run, "flow_id", None)))
+	_store_pin(flow_run, version)
+	return version
+
+
+def _store_pin(flow_run, version: PinnedVersion) -> None:
+	"""Record a pin on the run, where the schema can hold one.
+
+	Guarded rather than assumed: a site whose ``Flow Run`` has not been
+	migrated yet simply keeps resolving the pin per run instead of erroring.
+	"""
+	try:
+		if not frappe.db.has_column("Flow Run", "pinned_definition"):
+			return
+		flow_run.db_set(
+			{
+				"pinned_fingerprint": version.fingerprint,
+				"pinned_definition": version.to_json(),
+			}
+		)
+	except Exception:
+		# Pin persistence is an optimisation over re-resolving; never let it
+		# take down a run.
+		pass
+
+
+# ---------------------------------------------------------------------------
+# Run lock (F-4)
+# ---------------------------------------------------------------------------
+
+
+def _run_lock_key(flow_run_name: str) -> str:
+	return f"huf:flow:run_lock:{flow_run_name}"
+
+
+def _acquire_run_lock(flow_run_name: str) -> bool:
+	"""Take the single-writer lock for a run.
+
+	Same shape as the distributed lock in ``agent_integration.py``: a Redis
+	``SET key value EX ttl NX``, which is atomic, so exactly one of two
+	concurrent callers gets ``True``. Before T-22 ``run_flow`` took no lock at
+	all and two concurrent calls could both advance the same cursor (F-4).
+	"""
+	try:
+		return bool(frappe.cache().set(_run_lock_key(flow_run_name), 1, ex=RUN_LOCK_TTL_SECONDS, nx=True))
+	except Exception:
+		# A cache that cannot serve the lock must not silently serialize
+		# nothing *and* block execution; the executor's status guard is the
+		# second line of defence.
+		return True
+
+
+def _release_run_lock(flow_run_name: str) -> None:
+	try:
+		frappe.cache().delete_value(_run_lock_key(flow_run_name))
+	except Exception:
+		pass
+
+
+# ---------------------------------------------------------------------------
+# Public entry points
+# ---------------------------------------------------------------------------
+
+
 def create_flow_run(
 	flow_id: str,
 	payload: dict | None = None,
@@ -66,6 +283,9 @@ def create_flow_run(
 ) -> "frappe.Document":
 	"""
 	Create a new FlowRun document from a FlowDefinition.
+
+	The run pins the definition's content fingerprint at creation, and stores
+	the graph itself alongside it, so the run is immune to later edits (F-1).
 
 	Args:
 	    flow_id: The flow_id to run
@@ -80,6 +300,8 @@ def create_flow_run(
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	defn = json.loads(defn_doc.definition_json) if isinstance(defn_doc.definition_json, str) else defn_doc.definition_json
 
+	version = PinnedVersion.pin(defn)
+
 	settings = defn.get("settings", {})
 	resolved_mode = mode or settings.get("mode", "normal")
 	max_hops = settings.get("max_hops", DEFAULT_MAX_HOPS)
@@ -90,24 +312,27 @@ def create_flow_run(
 	if conv_mode == "flow_shared":
 		conversation = _create_flow_conversation(flow_id, defn.get("entry"))
 
-	flow_run = frappe.get_doc(
-		{
-			"doctype": "Flow Run",
-			"flow_definition": flow_id,
-			"flow_id": flow_id,
-			"flow_version": defn_doc.version,
-			"mode": resolved_mode.capitalize(),
-			"status": "Queued",
-			"current_node_id": defn.get("entry"),
-			"hop_count": 0,
-			"max_hops": max_hops,
-			"context_json": json.dumps(payload or {}),
-			"trigger_type": trigger_type,
-			"trigger_payload": json.dumps(payload or {}),
-			"conversation": conversation.name if conversation else None,
-			"started_at": now_datetime(),
-		}
-	)
+	fields = {
+		"doctype": "Flow Run",
+		"flow_definition": flow_id,
+		"flow_id": flow_id,
+		"flow_version": defn_doc.version,
+		"mode": resolved_mode.capitalize(),
+		"status": "Queued",
+		"current_node_id": defn.get("entry"),
+		"hop_count": 0,
+		"max_hops": max_hops,
+		"context_json": json.dumps(payload or {}),
+		"trigger_type": trigger_type,
+		"trigger_payload": json.dumps(payload or {}),
+		"conversation": conversation.name if conversation else None,
+		"started_at": now_datetime(),
+	}
+	if _has_pin_columns():
+		fields["pinned_fingerprint"] = version.fingerprint
+		fields["pinned_definition"] = version.to_json()
+
+	flow_run = frappe.get_doc(fields)
 	# Authenticated callers are already verified by the public API.
 	# Webhook triggers run as Guest after HMAC validation, so the internal
 	# Flow Run record must be created on behalf of the system.
@@ -122,43 +347,78 @@ def create_flow_run(
 	return flow_run
 
 
+def _has_pin_columns() -> bool:
+	try:
+		return bool(frappe.db.has_column("Flow Run", "pinned_definition"))
+	except Exception:
+		return False
+
+
 def run_flow(flow_run_name: str):
 	"""
 	Execute a flow run from its current position until completion or pause.
 
-	This is the main execution loop. It:
-	1. Loads the definition and flow run
-	2. Starts at current_node_id
-	3. Executes the node
-	4. Evaluates outgoing edges
-	5. Moves to the next node
-	6. Repeats until end, pause, or hop limit
+	Loads the run's *pinned* graph, takes the run lock, and hands the walk to
+	the shared :class:`~huf.ai.graph.executor.GraphExecutor`.
 
 	Args:
 	    flow_run_name: Name of the Flow Run document
 	"""
-	flow_run = frappe.get_doc("Flow Run", flow_run_name)
-	defn = load_definition(flow_run.flow_id)
-
-	# Build lookup maps
-	nodes_map = {n["id"]: n for n in defn.get("nodes", [])}
-	edges_list = defn.get("edges", [])
-	settings = defn.get("settings", {})
-
-	# Update status to Running
-	flow_run.db_set({"status": "Running", "last_error": ""})
-	commit_if_background()
+	if not _acquire_run_lock(flow_run_name):
+		# Another worker is already advancing this run; a second cursor
+		# writer is exactly the race F-4 describes.
+		return
 
 	try:
-		_execute_loop(flow_run, nodes_map, edges_list, settings)
-	except Exception as e:
-		_fail_flow_run(flow_run, str(e))
-		frappe.log_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
+		flow_run = frappe.get_doc("Flow Run", flow_run_name)
+		version = _pinned_version(flow_run)
+		defn = version.graph
+
+		nodes_map = {n["id"]: n for n in defn.get("nodes", [])}
+		edges_list = defn.get("edges", [])
+		run_ctx = _build_run_context(flow_run, version)
+
+		flow_run.db_set({"status": "Running", "last_error": ""})
+		commit_if_background()
+
+		try:
+			_execute_loop(flow_run, nodes_map, edges_list, run_ctx)
+		except Exception as e:
+			_fail_flow_run(flow_run, str(e))
+			frappe.log_error(f"Flow engine error: {frappe.get_traceback()}", "Flow Engine")
+	finally:
+		_release_run_lock(flow_run_name)
+
+
+def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
+	"""Build the run-scoped context once, for the whole run (F-9)."""
+	context = GraphContext.from_json(
+		getattr(flow_run, "context_json", None),
+		run_id=getattr(flow_run, "name", None),
+		mode=(getattr(flow_run, "mode", "") or "normal"),
+		metadata={
+			"flow_id": getattr(flow_run, "flow_id", None),
+			"conversation": getattr(flow_run, "conversation", None),
+			"fingerprint": version.fingerprint,
+		},
+	)
+	return FlowRunContext(
+		version.graph.get("settings", {}),
+		flow_run=flow_run,
+		version=version,
+		context=context,
+	)
 
 
 def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 	"""
-	Resume a paused flow run (Waiting User status).
+	Resume a paused flow run (Waiting User / Waiting Approval).
+
+	A pause records where to continue (structural knot 2), so resuming
+	*advances past* the node that paused rather than re-executing it. That is
+	both the correct semantics -- re-running a node that already produced its
+	side effects is a bug -- and what keeps a resumed run independent of any
+	edit made to the definition while it was waiting (F-1).
 
 	Args:
 	    flow_run_name: Name of the Flow Run
@@ -166,27 +426,57 @@ def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
 	"""
 	flow_run = frappe.get_doc("Flow Run", flow_run_name)
 
-	if flow_run.status not in ("Waiting User", "Waiting Approval"):
+	if flow_run.status not in WAITING_STATUSES:
 		frappe.throw(_("Flow Run is not in a waiting state (status: {0})").format(flow_run.status))
 
-	# Merge user input into context
-	if user_input:
-		ctx = _load_context(flow_run)
-		ctx.update(user_input)
-		flow_run.db_set("context_json", json.dumps(ctx, default=str))
+	version = _pinned_version(flow_run)
+	run_ctx = _build_run_context(flow_run, version)
 
-	# Clear waiting state
+	if user_input:
+		run_ctx.context.update(user_input)
+		run_ctx.save_context()
+
+	waiting = _load_waiting(flow_run)
+	paused_node = flow_run.current_node_id
+	next_node_id = waiting.get("resume_node") or _evaluate_edges(
+		flow_run, paused_node, {"status": "success"}, run_ctx.edges, context=run_ctx.context
+	)
+
 	flow_run.db_set({"waiting": None, "status": "Running"})
 	commit_if_background()
 
-	# Continue execution
+	if not next_node_id:
+		# The node that paused was the last step on its chain.
+		_complete_flow_run(flow_run)
+		return
+
+	flow_run.db_set("current_node_id", next_node_id)
+	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
+	commit_if_background()
+
 	run_flow(flow_run_name)
+
+
+def _load_waiting(flow_run) -> dict:
+	raw = getattr(flow_run, "waiting", None)
+	if not raw:
+		return {}
+	try:
+		data = json.loads(raw) if isinstance(raw, str) else raw
+	except (json.JSONDecodeError, TypeError):
+		return {}
+	return data if isinstance(data, dict) else {}
 
 
 @frappe.whitelist()
 def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = None):
 	"""
 	Approve or reject a flow run waiting for approval.
+
+	Routing goes through the same :class:`~huf.ai.graph.executor.Router` every
+	other node uses -- the ``meta.outcome`` convention is now just an
+	outcome-labelled edge, not a third inline routing implementation
+	(structural knot 4).
 
 	Args:
 	    flow_run_name: Name of the Flow Run
@@ -198,41 +488,38 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 	if flow_run.status != "Waiting Approval":
 		frappe.throw(_("Flow Run is not waiting for approval (status: {0})").format(flow_run.status))
 
-	# Verify current user has approval permissions
-	waiting = json.loads(flow_run.waiting) if flow_run.waiting else {}
+	# Permission is verified before anything is mutated.
+	waiting = _load_waiting(flow_run)
 	_verify_approval_permission(waiting)
 
-	# Store decision in context
-	ctx = _load_context(flow_run)
-	store_key = waiting.get("store_decision_in_context", "approval")
-	ctx[store_key] = {
-		"decision": decision,
-		"comment": comment,
-		"approved_by": frappe.session.user,
-		"approved_at": str(now_datetime()),
-	}
-	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-
-	# Find the outgoing edge matching the outcome
-	defn = load_definition(flow_run.flow_id)
-	edges_list = defn.get("edges", [])
+	version = _pinned_version(flow_run)
+	run_ctx = _build_run_context(flow_run, version)
+	edges_list = run_ctx.edges
 	current_node = flow_run.current_node_id
 
-	next_node = None
-	for edge in edges_list:
-		if edge.get("from") != current_node:
-			continue
-		edge_meta = edge.get("meta", {})
-		if edge_meta.get("outcome") == decision:
-			next_node = edge.get("to")
-			break
+	run_ctx.context.set(
+		waiting.get("store_decision_in_context", "approval"),
+		{
+			"decision": decision,
+			"comment": comment,
+			"approved_by": frappe.session.user,
+			"approved_at": str(now_datetime()),
+		},
+	)
+	run_ctx.save_context()
+
+	router = _build_router(flow_run, run_ctx, edges_list, ExecutionState(cursor=current_node))
+	next_node = router.resolve_labelled(current_node, decision)
 
 	if not next_node and decision == "approved":
-		next_node = _evaluate_edges(flow_run, current_node, {"status": "success"}, edges_list)
+		next_node = _evaluate_edges(
+			flow_run, current_node, {"status": "success"}, edges_list, context=run_ctx.context
+		)
 
 	if not next_node:
 		if decision == "rejected":
-			# Rejection without an explicit 'rejected' edge must not route like approval
+			# Rejection without an explicit 'rejected' edge must not route
+			# like an approval down a success-shaped path.
 			flow_run.db_set("waiting", None)
 			_fail_flow_run(
 				flow_run,
@@ -240,9 +527,8 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 			)
 			_clear_flow_notifications(flow_run)
 			return
-		# No outgoing edges — approval was the final step, complete the flow gracefully
-		outgoing = [e for e in edges_list if e.get("from") == current_node]
-		if not outgoing:
+		# No outgoing edges -- approval was the final step, complete gracefully
+		if not _get_outgoing_edges(current_node, edges_list):
 			flow_run.db_set({"waiting": None, "status": "Running"})
 			commit_if_background()
 			_complete_flow_run(flow_run)
@@ -250,7 +536,6 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 		_fail_flow_run(flow_run, f"No edge found for outcome '{decision}' from node '{current_node}'")
 		return
 
-	# Move to the next node and resume
 	flow_run.db_set({"current_node_id": next_node, "waiting": None, "status": "Running"})
 	flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
 	commit_if_background()
@@ -261,131 +546,198 @@ def approve_flow_run(flow_run_name: str, decision: str, comment: str | None = No
 
 
 # ---------------------------------------------------------------------------
-# Core execution loop
+# Core execution -- the adapter onto GraphExecutor
 # ---------------------------------------------------------------------------
 
 
-def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
-	"""Main execution loop - runs nodes and follows edges until done."""
-	is_agentic = (flow_run.mode or "").lower() == "agentic"
-	orch_policy = settings.get("orchestrator_call_policy", "after_each_node")
-	completed_nodes = []
+def _build_program(nodes_map: dict, edges_list: list, settings) -> GraphProgram:
+	"""Normalize a Flow graph into the executor's vocabulary.
 
-	while True:
-		node_id = flow_run.current_node_id
-		node = nodes_map.get(node_id)
+	This is the whole of the Flow profile's shape knowledge: which node types
+	route themselves, which are terminal, and which carry a bounded loop body.
+	"""
+	run_ctx = _run_context(settings)
+	if run_ctx is not None and run_ctx.version is not None:
+		version = run_ctx.version
+	else:
+		version = PinnedVersion.pin(
+			{"nodes": list(nodes_map.values()), "edges": edges_list, "settings": dict(settings or {})}
+		)
 
-		if not node:
-			_publish_flow_event(flow_run, "flow_error", {"error": f"Node '{node_id}' not found"})
-			_fail_flow_run(flow_run, f"Node '{node_id}' not found in definition")
-			return
+	specs = {}
+	for node_id, node in nodes_map.items():
+		config = node.get("config") or {}
+		node_type = node.get("type")
+		specs[node_id] = NodeSpec(
+			id=node_id,
+			type=node_type,
+			config=config,
+			routing=NODE_ROUTING.get(node_type, RoutingMode.DEFAULT),
+			raw=node,
+			loop_body=config.get("loop_node") if node_type == "loop" else None,
+		)
+	return GraphProgram(version, specs, version.graph.get("entry"), settings=dict(settings or {}))
 
-		# Check hop limit
-		if (flow_run.hop_count or 0) >= (flow_run.max_hops or DEFAULT_MAX_HOPS):
-			_publish_flow_event(flow_run, "flow_error", {"error": f"Hop limit reached ({flow_run.max_hops})"})
-			_fail_flow_run(flow_run, f"Hop limit reached ({flow_run.max_hops})")
-			return
 
-		# Publish node start event for live UI tracking
-		_publish_flow_event(flow_run, "flow_node_start", {
-			"node_id": node_id,
-			"node_type": node.get("type"),
-			"node_label": node.get("_label", node_id),
-		})
+def _build_router(flow_run, settings, edges_list: list, state: ExecutionState) -> Router:
+	"""One routing path for every node type (structural knots 3 and 4)."""
+	run_ctx = _run_context(settings)
+	is_agentic = (run_ctx.mode if run_ctx is not None else "normal") == "agentic"
+	orch_policy = (settings or {}).get("orchestrator_call_policy", "after_each_node")
 
-		# Execute the node
-		node_result = _execute_node(flow_run, node, settings)
-
-		# Publish node end event
-		result_status = node_result.get("status", "success") if isinstance(node_result, dict) else "success"
-		_publish_flow_event(flow_run, "flow_node_end", {
-			"node_id": node_id,
-			"node_type": node.get("type"),
-			"status": result_status,
-		})
-
-		# Check if flow was paused (approval/user wait)
-		flow_run.reload()
-		if flow_run.status in ("Waiting Approval", "Waiting User"):
-			_publish_flow_event(flow_run, "flow_paused", {
-				"node_id": node_id,
-				"status": flow_run.status,
-			})
-			return
-
-		# Update hop count and completed list
-		completed_nodes.append(node_id)
-		flow_run.db_set("hop_count", (flow_run.hop_count or 0) + 1)
-		# No explicit commit here; the node executor or completion/failure handler
-		# will commit the updated state in one go.
-
-		# Check for end node
-		if node.get("type") == "end":
-			_complete_flow_run(flow_run)
-			_publish_flow_event(flow_run, "flow_completed", {
-				"node_id": node_id,
-				"status": "Success",
-			})
-			return
-
-		# Determine next node
-		next_node_id = None
-
-		if node.get("type") == "router.llm":
-			# Router already determined next_node_id via LLM
-			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
-			if not next_node_id:
-				_fail_flow_run(flow_run, "Router node did not return a next_node_id")
-				_publish_flow_event(flow_run, "flow_error", {"error": "Router did not return next_node_id"})
-				return
-
-		elif node.get("type") == "condition":
-			# Condition node already evaluated and returns next_node_id
-			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
-			if not next_node_id:
-				_fail_flow_run(flow_run, "Condition node did not resolve a branch")
-				return
-
-		elif node.get("type") == "loop":
-			# Loop executor returns next_node_id (body node or done node)
-			next_node_id = node_result.get("next_node_id") if isinstance(node_result, dict) else None
-			if not next_node_id:
-				# No done_node configured — loop finished, complete gracefully
-				_complete_flow_run(flow_run)
-				_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
-				return
-
-		elif node.get("type") == "human.approval":
-			# Already paused above; this shouldn't be reached
-			return
-
-		elif is_agentic and _should_call_orchestrator(orch_policy, completed_nodes):
-			# Agentic mode: ask orchestrator for next node
-			candidates = _get_outgoing_edges(node_id, edges_list)
+	def default_resolver(node: NodeSpec, outcome: Outcome, context: GraphContext):
+		node_result = outcome.extra or {"status": outcome.status}
+		if is_agentic and _should_call_orchestrator(orch_policy, state.completed_nodes):
+			candidates = _get_outgoing_edges(node.id, edges_list)
 			if not candidates:
-				_complete_flow_run(flow_run)
-				return
-
-			next_node_id = _call_orchestrator(
-				flow_run, node_id, node_result, candidates, settings, completed_nodes
+				return None
+			chosen = _call_orchestrator(
+				flow_run, node.id, node_result, candidates, settings, state.completed_nodes
 			)
-			if not next_node_id:
-				_fail_flow_run(flow_run, "Orchestrator did not return a valid next_node_id")
-				return
-		else:
-			# Normal mode: evaluate edges deterministically
-			next_node_id = _evaluate_edges(flow_run, node_id, node_result, edges_list)
+			if not chosen:
+				raise RoutingError("Orchestrator did not return a valid next_node_id")
+			return chosen
+		return _evaluate_edges(flow_run, node.id, node_result, edges_list, context=context)
 
-		if not next_node_id:
-			# No outgoing edges matched - flow is done
-			_complete_flow_run(flow_run)
-			_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
-			return
+	def labelled_resolver(node_id: str, label: str):
+		for edge in edges_list:
+			if edge.get("from") != node_id:
+				continue
+			if (edge.get("meta") or {}).get("outcome") == label:
+				return edge.get("to")
+		return None
 
-		# Move to next node
-		flow_run.db_set("current_node_id", next_node_id)
-		# No explicit commit here; the next node executor or completion/failure
-		# handler will persist the updated cursor in one go.
+	program = _build_program({}, edges_list, settings)
+	return Router(program, default_resolver=default_resolver, labelled_resolver=labelled_resolver)
+
+
+def _flow_state(flow_run) -> ExecutionState:
+	status = (getattr(flow_run, "status", "") or "").strip()
+	return ExecutionState(
+		cursor=getattr(flow_run, "current_node_id", None),
+		hop_count=getattr(flow_run, "hop_count", 0) or 0,
+		status="running" if status in ADVANCEABLE_STATUSES else status.lower(),
+	)
+
+
+class _FlowStateStore:
+	"""Write-through persistence for the cursor and hop count.
+
+	This is the opt-in half of the executor's persistence seam: Flow wants
+	every step durable because a run can pause for days, while a Procedure
+	(T-23) keeps the default in-memory store and never touches the database
+	on its hot path.
+	"""
+
+	def __init__(self, flow_run):
+		self.flow_run = flow_run
+
+	def save_cursor(self, cursor: str) -> None:
+		self.flow_run.db_set("current_node_id", cursor)
+
+	def save_hops(self, hop_count: int) -> None:
+		self.flow_run.db_set("hop_count", hop_count)
+
+
+class _FlowEventListener:
+	"""Publishes the realtime events the Flow UI subscribes to."""
+
+	def __init__(self, flow_run):
+		self.flow_run = flow_run
+
+	def node_start(self, node: NodeSpec) -> None:
+		_publish_flow_event(
+			self.flow_run,
+			"flow_node_start",
+			{
+				"node_id": node.id,
+				"node_type": node.type,
+				"node_label": node.raw.get("_label", node.id),
+			},
+		)
+
+	def node_end(self, node: NodeSpec, outcome: Outcome) -> None:
+		_publish_flow_event(
+			self.flow_run,
+			"flow_node_end",
+			{"node_id": node.id, "node_type": node.type, "status": outcome.status},
+		)
+
+
+def _make_node_handler(flow_run, settings):
+	"""Bridge one Flow node executor into the executor's handler contract."""
+
+	def handler(node: NodeSpec, context: GraphContext, state: ExecutionState):
+		result = _execute_node(flow_run, node.raw, settings)
+		outcome = Outcome.from_mapping(result)
+		if not outcome.is_paused and node.type in EXTERNALLY_PAUSABLE_TYPES:
+			# Another subsystem may have parked this run while the node ran.
+			# Convert that into a typed pause here, in the adapter, so the
+			# executor core never reads a status string (structural knot 2).
+			try:
+				flow_run.reload()
+			except Exception:
+				pass
+			if getattr(flow_run, "status", None) in WAITING_STATUSES:
+				return Outcome.paused(PauseRequest(kind="user", status_label=flow_run.status))
+		return outcome
+
+	return handler
+
+
+def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
+	"""Drive a Flow run to completion, a pause, or a failure.
+
+	Everything about *how* the graph is walked -- hop budget, foreach budget,
+	terminal detection, routing -- belongs to
+	:class:`~huf.ai.graph.executor.GraphExecutor`. What is left here is
+	Flow-specific: mapping the executor's result onto the ``Flow Run``
+	document's status vocabulary.
+	"""
+	program = _build_program(nodes_map, edges_list, settings)
+	state = _flow_state(flow_run)
+	router = _build_router(flow_run, settings, edges_list, state)
+	handler = _make_node_handler(flow_run, settings)
+	handlers = {node_type: handler for node_type in _NODE_TYPES}
+
+	policy = ExecutionPolicy(
+		max_hops=getattr(flow_run, "max_hops", None) or DEFAULT_MAX_HOPS,
+		max_foreach_iterations=(settings or {}).get("max_foreach_iterations")
+		or ExecutionPolicy.max_foreach_iterations,
+	)
+
+	executor = GraphExecutor(
+		program,
+		handlers,
+		router=router,
+		policy=policy,
+		store=_FlowStateStore(flow_run),
+		listener=_FlowEventListener(flow_run),
+	)
+
+	result = executor.run(_context_of(flow_run, settings), state)
+
+	if result.status == ExecutionResult.REFUSED:
+		# The run is not advanceable (already finished, or being advanced by
+		# another writer). Leave it exactly as it is (F-4).
+		return result
+
+	if result.status == ExecutionResult.PAUSED:
+		_publish_flow_event(
+			flow_run,
+			"flow_paused",
+			{"node_id": result.node_id, "status": getattr(flow_run, "status", None)},
+		)
+		return result
+
+	if result.status == ExecutionResult.FAILED:
+		_publish_flow_event(flow_run, "flow_error", {"error": result.error})
+		_fail_flow_run(flow_run, result.error)
+		return result
+
+	_complete_flow_run(flow_run)
+	_publish_flow_event(flow_run, "flow_completed", {"node_id": result.node_id, "status": "Success"})
+	return result
 
 
 # ---------------------------------------------------------------------------
@@ -397,28 +749,14 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 	"""
 	Execute a single node and return the result.
 
-	Dispatches to the appropriate executor based on node type.
+	Dispatches to the appropriate executor based on node type. This table is
+	now purely a dispatch table: it no longer also decides routing, which
+	lives in :data:`NODE_ROUTING` and the executor's Router (knot 3).
 	"""
 	node_type = node.get("type")
 	config = node.get("config", {})
-	node_id = node.get("id")
 
-	executors = {
-		"trigger.webhook": _exec_trigger_webhook,
-		"trigger.schedule": _exec_trigger_schedule,
-		"trigger.doc-event": _exec_trigger_doc_event,
-		"agent.run": _exec_agent_run,
-		"tool.call": _exec_tool_call,
-		"router.llm": _exec_router_llm,
-		"human.approval": _exec_human_approval,
-		"http_request": _exec_http_request,
-		"condition": _exec_condition,
-		"transform": _exec_transform,
-		"loop": _exec_loop_node,
-		"end": _exec_end,
-	}
-
-	executor = executors.get(node_type)
+	executor = _NODE_EXECUTORS.get(node_type)
 	if not executor:
 		frappe.throw(_("Unknown node type: {0}").format(node_type))
 
@@ -427,59 +765,45 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 
 def _exec_trigger_webhook(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute trigger.webhook node - mostly a passthrough for UI clarity."""
-	# The trigger payload is already in the flow run context
-	ctx = _load_context(flow_run)
-	return {"status": "success", "output": ctx}
+	ctx = _context_of(flow_run, settings)
+	return {"status": "success", "output": ctx.as_dict()}
 
 
 def _exec_trigger_schedule(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""
 	Execute trigger.schedule node - passthrough for scheduled execution.
-	
-	The actual scheduling is handled externally via Frappe Scheduler.
-	This executor just passes through with a timestamp indicating when
-	the schedule triggered the flow.
+
+	The actual scheduling is handled externally via Frappe Scheduler. This
+	executor records when the schedule fired.
 	"""
-	ctx = _load_context(flow_run)
-	
-	# Add schedule trigger metadata to context
+	ctx = _context_of(flow_run, settings)
+
 	schedule_info = {
 		"trigger_type": "schedule",
 		"triggered_at": str(now_datetime()),
 		"cron_expression": config.get("cron", ""),
 		"schedule_name": config.get("schedule_name", ""),
 	}
-	
-	# Merge with existing context
-	ctx["_schedule_trigger"] = schedule_info
-	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	commit_if_background()
-	
-	return {
-		"status": "success",
-		"trigger_type": "schedule",
-		"schedule_info": schedule_info,
-	}
+
+	ctx.set("_schedule_trigger", schedule_info)
+	_persist_context(flow_run, ctx, settings)
+
+	return {"status": "success", "trigger_type": "schedule", "schedule_info": schedule_info}
 
 
 def _exec_trigger_doc_event(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""
 	Execute trigger.doc-event node - pass through with doc context.
-	
-	This executor handles flows triggered by document events (after_insert, on_update, etc.).
-	The trigger payload contains the doc that triggered the event, along with metadata
-	about the event type and triggering document.
-	
-	The payload is already set during flow_run creation by flow_hooks.run_doc_event_flows().
-	This executor mainly validates and enriches the context for downstream nodes.
+
+	The payload is set during flow run creation by
+	``flow_hooks.run_doc_event_flows()``; this executor enriches it with
+	event metadata for downstream nodes.
 	"""
-	ctx = _load_context(flow_run)
-	
-	# Extract trigger info from context (set by flow_hooks)
-	trigger_info = ctx.get("trigger", {})
-	doc_data = ctx.get("doc", {})
-	
-	# Enrich context with doc-event specific metadata
+	ctx = _context_of(flow_run, settings)
+
+	trigger_info = ctx.get("trigger") or {}
+	doc_data = ctx.get("doc") or {}
+
 	doc_event_info = {
 		"trigger_type": "doc_event",
 		"triggered_at": str(now_datetime()),
@@ -487,23 +811,14 @@ def _exec_trigger_doc_event(flow_run, node: dict, config: dict, settings: dict) 
 		"docname": trigger_info.get("docname", ctx.get("docname")),
 		"event": trigger_info.get("event", ctx.get("event")),
 	}
-	
-	# Add to context for easy access by downstream nodes
-	ctx["_doc_event_trigger"] = doc_event_info
-	
-	# Ensure doc data is accessible
+
+	ctx.set("_doc_event_trigger", doc_event_info)
 	if doc_data and not ctx.get("doc"):
-		ctx["doc"] = doc_data
-	
-	# Persist updated context
-	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	commit_if_background()
-	
-	return {
-		"status": "success",
-		"trigger_type": "doc_event",
-		"doc_event_info": doc_event_info,
-	}
+		ctx.set("doc", doc_data)
+
+	_persist_context(flow_run, ctx, settings)
+
+	return {"status": "success", "trigger_type": "doc_event", "doc_event_info": doc_event_info}
 
 
 def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
@@ -512,21 +827,19 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	if not agent_name:
 		return {"status": "failed", "error": "agent.run node missing agent_name in config"}
 
-	ctx = _load_context(flow_run)
+	run_ctx = _run_context(settings)
+	ctx = _context_of(flow_run, settings)
 
-	# Build prompt from template or context
-	prompt = _build_agent_prompt(config, ctx)
+	prompt = _build_agent_prompt(config, ctx.as_dict())
 
-	# Determine conversation mode
 	conv_mode = config.get("conversation_mode", "flow_shared")
-	conversation_id = flow_run.conversation if conv_mode == "flow_shared" else None
+	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
 
-	# Optionally inject flow context as system message
 	inject_context = config.get("input", {}).get("inject_flow_context")
 	if inject_context is None:
 		inject_context = config.get("inject_flow_context", False)
 
-	if (flow_run.mode or "").lower() == "agentic":
+	if _mode_of(flow_run, run_ctx) == "agentic":
 		inject_context = True
 
 	try:
@@ -543,16 +856,14 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			now=True,
 		)
 
-		# Update last_agent_run
 		if result and result.get("agent_run_id"):
 			flow_run.db_set("last_agent_run", result["agent_run_id"])
 
-		# Save response to context if configured
 		output_config = config.get("output", {})
 		save_key = output_config.get("save_response_to_context") or config.get("save_response_to_context")
 		if save_key:
-			ctx[save_key] = result.get("response", "")
-			flow_run.db_set("context_json", json.dumps(ctx, default=str))
+			ctx.set(save_key, result.get("response", ""))
+			_persist_context(flow_run, ctx, settings)
 
 		commit_if_background()
 
@@ -567,35 +878,23 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 
 def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute tool.call node - deterministic tool execution."""
+	"""Execute tool.call node - deterministic tool execution.
+
+	Argument substitution uses the single interpolation implementation
+	(:func:`_substitute_dict`), not a local flat-key variant (F-2), and the
+	``Agent Tool Call`` telemetry record is emitted by the invocation service
+	rather than assembled here -- exactly one record per call (I5, GT-05).
+	"""
 	tool_name = config.get("tool_name")
 	if not tool_name:
 		return {"status": "failed", "error": "tool.call node missing tool_name in config"}
 
-	# Build args, potentially with context interpolation
 	# Support both 'args' (preferred) and 'parameters' (legacy)
 	args = dict(config.get("args") or config.get("parameters") or {})
-	ctx = _load_context(flow_run)
+	run_ctx = _run_context(settings)
+	ctx = _context_of(flow_run, settings)
+	args = _substitute_dict(args, ctx.as_dict())
 
-	# Recursive context variable substitution
-	import re
-	
-	def _substitute(data):
-		if isinstance(data, dict):
-			return {k: _substitute(v) for k, v in data.items()}
-		elif isinstance(data, list):
-			return [_substitute(v) for v in data]
-		elif isinstance(data, str):
-			# Handle inline templates like "Hello {{name}}"
-			def replace_var(match):
-				var_name = match.group(1).strip()
-				return str(ctx.get(var_name, match.group(0)))
-			return re.sub(r'\{\{(.*?)\}\}', replace_var, data)
-		return data
-
-	args = _substitute(args)
-
-	# Create an Agent Run for auditing
 	run_doc = _create_flow_agent_run(
 		flow_run=flow_run,
 		node=node,
@@ -604,52 +903,18 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		agent_name=config.get("agent_name") or config.get("agent"),
 	)
 
-	# Check MCP tool info
-	is_mcp_tool = 0
-	mcp_server = None
-	mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
-	if mcp_tool_entry:
-		is_mcp_tool = 1
-		mcp_server = mcp_tool_entry
-
-	from uuid import uuid4
-	tool_call_id = f"call_{uuid4().hex[:12]}"
-
-	# Create Agent Tool Call audit record
-	tool_call_doc = frappe.get_doc({
-		"doctype": "Agent Tool Call",
-		"agent_run": run_doc.name,
-		"conversation": getattr(flow_run, "conversation", None),
-		"tool": tool_name,
-		"is_mcp_tool": is_mcp_tool,
-		"mcp_server": mcp_server,
-		"tool_args": json.dumps(args, default=str) if args else None,
-		"status": "Started",
-		"call_id": tool_call_id,
-	})
-	tool_call_doc.insert(ignore_permissions=True)
+	invocation_ctx = RunContext(
+		conversation_id=_conversation_of(flow_run, run_ctx),
+		agent_run_id=getattr(run_doc, "name", None),
+	)
 
 	try:
-		result = execute_tool(tool_name, args)
+		with tool_run_context(invocation_ctx):
+			result = execute_tool(tool_name, args)
+
 		is_success = result.get("success", False) if isinstance(result, dict) else bool(result)
-		tool_result = result.get("result", result) if isinstance(result, dict) else result
 		error_msg = result.get("error", "") if isinstance(result, dict) else ""
 
-		# Format result for JSON field
-		if isinstance(tool_result, (dict, list)):
-			formatted_result = tool_result
-		else:
-			formatted_result = {"output": str(tool_result)} if tool_result is not None else None
-
-		# Update Agent Tool Call record
-		tool_call_doc.update({
-			"status": "Completed" if is_success else "Failed",
-			"tool_result": formatted_result,
-			"error_message": error_msg or None,
-		})
-		tool_call_doc.save(ignore_permissions=True)
-
-		# Update the agent run
 		run_doc.db_set(
 			{
 				"status": "Success" if is_success else "Failed",
@@ -660,12 +925,11 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		)
 		flow_run.db_set("last_agent_run", run_doc.name)
 
-		# Save result to context if configured
 		output_config = config.get("output", {})
 		save_key = output_config.get("save_result_to_context") or config.get("save_result_to_context")
 		if save_key:
-			ctx[save_key] = result.get("result", result)
-			flow_run.db_set("context_json", json.dumps(ctx, default=str))
+			ctx.set(save_key, result.get("result", result))
+			_persist_context(flow_run, ctx, settings)
 
 		commit_if_background()
 
@@ -675,46 +939,43 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": result.get("error"),
 		}
 	except Exception as e:
-		try:
-			tool_call_doc.update({"status": "Failed", "error_message": str(e)})
-			tool_call_doc.save(ignore_permissions=True)
-		except Exception:
-			pass
 		run_doc.db_set({"status": "Failed", "error_message": str(e), "end_time": now_datetime()})
 		commit_if_background()
 		return {"status": "failed", "error": str(e)}
 
 
 def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute router.llm node - LLM-based routing."""
+	"""Execute router.llm node - LLM-based routing.
+
+	Candidates come from the run's *pinned* graph (structural knot 5). The
+	pre-T-22 implementation re-loaded the whole ``Flow Definition`` from the
+	database in the middle of execution, which is precisely how an edit could
+	change a running graph's routing under it.
+	"""
 	router_agent_name = config.get("router_agent_name")
 	if not router_agent_name:
 		return {"status": "failed", "error": "router.llm node missing router_agent_name in config"}
 
-	ctx = _load_context(flow_run)
-	defn = load_definition(flow_run.flow_id)
-	edges_list = defn.get("edges", [])
+	run_ctx = _run_context(settings)
+	ctx = _context_of(flow_run, settings)
+	edges_list = run_ctx.edges if run_ctx is not None else load_definition(flow_run.flow_id).get("edges", [])
 
-	# Get candidates from outgoing edges
 	candidates = _get_outgoing_edges(node.get("id"), edges_list)
 	if not candidates:
 		return {"status": "failed", "error": "router.llm node has no outgoing edges"}
 
 	valid_node_ids = {c["to"] for c in candidates}
 
-	# Build router prompt
 	prompt = build_router_prompt(
 		node_config=config,
 		candidates=candidates,
-		flow_context=ctx,
+		flow_context=ctx.as_dict(),
 		last_node_result=None,
 	)
 
-	# Determine conversation mode
 	conv_mode = config.get("conversation_mode", "flow_shared")
-	conversation_id = flow_run.conversation if conv_mode == "flow_shared" else None
+	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
 
-	# Call the router agent
 	try:
 		from huf.ai.agent_integration import run_agent_sync
 
@@ -732,13 +993,11 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 		if not result.get("success"):
 			return {"status": "failed", "error": result.get("error", "Router agent failed")}
 
-		# Parse the decision
 		decision = parse_decision(result.get("response", ""), valid_node_ids)
 
-		# Apply context patch
 		if decision.get("context_patch"):
 			ctx.update(decision["context_patch"])
-			flow_run.db_set("context_json", json.dumps(ctx, default=str))
+			_persist_context(flow_run, ctx, settings)
 
 		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
 		commit_if_background()
@@ -754,19 +1013,21 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 
 
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute human.approval node - pause for human decision."""
-	# If already waiting at this node, don't re-send notifications or re-set state
+	"""Execute human.approval node - pause for human decision.
+
+	Returns a pause as a *value*; the executor never has to reload the
+	document and compare status strings to notice (structural knot 2).
+	"""
 	if flow_run.status == "Waiting Approval" and flow_run.current_node_id == node.get("id"):
 		return {"status": "waiting_approval"}
 
-	# Interpolate context_summary, reference_name if they contain {{variables}}
-	ctx = _load_context(flow_run)
+	ctx = _context_of(flow_run, settings)
 	context_summary = config.get("context_summary", "")
 	reference_name = config.get("reference_name", "")
 	if context_summary:
-		context_summary = _interpolate_string(context_summary, ctx)
+		context_summary = _interpolate_string(context_summary, ctx.as_dict())
 	if reference_name:
-		reference_name = _interpolate_string(reference_name, ctx)
+		reference_name = _interpolate_string(reference_name, ctx.as_dict())
 
 	waiting_data = {
 		"type": "approval",
@@ -782,18 +1043,384 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 		"store_decision_in_context": config.get("store_decision_in_context", "approval"),
 	}
 
-	flow_run.db_set(
-		{
-			"status": "Waiting Approval",
-			"waiting": json.dumps(waiting_data),
-		}
-	)
+	flow_run.db_set({"status": "Waiting Approval", "waiting": json.dumps(waiting_data)})
 	commit_if_background()
 
-	# Send notifications to approvers
 	_send_approval_notifications(flow_run, node, config, waiting_data)
 
 	return {"status": "waiting_approval"}
+
+
+def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute http_request node - makes an HTTP request.
+
+	Config keys:
+	    url (str): Target URL (supports {{ }} variable interpolation)
+	    method (str): GET, POST, PUT, DELETE (default: GET)
+	    headers (dict): Optional request headers
+	    body (dict|str): Optional request body for POST/PUT
+	    timeout (int): Request timeout in seconds (default: 30)
+	    save_result_to_context (str): Context key to store result
+	"""
+	import requests as http_lib
+
+	url = config.get("url")
+	if not url:
+		return {"status": "failed", "error": "http_request node missing 'url' in config"}
+
+	ctx = _context_of(flow_run, settings)
+	data = ctx.as_dict()
+
+	url = _interpolate_string(url, data)
+	method = (config.get("method") or "GET").upper()
+	headers = config.get("headers", {})
+	if isinstance(headers, dict):
+		headers = {k: _interpolate_string(str(v), data) for k, v in headers.items()}
+
+	body = config.get("body")
+	if isinstance(body, (dict, list, str)):
+		body = _substitute_dict(body, data)
+
+	timeout = config.get("timeout", 30)
+
+	try:
+		kwargs = {"headers": headers, "timeout": timeout}
+		if method in ("POST", "PUT", "PATCH") and body:
+			if isinstance(body, dict):
+				kwargs["json"] = body
+			else:
+				kwargs["data"] = body
+
+		resp = http_lib.request(method, url, **kwargs)
+
+		try:
+			result_data = resp.json()
+		except (json.JSONDecodeError, TypeError):
+			frappe.log_error(
+				frappe.get_traceback(),
+				"HTTP response JSON parse failed — falling back to text",
+			)
+			result_data = resp.text
+
+		result = {
+			"status_code": resp.status_code,
+			"data": result_data,
+			"headers": dict(resp.headers),
+		}
+
+		output_config = config.get("output", {})
+		save_key = output_config.get("save_result_to_context") or config.get("save_result_to_context")
+		if save_key:
+			ctx.set(save_key, result)
+			_persist_context(flow_run, ctx, settings)
+
+		commit_if_background()
+
+		is_success = 200 <= resp.status_code < 400
+		return {"status": "success" if is_success else "failed", "result": result}
+	except Exception as e:
+		return {"status": "failed", "error": str(e)}
+
+
+def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute condition node - evaluates a boolean expression and routes to
+	true_node or false_node.
+
+	Config keys:
+	    expression (str): Boolean expression to evaluate against context
+	    true_node (str): Node ID to go to if expression is true
+	    false_node (str): Node ID to go to if expression is false
+	"""
+	expression = config.get("expression", "")
+	true_node = config.get("true_node")
+	false_node = config.get("false_node")
+
+	if not expression:
+		return {"status": "failed", "error": "condition node missing 'expression' in config"}
+
+	if not true_node and not false_node:
+		return {"status": "failed", "error": "condition node needs at least one of 'true_node' or 'false_node'"}
+
+	ctx = _context_of(flow_run, settings)
+
+	try:
+		result = safe_eval_expression(expression, ctx.as_dict())
+		chosen_node = true_node if result else false_node
+
+		if not chosen_node:
+			# The chosen branch has no target: this chain simply ends here.
+			return {"status": "success", "result": result, "next_node_id": None}
+
+		return {
+			"status": "success",
+			"result": result,
+			"branch": "true" if result else "false",
+			"next_node_id": chosen_node,
+		}
+	except Exception as e:
+		return {"status": "failed", "error": f"Condition evaluation failed: {str(e)}"}
+
+
+def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute transform node - applies data transformations to context.
+
+	Config keys:
+	    transformations (list): source_field, target_field, operation
+	        (copy|map|template)
+	"""
+	ctx = _context_of(flow_run, settings)
+	data = ctx.as_dict()
+	transformations = config.get("transformations", [])
+
+	results = {}
+	for t in transformations:
+		source = t.get("source_field", "")
+		target = t.get("target_field", "")
+		operation = t.get("operation", "copy")
+
+		if not source or not target:
+			continue
+
+		try:
+			if operation == "template":
+				value = _interpolate_string(source, data)
+			else:
+				# copy and map are the same read; they differ only in intent.
+				value = _resolve_context_path(data, source)
+			ctx.set(target, value)
+			results[target] = value
+		except Exception as e:
+			results[target] = f"Error: {str(e)}"
+
+	_persist_context(flow_run, ctx, settings)
+
+	return {"status": "success", "result": results}
+
+
+def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""
+	Execute loop node - a bounded foreach over an array in context.
+
+	Each visit either binds the next item and routes into the body, or
+	finishes and routes to ``done_node``. Iteration is bounded by this node's
+	own ``max_iterations`` and is *not* charged against the run's hop budget
+	(F-3): before T-22 a loop with more items than ``max_hops`` could never
+	complete.
+
+	Config keys:
+	    iterate_over (str): Context key containing the array to iterate
+	    item_key (str): Context key for the current item (default: 'loop_item')
+	    index_key (str): Context key for the index (default: 'loop_index')
+	    loop_node (str): Node ID of the loop body
+	    done_node (str): Node ID to go to when iteration completes
+	    max_iterations (int): Iteration ceiling (default: 100)
+	"""
+	ctx = _context_of(flow_run, settings)
+
+	iterate_over = config.get("iterate_over", "")
+	item_key = config.get("item_key", "loop_item")
+	index_key = config.get("index_key", "loop_index")
+	loop_node = config.get("loop_node")
+	done_node = config.get("done_node")
+	max_iter = config.get("max_iterations", 100)
+
+	if not iterate_over:
+		return {"status": "failed", "error": "loop node missing 'iterate_over' in config"}
+
+	items = _resolve_context_path(ctx.as_dict(), iterate_over)
+	if not isinstance(items, list):
+		return {"status": "failed", "error": f"'{iterate_over}' is not a list in context"}
+
+	current_index = ctx.as_dict().get(index_key, 0)
+	if not isinstance(current_index, int):
+		current_index = 0
+
+	if current_index >= max_iter or current_index >= len(items):
+		reason = "max_iterations reached" if current_index >= max_iter else "iteration_complete"
+		ctx.pop(item_key, None)
+		ctx.pop(index_key, None)
+		ctx.pop_foreach()
+		_persist_context(flow_run, ctx, settings)
+		return {"status": "success", "result": reason, "next_node_id": done_node}
+
+	ctx.set(item_key, items[current_index])
+	ctx.set(index_key, current_index + 1)
+	ctx.push_foreach(items[current_index], current_index)
+	_persist_context(flow_run, ctx, settings)
+	return {"status": "success", "result": items[current_index], "next_node_id": loop_node}
+
+
+def _exec_end(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""Execute end node - marks success."""
+	return {"status": "success", "output": "flow_complete"}
+
+
+_NODE_EXECUTORS = {
+	"trigger.webhook": _exec_trigger_webhook,
+	"trigger.schedule": _exec_trigger_schedule,
+	"trigger.doc-event": _exec_trigger_doc_event,
+	"agent.run": _exec_agent_run,
+	"tool.call": _exec_tool_call,
+	"router.llm": _exec_router_llm,
+	"human.approval": _exec_human_approval,
+	"http_request": _exec_http_request,
+	"condition": _exec_condition,
+	"transform": _exec_transform,
+	"loop": _exec_loop_node,
+	"end": _exec_end,
+}
+
+_NODE_TYPES = tuple(_NODE_EXECUTORS)
+
+
+# ---------------------------------------------------------------------------
+# Edge evaluation
+# ---------------------------------------------------------------------------
+
+
+def _evaluate_edges(
+	flow_run, node_id: str, node_result: dict, edges_list: list, *, context=None
+) -> str | None:
+	"""
+	Evaluate outgoing edges from a node and return the next node ID.
+
+	Edges are sorted by priority (desc) and the first matching edge wins.
+
+	``context`` lets a caller that already holds the run's parsed context pass
+	it in rather than have it re-parsed here (F-9); callers that don't, get
+	the old behaviour.
+	"""
+	outgoing = [e for e in edges_list if e.get("from") == node_id]
+	if not outgoing:
+		return None
+
+	outgoing.sort(key=lambda e: e.get("priority", 0), reverse=True)
+
+	ctx = context.as_dict() if context is not None else _load_context(flow_run)
+	node_status = node_result.get("status", "success") if isinstance(node_result, dict) else "success"
+
+	for edge in outgoing:
+		edge_type = edge.get("type", "always")
+
+		if edge_type == "always":
+			return edge.get("to")
+
+		elif edge_type == "on_success":
+			if node_status == "success":
+				return edge.get("to")
+
+		elif edge_type == "on_failure":
+			if node_status == "failed":
+				return edge.get("to")
+
+		elif edge_type == "expression":
+			condition = edge.get("condition", "")
+			try:
+				if safe_eval_expression(condition, ctx):
+					return edge.get("to")
+			except Exception as e:
+				frappe.log_error(
+					f"Edge expression error ({condition}): {str(e)}",
+					"Flow Engine Edge Eval",
+				)
+
+	return None
+
+
+def _get_outgoing_edges(node_id: str, edges_list: list) -> list[dict]:
+	"""Get outgoing edges from a node as candidate list."""
+	candidates = []
+	for edge in edges_list:
+		if edge.get("from") == node_id:
+			candidates.append(
+				{
+					"to": edge.get("to"),
+					"edge_id": edge.get("id"),
+					"label": edge.get("meta", {}).get("label", ""),
+					"meta": edge.get("meta", {}),
+				}
+			)
+	return candidates
+
+
+# ---------------------------------------------------------------------------
+# Agentic mode helpers
+# ---------------------------------------------------------------------------
+
+
+def _should_call_orchestrator(policy: str, completed_nodes: list) -> bool:
+	"""Determine if orchestrator should be called based on policy."""
+	if policy == "start_and_after_each_node":
+		return True
+	if policy == "after_each_node":
+		return len(completed_nodes) > 0
+	return False
+
+
+def _call_orchestrator(
+	flow_run, current_node_id: str, node_result: dict, candidates: list, settings: dict, completed_nodes: list
+) -> str | None:
+	"""Call the orchestrator agent and return the chosen next_node_id."""
+	orchestrator_agent = (settings or {}).get("orchestrator_agent")
+	if not orchestrator_agent:
+		frappe.log_error("Agentic mode requires orchestrator_agent in settings", "Flow Engine")
+		return None
+
+	run_ctx = _run_context(settings)
+	ctx = _context_of(flow_run, settings)
+	valid_node_ids = {c["to"] for c in candidates}
+
+	prompt = build_orchestrator_prompt(
+		current_node_id=current_node_id,
+		current_node_result=node_result,
+		flow_context=ctx.as_dict(),
+		candidates=candidates,
+		completed_summary=", ".join(completed_nodes),
+	)
+
+	conv_mode = (settings or {}).get("conversation_mode", "flow_shared")
+	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
+
+	try:
+		from huf.ai.agent_integration import run_agent_sync
+
+		result = run_agent_sync(
+			agent_name=orchestrator_agent,
+			prompt=prompt,
+			conversation_id=conversation_id,
+			channel_id="flow_orchestrator",
+			flow_run_id=flow_run.name,
+			flow_node_id=current_node_id,
+			run_kind="orchestrator",
+			now=True,
+		)
+
+		if not result.get("success"):
+			frappe.log_error(f"Orchestrator failed: {result.get('error')}", "Flow Engine Orchestrator")
+			return None
+
+		decision = parse_decision(result.get("response", ""), valid_node_ids)
+
+		if decision.get("context_patch"):
+			ctx.update(decision["context_patch"])
+			_persist_context(flow_run, ctx, settings)
+
+		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
+		commit_if_background()
+
+		return decision["next_node_id"]
+
+	except Exception as e:
+		frappe.log_error(f"Orchestrator error: {str(e)}", "Flow Engine Orchestrator")
+		return None
+
+
+# ---------------------------------------------------------------------------
+# Approval notifications
+# ---------------------------------------------------------------------------
 
 
 def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_data: dict):
@@ -941,406 +1568,44 @@ def _clear_flow_notifications(flow_run):
 		pass
 
 
-def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	Execute http_request node - makes an HTTP request.
-
-	Config keys:
-	    url (str): Target URL (supports {{ }} variable interpolation)
-	    method (str): GET, POST, PUT, DELETE (default: GET)
-	    headers (dict): Optional request headers
-	    body (dict|str): Optional request body for POST/PUT
-	    timeout (int): Request timeout in seconds (default: 30)
-	    save_result_to_context (str): Context key to store result
-	"""
-	import requests as http_lib
-
-	url = config.get("url")
-	if not url:
-		return {"status": "failed", "error": "http_request node missing 'url' in config"}
-
-	ctx = _load_context(flow_run)
-
-	# Interpolate variables in url, headers, and body
-	url = _interpolate_string(url, ctx)
-	method = (config.get("method") or "GET").upper()
-	headers = config.get("headers", {})
-	if isinstance(headers, dict):
-		headers = {k: _interpolate_string(str(v), ctx) for k, v in headers.items()}
-
-	body = config.get("body")
-	if isinstance(body, dict):
-		body = _substitute_dict(body, ctx)
-	elif isinstance(body, str):
-		body = _interpolate_string(body, ctx)
-
-	timeout = config.get("timeout", 30)
-
-	try:
-		kwargs = {"headers": headers, "timeout": timeout}
-		if method in ("POST", "PUT", "PATCH") and body:
-			if isinstance(body, dict):
-				kwargs["json"] = body
-			else:
-				kwargs["data"] = body
-
-		resp = http_lib.request(method, url, **kwargs)
-
-		try:
-			result_data = resp.json()
-		except (json.JSONDecodeError, TypeError):
-			frappe.log_error(
-				frappe.get_traceback(),
-				"HTTP response JSON parse failed — falling back to text"
-			)
-			result_data = resp.text
-
-		result = {
-			"status_code": resp.status_code,
-			"data": result_data,
-			"headers": dict(resp.headers),
-		}
-
-		# Save to context if configured
-		# Support both output.save_result_to_context (new) and root-level (legacy)
-		output_config = config.get("output", {})
-		save_key = output_config.get("save_result_to_context") or config.get("save_result_to_context")
-		if save_key:
-			ctx[save_key] = result
-			flow_run.db_set("context_json", json.dumps(ctx, default=str))
-
-		commit_if_background()
-
-		is_success = 200 <= resp.status_code < 400
-		return {
-			"status": "success" if is_success else "failed",
-			"result": result,
-		}
-	except Exception as e:
-		return {"status": "failed", "error": str(e)}
-
-
-def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	Execute condition node - evaluates a boolean expression and routes
-	to true_branch or false_branch.
-
-	This is HUF's equivalent to n8n's IF node with explicit branch ports.
-
-	Config keys:
-	    expression (str): Boolean expression to evaluate against context
-	    true_node (str): Node ID to go to if expression is true
-	    false_node (str): Node ID to go to if expression is false
-	"""
-	expression = config.get("expression", "")
-	true_node = config.get("true_node")
-	false_node = config.get("false_node")
-
-	if not expression:
-		return {"status": "failed", "error": "condition node missing 'expression' in config"}
-
-	if not true_node and not false_node:
-		return {"status": "failed", "error": "condition node needs at least one of 'true_node' or 'false_node'"}
-
-	ctx = _load_context(flow_run)
-
-	try:
-		result = safe_eval_expression(expression, ctx)
-		chosen_node = true_node if result else false_node
-
-		if not chosen_node:
-			# If we evaluated to a branch that has no target, consider it done
-			return {"status": "success", "result": result, "next_node_id": None}
-
-		return {
-			"status": "success",
-			"result": result,
-			"branch": "true" if result else "false",
-			"next_node_id": chosen_node,
-		}
-	except Exception as e:
-		return {"status": "failed", "error": f"Condition evaluation failed: {str(e)}"}
-
-
-def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	Execute transform node - applies data transformations to context.
-
-	Config keys:
-	    transformations (list): List of transformation operations
-	        Each with: source_field, target_field, operation (copy|map|template)
-	    save_result_to_context (str): Optional key to store result
-	"""
-	ctx = _load_context(flow_run)
-	transformations = config.get("transformations", [])
-
-	results = {}
-	for t in transformations:
-		source = t.get("source_field", "")
-		target = t.get("target_field", "")
-		operation = t.get("operation", "copy")
-
-		if not source or not target:
-			continue
-
-		try:
-			if operation == "copy":
-				# Direct copy from context
-				value = _resolve_context_path(ctx, source)
-				ctx[target] = value
-				results[target] = value
-			elif operation == "template":
-				# Interpolate a template string
-				value = _interpolate_string(source, ctx)
-				ctx[target] = value
-				results[target] = value
-			elif operation == "map":
-				# Map/rename: get source data and store under target
-				value = _resolve_context_path(ctx, source)
-				ctx[target] = value
-				results[target] = value
-		except Exception as e:
-			results[target] = f"Error: {str(e)}"
-
-	flow_run.db_set("context_json", json.dumps(ctx, default=str))
-	commit_if_background()
-
-	return {"status": "success", "result": results}
-
-
-def _exec_loop_node(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""
-	Execute loop node - iterates over an array in context.
-
-	The loop node works by checking if there are remaining items to iterate.
-	If yes, it sets the current item in context and returns the loop_node (body).
-	If no, it returns the done_node.
-
-	Config keys:
-	    iterate_over (str): Context key containing the array to iterate
-	    item_key (str): Context key to store current item (default: 'loop_item')
-	    index_key (str): Context key to store current index (default: 'loop_index')
-	    loop_node (str): Node ID to execute for each iteration (loop body)
-	    done_node (str): Node ID to go to when iteration is complete
-	    max_iterations (int): Safety limit (default: 100)
-	"""
-	ctx = _load_context(flow_run)
-
-	iterate_over = config.get("iterate_over", "")
-	item_key = config.get("item_key", "loop_item")
-	index_key = config.get("index_key", "loop_index")
-	loop_node = config.get("loop_node")
-	done_node = config.get("done_node")
-	max_iter = config.get("max_iterations", 100)
-
-	if not iterate_over:
-		return {"status": "failed", "error": "loop node missing 'iterate_over' in config"}
-
-	# Get the array to iterate over
-	items = _resolve_context_path(ctx, iterate_over)
-	if not isinstance(items, list):
-		return {"status": "failed", "error": f"'{iterate_over}' is not a list in context"}
-
-	# Get current iteration index
-	current_index = ctx.get(index_key, 0)
-	if not isinstance(current_index, int):
-		current_index = 0
-
-	# Safety check
-	if current_index >= max_iter:
-		ctx.pop(item_key, None)
-		ctx.pop(index_key, None)
-		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		commit_if_background()
-		return {"status": "success", "result": "max_iterations reached", "next_node_id": done_node}
-
-	if current_index < len(items):
-		# Set current item and advance index
-		ctx[item_key] = items[current_index]
-		ctx[index_key] = current_index + 1
-		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		commit_if_background()
-		return {"status": "success", "result": items[current_index], "next_node_id": loop_node}
-	else:
-		# Iteration complete - clean up loop variables
-		ctx.pop(item_key, None)
-		ctx.pop(index_key, None)
-		flow_run.db_set("context_json", json.dumps(ctx, default=str))
-		commit_if_background()
-		return {"status": "success", "result": "iteration_complete", "next_node_id": done_node}
-
-
-def _exec_end(flow_run, node: dict, config: dict, settings: dict) -> dict:
-	"""Execute end node - marks success."""
-	return {"status": "success", "output": "flow_complete"}
-
-
-# ---------------------------------------------------------------------------
-# Edge evaluation
-# ---------------------------------------------------------------------------
-
-
-def _evaluate_edges(flow_run, node_id: str, node_result: dict, edges_list: list) -> str | None:
-	"""
-	Evaluate outgoing edges from a node and return the next node ID.
-
-	Edges are sorted by priority (desc) and the first matching edge wins.
-	"""
-	outgoing = [e for e in edges_list if e.get("from") == node_id]
-	if not outgoing:
-		return None
-
-	# Sort by priority descending
-	outgoing.sort(key=lambda e: e.get("priority", 0), reverse=True)
-
-	ctx = _load_context(flow_run)
-	node_status = node_result.get("status", "success") if isinstance(node_result, dict) else "success"
-
-	for edge in outgoing:
-		edge_type = edge.get("type", "always")
-
-		if edge_type == "always":
-			return edge.get("to")
-
-		elif edge_type == "on_success":
-			if node_status == "success":
-				return edge.get("to")
-
-		elif edge_type == "on_failure":
-			if node_status == "failed":
-				return edge.get("to")
-
-		elif edge_type == "expression":
-			condition = edge.get("condition", "")
-			try:
-				if safe_eval_expression(condition, ctx):
-					return edge.get("to")
-			except Exception as e:
-				frappe.log_error(
-					f"Edge expression error ({condition}): {str(e)}",
-					"Flow Engine Edge Eval",
-				)
-
-	return None
-
-
-def _get_outgoing_edges(node_id: str, edges_list: list) -> list[dict]:
-	"""Get outgoing edges from a node as candidate list."""
-	candidates = []
-	for edge in edges_list:
-		if edge.get("from") == node_id:
-			candidates.append(
-				{
-					"to": edge.get("to"),
-					"edge_id": edge.get("id"),
-					"label": edge.get("meta", {}).get("label", ""),
-					"meta": edge.get("meta", {}),
-				}
-			)
-	return candidates
-
-
-# ---------------------------------------------------------------------------
-# Agentic mode helpers
-# ---------------------------------------------------------------------------
-
-
-def _should_call_orchestrator(policy: str, completed_nodes: list) -> bool:
-	"""Determine if orchestrator should be called based on policy."""
-	if policy == "start_and_after_each_node":
-		return True
-	if policy == "after_each_node":
-		return len(completed_nodes) > 0
-	return False
-
-
-def _call_orchestrator(
-	flow_run, current_node_id: str, node_result: dict, candidates: list, settings: dict, completed_nodes: list
-) -> str | None:
-	"""Call the orchestrator agent and return the chosen next_node_id."""
-	orchestrator_agent = settings.get("orchestrator_agent")
-	if not orchestrator_agent:
-		frappe.log_error("Agentic mode requires orchestrator_agent in settings", "Flow Engine")
-		return None
-
-	ctx = _load_context(flow_run)
-	valid_node_ids = {c["to"] for c in candidates}
-
-	prompt = build_orchestrator_prompt(
-		current_node_id=current_node_id,
-		current_node_result=node_result,
-		flow_context=ctx,
-		candidates=candidates,
-		completed_summary=", ".join(completed_nodes),
-	)
-
-	conv_mode = settings.get("conversation_mode", "flow_shared")
-	conversation_id = flow_run.conversation if conv_mode == "flow_shared" else None
-
-	try:
-		from huf.ai.agent_integration import run_agent_sync
-
-		result = run_agent_sync(
-			agent_name=orchestrator_agent,
-			prompt=prompt,
-			conversation_id=conversation_id,
-			channel_id="flow_orchestrator",
-			flow_run_id=flow_run.name,
-			flow_node_id=current_node_id,
-			run_kind="orchestrator",
-			now=True,
-		)
-
-		if not result.get("success"):
-			frappe.log_error(f"Orchestrator failed: {result.get('error')}", "Flow Engine Orchestrator")
-			return None
-
-		decision = parse_decision(result.get("response", ""), valid_node_ids)
-
-		# Apply context patch
-		if decision.get("context_patch"):
-			ctx.update(decision["context_patch"])
-			flow_run.db_set("context_json", json.dumps(ctx, default=str))
-
-		flow_run.db_set("last_agent_run", result.get("agent_run_id"))
-		commit_if_background()
-
-		return decision["next_node_id"]
-
-	except Exception as e:
-		frappe.log_error(f"Orchestrator error: {str(e)}", "Flow Engine Orchestrator")
-		return None
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
+def _conversation_of(flow_run, run_ctx: FlowRunContext | None):
+	if run_ctx is not None:
+		return run_ctx.conversation
+	return getattr(flow_run, "conversation", None)
+
+
+def _mode_of(flow_run, run_ctx: FlowRunContext | None) -> str:
+	if run_ctx is not None:
+		return run_ctx.mode
+	return (getattr(flow_run, "mode", "") or "").lower()
+
+
 def _load_context(flow_run) -> dict:
-	"""Load the flow context from the flow run document."""
-	if not flow_run.context_json:
-		return {}
-	try:
-		ctx = json.loads(flow_run.context_json) if isinstance(flow_run.context_json, str) else flow_run.context_json
-		return ctx if isinstance(ctx, dict) else {}
-	except (json.JSONDecodeError, TypeError):
-		return {}
+	"""Load the flow context from the flow run document.
+
+	Kept for callers outside a run (and for tests that drive a single node
+	executor directly). Inside a run the context is parsed once and carried
+	on :class:`FlowRunContext` instead (F-9).
+	"""
+	return GraphContext.from_json(getattr(flow_run, "context_json", None)).as_dict()
 
 
 def _build_agent_prompt(config: dict, context: dict) -> str:
-	"""Build agent prompt from config template and context."""
+	"""Build agent prompt from config template and context.
+
+	Uses the single interpolation implementation (F-2); this used to be a
+	fourth, subtly different ``str.replace`` loop over context keys.
+	"""
 	input_config = config.get("input", {})
 	prompt_template = input_config.get("prompt_template")
 
 	if prompt_template:
-		# Simple template variable substitution
-		prompt = prompt_template
-		for key, value in context.items():
-			placeholder = "{{" + key + "}}"
-			if placeholder in prompt:
-				prompt = prompt.replace(placeholder, str(value) if not isinstance(value, str) else value)
-		return prompt
+		return _interpolate_string(prompt_template, context)
 
 	# Default: serialize the context as the prompt
 	return json.dumps(context, indent=2, default=str)
@@ -1437,24 +1702,13 @@ def _verify_approval_permission(waiting: dict):
 
 def _complete_flow_run(flow_run):
 	"""Mark a flow run as successfully completed."""
-	flow_run.db_set(
-		{
-			"status": "Success",
-			"completed_at": now_datetime(),
-		}
-	)
+	flow_run.db_set({"status": "Success", "completed_at": now_datetime()})
 	commit_if_background()
 
 
 def _fail_flow_run(flow_run, error_msg: str):
 	"""Mark a flow run as failed."""
-	flow_run.db_set(
-		{
-			"status": "Failed",
-			"last_error": error_msg,
-			"completed_at": now_datetime(),
-		}
-	)
+	flow_run.db_set({"status": "Failed", "last_error": error_msg, "completed_at": now_datetime()})
 	commit_if_background()
 	_publish_flow_event(flow_run, "flow_failed", {"error": error_msg})
 
@@ -1482,12 +1736,19 @@ def _publish_flow_event(flow_run, event_type: str, data: dict):
 
 
 # ---------------------------------------------------------------------------
-# Additional string/context helpers
+# The one interpolation implementation (F-2)
 # ---------------------------------------------------------------------------
 
 
 def _interpolate_string(template: str, ctx: dict) -> str:
-	"""Replace {{ key }} placeholders in a string with values from context."""
+	"""Replace ``{{ key }}`` placeholders in a string with context values.
+
+	This is the only ``{{...}}`` implementation in the engine. GT-04 found
+	four, with different resolution semantics per node type -- dotted paths
+	here, flat keys only inside ``tool.call``, a bare ``str.replace`` loop in
+	the agent-prompt builder. Every node type now resolves identically, and
+	dotted paths work everywhere.
+	"""
 	import re
 
 	def replacer(match):
@@ -1499,7 +1760,7 @@ def _interpolate_string(template: str, ctx: dict) -> str:
 
 
 def _substitute_dict(data, ctx: dict):
-	"""Recursively substitute {{ key }} in dict/list/str values."""
+	"""Recursively substitute ``{{ key }}`` in dict/list/str values."""
 	if isinstance(data, dict):
 		return {k: _substitute_dict(v, ctx) for k, v in data.items()}
 	elif isinstance(data, list):
@@ -1510,7 +1771,11 @@ def _substitute_dict(data, ctx: dict):
 
 
 def _resolve_context_path(ctx: dict, path: str):
-	"""Resolve a dotted path like 'user_data.email' from context dict."""
+	"""Resolve a dotted path like 'user_data.email' from a context dict.
+
+	Delegates to the executor's path resolver so the ``{{...}}`` form and the
+	IR's ``{"$from": ...}`` form share one path grammar.
+	"""
 	parts = path.split(".")
 	current = ctx
 	for part in parts:
