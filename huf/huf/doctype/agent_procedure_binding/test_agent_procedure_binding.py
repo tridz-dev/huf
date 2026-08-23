@@ -86,6 +86,9 @@ class TestAgentProcedureBinding(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": frappe.generate_hash(length=10),
 				"agent_modality": "Text",
+				# Agent.validate requires instructions; without it every test here errors with
+				# "Please provide an instruction for this AI Agent".
+				"instructions": "Test agent for procedure binding.",
 			}
 		)
 		doc.insert(ignore_permissions=True)
