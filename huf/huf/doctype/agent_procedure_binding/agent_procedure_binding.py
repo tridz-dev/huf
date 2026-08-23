@@ -13,8 +13,11 @@ Two invariants this controller enforces, both at validate() time (defence in dep
 huf.ai.graph.procedure_binding re-checks both again at exposure time, fail closed):
 
   I8 -- No automatic activation of write Procedures. A binding may only ever point at a
-  Procedure version with is_read_only=1. There is no bypass flag; a write Procedure is
-  activated by hand, outside this feature, in a later wave.
+  Procedure version with is_read_only=1, OR a write Procedure (is_read_only=0) whose
+  approval_status is "Approved" through the manual gate in
+  huf.ai.procedure_approval_api (request_procedure_approval / approve_procedure --
+  System Manager / Huf Manager only). There is no other bypass: an unapproved write
+  Procedure still cannot be bound.
 
   Per-agent cap -- Procedure schemas entering model context is exactly the context bloat
   this feature exists to remove (T-31 warning, PLAN.md). An agent may not hold more than
@@ -49,7 +52,7 @@ class AgentProcedureBinding(Document):
 		procedure = frappe.db.get_value(
 			"Agent Procedure",
 			self.procedure,
-			["procedure_id", "version", "is_read_only", "status"],
+			["procedure_id", "version", "is_read_only", "status", "approval_status"],
 			as_dict=True,
 		)
 		if not procedure:
@@ -60,15 +63,27 @@ class AgentProcedureBinding(Document):
 		self._procedure_snapshot = procedure
 
 	def _guard_read_only(self, procedure):
-		if self.enabled and not procedure.is_read_only:
-			frappe.throw(
-				_(
-					"Agent Procedure {0} is not read-only (I8). Only read-only Procedures may be "
-					"bound and enabled in this wave -- write Procedures require manual activation "
-					"outside Agent Procedure Binding."
-				).format(self.procedure),
-				title=_("Write Procedure Cannot Be Bound"),
-			)
+		"""I8: bind/enable is allowed when EITHER the Procedure is read-only, OR it is a
+		write Procedure that has cleared the manual approval gate
+		(huf.ai.procedure_approval_api.approve_procedure). The read-only-only path is the
+		default and is preserved unchanged above; the approved-write path is an explicit
+		additional allowance, not a replacement for it.
+		"""
+		if not self.enabled or procedure.is_read_only:
+			return
+
+		if procedure.approval_status == "Approved":
+			return
+
+		frappe.throw(
+			_(
+				"Agent Procedure {0} is not read-only (I8) and has not been approved for "
+				"binding. Read-only Procedures may be bound directly; a write Procedure must "
+				"first go through huf.ai.procedure_approval_api (request review, then have a "
+				"System Manager or Huf Manager approve it) before it can be bound."
+			).format(self.procedure),
+			title=_("Write Procedure Cannot Be Bound"),
+		)
 
 	def _guard_single_enabled_per_procedure_id(self):
 		"""At most one *enabled* binding per (agent, procedure_id) at a time.
