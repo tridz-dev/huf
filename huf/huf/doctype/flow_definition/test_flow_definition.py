@@ -24,7 +24,6 @@ def _valid_definition(flow_id):
 	return {
 		"schema_version": "1.0.0",
 		"profile": "flow",
-		"id": flow_id,
 		"fingerprint": "0" * 64,
 		"entry": "start",
 		"nodes": [
@@ -45,7 +44,17 @@ def _valid_definition(flow_id):
 			"output_schema": {"type": "object"},
 			"applies_when": [],
 			"permission_envelope": {"read": [], "write": [], "http": "none", "code": "none"},
-			"limits": {"fail_closed": True},
+			"limits": {
+				"max_nodes": 20,
+				"max_rows": 1000,
+				"max_output_bytes": 100_000,
+				"max_parallel_calls": 1,
+				"max_foreach_iterations": 1,
+				"max_external_calls": 5,
+				"max_writes": 0,
+				"max_wall_time_ms": 5000,
+				"fail_closed": True,
+			},
 		},
 	}
 
@@ -71,7 +80,6 @@ class TestFlowDefinitionAutoConvert(UnitTestCase):
 		import json
 
 		definition = dict(definition) if definition else _valid_definition(flow_id)
-		definition["id"] = flow_id
 
 		_ensure_saving_flag()
 		doc = frappe.get_doc(
