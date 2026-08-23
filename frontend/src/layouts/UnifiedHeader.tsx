@@ -99,6 +99,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
     if (path === '/') return 'Dashboard';
     if (path.startsWith('/agents')) return 'Agent';
     if (path.startsWith('/flows')) return 'Flows';
+    if (path.startsWith('/procedures')) return 'Procedures';
     if (path.startsWith('/data')) return 'Data';
     if (path.startsWith('/providers')) return 'AI providers & models';
     if (path.startsWith('/integration-services')) return 'Integration catalog';
