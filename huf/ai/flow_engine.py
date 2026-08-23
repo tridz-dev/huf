@@ -133,7 +133,7 @@ class FlowRunContext(dict):
 
 	@property
 	def edges(self) -> list:
-		return self.definition.get("edges", [])
+		return effective_edges(self.definition)
 
 	def save_context(self) -> None:
 		"""Write the in-memory context back to the ``Flow Run``."""
@@ -377,7 +377,7 @@ def run_flow(flow_run_name: str):
 		defn = version.graph
 
 		nodes_map = {n["id"]: n for n in defn.get("nodes", [])}
-		edges_list = defn.get("edges", [])
+		edges_list = effective_edges(defn)
 		run_ctx = _build_run_context(flow_run, version)
 
 		flow_run.db_set({"status": "Running", "last_error": ""})
@@ -961,7 +961,7 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
-	edges_list = run_ctx.edges if run_ctx is not None else load_definition(flow_run.flow_id).get("edges", [])
+	edges_list = run_ctx.edges if run_ctx is not None else effective_edges(load_definition(flow_run.flow_id))
 
 	candidates = _get_outgoing_edges(node.get("id"), edges_list)
 	if not candidates:
@@ -1135,14 +1135,17 @@ def _exec_condition(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	    false_node (str): Node ID to go to if expression is false
 	"""
 	expression = config.get("expression", "")
-	true_node = config.get("true_node")
-	false_node = config.get("false_node")
+	# on_true/on_false, not true_node/false_node -- these are the shared graph-IR's own
+	# field names for a ConditionNode's branch targets (graph_ir.schema.json
+	# ConditionNode), not a Flow-only convention any more.
+	true_node = config.get("on_true")
+	false_node = config.get("on_false")
 
 	if not expression:
 		return {"status": "failed", "error": "condition node missing 'expression' in config"}
 
 	if not true_node and not false_node:
-		return {"status": "failed", "error": "condition node needs at least one of 'true_node' or 'false_node'"}
+		return {"status": "failed", "error": "condition node needs at least one of 'on_true' or 'on_false'"}
 
 	ctx = _context_of(flow_run, settings)
 
@@ -1280,6 +1283,93 @@ _NODE_TYPES = tuple(_NODE_EXECUTORS)
 # ---------------------------------------------------------------------------
 # Edge evaluation
 # ---------------------------------------------------------------------------
+
+
+def effective_edges(defn: dict) -> list[dict]:
+	"""The edge list to route with, for either graph shape a pinned run may carry.
+
+	A ``Flow Run`` pins its whole graph at creation time (F-1) and keeps executing
+	that exact pinned copy for its entire life, however long that run takes -- so a run
+	created before this migration may still be executing against the pre-migration
+	shape (a real top-level ``edges`` array) well after Flow Definition's own validator
+	has moved on to requiring the shared graph-IR shape. Both are handled here: an
+	explicit ``edges`` key (the old shape, or a caller/test that hands routing in
+	directly) is used as-is; its absence (the shared graph-IR shape saved and validated
+	via ``huf.huf.doctype.flow_definition.flow_definition._validate_definition_json``)
+	falls back to :func:`edges_from_nodes`.
+	"""
+	if "edges" in defn:
+		return defn.get("edges") or []
+	return edges_from_nodes(defn.get("nodes", []))
+
+
+def edges_from_nodes(nodes: list) -> list[dict]:
+	"""Derive this module's internal edge list from the shared graph-IR's node-native
+	routing pointers.
+
+	The shared IR (``huf/ai/graph/graph_ir.schema.json``) has no independent top-level
+	``edges`` array any more: every node carries its own successor pointer (``next``)
+	and error route (``on_error``), and the three self-routing node types carry their
+	branch targets in their own ``config`` -- ``condition.on_true``/``on_false``,
+	``router.llm.options``/``default``, ``human.approval.approve_next``/``reject_next``.
+	This function is the one place that knowledge is decoded back into the ``{from, to,
+	type, meta}`` edge shape the rest of this module's routing machinery
+	(:func:`_evaluate_edges`, :func:`_get_outgoing_edges`, :class:`Router`'s labelled
+	resolution) still speaks -- so that machinery did not have to be rewritten to walk
+	five different per-node-type shapes directly.
+	"""
+	edges: list[dict] = []
+	for node in nodes:
+		if not isinstance(node, dict):
+			continue
+		node_id = node.get("id")
+		node_type = node.get("type")
+		config = node.get("config") or {}
+
+		if node_type == "condition":
+			on_true = config.get("on_true")
+			on_false = config.get("on_false")
+			if on_true:
+				edges.append(
+					{
+						"from": node_id,
+						"to": on_true,
+						"type": "expression",
+						"condition": config.get("expression") or "true",
+						"priority": 1,
+					}
+				)
+			if on_false:
+				edges.append({"from": node_id, "to": on_false, "type": "always"})
+		elif node_type == "router.llm":
+			for option in config.get("options") or []:
+				to = (option or {}).get("node_id")
+				if to:
+					edges.append({"from": node_id, "to": to, "type": "always", "meta": {"label": (option or {}).get("label")}})
+			default = config.get("default")
+			if default:
+				edges.append({"from": node_id, "to": default, "type": "always", "meta": {"label": "default"}})
+		elif node_type == "human.approval":
+			approve_next = config.get("approve_next")
+			reject_next = config.get("reject_next")
+			if approve_next:
+				edges.append(
+					{"from": node_id, "to": approve_next, "type": "on_success", "meta": {"outcome": "approved"}}
+				)
+			if reject_next:
+				edges.append(
+					{"from": node_id, "to": reject_next, "type": "on_failure", "meta": {"outcome": "rejected"}}
+				)
+		else:
+			next_id = node.get("next")
+			if next_id:
+				edges.append({"from": node_id, "to": next_id, "type": "always"})
+
+		on_error = node.get("on_error")
+		if on_error:
+			edges.append({"from": node_id, "to": on_error, "type": "on_failure"})
+
+	return edges
 
 
 def _evaluate_edges(

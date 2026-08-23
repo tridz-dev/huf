@@ -23,7 +23,7 @@ import {
   resumeFlowRun as apiResumeFlowRun,
 } from './flowApi';
 import type { FlowRunSummary, FlowRunDetail } from './flowApi';
-import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend } from './flowSerializer';
+import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
 import type { BackendFlowGraph } from './flowApi';
 
 class FlowService {
@@ -87,25 +87,24 @@ class FlowService {
   async createFlow(name: string, category?: string): Promise<Flow> {
     const flowId = `flow-${Date.now()}`;
 
-    // Build a minimal valid graph
+    // Build a minimal valid graph (shared graph-IR Flow profile -- see flowSerializer.ts)
     const defaultGraph: BackendFlowGraph = {
-      schema_version: 1,
-      id: flowId,
-      version: 1,
+      schema_version: '1.0.0',
+      profile: 'flow',
+      fingerprint: '0'.repeat(64),
       entry: 'empty-trigger',
       nodes: [
         {
           id: 'empty-trigger',
           type: 'trigger.webhook',
-          config: {},
+          config: { method: 'POST' },
+          next: null,
           _position: { x: 250, y: 100 },
           _label: 'Select trigger',
           _icon: 'Webhook',
         },
       ],
-      edges: [],
-      settings: { mode: 'normal', max_hops: 100 },
-      metadata: { name, category },
+      contract: defaultContract(),
     };
 
     await saveFlowDefinition(flowId, defaultGraph);

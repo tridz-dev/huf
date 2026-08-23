@@ -60,15 +60,17 @@ function FlowListPage() {
         try {
           const def = await getFlowDefinition(item.flow_id);
           const graph = def.definition_json;
-          const metadata = graph?.metadata || {};
+          // The shared graph-IR carries no `metadata` any more (additionalProperties:
+          // false) -- name/description/category live on the Flow Definition doctype
+          // record itself, not inside definition_json. See flowSerializer.ts.
           const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
 
           return {
             id: item.flow_id,
-            name: def.flow_name || metadata.name || item.flow_name,
-            description: metadata.description,
+            name: def.flow_name || item.flow_name,
+            description: undefined,
             status: mapBackendStatusToFrontend(def.status || item.status),
-            category: metadata.category,
+            category: undefined,
             nodeCount: nodes.length || 0,
             createdAt: new Date(item.modified),
             updatedAt: new Date(item.modified),
