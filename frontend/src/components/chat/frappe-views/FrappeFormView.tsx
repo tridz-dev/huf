@@ -22,9 +22,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from '@/components/ui/select';
-import { CopyIcon, CheckIcon } from 'lucide-react';
+import { CopyIcon, CheckIcon, ExternalLink } from 'lucide-react';
 import type { FrappeFieldMeta, FrappeViewPayload } from '@/types/artifact.types';
 import { isDisplayField } from './frappeFieldFormat';
+import { deskFormUrl } from './frappeDeskUrl';
 
 export interface FrappeFormViewProps {
 	payload: FrappeViewPayload;
@@ -89,8 +90,23 @@ export function FrappeFormView({ payload }: FrappeFormViewProps) {
 		}
 	};
 
+	const recordName = typeof record.name === 'string' ? record.name : undefined;
+
 	return (
 		<form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-line bg-panel p-4">
+			{recordName && (
+				<div className="flex justify-end">
+					<a
+						href={deskFormUrl(payload.doctype, recordName)}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-flex items-center gap-1 text-xs text-steel hover:text-ink"
+					>
+						Open in Desk
+						<ExternalLink className="h-3 w-3" />
+					</a>
+				</div>
+			)}
 			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				{fields.map((field) => (
 					<div key={field.fieldname} className="space-y-1.5">

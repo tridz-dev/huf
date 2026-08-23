@@ -22,9 +22,10 @@ import {
 } from '@tanstack/react-table';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowUpDown, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 import type { FrappeFieldMeta, FrappeViewPayload } from '@/types/artifact.types';
 import { formatFrappeCellValue, isDisplayField } from './frappeFieldFormat';
+import { deskListUrl } from './frappeDeskUrl';
 
 export interface FrappeListViewProps {
 	payload: FrappeViewPayload;
@@ -89,6 +90,17 @@ export function FrappeListView({ payload, onPageChange }: FrappeListViewProps) {
 
 	return (
 		<div className="space-y-3">
+			<div className="flex justify-end">
+				<a
+					href={deskListUrl(payload.doctype)}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-1 text-xs text-steel hover:text-ink"
+				>
+					Open in Desk
+					<ExternalLink className="h-3 w-3" />
+				</a>
+			</div>
 			<div className="rounded-lg border border-line bg-panel overflow-x-auto">
 				<Table>
 					<TableHeader>
