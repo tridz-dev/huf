@@ -145,6 +145,7 @@ class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 		insert naming the same pair collides on the primary key. This is the "unique
 		key preventing overwrite" GT-14 calls for, independent of any validate hook."""
 		self._insert()  # v1
+		_ensure_saving_flag()
 		with self.assertRaises(frappe.DuplicateEntryError):
 			frappe.get_doc(
 				{
@@ -154,7 +155,6 @@ class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 					"version": 1,
 					"definition_json": frappe.as_json(_graph(tool_id="something_else")),
 				}
-			_ensure_saving_flag()
 			).insert(ignore_permissions=True)
 
 	def test_saving_existing_version_with_changed_content_is_blocked(self):
