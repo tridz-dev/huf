@@ -14,8 +14,8 @@ Test classes and their bench requirements
 Frappe-free (plain pytest / stubbed frappe via huf/ai/tests/conftest.py,
 no live bench, no DB):
     - TestResolveContextPath
-    - TestInterpolateString
-    - TestSubstituteDict
+    - TestFromReferenceResolution
+    - TestResolveRecursive
     - TestEvaluateEdges
     - TestExecCondition
     - TestExecTransform
@@ -93,6 +93,7 @@ if isinstance(sys.modules.get("frappe"), MagicMock):
 	sys.modules["frappe"].whitelist = lambda *a, **k: (lambda f: f)
 
 from huf.ai import flow_engine
+from huf.ai.graph.executor import GraphContext
 
 
 # ---------------------------------------------------------------------------
@@ -179,49 +180,72 @@ class TestResolveContextPath(unittest.TestCase):
 		self.assertIsNone(flow_engine._resolve_context_path({"a": "hello"}, "a.b"))
 
 
-class TestInterpolateString(unittest.TestCase):
-	"""`_interpolate_string` -- {{ }} substitution with dotted-path support."""
+class TestFromReferenceResolution(unittest.TestCase):
+	"""`GraphContext.resolve` -- the single ``{"$from": ...}`` reference form
+	that replaced the four ``{{...}}`` string interpolators (F-2). Mirrors
+	what the old `TestInterpolateString` pinned, one reference at a time
+	rather than one placeholder inside a larger string, since composing a
+	string out of several interpolated fragments is exactly the capability
+	GT-04 removed.
+	"""
 
 	def test_simple_substitution(self):
-		self.assertEqual(flow_engine._interpolate_string("Hello {{name}}", {"name": "World"}), "Hello World")
+		ctx = GraphContext({"name": "World"})
+		self.assertEqual(ctx.resolve({"$from": "context.name"}), "World")
 
 	def test_dotted_path_substitution(self):
-		ctx = {"order": {"id": "ORD-1"}}
-		self.assertEqual(flow_engine._interpolate_string("Order: {{order.id}}", ctx), "Order: ORD-1")
+		ctx = GraphContext({"order": {"id": "ORD-1"}})
+		self.assertEqual(ctx.resolve({"$from": "context.order.id"}), "ORD-1")
 
-	def test_whitespace_inside_braces_is_trimmed(self):
-		self.assertEqual(flow_engine._interpolate_string("{{  name  }}", {"name": "x"}), "x")
+	def test_unresolved_reference_returns_none(self):
+		ctx = GraphContext({})
+		self.assertIsNone(ctx.resolve({"$from": "context.missing"}))
 
-	def test_unresolved_placeholder_left_intact(self):
-		self.assertEqual(flow_engine._interpolate_string("Hi {{missing}}", {}), "Hi {{missing}}")
+	def test_non_string_value_passes_through(self):
+		ctx = GraphContext({"n": 3})
+		self.assertEqual(ctx.resolve({"$from": "context.n"}), 3)
 
-	def test_non_string_value_is_stringified(self):
-		self.assertEqual(flow_engine._interpolate_string("Count: {{n}}", {"n": 3}), "Count: 3")
-
-	def test_multiple_placeholders(self):
-		ctx = {"a": "1", "b": "2"}
-		self.assertEqual(flow_engine._interpolate_string("{{a}}-{{b}}", ctx), "1-2")
-
-
-class TestSubstituteDict(unittest.TestCase):
-	"""`_substitute_dict` -- recursive {{ }} substitution over dict/list/str."""
-
-	def test_substitutes_nested_structure(self):
-		ctx = {"name": "Ada", "id": "42"}
-		data = {"greeting": "Hi {{name}}", "list": ["{{id}}", "static"], "nested": {"x": "{{name}}!"}}
-		result = flow_engine._substitute_dict(data, ctx)
+	def test_multiple_references_in_one_config_value(self):
+		ctx = GraphContext({"a": "1", "b": "2"})
 		self.assertEqual(
-			result,
-			{"greeting": "Hi Ada", "list": ["42", "static"], "nested": {"x": "Ada!"}},
+			ctx.resolve({"a": {"$from": "context.a"}, "b": {"$from": "context.b"}}),
+			{"a": "1", "b": "2"},
 		)
 
-	def test_non_string_leaves_untouched(self):
-		data = {"count": 5, "enabled": True, "ratio": 1.5}
-		self.assertEqual(flow_engine._substitute_dict(data, {}), data)
+	def test_static_string_is_left_untouched(self):
+		# Plain strings are no longer a templating surface -- only an exact
+		# {"$from": ...} mapping is resolved; everything else, including a
+		# string that happens to contain "{{...}}", passes through as-is.
+		ctx = GraphContext({"name": "World"})
+		self.assertEqual(ctx.resolve("Hello {{name}}"), "Hello {{name}}")
 
-	def test_supports_dotted_paths_like_interpolate_string(self):
-		ctx = {"user": {"email": "a@b.com"}}
-		self.assertEqual(flow_engine._substitute_dict({"to": "{{user.email}}"}, ctx), {"to": "a@b.com"})
+
+class TestResolveRecursive(unittest.TestCase):
+	"""`GraphContext.resolve` recurses through nested dict/list structures,
+	replacing the old `_substitute_dict` recursive ``{{ }}`` substitution.
+	"""
+
+	def test_resolves_nested_structure(self):
+		ctx = GraphContext({"name": "Ada", "id": "42"})
+		data = {
+			"greeting": {"$from": "context.name"},
+			"list": [{"$from": "context.id"}, "static"],
+			"nested": {"x": {"$from": "context.name"}},
+		}
+		result = ctx.resolve(data)
+		self.assertEqual(
+			result,
+			{"greeting": "Ada", "list": ["42", "static"], "nested": {"x": "Ada"}},
+		)
+
+	def test_non_reference_values_left_untouched(self):
+		ctx = GraphContext({})
+		data = {"count": 5, "enabled": True, "ratio": 1.5}
+		self.assertEqual(ctx.resolve(data), data)
+
+	def test_supports_dotted_paths_like_flat_keys(self):
+		ctx = GraphContext({"user": {"email": "a@b.com"}})
+		self.assertEqual(ctx.resolve({"to": {"$from": "context.user.email"}}), {"to": "a@b.com"})
 
 
 # ---------------------------------------------------------------------------
@@ -393,17 +417,22 @@ class TestExecTransform(unittest.TestCase):
 		new_ctx = json.loads(flow_run.context_json)
 		self.assertEqual(new_ctx["dest"], "hello")
 
-	def test_template_operation_interpolates(self):
+	def test_template_operation_resolves_source_path(self):
+		# F-2: "template" used to run source_field through the now-removed
+		# {{...}} string interpolator, letting it compose a string out of
+		# several context values. That composition capability is gone with
+		# the templating syntax; "template" is now the same dotted-path read
+		# as "copy"/"map" -- this pins that it still resolves a nested path.
 		flow_run = FakeFlowRun()
-		_ctx(flow_run, name="Ada")
+		_ctx(flow_run, user={"name": "Ada"})
 		config = {
 			"transformations": [
-				{"source_field": "Hi {{name}}", "target_field": "greeting", "operation": "template"}
+				{"source_field": "user.name", "target_field": "greeting", "operation": "template"}
 			]
 		}
 		flow_engine._exec_transform(flow_run, {}, config, {})
 		new_ctx = json.loads(flow_run.context_json)
-		self.assertEqual(new_ctx["greeting"], "Hi Ada")
+		self.assertEqual(new_ctx["greeting"], "Ada")
 
 	def test_map_operation_renames(self):
 		flow_run = FakeFlowRun()
@@ -507,11 +536,15 @@ class TestExecTriggerWebhook(unittest.TestCase):
 
 
 class TestExecToolCallInterpolation(unittest.TestCase):
-	"""tool.call's own inline `replace_var` -- one of the four interpolation
-	implementations (F-2). These tests drive the real `_exec_tool_call`
-	executor with the frappe surface it touches (db.get_value, get_doc,
-	execute_tool) mocked, and assert on the args actually passed to the tool
-	-- an observable outcome that should hold across the F-2 fix.
+	"""tool.call's arg substitution -- one of the four ``{{...}}``
+	implementations GT-04 found (F-2), and the one this defect is named for:
+	unlike `_interpolate_string`, it only did a flat ``ctx.get(var_name)``
+	lookup and could not resolve dotted paths. These tests drive the real
+	`_exec_tool_call` executor with the frappe surface it touches
+	(db.get_value, get_doc, execute_tool) mocked, and assert on the args
+	actually passed to the tool -- an observable outcome that should hold
+	across the F-2 fix, now expressed through the single
+	``{"$from": ...}`` reference form instead of ``{{...}}``.
 	"""
 
 	def _run_tool_call(self, ctx, args, tool_result=None):
@@ -537,18 +570,20 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 
 		return captured
 
-	def test_flat_key_substitution_works(self):
-		captured = self._run_tool_call({"name": "Ada"}, {"greeting": "Hello {{name}}"})
-		self.assertEqual(captured["args"]["greeting"], "Hello Ada")
+	def test_flat_key_reference_resolves(self):
+		captured = self._run_tool_call({"name": "Ada"}, {"greeting": {"$from": "context.name"}})
+		self.assertEqual(captured["args"]["greeting"], "Ada")
 
-	def test_dotted_path_substitution_currently_unsupported(self):
-		"""F-2: tool.call's local `replace_var` only does a flat ctx.get(var_name)
-		lookup -- unlike `_interpolate_string`, it does NOT resolve dotted paths.
-		Intended behaviour (post T-22 unification): dotted paths resolve here too.
+	def test_dotted_path_reference_resolves(self):
+		"""F-2: tool.call's arg substitution used to only do a flat
+		ctx.get(var_name) lookup and could not resolve dotted paths, unlike
+		`_interpolate_string` elsewhere in the engine. Now every node type
+		resolves ``{"$from": ...}`` through the same `GraphContext.resolve`,
+		so a nested path works here exactly as it does everywhere else.
 		"""
 		captured = self._run_tool_call(
 			{"user": {"email": "a@b.com"}},
-			{"to": "{{user.email}}"},
+			{"to": {"$from": "context.user.email"}},
 		)
 		self.assertEqual(captured["args"]["to"], "a@b.com")
 

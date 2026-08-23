@@ -16,10 +16,12 @@ What changed in T-22, and why (defect ids are from the track plan):
   :class:`~huf.ai.graph.executor.PinnedVersion` (see :func:`_pinned_version`)
   and executes that exact graph for its whole life.
 * **F-2 -- interpolation.** Four divergent ``{{...}}`` implementations with
-  different semantics per node type are gone. There is exactly one:
-  :func:`_interpolate_string` (dotted paths) and its recursive form
-  :func:`_substitute_dict`, used by every node type. Graph-IR configs use the
-  executor's single structured reference form, ``{"$from": "node.path"}``.
+  different semantics per node type are gone; there is no string templating
+  left in the engine at all. Every node type resolves its config exclusively
+  through the executor's single structured reference form,
+  ``{"$from": "node.path"}`` (see :meth:`~huf.ai.graph.executor.GraphContext.resolve`),
+  with :func:`_resolve_context_path` still used for a plain dotted-path
+  read (``transform``'s copy/map/template operations).
 * **F-3 -- loops.** Loop iteration no longer burns the run's hop budget; a
   bounded foreach carries its own iteration budget in the executor.
 * **F-4 -- concurrency.** ``run_flow`` takes a distributed lock, and the
@@ -830,7 +832,7 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
 
-	prompt = _build_agent_prompt(config, ctx.as_dict())
+	prompt = _build_agent_prompt(config, ctx)
 
 	conv_mode = config.get("conversation_mode", "flow_shared")
 	conversation_id = _conversation_of(flow_run, run_ctx) if conv_mode == "flow_shared" else None
@@ -880,10 +882,11 @@ def _exec_agent_run(flow_run, node: dict, config: dict, settings: dict) -> dict:
 def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute tool.call node - deterministic tool execution.
 
-	Argument substitution uses the single interpolation implementation
-	(:func:`_substitute_dict`), not a local flat-key variant (F-2), and the
-	``Agent Tool Call`` telemetry record is emitted by the invocation service
-	rather than assembled here -- exactly one record per call (I5, GT-05).
+	Argument substitution resolves ``{"$from": ...}`` references through the
+	executor's single structured reference form (F-2), not a local flat-key
+	variant, and the ``Agent Tool Call`` telemetry record is emitted by the
+	invocation service rather than assembled here -- exactly one record per
+	call (I5, GT-05).
 	"""
 	tool_name = config.get("tool_name")
 	if not tool_name:
@@ -893,7 +896,7 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	args = dict(config.get("args") or config.get("parameters") or {})
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
-	args = _substitute_dict(args, ctx.as_dict())
+	args = ctx.resolve(args)
 
 	run_doc = _create_flow_agent_run(
 		flow_run=flow_run,
@@ -1025,9 +1028,9 @@ def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> 
 	context_summary = config.get("context_summary", "")
 	reference_name = config.get("reference_name", "")
 	if context_summary:
-		context_summary = _interpolate_string(context_summary, ctx.as_dict())
+		context_summary = ctx.resolve(context_summary)
 	if reference_name:
-		reference_name = _interpolate_string(reference_name, ctx.as_dict())
+		reference_name = ctx.resolve(reference_name)
 
 	waiting_data = {
 		"type": "approval",
@@ -1056,7 +1059,7 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 	Execute http_request node - makes an HTTP request.
 
 	Config keys:
-	    url (str): Target URL (supports {{ }} variable interpolation)
+	    url (str): Target URL (may be a ``{"$from": ...}`` reference)
 	    method (str): GET, POST, PUT, DELETE (default: GET)
 	    headers (dict): Optional request headers
 	    body (dict|str): Optional request body for POST/PUT
@@ -1065,22 +1068,20 @@ def _exec_http_request(flow_run, node: dict, config: dict, settings: dict) -> di
 	"""
 	import requests as http_lib
 
-	url = config.get("url")
+	ctx = _context_of(flow_run, settings)
+
+	url = ctx.resolve(config.get("url"))
 	if not url:
 		return {"status": "failed", "error": "http_request node missing 'url' in config"}
 
-	ctx = _context_of(flow_run, settings)
-	data = ctx.as_dict()
-
-	url = _interpolate_string(url, data)
 	method = (config.get("method") or "GET").upper()
-	headers = config.get("headers", {})
+	headers = ctx.resolve(config.get("headers") or {})
 	if isinstance(headers, dict):
-		headers = {k: _interpolate_string(str(v), data) for k, v in headers.items()}
+		headers = {k: str(v) for k, v in headers.items()}
 
 	body = config.get("body")
 	if isinstance(body, (dict, list, str)):
-		body = _substitute_dict(body, data)
+		body = ctx.resolve(body)
 
 	timeout = config.get("timeout", 30)
 
@@ -1170,6 +1171,11 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	Config keys:
 	    transformations (list): source_field, target_field, operation
 	        (copy|map|template)
+
+	``copy``, ``map``, and ``template`` are all the same dotted-path read of
+	``source_field`` against the context; they differ only in the author's
+	intent, not in mechanism (F-2 -- ``template`` used to run its source
+	through the now-removed ``{{...}}`` string interpolator).
 	"""
 	ctx = _context_of(flow_run, settings)
 	data = ctx.as_dict()
@@ -1179,17 +1185,12 @@ def _exec_transform(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	for t in transformations:
 		source = t.get("source_field", "")
 		target = t.get("target_field", "")
-		operation = t.get("operation", "copy")
 
 		if not source or not target:
 			continue
 
 		try:
-			if operation == "template":
-				value = _interpolate_string(source, data)
-			else:
-				# copy and map are the same read; they differ only in intent.
-				value = _resolve_context_path(data, source)
+			value = _resolve_context_path(data, source)
 			ctx.set(target, value)
 			results[target] = value
 		except Exception as e:
@@ -1595,20 +1596,22 @@ def _load_context(flow_run) -> dict:
 	return GraphContext.from_json(getattr(flow_run, "context_json", None)).as_dict()
 
 
-def _build_agent_prompt(config: dict, context: dict) -> str:
+def _build_agent_prompt(config: dict, ctx: GraphContext) -> str:
 	"""Build agent prompt from config template and context.
 
-	Uses the single interpolation implementation (F-2); this used to be a
-	fourth, subtly different ``str.replace`` loop over context keys.
+	``prompt_template`` resolves through the single structured reference
+	form (F-2); this used to be a fourth, subtly different ``str.replace``
+	loop over context keys.
 	"""
 	input_config = config.get("input", {})
 	prompt_template = input_config.get("prompt_template")
 
 	if prompt_template:
-		return _interpolate_string(prompt_template, context)
+		resolved = ctx.resolve(prompt_template)
+		return resolved if isinstance(resolved, str) else json.dumps(resolved, default=str)
 
 	# Default: serialize the context as the prompt
-	return json.dumps(context, indent=2, default=str)
+	return json.dumps(ctx.as_dict(), indent=2, default=str)
 
 
 def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = "", agent_name: str = None) -> "frappe.Document":
@@ -1736,38 +1739,8 @@ def _publish_flow_event(flow_run, event_type: str, data: dict):
 
 
 # ---------------------------------------------------------------------------
-# The one interpolation implementation (F-2)
+# Context path resolution (F-2)
 # ---------------------------------------------------------------------------
-
-
-def _interpolate_string(template: str, ctx: dict) -> str:
-	"""Replace ``{{ key }}`` placeholders in a string with context values.
-
-	This is the only ``{{...}}`` implementation in the engine. GT-04 found
-	four, with different resolution semantics per node type -- dotted paths
-	here, flat keys only inside ``tool.call``, a bare ``str.replace`` loop in
-	the agent-prompt builder. Every node type now resolves identically, and
-	dotted paths work everywhere.
-	"""
-	import re
-
-	def replacer(match):
-		key = match.group(1).strip()
-		value = _resolve_context_path(ctx, key)
-		return str(value) if value is not None else match.group(0)
-
-	return re.sub(r"\{\{\s*(.+?)\s*\}\}", replacer, template)
-
-
-def _substitute_dict(data, ctx: dict):
-	"""Recursively substitute ``{{ key }}`` in dict/list/str values."""
-	if isinstance(data, dict):
-		return {k: _substitute_dict(v, ctx) for k, v in data.items()}
-	elif isinstance(data, list):
-		return [_substitute_dict(v, ctx) for v in data]
-	elif isinstance(data, str) and "{{" in data and "}}" in data:
-		return _interpolate_string(data, ctx)
-	return data
 
 
 def _resolve_context_path(ctx: dict, path: str):
