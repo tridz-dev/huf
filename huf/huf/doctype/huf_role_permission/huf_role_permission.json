@@ -14,7 +14,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Capability",
-   "options": "agent.use\nagent.create\nagent.edit\nagent.delete\nagent.view_all\nchat.use\nchat.view_own\nchat.view_all\nknowledge.use\nknowledge.create\nknowledge.manage\ntools.use\ntools.create\ntools.manage\nflows.use\nflows.create\nflows.manage\nsystem.providers.manage\nsystem.models.manage\nsystem.mcp.manage\nsystem.integrations.manage\nsystem.settings.manage\ndata.tables.manage\ndata.records.create\ndata.records.view_own\ndata.records.view_all\ndata.records.edit_own\ndata.records.edit_all\nusers.invite\nusers.manage\nroles.manage\nexecution_profile.manage\nnetwork_access_policy.manage\nexecution.approve\ncode_execution.run\nssh_connection.manage\nssh.run\nssh.approve\ndocker.run",
+   "options": "agent.use\nagent.create\nagent.edit\nagent.delete\nagent.view_all\nchat.use\nchat.view_own\nchat.view_all\nknowledge.use\nknowledge.create\nknowledge.manage\ntools.use\ntools.create\ntools.manage\nflows.use\nflows.create\nflows.manage\nsystem.providers.manage\nsystem.models.manage\nsystem.mcp.manage\nsystem.integrations.manage\nsystem.settings.manage\ndata.tables.manage\ndata.records.create\ndata.records.view_own\ndata.records.view_all\ndata.records.edit_own\ndata.records.edit_all\nusers.invite\nusers.manage\nroles.manage\nexecution_profile.manage\nnetwork_access_policy.manage\nexecution.approve\ncode_execution.run\nssh_connection.manage\nssh.run\nssh.approve\ndocker.run\ndeveloper.access\ndeveloper.keys.manage",
    "reqd": 1
   },
   {
