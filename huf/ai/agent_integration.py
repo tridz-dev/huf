@@ -1706,6 +1706,15 @@ def _execute_agent_run(
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
+
+        # Opt-in only -- off unless a site operator sets
+        # huf_retain_system_prompts_enabled in site_config. See
+        # huf/ai/system_prompt_retention.py for why this defaults off (D15).
+        from huf.ai.system_prompt_retention import maybe_snapshot_system_prompt
+        maybe_snapshot_system_prompt(
+            run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
+        )
+
         prefix_breakpoints = compute_prefix_breakpoints(
             agent_doc, agent, resolved_model_name, resolved_provider, history
         )
@@ -2919,6 +2928,15 @@ async def run_agent_stream(
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
+
+        # Opt-in only -- off unless a site operator sets
+        # huf_retain_system_prompts_enabled in site_config. See
+        # huf/ai/system_prompt_retention.py for why this defaults off (D15).
+        from huf.ai.system_prompt_retention import maybe_snapshot_system_prompt
+        maybe_snapshot_system_prompt(
+            run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
+        )
+
         prefix_breakpoints = compute_prefix_breakpoints(
             agent_doc, agent, resolved_model_name, resolved_provider, history
         )
