@@ -17,6 +17,24 @@ Agent setting, so it is not reproduced here — see AGENTS.md notes on
 prompt_cache_options). Per-breakpoint cache-hit attribution is deliberately
 not attempted: providers report one aggregate cache_read count per run, not
 per-block hits, and a wrong per-block guess is worse than an honest gap.
+
+Two distinct measurement points, not one:
+
+  - `compute_segment_tokens()` is called ONCE, pre-call, from
+    agent_integration.py, before the LLM is invoked. It describes round 1's
+    pre-call composition only: system, tools, knowledge, history, and the
+    outgoing user message, as they exist before that first completion.
+  - A single Agent Run can perform up to `max_turns` LLM completions. Every
+    round after round 1 carries a message list that has grown by the
+    assistant's tool-call request and every tool result from prior rounds —
+    content `compute_segment_tokens()` never sees and that no other segment
+    accounts for either. `count_tool_exchange_tokens()` measures exactly
+    that growth, and `reconcile_composition()` compares the two measurement
+    points (segments + tool exchange vs. the provider's own reported
+    `prompt_tokens`) to surface when they diverge, i.e. when some other,
+    still-uninstrumented context source exists. Conflating these two points
+    — treating segment_tokens as if it described the whole run — is the
+    defect this module now guards against.
 """
 
 import hashlib
@@ -110,3 +128,167 @@ def compute_prefix_breakpoints(agent_doc, agent, resolved_model, resolved_provid
             breakpoints.append({"marker": "history", "prefix_hash": prefix_hash})
 
     return breakpoints
+
+
+def _extract_message_text(content):
+    """Flatten a message's `content` to plain text for token counting.
+
+    `content` is usually a plain string, but this codebase also produces
+    the multimodal list-of-content-blocks shape via `_build_text_content`
+    (e.g. `[{"type": "text", "text": "...", "cache_control": {...}}]`).
+    Non-text blocks (e.g. image_url parts) contribute no text here.
+    """
+    if not content:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                text = block.get("text")
+                if text:
+                    parts.append(str(text))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
+    return str(content)
+
+
+def _normalize_tool_call(tool_call):
+    """Reduce one tool call (dict or SDK object) to a plain {name, arguments} dict.
+
+    litellm's non-streaming path attaches SDK objects (e.g.
+    ChatCompletionMessageToolCall) to `assistant_message["tool_calls"]`; the
+    streaming path attaches plain dicts assembled from delta chunks. Both
+    shapes occur in practice and are normalized here so serialisation is
+    uniform regardless of which provider loop produced the message.
+    """
+    if isinstance(tool_call, dict):
+        function = tool_call.get("function") or {}
+        return {
+            "name": function.get("name") if isinstance(function, dict) else None,
+            "arguments": function.get("arguments") if isinstance(function, dict) else None,
+        }
+    function = getattr(tool_call, "function", None)
+    return {
+        "name": getattr(function, "name", None) if function is not None else None,
+        "arguments": getattr(function, "arguments", None) if function is not None else None,
+    }
+
+
+def count_tool_exchange_tokens(pricing_model, messages):
+    """Best-effort token count of the tool exchange within `messages`.
+
+    `messages` is the running message list from the provider loop (or, for
+    O(rounds) accumulation, just the slice appended in the current round —
+    see providers/litellm.py). Counts exactly two things:
+
+      - assistant messages carrying `tool_calls`: the serialised tool-call
+        payload (name + arguments), not the message's `content` — a
+        tool-calling assistant turn's content is frequently empty and is
+        not the thing we're trying to measure here.
+      - messages with role == "tool": the tool result content.
+
+    Deliberately does NOT count the system message, the original user
+    message, or ordinary assistant prose — those are already covered by
+    `compute_segment_tokens()`'s five categories, and double-counting them
+    would make composition percentages wrong.
+
+    Returns an int (0 for an empty/no-op exchange), or `None` if counting
+    failed for any message — same discipline as `_count`; a partial count
+    would understate the true figure and mislead reconciliation more than
+    an honest "unknown".
+    """
+    if not messages:
+        return 0
+
+    total = 0
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+
+        if role == "assistant" and message.get("tool_calls"):
+            try:
+                normalized_calls = [_normalize_tool_call(tc) for tc in message["tool_calls"]]
+                payload = frappe.as_json(normalized_calls)
+            except Exception:
+                return None
+            count = _count(pricing_model, payload)
+            if count is None:
+                return None
+            total += count
+
+        elif role == "tool":
+            text = _extract_message_text(message.get("content"))
+            if not text:
+                continue
+            count = _count(pricing_model, text)
+            if count is None:
+                return None
+            total += count
+
+    return total
+
+
+def reconcile_composition(segment_tokens, tool_exchange_tokens, provider_prompt_tokens, tolerance=0.15):
+    """Compare counted context composition against the provider's reported prompt size.
+
+    Compares `sum(segment_tokens.values()) + tool_exchange_tokens`
+    against `provider_prompt_tokens` for the same measurement point.
+    Divergence beyond `tolerance` (a fraction of `provider_prompt_tokens`)
+    signals an uninstrumented context source — something contributing to
+    the provider's prompt that no segment and no tool-exchange count
+    accounts for. Logs a warning naming both figures in that case; never
+    raises and never fails a run.
+
+    An unknown input makes the whole comparison unknown, and each returns
+    `None` rather than being coerced to 0:
+
+      - any `None` in `segment_tokens` (a segment that could not be counted),
+      - `tool_exchange_tokens` of `None` (the tool exchange could not be
+        counted) — summing it as 0 would understate `counted` and report a
+        divergence that is purely an artefact of the failed count,
+      - a falsy `provider_prompt_tokens` (nothing to compare against).
+
+    A `tool_exchange_tokens` of 0 is a real measurement, not an unknown: a
+    single-round run genuinely has no tool exchange, and it reconciles normally.
+
+    Returns a dict with keys `counted`, `reported`, `delta_ratio`,
+    `within_tolerance`, or `None` when the comparison could not be made.
+    """
+    try:
+        if not provider_prompt_tokens:
+            return None
+        if not isinstance(segment_tokens, dict) or not segment_tokens:
+            return None
+        if any(value is None for value in segment_tokens.values()):
+            return None
+        if tool_exchange_tokens is None:
+            # Unknown, not zero: summing it as 0 would understate `counted` and
+            # report a divergence that is an artefact of the failed count.
+            return None
+
+        counted = sum(segment_tokens.values()) + tool_exchange_tokens
+        reported = provider_prompt_tokens
+        delta_ratio = abs(counted - reported) / reported
+        within_tolerance = delta_ratio <= tolerance
+
+        if not within_tolerance:
+            frappe.logger("huf").warning(
+                "Context composition mismatch: counted %s tokens (segments + tool exchange) "
+                "vs provider-reported prompt_tokens=%s (delta_ratio=%.2f%%, tolerance=%.0f%%). "
+                "This suggests an uninstrumented context source.",
+                counted, reported, delta_ratio * 100, tolerance * 100,
+            )
+
+        return {
+            "counted": counted,
+            "reported": reported,
+            "delta_ratio": delta_ratio,
+            "within_tolerance": within_tolerance,
+        }
+    except Exception:
+        # Reconciliation is diagnostic-only; never let it break a run.
+        return None

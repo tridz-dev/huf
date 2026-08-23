@@ -2,6 +2,25 @@ import frappe
 from frappe import _
 
 
+async def _await_tagged(coro, provider_path):
+    """Await a provider coroutine and tag the result with the path that served it.
+
+    RunProvider.run() is a *sync* method that returns the provider's coroutine
+    without awaiting it -- the caller awaits. So the marker cannot be attached to
+    what run() returns directly: a coroutine object has no __dict__ and assigning
+    to it raises AttributeError. Wrapping keeps run()'s existing semantics (still
+    returns an awaitable, still defers execution to the caller) while attaching
+    the marker to the real result once it exists.
+    """
+    result = await coro
+    try:
+        result.provider_path = provider_path
+    except (AttributeError, TypeError):
+        # Marking is observability, never a reason to fail a run.
+        pass
+    return result
+
+
 class RunProvider:
     """
     Central routing layer for AI providers.
@@ -21,7 +40,10 @@ class RunProvider:
         # This supports OpenAI, Anthropic, Google, and 100+ others automatically.
         try:
             from huf.ai.providers import litellm
-            return litellm.run(agent, enhanced_prompt, provider, model, context=context)
+            return _await_tagged(
+                litellm.run(agent, enhanced_prompt, provider, model, context=context),
+                "litellm",
+            )
 
         except ImportError as e:
             # Handle case where litellm package is missing
@@ -70,7 +92,10 @@ class RunProvider:
             frappe.throw(_(f"Provider {provider} is missing a run() function"))
 
         try:
-            return module.run(agent, enhanced_prompt, provider, model, context=context)
+            return _await_tagged(
+                module.run(agent, enhanced_prompt, provider, model, context=context),
+                "legacy_fallback",
+            )
         except Exception:
             # If custom module existed but failed, raise the original LiteLLM error if present
             if original_exception:

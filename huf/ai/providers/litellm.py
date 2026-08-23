@@ -571,6 +571,33 @@ def _finalize_usage_totals(usage_totals: dict) -> dict:
     return usage_totals
 
 
+def _accumulate_tool_exchange_tokens(usage_totals: dict, pricing_model: str, new_messages: list):
+    """Best-effort accumulation of one round's tool-exchange token count into `usage_totals`.
+
+    `new_messages` is only the messages appended THIS round (the assistant
+    tool-call message plus its tool results) — never the whole growing
+    message list — so counting stays O(rounds), not O(rounds^2). Imports
+    context_segments lazily: that module imports `_normalize_model_name`
+    from this one, so a module-level import here would be circular.
+
+    Once a round's count fails, `tool_exchange_tokens` degrades to `None`
+    for the rest of the run and stays there: a partial sum would understate
+    the true figure, which is worse than an honest "unknown" for the
+    reconciliation this feeds (see context_segments.reconcile_composition).
+    """
+    if usage_totals.get("tool_exchange_tokens") is None:
+        return
+    try:
+        from huf.ai.context_segments import count_tool_exchange_tokens
+        count = count_tool_exchange_tokens(pricing_model, new_messages)
+    except Exception:
+        count = None
+    if count is None:
+        usage_totals["tool_exchange_tokens"] = None
+    else:
+        usage_totals["tool_exchange_tokens"] += count
+
+
 async def run(agent, enhanced_prompt, provider, model, context=None):
     """
     Unified LiteLLM provider implementation.
@@ -623,6 +650,10 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             frappe.throw("API key not configured in AI Provider.")
 
         normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
+        # Pricing/tokenizer-model name, computed the same way context_segments.py
+        # computes it (no brand override) so tool-exchange counts use the same
+        # tokenizer as the pre-call segment counts they're reconciled against.
+        pricing_model = _normalize_model_name(model, provider)
         is_local_llm = bool(provider_doc.get("is_local_llm", 0))
         api_base = _resolve_api_base(provider_doc)
 
@@ -638,7 +669,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
         cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
         cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
-        
+
         if agent_doc:
             enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
@@ -650,7 +681,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             enable_prompt_caching = False
 
         max_context_chars = _get_agent_max_context_chars(agent_doc)
-        
+
         # Check if model supports prompt caching
         model_supports_caching = False
         cache_skipped_unsupported_model = False
@@ -752,6 +783,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             "peak_context_tokens": 0,
             "round_count": 0,
             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+            # Tokens contributed by tool-call requests/results across all rounds
+            # (see context_segments.count_tool_exchange_tokens); None if any
+            # round's count failed. round_prompt_tokens is the per-round
+            # prompt-size growth shape, taken from round_usage["input_tokens"]
+            # at no extra tokenizer cost.
+            "tool_exchange_tokens": 0,
+            "round_prompt_tokens": [],
         }
         total_cost = 0.0
         all_new_items = []
@@ -1004,6 +1042,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             total_usage["peak_context_tokens"] = max(
                 total_usage["peak_context_tokens"], round_usage["input_tokens"]
             )
+            total_usage["round_prompt_tokens"].append(round_usage["input_tokens"])
 
             try:
                 round_cost, _cost_source = calculate_cost(
@@ -1011,6 +1050,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     input_tokens=round_usage["input_tokens"],
                     output_tokens=round_usage["output_tokens"],
                     cached_tokens=round_usage["cache_read_tokens"],
+                    cache_creation_tokens=round_usage["cache_write_tokens"],
                     litellm_response=response,
                 )
                 total_cost += round_cost
@@ -1136,6 +1176,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 )
 
             messages.extend(tool_results)
+
+            # Accumulate just this round's growth (the assistant tool-call
+            # request plus its results) — never re-tokenise the whole
+            # `messages` list, which would make this O(rounds^2).
+            _accumulate_tool_exchange_tokens(
+                total_usage, pricing_model, [assistant_message] + tool_results
+            )
 
         return SimpleResult(
             "Agent stopped after max rounds of tool calls.",
@@ -1322,6 +1369,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             return
 
         normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
+        # Pricing/tokenizer-model name, computed the same way context_segments.py
+        # computes it (no brand override) so tool-exchange counts use the same
+        # tokenizer as the pre-call segment counts they're reconciled against.
+        pricing_model = _normalize_model_name(model, provider)
         is_local_llm = bool(provider_doc.get("is_local_llm", 0))
         api_base = _resolve_api_base(provider_doc)
 
@@ -1337,7 +1388,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
         cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
         cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
-        
+
         if agent_doc:
             enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
             cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
@@ -1577,6 +1628,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "peak_context_tokens": 0,
             "round_count": 0,
             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+            # See the matching fields in run()'s total_usage init for what
+            # these mean and why tool_exchange_tokens can degrade to None.
+            "tool_exchange_tokens": 0,
+            "round_prompt_tokens": [],
         }
         stream_total_cost = 0.0
 
@@ -1888,6 +1943,14 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                             messages.append(assistant_msg)
                             messages.extend(tool_results)
 
+                            # Accumulate just this round's growth (the assistant
+                            # tool-call request plus its results) — never
+                            # re-tokenise the whole `messages` list, which would
+                            # make this O(rounds^2).
+                            _accumulate_tool_exchange_tokens(
+                                stream_total_usage, pricing_model, [assistant_msg] + tool_results
+                            )
+
                             # Reset for next round
                             streaming_content = ""
                             current_tool_calls = {}
@@ -1910,6 +1973,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 stream_total_usage["peak_context_tokens"] = max(
                     stream_total_usage["peak_context_tokens"], round_usage["input_tokens"]
                 )
+                stream_total_usage["round_prompt_tokens"].append(round_usage["input_tokens"])
 
                 try:
                     round_cost, _cost_source = calculate_cost(
@@ -1917,6 +1981,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                         input_tokens=round_usage["input_tokens"],
                         output_tokens=round_usage["output_tokens"],
                         cached_tokens=round_usage["cache_read_tokens"],
+                        cache_creation_tokens=round_usage["cache_write_tokens"],
                     )
                     stream_total_cost += round_cost
                 except (ValueError, TypeError, AttributeError, KeyError):
