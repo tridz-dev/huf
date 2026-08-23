@@ -1,4 +1,5 @@
 import { ChevronDown, Mic, MicOff, Phone, PhoneOff } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,16 @@ interface VoiceCallOverlayProps {
  * a bespoke `fixed inset-0` overlay.
  */
 export function VoiceCallOverlay({ voiceCall, agentName, onEndCall, onStartCall, onMinimize }: VoiceCallOverlayProps) {
+    const transcriptRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll the caption list to the newest turn as the transcript grows.
+    useEffect(() => {
+        const el = transcriptRef.current;
+        if (el) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }, [voiceCall.transcript]);
+
     const statusLabel =
         voiceCall.status === 'connecting'
             ? 'Connecting…'
@@ -81,6 +92,29 @@ export function VoiceCallOverlay({ voiceCall, agentName, onEndCall, onStartCall,
                     <span className="text-lg font-medium text-ink">{agentName}</span>
                     <span className="text-sm text-steel">{statusLabel}</span>
                 </div>
+
+                {voiceCall.transcript.length > 0 && (
+                    <div
+                        ref={transcriptRef}
+                        className="flex w-full max-w-md flex-col gap-2 overflow-y-auto px-2 text-sm"
+                        style={{ maxHeight: '30vh' }}
+                        aria-live="polite"
+                    >
+                        {voiceCall.transcript.map((turn) => (
+                            <p
+                                key={turn.id}
+                                className={cn(
+                                    "leading-snug",
+                                    turn.role === 'agent' ? "text-ink" : "text-steel",
+                                    !turn.final && "opacity-70",
+                                )}
+                            >
+                                <span className="font-medium">{turn.role === 'agent' ? agentName : 'You'}: </span>
+                                {turn.text}
+                            </p>
+                        ))}
+                    </div>
+                )}
 
                 <div className="flex items-center gap-6">
                     {voiceCall.status === 'live' && (

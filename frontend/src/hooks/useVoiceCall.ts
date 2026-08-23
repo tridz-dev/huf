@@ -4,6 +4,14 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 export type VoiceCallStatus = 'idle' | 'connecting' | 'live' | 'error' | 'ended';
 
+export interface TranscriptTurn {
+  id: string;
+  role: 'user' | 'agent';
+  text: string;
+  /** True once the turn is known-final (no more deltas will arrive for it). */
+  final: boolean;
+}
+
 export interface UseVoiceCallResult {
   status: VoiceCallStatus;
   error: string | null;
@@ -12,6 +20,7 @@ export interface UseVoiceCallResult {
   mute: () => void;
   unmute: () => void;
   isMuted: boolean;
+  transcript: TranscriptTurn[];
 }
 
 /**
@@ -58,6 +67,14 @@ function floatTo16kPcm16(input: Float32Array, inputSampleRate: number): ArrayBuf
   return out.buffer;
 }
 
+let transcriptIdCounter = 0;
+
+/** Dependency-free id generator — good enough for keying local transcript turns. */
+function nextTranscriptId(): string {
+  transcriptIdCounter += 1;
+  return `turn-${Date.now()}-${transcriptIdCounter}`;
+}
+
 function base64FromArrayBuffer(buffer: ArrayBuffer): string {
   let binary = '';
   const bytes = new Uint8Array(buffer);
@@ -88,6 +105,25 @@ function base64FromArrayBuffer(buffer: ArrayBuffer): string {
  *   `wss://<current host><sidecar_ws_path>`. No frontend env var for a
  *   sidecar base URL was found in this repo at implementation time — if one
  *   is added later (e.g. VITE_REALTIME_WS_BASE), this should read it first.
+ *
+ * Transcript event shapes (NOT re-verified against live provider docs in
+ * this pass — same "flagged, not silently guessed" convention as above):
+ * - ElevenLabs: `{type: "user_transcript", user_transcription_event:
+ *   {user_transcript}}` for recognized user speech, and `{type:
+ *   "agent_response", agent_response_event: {agent_response}}` for the
+ *   agent's spoken response — both arrive as single, already-final frames
+ *   (no delta/done split, per ElevenLabs' documented Conversational AI
+ *   WebSocket event shapes). An `interruption` event type likely also
+ *   exists but was not observed in this pass, so it is not handled.
+ * - litellm_realtime: `response.audio_transcript.delta` (`{delta}`, partial)
+ *   and `response.audio_transcript.done` (`{transcript}`, final) for the
+ *   agent's spoken text — this matches exactly what the sidecar itself
+ *   parses in `_try_persist_agent_turn` (huf/ai/voice/sidecar/app.py), so
+ *   confidence here is high. User-side transcription
+ *   (`conversation.item.input_audio_transcription.completed`) is NOT
+ *   implemented: the sidecar never sends a `session.update` enabling input
+ *   transcription, so there is no evidence the provider ever emits it for
+ *   these sessions — left as a documented gap rather than fabricated.
  */
 export function useVoiceCall(
   agentName: string,
@@ -96,6 +132,7 @@ export function useVoiceCall(
   const [status, setStatus] = useState<VoiceCallStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptTurn[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -110,6 +147,11 @@ export function useVoiceCall(
   // Tracks the latest status so close/error listeners registered at start()
   // time can check "were we actually live" without stale closures.
   const statusRef = useRef(status);
+  // litellm_realtime streams the agent's transcript as delta/done events
+  // with no turn id of its own to key off — this tracks the in-progress
+  // turn's locally-generated id so successive deltas update the same entry,
+  // and is cleared on "done" so the next response starts a fresh turn.
+  const streamingAgentTurnIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     isMutedRef.current = isMuted;
@@ -181,6 +223,27 @@ export function useVoiceCall(
     source.start(startAt);
     playbackTimeRef.current = startAt + audioBuffer.duration;
   }, []);
+
+  /**
+   * Insert or update one transcript turn by id. `append: true` concatenates
+   * onto the existing turn's text (streaming deltas); otherwise `text`
+   * replaces it outright (a final/complete transcript).
+   */
+  const upsertTranscriptTurn = useCallback(
+    (id: string, role: TranscriptTurn['role'], text: string, final: boolean, append = false) => {
+      setTranscript((prev) => {
+        const index = prev.findIndex((turn) => turn.id === id);
+        if (index === -1) {
+          return [...prev, { id, role, text, final }];
+        }
+        const next = [...prev];
+        const existing = next[index];
+        next[index] = { ...existing, text: append ? existing.text + text : text, final };
+        return next;
+      });
+    },
+    [],
+  );
 
   const startMicCapture = useCallback(
     async (onFrame: (pcm16: ArrayBuffer) => void) => {
@@ -266,6 +329,8 @@ export function useVoiceCall(
     }
     setError(null);
     setStatus('connecting');
+    setTranscript([]);
+    streamingAgentTurnIdRef.current = null;
 
     let result: StartSessionResult;
     try {
@@ -328,6 +393,8 @@ export function useVoiceCall(
             const parsed = JSON.parse(event.data) as {
               type?: string;
               audio_event?: { audio_base_64?: string };
+              user_transcription_event?: { user_transcript?: string };
+              agent_response_event?: { agent_response?: string };
             };
             const base64Audio = parsed?.audio_event?.audio_base_64;
             if (parsed?.type === 'audio' && base64Audio) {
@@ -337,10 +404,21 @@ export function useVoiceCall(
                 bytes[i] = binary.charCodeAt(i);
               }
               playIncomingPcm16(bytes.buffer);
+            } else if (parsed?.type === 'user_transcript') {
+              const text = parsed.user_transcription_event?.user_transcript;
+              if (text) {
+                upsertTranscriptTurn(nextTranscriptId(), 'user', text, true);
+              }
+            } else if (parsed?.type === 'agent_response') {
+              const text = parsed.agent_response_event?.agent_response;
+              if (text) {
+                upsertTranscriptTurn(nextTranscriptId(), 'agent', text, true);
+              }
             }
+            // Other control frames (interruption, ping, etc.) are still
+            // ignored — this hook only handles audio + transcript text.
           } catch {
-            // Non-audio control frames (interruption, ping, etc.) are
-            // ignored — this hook only handles the audio path.
+            // Malformed/non-JSON frames are ignored.
           }
         });
 
@@ -384,9 +462,42 @@ export function useVoiceCall(
           }
           if (event.data instanceof Blob) {
             void event.data.arrayBuffer().then((buffer) => playIncomingPcm16(buffer));
+            return;
           }
-          // String frames (JSON control/status messages from the sidecar)
-          // are intentionally ignored here — this hook only handles audio.
+          if (typeof event.data !== 'string') {
+            return;
+          }
+          // String frames are JSON control/status/transcript messages
+          // relayed from the OpenAI Realtime API by the sidecar (see
+          // huf/ai/voice/sidecar/app.py's own `_try_persist_agent_turn`,
+          // which parses this same wire format for `response.audio_
+          // transcript.done`). Defensive try/catch: a parse failure here
+          // must never affect the live audio path above.
+          try {
+            const parsed = JSON.parse(event.data) as {
+              type?: string;
+              delta?: string;
+              transcript?: string;
+              item_id?: string;
+              response_id?: string;
+            };
+            if (parsed?.type === 'response.audio_transcript.delta' && parsed.delta) {
+              const id = streamingAgentTurnIdRef.current ?? parsed.item_id ?? parsed.response_id ?? nextTranscriptId();
+              streamingAgentTurnIdRef.current = id;
+              upsertTranscriptTurn(id, 'agent', parsed.delta, false, true);
+            } else if (parsed?.type === 'response.audio_transcript.done') {
+              const id = streamingAgentTurnIdRef.current ?? parsed.item_id ?? parsed.response_id ?? nextTranscriptId();
+              upsertTranscriptTurn(id, 'agent', parsed.transcript ?? '', true, false);
+              streamingAgentTurnIdRef.current = null;
+            }
+            // `conversation.item.input_audio_transcription.completed` (user
+            // speech) is deliberately NOT handled here — the sidecar never
+            // sends a session.update enabling input transcription, so there
+            // is no evidence the provider emits it for these sessions. Left
+            // as a documented gap rather than fabricated.
+          } catch {
+            // Non-JSON/malformed string frames are ignored.
+          }
         });
 
         ws.addEventListener('close', () => {
@@ -402,7 +513,7 @@ export function useVoiceCall(
       handleTransportError(err instanceof Error ? err.message : 'Failed to open voice call');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentName, conversationId, status, startMicCapture, playIncomingPcm16, handleTransportError]);
+  }, [agentName, conversationId, status, startMicCapture, playIncomingPcm16, handleTransportError, upsertTranscriptTurn]);
 
   const mute = useCallback(() => setIsMuted(true), []);
   const unmute = useCallback(() => setIsMuted(false), []);
@@ -415,5 +526,5 @@ export function useVoiceCall(
     [closeSocket, teardownAudio],
   );
 
-  return { status, error, start, stop, mute, unmute, isMuted };
+  return { status, error, start, stop, mute, unmute, isMuted, transcript };
 }
