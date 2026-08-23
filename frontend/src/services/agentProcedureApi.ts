@@ -14,6 +14,8 @@ export interface AgentProcedureProvenance {
   [key: string]: unknown;
 }
 
+export type AgentProcedureApprovalStatus = 'Not Requested' | 'Pending Review' | 'Approved' | 'Rejected';
+
 export interface AgentProcedureDoc {
   name: string;
   procedure_id?: string;
@@ -40,6 +42,10 @@ export interface AgentProcedureDoc {
   updated_at?: string;
   creation?: string;
   modified?: string;
+  approval_status?: AgentProcedureApprovalStatus;
+  approved_by?: string;
+  approved_at?: string;
+  approval_note?: string;
 }
 
 export interface AgentProcedureListParams extends PaginationParams {
@@ -183,5 +189,49 @@ export async function runProcedureValidation(
     return (result?.message ?? result) as ProcedureValidationResult;
   } catch (error) {
     handleFrappeError(error, `Error running validation harness for ${procedureName}`);
+  }
+}
+
+export interface ProcedureApprovalResult {
+  procedure_name: string;
+  approval_status: AgentProcedureApprovalStatus;
+  approved_by?: string;
+  approved_at?: string;
+  changed: boolean;
+}
+
+/** Flags a write Procedure (is_read_only=0) as ready for manual review. Any user with
+ * Agent Procedure read access may call this -- it grants no binding rights by itself,
+ * see `approveProcedure`. See `huf.ai.procedure_approval_api.request_procedure_approval`. */
+export async function requestProcedureApproval(
+  procedureName: string
+): Promise<ProcedureApprovalResult | undefined> {
+  try {
+    const result = await call.post('huf.ai.procedure_approval_api.request_procedure_approval', {
+      procedure_name: procedureName,
+    });
+    return (result?.message ?? result) as ProcedureApprovalResult;
+  } catch (error) {
+    handleFrappeError(error, `Error requesting review for ${procedureName}`);
+  }
+}
+
+/** Approves or rejects a write Procedure for binding. Restricted server-side to System
+ * Manager / Huf Manager (I8 gate) -- see
+ * `huf.ai.procedure_approval_api.approve_procedure`. */
+export async function approveProcedure(
+  procedureName: string,
+  approve: boolean,
+  note?: string
+): Promise<ProcedureApprovalResult | undefined> {
+  try {
+    const result = await call.post('huf.ai.procedure_approval_api.approve_procedure', {
+      procedure_name: procedureName,
+      approve,
+      ...(note ? { note } : {}),
+    });
+    return (result?.message ?? result) as ProcedureApprovalResult;
+  } catch (error) {
+    handleFrappeError(error, `Error recording approval decision for ${procedureName}`);
   }
 }

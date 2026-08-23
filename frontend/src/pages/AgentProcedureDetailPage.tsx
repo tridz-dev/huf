@@ -1,18 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Loader2, PlayCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, PlayCircle, ShieldCheck, XCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import {
+  approveProcedure,
   getAgentProcedure,
   getAgentProcedureVersionHistory,
   getSourceFlowId,
+  requestProcedureApproval,
   runProcedureValidation,
   type AgentProcedureDoc,
   type ProcedureValidationResult,
 } from '@/services/agentProcedureApi';
 import { formatTimeAgo } from '@/utils/time';
+
+/** System Manager maps to the "Huf Admin" Huf role server-side (see AgentsPage.tsx /
+ * AgentFormPage.tsx for the same convention) -- Huf Admin and Huf Manager are both
+ * eligible to approve/reject a write Procedure per
+ * huf.ai.procedure_approval_api.APPROVAL_MANAGER_ROLES. */
+function canApproveProcedures(hufRole: string | null): boolean {
+  return hufRole === 'Huf Admin' || hufRole === 'Huf Manager';
+}
 
 export { AgentProcedureDetailPage, ProcedureValidationResultCard };
 export default AgentProcedureDetailPage;
@@ -118,6 +129,8 @@ function AgentProcedureDetailPage() {
   const [loading, setLoading] = useState(true);
   const [testRunning, setTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<ProcedureValidationResult | null>(null);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+  const { hufRole } = usePermissions();
 
   useEffect(() => {
     if (!procedureId) {
@@ -178,6 +191,35 @@ function AgentProcedureDetailPage() {
       setTestResult(result ?? null);
     } finally {
       setTestRunning(false);
+    }
+  }
+
+  async function handleRequestReview() {
+    if (!procedure) return;
+    setApprovalBusy(true);
+    try {
+      const result = await requestProcedureApproval(procedure.name);
+      if (result) setProcedure({ ...procedure, approval_status: result.approval_status });
+    } finally {
+      setApprovalBusy(false);
+    }
+  }
+
+  async function handleApprovalDecision(approve: boolean) {
+    if (!procedure) return;
+    setApprovalBusy(true);
+    try {
+      const result = await approveProcedure(procedure.name, approve);
+      if (result) {
+        setProcedure({
+          ...procedure,
+          approval_status: result.approval_status,
+          approved_by: result.approved_by,
+          approved_at: result.approved_at,
+        });
+      }
+    } finally {
+      setApprovalBusy(false);
     }
   }
 
@@ -254,6 +296,78 @@ function AgentProcedureDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {!procedure.is_read_only && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4" />
+                Approval
+              </CardTitle>
+              <CardDescription>
+                This is a write Procedure (I8). It cannot be bound to an agent until a System
+                Manager or Huf Manager approves it here.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center gap-3">
+                <span className="text-steel">Status</span>
+                <Badge
+                  variant={
+                    procedure.approval_status === 'Approved'
+                      ? 'success'
+                      : procedure.approval_status === 'Rejected'
+                        ? 'destructive'
+                        : 'outline'
+                  }
+                >
+                  {procedure.approval_status || 'Not Requested'}
+                </Badge>
+              </div>
+
+              {(procedure.approved_by || procedure.approved_at) && (
+                <div className="text-steel-soft text-xs">
+                  {procedure.approval_status === 'Approved' ? 'Approved' : 'Reviewed'} by{' '}
+                  {procedure.approved_by || '—'}
+                  {procedure.approved_at ? ` (${formatTimeAgo(procedure.approved_at)})` : ''}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRequestReview}
+                  disabled={approvalBusy || procedure.approval_status === 'Approved'}
+                >
+                  {approvalBusy ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : null}
+                  Request Review
+                </Button>
+
+                {canApproveProcedures(hufRole) && (
+                  <>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleApprovalDecision(true)}
+                      disabled={approvalBusy || procedure.approval_status === 'Approved'}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleApprovalDecision(false)}
+                      disabled={approvalBusy}
+                    >
+                      Reject
+                    </Button>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
