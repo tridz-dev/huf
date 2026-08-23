@@ -19,6 +19,7 @@ import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
+import { VoiceCallOverlay } from './VoiceCallOverlay';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -133,6 +134,21 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     const handleEndVoiceCall = useCallback(() => {
         void voiceCall.stop();
     }, [voiceCall]);
+
+    // Which view represents a live/connecting call: the full-viewport
+    // overlay (default) or the collapsed compact bar. Purely a UI
+    // preference — unrelated to useVoiceCall's own state machine — so it
+    // lives here rather than inside the hook. Each new call defaults back
+    // to the prominent overlay, so a "minimized" choice from a previous
+    // call never carries over.
+    const [isVoiceOverlayMinimized, setIsVoiceOverlayMinimized] = useState(false);
+    const prevVoiceStatusRef = useRef(voiceCall.status);
+    useEffect(() => {
+        if (prevVoiceStatusRef.current === 'idle' && voiceCall.status === 'connecting') {
+            setIsVoiceOverlayMinimized(false);
+        }
+        prevVoiceStatusRef.current = voiceCall.status;
+    }, [voiceCall.status]);
 
     const clearRunTimeout = useCallback(() => {
         if (runTimeoutRef.current) {
@@ -938,6 +954,23 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
     if (!agentName) {
         return null;
+    }
+
+    // 'connecting'/'live' default to the prominent full-viewport overlay —
+    // this is the "just started a call" moment where a takeover view matters
+    // most. 'error'/'ended' are terminal/transient and stay on the compact
+    // bar below (a full-screen takeover for an error is overkill). Minimizing
+    // the overlay also falls back to the compact bar without ending the call.
+    if ((voiceCall.status === 'connecting' || voiceCall.status === 'live') && !isVoiceOverlayMinimized) {
+        return (
+            <VoiceCallOverlay
+                voiceCall={voiceCall}
+                agentName={agentName}
+                onEndCall={handleEndVoiceCall}
+                onStartCall={handleStartVoiceCall}
+                onMinimize={() => setIsVoiceOverlayMinimized(true)}
+            />
+        );
     }
 
     if (voiceCall.status !== 'idle') {
