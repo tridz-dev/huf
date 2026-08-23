@@ -62,6 +62,10 @@ const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifac
 const AgentContextArtifactDetailPageWrapper = lazy(
   () => import('./pages/AgentContextArtifactDetailPageWrapper')
 );
+const AgentProceduresPage = lazy(() => import('./pages/AgentProceduresPage'));
+const AgentProcedureDetailPageWrapper = lazy(
+  () => import('./pages/AgentProcedureDetailPageWrapper')
+);
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -575,6 +579,29 @@ function AppShell() {
             }
           />
           <Route path="/artifacts/*" element={<Navigate to="/artifacts" replace />} />
+          <Route
+            path="/procedures"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentProceduresPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/procedures/:procedureId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentProcedureDetailPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/procedures/*" element={<Navigate to="/procedures" replace />} />
           <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"

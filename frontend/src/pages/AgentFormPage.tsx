@@ -35,6 +35,7 @@ import type { AgentPromptOption } from '../components/agent/PromptTemplateSectio
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
 import { SkillsTab } from '../components/agent/SkillsTab';
+import { ProcedureBindingsTab } from '../components/agent/ProcedureBindingsTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
@@ -242,6 +243,12 @@ export function AgentFormPage() {
     },
     skills: {
       label: 'Skills',
+      fields: [],
+      default: false,
+      disabled: false,
+    },
+    procedures: {
+      label: 'Procedures',
       fields: [],
       default: false,
       disabled: false,
@@ -2403,6 +2410,10 @@ export function AgentFormPage() {
                   skillOptions={skillOptions}
                   onChange={setAgentSkills}
                 />
+              </TabsContent>
+
+              <TabsContent value="procedures" className="space-y-4">
+                <ProcedureBindingsTab agentId={isNew ? undefined : id} />
               </TabsContent>
 
               <TabsContent value="permissions" className="space-y-4">
