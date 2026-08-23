@@ -88,7 +88,9 @@
    "default": "0",
    "fieldname": "is_system",
    "fieldtype": "Check",
-   "label": "Is System"
+   "hidden": 1,
+   "label": "Is System",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_set1",

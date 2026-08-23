@@ -5,6 +5,20 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import now_datetime
 
+from huf.ai import system_records
+
+# Flow Definition fields that stay editable on a system-owned flow. Every
+# other field is locked for non-System-Managers by system_records'
+# lock-by-default guard -- see huf/ai/system_records.py. updated_by/updated_at
+# are excluded because validate() stamps them on every save (see below),
+# which would otherwise self-trigger the guard on every legitimate write.
+SYSTEM_RECORD_UNLOCKED_FIELDS: tuple = ("updated_by", "updated_at")
+
+
+def get_permission_query_conditions(user=None):
+	"""Hide system Flow Definitions from non-System-Managers. Registered in hooks.py."""
+	return system_records.make_permission_query_conditions("Flow Definition")(user)
+
 
 ALLOWED_NODE_TYPES = {
 	"trigger.webhook",
@@ -29,10 +43,18 @@ class FlowDefinition(Document):
 		self._validate_definition_json()
 		self.updated_by = frappe.session.user
 		self.updated_at = now_datetime()
+		system_records.guard_flag_tamper(self)
+		system_records.guard_field_immutability(self, unlocked_fields=SYSTEM_RECORD_UNLOCKED_FIELDS)
 
 	def before_save(self):
 		if not self.is_new():
 			self.version = (self.version or 0) + 1
+
+	def on_trash(self):
+		system_records.guard_delete(self)
+
+	def before_rename(self, old_name: str, new_name: str, merge: bool = False):
+		system_records.guard_rename(self, old_name, new_name, merge)
 
 	def _validate_definition_json(self):
 		"""Validate the flow definition JSON against v0.1 schema rules."""
