@@ -46,7 +46,23 @@ def _graph(tool_id="get_thing"):
 	}
 
 
-class TestAgentProcedureRunPinning(IntegrationTestCase):
+class _FlagsSafeIntegrationTestCase(IntegrationTestCase):
+	"""IntegrationTestCase that guarantees ``frappe.flags.currently_saving`` is a list.
+
+	``frappe.model.document.set_user_and_timestamp`` appends to this flag unconditionally, but
+	nothing initialises it outside a request lifecycle, so any ``insert()`` from a test errors with
+	``AttributeError: 'NoneType' object has no attribute 'append'``. This is a pre-existing framework
+	issue in this repo -- ``huf/ai/tests/test_code_execution_broker_permissions.py`` is quarantined
+	for exactly this reason. Initialising the flag is preferable to quarantining the tests.
+	"""
+
+	def setUp(self):
+		super().setUp()
+		if getattr(frappe.flags, "currently_saving", None) is None:
+			frappe.flags.currently_saving = []
+
+
+class TestAgentProcedureRunPinning(_FlagsSafeIntegrationTestCase):
 	def setUp(self):
 		self._procedure_names = []
 		self._run_names = []
@@ -133,7 +149,7 @@ class TestAgentProcedureRunPinning(IntegrationTestCase):
 		self.assertTrue(run.completed_at)
 
 
-class TestAgentProcedureRunLock(IntegrationTestCase):
+class TestAgentProcedureRunLock(_FlagsSafeIntegrationTestCase):
 	"""Exercises the real frappe.cache()-backed lock (huf.ai.procedure_lock) against
 	an actual run name -- huf.ai.tests.test_procedure_lock covers the pure logic with a
 	fake cache; this proves the same module works against the real cache backend."""
@@ -151,7 +167,7 @@ class TestAgentProcedureRunLock(IntegrationTestCase):
 		self.assertTrue(procedure_lock.acquire_run_lock(self.run_name))
 
 
-class TestAgentToolCallProcedureRunLinkage(IntegrationTestCase):
+class TestAgentToolCallProcedureRunLinkage(_FlagsSafeIntegrationTestCase):
 	"""I5: Agent Run -> Agent Procedure Run -> many Agent Tool Call must be queryable."""
 
 	def setUp(self):

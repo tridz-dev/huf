@@ -54,7 +54,23 @@ def _graph(tool_id="get_thing", extra_nodes=None):
 	}
 
 
-class TestAgentProcedureVersioning(IntegrationTestCase):
+class _FlagsSafeIntegrationTestCase(IntegrationTestCase):
+	"""IntegrationTestCase that guarantees ``frappe.flags.currently_saving`` is a list.
+
+	``frappe.model.document.set_user_and_timestamp`` appends to this flag unconditionally, but
+	nothing initialises it outside a request lifecycle, so any ``insert()`` from a test errors with
+	``AttributeError: 'NoneType' object has no attribute 'append'``. This is a pre-existing framework
+	issue in this repo -- ``huf/ai/tests/test_code_execution_broker_permissions.py`` is quarantined
+	for exactly this reason. Initialising the flag is preferable to quarantining the tests.
+	"""
+
+	def setUp(self):
+		super().setUp()
+		if getattr(frappe.flags, "currently_saving", None) is None:
+			frappe.flags.currently_saving = []
+
+
+class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 	def setUp(self):
 		self._names = []
 		self.procedure_id = frappe.generate_hash(length=10)
@@ -177,7 +193,7 @@ class TestAgentProcedureVersioning(IntegrationTestCase):
 			frappe.rename_doc("Agent Procedure", doc.name, f"{doc.name}-renamed")
 
 
-class TestAgentProcedureTierLocking(IntegrationTestCase):
+class TestAgentProcedureTierLocking(_FlagsSafeIntegrationTestCase):
 	def setUp(self):
 		self._names = []
 		self.procedure_id = frappe.generate_hash(length=10)
