@@ -369,9 +369,17 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
         from huf.ai.graph.procedure_binding import build_procedure_binding_tools
         existing_tool_names = {getattr(t, "name", "") for t in tools}
         for tool in build_procedure_binding_tools(agent, **kwargs):
-            if getattr(tool, "name", "") not in existing_tool_names:
+            tool_name = getattr(tool, "name", "")
+            # T-34: when lazy discovery is on, a bound procedure's schema only enters
+            # context once the model has unlocked it via load_tools (same
+            # discovered_tool_names / "_lazy_tools" mechanism as ordinary tools above).
+            # When lazy discovery is off this branch never runs and behaviour is
+            # byte-for-byte the T-31 eager path.
+            if lazy_enabled and tool_name not in discovered_tool_names:
+                continue
+            if tool_name not in existing_tool_names:
                 tools.append(tool)
-                existing_tool_names.add(tool.name)
+                existing_tool_names.add(tool_name)
     except Exception as e:
         frappe.logger("huf").debug(f"Error building bound-procedure tools for agent: {e!s}")
 

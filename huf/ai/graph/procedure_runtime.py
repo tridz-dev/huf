@@ -760,6 +760,8 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 	from huf.ai.graph.validator import validate_procedure_graph
 	from huf.ai.procedure_lock import ProcedureRunLock
 
+	from huf.ai.graph.cache import get_cached_result, set_cached_result
+
 	run = frappe.get_doc("Agent Procedure Run", run_name)
 
 	graph = run.pinned_definition_json
@@ -767,6 +769,29 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 		graph = json.loads(graph)
 	if not isinstance(graph, dict):
 		frappe.throw(f"Agent Procedure Run {run_name} has no pinned definition to execute")
+
+	is_read_only = bool(frappe.db.get_value("Agent Procedure", run.procedure, "is_read_only"))
+	fingerprint_for_cache = run.pinned_fingerprint or _fingerprint(graph)
+	try:
+		cache_company = frappe.defaults.get_user_default("Company")
+	except Exception:  # noqa: BLE001 - defaults lookup is best-effort scoping only
+		cache_company = None
+
+	if is_read_only:
+		cached_input = run.input_payload
+		if isinstance(cached_input, str):
+			cached_input = json.loads(cached_input) if cached_input else {}
+		cached_output = get_cached_result(
+			procedure_version=fingerprint_for_cache,
+			inputs=cached_input or {},
+			user=frappe.session.user,
+			company=cache_company,
+		)
+		if cached_output is not None:
+			run.status = "Completed"
+			run.output_payload = json.dumps(cached_output, default=str)
+			run.save(ignore_permissions=True)
+			return ProcedureOutcome(status=ProcedureOutcome.SUCCESS, output=cached_output)
 
 	validation = validate_procedure_graph(graph, classify_tool=_permissions.default_tool_classifier)
 	if not validation.ok:
@@ -823,6 +848,19 @@ def run_agent_procedure_run(run_name: str, *, agent_doc=None) -> "ProcedureOutco
 		if outcome.status == ProcedureOutcome.SUCCESS:
 			run.status = "Completed"
 			run.output_payload = json.dumps(outcome.output, default=str)
+			if is_read_only:
+				# Structural guard lives in cache.py itself (set_cached_result raises
+				# unless is_read_only is true) -- passing it explicitly here is
+				# defence in depth, not the only thing standing between a mutating
+				# procedure and the cache.
+				set_cached_result(
+					procedure_version=fingerprint_for_cache,
+					inputs=input_payload or {},
+					user=user,
+					company=cache_company,
+					is_read_only=is_read_only,
+					result=outcome.output,
+				)
 		elif outcome.status == ProcedureOutcome.NOT_APPLICABLE:
 			run.status = "Completed"
 			run.output_payload = json.dumps({"status": "not_applicable"})
