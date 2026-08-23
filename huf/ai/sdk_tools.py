@@ -361,6 +361,20 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
             except Exception as e:
                 frappe.logger("huf").debug(f"Error wiring memory tool {tool_name}: {e!s}")
 
+    # Bound Agent Procedures (T-31): exposed as tool-like capabilities computed at
+    # request time from enabled Agent Procedure Binding rows, never as an Agent Tool
+    # Function row per (agent, procedure) pair. See huf.ai.graph.procedure_binding for
+    # the read-only re-check (I8) and the hard per-agent cap this applies.
+    try:
+        from huf.ai.graph.procedure_binding import build_procedure_binding_tools
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        for tool in build_procedure_binding_tools(agent, **kwargs):
+            if getattr(tool, "name", "") not in existing_tool_names:
+                tools.append(tool)
+                existing_tool_names.add(tool.name)
+    except Exception as e:
+        frappe.logger("huf").debug(f"Error building bound-procedure tools for agent: {e!s}")
+
     existing_types = [t.name for t in tools] if tools else []
     if "get_result_context" not in existing_types:
         tool = create_function_tool(

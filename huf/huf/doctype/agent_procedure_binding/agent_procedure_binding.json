@@ -1,0 +1,160 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-23 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "agent",
+  "procedure",
+  "column_break_gen1",
+  "procedure_id",
+  "version",
+  "activation_tab",
+  "enabled",
+  "priority",
+  "column_break_act1",
+  "fallback_enabled",
+  "health"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "description": "The Agent this Procedure is bound to. Binding, not an Agent Tool Function row per pair (GOAL.md 3.1) -- exposure to the model is computed at runtime from enabled bindings, in huf.ai.sdk_tools.",
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "reqd": 1
+  },
+  {
+   "description": "The exact Agent Procedure VERSION row this binding pins (docname procedure_id-vN). Promotion/rollback is changing this link on the binding -- an atomic binding move (I6) -- never editing the Procedure row it points at.",
+   "fieldname": "procedure",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Procedure (pinned version)",
+   "options": "Agent Procedure",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_gen1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Denormalized from procedure.procedure_id at validate time. Read-only.",
+   "fieldname": "procedure_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Procedure ID",
+   "read_only": 1
+  },
+  {
+   "description": "Denormalized from procedure.version at validate time. Read-only.",
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "activation_tab",
+   "fieldtype": "Tab Break",
+   "label": "Activation"
+  },
+  {
+   "default": "1",
+   "description": "Only an enabled binding is exposed to the model at runtime. Only one enabled binding may exist per (agent, procedure_id) at a time -- disable the old binding (or let promotion move this one's `procedure` link) rather than adding a second enabled row for the same logical procedure.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Enabled"
+  },
+  {
+   "default": "0",
+   "description": "Higher priority bindings are exposed first when an agent's enabled binding count exceeds the per-agent cap (huf.ai.graph.procedure_binding.get_binding_cap). Ties broken by modified time.",
+   "fieldname": "priority",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Priority"
+  },
+  {
+   "fieldname": "column_break_act1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Whether T-32's fallback protocol may fall back to the agentic path when this bound procedure's run fails. Does not itself invoke anything -- read by T-32.",
+   "fieldname": "fallback_enabled",
+   "fieldtype": "Check",
+   "label": "Fallback Enabled"
+  },
+  {
+   "default": "Unknown",
+   "description": "Rolling health signal for this binding, maintained by T-33's monitoring (out of scope here). Never gates exposure by itself in this wave.",
+   "fieldname": "health",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Health",
+   "options": "Unknown\nHealthy\nDegraded\nUnhealthy"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Procedure Binding",
+ "naming_rule": "Expression (old style)",
+ "autoname": "AGPB-.#####",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
