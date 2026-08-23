@@ -4,10 +4,23 @@ import { isVectorKnowledgeType } from '@/data/knowledge';
 export const knowledgeSourceFormSchema = z.object({
 	source_name: z.string().min(1, 'Source name is required'),
 	description: z.string().optional(),
-	knowledge_type: z.enum(['sqlite_fts', 'sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec'], {
-
-		required_error: 'Knowledge type is required',
-	}),
+	knowledge_type: z.enum(
+		[
+			'sqlite_fts',
+			'sqlite_vec',
+			'sqlite_hybrid',
+			'chroma',
+			'pgvector',
+			'redis',
+			'zvec',
+			'weaviate',
+			'faiss',
+			'pinecone',
+		],
+		{
+			required_error: 'Knowledge type is required',
+		},
+	),
 	scope: z.enum(['Site', 'Workspace', 'Agent', 'Global']).default('Site'),
 	storage_mode: z.string().default('Frappe File'),
 	chunk_size: z.number().int().min(100, 'Minimum chunk size is 100').default(512),

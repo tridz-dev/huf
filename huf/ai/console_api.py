@@ -6,6 +6,7 @@ Whitelisted API methods for the Console prompt-engineering workspace.
 
 Provides:
 - Prompt generation from a natural-language description.
+- Prompt improvement (one-shot rewrite of an existing prompt).
 - Pass/fail evaluation of a model response against criteria.
 - Saving an arbitrary prompt body as an Agent Prompt template.
 """
@@ -25,6 +26,7 @@ from huf.permissions import has_capability
 
 
 GENERATE_PROMPT_CAPABILITY = "agent.use"
+IMPROVE_PROMPT_CAPABILITY = "agent.use"
 EVALUATE_RUN_CAPABILITY = "agent.use"
 SAVE_PROMPT_TEMPLATE_CAPABILITY = "agent.create"
 
@@ -235,6 +237,73 @@ def generate_prompt(
 		frappe.throw(_("No prompt was generated. Please try again with a different description or provider."))
 
 	return {"prompt": generated.strip()}
+
+
+@frappe.whitelist()
+def improve_prompt(
+	prompt_body: str,
+	instruction: str | None = None,
+	provider: str | None = None,
+	model: str | None = None,
+):
+	"""Rewrite an existing prompt for clarity and effectiveness via a one-shot LLM call.
+
+	Standalone helper for the Playground's prompt panel — works on whatever
+	prompt text is currently in the bench, independent of whether it is tied
+	to a saved Agent Prompt template.
+
+	Args:
+		prompt_body: The prompt text to improve.
+		instruction: Optional improvement goal (e.g. "make it more concise").
+		provider: Optional provider to use (defaults to console config).
+		model: Optional model to use (defaults to console config).
+
+	Returns:
+		dict: ``{"prompt": "<improved prompt text>"}``
+	"""
+	_require(IMPROVE_PROMPT_CAPABILITY)
+
+	if not prompt_body or not prompt_body.strip():
+		frappe.throw(_("Prompt is required."), frappe.ValidationError)
+
+	if provider and model:
+		if not frappe.db.exists("AI Provider", provider):
+			frappe.throw(_("Selected provider does not exist."), frappe.ValidationError)
+		if not frappe.db.exists("AI Model", model):
+			frappe.throw(_("Selected model does not exist."), frappe.ValidationError)
+	else:
+		provider, model = _get_console_model_config()
+		if not provider or not model:
+			frappe.throw(
+				_(
+					"No AI provider is available for prompt improvement. "
+					"Configure one with an API key or set 'huf_console_prompt_engineer_model' in site config."
+				),
+				frappe.ValidationError,
+			)
+
+	parts = [
+		"You are an expert prompt engineer. Improve the following prompt for clarity, "
+		"specificity, and effectiveness, while preserving its original intent and scope. "
+		"Return only the improved prompt text, with no explanation, preamble, or markdown fences."
+	]
+	if instruction and instruction.strip():
+		parts.append(f"Improvement goal: {instruction.strip()}")
+	parts.append(f"Original prompt:\n{prompt_body.strip()}")
+	parts.append("Improved prompt:")
+
+	messages = [{"role": "user", "content": "\n\n".join(parts)}]
+
+	try:
+		improved = _simple_completion_sync(provider, model, messages)
+	except Exception as e:
+		frappe.log_error(f"improve_prompt failed: {e!s}\n{frappe.get_traceback()}", "Console Prompt Improvement")
+		frappe.throw(_("Prompt improvement failed. Please try again or choose a different provider."))
+
+	if not improved:
+		frappe.throw(_("No improved prompt was returned. Please try again."))
+
+	return {"prompt": improved.strip()}
 
 
 @frappe.whitelist()

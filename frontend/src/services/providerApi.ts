@@ -213,6 +213,17 @@ export async function updateProvider(name: string, data: Partial<AIProviderDoc>)
 }
 
 /**
+ * Delete an AI Provider document
+ */
+export async function deleteProvider(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype['AI Provider'], name);
+  } catch (error) {
+    handleFrappeError(error, `Error deleting provider ${name}`);
+  }
+}
+
+/**
  * Result of probing a single linked AI Model on a provider
  */
 export interface ProviderConnectionModelResult {
@@ -388,6 +399,17 @@ export async function updateModel(name: string, data: Partial<AIModelDoc>): Prom
     return updatedModel as AIModelDoc;
   } catch (error) {
     handleFrappeError(error, `Error updating model ${name}`);
+  }
+}
+
+/**
+ * Delete an AI Model document
+ */
+export async function deleteModel(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype['AI Model'], name);
+  } catch (error) {
+    handleFrappeError(error, `Error deleting model ${name}`);
   }
 }
 
