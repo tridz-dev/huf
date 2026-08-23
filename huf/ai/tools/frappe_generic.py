@@ -493,6 +493,8 @@ def handle_render_frappe_view(**kwargs) -> str:
         payload["fields"] = list(list_json["data"][0].keys()) if list_json["data"] else (kwargs.get("fields") or [])
         payload["data"] = list_json["data"]
         payload["total_count"] = list_json["total_count"]
+        payload["limit_start"] = list_json["limit_start"]
+        payload["limit_page_length"] = list_json["limit_page_length"]
         artifact_type = "frappe-list"
 
     elif mode == "form":
@@ -520,6 +522,8 @@ def handle_render_frappe_view(**kwargs) -> str:
         payload["fields"] = kwargs.get("fields")
         payload["data"] = list_json["data"]
         payload["total_count"] = list_json["total_count"]
+        payload["limit_start"] = list_json["limit_start"]
+        payload["limit_page_length"] = list_json["limit_page_length"]
         artifact_type = "frappe-report"
 
     title = _escape_artifact_attr(f"{doctype} ({mode})")
