@@ -147,7 +147,7 @@ def _calculate_from_custom_pricing(
       cost = (input  / 1M) * input_price
            + (output / 1M) * output_price
            + (cached / 1M) * cached_price          (if cached_price is set)
-           + (cache_creation / 1M) * cache_write_price  (if cache_write_price is set)
+           + (cache_creation / 1M) * cache_write_price  (if a non-zero write rate is set)
 
     Both cached (read) tokens and cache-creation (write) tokens are a subset
     of input_tokens as reported by the provider/LiteLLM — not additional
@@ -170,7 +170,16 @@ def _calculate_from_custom_pricing(
         remaining_input = max(0, remaining_input - cached_tokens)
         cost += (cached_tokens / 1_000_000) * cached_price
 
-    if cache_write_price is not None and cache_creation_tokens > 0:
+    # Falsy (0 or None) means "not configured", not "configured as free". The
+    # AI Model field is a plain Float with no separate presence flag, so a bare
+    # 0 cannot be distinguished from unset -- get_model_pricing() already
+    # normalises it, and this check keeps the invariant even for a caller that
+    # builds a pricing dict without going through it. Unconfigured cache-write
+    # tokens stay in the base-rate pool rather than being billed as free.
+    # (The cache-READ rate deliberately keeps its existing `is not None` check:
+    # 0 has always meant a genuinely free read there, and changing it would
+    # alter costs already being reported.)
+    if cache_write_price and cache_creation_tokens > 0:
         # Cache-creation (write) tokens are likewise a subset of input tokens.
         # Same treatment: bill separately at the write rate, remove from the
         # pool billed at the regular rate.

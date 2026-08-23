@@ -4,6 +4,8 @@ export interface SegmentTokens {
   knowledge: number | null;
   history: number | null;
   message: number | null;
+  /** Not present in historical (pre-instrumentation) segment_tokens snapshots. */
+  tool_exchange?: number | null;
 }
 
 export interface PrefixBreakpoint {
@@ -24,7 +26,8 @@ export interface RunContextMetrics {
 export interface RunContextMetricsResponse {
   segment_tokens: SegmentTokens | null;
   total_tokens: number | null;
-  context_window: number;
+  /** Null when the model's context window is unknown; never a guessed default. */
+  context_window: number | null;
   prefix_breakpoints: PrefixBreakpoint[];
   cache_skipped_unsupported_model: boolean | null;
   metrics: RunContextMetrics;
