@@ -27,13 +27,21 @@ def _resolve_session(request) -> Optional[RequestContext]:
 
 
 def _resolve_api_key(request) -> Optional[RequestContext]:
-	"""Resolve the principal from an `Authorization: Bearer <key>` header.
+	"""Resolve the principal from an `X-Huf-Api-Key: <key>` header.
+
+	Deliberately NOT `Authorization: Bearer ...`: Frappe's own
+	`frappe.auth.validate_auth()` inspects any two-part `Authorization`
+	header itself before our page_renderer ever runs, and hard-fails
+	("Session Expired") if it doesn't parse as Frappe's own OAuth/API-key
+	scheme (`token <key>:<secret>`). Confirmed live: a bearer-token
+	credential in `Authorization` never reaches this resolver at all. A
+	dedicated header sidesteps that collision entirely.
 
 	Looks up and verifies the raw key against `Huf API Key` records (hash
 	comparison only, never plaintext). Returns `None` (falls through to the
-	next resolver) when there is no bearer header or the key does not
-	verify, so a request with no API key still falls through to session
-	auth instead of failing outright.
+	next resolver) when there is no key header or the key does not verify,
+	so a request with no API key still falls through to session auth
+	instead of failing outright.
 
 	Note: this resolves *identity* and attaches the key's `scopes` /
 	`agent_restriction_mode` onto the returned context (as
@@ -46,11 +54,8 @@ def _resolve_api_key(request) -> Optional[RequestContext]:
 	if headers is None:
 		headers = frappe.request.headers if frappe.request else {}
 
-	authorization = headers.get("Authorization") if headers else None
-	if not authorization or not authorization.startswith("Bearer "):
-		return None
-
-	raw_key = authorization[len("Bearer "):].strip()
+	raw_key = (headers.get("X-Huf-Api-Key") if headers else None) or ""
+	raw_key = raw_key.strip()
 	if not raw_key:
 		return None
 
