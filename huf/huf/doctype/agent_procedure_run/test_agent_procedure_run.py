@@ -46,6 +46,21 @@ def _graph(tool_id="get_thing"):
 	}
 
 
+def _ensure_saving_flag():
+	"""Guarantee ``frappe.flags.currently_saving`` is a list before an insert.
+
+	``frappe.model.document.set_user_and_timestamp`` appends to this flag unconditionally, but the
+	test runner does not initialise it, so ``insert()`` raises
+	``AttributeError: 'NoneType' object has no attribute 'append'``. Setting it in ``setUp`` is not
+	enough -- the framework resets ``frappe.local`` between setUp and the test body -- so the guard
+	has to sit next to the insert. This repo already quarantines
+	``huf/ai/tests/test_code_execution_broker_permissions.py`` for the same underlying issue.
+	"""
+
+	if frappe.flags.currently_saving is None:
+		frappe.flags.currently_saving = []
+
+
 class _FlagsSafeIntegrationTestCase(IntegrationTestCase):
 	"""IntegrationTestCase that guarantees ``frappe.flags.currently_saving`` is a list.
 
@@ -76,6 +91,7 @@ class TestAgentProcedureRunPinning(_FlagsSafeIntegrationTestCase):
 				"definition_json": frappe.as_json(_graph(tool_id="v1_tool")),
 			}
 		)
+		_ensure_saving_flag()
 		self.procedure.insert(ignore_permissions=True)
 		self._procedure_names.append(self.procedure.name)
 
@@ -94,6 +110,7 @@ class TestAgentProcedureRunPinning(_FlagsSafeIntegrationTestCase):
 
 	def _insert_run(self):
 		run = frappe.get_doc({"doctype": "Agent Procedure Run", "procedure": self.procedure.name})
+		_ensure_saving_flag()
 		run.insert(ignore_permissions=True)
 		self._run_names.append(run.name)
 		return run
@@ -120,6 +137,7 @@ class TestAgentProcedureRunPinning(_FlagsSafeIntegrationTestCase):
 				"definition_json": frappe.as_json(_graph(tool_id="v2_tool")),
 			}
 		)
+		_ensure_saving_flag()
 		newer.insert(ignore_permissions=True)
 		self._procedure_names.append(newer.name)
 		self.assertNotEqual(newer.fingerprint, run.pinned_fingerprint)
@@ -181,10 +199,12 @@ class TestAgentToolCallProcedureRunLinkage(_FlagsSafeIntegrationTestCase):
 				"definition_json": frappe.as_json(_graph()),
 			}
 		)
+		_ensure_saving_flag()
 		self.procedure.insert(ignore_permissions=True)
 		self._names["Agent Procedure"].append(self.procedure.name)
 
 		self.run = frappe.get_doc({"doctype": "Agent Procedure Run", "procedure": self.procedure.name})
+		_ensure_saving_flag()
 		self.run.insert(ignore_permissions=True)
 		self._names["Agent Procedure Run"].append(self.run.name)
 
@@ -206,6 +226,7 @@ class TestAgentToolCallProcedureRunLinkage(_FlagsSafeIntegrationTestCase):
 				"status": "Completed",
 			}
 		)
+		_ensure_saving_flag()
 		call.insert(ignore_permissions=True)
 		self._names["Agent Tool Call"].append(call.name)
 

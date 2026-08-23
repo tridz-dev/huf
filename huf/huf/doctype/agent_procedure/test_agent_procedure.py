@@ -54,6 +54,21 @@ def _graph(tool_id="get_thing", extra_nodes=None):
 	}
 
 
+def _ensure_saving_flag():
+	"""Guarantee ``frappe.flags.currently_saving`` is a list before an insert.
+
+	``frappe.model.document.set_user_and_timestamp`` appends to this flag unconditionally, but the
+	test runner does not initialise it, so ``insert()`` raises
+	``AttributeError: 'NoneType' object has no attribute 'append'``. Setting it in ``setUp`` is not
+	enough -- the framework resets ``frappe.local`` between setUp and the test body -- so the guard
+	has to sit next to the insert. This repo already quarantines
+	``huf/ai/tests/test_code_execution_broker_permissions.py`` for the same underlying issue.
+	"""
+
+	if frappe.flags.currently_saving is None:
+		frappe.flags.currently_saving = []
+
+
 class _FlagsSafeIntegrationTestCase(IntegrationTestCase):
 	"""IntegrationTestCase that guarantees ``frappe.flags.currently_saving`` is a list.
 
@@ -93,6 +108,7 @@ class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 				**kwargs,
 			}
 		)
+		_ensure_saving_flag()
 		doc.insert(ignore_permissions=True)
 		self._names.append(doc.name)
 		return doc
@@ -138,6 +154,7 @@ class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 					"version": 1,
 					"definition_json": frappe.as_json(_graph(tool_id="something_else")),
 				}
+			_ensure_saving_flag()
 			).insert(ignore_permissions=True)
 
 	def test_saving_existing_version_with_changed_content_is_blocked(self):
@@ -171,6 +188,7 @@ class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 			}
 		)
 		with self.assertRaises(frappe.ValidationError):
+			_ensure_saving_flag()
 			doc.insert(ignore_permissions=True)
 
 	def test_router_llm_and_human_approval_are_also_rejected(self):
@@ -185,6 +203,7 @@ class TestAgentProcedureVersioning(_FlagsSafeIntegrationTestCase):
 				}
 			)
 			with self.assertRaises(frappe.ValidationError):
+				_ensure_saving_flag()
 				doc.insert(ignore_permissions=True)
 
 	def test_rename_is_never_allowed(self):
@@ -216,6 +235,7 @@ class TestAgentProcedureTierLocking(_FlagsSafeIntegrationTestCase):
 				"definition_json": frappe.as_json(_graph()),
 			}
 		)
+		_ensure_saving_flag()
 		doc.insert(ignore_permissions=True)
 		self._names.append(doc.name)
 		self.assertEqual(doc.is_system, 1)
@@ -230,6 +250,7 @@ class TestAgentProcedureTierLocking(_FlagsSafeIntegrationTestCase):
 				"definition_json": frappe.as_json(_graph()),
 			}
 		)
+		_ensure_saving_flag()
 		doc.insert(ignore_permissions=True)
 		self._names.append(doc.name)
 		self.assertEqual(doc.is_system, 0)
@@ -244,6 +265,7 @@ class TestAgentProcedureTierLocking(_FlagsSafeIntegrationTestCase):
 				"definition_json": frappe.as_json(_graph()),
 			}
 		)
+		_ensure_saving_flag()
 		doc.insert(ignore_permissions=True)
 		self._names.append(doc.name)
 
