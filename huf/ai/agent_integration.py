@@ -445,15 +445,33 @@ class AgentManager:
             from huf.ai.capabilities import capability_enabled
 
             if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
-                from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+                from huf.ai.chart_artifact_instructions import (
+                    CHART_ARTIFACT_INSTRUCTIONS,
+                    CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
+                )
                 from huf.ai.artifact_instructions import (
                     AI_ELEMENT_INSTRUCTIONS,
                     MEDIA_ELEMENT_INSTRUCTIONS,
+                    MERMAID_ARTIFACT_INSTRUCTIONS,
+                    MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
                     agent_has_media_tools,
                 )
 
-                instructions += CHART_ARTIFACT_INSTRUCTIONS
-                instructions += AI_ELEMENT_INSTRUCTIONS
+                resolved_tool_names = {tool.name for tool in self.tools}
+
+                if "render_chart" in resolved_tool_names:
+                    instructions += CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL
+                else:
+                    instructions += CHART_ARTIFACT_INSTRUCTIONS
+
+                element_instructions = AI_ELEMENT_INSTRUCTIONS
+                if "render_mermaid" in resolved_tool_names:
+                    element_instructions = element_instructions.replace(
+                        MERMAID_ARTIFACT_INSTRUCTIONS,
+                        MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
+                    )
+                instructions += element_instructions
+
                 if agent_has_media_tools(self.agent_doc):
                     instructions += MEDIA_ELEMENT_INSTRUCTIONS
 

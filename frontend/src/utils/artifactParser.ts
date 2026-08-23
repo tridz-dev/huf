@@ -106,6 +106,7 @@ export function isValidArtifactType(type: string): type is ArtifactType {
 		'react-component',
 		'markdown',
 		'video',
+		'chart',
 	];
 	return validTypes.includes(type as ArtifactType);
 }
