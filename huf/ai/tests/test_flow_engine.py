@@ -320,7 +320,15 @@ class TestEvaluateEdges(unittest.TestCase):
 		]
 		# A raising expression must not abort edge evaluation -- it should be
 		# treated as non-matching and evaluation should continue to the next edge.
-		self.assertEqual(flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges), "fallback")
+		#
+		# frappe.log_error is patched out deliberately: the swallow path writes an
+		# Error Log document, and inserting one outside a normal request lifecycle
+		# fails on an uninitialised frappe.flags.currently_saving. The behaviour under
+		# test is "the exception is swallowed and the next edge is tried", not whether
+		# the log write itself succeeds.
+		with patch.object(flow_engine.frappe, "log_error"):
+			result = flow_engine._evaluate_edges(flow_run, "n1", {"status": "success"}, edges)
+		self.assertEqual(result, "fallback")
 
 
 # ---------------------------------------------------------------------------
