@@ -267,6 +267,12 @@ class TestInvokeBoundProcedure(unittest.TestCase):
 		calls = []
 
 		class _Outcome:
+			# Mirrors ProcedureOutcome's status constants, which invoke_bound_procedure
+			# compares against directly.
+			SUCCESS = "success"
+			FAILED = "failed"
+			NOT_APPLICABLE = "not_applicable"
+
 			def __init__(self):
 				self.status = "success"
 				self.output = {"ok": True}
