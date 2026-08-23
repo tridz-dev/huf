@@ -1,9 +1,11 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { BarChart2, BrainIcon, ChevronDownIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, ToolGroup } from '@/components/ai-elements/tool';
+import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput, ToolGroup, ProcedureRunRow, type ToolGroupCall } from '@/components/ai-elements/tool';
+import { useProcedureRunLookup } from './useProcedureRunLookup';
+import { useProcedureRunSummaries } from './useProcedureRunSummaries';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import type { ToolUIPart } from 'ai';
@@ -106,6 +108,62 @@ export function ChatMessage({
         message.runStatus === 'Started'
     );
 
+    // T-51 / D8: tool calls whose `Agent Tool Call` record carries the same
+    // `agent_procedure_run` came from one deterministic procedure execution,
+    // so they collapse into a single `ProcedureRunRow` instead of N `Tool`
+    // rows — the atomic calls are still all rendered, just folded, when the
+    // row is expanded (invariant I5).
+    const navigate = useNavigate();
+    const toolCallIds = message.tools?.map((tool) => tool.tool_call_id) ?? [];
+    const resolvedProcedureRuns = useProcedureRunLookup(
+        showToolExecutionDetails && (message.tools?.length ?? 0) > 0 ? toolCallIds : []
+    );
+    const procedureRunByToolCallId: Record<string, string> = { ...resolvedProcedureRuns };
+    message.tools?.forEach((tool) => {
+        if (tool.agentProcedureRun) procedureRunByToolCallId[tool.tool_call_id] = tool.agentProcedureRun;
+    });
+    const distinctProcedureRunIds = Array.from(new Set(Object.values(procedureRunByToolCallId)));
+    const procedureRunSummaries = useProcedureRunSummaries(distinctProcedureRunIds);
+
+    type ToolGroupItem = { kind: 'tool'; tool: NonNullable<MessageType['tools']>[number] };
+    type ProcedureGroupItem = { kind: 'procedure'; procedureRunId: string; tools: NonNullable<MessageType['tools']> };
+    const toolGroups: (ToolGroupItem | ProcedureGroupItem)[] = [];
+    (message.tools ?? []).forEach((tool) => {
+        const procedureRunId = procedureRunByToolCallId[tool.tool_call_id];
+        if (procedureRunId) {
+            const existing = toolGroups.find(
+                (group): group is ProcedureGroupItem => group.kind === 'procedure' && group.procedureRunId === procedureRunId
+            );
+            if (existing) existing.tools.push(tool);
+            else toolGroups.push({ kind: 'procedure', procedureRunId, tools: [tool] });
+        } else {
+            toolGroups.push({ kind: 'tool', tool });
+        }
+    });
+    const looseTools = toolGroups.filter((g): g is ToolGroupItem => g.kind === 'tool').map((g) => g.tool);
+    const procedureGroups = toolGroups.filter((g): g is ProcedureGroupItem => g.kind === 'procedure');
+
+    const toToolGroupCall = (tool: NonNullable<MessageType['tools']>[number]): ToolGroupCall => ({
+        callId: tool.tool_call_id,
+        name: tool.name,
+        state: tool.status,
+        input: tool.parameters,
+        output: tool.result,
+        errorText: tool.error,
+        durationMs: tool.durationMs,
+    });
+
+    // Best-effort click-through to the shared graph viewer (D8): reuses the
+    // existing Flow canvas route rather than introducing a new page/route.
+    // The viewer currently renders Flow Definitions; wiring it to render an
+    // Agent Procedure's pinned definition by id is tracked separately and
+    // not yet complete, so this navigates to the same route shape the graph
+    // viewer already uses, keyed by the procedure id.
+    const openProcedureGraph = (procedureRunId: string) => {
+        const summary = procedureRunSummaries[procedureRunId];
+        navigate(`/flows/${encodeURIComponent(summary?.procedureId ?? procedureRunId)}`);
+    };
+
     // Skip rendering ALL tool-related messages when tool execution details are hidden
     if (!showToolExecutionDetails) {
         // Hide messages with tool-related kinds (stored in DB as text)
@@ -125,42 +183,51 @@ export function ChatMessage({
         <div className="flex flex-col group relative w-full">
             {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
                 <div className="flex w-full max-w-chat-measure flex-col gap-2">
-                    {message.tools.length > 1 ? (
+                    {procedureGroups.map((group) => {
+                        const summary = procedureRunSummaries[group.procedureRunId];
+                        return (
+                            <ProcedureRunRow
+                                key={`${message.key}-procedure-${group.procedureRunId}`}
+                                calls={group.tools.map(toToolGroupCall)}
+                                procedureName={summary?.procedureName ?? 'Procedure'}
+                                version={summary?.version}
+                                durationMs={summary?.durationMs}
+                                onOpenGraph={() => openProcedureGraph(group.procedureRunId)}
+                                runStatus={message.runStatus}
+                                isHistorical={!message.runStatus}
+                                onApprove={handleToolCallApprove}
+                                onDeny={handleToolCallDeny}
+                            />
+                        );
+                    })}
+                    {looseTools.length > 1 ? (
                         <ToolGroup
-                            calls={message.tools.map((tool) => ({
-                                callId: tool.tool_call_id,
-                                name: tool.name,
-                                state: tool.status,
-                                input: tool.parameters,
-                                output: tool.result,
-                                errorText: tool.error,
-                                durationMs: tool.durationMs,
-                            }))}
+                            calls={looseTools.map(toToolGroupCall)}
                             runStatus={message.runStatus}
                             isHistorical={!message.runStatus}
                             onApprove={handleToolCallApprove}
                             onDeny={handleToolCallDeny}
                         />
-                    ) : (
+                    ) : looseTools.length === 1 ? (
                         <Tool key={`${message.key}-tool-0`}>
                             <ToolHeader
-                                title={message.tools[0].name}
-                                type={`tool-${message.tools[0].name}` as ToolUIPart['type']}
-                                state={message.tools[0].status}
-                                durationMs={message.tools[0].durationMs}
+                                title={looseTools[0].name}
+                                type={`tool-${looseTools[0].name}` as ToolUIPart['type']}
+                                state={looseTools[0].status}
+                                durationMs={looseTools[0].durationMs}
                                 onRetry={handleRegenerate}
-                                onApprove={() => handleToolCallApprove(message.tools![0].tool_call_id)}
-                                onDeny={() => handleToolCallDeny(message.tools![0].tool_call_id)}
+                                onApprove={() => handleToolCallApprove(looseTools[0].tool_call_id)}
+                                onDeny={() => handleToolCallDeny(looseTools[0].tool_call_id)}
                             />
                             <ToolContent>
-                                <ToolInput input={message.tools[0].parameters} />
+                                <ToolInput input={looseTools[0].parameters} />
                                 <ToolOutput
-                                    output={message.tools[0].result}
-                                    errorText={message.tools[0].error}
+                                    output={looseTools[0].result}
+                                    errorText={looseTools[0].error}
                                 />
                             </ToolContent>
                         </Tool>
-                    )}
+                    ) : null}
                 </div>
             ) : (
                     <Message from={message.from} className={cn(isUser && "max-w-[68%]", !isUser && "!max-w-full")}>
