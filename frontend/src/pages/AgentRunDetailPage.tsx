@@ -511,7 +511,7 @@ function AgentRunDetailPage() {
                     : undefined
                 }
               />
-              <div className="grid grid-cols-4 gap-x-4 gap-y-2 border-t border-line pt-3">
+              <div className="grid grid-cols-3 gap-x-4 gap-y-2 border-t border-line pt-3">
                 <ContextStat label="Prefix stability" value={contextMetrics.metrics.prefix_stability} capitalize />
                 <ContextStat
                   label="Effective multiplier"
@@ -527,14 +527,6 @@ function AgentRunDetailPage() {
                     typeof contextMetrics.metrics.counterfactual_savings === 'number'
                       ? `$${contextMetrics.metrics.counterfactual_savings.toFixed(6)}`
                       : 'Unavailable'
-                  }
-                />
-                <ContextStat
-                  label="Wasted writes"
-                  value={
-                    typeof contextMetrics.metrics.wasted_writes_tokens === 'number'
-                      ? contextMetrics.metrics.wasted_writes_tokens.toLocaleString()
-                      : 'Not yet tracked'
                   }
                 />
               </div>

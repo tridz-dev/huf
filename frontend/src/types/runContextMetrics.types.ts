@@ -18,7 +18,6 @@ export type PrefixStability = 'stable' | 'changed' | 'unknown' | 'unavailable';
 export interface RunContextMetrics {
   cache_read_share: number | null;
   effective_input_multiplier: number | null;
-  wasted_writes_tokens: number | null;
   prefix_stability: PrefixStability;
   counterfactual_savings: number | null;
 }

@@ -2,10 +2,17 @@
 # For license information, please see license.txt
 
 """
-Five derived context/cache metrics, computed once server-side and reused by
+Four derived context/cache metrics, computed once server-side and reused by
 every surface (chat header, run detail, agent/fleet views). Composition
 (segment_tokens) answers "what fills the window"; these metrics answer
 "is caching paying off" — never recomputed client-side.
+
+A fifth metric, wasted-write tokens (cache writes that were never read back
+before expiring), was deliberately dropped rather than shipped as a
+permanent `None`: it needs read-after-write tracking across runs that no
+provider reports today, and there was no partial version of it worth
+keeping. `prefix_stability` below is a real, if approximate, signal and
+is not affected by this.
 
 Approximation note: effective_input_multiplier and counterfactual_savings
 use fixed token-cost multipliers (cache read ~=0.1x, cache write ~=1.25x,
@@ -85,7 +92,6 @@ def compute_run_metrics(run_doc, previous_run_doc=None):
     return {
         "cache_read_share": cache_read_share,
         "effective_input_multiplier": effective_input_multiplier,
-        "wasted_writes_tokens": None,  # needs read-after-write tracking; not captured yet
         "prefix_stability": prefix_stability,
         "counterfactual_savings": counterfactual_savings,
     }
