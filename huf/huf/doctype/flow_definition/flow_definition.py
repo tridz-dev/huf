@@ -6,6 +6,7 @@ from frappe.model.document import Document
 from frappe.utils import now_datetime
 
 from huf.ai import system_records
+from huf.ai.transaction import commit_if_background
 
 # Flow Definition fields that stay editable on a system-owned flow. Every
 # other field is locked for non-System-Managers by system_records'
@@ -50,11 +51,76 @@ class FlowDefinition(Document):
 		if not self.is_new():
 			self.version = (self.version or 0) + 1
 
+	def on_update(self):
+		self._maybe_convert_to_procedure()
+
 	def on_trash(self):
 		system_records.guard_delete(self)
 
 	def before_rename(self, old_name: str, new_name: str, merge: bool = False):
 		system_records.guard_rename(self, old_name, new_name, merge)
+
+	def _maybe_convert_to_procedure(self):
+		"""On save, if the checkbox is set, (re)compile this Flow into a Draft Agent
+		Procedure -- the convenience the original plan's separate "Convert to procedure"
+		action does not give you: tick the box once, every subsequent save keeps the
+		Procedure in sync with the Flow.
+
+		Deliberately NOT the Phase 6 "Analyse Agent" UX (GOAL.md), which is a distinct,
+		explicit action surfaced to the user with a Test/Enable choice -- see PLAN.md
+		T-52. This is a narrower, save-triggered convenience on top of the same
+		conversion primitive (huf.ai.procedure_conversion / flow_api.convert_flow_to_procedure),
+		and it inherits every one of that primitive's guarantees: the result is always
+		tier="Draft"/status="Draft" (I8 -- never auto-activated, never auto-bound to an
+		Agent), and a non-deterministic Flow (containing agent.run / router.llm /
+		human.approval) is refused with a specific reason rather than partially converted.
+
+		Runs in on_update (after the row is committed), not validate, so a refusal here
+		never blocks saving the Flow itself -- the checkbox is a best-effort convenience,
+		not a save-time gate.
+		"""
+		if not self.auto_convert_to_procedure:
+			return
+		if self.is_system:
+			# System flows are locked content (D12); do not spawn procedures from them
+			# via a checkbox a non-admin could have ticked before the flow was locked.
+			return
+
+		from huf.ai.flow_api import convert_flow_to_procedure
+
+		try:
+			result = convert_flow_to_procedure(self.flow_id)
+		except Exception as e:  # noqa: BLE001 -- this must never fail the Flow save itself
+			frappe.db.set_value(
+				"Flow Definition",
+				self.name,
+				{"converted_procedure": None, "conversion_note": f"Not converted: {e}"},
+				update_modified=False,
+			)
+			commit_if_background()
+			return
+
+		procedure_name = result.get("name")
+		if not result.get("convertible", True) or not procedure_name:
+			note = result.get("reason") or "Not convertible: contains an agent.run/router.llm/human.approval node."
+			frappe.db.set_value(
+				"Flow Definition",
+				self.name,
+				{"converted_procedure": None, "conversion_note": note},
+				update_modified=False,
+			)
+		else:
+			reduction = result.get("estimated_round_trip_reduction_pct")
+			note = f"Draft procedure created/refreshed as {procedure_name}."
+			if reduction is not None:
+				note += f" Estimated {reduction}% fewer round trips."
+			frappe.db.set_value(
+				"Flow Definition",
+				self.name,
+				{"converted_procedure": procedure_name, "conversion_note": note},
+				update_modified=False,
+			)
+		commit_if_background()
 
 	def _validate_definition_json(self):
 		"""Validate the flow definition JSON against v0.1 schema rules."""
