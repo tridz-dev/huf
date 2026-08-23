@@ -58,6 +58,10 @@ const ChatScheduledPage = lazy(() =>
 );
 const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
+const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
+const AgentContextArtifactDetailPageWrapper = lazy(
+  () => import('./pages/AgentContextArtifactDetailPageWrapper')
+);
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -548,7 +552,29 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
+          <Route
+            path="/artifacts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts/:artifactId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentContextArtifactDetailPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/artifacts/*" element={<Navigate to="/artifacts" replace />} />
           <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
