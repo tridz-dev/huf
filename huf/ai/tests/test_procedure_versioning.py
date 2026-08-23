@@ -37,6 +37,7 @@ def _install_standalone_frappe_stub():
 
 _install_standalone_frappe_stub()
 
+from huf.ai import procedure_versioning
 from huf.ai.procedure_versioning import (
 	CONTENT_FIELDS,
 	FLOW_ONLY_NODE_TYPES,
@@ -199,3 +200,29 @@ class TestContentFields(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class VerifyFingerprintTests(unittest.TestCase):
+	"""I6: a definition rewritten in place must be detected, not executed.
+
+	Version identity is structural (the docname carries the version, so the primary key
+	rejects a colliding insert), but nothing at the database level stops frappe.db.set_value
+	or raw SQL from rewriting definition_json on an Active row, and no Document guard runs
+	for either. Recomputing the hash at load time is what makes that tampering fail closed.
+	"""
+
+	def test_matching_fingerprint_passes(self):
+		definition = {"profile": "procedure", "entry": "a", "nodes": []}
+		procedure_versioning.verify_fingerprint(
+			definition, procedure_versioning.compute_fingerprint(definition)
+		)
+
+	def test_tampered_definition_is_rejected(self):
+		original = {"profile": "procedure", "entry": "a", "nodes": []}
+		recorded = procedure_versioning.compute_fingerprint(original)
+		tampered = {"profile": "procedure", "entry": "a", "nodes": [{"id": "evil"}]}
+		with self.assertRaises(procedure_versioning.ProcedureTamperError):
+			procedure_versioning.verify_fingerprint(tampered, recorded)
+
+	def test_absent_fingerprint_is_not_treated_as_tampering(self):
+		procedure_versioning.verify_fingerprint({"a": 1}, "")
