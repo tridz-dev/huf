@@ -364,7 +364,7 @@ class TestExecCondition(unittest.TestCase):
 	def test_true_branch_routes_to_true_node(self):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, flag=True)
-		config = {"expression": "context['flag']", "true_node": "t", "false_node": "f"}
+		config = {"expression": "context['flag']", "on_true": "t", "on_false": "f"}
 		result = flow_engine._exec_condition(flow_run, {}, config, {})
 		self.assertEqual(result["status"], "success")
 		self.assertEqual(result["next_node_id"], "t")
@@ -373,7 +373,7 @@ class TestExecCondition(unittest.TestCase):
 	def test_false_branch_routes_to_false_node(self):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, flag=False)
-		config = {"expression": "context['flag']", "true_node": "t", "false_node": "f"}
+		config = {"expression": "context['flag']", "on_true": "t", "on_false": "f"}
 		result = flow_engine._exec_condition(flow_run, {}, config, {})
 		self.assertEqual(result["next_node_id"], "f")
 		self.assertEqual(result["branch"], "false")
@@ -381,7 +381,7 @@ class TestExecCondition(unittest.TestCase):
 	def test_missing_branch_target_yields_no_next_node(self):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, flag=True)
-		config = {"expression": "context['flag']", "true_node": "t"}  # no false_node
+		config = {"expression": "context['flag']", "on_true": "t"}  # no on_false
 		result = flow_engine._exec_condition(flow_run, {}, config, {})
 		# flag is True -> chosen branch is true_node, which IS set, so this
 		# should route normally; flip to confirm the "chosen branch absent" path:
@@ -389,7 +389,7 @@ class TestExecCondition(unittest.TestCase):
 
 	def test_missing_expression_fails(self):
 		flow_run = FakeFlowRun()
-		result = flow_engine._exec_condition(flow_run, {}, {"true_node": "t"}, {})
+		result = flow_engine._exec_condition(flow_run, {}, {"on_true": "t"}, {})
 		self.assertEqual(result["status"], "failed")
 
 	def test_missing_both_targets_fails(self):
@@ -400,8 +400,8 @@ class TestExecCondition(unittest.TestCase):
 	def test_chosen_branch_without_target_completes_with_no_next_node(self):
 		flow_run = FakeFlowRun()
 		_ctx(flow_run, flag=False)
-		# Only true_node configured; expression evaluates false -> false_node is None.
-		config = {"expression": "context['flag']", "true_node": "t"}
+		# Only on_true configured; expression evaluates false -> on_false is None.
+		config = {"expression": "context['flag']", "on_true": "t"}
 		result = flow_engine._exec_condition(flow_run, {}, config, {})
 		self.assertEqual(result["status"], "success")
 		self.assertIsNone(result["next_node_id"])
