@@ -32,6 +32,7 @@ export const doctype = {
   "Agent Procedure": "Agent Procedure",
   "Agent Procedure Run": "Agent Procedure Run",
   "Agent Procedure Step": "Agent Procedure Step",
+  "Agent Procedure Binding": "Agent Procedure Binding",
   "Agent Tool Call": "Agent Tool Call",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",

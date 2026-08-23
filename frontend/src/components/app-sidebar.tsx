@@ -71,6 +71,13 @@ export const buildNavItems = [
     badge: "Experimental",
   },
   {
+    title: "Procedures",
+    url: "/procedures",
+    icon: Layers,
+    capability: "flows.use",
+    badge: "Experimental",
+  },
+  {
     title: "Intelligence",
     url: "/memory",
     icon: Brain,
