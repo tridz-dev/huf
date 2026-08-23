@@ -128,6 +128,16 @@ function renderFrappeView(type: 'frappe-list' | 'frappe-form' | 'frappe-report',
 		);
 	}
 
+	// Defensive normalization: a model asked to relay the tool's artifact tag
+	// "verbatim" can still occasionally paraphrase a key name (observed:
+	// gemini-3.6-flash emitting `doc` instead of `data` for mode="form"
+	// while otherwise reproducing the payload faithfully). Recover the
+	// common single-key-rename case rather than showing a hard error for
+	// data that's actually all there.
+	if (payload && payload.data === undefined && (payload as Record<string, unknown>).doc !== undefined) {
+		payload = { ...payload, data: (payload as Record<string, unknown>).doc } as FrappeViewPayload;
+	}
+
 	if (!payload || !payload.meta || payload.data === undefined) {
 		return (
 			<div className="text-sm text-destructive p-4">
