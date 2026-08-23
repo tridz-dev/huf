@@ -541,7 +541,6 @@ class TestExecToolCallInterpolation(unittest.TestCase):
 		captured = self._run_tool_call({"name": "Ada"}, {"greeting": "Hello {{name}}"})
 		self.assertEqual(captured["args"]["greeting"], "Hello Ada")
 
-	@unittest.expectedFailure
 	def test_dotted_path_substitution_currently_unsupported(self):
 		"""F-2: tool.call's local `replace_var` only does a flat ctx.get(var_name)
 		lookup -- unlike `_interpolate_string`, it does NOT resolve dotted paths.
@@ -752,7 +751,6 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 
 
 class TestKnownDefects(unittest.TestCase):
-	@unittest.expectedFailure
 	def test_resumed_run_uses_definition_pinned_at_start_not_current(self):
 		"""F-1 (flow_definition.py:33, flow_engine.py:141): flow_version
 		auto-increments on every FlowDefinition save, and `load_definition` /
@@ -820,7 +818,6 @@ class TestKnownDefects(unittest.TestCase):
 		# end node, not been left failing against a v2-shaped condition node.
 		self.assertEqual(flow_run.status, "Success")
 
-	@unittest.expectedFailure
 	def test_loop_over_more_than_max_hops_items_still_completes(self):
 		"""F-3 (flow_engine.py ~1111, DEFAULT_MAX_HOPS ~34): each loop iteration
 		burns one hop against the run's overall hop budget, via the same
@@ -852,7 +849,6 @@ class TestKnownDefects(unittest.TestCase):
 			flow_engine._execute_loop(flow_run, nodes_map, edges, {})
 		self.assertEqual(flow_run.status, "Success")
 
-	@unittest.expectedFailure
 	def test_concurrent_resumes_do_not_double_advance_the_cursor(self):
 		"""F-4: run_flow takes no lock, so two concurrent resumes of the same
 		paused run can both read the same `current_node_id` and both advance

@@ -11,9 +11,33 @@ Public contract is unchanged: ``execute(tool_name, args, user=None)`` still
 returns ``{"success": bool, "result": Any, "error": str}``.
 """
 
+import contextvars
+from contextlib import contextmanager
+
 import frappe
 
 from huf.ai.tool_invocation import RunContext, invoke_tool_sync
+
+_ambient_run_context: contextvars.ContextVar = contextvars.ContextVar(
+	"huf_flow_tool_run_context", default=None
+)
+
+
+@contextmanager
+def tool_run_context(ctx: RunContext):
+	"""Bind a ``RunContext`` for tool calls made inside this block.
+
+	``execute()`` owns telemetry now (I5/GT-05), so it needs the correlation
+	ids -- conversation, Agent Run -- that only the caller knows. Passing them
+	as an extra argument is not available to every caller (``flow_engine``
+	invokes ``execute`` through a two-argument seam its test suite pins), so
+	they are bound ambiently instead, for the duration of the call.
+	"""
+	token = _ambient_run_context.set(ctx)
+	try:
+		yield ctx
+	finally:
+		_ambient_run_context.reset(token)
 
 
 def execute(
@@ -22,7 +46,7 @@ def execute(
 	user: str = None,
 	*,
 	ctx: RunContext = None,
-	telemetry: bool = False,
+	telemetry: bool = True,
 ) -> dict:
 	"""
 	Execute an Agent Tool Function deterministically.
@@ -42,12 +66,12 @@ def execute(
 	        call_id) for callers that want run-context injection and/or
 	        telemetry correlation. Existing callers that don't pass one keep
 	        working exactly as before.
-	    telemetry: When True, this call owns its own ``Agent Tool Call``
-	        Started/Completed-Failed record (GT-05, invariant I5). Defaults
-	        to False so existing callers that already assemble their own
-	        telemetry (flow_engine._exec_tool_call today) don't get a
-	        duplicate record; new callers (e.g. ProcedureRuntime) should
-	        pass True and drop their own telemetry block.
+	    telemetry: When True (the default since T-22), this call owns its
+	        own ``Agent Tool Call`` Started/Completed-Failed record (GT-05,
+	        invariant I5). ``flow_engine`` no longer assembles one itself, so
+	        this is the single emission point for the deterministic path --
+	        exactly one record per atomic operation. Pass False only from a
+	        caller that genuinely owns its own telemetry.
 
 	Returns:
 	    dict with keys:
@@ -55,6 +79,9 @@ def execute(
 	        result (any): Tool result if successful
 	        error (str): Error message if failed
 	"""
+	if ctx is None:
+		ctx = _ambient_run_context.get()
+
 	if user:
 		original_user = frappe.session.user
 		frappe.set_user(user)
