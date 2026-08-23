@@ -15,7 +15,7 @@ import ReactFlow, {
   BackgroundVariant
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen, Maximize2, Plus, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { TriggerNode } from './nodes/TriggerNode';
 import { ActionNode } from './nodes/ActionNode';
@@ -24,6 +24,7 @@ import { AddStepGhostNode, AddStepGhostNodeData } from './nodes/AddStepGhostNode
 import { InsertableEdge, InsertableEdgeData } from './edges/InsertableEdge';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
+import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { useFlowContext } from '../contexts/FlowContext';
 import { FlowNodeData, TriggerConfig, ActionConfig } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
@@ -49,6 +50,7 @@ export function FlowCanvas({
     setSelectedNode,
     setSelectedEdge
   } = useFlowContext();
+  const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -552,6 +554,16 @@ export function FlowCanvas({
                 Add trigger
               </Button>
             )}
+            {activeFlow && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsConvertDialogOpen(true)}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Convert to procedure
+              </Button>
+            )}
             <Button
               variant="outline"
               size="icon"
@@ -610,6 +622,14 @@ export function FlowCanvas({
         onSaveTrigger={handleSaveTriggerConfig}
         onSaveAction={handleSelectAction}
       />
+
+      {activeFlow && (
+        <ConvertToProcedureDialog
+          flowId={activeFlow.id}
+          open={isConvertDialogOpen}
+          onOpenChange={setIsConvertDialogOpen}
+        />
+      )}
     </div>
   );
 }
