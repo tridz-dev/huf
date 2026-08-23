@@ -28,6 +28,7 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.permissions import has_capability
 
 class _LazyLogger:
@@ -1813,68 +1814,17 @@ def _execute_agent_run(
 
         if usage:
 
-            if isinstance(usage, dict):
-                input_tokens = (getattr(usage, "prompt_tokens", usage.get("input_tokens", 0)) if isinstance(usage, dict) else 0) or 0
-                output_tokens = (getattr(usage, "completion_tokens", usage.get("output_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+            round_usage = extract_round_usage(usage)
+            input_tokens = round_usage["input_tokens"]
+            output_tokens = round_usage["output_tokens"]
+            cached_tokens = round_usage["cache_read_tokens"]
+            cache_creation_tokens = round_usage["cache_write_tokens"]
 
-                details = getattr(usage, "prompt_tokens_details", None)
-                if not details and isinstance(usage, dict):
-                    details = usage.get("prompt_tokens_details")
-
-                if details:
-                    if isinstance(details, dict):
-                        cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
-                        cache_creation_tokens = (
-                            details.get("cache_creation_input_tokens")
-                            or details.get("cache_write_tokens")
-                            or details.get("cache_creation_tokens")
-                            or 0
-                        )
-                    else:
-                        cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
-                        cache_creation_tokens = (
-                            getattr(details, "cache_creation_input_tokens", None)
-                            or getattr(details, "cache_write_tokens", None)
-                            or getattr(details, "cache_creation_tokens", None)
-                            or 0
-                        )
-                elif isinstance(usage, dict):
-                    cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                    cache_creation_tokens = (
-                        usage.get("cache_creation_tokens")
-                        or usage.get("cache_creation_input_tokens")
-                        or usage.get("cache_write_input_tokens")
-                        or usage.get("cache_miss_tokens")
-                        or 0
-                    )
-
-                if not cache_creation_tokens and isinstance(usage, dict):
-                    cache_creation_tokens = (
-                        usage.get("cache_creation_tokens")
-                        or usage.get("cache_creation_input_tokens")
-                        or usage.get("cache_write_input_tokens")
-                        or usage.get("cache_miss_tokens")
-                        or 0
-                    )
-
-                if isinstance(usage, dict):
-                    cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
-
+            usage_dict = normalise_usage_payload(usage)
+            if usage_dict is not None:
+                cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
             else:
-                input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
-                output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
-                cached_tokens = getattr(usage, "cached_tokens", None) or 0
-                cache_creation_tokens = (
-                    getattr(usage, "cache_creation_tokens", None)
-                    or getattr(usage, "cache_creation_input_tokens", None)
-                    or getattr(usage, "cache_write_input_tokens", None)
-                    or getattr(usage, "cache_miss_tokens", None)
-                    or 0
-                )
                 cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
-
-            cached_tokens = cached_tokens or 0
-            cache_creation_tokens = cache_creation_tokens or 0
 
             try:
                 # Prefer cost directly from the result
@@ -1912,7 +1862,9 @@ def _execute_agent_run(
                 cost = 0.0
 
             try:
-                total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
+                # usage is normally a plain dict here, so getattr() would always miss;
+                # read the normalised payload and fall back to the parts.
+                total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
                 frappe.db.sql("""
                     UPDATE `tabAgent Conversation`
@@ -1940,7 +1892,6 @@ def _execute_agent_run(
                     "output_tokens": output_tokens,
                     "cache_read_tokens": cached_tokens if usage else None,
                     "cache_creation_tokens": cache_creation_tokens if usage else None,
-                    "cache_miss_tokens": cache_creation_tokens if usage else None,
                     "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
                     "total_tokens": total_tokens,
                     "completeness": "provider_reported" if usage else "estimated",
@@ -2925,70 +2876,21 @@ async def run_agent_stream(
 
                     if usage:
 
-                        if isinstance(usage, dict):
-                            input_tokens = (getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0)) if isinstance(usage, dict) else 0) or 0
-                            output_tokens = (getattr(usage, "completion_tokens", usage.get("completion_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+                        round_usage = extract_round_usage(usage)
+                        input_tokens = round_usage["input_tokens"]
+                        output_tokens = round_usage["output_tokens"]
+                        cached_tokens = round_usage["cache_read_tokens"]
+                        cache_creation_tokens = round_usage["cache_write_tokens"]
 
-                            details = getattr(usage, "prompt_tokens_details", None)
-                            if not details and isinstance(usage, dict):
-                                details = usage.get("prompt_tokens_details")
-
-                            if details:
-                                if isinstance(details, dict):
-                                    cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
-                                    cache_creation_tokens = (
-                                        details.get("cache_creation_input_tokens")
-                                        or details.get("cache_write_tokens")
-                                        or details.get("cache_creation_tokens")
-                                        or 0
-                                    )
-                                else:
-                                    cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
-                                    cache_creation_tokens = (
-                                        getattr(details, "cache_creation_input_tokens", None)
-                                        or getattr(details, "cache_write_tokens", None)
-                                        or getattr(details, "cache_creation_tokens", None)
-                                        or 0
-                                    )
-                            elif isinstance(usage, dict):
-                                cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                                cache_creation_tokens = (
-                                    usage.get("cache_creation_tokens")
-                                    or usage.get("cache_creation_input_tokens")
-                                    or usage.get("cache_write_input_tokens")
-                                    or usage.get("cache_miss_tokens")
-                                    or 0
-                                )
-
-                            if not cache_creation_tokens and isinstance(usage, dict):
-                                cache_creation_tokens = (
-                                    usage.get("cache_creation_tokens")
-                                    or usage.get("cache_creation_input_tokens")
-                                    or usage.get("cache_write_input_tokens")
-                                    or usage.get("cache_miss_tokens")
-                                    or 0
-                                )
-
-                            if isinstance(usage, dict):
-                                cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
-
-                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                        usage_dict = normalise_usage_payload(usage)
+                        if usage_dict is not None:
+                            cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
                         else:
-                            input_tokens = (getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))) or 0
-                            output_tokens = (getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))) or 0
-                            cached_tokens = getattr(usage, "cached_tokens", None) or 0
-                            cache_creation_tokens = (
-                                getattr(usage, "cache_creation_tokens", None)
-                                or getattr(usage, "cache_creation_input_tokens", None)
-                                or getattr(usage, "cache_write_input_tokens", None)
-                                or getattr(usage, "cache_miss_tokens", None)
-                                or 0
-                            )
                             cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
-                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
 
-                    cached_tokens = cached_tokens or 0
-                    cache_creation_tokens = cache_creation_tokens or 0
+                        # usage is normally a plain dict here, so getattr() would always miss;
+                        # read the normalised payload and fall back to the parts.
+                        total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
@@ -3078,7 +2980,6 @@ async def run_agent_stream(
                             "output_tokens": output_tokens,
                             "cache_read_tokens": cached_tokens if usage else None,
                             "cache_creation_tokens": cache_creation_tokens if usage else None,
-                            "cache_miss_tokens": cache_creation_tokens if usage else None,
                             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
                             "total_tokens": total_tokens,
                             "completeness": "provider_reported" if usage else "estimated",

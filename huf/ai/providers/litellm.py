@@ -30,6 +30,7 @@ from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
 from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.reasoning import (
     ReasoningPolicy,
     ReasoningResolution,
@@ -552,6 +553,24 @@ def _resolve_api_base(provider_doc) -> str | None:
     return url
 
 
+def _finalize_usage_totals(usage_totals: dict) -> dict:
+    """Populate back-compat alias keys on an accumulated usage dict.
+
+    ``usage_totals`` must already carry the accumulated ``input_tokens`` and
+    ``output_tokens`` (billed sums across all rounds), plus
+    ``cached_tokens``, ``cache_creation_tokens``, ``peak_context_tokens``,
+    ``round_count``, and ``cache_skipped_unsupported_model``. Adds
+    ``prompt_tokens``/``completion_tokens`` (back-compat aliases for
+    ``input_tokens``/``output_tokens``) and ``billed_input_tokens`` (the same
+    value as ``input_tokens``, explicitly named so it is never confused with
+    ``peak_context_tokens``). Mutates and returns ``usage_totals``.
+    """
+    usage_totals["prompt_tokens"] = usage_totals["input_tokens"]
+    usage_totals["completion_tokens"] = usage_totals["output_tokens"]
+    usage_totals["billed_input_tokens"] = usage_totals["input_tokens"]
+    return usage_totals
+
+
 async def run(agent, enhanced_prompt, provider, model, context=None):
     """
     Unified LiteLLM provider implementation.
@@ -729,7 +748,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             "output_tokens": 0,
             "cached_tokens": 0,
             "cache_creation_tokens": 0,
-            "cache_miss_tokens": 0,
+            "billed_input_tokens": 0,
+            "peak_context_tokens": 0,
+            "round_count": 0,
             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
         }
         total_cost = 0.0
@@ -909,29 +930,6 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     else:
                         raise e
 
-                try:
-                    # --- Round token counts for cost calculation ---
-                    round_usage = response.usage
-                    round_input  = int(getattr(round_usage, "prompt_tokens", 0) or 0)
-                    round_output = int(getattr(round_usage, "completion_tokens", 0) or 0)
-                    round_cached = 0
-                    if hasattr(round_usage, "prompt_tokens_details") and round_usage.prompt_tokens_details:
-                        _d = round_usage.prompt_tokens_details
-                        round_cached = int(
-                            (getattr(_d, "cached_tokens", None) or getattr(_d, "cache_hit_tokens", None) or 0)
-                        )
-                    round_cost, _cost_source = calculate_cost(
-                        model_name=model,
-                        input_tokens=round_input,
-                        output_tokens=round_output,
-                        cached_tokens=round_cached,
-                        litellm_response=response,
-                    )
-                    total_cost += round_cost
-                except (ValueError, TypeError, AttributeError, KeyError):
-                    # Cost calculation is best-effort; ignore rounding failures.
-                    pass
-
             except InternalServerError as e:
                 raw_msg = (
                     f"OpenAI API server error with model '{normalized_model}'. "
@@ -995,56 +993,30 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # Extract response
             choice = response.choices[0].message
 
-            usage = response.usage
-            total_usage["input_tokens"] += (getattr(usage, "prompt_tokens", 0) or 0)
-            total_usage["output_tokens"] += (getattr(usage, "completion_tokens", 0) or 0)
+            # Single extraction of this round's usage, shared by cost calculation
+            # and accumulation into total_usage (see huf/ai/usage_extraction.py).
+            round_usage = extract_round_usage(response.usage)
+            total_usage["input_tokens"] += round_usage["input_tokens"]
+            total_usage["output_tokens"] += round_usage["output_tokens"]
+            total_usage["cached_tokens"] += round_usage["cache_read_tokens"]
+            total_usage["cache_creation_tokens"] += round_usage["cache_write_tokens"]
+            total_usage["round_count"] += 1
+            total_usage["peak_context_tokens"] = max(
+                total_usage["peak_context_tokens"], round_usage["input_tokens"]
+            )
 
-            # Track cached tokens and cache creation/write tokens if available
-            round_cached = 0
-            round_creation = 0
-
-            if hasattr(usage, "prompt_tokens_details") and usage.prompt_tokens_details:
-                details = usage.prompt_tokens_details
-                if isinstance(details, dict):
-                    round_cached = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
-                    round_creation = (
-                        details.get("cache_creation_input_tokens")
-                        or details.get("cache_write_tokens")
-                        or details.get("cache_creation_tokens")
-                        or 0
-                    )
-                else:
-                    round_cached = (
-                        getattr(details, "cached_tokens", None)
-                        or getattr(details, "cache_hit_tokens", None)
-                        or 0
-                    )
-                    round_creation = (
-                        getattr(details, "cache_creation_input_tokens", None)
-                        or getattr(details, "cache_write_tokens", None)
-                        or getattr(details, "cache_creation_tokens", None)
-                        or 0
-                    )
-            elif isinstance(usage, dict):
-                round_cached = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                round_creation = (
-                    usage.get("cache_creation_input_tokens")
-                    or usage.get("cache_write_input_tokens")
-                    or usage.get("cache_creation_tokens")
-                    or usage.get("cache_miss_tokens")
-                    or 0
+            try:
+                round_cost, _cost_source = calculate_cost(
+                    model_name=model,
+                    input_tokens=round_usage["input_tokens"],
+                    output_tokens=round_usage["output_tokens"],
+                    cached_tokens=round_usage["cache_read_tokens"],
+                    litellm_response=response,
                 )
-
-            if not round_creation:
-                round_creation = (
-                    getattr(usage, "cache_creation_input_tokens", None)
-                    or getattr(usage, "cache_write_input_tokens", None)
-                    or 0
-                )
-
-            total_usage["cached_tokens"] += (round_cached or 0)
-            total_usage["cache_creation_tokens"] += (round_creation or 0)
-            total_usage["cache_miss_tokens"] += (round_creation or 0)
+                total_cost += round_cost
+            except (ValueError, TypeError, AttributeError, KeyError):
+                # Cost calculation is best-effort; ignore rounding failures.
+                pass
 
             assistant_message = {
                 "role": "assistant",
@@ -1064,7 +1036,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # No tool call — return final result
             if not (hasattr(choice, "tool_calls") and choice.tool_calls):
                 return SimpleResult(
-                    choice.content or "", total_usage, all_new_items, cost=total_cost
+                    choice.content or "", _finalize_usage_totals(total_usage), all_new_items, cost=total_cost
                 )
 
             # Handle tool calls
@@ -1167,7 +1139,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
         return SimpleResult(
             "Agent stopped after max rounds of tool calls.",
-            total_usage,
+            _finalize_usage_totals(total_usage),
             all_new_items,
             cost=total_cost,
         )
@@ -1592,6 +1564,22 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         tool_loop_repeats = 0
         MAX_TOOL_LOOP_REPEATS = 1  # allow one retry, stop on the second repeat
 
+        # Usage/cost accumulator across all rounds of this streaming run. Unlike the
+        # per-round `stream_usage` capture below (reset every round), this survives
+        # the whole loop — see huf/ai/usage_extraction.py for why per-round
+        # extraction must never be conflated with a running total.
+        stream_total_usage = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cached_tokens": 0,
+            "cache_creation_tokens": 0,
+            "billed_input_tokens": 0,
+            "peak_context_tokens": 0,
+            "round_count": 0,
+            "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+        }
+        stream_total_cost = 0.0
+
         for round_num in range(MAX_ROUNDS):
             try:
                 # Use LiteLLM completion with stream=True
@@ -1908,6 +1896,33 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                         if finish_reason == "stop":
                             is_stop = True
 
+                # Accumulate this round's usage/cost into the running totals. This
+                # runs on every path that completes a round: the tool-call branch
+                # above (which `break`s out of the chunk loop but falls through to
+                # here), a "stop" finish reason, and plain stream exhaustion.
+                round_payload = normalise_usage_payload(stream_usage)
+                round_usage = extract_round_usage(round_payload)
+                stream_total_usage["input_tokens"] += round_usage["input_tokens"]
+                stream_total_usage["output_tokens"] += round_usage["output_tokens"]
+                stream_total_usage["cached_tokens"] += round_usage["cache_read_tokens"]
+                stream_total_usage["cache_creation_tokens"] += round_usage["cache_write_tokens"]
+                stream_total_usage["round_count"] += 1
+                stream_total_usage["peak_context_tokens"] = max(
+                    stream_total_usage["peak_context_tokens"], round_usage["input_tokens"]
+                )
+
+                try:
+                    round_cost, _cost_source = calculate_cost(
+                        model_name=model,
+                        input_tokens=round_usage["input_tokens"],
+                        output_tokens=round_usage["output_tokens"],
+                        cached_tokens=round_usage["cache_read_tokens"],
+                    )
+                    stream_total_cost += round_cost
+                except (ValueError, TypeError, AttributeError, KeyError):
+                    # Cost calculation is best-effort; ignore rounding failures.
+                    pass
+
                 if is_stop:
                     break
 
@@ -1936,57 +1951,9 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
 
-        # Max rounds reached
-        if stream_usage and hasattr(stream_usage, "dict"):
-             stream_usage = stream_usage.dict()
-        elif stream_usage and hasattr(stream_usage, "model_dump"):
-             stream_usage = stream_usage.model_dump()
-
-        if not stream_usage or not isinstance(stream_usage, dict):
-            stream_usage = {}
-
-        # Extract cache creation tokens and cache skipped flag for stream_usage
-        s_cached = 0
-        s_creation = 0
-        s_details = stream_usage.get("prompt_tokens_details") or {}
-        if isinstance(s_details, dict):
-            s_cached = int(s_details.get("cached_tokens", 0) or s_details.get("cache_hit_tokens", 0) or 0)
-            s_creation = int(
-                s_details.get("cache_creation_input_tokens", 0)
-                or s_details.get("cache_write_tokens", 0)
-                or s_details.get("cache_creation_tokens", 0)
-                or 0
-            )
-
-        if not s_creation:
-            s_creation = int(
-                stream_usage.get("cache_creation_input_tokens", 0)
-                or stream_usage.get("cache_write_input_tokens", 0)
-                or stream_usage.get("cache_creation_tokens", 0)
-                or stream_usage.get("cache_miss_tokens", 0)
-                or 0
-            )
-
-        stream_usage["cached_tokens"] = s_cached
-        stream_usage["cache_creation_tokens"] = s_creation
-        stream_usage["cache_miss_tokens"] = s_creation
-        stream_usage["cache_skipped_unsupported_model"] = cache_skipped_unsupported_model
-
-        # Calculate cost from streaming usage
-        stream_cost = 0.0
-        if stream_usage and isinstance(stream_usage, dict):
-            try:
-                s_input   = int(stream_usage.get("prompt_tokens", 0) or 0)
-                s_output  = int(stream_usage.get("completion_tokens", 0) or 0)
-                stream_cost, _src = calculate_cost(
-                    model_name=model,
-                    input_tokens=s_input,
-                    output_tokens=s_output,
-                    cached_tokens=s_cached,
-                )
-            except (ValueError, TypeError, AttributeError, KeyError):
-                # Stream cost calculation is best-effort; ignore failures.
-                pass
+        # Max rounds reached (or the loop broke via is_stop). Finalize the
+        # accumulated per-round totals — never the last round's usage alone.
+        _finalize_usage_totals(stream_total_usage)
 
         # Never report an empty response as a successful completion.
         if not full_response.strip() and not had_tool_calls:
@@ -2011,8 +1978,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         yield {
             "type": "complete",
             "full_response": full_response or "Agent stopped after max rounds.",
-            "usage": stream_usage,
-            "cost": stream_cost,
+            "usage": stream_total_usage,
+            "cost": stream_total_cost,
             "reasoning_content": accumulated_reasoning_content or None,
         }
 
