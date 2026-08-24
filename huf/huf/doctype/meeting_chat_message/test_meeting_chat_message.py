@@ -22,6 +22,6 @@ class TestMeetingChatMessage(FrappeTestCase):
 		frappe.flags.in_migrate = True
 		try:
 			message.delete()
+			meeting.delete()
 		finally:
 			frappe.flags.in_migrate = False
-		meeting.delete()
