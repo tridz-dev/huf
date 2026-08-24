@@ -20,12 +20,6 @@ export interface SnippetRequest {
 const API_KEY_PLACEHOLDER = 'huf_sk_...';
 const SESSION_ID_PLACEHOLDER = '<sid-from-login>';
 
-function bodyToFormString(body: Record<string, string>): string {
-	return Object.entries(body)
-		.map(([key, value]) => `${key}=${value}`)
-		.join('&');
-}
-
 function buildCurl(baseUrl: string, request: SnippetRequest, authMode: AuthMode): string {
 	const url = `${baseUrl}${request.path}`;
 	const authHeader =
