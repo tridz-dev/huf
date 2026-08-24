@@ -57,7 +57,7 @@ const ChatScheduledPage = lazy(() =>
   import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatScheduledPage }))
 );
 const Executions = lazy(() => import('./pages/Executions'));
-const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
+const AnalyticsEntityDetailPage = lazy(() => import('./pages/AnalyticsEntityDetailPage'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
@@ -539,13 +539,14 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route path="/analytics" element={<Navigate to="/executions?tab=analytics" replace />} />
           <Route
-            path="/analytics"
+            path="/analytics/:dimension/:entity"
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
-                    <AnalyticsPage />
+                    <AnalyticsEntityDetailPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

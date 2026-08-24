@@ -91,6 +91,21 @@ def _add_derived_rates(row: dict) -> None:
     row["cache_ratio"] = (row["cached_tokens"] / row["input_tokens"] * 100) if row["input_tokens"] else None
 
 
+def _filter_rows_by_entity(rows: list[dict], dimension: str, entity: str | None) -> list[dict]:
+    """Restrict rollup rows to those whose `dimension` field equals `entity`.
+
+    A falsy `entity` (None or "") is a no-op passthrough -- the caller wants
+    the unfiltered rows, matching the existing dimension-only behaviour. Only
+    an exact equality match on `row.get(dimension)` counts; a row missing the
+    dimension key (`.get` returns None) only matches when `entity` is itself
+    None, which the falsy check above already routes to passthrough, so in
+    practice it never happens through this path.
+    """
+    if not entity:
+        return rows
+    return [row for row in rows if row.get(dimension) == entity]
+
+
 def _load_composition_totals(raw) -> dict:
     """Parse a rollup row's composition_totals JSON string.
 
@@ -133,6 +148,7 @@ def get_execution_analytics(
     to_date: str | None = None,
     granularity: str = "hour",
     dimension: str = "provider",
+    entity: str | None = None,
 ):
     """Return execution analytics; auto-refreshes rollups if empty."""
     _require_analytics_access()
@@ -161,6 +177,7 @@ def get_execution_analytics(
             "metadata": {
                 "granularity": granularity,
                 "dimension": dimension,
+                "entity": entity,
                 "freshness": None,
                 "breakdowns_total_count": 0,
             },
@@ -173,6 +190,8 @@ def get_execution_analytics(
         from huf.ai.agent_run_analytics import refresh_rollups
         refresh_rollups(full_backfill=True)
         rows = _query_rollups(granularity, start, end)
+
+    rows = _filter_rows_by_entity(rows, dimension, entity)
 
     summary = {
         "run_count": 0,
@@ -196,10 +215,11 @@ def get_execution_analytics(
         bucket = series_by_bucket.setdefault(row["bucket_start"], {"bucket_start": row["bucket_start"], **{key: 0 for key in summary}})
         for key in summary:
             bucket[key] += row.get(key) or 0
-        dimension_value = row.get(dimension) or "Unknown"
-        breakdown = breakdown_by_dimension.setdefault(dimension_value, {"dimension": dimension_value, **{key: 0 for key in summary}})
-        for key in summary:
-            breakdown[key] += row.get(key) or 0
+        if not entity:
+            dimension_value = row.get(dimension) or "Unknown"
+            breakdown = breakdown_by_dimension.setdefault(dimension_value, {"dimension": dimension_value, **{key: 0 for key in summary}})
+            for key in summary:
+                breakdown[key] += row.get(key) or 0
         _accumulate_composition(composition_totals, _load_composition_totals(row.get("composition_totals")))
         if row.get("last_recomputed_at") and (freshness is None or row["last_recomputed_at"] > freshness):
             freshness = row["last_recomputed_at"]
@@ -217,6 +237,7 @@ def get_execution_analytics(
         "metadata": {
             "granularity": granularity,
             "dimension": dimension,
+            "entity": entity,
             "from": start,
             "to": end,
             "freshness": freshness,
