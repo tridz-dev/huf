@@ -643,6 +643,7 @@ def create_meeting_recorder_app():
 		"icon": "mic",
 		"category": "Productivity",
 		"enabled": 1,
+		"sync_status": "Active",
 	}
 
 	existing_name = frappe.db.get_value("HUF App", {"app_id": app_id}, "name")
