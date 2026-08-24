@@ -384,7 +384,13 @@ def handle_list_app_components(**kwargs) -> list:
 	block, per the design-system-aware rendering requirement.
 
 	No confirm, no permission check - purely informational, same allowlist
-	`render_app_component` validates against below.
+	`render_app_component` validates against below. Deliberately matches
+	handle_render_mermaid/handle_render_chart (PR #641, already shipped)
+	which are also ungated: all four are read-only templating over caller-
+	supplied structured data, produce no DB writes, and expose nothing an
+	authenticated chat user couldn't already see. Gating only the two
+	App-component tools while leaving their Mermaid/chart siblings ungated
+	would be an inconsistency, not a security improvement.
 	"""
 	return [
 		{"name": name, "props": spec["props"], "example": spec["example"]}

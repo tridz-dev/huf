@@ -101,11 +101,19 @@ def resolve_recent_resource(resource_type: str, conversation_id: str | None = No
 
 	Inspects the current Agent Conversation's conversation_data for
 	"_recent_resources" (populated by draft_agent/draft_app on confirmed
-	creation) and returns the newest entry matching resource_type. Read-only
-	introspection of the current conversation, not a document, so this only
-	requires the builder capability — no _require_doc_permission check.
+	creation) and returns the newest entry matching resource_type.
+
+	Still requires _require_doc_permission on the Agent Conversation being
+	read: without it, a builder-capability holder could pass an arbitrary
+	conversation_id belonging to a different user and learn which
+	Agents/Apps were recently created there (Phase 13 hardening finding —
+	conversation_id is normally auto-populated from run context, not
+	user-supplied, but the parameter accepts an explicit override and must
+	not trust it blindly).
 	"""
 	_require_builder_capability()
+	if conversation_id:
+		_require_doc_permission("Agent Conversation", "read", conversation_id)
 
 	data = _get_conversation_data(conversation_id)
 	recent = data.get("_recent_resources")

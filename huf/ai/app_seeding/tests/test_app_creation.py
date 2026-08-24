@@ -8,7 +8,12 @@ import unittest
 
 import frappe
 
-from huf.ai.app_seeding.apps_loader import create_app_from_agent, install_app, update_app
+from huf.ai.app_seeding.apps_loader import (
+	cleanup_orphaned_apps,
+	create_app_from_agent,
+	install_app,
+	update_app,
+)
 
 
 class TestAppCreation(unittest.TestCase):
@@ -228,6 +233,41 @@ class TestAppCreation(unittest.TestCase):
 		self.assertIn("live_voice", result.get("capabilities") or "")
 		self.assertTrue(
 			any("memory" in warning.lower() for warning in result.get("warnings") or [])
+		)
+
+	# ------------------------------------------------------------------
+	# cleanup_orphaned_apps (Phase 13 hardening regression)
+	# ------------------------------------------------------------------
+
+	def test_chat_created_app_survives_cleanup_orphaned_apps(self):
+		"""Regression: an App created via create_app_from_agent (source_app="huf",
+		source_file="chat") must NOT be deleted by cleanup_orphaned_apps, which
+		runs on every bench migrate via sync_huf_apps().
+
+		find_seed_dirs() deliberately skips scanning "huf" itself (the
+		manifest-discovery pipeline is for *other* apps' huf/apps/*.json files),
+		so a huf-sourced record can never appear in the `seen` set that
+		cleanup_orphaned_apps uses to decide what survives a full sync -- before
+		the fix, this meant every chat-created App was silently deleted on the
+		very next migrate. Simulates exactly that: an empty `seen` set (as if
+		find_seed_dirs() found nothing, which is always true for "huf"),
+		asserting the record is NOT in the deleted list and still exists.
+		"""
+		app_id = self._app_id("survives_cleanup")
+		create_app_from_agent(
+			app_id=app_id,
+			title="Should Survive Cleanup",
+			agent_name=self.agent_name,
+		)
+		self.assertTrue(frappe.db.exists("HUF App", app_id))
+
+		deleted = cleanup_orphaned_apps(seen=set())
+
+		self.assertNotIn(app_id, deleted)
+		self.assertTrue(
+			frappe.db.exists("HUF App", app_id),
+			"chat-created App must survive cleanup_orphaned_apps even with an "
+			"empty `seen` set, since huf-sourced records are never scanned",
 		)
 
 	# ------------------------------------------------------------------

@@ -423,6 +423,17 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 	current sync run. When None, every record from an installed app is treated
 	as seen unless its source app was uninstalled.
 	Returns the list of deleted app_ids.
+
+	Records with ``source_app == "huf"`` (e.g. Apps created via the Hub
+	Orchestrator chat builder, huf.ai.app_seeding.apps_loader.create_app_from_agent)
+	are exempt from the ``seen``-membership check: find_seed_dirs() explicitly
+	skips scanning "huf" itself (huf.ai.app_seeding.scanner.find_seed_dirs -
+	the manifest-discovery pipeline is for *other* apps' huf/apps/*.json files,
+	not huf's own), so a huf-sourced record can never legitimately appear in
+	``seen`` and would otherwise be deleted on every single sync/migrate
+	regardless of whether it's still wanted. "huf" is always installed, so the
+	installed-apps check above already covers the only other reason a record
+	could be orphaned.
 	"""
 	installed_apps = set(frappe.get_installed_apps())
 	deleted = []
@@ -432,7 +443,7 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 	)
 	for record in records:
 		orphaned = record.source_app not in installed_apps
-		if not orphaned and seen is not None:
+		if not orphaned and seen is not None and record.source_app != "huf":
 			orphaned = (record.source_app, record.source_file) not in seen
 		if not orphaned:
 			continue
@@ -724,7 +735,16 @@ def update_app(app_id: str, **fields) -> dict:
 			capabilities = json.loads(capabilities) if capabilities else {}
 
 		agent_name = fields.get("agent") or doc.get("agent")
-		if capabilities and agent_name:
+		if capabilities:
+			# Fail closed: a non-empty capabilities payload with no resolvable
+			# Agent can never satisfy the "subset of Agent capabilities"
+			# invariant (docs/adr/0001-app-runtime-model.md decision #2), so
+			# it must be rejected rather than silently saved unvalidated.
+			if not agent_name:
+				frappe.throw(
+					"Cannot set capabilities without a linked Agent.",
+					frappe.ValidationError,
+				)
 			agent_doc = frappe.get_doc("Agent", agent_name)
 			errors = validate_app_capabilities(capabilities, agent_doc)
 			if errors:
