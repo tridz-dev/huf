@@ -807,7 +807,7 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
         return {"success": False, "error": str(e)}
 
 
-def handle_send_email(to=None, subject=None, message=None, body=None, reference_doctype=None, reference_name=None, **kwargs):
+def handle_send_email(to=None, subject=None, message=None, body=None, reference_doctype=None, reference_name=None, gateway=None, **kwargs):
     """
     SDK handler that wraps send_email. Accepts 'message' or 'body' for the email content.
     """
@@ -821,6 +821,7 @@ def handle_send_email(to=None, subject=None, message=None, body=None, reference_
             message=message or body,
             reference_doctype=reference_doctype,
             reference_name=reference_name,
+            gateway=gateway,
         )
     except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
         return {"success": False, "error": str(e)}

@@ -506,6 +506,7 @@ def send_email(
     message: str,
     reference_doctype: str = None,
     reference_name: str = None,
+    gateway: str = None,
 ):
     """
     Send an email using frappe.sendmail, with proper error handling
@@ -516,6 +517,9 @@ def send_email(
         message: Email body (plain text or HTML)
         reference_doctype: Optional DocType to thread this email against
         reference_name: Optional document name to thread this email against
+        gateway: Optional Gateway name (provider "Email") to send from --
+            uses that gateway's configured sender address instead of the
+            site's default outgoing Email Account
     """
     try:
         recipients = to if isinstance(to, list) else [to]
@@ -550,10 +554,23 @@ def send_email(
                     "permission_denied": True,
                 }
 
+        sender = None
+        if gateway:
+            gateway_doc = frappe.get_doc("Gateway", gateway)
+            if gateway_doc.provider != "Email":
+                return {"success": False, "error": f"Gateway {gateway} is not an Email gateway"}
+            if not gateway_doc.is_enabled:
+                return {"success": False, "error": f"Gateway {gateway} is disabled"}
+
+            from huf.ai.gateway_webhook import get_gateway_adapter
+
+            sender = get_gateway_adapter(gateway_doc).sender_email or None
+
         frappe.sendmail(
             recipients=recipients,
             subject=subject,
             message=message,
+            sender=sender,
             reference_doctype=reference_doctype,
             reference_name=reference_name,
             delayed=True,
