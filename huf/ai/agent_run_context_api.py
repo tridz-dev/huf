@@ -13,8 +13,37 @@ import json
 import frappe
 
 from huf.ai.cache_metrics import compute_run_metrics
+from huf.ai.model_metadata import resolve_model_context_window
 
-DEFAULT_CONTEXT_WINDOW = 200000
+
+def _resolve_context_window(run_doc):
+    """Resolve the context window to measure a run's usage against.
+
+    Most-authoritative source first:
+      1. ``Agent Run.model_context_window`` — the value snapshotted at call
+         time. Always wins when set, because it records what was actually
+         true for this run, immune to later edits of the AI Model record.
+      2. Everything else — delegated to ``resolve_model_context_window``:
+         the run's ``AI Model.context_window`` (current model metadata),
+         then LiteLLM's model-cost table, then ``None``.
+
+    A field is treated as "set" only when it is a truthy, non-zero int; 0
+    and NULL both mean "not set" per the AI Model field convention.
+    """
+    snapshot_window = run_doc.get("model_context_window")
+    if snapshot_window:
+        return snapshot_window
+
+    model_link = run_doc.get("model")
+    if not model_link:
+        return None
+
+    provider_brand = (
+        frappe.get_cached_value("AI Provider", run_doc.get("provider"), "provider_brand")
+        if run_doc.get("provider")
+        else None
+    )
+    return resolve_model_context_window(model_link, run_doc.get("provider"), provider_brand)
 
 
 @frappe.whitelist(methods=["GET"])
@@ -40,12 +69,10 @@ def get_run_context_metrics(run_name: str):
 
     metrics = compute_run_metrics(run_doc, previous_run_doc)
 
-    # AI Model does not carry a context-window field today; DEFAULT_CONTEXT_WINDOW
-    # is a placeholder until model metadata exposes one (see PHASE2_VisualCache.md).
     return {
         "segment_tokens": snapshot.get("segment_tokens"),
         "total_tokens": snapshot.get("total_tokens"),
-        "context_window": DEFAULT_CONTEXT_WINDOW,
+        "context_window": _resolve_context_window(run_doc),
         "prefix_breakpoints": snapshot.get("prefix_breakpoints") or [],
         "cache_skipped_unsupported_model": snapshot.get("cache_skipped_unsupported_model"),
         "metrics": metrics,

@@ -19,6 +19,11 @@ interface ChatWindowProps {
     artifacts?: ArtifactListItem[];
     onOpenArtifact?: (target: ArtifactPaneTarget) => void;
     activeArtifactName?: string;
+    /** Whether the right-docked conversation analytics pane is currently open. */
+    analyticsPaneOpen?: boolean;
+    /** Toggles the analytics pane. Sibling of onToggleArtifactPane - the
+     * header only renders its toggle button when this is provided. */
+    onToggleAnalyticsPane?: () => void;
 }
 
 export default function ChatWindow({
@@ -32,6 +37,8 @@ export default function ChatWindow({
     artifacts,
     onOpenArtifact,
     activeArtifactName,
+    analyticsPaneOpen,
+    onToggleAnalyticsPane,
 }: ChatWindowProps) {
     return (
         <div className="w-full h-full flex flex-col overflow-hidden bg-background">
@@ -42,6 +49,8 @@ export default function ChatWindow({
                 onExpandRail={onExpandRail}
                 artifactPaneOpen={artifactPaneOpen}
                 onToggleArtifactPane={onToggleArtifactPane}
+                analyticsPaneOpen={analyticsPaneOpen}
+                onToggleAnalyticsPane={onToggleAnalyticsPane}
             />
             <ChatMessageList
                 chatId={chatIdProp}

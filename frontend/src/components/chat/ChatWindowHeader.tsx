@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
     ArrowLeft,
+    BarChart3,
     Check,
     ChevronDown,
     MoreVertical,
@@ -39,6 +40,12 @@ interface ChatWindowHeaderProps {
     /** Toggles the artifact preview pane. The toggle button only renders when
      * this is provided, so the control is never present-but-inert. */
     onToggleArtifactPane?: () => void;
+    /** Whether the right-docked conversation analytics pane is currently open.
+     * Sibling of artifactPaneOpen - drives the analytics toggle's fill state. */
+    analyticsPaneOpen?: boolean;
+    /** Toggles the analytics pane. Sibling of onToggleArtifactPane: the
+     * toggle button only renders when this is provided. */
+    onToggleAnalyticsPane?: () => void;
     /** Whether the left rail is collapsed. When true, the header gains a
      * leading icon cluster (expand rail, Dashboard, New, divider) in place
      * of the plain sidebar-open button (spec 28.5). */
@@ -53,6 +60,8 @@ export function ChatWindowHeader({
     onToggleSidebar,
     artifactPaneOpen,
     onToggleArtifactPane,
+    analyticsPaneOpen,
+    onToggleAnalyticsPane,
     railCollapsed,
     onExpandRail,
 }: ChatWindowHeaderProps) {
@@ -207,21 +216,23 @@ export function ChatWindowHeader({
                     </button>
                 </AgentSwitcher>
                 <span className="flex-1" />
+                <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
                 <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
             </header>
         );
     }
 
-    // Spec 28.2: with the artifact pane open, the header simplifies down to
-    // the title, a flex spacer, and the artifact toggle — the picker
-    // chevron, model text, and overflow dots all drop out.
-    if (artifactPaneOpen) {
+    // Spec 28.2: with the artifact pane (or the sibling analytics pane) open,
+    // the header simplifies down to the title, a flex spacer, and the pane
+    // toggles — the picker chevron, model text, and overflow dots all drop out.
+    if (artifactPaneOpen || analyticsPaneOpen) {
         return (
             <header className={headerClassName}>
                 <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
                     {conversationTitle || agent.agent_name}
                 </span>
                 <span className="flex-1" />
+                <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
                 <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
             </header>
         );
@@ -325,6 +336,7 @@ export function ChatWindowHeader({
                 />
             )}
 
+            <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
             <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
         </header>
     );
@@ -421,6 +433,34 @@ function ArtifactPaneToggle({ open, onToggle }: ArtifactPaneToggleProps) {
                 )}
             </svg>
             <span className="sr-only">{open ? "Hide artifacts" : "Show artifacts"}</span>
+        </Button>
+    );
+}
+
+interface AnalyticsPaneToggleProps {
+    open?: boolean;
+    onToggle?: () => void;
+}
+
+/**
+ * Sibling of `ArtifactPaneToggle`, following its exact shape: ghost icon
+ * button, `h-8 w-8`, `text-steel hover:text-ink` when closed / `text-ink`
+ * when open, rendered only when `onToggle` is provided so a conversation
+ * with no analytics available never shows an inert control.
+ */
+function AnalyticsPaneToggle({ open, onToggle }: AnalyticsPaneToggleProps) {
+    if (!onToggle) return null;
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={open ? "h-8 w-8 text-ink hover:text-ink" : "h-8 w-8 text-steel hover:text-ink"}
+            onClick={onToggle}
+        >
+            <BarChart3 className="size-[17px]" strokeWidth={open ? 2.25 : 2} aria-hidden="true" />
+            <span className="sr-only">{open ? "Hide analytics" : "Show analytics"}</span>
         </Button>
     );
 }
