@@ -24,7 +24,7 @@ function MeetingDetailPageWrapper() {
   }, [meetingId]);
 
   const breadcrumbs = [
-    { label: 'Meetings', href: '/huf/meetings' },
+    { label: 'Meetings', href: '/meetings' },
     { label: meetingLabel },
   ];
 

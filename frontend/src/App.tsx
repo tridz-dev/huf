@@ -754,7 +754,7 @@ function AppShell() {
             }
           />
           <Route
-            path="/huf/meetings"
+            path="/meetings"
             element={
               <ProtectedRoute>
                 <UnifiedLayout headerActions={<MeetingsHeaderActions />}>
@@ -766,7 +766,7 @@ function AppShell() {
             }
           />
           <Route
-            path="/huf/meetings/:meetingId/record"
+            path="/meetings/:meetingId/record"
             element={
               <ProtectedRoute>
                 <UnifiedLayout>
@@ -778,7 +778,7 @@ function AppShell() {
             }
           />
           <Route
-            path="/huf/meetings/:meetingId"
+            path="/meetings/:meetingId"
             element={
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
