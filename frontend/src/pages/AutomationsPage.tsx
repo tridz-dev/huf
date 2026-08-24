@@ -199,7 +199,6 @@ export function AutomationsPage() {
                   onClick: () => handleRunNow(automation),
                 },
               ]}
-              menuIcon={isActive ? Pause : Play}
               menuActions={[
                 {
                   icon: isActive ? Pause : Play,
