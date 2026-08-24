@@ -118,7 +118,7 @@ Depends on: Phase 4
 
 ## Phase 6 — Installation + launcher integration
 Depends on: Phase 4
-- [ ] `install_app` idempotency verified (re-run doesn't duplicate)
+- [x] `install_app` idempotency verified (re-run doesn't duplicate) — tool-layer regression test added to `huf/ai/tests/test_app_builder_tools.py:test_install_app_idempotent_across_preview_and_confirm_branches`
 
 ## Phase 8 — Audio input, transcription, OCR App config
 Depends on: Phase 5

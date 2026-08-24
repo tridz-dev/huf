@@ -234,6 +234,60 @@ class TestDraftApp(IntegrationTestCase):
 			frappe.db.count("HUF App", filters={"app_id": self.APP_ID}), 1
 		)
 
+	def test_install_app_idempotent_across_preview_and_confirm_branches(self):
+		"""Regression: tool-layer install_app idempotency across preview/confirm.
+
+		The tool-layer install_app has its own confirm-preview branch that could
+		theoretically diverge from the domain-service function's idempotency.
+		This test validates that the preview (confirm=False) branch never mutates
+		state, and confirm (confirm=True) calls remain idempotent even after
+		interleaved preview calls, keeping HUF App record count at 1.
+		"""
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			# Create and draft the app
+			builder.draft_app(
+				app_id=self.APP_ID,
+				title="Test App",
+				agent_name=self.AGENT_NAME,
+				confirm=True,
+			)
+
+			# Preview: confirm=False should not mutate, should show not yet installed
+			preview1 = builder.install_app(self.APP_ID, confirm=False)
+			self.assertFalse(preview1["installed"])
+			self.assertTrue(preview1["confirm_required"])
+			self.assertFalse(preview1["already_installed"])
+			self.assertEqual(
+				frappe.db.count("HUF App", filters={"app_id": self.APP_ID}), 1,
+				"preview call must not create new record"
+			)
+
+			# Confirm: confirm=True should install
+			confirm1 = builder.install_app(self.APP_ID, confirm=True)
+			self.assertTrue(confirm1["installed"])
+			self.assertEqual(
+				frappe.db.count("HUF App", filters={"app_id": self.APP_ID}), 1,
+				"confirm call must not duplicate record"
+			)
+
+			# Preview again: should show already installed
+			preview2 = builder.install_app(self.APP_ID, confirm=False)
+			self.assertFalse(preview2["installed"])
+			self.assertTrue(preview2["confirm_required"])
+			self.assertTrue(preview2["already_installed"])
+			self.assertEqual(
+				frappe.db.count("HUF App", filters={"app_id": self.APP_ID}), 1,
+				"preview after confirm must not create new record"
+			)
+
+			# Confirm again: should be idempotent
+			confirm2 = builder.install_app(self.APP_ID, confirm=True)
+			self.assertTrue(confirm2["installed"])
+			self.assertEqual(
+				frappe.db.count("HUF App", filters={"app_id": self.APP_ID}), 1,
+				"second confirm must remain idempotent"
+			)
+
 
 class TestSetAppIconCapability(IntegrationTestCase):
 	"""set_app_icon must refuse users without builder roles."""
