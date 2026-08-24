@@ -489,10 +489,13 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertTrue(mock_run.call_args.kwargs.get("now"))
 
+    @patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False)
     @patch("huf.ai.prompt_resolver.resolve_prompt")
     @patch("huf.ai.agent_scheduler.frappe")
     @patch("huf.ai.agent_scheduler.run_agent_sync")
-    def test_scheduler_submits_queued_run(self, mock_run, mock_frappe, mock_resolve_prompt):
+    def test_scheduler_submits_queued_run(
+        self, mock_run, mock_frappe, mock_resolve_prompt, mock_runtime_is_new
+    ):
         """Scheduled triggers are background workers; they hand runs to the queue."""
         mock_frappe.session.user = "Administrator"
         mock_frappe.has_permission.return_value = True
