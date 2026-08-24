@@ -610,6 +610,23 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 			"a 'tts_model' configured."
 		)
 
+	if capabilities.get("video_output"):
+		# GAP (documented, not silently skipped): Agent DocType has no
+		# dedicated video-generation-model field yet (no analogue to
+		# `image_generation_model` / `tts_model` — confirmed by inspecting
+		# huf/huf/doctype/agent/agent.json). Until such a field exists, this
+		# capability can never be meaningfully validated, so we fail closed
+		# rather than pretend it passed. See
+		# docs/hub-orchestrator-unified-builder-plan.md Phase 10 and
+		# docs/hub-orchestrator-app-builder-todo.md.
+		errors.append(
+			"App capability 'video_output' cannot be validated yet: the "
+			"Agent DocType has no video-generation-model field (analogous "
+			"to 'image_generation_model'/'tts_model'). Add that field "
+			"before enabling this capability; until then 'video_output' is "
+			"rejected rather than silently accepted."
+		)
+
 	return errors
 
 

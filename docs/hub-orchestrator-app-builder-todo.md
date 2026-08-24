@@ -192,8 +192,26 @@ Depends on: Phase 6
 
 ## Phase 10 — Video playback/output (largest net-new backend work)
 Depends on: Phase 9
-- [ ] `handle_generate_video` (currently absent) — scope realistically, mark deferred if a
-      provider/model contract can't be established in this pass
+- [x] `handle_generate_video` — PARTIALLY DONE, HONESTLY SCOPED, NOT FULLY WORKING:
+      confirmed litellm==1.95.0 (installed/pinned version) has no generic
+      `video_generation()`-style call (unlike `image_generation`); no provider/model
+      contract could be established in this pass, so per the plan's own instruction
+      this was deferred rather than faked. What actually shipped:
+      `huf/ai/handlers/media.py::handle_generate_video` implements the full
+      model-resolution/validation scaffolding (mirrors `handle_generate_image`'s
+      shape, fails closed with a clear error if no Video-modality AI Model is
+      configured) but the actual provider call raises `NotImplementedError` with an
+      explanatory message — it does NOT generate video. `Video` added to
+      `AI Model.modalities` options
+      (`huf/huf/doctype/ai_model/ai_model.json`). `validate_app_capabilities`
+      (`huf/ai/app_seeding/apps_loader.py`) now rejects `video_output` capability
+      unconditionally with an explanatory error, because Agent DocType has **no**
+      video-generation-model field yet (no analogue to `image_generation_model`/
+      `tts_model` — checked `huf/huf/doctype/agent/agent.json`, field does not
+      exist). Adding that field is a real prerequisite for Phase 10 to be
+      considered complete; not done here to avoid inventing a field ahead of other
+      in-flight work. Tests: `huf/ai/tests/test_media_handlers.py` (fail-closed
+      paths only; no test asserts successful generation, since none happens).
 
 ## Phase 11 — Live voice App config
 Depends on: Phase 9
