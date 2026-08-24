@@ -1,4 +1,4 @@
-import { Database, Globe, Cpu, Bot, Code, Search } from 'lucide-react';
+import { Database, Globe, Cpu, Bot, Code, Search, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ToolTemplate } from '@/types/toolTemplate.types';
@@ -15,6 +15,7 @@ const iconMap = {
   bot: Bot,
   code: Code,
   search: Search,
+  mail: Mail,
 };
 
 export function ToolTemplateCard({ template, onClick }: ToolTemplateCardProps) {
