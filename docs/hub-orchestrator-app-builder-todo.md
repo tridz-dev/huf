@@ -36,6 +36,39 @@ Base branch: `pre-develop` (per final PR target). Implementation branch:
   admin/admin) for continued verification in later rounds — see
   `/workspace/benches/hub-orchestrator-app-builder/BENCH_IDENTITY.md` inside the container.
 
+- 2026-08-24: **Round 2 (Phases 4/5/6/9b) verified against the same real bench.** Found and fixed
+  two real bugs `py_compile` couldn't catch:
+  1. `bench migrate` hard-failed every time — `huf.ai.skills.hooks.sync_app_skills` (pre-existing
+     mechanism, runs on every `after_migrate`) treats any `source_type="App Provided"` Skill not
+     declared via the `huf_skills` hook as orphaned and deletes it; our self-seeded Design System
+     Skill was created directly, bypassing that declaration, so it was swept up every migrate
+     (deletion correctly failed since it's attached to Hub Orchestrator, but the failure-logging
+     path hit an unrelated `frappe.log_error` title-length bug that turned it into a hard migrate
+     failure). Fixed by declaring the skill via a `huf_skills` hook entry + `get_skill_manifest()`
+     (commit `04c6c91b`) — the same mechanism every other app already uses.
+  2. `test_install_app_idempotent_across_preview_and_confirm_branches` (Phase 6) failed —
+     `create_app_from_agent`/`validate_manifest` already default a new App to `enabled=1` (existing
+     `apps_loader.py` convention), so the test's assumption that a freshly-drafted app starts
+     uninstalled was wrong. Fixed the test to explicitly disable before testing the not-yet-installed
+     preview branch, mirroring `test_app_creation.py`'s existing convention (commit `1ea5ac9e`).
+
+  After both fixes: `bench migrate` clean, and full sweep — `test_app_creation.py` 4/4,
+  `test_app_builder_tools.py` 24/24, `test_design_system_tools.py` 8/8,
+  `test_app_public_renderer.py` 6/6, pre-existing `test_builder_tools.py` 71/71 — all pass, zero
+  regressions (113 tests total). Also confirmed via `bench execute`: the Design System Skill
+  survives `bench migrate` and stays attached to Hub Orchestrator; `HUF App` DocType now has
+  `agent`/`is_public`/`alias`/`icon_source`/`capabilities` fields (verified via `meta.has_field`).
+
+  **Two pre-existing test suites (NOT ours, NOT regressions we caused) also fail on this bench**:
+  `test_lazy_tool_discovery.py` (1 failure, PR #640) and `test_render_tools.py`'s
+  `TestPromptInstructionSelection` (2 errors, PR #641 — its own PR description explicitly flags
+  this exact test as needing "a real bench run" with a configured AI Provider/Model, which this
+  `--blank` bench doesn't have). Confirmed not caused by this branch: `git diff --stat
+  origin/pre-develop HEAD -- huf/ai/tools/_registry.py huf/ai/sdk_tools.py huf/ai/tool_registry.py
+  huf/ai/tools/lazy_discovery.py` shows only `_registry.py` touched, purely additive (0 deletions)
+  — this branch never modifies the tool-eligibility/eager-set code path those tests exercise.
+  Out of scope for this track; noted here so it isn't mistaken for something we broke.
+
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked/deferred
 
 ---
