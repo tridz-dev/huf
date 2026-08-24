@@ -23,9 +23,10 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blo
 
 ## Phase 1 — Target architecture/ADR
 Depends on: none (base audit already done, see the plan doc §A-C)
-- [ ] Decide: one generic Agent-backed App runtime (plan's D recommendation) — confirm/record
-- [ ] Finalize `HUF App` field additions (plan §D.5): `agent`, `is_public`, `alias`,
+- [x] Decide: one generic Agent-backed App runtime (plan's D recommendation) — confirm/record
+- [x] Finalize `HUF App` field additions (plan §D.5): `agent`, `is_public`, `alias`,
       `icon_source`, `capabilities`
+- See `docs/adr/0001-app-runtime-model.md` for the recorded runtime and capability-ownership decisions.
 
 ## Phase 2 — App domain service operations
 Depends on: Phase 1
