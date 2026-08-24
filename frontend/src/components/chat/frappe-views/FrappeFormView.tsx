@@ -93,9 +93,12 @@ export function FrappeFormView({ payload }: FrappeFormViewProps) {
 	const recordName = typeof record.name === 'string' ? record.name : undefined;
 
 	return (
-		<form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-line bg-panel p-4">
+		<form onSubmit={handleSubmit} className="space-y-3 rounded-sm border border-line bg-panel p-3.5">
 			{recordName && (
-				<div className="flex justify-end">
+				<div className="flex items-center justify-between border-b border-line pb-2">
+					<span className="font-mono text-[11px] uppercase tracking-wide text-steel-soft">
+						{recordName}
+					</span>
 					<a
 						href={deskFormUrl(payload.doctype, recordName)}
 						target="_blank"
@@ -107,10 +110,13 @@ export function FrappeFormView({ payload }: FrappeFormViewProps) {
 					</a>
 				</div>
 			)}
-			<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+			<div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
 				{fields.map((field) => (
-					<div key={field.fieldname} className="space-y-1.5">
-						<Label htmlFor={field.fieldname} className="text-xs text-steel">
+					<div key={field.fieldname} className="space-y-1">
+						<Label
+							htmlFor={field.fieldname}
+							className="font-mono text-[10px] uppercase tracking-wide text-steel-soft"
+						>
 							{field.label || field.fieldname}
 							{field.reqd && <span className="text-destructive ml-0.5">*</span>}
 						</Label>
@@ -118,8 +124,8 @@ export function FrappeFormView({ payload }: FrappeFormViewProps) {
 					</div>
 				))}
 			</div>
-			<div className="flex justify-end">
-				<Button type="submit" size="sm" variant="outline">
+			<div className="flex justify-end pt-1">
+				<Button type="submit" size="sm" variant="outline" className="h-7 px-2 text-xs">
 					{copied ? <CheckIcon className="h-3.5 w-3.5 mr-1" /> : <CopyIcon className="h-3.5 w-3.5 mr-1" />}
 					{copied ? 'Copied as JSON' : 'Copy as JSON'}
 				</Button>
@@ -137,6 +143,7 @@ function renderFieldControl(
 		return (
 			<Checkbox
 				id={field.fieldname}
+				className="rounded-sm"
 				checked={Boolean(value)}
 				disabled={field.read_only}
 				onCheckedChange={(checked) => onChange(Boolean(checked))}
@@ -152,7 +159,7 @@ function renderFieldControl(
 				disabled={field.read_only}
 				onValueChange={(v) => onChange(v)}
 			>
-				<SelectTrigger id={field.fieldname} size="sm">
+				<SelectTrigger id={field.fieldname} size="sm" className="rounded-sm">
 					<SelectValue placeholder="Select..." />
 				</SelectTrigger>
 				<SelectContent>
@@ -182,6 +189,7 @@ function renderFieldControl(
 		<Input
 			id={field.fieldname}
 			size="sm"
+			className="rounded-sm"
 			value={displayValue}
 			disabled={field.read_only || field.fieldtype === 'Table'}
 			onChange={(e) => onChange(e.target.value)}

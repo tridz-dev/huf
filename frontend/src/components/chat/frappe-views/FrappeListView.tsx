@@ -89,14 +89,14 @@ export function FrappeListView({ payload }: FrappeListViewProps) {
 				<Button
 					variant="ghost"
 					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2 text-xs rounded text-steel hover:text-ink hover:bg-paper-deep"
+					className="h-6 px-1.5 font-mono text-[11px] uppercase tracking-wide rounded-sm text-steel-soft hover:text-ink hover:bg-paper-deep"
 				>
 					{field.label || field.fieldname}
 					<ArrowUpDown className="ml-1 h-3 w-3" />
 				</Button>
 			),
 			cell: ({ row }) => (
-				<span className="text-sm text-ink">
+				<span className="text-[13px] leading-tight text-ink">
 					{formatFrappeCellValue(row.getValue(field.fieldname), field)}
 				</span>
 			),
@@ -130,13 +130,13 @@ export function FrappeListView({ payload }: FrappeListViewProps) {
 					<ExternalLink className="h-3 w-3" />
 				</a>
 			</div>
-			<div className="rounded-lg border border-line bg-panel overflow-x-auto">
+			<div className="rounded-sm border border-line bg-panel overflow-x-auto">
 				<Table>
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
 							<TableRow key={headerGroup.id} className="border-line hover:bg-transparent">
 								{headerGroup.headers.map((header) => (
-									<TableHead key={header.id} className="text-steel">
+									<TableHead key={header.id} className="h-8 py-0 text-steel">
 										{header.isPlaceholder
 											? null
 											: flexRender(header.column.columnDef.header, header.getContext())}
@@ -150,7 +150,7 @@ export function FrappeListView({ payload }: FrappeListViewProps) {
 							table.getRowModel().rows.map((row) => (
 								<TableRow key={row.id} className="border-line hover:bg-paper-deep">
 									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id}>
+										<TableCell key={cell.id} className="py-1.5">
 											{flexRender(cell.column.columnDef.cell, cell.getContext())}
 										</TableCell>
 									))}
@@ -172,11 +172,12 @@ export function FrappeListView({ payload }: FrappeListViewProps) {
 						? `${limitStart + 1}-${Math.min(limitStart + limitPageLength, totalCount)} of ${totalCount}`
 						: '0 records'}
 				</span>
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-1.5">
 					{loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-steel" />}
 					<Button
 						variant="outline"
 						size="sm"
+						className="h-7 px-2 text-xs"
 						disabled={!hasPrev || loading}
 						onClick={() => fetchPage(Math.max(0, limitStart - limitPageLength))}
 					>
@@ -186,6 +187,7 @@ export function FrappeListView({ payload }: FrappeListViewProps) {
 					<Button
 						variant="outline"
 						size="sm"
+						className="h-7 px-2 text-xs"
 						disabled={!hasNext || loading}
 						onClick={() => fetchPage(limitStart + limitPageLength)}
 					>

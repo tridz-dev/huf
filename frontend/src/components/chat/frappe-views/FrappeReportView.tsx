@@ -105,14 +105,14 @@ export function FrappeReportView({ payload }: FrappeReportViewProps) {
 				<Button
 					variant="ghost"
 					onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-					className="h-8 px-2 text-xs rounded text-steel hover:text-ink hover:bg-paper-deep"
+					className="h-6 px-1.5 font-mono text-[11px] uppercase tracking-wide rounded-sm text-steel-soft hover:text-ink hover:bg-paper-deep"
 				>
 					{field.label || field.fieldname}
 					<ArrowUpDown className="ml-1 h-3 w-3" />
 				</Button>
 			),
 			cell: ({ row }) => (
-				<span className="text-sm text-ink">
+				<span className="text-[13px] leading-tight text-ink">
 					{formatFrappeCellValue(row.getValue(field.fieldname), field)}
 				</span>
 			),
@@ -153,20 +153,24 @@ export function FrappeReportView({ payload }: FrappeReportViewProps) {
 					<ExternalLink className="h-3 w-3" />
 				</a>
 			</div>
-			<div className="rounded-lg border border-line bg-panel p-3">
-				<div className="flex items-center gap-1.5 mb-2 text-xs text-steel">
-					<Filter className="h-3.5 w-3.5" />
+			<div className="rounded-sm border border-line bg-panel p-2.5">
+				<div className="flex items-center gap-1.5 mb-2 font-mono text-[11px] uppercase tracking-wide text-steel-soft">
+					<Filter className="h-3 w-3" />
 					Filters
 				</div>
-				<div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+				<div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
 					{displayFields.map((field) => (
 						<div key={field.fieldname} className="space-y-1">
-							<Label htmlFor={`filter-${field.fieldname}`} className="text-[11px] text-steel-soft">
+							<Label
+								htmlFor={`filter-${field.fieldname}`}
+								className="font-mono text-[10px] uppercase tracking-wide text-steel-soft"
+							>
 								{field.label || field.fieldname}
 							</Label>
 							<Input
 								id={`filter-${field.fieldname}`}
 								size="sm"
+								className="rounded-sm"
 								value={filters[field.fieldname] ?? ''}
 								onChange={(e) => updateFilter(field.fieldname, e.target.value)}
 								placeholder="Any"
@@ -175,13 +179,13 @@ export function FrappeReportView({ payload }: FrappeReportViewProps) {
 					))}
 				</div>
 			</div>
-			<div className="rounded-lg border border-line bg-panel overflow-x-auto">
+			<div className="rounded-sm border border-line bg-panel overflow-x-auto">
 				<Table>
 					<TableHeader>
 						{table.getHeaderGroups().map((headerGroup) => (
 							<TableRow key={headerGroup.id} className="border-line hover:bg-transparent">
 								{headerGroup.headers.map((header) => (
-									<TableHead key={header.id} className="text-steel">
+									<TableHead key={header.id} className="h-8 py-0 text-steel">
 										{header.isPlaceholder
 											? null
 											: flexRender(header.column.columnDef.header, header.getContext())}
@@ -195,7 +199,7 @@ export function FrappeReportView({ payload }: FrappeReportViewProps) {
 							table.getRowModel().rows.map((row) => (
 								<TableRow key={row.id} className="border-line hover:bg-paper-deep">
 									{row.getVisibleCells().map((cell) => (
-										<TableCell key={cell.id}>
+										<TableCell key={cell.id} className="py-1.5">
 											{flexRender(cell.column.columnDef.cell, cell.getContext())}
 										</TableCell>
 									))}
