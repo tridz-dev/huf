@@ -29,6 +29,16 @@ function statusPresentation(status: MeetingStatus): { label: string; variant: Ba
   }
 }
 
+/** Short, list-view-appropriate failure reason — the detail page shows the
+ * full `last_error`/`error_log`, this is just enough to tell failed
+ * meetings apart at a glance without opening each one. */
+export function failureReason(meeting: MeetingListItem): string | undefined {
+  if (meeting.status !== 'Failed') return undefined;
+  if (meeting.failed_step === 'Model Not Configured') return 'No AI model configured';
+  if (meeting.last_error) return meeting.last_error.slice(0, 140);
+  return 'Failed to process';
+}
+
 function formatDuration(seconds?: number): string {
   if (!seconds || seconds <= 0) return '—';
   const minutes = Math.round(seconds / 60);
@@ -45,10 +55,13 @@ export function MeetingCard({ meeting, onClick }: MeetingCardProps) {
   const status = statusPresentation(meeting.status);
   const title = meeting.title?.trim() || `Meeting — ${formatTimeAgo(meeting.started_at || meeting.modified)}`;
 
+  const description =
+    failureReason(meeting) ?? (meeting.summary ? meeting.summary.slice(0, 140) : meeting.description?.slice(0, 140));
+
   return (
     <ItemCard
       title={title}
-      description={meeting.summary ? meeting.summary.slice(0, 140) : meeting.description?.slice(0, 140)}
+      description={description}
       status={status}
       metadata={[
         { label: 'When', value: formatTimeAgo(meeting.started_at || meeting.modified), icon: Calendar },
