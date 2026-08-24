@@ -644,6 +644,7 @@ def create_meeting_recorder_app():
 		"category": "Productivity",
 		"enabled": 1,
 		"sync_status": "Active",
+		"source_app": "huf",
 	}
 
 	existing_name = frappe.db.get_value("HUF App", {"app_id": app_id}, "name")
