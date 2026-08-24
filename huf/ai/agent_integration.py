@@ -413,14 +413,24 @@ class AgentManager:
             """
 
         if getattr(self.agent_doc, "enable_memory", False):
-            instructions += """
+            can_search = getattr(self.agent_doc, "enable_memory_search_tool", False)
+            can_write = getattr(self.agent_doc, "enable_memory_write_tool", False)
 
-                SYSTEM INSTRUCTION - LONG-TERM MEMORY:
-                You have access to a persistent memory system across sessions.
-                1. AUTOMATIC RECALL: Use the 'search_memory_records' tool whenever the user refers to past interactions, preferences, or context.
-                2. PROACTIVE SAVING: Use the 'save_memory_record' tool when the user shares new facts, preferences, or important details about themselves or a project.
-                3. ACCURACY: When saving, provide a clear 'title' and detailed 'summary_text'. Set 'record_type' and 'scope_type' appropriately.
-            """
+            memory_lines = ["SYSTEM INSTRUCTION - LONG-TERM MEMORY:", "You have access to a persistent memory system across sessions."]
+            if can_search:
+                memory_lines.append(
+                    "1. AUTOMATIC RECALL: Use the 'search_memory_records' tool whenever the user refers to past interactions, preferences, or context."
+                )
+            if can_write:
+                memory_lines.append(
+                    "2. PROACTIVE SAVING: Use the 'save_memory_record' tool when the user shares new facts, preferences, or important details about themselves or a project."
+                )
+                memory_lines.append(
+                    "3. ACCURACY: When saving, provide a clear 'title' and detailed 'summary_text'. Set 'record_type' and 'scope_type' appropriately."
+                )
+
+            if can_search or can_write:
+                instructions += "\n\n                " + "\n                ".join(memory_lines) + "\n            "
 
             if getattr(self.agent_doc, "memory_policy", None):
                 try:
@@ -853,7 +863,16 @@ def run_background_summarization(conversation_name, agent_name):
 
         # Calculate overflow, ensuring we don't split tool-call pairs
         overflow_count = len(history) - history_limit
-        to_summarize, _remaining = safe_history_split(history, overflow_count)
+        try:
+            summary_ratio = float(agent_doc.summary_ratio or 0.7)
+        except (TypeError, ValueError):
+            summary_ratio = 0.7
+        summary_ratio = min(max(summary_ratio, 0.1), 0.95)
+        # summary_ratio controls how much of the history gets folded into the
+        # summary once overflow triggers; never compress less than the overflow.
+        ratio_count = int(len(history) * summary_ratio)
+        to_summarize_count = min(max(overflow_count, ratio_count), len(history) - 1)
+        to_summarize, _remaining = safe_history_split(history, to_summarize_count)
 
         from huf.ai.providers.litellm import get_simple_completion
         summary_model = agent_doc.summary_model or agent_doc.model
