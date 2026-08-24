@@ -204,6 +204,8 @@ def list_meetings(start: int = 0, limit: int = 20, status: str = None, search: s
             "duration_seconds",
             "chunk_count",
             "summary",
+            "failed_step",
+            "last_error",
             "modified",
         ],
         order_by="modified desc",

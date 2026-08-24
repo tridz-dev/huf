@@ -77,6 +77,8 @@ export interface MeetingListItem {
   duration_seconds?: number;
   chunk_count?: number;
   summary?: string;
+  failed_step?: Meeting['failed_step'];
+  last_error?: string;
   modified?: string;
 }
 

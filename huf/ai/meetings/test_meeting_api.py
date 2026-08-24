@@ -103,6 +103,19 @@ class TestMeetingApi(unittest.TestCase):
         self.assertIn("has_more", result)
         self.assertLessEqual(len(result["meetings"]), 2)
 
+    def test_list_meetings_includes_failure_reason(self):
+        name = self._create()
+        doc = frappe.get_doc("Meeting", name)
+        doc.status = "Failed"
+        doc.failed_step = "Model Not Configured"
+        doc.last_error = "No AI model is configured for the Meeting Summary Agent."
+        doc.save(ignore_permissions=True)
+
+        result = meeting_api.list_meetings(status="Failed", limit=50)
+        row = next(m for m in result["meetings"] if m["name"] == name)
+        self.assertEqual(row["failed_step"], "Model Not Configured")
+        self.assertEqual(row["last_error"], "No AI model is configured for the Meeting Summary Agent.")
+
     def test_list_meetings_filters_by_status(self):
         draft = self._create()
         recording = self._create()
