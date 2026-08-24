@@ -1,0 +1,133 @@
+{
+ "actions": [],
+ "creation": "2026-08-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "meeting",
+  "role",
+  "column_break_content",
+  "applied_to_summary",
+  "section_break_content",
+  "content",
+  "error",
+  "is_system_owned"
+ ],
+ "fields": [
+  {
+   "fieldname": "meeting",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Meeting",
+   "options": "Meeting",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Role",
+   "options": "user\nassistant",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_content",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "applied_to_summary",
+   "fieldtype": "Check",
+   "label": "Applied To Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_content",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Long Text",
+   "label": "Content",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error",
+   "read_only": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "is_system_owned",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is System Owned",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Meeting Chat Message",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": []
+}

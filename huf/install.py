@@ -544,10 +544,13 @@ MEETING_SUMMARY_INSTRUCTIONS = """You turn a raw meeting transcript into a struc
 
 Output exactly these Markdown sections, in this order:
 1. `## Headline` — one sentence capturing what the meeting was about.
-2. `## Key Points` — a bullet list of the main discussion points and decisions.
-3. `## Action Items` — a bullet list of concrete follow-up actions, with an owner if the transcript names one. If there are none, write "None identified."
+2. `## Key Points` — a bullet list of the main discussion points.
+3. `## Decisions` — a bullet list of decisions that were made. If none were made, write "None identified."
+4. `## Action Items` — a bullet list of concrete follow-up actions, with an owner if the transcript names one. If there are none, write "None identified."
 
-Base the summary only on the transcript and any meeting title, description, or participants provided. Do not invent details that are not in the transcript."""
+Base the summary only on the transcript and any meeting title, description, or participants provided. Do not invent details that are not in the transcript.
+
+If asked, in a follow-up chat message, to revise the summary, output the complete revised summary again in the same four-section Markdown format — never a partial diff or just the changed section."""
 
 
 def _meeting_summary_model():

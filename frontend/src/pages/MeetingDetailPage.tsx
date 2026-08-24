@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AlertTriangle, Calendar, Clock, RotateCw, Users } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, FileDown, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { MeetingChatPanel } from '@/components/meetings/MeetingChatPanel';
+import { MeetingFailureCard } from '@/components/meetings/MeetingFailureCard';
 import { MeetingProcessingStatus } from '@/components/meetings/MeetingProcessingStatus';
 import { MeetingSummaryPanel } from '@/components/meetings/MeetingSummaryPanel';
 import { MeetingTranscriptPanel } from '@/components/meetings/MeetingTranscriptPanel';
@@ -11,6 +13,7 @@ import { MeetingRecordingPlayer } from '@/components/meetings/MeetingRecordingPl
 import { PostMeetingContextPanel } from '@/components/meetings/PostMeetingContextPanel';
 import { useMeetingProcessingSocket } from '@/hooks/useMeetingProcessingSocket';
 import { getMeeting, retryChunkTranscription, retrySummary } from '@/services/meetingApi';
+import { downloadMeetingMinutes, downloadMeetingTranscript } from '@/services/meetingExport';
 import { formatTimeAgo } from '@/utils/time';
 import type { GetMeetingResult } from '@/services/meetingApi';
 
@@ -180,22 +183,13 @@ function MeetingDetailPage() {
         )}
 
         {status === 'Failed' && (
-          <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-            <div className="flex items-center gap-2 text-sm text-destructive">
-              <AlertTriangle className="h-4 w-4" aria-hidden />
-              <span>
-                {failedChunks.length > 0
-                  ? 'Transcription failed for this meeting.'
-                  : 'Summarizing this meeting failed.'}
-              </span>
-            </div>
-            <div>
-              <Button size="sm" variant="outline" onClick={handleRetry} disabled={retrying}>
-                <RotateCw className={retrying ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} aria-hidden />
-                {retrying ? 'Retrying...' : 'Retry'}
-              </Button>
-            </div>
-          </div>
+          <MeetingFailureCard
+            failedStep={meeting.failed_step}
+            lastError={meeting.last_error}
+            errorLog={meeting.error_log}
+            onRetry={handleRetry}
+            retrying={retrying}
+          />
         )}
 
         {status === 'Completed' && chunks.some((chunk) => !!chunk.audio_file) && (
@@ -205,16 +199,34 @@ function MeetingDetailPage() {
         {status === 'Completed' && (
           <>
             <div>
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h2 className="font-body text-sm font-medium text-ink">Summary</h2>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 text-xs"
-                  onClick={() => document.getElementById('transcript')?.scrollIntoView({ behavior: 'smooth' })}
-                >
-                  Jump to transcript
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadMeetingTranscript(meeting.name)}
+                  >
+                    <FileDown className="h-3.5 w-3.5" aria-hidden />
+                    Download transcript
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => downloadMeetingMinutes(meeting.name)}
+                  >
+                    <FileDown className="h-3.5 w-3.5" aria-hidden />
+                    Download minutes
+                  </Button>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 text-xs"
+                    onClick={() => document.getElementById('transcript')?.scrollIntoView({ behavior: 'smooth' })}
+                  >
+                    Jump to transcript
+                  </Button>
+                </div>
               </div>
               <MeetingSummaryPanel summary={meeting.summary} />
             </div>
@@ -225,6 +237,13 @@ function MeetingDetailPage() {
               <h2 className="mb-3 font-body text-sm font-medium text-ink">Transcript</h2>
               <MeetingTranscriptPanel chunks={chunks} isLive={false} />
             </div>
+
+            <MeetingChatPanel
+              meetingName={meeting.name}
+              hasTranscript={!!meeting.transcript}
+              hasSummary={!!meeting.summary}
+              onSummaryRevised={load}
+            />
           </>
         )}
 
