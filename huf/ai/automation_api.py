@@ -306,6 +306,64 @@ def resume_automation(automation: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Chat integration
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def draft_automation_from_conversation(conversation_name: str) -> dict:
+    """
+    Best-effort automation draft sourced from an existing Agent Conversation,
+    for the chat UI's explicit "Create automation from this chat" action.
+
+    This deliberately does not call an LLM to synthesize a Task Instruction
+    from the conversation -- doing that honestly would need its own
+    LLM-calling pathway, which is out of scope here. Instead it returns the
+    conversation's linked Agent (a safe, mechanical pre-fill) plus its plain
+    conversational messages, so the caller can route the user to the
+    Automation form (``AutomationFormPage.tsx``) with the Agent pre-selected
+    and the messages available for the user to read and manually turn into
+    an instruction.
+
+    Args:
+        conversation_name: Agent Conversation name.
+
+    Returns:
+        dict with:
+            conversation: the conversation name (echoed back).
+            agent: Agent name linked to the conversation.
+            title: conversation title, if any.
+            messages: list of {role, content} dicts, in order. Tool-call and
+                tool-result rows are excluded -- they're implementation
+                detail, not something a user would want copied into an
+                Automation's instruction.
+    """
+    doc = frappe.get_doc("Agent Conversation", conversation_name)
+    if not doc.has_permission("read"):
+        frappe.throw(
+            _("You do not have permission to view this conversation."), frappe.PermissionError
+        )
+
+    messages = frappe.get_all(
+        "Agent Message",
+        filters={"conversation": conversation_name},
+        fields=["role", "content", "kind"],
+        order_by="conversation_index asc",
+        limit=200,
+    )
+    display_messages = [
+        {"role": m.role, "content": m.content} for m in messages if m.kind == "Message" and m.content
+    ]
+
+    return {
+        "conversation": doc.name,
+        "agent": doc.agent,
+        "title": doc.title,
+        "messages": display_messages,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Automation Trigger CRUD
 # ---------------------------------------------------------------------------
 

@@ -13,6 +13,7 @@ import {
     Plus,
     Search,
     Settings,
+    Zap,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -30,6 +31,7 @@ import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
 import { DEFAULT_COLD_START_AGENT } from "./useChatAgentIdentity";
+import { draftAutomationFromConversation } from "@/services/automationApi";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
@@ -81,6 +83,23 @@ export function ChatWindowHeader({
     const [conversationProject, setConversationProject] = useState<string | null>(null);
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [dataPanelOpen, setDataPanelOpen] = useState(false);
+    const [creatingAutomation, setCreatingAutomation] = useState(false);
+
+    async function handleCreateAutomationFromChat() {
+        if (!chatId || creatingAutomation) return;
+        setCreatingAutomation(true);
+        try {
+            const draft = await draftAutomationFromConversation(chatId);
+            if (!draft?.agent) return;
+            // AutomationFormPage already reads `?agent=` to pre-select the
+            // Agent on the create form; the rest (instruction, description)
+            // is left for the user to fill in from what they just discussed
+            // -- see huf.ai.automation_api.draft_automation_from_conversation.
+            navigate(`/automations/new?agent=${encodeURIComponent(draft.agent)}`);
+        } finally {
+            setCreatingAutomation(false);
+        }
+    }
 
     useEffect(() => {
         let cancelled = false;
@@ -321,6 +340,18 @@ export function ChatWindowHeader({
                             className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
                         >
                             Conversation data
+                        </DropdownMenuItem>
+                    )}
+                    {chatId && (
+                        <DropdownMenuItem
+                            disabled={creatingAutomation}
+                            onSelect={() => {
+                                void handleCreateAutomationFromChat();
+                            }}
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                        >
+                            <Zap className="size-[15px]" />
+                            Create automation from this chat
                         </DropdownMenuItem>
                     )}
                 </DropdownMenuContent>
