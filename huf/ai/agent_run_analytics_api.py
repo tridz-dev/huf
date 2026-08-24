@@ -74,6 +74,23 @@ def _query_rollups(granularity: str, start, end) -> list[dict]:
     )
 
 
+def _add_derived_rates(row: dict) -> None:
+    """Add success_rate/average_duration_ms/cache_ratio to a summary-shaped dict, in place.
+
+    The frontend's ExecutionAnalyticsSummary type declares these three as
+    `number | null` on every series bucket and breakdown row, not just the
+    top-level summary -- series/breakdowns are typed as
+    `Array<ExecutionAnalyticsSummary & {...}>`, the same type. Skipping this
+    on series/breakdown rows previously left the keys entirely absent
+    (`undefined` in JS, not `null`), which a `=== null` guard does not catch,
+    so `undefined.toFixed(...)` crashed the whole page the first time a
+    breakdown row existed. Must be called on every row this response emits.
+    """
+    row["success_rate"] = (row["success_count"] / row["run_count"] * 100) if row["run_count"] else None
+    row["average_duration_ms"] = (row["duration_ms_sum"] / row["duration_count"]) if row["duration_count"] else None
+    row["cache_ratio"] = (row["cached_tokens"] / row["input_tokens"] * 100) if row["input_tokens"] else None
+
+
 def _load_composition_totals(raw) -> dict:
     """Parse a rollup row's composition_totals JSON string.
 
@@ -186,9 +203,11 @@ def get_execution_analytics(
         _accumulate_composition(composition_totals, _load_composition_totals(row.get("composition_totals")))
         if row.get("last_recomputed_at") and (freshness is None or row["last_recomputed_at"] > freshness):
             freshness = row["last_recomputed_at"]
-    summary["success_rate"] = (summary["success_count"] / summary["run_count"] * 100) if summary["run_count"] else None
-    summary["average_duration_ms"] = (summary["duration_ms_sum"] / summary["duration_count"]) if summary["duration_count"] else None
-    summary["cache_ratio"] = (summary["cached_tokens"] / summary["input_tokens"] * 100) if summary["input_tokens"] else None
+    _add_derived_rates(summary)
+    for bucket in series_by_bucket.values():
+        _add_derived_rates(bucket)
+    for breakdown in breakdown_by_dimension.values():
+        _add_derived_rates(breakdown)
     breakdowns_total_count = len(breakdown_by_dimension)
     return {
         "summary": summary,
