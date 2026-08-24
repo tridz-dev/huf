@@ -9,6 +9,24 @@ import frappe
 from huf.ai.meetings import meeting_api, meeting_chat
 
 
+class TestTruncateTranscript(unittest.TestCase):
+    def test_under_limit_returned_unchanged(self):
+        transcript = "Alice: hello.\nBob: hi." * 10
+        self.assertLess(len(transcript), meeting_chat.MAX_TRANSCRIPT_CHARS)
+        self.assertEqual(meeting_chat._truncate_transcript(transcript), transcript)
+
+    def test_over_limit_truncated_to_tail_with_marker(self):
+        transcript = "x" * (meeting_chat.MAX_TRANSCRIPT_CHARS + 500)
+        # Make the tail distinguishable from the truncated-away head.
+        transcript = transcript[:-10] + "END-MARKER"
+
+        result = meeting_chat._truncate_transcript(transcript)
+
+        self.assertTrue(result.startswith("[transcript truncated — showing the most recent portion]\n"))
+        self.assertTrue(result.endswith("END-MARKER"))
+        self.assertEqual(len(result) - len("[transcript truncated — showing the most recent portion]\n"), meeting_chat.MAX_TRANSCRIPT_CHARS)
+
+
 class TestMeetingChat(unittest.TestCase):
     def setUp(self):
         frappe.set_user("Administrator")

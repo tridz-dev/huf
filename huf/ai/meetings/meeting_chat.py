@@ -14,12 +14,32 @@ and huf.ai.meetings.meeting_summary.
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.meetings.meeting_api import _get_meeting
 from huf.ai.meetings.meeting_summary import SUMMARY_AGENT
 
 CHAT_HISTORY_LIMIT = 10
+MAX_TRANSCRIPT_CHARS = 24_000
+
+
+def _truncate_transcript(transcript: str) -> str:
+    """Cap the transcript text sent to the model to protect against a
+    pathologically long, multi-hour meeting blowing the context window (or
+    being needlessly expensive) on every chat turn. Keeps the LAST
+    ``MAX_TRANSCRIPT_CHARS`` characters — the most recent portion of a
+    meeting is usually more relevant for Q&A/revision than the opening — and
+    prepends a marker line so it's clear (in the prompt and when debugging
+    via error_log/chat history) that content was cut, not silently missing.
+    This only affects what's sent to the model; the stored/displayed
+    transcript is untouched."""
+    if len(transcript) <= MAX_TRANSCRIPT_CHARS:
+        return transcript
+    return (
+        "[transcript truncated — showing the most recent portion]\n"
+        + transcript[-MAX_TRANSCRIPT_CHARS:]
+    )
 
 
 def _recent_history(meeting_name: str) -> list:
@@ -56,6 +76,7 @@ def _insert_message(meeting_name: str, role: str, content: str, error: str = Non
 
 
 @frappe.whitelist()
+@rate_limit(limit=20, seconds=60)
 def ask_meeting(meeting_name: str, message: str):
     """
     Answer a question about a meeting, grounded in its transcript, summary,
@@ -77,7 +98,7 @@ def ask_meeting(meeting_name: str, message: str):
     prompt_parts = [
         "You are answering questions about a specific meeting, using only the "
         "transcript, summary, and chat history below. Be concise.",
-        f"Meeting transcript:\n{meeting.transcript}",
+        f"Meeting transcript:\n{_truncate_transcript(meeting.transcript)}",
     ]
     if meeting.summary:
         prompt_parts.append(f"Current summary:\n{meeting.summary}")
@@ -109,6 +130,7 @@ def ask_meeting(meeting_name: str, message: str):
 
 
 @frappe.whitelist()
+@rate_limit(limit=10, seconds=60)
 def revise_summary(meeting_name: str, instruction: str):
     """
     Regenerate ``Meeting.summary`` from a natural-language revision
@@ -129,7 +151,7 @@ def revise_summary(meeting_name: str, instruction: str):
         "complete revised summary again in the same four-section Markdown "
         "format (Headline, Key Points, Decisions, Action Items) — never a "
         "partial diff or just the changed section.",
-        f"Meeting transcript:\n{meeting.transcript}",
+        f"Meeting transcript:\n{_truncate_transcript(meeting.transcript)}",
         f"Current summary:\n{meeting.summary}",
         f"Revision instruction: {instruction}",
     ])

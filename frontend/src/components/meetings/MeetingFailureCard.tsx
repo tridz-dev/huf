@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronDown, RotateCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ChevronDown, RotateCw, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { linkRoutes } from '@/lib/link-routes';
 import type { Meeting } from '@/types/meeting.types';
+
+const MEETING_SUMMARY_AGENT_NAME = 'Meeting Summary Agent';
 
 export interface MeetingFailureCardProps {
   failedStep?: Meeting['failed_step'];
@@ -60,7 +64,15 @@ export function MeetingFailureCard({ failedStep, lastError, errorLog, onRetry, r
         </Collapsible>
       )}
 
-      <div>
+      <div className="flex items-center gap-2">
+        {isModelNotConfigured && (
+          <Button size="sm" variant="default" asChild>
+            <Link to={linkRoutes.agent(MEETING_SUMMARY_AGENT_NAME)}>
+              <Settings className="h-3.5 w-3.5" aria-hidden />
+              Configure model
+            </Link>
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying}>
           <RotateCw className={retrying ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} aria-hidden />
           {retrying ? 'Retrying...' : 'Retry'}
