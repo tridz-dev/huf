@@ -244,13 +244,18 @@ class TestDraftApp(IntegrationTestCase):
 		interleaved preview calls, keeping HUF App record count at 1.
 		"""
 		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
-			# Create and draft the app
+			# Create and draft the app. create_app_from_agent/validate_manifest
+			# default a new App to enabled=1 (existing apps_loader.py convention),
+			# so explicitly disable it first to exercise the "not yet installed"
+			# preview branch, mirroring test_app_creation.py's
+			# test_install_app_is_idempotent.
 			builder.draft_app(
 				app_id=self.APP_ID,
 				title="Test App",
 				agent_name=self.AGENT_NAME,
 				confirm=True,
 			)
+			frappe.db.set_value("HUF App", self.APP_ID, "enabled", 0)
 
 			# Preview: confirm=False should not mutate, should show not yet installed
 			preview1 = builder.install_app(self.APP_ID, confirm=False)
