@@ -54,14 +54,17 @@ class TestMeetingSummary(unittest.TestCase):
         self.assertNotIn("Participants", prompt)
 
     def test_success_sets_summary_and_completes(self):
-        with patch(
-            "huf.ai.meetings.meeting_summary.run_agent_sync",
-            return_value={
-                "success": True,
-                "status": "Success",
-                "response": "## Headline\nShipping the feature.",
-                "agent_run_id": "Agent Run 1",
-            },
+        with (
+            patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=True),
+            patch(
+                "huf.ai.meetings.meeting_summary.run_agent_sync",
+                return_value={
+                    "success": True,
+                    "status": "Success",
+                    "response": "## Headline\nShipping the feature.",
+                    "agent_run_id": "Agent Run 1",
+                },
+            ),
         ):
             meeting_summary.run_meeting_summary(self.meeting_name)
 
@@ -69,13 +72,18 @@ class TestMeetingSummary(unittest.TestCase):
         self.assertEqual(meeting.summary, "## Headline\nShipping the feature.")
         self.assertEqual(meeting.summary_agent_run, "Agent Run 1")
         self.assertEqual(meeting.status, "Completed")
+        self.assertFalse(meeting.failed_step)
+        self.assertFalse(meeting.last_error)
 
     def test_failure_sets_failed_and_preserves_transcript(self):
         transcript_before = frappe.get_doc("Meeting", self.meeting_name).transcript
 
-        with patch(
-            "huf.ai.meetings.meeting_summary.run_agent_sync",
-            return_value={"success": False, "status": "Failed", "error": "provider down"},
+        with (
+            patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=True),
+            patch(
+                "huf.ai.meetings.meeting_summary.run_agent_sync",
+                return_value={"success": False, "status": "Failed", "error": "provider down"},
+            ),
         ):
             meeting_summary.run_meeting_summary(self.meeting_name)
 
@@ -83,14 +91,30 @@ class TestMeetingSummary(unittest.TestCase):
         self.assertEqual(meeting.status, "Failed")
         self.assertEqual(meeting.transcript, transcript_before)
         self.assertFalse(meeting.summary)
+        self.assertEqual(meeting.failed_step, "Summary")
+        self.assertEqual(meeting.last_error, "provider down")
+
+    def test_guard_skips_to_failed_when_model_not_configured(self):
+        with patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=False):
+            meeting_summary.run_meeting_summary(self.meeting_name)
+
+        meeting = frappe.get_doc("Meeting", self.meeting_name)
+        self.assertEqual(meeting.status, "Failed")
+        self.assertEqual(meeting.failed_step, "Model Not Configured")
+        self.assertTrue(meeting.last_error)
+        self.assertTrue(meeting.error_log)
 
     def test_exception_sets_failed_and_preserves_transcript(self):
         transcript_before = frappe.get_doc("Meeting", self.meeting_name).transcript
 
-        with patch(
-            "huf.ai.meetings.meeting_summary.run_agent_sync",
-            side_effect=RuntimeError("boom"),
-        ), patch("frappe.log_error"):
+        with (
+            patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=True),
+            patch(
+                "huf.ai.meetings.meeting_summary.run_agent_sync",
+                side_effect=RuntimeError("boom"),
+            ),
+            patch("frappe.log_error"),
+        ):
             meeting_summary.run_meeting_summary(self.meeting_name)
 
         meeting = frappe.get_doc("Meeting", self.meeting_name)
@@ -98,15 +122,18 @@ class TestMeetingSummary(unittest.TestCase):
         self.assertEqual(meeting.transcript, transcript_before)
 
     def test_retry_summary_job_reinvokes_run_meeting_summary(self):
-        with patch(
-            "huf.ai.meetings.meeting_summary.run_agent_sync",
-            return_value={
-                "success": True,
-                "status": "Success",
-                "response": "## Headline\nRetried summary.",
-                "agent_run_id": "Agent Run 2",
-            },
-        ) as mock_run:
+        with (
+            patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=True),
+            patch(
+                "huf.ai.meetings.meeting_summary.run_agent_sync",
+                return_value={
+                    "success": True,
+                    "status": "Success",
+                    "response": "## Headline\nRetried summary.",
+                    "agent_run_id": "Agent Run 2",
+                },
+            ) as mock_run,
+        ):
             meeting_summary.retry_summary_job(self.meeting_name)
 
         mock_run.assert_called_once()

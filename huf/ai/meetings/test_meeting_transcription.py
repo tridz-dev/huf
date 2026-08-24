@@ -43,9 +43,12 @@ class TestMeetingTranscription(unittest.TestCase):
     def test_successful_transcription_updates_chunk(self):
         chunk = self._make_chunk()
 
-        with patch(
-            "huf.ai.audio_service.transcribe_audio_file",
-            return_value={"success": True, "transcript": "hello world"},
+        with (
+            patch("huf.ai.meetings.meeting_transcription._agent_is_configured", return_value=True),
+            patch(
+                "huf.ai.audio_service.transcribe_audio_file",
+                return_value={"success": True, "transcript": "hello world"},
+            ),
         ):
             meeting_transcription.transcribe_meeting_chunk(chunk.name)
 
@@ -58,6 +61,7 @@ class TestMeetingTranscription(unittest.TestCase):
         chunk = self._make_chunk()
 
         with (
+            patch("huf.ai.meetings.meeting_transcription._agent_is_configured", return_value=True),
             patch(
                 "huf.ai.audio_service.transcribe_audio_file",
                 return_value={"success": False, "error": "provider down"},
@@ -73,6 +77,26 @@ class TestMeetingTranscription(unittest.TestCase):
         self.assertEqual(chunk.upload_status, "Failed")
         self.assertEqual(chunk.transcription_error, "provider down")
         self.assertEqual(mock_enqueue.call_count, meeting_transcription.MAX_RETRY_COUNT - 1)
+
+        meeting_doc = frappe.get_doc("Meeting", self.meeting["meeting_name"])
+        self.assertEqual(meeting_doc.failed_step, "Transcription")
+        self.assertEqual(meeting_doc.last_error, "provider down")
+        self.assertIn("provider down", meeting_doc.error_log)
+
+    def test_guard_skips_to_failed_when_model_not_configured(self):
+        chunk = self._make_chunk()
+
+        with patch("huf.ai.meetings.meeting_transcription._agent_is_configured", return_value=False):
+            meeting_transcription.transcribe_meeting_chunk(chunk.name)
+
+        chunk.reload()
+        self.assertEqual(chunk.upload_status, "Failed")
+
+        meeting_doc = frappe.get_doc("Meeting", self.meeting["meeting_name"])
+        self.assertEqual(meeting_doc.status, "Failed")
+        self.assertEqual(meeting_doc.failed_step, "Model Not Configured")
+        self.assertTrue(meeting_doc.last_error)
+        self.assertTrue(meeting_doc.error_log)
 
     def test_finalize_meeting_reenqueues_when_chunks_not_terminal(self):
         self._make_chunk(upload_status="Transcribing")

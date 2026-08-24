@@ -44,10 +44,26 @@ export interface Meeting {
   summary_agent_run?: string;
   context_prompted_at?: string;
   context_completed?: 0 | 1;
+  failed_step?: 'Model Not Configured' | 'Transcription' | 'Summary' | '';
+  last_error?: string;
+  error_log?: string;
   is_system_owned?: 0 | 1;
   modified?: string;
   creation?: string;
   owner?: string;
+}
+
+/** `Meeting Chat Message.role` Select options. */
+export type MeetingChatRole = 'user' | 'assistant';
+
+/** Full `Meeting Chat Message` row shape (huf/huf/doctype/meeting_chat_message). */
+export interface MeetingChatMessage {
+  name: string;
+  role: MeetingChatRole;
+  content: string;
+  applied_to_summary?: 0 | 1;
+  error?: string;
+  creation?: string;
 }
 
 /** Summary row shape returned inline by `list_meetings`. */

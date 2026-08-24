@@ -1,4 +1,4 @@
-import { FileText, ListChecks, ListTree } from 'lucide-react';
+import { FileText, Gavel, ListChecks, ListTree } from 'lucide-react';
 import { Streamdown } from 'streamdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -14,10 +14,11 @@ interface MeetingSummaryPanelProps {
 interface ParsedSummary {
   headline: string;
   keyPoints: string;
+  decisions: string;
   actionItems: string;
 }
 
-const SECTION_HEADINGS = ['Headline', 'Key Points', 'Action Items'] as const;
+const SECTION_HEADINGS = ['Headline', 'Key Points', 'Decisions', 'Action Items'] as const;
 
 /**
  * Splits the agent's Markdown output into its three named `## ` sections.
@@ -44,6 +45,7 @@ function parseSummary(markdown: string): ParsedSummary {
   return {
     headline: sections['Headline']?.trim() || '',
     keyPoints: sections['Key Points']?.trim() || '',
+    decisions: sections['Decisions']?.trim() || '',
     actionItems: sections['Action Items']?.trim() || '',
   };
 }
@@ -66,7 +68,7 @@ export function MeetingSummaryPanel({ summary }: MeetingSummaryPanelProps) {
 
   const parsed = parseSummary(summary);
   const hasStructuredSections = SECTION_HEADINGS.some(
-    (heading) => heading === 'Headline' ? parsed.headline : heading === 'Key Points' ? parsed.keyPoints : parsed.actionItems,
+    (heading) => heading === 'Headline' ? parsed.headline : heading === 'Key Points' ? parsed.keyPoints : heading === 'Decisions' ? parsed.decisions : parsed.actionItems,
   );
 
   if (!hasStructuredSections) {
@@ -98,6 +100,18 @@ export function MeetingSummaryPanel({ summary }: MeetingSummaryPanelProps) {
           </CardHeader>
           <CardContent className="prose prose-sm max-w-none [&_ul]:my-0 [&_li]:my-1">
             <Streamdown>{parsed.keyPoints}</Streamdown>
+          </CardContent>
+        </Card>
+      )}
+
+      {parsed.decisions && (
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+            <Gavel className="h-4 w-4 text-steel-soft" aria-hidden />
+            <CardTitle className="text-sm">Decisions</CardTitle>
+          </CardHeader>
+          <CardContent className="prose prose-sm max-w-none [&_ul]:my-0 [&_li]:my-1">
+            <Streamdown>{parsed.decisions}</Streamdown>
           </CardContent>
         </Card>
       )}

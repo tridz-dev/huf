@@ -18,7 +18,7 @@ built in Phase 5).
 import time
 
 import frappe
-from frappe.utils import cint, flt, get_datetime, time_diff_in_seconds
+from frappe.utils import cint, flt, get_datetime, now_datetime, time_diff_in_seconds
 
 from huf.ai import audio_service
 
@@ -27,10 +27,47 @@ MAX_RETRY_COUNT = 3
 RETRY_BACKOFF_SECONDS = 5
 FINALIZE_POLL_SECONDS = 5
 TERMINAL_UPLOAD_STATUSES = ("Transcribed", "Failed")
+MODEL_NOT_CONFIGURED_MESSAGE = (
+    "No AI model is configured for the Meeting Summary Agent. Configure a model in"
+    " Agent settings, then retry."
+)
+
+
+def _agent_is_configured(agent_name: str = TRANSCRIPTION_AGENT) -> bool:
+    """Return whether the given Agent is usable (not disabled, has a model set)."""
+    agent = frappe.get_cached_doc("Agent", agent_name)
+    return not agent.disabled and bool(agent.model)
+
+
+def _append_error_log(meeting_doc, message: str):
+    """Append a timestamped line to ``meeting_doc.error_log``, in place."""
+    entry = f"[{now_datetime()}] {message}"
+    meeting_doc.error_log = f"{meeting_doc.error_log}\n{entry}" if meeting_doc.error_log else entry
+
+
+def _fail_meeting_for_unconfigured_model(meeting_name: str):
+    meeting = frappe.get_doc("Meeting", meeting_name)
+    meeting.status = "Failed"
+    meeting.failed_step = "Model Not Configured"
+    meeting.last_error = MODEL_NOT_CONFIGURED_MESSAGE
+    _append_error_log(meeting, MODEL_NOT_CONFIGURED_MESSAGE)
+    meeting.save(ignore_permissions=True)
+    frappe.db.commit()
+    _emit_processing_status(meeting_name, meeting.status)
 
 
 def transcribe_meeting_chunk(chunk_name: str):
     chunk = frappe.get_doc("Meeting Recording Chunk", chunk_name)
+
+    if not _agent_is_configured():
+        chunk.upload_status = "Failed"
+        chunk.transcription_error = MODEL_NOT_CONFIGURED_MESSAGE
+        chunk.save(ignore_permissions=True)
+        frappe.db.commit()
+        _fail_meeting_for_unconfigured_model(chunk.meeting)
+        _maybe_finalize_meeting(chunk.meeting)
+        return
+
     chunk.upload_status = "Transcribing"
     chunk.save(ignore_permissions=True)
     frappe.db.commit()
@@ -74,6 +111,13 @@ def _handle_transcription_failure(chunk, error_message: str):
 
     chunk.upload_status = "Failed"
     chunk.save(ignore_permissions=True)
+    frappe.db.commit()
+
+    meeting = frappe.get_doc("Meeting", chunk.meeting)
+    meeting.failed_step = "Transcription"
+    meeting.last_error = error_message[:500]
+    _append_error_log(meeting, error_message)
+    meeting.save(ignore_permissions=True)
     frappe.db.commit()
     _emit_processing_status(chunk.meeting, "Transcribing")
 
@@ -172,6 +216,8 @@ def finalize_meeting(meeting_name: str):
     meeting.transcript = transcript
     meeting.duration_seconds = duration_seconds
     meeting.status = "Summarizing"
+    meeting.failed_step = None
+    meeting.last_error = None
     meeting.save(ignore_permissions=True)
     frappe.db.commit()
     _emit_processing_status(meeting_name, "Summarizing")
