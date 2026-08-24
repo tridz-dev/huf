@@ -1,0 +1,50 @@
+{
+  "agent": {
+    "agent_name": "golden-001-text-agent",
+    "instructions": "You are a deterministic test agent.",
+    "max_turns": 10,
+    "model": "test-model",
+    "provider": "Test_Provider"
+  },
+  "context": {},
+  "cost": 0.0,
+  "error": null,
+  "final_output": "This is a deterministic TEST_TEXT response from the HUF test provider.",
+  "messages": [
+    {
+      "content": "Current user message:\n__TEST_SCENARIO__:TEST_TEXT Hello, how are you?\n",
+      "id": "<MSG_ID:0>",
+      "kind": "Message",
+      "role": "user"
+    },
+    {
+      "content": "This is a deterministic TEST_TEXT response from the HUF test provider.",
+      "id": "<MSG_ID:1>",
+      "kind": "Message",
+      "role": "assistant"
+    }
+  ],
+  "prompt": "Current user message:\n__TEST_SCENARIO__:TEST_TEXT Hello, how are you?\n",
+  "run": {
+    "creation": "<TIMESTAMP>",
+    "run_id": "<RUN_ID>",
+    "status": "Success"
+  },
+  "scenario": "AGENT-GOLDEN-001",
+  "state_transitions": [
+    "queued",
+    "started",
+    "completed"
+  ],
+  "terminal_status": "Success",
+  "tool_calls": [],
+  "tool_definitions": [],
+  "usage": {
+    "cache_creation_tokens": 0,
+    "cache_miss_tokens": 0,
+    "cache_skipped_unsupported_model": false,
+    "cached_tokens": 0,
+    "input_tokens": 10,
+    "output_tokens": 8
+  }
+}
