@@ -178,7 +178,7 @@ function AnalyticsSections({ data }: { data: ConversationAnalyticsResponse }) {
       {/* --- Cumulative: a running sum over every run so far. --- */}
       <section>
         <SectionHeading title="Totals" caption="Summed across every run in this conversation" />
-        <GaugeRow className="mt-2">
+        <GaugeRow className="mt-2 lg:grid-cols-2">
           <MetricGauge
             label="Runs"
             value={formatCount(totals.run_count)}
@@ -188,7 +188,7 @@ function AnalyticsSections({ data }: { data: ConversationAnalyticsResponse }) {
           <MetricGauge label="Output" value={formatTokens(totals.output_tokens)} unit="tokens" />
           <MetricGauge label="Cost" value={formatCost(totals.cost)} />
         </GaugeRow>
-        <GaugeRow className="mt-2">
+        <GaugeRow className="mt-2 lg:grid-cols-2">
           <MetricGauge label="Cache read" value={formatTokens(totals.cache_read_tokens)} unit="tokens" />
           <MetricGauge label="Cache write" value={formatTokens(totals.cache_write_tokens)} unit="tokens" />
           {totals.average_duration_ms !== null ? (
@@ -210,7 +210,7 @@ function AnalyticsSections({ data }: { data: ConversationAnalyticsResponse }) {
         <SectionHeading title="Current context" caption="Snapshot of the latest turn — not a total" />
         {current ? (
           <div className="mt-2 flex flex-col gap-2">
-            <GaugeRow>
+            <GaugeRow className="lg:grid-cols-2">
               <MetricGauge
                 label="Largest turn"
                 value={current.peak_context_tokens !== null ? formatTokens(current.peak_context_tokens) : '—'}
@@ -253,7 +253,7 @@ function AnalyticsSections({ data }: { data: ConversationAnalyticsResponse }) {
       {/* --- Cache effectiveness --- */}
       <section>
         <SectionHeading title="Cache effectiveness" />
-        <GaugeRow className="mt-2">
+        <GaugeRow className="mt-2 lg:grid-cols-2">
           {cache.effectiveness !== null ? (
             <MetricGauge
               label="Effectiveness"
