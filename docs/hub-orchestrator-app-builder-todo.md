@@ -33,10 +33,11 @@ Depends on: none (base audit already done, see the plan doc §A-C)
 
 ## Phase 2 — App domain service operations
 Depends on: Phase 1
-- [ ] `create_app_from_agent()` in `huf/ai/app_seeding/apps_loader.py`
-- [ ] `update_app()` in `huf/ai/app_seeding/apps_loader.py`
-- [ ] `install_app()` (idempotent) in `huf/ai/app_seeding/apps_loader.py`
-- [ ] Unit tests for the above (extend `huf/ai/app_seeding/tests/test_apps_sync.py` conventions)
+- [x] `create_app_from_agent()` in `huf/ai/app_seeding/apps_loader.py`
+- [x] `update_app()` in `huf/ai/app_seeding/apps_loader.py`
+- [x] `install_app()` (idempotent) in `huf/ai/app_seeding/apps_loader.py`
+- [x] Unit tests for the above (`huf/ai/app_seeding/tests/test_app_creation.py`, follows
+      `test_apps_sync.py` conventions; not executed against a live bench — see commit note)
 
 ## Phase 3a — Hub App builder tools (discovery + two-phase CRUD)
 Depends on: Phase 2

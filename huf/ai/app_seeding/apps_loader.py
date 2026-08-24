@@ -513,6 +513,130 @@ def sync_huf_apps() -> dict:
 	return summary
 
 
+def create_app_from_agent(
+	app_id: str,
+	title: str,
+	agent_name: str,
+	description: str = "",
+	route: str | None = None,
+	category: str = "Other",
+	icon: str | None = None,
+) -> dict:
+	"""
+	Create a chat-authored ``HUF App`` backed by an existing Agent.
+
+	``agent_name`` must resolve to an existing ``Agent`` doc; a chat-authored
+	App is just another manifest source, so this builds a manifest dict
+	matching ``ALLOWED_FIELDS`` and hands it to the existing
+	``validate_manifest()``/``upsert_huf_app()`` pipeline rather than
+	reimplementing their validation logic.
+
+	Note: the ``Agent`` link is not yet a field on the ``HUF App`` DocType
+	(see plan §D.5); once added, this function should also stamp it onto the
+	created doc. Access control (``_require_doc_permission`` on the Agent) is
+	the tool layer's responsibility, added in a later phase.
+
+	Returns the created ``HUF App`` doc as a dict.
+	"""
+	if not frappe.db.exists("Agent", agent_name):
+		frappe.throw(
+			f"Agent '{agent_name}' does not exist",
+			frappe.ValidationError,
+		)
+
+	manifest = {
+		"manifest_version": SUPPORTED_MANIFEST_VERSION,
+		"app_id": app_id,
+		"title": title,
+		"description": description,
+		"route": route or f"/apps/{app_id}",
+		"icon": icon or "",
+		"category": category,
+		"launch_mode": "route",
+	}
+
+	normalized, error = validate_manifest(manifest)
+	if error:
+		frappe.throw(error, frappe.ValidationError)
+
+	ok, error = upsert_huf_app(manifest, source_app="huf", source_file="chat")
+	if not ok:
+		frappe.throw(error, frappe.ValidationError)
+
+	doc = frappe.get_doc("HUF App", app_id)
+	if doc.meta.has_field("agent"):
+		frappe.db.set_value("HUF App", app_id, "agent", agent_name, update_modified=False)
+		doc.reload()
+	return doc.as_dict()
+
+
+def update_app(app_id: str, **fields) -> dict:
+	"""
+	Apply a partial update to an existing ``HUF App`` record.
+
+	Only the fields actually passed in ``fields`` (e.g. ``title``,
+	``description``, ``icon``, ``category``, ``agent``) are applied; anything
+	else already on the record is left untouched. The merged data is
+	re-validated via the existing ``validate_manifest()`` grammar before
+	saving, so an update can never leave the record in a shape a manifest
+	sync would reject.
+
+	Permission checks belong in the tool layer (added in a later phase); this
+	function saves with ``ignore_permissions=True``.
+
+	Returns the updated doc as a dict.
+	"""
+	doc = frappe.get_doc("HUF App", app_id)
+
+	for fieldname, value in fields.items():
+		if doc.meta.has_field(fieldname):
+			doc.set(fieldname, value)
+
+	merged = {
+		"manifest_version": SUPPORTED_MANIFEST_VERSION,
+		"app_id": doc.app_id,
+		"title": doc.title,
+		"description": doc.description or "",
+		"route": doc.route,
+		"icon": doc.icon or "",
+		"category": doc.category or "Other",
+		"launch_mode": "route",
+	}
+	_, error = validate_manifest(merged)
+	if error:
+		frappe.throw(error, frappe.ValidationError)
+
+	doc.save(ignore_permissions=True)
+	return doc.as_dict()
+
+
+def install_app(app_id: str) -> dict:
+	"""
+	Mark an ``HUF App`` as installed (``enabled=1``, ``sync_status="Active"``).
+
+	Idempotent: calling this twice for the same ``app_id`` never creates a
+	duplicate record and never errors -- if the record is already enabled,
+	the existing state is returned unchanged with ``already_installed: True``.
+	"""
+	if not frappe.db.exists("HUF App", app_id):
+		frappe.throw(f"HUF App '{app_id}' does not exist", frappe.DoesNotExistError)
+
+	already_enabled = frappe.db.get_value("HUF App", app_id, "enabled")
+	if already_enabled:
+		doc = frappe.get_doc("HUF App", app_id)
+		result = doc.as_dict()
+		result["already_installed"] = True
+		return result
+
+	frappe.db.set_value("HUF App", app_id, "enabled", 1)
+	frappe.db.set_value("HUF App", app_id, "sync_status", "Active")
+
+	doc = frappe.get_doc("HUF App", app_id)
+	result = doc.as_dict()
+	result["already_installed"] = False
+	return result
+
+
 def on_app_uninstalled(app_name):
 	"""Hook for after_app_uninstall: remove registry entries of the provider
 	app that was just uninstalled."""
