@@ -20,6 +20,22 @@ Base branch: `pre-develop` (per final PR target). Implementation branch:
   agents read the actual current files, so this should already be reconciled, but re-verify with a
   diff review before assuming zero collision.
 
+- 2026-08-24: **Round 1 (Phases 1/2/3a/3b/7) verified against a real disposable bench**, not just
+  `py_compile`. Bench `hub-orchestrator-app-builder` provisioned via `frappe-multihand` skill
+  (`--app huf --branch feat/hub-orchestrator-app-builder --blank`, port 8088) on
+  `frappe_docker_devcontainer-frappe-1`. Found and fixed one real bug `py_compile` couldn't catch:
+  the Phase 2 test fixture's minimal `Agent` doc was missing `instructions` (required by
+  `Agent._validate_prompt()` when `prompt_mode=Local`, the default) and included a nonexistent
+  `title` field — fixed in `huf/ai/app_seeding/tests/test_app_creation.py` (commit `63b0b581`).
+  After the fix: `test_app_creation.py` 4/4 pass, `test_app_builder_tools.py` 19/19 pass,
+  `test_design_system_tools.py` 8/8 pass, pre-existing `test_builder_tools.py` regression suite
+  71/71 still pass (zero regressions). End-to-end seed verification via `bench execute`: Hub
+  Orchestrator agent has all 22 expected tools attached (12 original + 10 new), and the "HUF
+  Design System Reference" Skill exists and is attached to its `agent_skill` table. Bench left
+  running (not torn down) at `http://localhost:8088` (site `hub-orchestrator-app-builder.local`,
+  admin/admin) for continued verification in later rounds — see
+  `/workspace/benches/hub-orchestrator-app-builder/BENCH_IDENTITY.md` inside the container.
+
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked/deferred
 
 ---
