@@ -1,0 +1,78 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-08-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "agent_run",
+  "agent",
+  "conversation",
+  "captured_at",
+  "system_prompt"
+ ],
+ "fields": [
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent Run",
+   "options": "Agent Run",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Agent",
+   "options": "Agent",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation",
+   "read_only": 1
+  },
+  {
+   "fieldname": "captured_at",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Captured At",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Long Text",
+   "label": "System Prompt",
+   "read_only": 1,
+   "reqd": 1,
+   "description": "The exact assembled system prompt this run received, verbatim. Opt-in only (site_config huf_retain_system_prompts_enabled) -- only ever written when a site operator has explicitly turned this on. May contain memory-block and knowledge-base text; treat as sensitive."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-08-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Run Prompt Snapshot",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "read": 1,
+   "report": 1,
+   "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager"
+  }
+ ],
+ "sort_field": "captured_at",
+ "sort_order": "DESC",
+ "states": []
+}

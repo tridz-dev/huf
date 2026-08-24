@@ -1,4 +1,4 @@
-import { Cpu, Settings, Loader2, DollarSign } from 'lucide-react';
+import { Cpu, Settings, Loader2, DollarSign, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import {
   Dialog,
@@ -8,6 +8,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
@@ -27,6 +37,7 @@ import {
   getModel,
   updateModel,
   createModel,
+  deleteModel,
   getProviders,
   getModalityOptions,
   buildProviderNameMap,
@@ -40,6 +51,7 @@ import { LinkFieldControl } from '../components/ui/link-field-control';
 import { MultiSelectCombobox } from '../components/ui/multi-select-combobox';
 import { linkRoutes } from '../lib/link-routes';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 interface ModelsPageProps {
   addModelKey?: number;
@@ -98,6 +110,8 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   const [loadingModel, setLoadingModel] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<ModelFormData>(emptyFormData);
+  const [deleteTarget, setDeleteTarget] = useState<AIModel | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const providerMap = useMemo(() => buildProviderNameMap(providers), [providers]);
 
@@ -108,12 +122,14 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     loadingMore,
     search,
     setSearch,
+    filters,
+    setFilter,
     loadMore,
     total,
     reset,
     error,
   } = useInfiniteScroll<
-    { page?: number; limit?: number; start?: number; search?: string },
+    { provider?: string; page?: number; limit?: number; start?: number; search?: string },
     AIModel
   >({
     fetchFn: async (params) => {
@@ -122,6 +138,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         limit: params.limit,
         start: params.start,
         search: params.search,
+        provider: params.provider && params.provider !== 'all' ? params.provider : undefined,
       });
 
       if (Array.isArray(response)) {
@@ -320,6 +337,27 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     allowInDialog: true,
   });
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteModel(deleteTarget.name);
+      toast.success('Model deleted');
+      setDeleteTarget(null);
+      reset();
+    } catch (deleteError) {
+      toast.error('Failed to delete model', {
+        description: getFrappeErrorMessage(deleteError),
+        duration: 8000,
+      });
+      console.error(deleteError);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isFiltered = !!search || (filters.provider && filters.provider !== 'all');
+
   return (
     <PageFrame
       title="Models"
@@ -328,6 +366,17 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           searchPlaceholder="Search models..."
           searchValue={search}
           onSearchChange={setSearch}
+          filters={[
+            {
+              label: 'Provider',
+              value: filters.provider || 'all',
+              options: [
+                { label: 'All providers', value: 'all' },
+                ...providers.map((p) => ({ label: p.provider_name, value: p.name })),
+              ],
+              onChange: (value) => setFilter('provider', value),
+            },
+          ]}
         />
       }
     >
@@ -343,13 +392,19 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         columns={{ sm: 1, md: 2, lg: 3 }}
         loading={initialLoading}
         emptyState={
-          search ? (
+          isFiltered ? (
             <EmptyState
               variant="no-results"
               icon={Cpu}
               title="No models found"
               filterTerm={search}
-              secondaryAction={{ label: 'Clear search', onClick: () => setSearch('') }}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('provider', 'all');
+                },
+              }}
             />
           ) : (
             <EmptyState
@@ -385,6 +440,14 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                   label: 'Configure',
                   onClick: () => handleConfigure(model),
                   variant: 'ghost',
+                },
+              ]}
+              menuActions={[
+                {
+                  icon: Trash2,
+                  label: 'Delete',
+                  onClick: () => setDeleteTarget(model),
+                  variant: 'destructive',
                 },
               ]}
               onClick={() => handleConfigure(model)}
@@ -633,6 +696,28 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!deleting && !open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget?.model_name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the model. Agents using this model will need to be
+              reconfigured with a different one. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageFrame>
   );
 }

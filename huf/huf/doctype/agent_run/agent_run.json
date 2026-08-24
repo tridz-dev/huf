@@ -32,6 +32,15 @@
   "end_time",
   "output_tokens",
   "cached_tokens",
+  "billed_input_tokens",
+  "peak_context_tokens",
+  "cache_creation_tokens",
+  "total_tokens",
+  "cache_skipped_unsupported_model",
+  "round_count",
+  "model_context_window",
+  "provider_path",
+  "execution_mode",
   "parent_run",
   "is_child",
   "agent_orchestration",
@@ -184,6 +193,71 @@
    "fieldname": "cached_tokens",
    "fieldtype": "Int",
    "label": "Cached Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Sum of prompt_tokens across all rounds of this run. The cost-bearing number.",
+   "fieldname": "billed_input_tokens",
+   "fieldtype": "Int",
+   "label": "Billed Input Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "prompt_tokens of the largest single round. The correct numerator for context-window fullness. Never sum this across runs.",
+   "fieldname": "peak_context_tokens",
+   "fieldtype": "Int",
+   "label": "Peak Context Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Cache write tokens. Promoted from usage_snapshot so it can be aggregated in SQL.",
+   "fieldname": "cache_creation_tokens",
+   "fieldtype": "Int",
+   "label": "Cache Creation Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Promoted from usage_snapshot so it can be aggregated in SQL.",
+   "fieldname": "total_tokens",
+   "fieldtype": "Int",
+   "label": "Total Tokens",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "cache_skipped_unsupported_model",
+   "fieldtype": "Check",
+   "label": "Cache Skipped (Unsupported Model)",
+   "read_only": 1
+  },
+  {
+   "description": "Number of LLM completions performed for this run. One Agent Run is not one model call.",
+   "fieldname": "round_count",
+   "fieldtype": "Int",
+   "label": "Round Count",
+   "read_only": 1
+  },
+  {
+   "description": "Snapshotted at call time so later AI Model edits cannot rewrite history.",
+   "fieldname": "model_context_window",
+   "fieldtype": "Int",
+   "label": "Model Context Window",
+   "read_only": 1
+  },
+  {
+   "description": "Which provider path served this run. legacy_fallback drops cache and cost data.",
+   "fieldname": "provider_path",
+   "fieldtype": "Select",
+   "label": "Provider Path",
+   "options": "\nlitellm\nlegacy_fallback",
+   "read_only": 1
+  },
+  {
+   "description": "Whether this run used the sync or streaming completion path.",
+   "fieldname": "execution_mode",
+   "fieldtype": "Select",
+   "label": "Execution Mode",
+   "options": "\nsync\nstream",
    "read_only": 1
   },
   {

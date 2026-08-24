@@ -9,10 +9,12 @@ import {
   ActiveAgentsTab,
   ActiveFlowsTab,
   RecentExecutionsTab,
+  EmptyStat,
   GaugeRow,
   MetricGauge,
 } from '../components/dashboard';
-import { getAgentRunsCountLast7Days, getAgentRunsForMetrics, getRecentAgentRuns, getDashboardActiveFlows, type AgentRunMetricsDoc, type DashboardFlowItem } from '../services/dashboardApi';
+import { getAgentRunsCountLast7Days, getRecentAgentRuns, getDashboardActiveFlows, type DashboardFlowItem } from '../services/dashboardApi';
+import { getExecutionAnalytics } from '../services/executionAnalyticsApi';
 import type { AgentRunDoc } from '../services/agentRunApi';
 import { getAgents } from '../services/agentApi';
 import { getProviders } from '../services/providerApi';
@@ -21,59 +23,9 @@ import { settleAll } from '../lib/settleAll';
 
 interface DashboardMetrics {
   totalRuns: number;
-  successRate: number;
-  avgRuntime: number;
+  successRate: number | null;
+  avgRuntime: number | null;
   totalCost: number;
-}
-
-/**
- * Calculate success rate from agent runs
- */
-function calculateSuccessRate(runs: AgentRunMetricsDoc[]): number {
-  if (runs.length === 0) return 0;
-  const successCount = runs.filter(
-    (run) => run.status === 'Success' || run.status === 'success'
-  ).length;
-  return (successCount / runs.length) * 100;
-}
-
-/**
- * Calculate average runtime from agent runs
- */
-function calculateAvgRuntime(runs: AgentRunMetricsDoc[]): number {
-  const validRuns = runs.filter(
-    (run) => run.start_time && run.end_time
-  );
-
-  if (validRuns.length === 0) return 0;
-
-  const totalMs = validRuns.reduce((sum, run) => {
-    try {
-      const start = new Date(run.start_time!);
-      const end = new Date(run.end_time!);
-      
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return sum;
-      }
-
-      const diff = end.getTime() - start.getTime();
-      return diff >= 0 ? sum + diff : sum;
-    } catch {
-      return sum;
-    }
-  }, 0);
-
-  return totalMs / validRuns.length;
-}
-
-/**
- * Calculate total cost from agent runs
- */
-function calculateTotalCost(runs: AgentRunMetricsDoc[]): number {
-  return runs.reduce((sum, run) => {
-    const cost = run.cost;
-    return sum + (typeof cost === 'number' && !isNaN(cost) ? cost : 0);
-  }, 0);
 }
 
 /**
@@ -131,8 +83,8 @@ function HomePage() {
   const [activeTab, setActiveTab] = useState('agents');
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalRuns: 0,
-    successRate: 0,
-    avgRuntime: 0,
+    successRate: null,
+    avgRuntime: null,
     totalCost: 0,
   });
   const [metricsLoading, setMetricsLoading] = useState(true);
@@ -153,10 +105,13 @@ function HomePage() {
         // Fetch all data in parallel - one denied widget must not blank the
         // rest of the dashboard, so each slot is isolated via settleAll.
         const widgetLabels = ['run count', 'run metrics', 'agents', 'recent runs', 'flows', 'providers'];
-        const [totalRuns, runsData, agentsData, recentRuns, flowsData, providersData] = await settleAll(
+        // No fromDate override: the analytics API's own default window (last
+        // 7 days from the server clock) is exactly what this dashboard needs,
+        // and matches the window every other analytics surface uses.
+        const [totalRuns, analytics, agentsData, recentRuns, flowsData, providersData] = await settleAll(
           [
             getAgentRunsCountLast7Days(),
-            getAgentRunsForMetrics(),
+            getExecutionAnalytics(),
             getAgents({
               status: 'active',
               limit: 10,
@@ -172,12 +127,13 @@ function HomePage() {
         );
 
         // Process metrics
-        if (runsData) {
+        if (analytics) {
+          const { summary } = analytics;
           setMetrics({
             totalRuns: totalRuns ?? 0,
-            successRate: calculateSuccessRate(runsData),
-            avgRuntime: calculateAvgRuntime(runsData),
-            totalCost: calculateTotalCost(runsData),
+            successRate: summary.success_rate,
+            avgRuntime: summary.average_duration_ms,
+            totalCost: summary.total_cost,
           });
         }
 
@@ -213,51 +169,50 @@ function HomePage() {
     fetchAllData();
   }, []);
 
-  const metricsData = [
-    {
-      id: 'total-runs',
-      label: 'Total agent runs',
-      period: 'Last 7 days',
-      value: metricsLoading ? '...' : formatNumber(metrics.totalRuns),
-      info: 'Total number of agent executions in the last 7 days',
-    },
-    {
-      id: 'success-rate',
-      label: 'Success rate',
-      period: 'Last 7 days',
-      value: metricsLoading ? '...' : `${metrics.successRate.toFixed(1)}%`,
-      info: 'Percentage of successful agent runs without errors',
-    },
-    {
-      id: 'avg-runtime',
-      label: 'Avg runtime',
-      period: 'Last 7 days',
-      value: metricsLoading ? '...' : formatDuration(metrics.avgRuntime),
-      info: 'Average execution time across all agent runs',
-    },
-    {
-      id: 'cost',
-      label: 'Total cost',
-      period: 'Last 7 days',
-      value: metricsLoading ? '...' : formatCurrency(metrics.totalCost),
-      info: 'Total API costs for LLM usage across all agents',
-    },
-  ];
-
   return (
     <PageFrame title="Dashboard">
       <div className="space-y-6">
         {/* HUF Gauge Strip */}
         <GaugeRow>
-          {metricsData.map((metric) => (
+          <MetricGauge
+            label="Total agent runs"
+            period="Last 7 days"
+            value={metricsLoading ? '...' : formatNumber(metrics.totalRuns)}
+            info="Total number of agent executions in the last 7 days"
+          />
+          {/* success_rate is null when there are no completed runs to compute
+              a rate from - that is a different claim than 0%, so it renders
+              as the "no value" empty state instead of a misleading figure. */}
+          {!metricsLoading && metrics.successRate === null ? (
+            <div className="px-[18px] py-4 min-w-0">
+              <EmptyStat label="Success rate" caption="No completed runs in this period." />
+            </div>
+          ) : (
             <MetricGauge
-              key={metric.id}
-              label={metric.label}
-              period={metric.period}
-              value={metric.value}
-              info={metric.info}
+              label="Success rate"
+              period="Last 7 days"
+              value={metricsLoading ? '...' : `${metrics.successRate!.toFixed(1)}%`}
+              info="Percentage of successful agent runs without errors"
             />
-          ))}
+          )}
+          {!metricsLoading && metrics.avgRuntime === null ? (
+            <div className="px-[18px] py-4 min-w-0">
+              <EmptyStat label="Avg runtime" caption="No completed runs in this period." />
+            </div>
+          ) : (
+            <MetricGauge
+              label="Avg runtime"
+              period="Last 7 days"
+              value={metricsLoading ? '...' : formatDuration(metrics.avgRuntime!)}
+              info="Average execution time across all agent runs"
+            />
+          )}
+          <MetricGauge
+            label="Total cost"
+            period="Last 7 days"
+            value={metricsLoading ? '...' : formatCurrency(metrics.totalCost)}
+            info="Total API costs for LLM usage across all agents"
+          />
         </GaugeRow>
 
         {/* Empty state card when no AI providers exist */}

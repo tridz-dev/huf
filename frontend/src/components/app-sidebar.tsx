@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Mic, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, ChartNoAxesCombined, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Mic, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -133,6 +133,13 @@ export const operateNavItems = [
 		title: "Executions",
 		url: "/executions",
 		icon: Zap,
+		capability: "agent.use",
+		badge: "Experimental",
+	},
+	{
+		title: "Analytics",
+		url: "/analytics",
+		icon: ChartNoAxesCombined,
 		capability: "agent.use",
 		badge: "Experimental",
 	},

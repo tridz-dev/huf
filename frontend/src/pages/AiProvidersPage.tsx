@@ -1,4 +1,4 @@
-import { ArrowRight, Check, CheckCircle2, Cloud, ExternalLink, KeyRound, Loader2, Settings, Sparkles, XCircle } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Cloud, ExternalLink, KeyRound, Loader2, Settings, Sparkles, Trash2, XCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import {
@@ -9,6 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Checkbox } from '../components/ui/checkbox';
@@ -23,6 +33,7 @@ import {
   getProviders,
   updateProvider,
   createProvider,
+  deleteProvider,
   testProviderConnection,
 } from '../services/providerApi';
 import type { ProviderConnectionTestResult } from '../services/providerApi';
@@ -100,6 +111,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTest, setConnectionTest] = useState<ProviderConnectionTestResult | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AIProvider | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const emptyFormData = {
     provider_name: '',
@@ -418,6 +431,25 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     allowInDialog: true,
   });
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteProvider(deleteTarget.name);
+      toast.success('Provider deleted');
+      setDeleteTarget(null);
+      reset();
+    } catch (deleteError) {
+      toast.error('Failed to delete provider', {
+        description: getFrappeErrorMessage(deleteError),
+        duration: 8000,
+      });
+      console.error(deleteError);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <PageFrame
       title="AI providers"
@@ -529,6 +561,14 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                   label: 'Configure',
                   onClick: () => handleConfigure(provider),
                   variant: 'ghost',
+                },
+              ]}
+              menuActions={[
+                {
+                  icon: Trash2,
+                  label: 'Delete',
+                  onClick: () => setDeleteTarget(provider),
+                  variant: 'destructive',
                 },
               ]}
               onClick={() => handleConfigure(provider)}
@@ -777,6 +817,28 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
           })()}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!deleting && !open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTarget?.provider_name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the provider. Models linked to this provider will need
+              a different provider before they can be used. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageFrame>
   );
 }
