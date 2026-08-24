@@ -53,6 +53,32 @@ SKILL_DESCRIPTION = (
 )
 
 
+def get_skill_manifest() -> dict:
+	"""Manifest for the `huf_skills` hook (see huf/hooks.py).
+
+	huf.ai.skills.hooks.sync_app_skills scans every installed app's `huf_skills`
+	hook on every migrate and deletes any "App Provided" Skill not found in that
+	scan (orphan cleanup) -- including skills provided by huf itself, since it
+	scans huf like any other installed app. Without this manifest declaring the
+	skill, sync_app_skills would try to delete it on every single migrate (it
+	correctly fails, since the skill is attached to Hub Orchestrator, but the
+	failure-logging path has an unrelated framework bug that turns that into a
+	hard migrate failure). This function is the fix: it makes sync_app_skills
+	see the skill as still declared, so it upserts instead of deleting it.
+	create_design_system_skill() below still does its own idempotent
+	insert/update immediately at install/migrate time (before sync_app_skills
+	runs, per hooks.py's after_migrate ordering) so the skill and its
+	Hub Orchestrator attachment exist without waiting on a second sync pass.
+	"""
+	return {
+		"name": SKILL_NAME,
+		"title": SKILL_NAME,
+		"description": SKILL_DESCRIPTION,
+		"instructions": SKILL_INSTRUCTIONS,
+		"tools": ["list_app_components", "render_app_component"],
+	}
+
+
 @contextmanager
 def _seeding_flag():
 	"""Set frappe.flags.in_seeding so any is_system-style guards pass, then restore."""
