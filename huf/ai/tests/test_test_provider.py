@@ -157,6 +157,132 @@ class TestTestProviderDirect(unittest.TestCase):
         self.assertEqual(first.cost, second.cost)
 
 
+class TestTestProviderToolScenarios(unittest.TestCase):
+    """Exercise TEST_TOOL_SINGLE / TEST_TOOL_MULTI / TEST_PROVIDER_TIMEOUT
+    directly, proving their shape matches litellm.run()'s real
+    success/error paths (see test_provider.py's "Tool-call scenario
+    contract" docstring section for the contract this asserts against).
+    """
+
+    def _assert_tool_call_item_shape(self, item, expected_name, expected_args, expected_id):
+        self.assertEqual(item.type, "tool_call_item")
+        self.assertEqual(item.raw_item.name, expected_name)
+        self.assertEqual(item.raw_item.arguments, expected_args)
+        self.assertEqual(item.raw_item.id, expected_id)
+
+    def _assert_tool_call_output_item_shape(self, item, expected_name, expected_output, expected_id):
+        self.assertEqual(item.type, "tool_call_output_item")
+        self.assertIsInstance(item.raw_item, dict)
+        self.assertEqual(item.raw_item["name"], expected_name)
+        self.assertEqual(item.raw_item["output"], expected_output)
+        self.assertEqual(item.raw_item["id"], expected_id)
+
+    def test_tool_single_returns_one_executed_tool_call_round_trip(self):
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_TOOL_SINGLE"
+
+        result = asyncio.run(
+            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
+
+        # Shape: matches litellm.SimpleResult's public contract exactly.
+        self.assertTrue(hasattr(result, "final_output"))
+        self.assertTrue(hasattr(result, "usage"))
+        self.assertTrue(hasattr(result, "new_items"))
+        self.assertTrue(hasattr(result, "cost"))
+
+        self.assertEqual(result.final_output, test_provider._TEST_TOOL_SINGLE_RESPONSE)
+        self.assertEqual(result.cost, 0.0)
+        self.assertIsInstance(result.usage, dict)
+        self.assertEqual(
+            result.usage.get("input_tokens"), test_provider._TEST_TOOL_SINGLE_INPUT_TOKENS
+        )
+        self.assertEqual(
+            result.usage.get("output_tokens"), test_provider._TEST_TOOL_SINGLE_OUTPUT_TOKENS
+        )
+
+        # new_items: exactly one already-executed tool_call_item/
+        # tool_call_output_item pair, matching what litellm.run()'s real
+        # per-round loop appends (litellm.py ~1123-1171) - not an
+        # instruction for some outer loop to go execute a tool.
+        self.assertEqual(len(result.new_items), 2)
+        self._assert_tool_call_item_shape(
+            result.new_items[0], test_provider._TOOL_NAME, test_provider._TOOL_ARGS,
+            test_provider._TOOL_CALL_ID_1,
+        )
+        self._assert_tool_call_output_item_shape(
+            result.new_items[1], test_provider._TOOL_NAME, test_provider._TOOL_RESULT,
+            test_provider._TOOL_CALL_ID_1,
+        )
+
+    def test_tool_multi_returns_two_executed_tool_call_round_trips(self):
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_TOOL_MULTI"
+
+        result = asyncio.run(
+            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
+
+        self.assertEqual(result.final_output, test_provider._TEST_TOOL_MULTI_RESPONSE)
+        self.assertEqual(result.cost, 0.0)
+
+        # Two full round-trips = four new_items, alternating call/output,
+        # each pair matching litellm.run()'s per-round-loop append shape.
+        self.assertEqual(len(result.new_items), 4)
+        self._assert_tool_call_item_shape(
+            result.new_items[0], test_provider._TOOL_NAME, test_provider._TOOL_ARGS,
+            test_provider._TOOL_CALL_ID_1,
+        )
+        self._assert_tool_call_output_item_shape(
+            result.new_items[1], test_provider._TOOL_NAME, test_provider._TOOL_RESULT,
+            test_provider._TOOL_CALL_ID_1,
+        )
+        self._assert_tool_call_item_shape(
+            result.new_items[2], test_provider._TOOL_NAME_2, test_provider._TOOL_ARGS_2,
+            test_provider._TOOL_CALL_ID_2,
+        )
+        self._assert_tool_call_output_item_shape(
+            result.new_items[3], test_provider._TOOL_NAME_2, test_provider._TOOL_RESULT_2,
+            test_provider._TOOL_CALL_ID_2,
+        )
+
+    def test_provider_timeout_raises_provider_unavailable_error(self):
+        """Must raise the exact same exception class litellm.run() raises for
+        a real timeout (litellm_module.ProviderUnavailableError), with the
+        same public_message/log_message attribute shape - see
+        `litellm.py:64-71` and `litellm.py`'s generic `except Exception`
+        fallback (~line 979-988) that a real litellm.Timeout falls through to.
+        """
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_PROVIDER_TIMEOUT"
+
+        with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
+            asyncio.run(
+                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
+
+        exc = ctx.exception
+        self.assertTrue(hasattr(exc, "public_message"))
+        self.assertTrue(hasattr(exc, "log_message"))
+        self.assertEqual(exc.public_message, test_provider._TEST_TIMEOUT_MESSAGE)
+        self.assertEqual(exc.log_message, test_provider._TEST_TIMEOUT_LOG_MESSAGE)
+        self.assertEqual(str(exc), test_provider._TEST_TIMEOUT_MESSAGE)
+
+    def test_provider_timeout_via_real_litellm_routing(self):
+        """Exercise the exact same real routing path as TEST_TEXT's routing
+        test, proving the timeout scenario raises identically whether reached
+        directly or via `litellm.run()`'s `provider.lower() == "test_provider"`
+        dispatch.
+        """
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_PROVIDER_TIMEOUT"
+
+        with self.assertRaises(litellm_module.ProviderUnavailableError):
+            asyncio.run(
+                litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
+
+
 class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
     """Prove the REAL routing path: `huf.ai.providers.litellm.run()`'s own
     `provider.lower() == "test_provider"` check dispatches to

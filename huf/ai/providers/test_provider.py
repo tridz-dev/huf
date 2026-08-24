@@ -100,6 +100,58 @@ We rejected two alternatives:
 Adding new scenarios (`TEST_TOOL_SINGLE`, `TEST_TOOL_MULTI`, etc.) later is a
 matter of adding another `_SCENARIO_HANDLERS` entry below — the extraction
 mechanism (`_extract_scenario`) does not change.
+
+Tool-call scenario contract (`TEST_TOOL_SINGLE` / `TEST_TOOL_MULTI`)
+---------------------------------------------------------------------
+Decision: **the provider both decides AND executes tool calls, and returns
+the fully-resolved round-trip in `new_items`** — it does NOT return a
+"please call this tool" instruction for some outer loop to execute.
+
+This is not a simplification for testing purposes; it is what the real
+contract actually is. Per `docs/testing/CURRENT_STATE.md` section 4
+("Tool-calling framework"): "Execution is NOT via the OpenAI Agents SDK
+Runner — HUF's own loop in `huf/ai/providers/litellm.py::run()` (~lines
+700-1170)". Reading that loop directly confirms it: inside
+`huf/ai/providers/litellm.py::run()`, the per-round loop (~lines 1086-1182)
+calls `_find_tool(agent, tool_name)` and `await _execute_tool_call(...)`
+*itself*, appends a `tool_call_item` SimpleNamespace (`raw_item=SimpleNamespace
+(name=..., arguments=..., id=...)`) immediately followed by a
+`tool_call_output_item` SimpleNamespace (`raw_item={"name":..., "output":...,
+"id":...}`) to `all_new_items`, feeds the tool result back into `messages` as
+a `role: tool` message, and only then makes the *next* round's completion
+call. There is no signal in `SimpleResult`/`new_items` meaning "outer caller,
+please go execute this" — by the time `litellm.run()` returns, every tool
+call in `new_items` has already been executed and paired with its output.
+`agent_integration.py`'s tool-call-loop persistence code (~1620-1780) only
+*replays* `result.new_items` after the fact to write `Agent Tool Call` /
+`Agent Message` (kind="Tool Call") audit rows — it does not invoke tools
+itself.
+
+Consequently, `TEST_TOOL_SINGLE`/`TEST_TOOL_MULTI` fabricate a fixed,
+deterministic sequence of already-resolved tool_call_item/tool_call_output_item
+pairs (referencing a made-up but realistic tool name/args/result), exactly
+mirroring the shape `litellm.run()` would have produced for a real agent
+whose model chose to call a real tool. There is no real `Agent Tool Function`
+invocation here, and no need for one: by the time `agent_integration.py`
+consumes `result.new_items`, a real run's tool has *already* been executed by
+`litellm.run()` — so a scenario faking that pre-executed shape is faithful to
+the contract, not a shortcut around it.
+
+`TEST_PROVIDER_TIMEOUT`
+------------------------
+Raises `huf.ai.providers.litellm.ProviderUnavailableError` — the exact
+exception class a real timeout surfaces as. In `litellm.run()`, any
+completion-call exception not explicitly matched by `InternalServerError`/
+`RateLimitError`/`ContextWindowExceededError`/`APIError` (a real
+`litellm.Timeout`/`openai.APITimeoutError` included) falls through to the
+generic `except Exception as e` handler (~line 979), which calls
+`_raise_provider_unavailable(raw_msg, normalized_model)` — and that
+constructs a `ProviderUnavailableError(public_message, log_message=raw_msg)`
+(see `litellm.py:113-117`). This scenario raises that same class with the
+same two-attribute shape (`public_message`, `log_message`) so error-handling
+code downstream (which per `litellm.py:1191` re-raises `ProviderUnavailableError`
+unchanged, unlike other exception types) is exercised identically to a real
+provider timeout.
 """
 
 import re
@@ -114,6 +166,60 @@ _TEST_TEXT_INPUT_TOKENS = 10
 _TEST_TEXT_OUTPUT_TOKENS = 8
 
 _TEST_TEXT_RESPONSE = "This is a deterministic TEST_TEXT response from the HUF test provider."
+
+# --- TEST_TOOL_SINGLE / TEST_TOOL_MULTI fixtures -----------------------
+# Fixed, made-up-but-realistic tool name/args/result. No real `Agent Tool
+# Function` is invoked (see module docstring: the provider already returns
+# fully-executed tool calls, matching what litellm.run() itself produces).
+_TOOL_NAME = "get_weather"
+_TOOL_ARGS = '{"city": "Bengaluru"}'
+_TOOL_RESULT = '{"city": "Bengaluru", "condition": "Sunny", "temp_c": 29}'
+_TOOL_CALL_ID_1 = "test-tool-call-1"
+_TOOL_CALL_ID_2 = "test-tool-call-2"
+
+_TOOL_NAME_2 = "get_forecast"
+_TOOL_ARGS_2 = '{"city": "Bengaluru", "days": 3}'
+_TOOL_RESULT_2 = '{"city": "Bengaluru", "forecast": ["Sunny", "Cloudy", "Sunny"]}'
+
+_TEST_TOOL_SINGLE_INPUT_TOKENS = 20
+_TEST_TOOL_SINGLE_OUTPUT_TOKENS = 15
+_TEST_TOOL_SINGLE_RESPONSE = (
+    "Based on the tool result, it is currently Sunny at 29C in Bengaluru."
+)
+
+_TEST_TOOL_MULTI_INPUT_TOKENS = 32
+_TEST_TOOL_MULTI_OUTPUT_TOKENS = 24
+_TEST_TOOL_MULTI_RESPONSE = (
+    "Based on both tool results, it is currently Sunny at 29C in Bengaluru, "
+    "with a 3-day forecast of Sunny, Cloudy, Sunny."
+)
+
+_TEST_TIMEOUT_MESSAGE = (
+    "The AI provider could not complete this request for test-model. "
+    "Please try again or choose a different model."
+)
+_TEST_TIMEOUT_LOG_MESSAGE = (
+    "LiteLLM error for model 'test-model': Deterministic TEST_PROVIDER_TIMEOUT "
+    "simulated timeout (Read timed out)."
+)
+
+
+def _tool_call_item(tool_name, tool_args, tool_call_id):
+    """Mirror the exact shape `litellm.run()` appends for a decided tool call
+    (see `litellm.py` ~line 1123-1128)."""
+    return SimpleNamespace(
+        type="tool_call_item",
+        raw_item=SimpleNamespace(name=tool_name, arguments=tool_args, id=tool_call_id),
+    )
+
+
+def _tool_call_output_item(tool_name, output, tool_call_id):
+    """Mirror the exact shape `litellm.run()` appends for an already-executed
+    tool's result (see `litellm.py` ~line 1166-1171)."""
+    return SimpleNamespace(
+        type="tool_call_output_item",
+        raw_item={"name": tool_name, "output": output, "id": tool_call_id},
+    )
 
 
 class UnknownTestScenarioError(Exception):
@@ -149,9 +255,84 @@ def _run_test_text(agent, enhanced_prompt, provider, model, context=None):
     )
 
 
+def _run_test_tool_single(agent, enhanced_prompt, provider, model, context=None):
+    """TEST_TOOL_SINGLE scenario: one already-executed tool call round-trip,
+    then a final text response referencing the tool result. See the module
+    docstring's "Tool-call scenario contract" section for why `new_items`
+    already contains the executed tool_call_item/tool_call_output_item pair
+    (this is what `litellm.run()` itself would have produced by the time it
+    returns, not an instruction for some outer loop to execute)."""
+    usage = {
+        "input_tokens": _TEST_TOOL_SINGLE_INPUT_TOKENS,
+        "output_tokens": _TEST_TOOL_SINGLE_OUTPUT_TOKENS,
+        "cached_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cache_miss_tokens": 0,
+        "cache_skipped_unsupported_model": False,
+    }
+    new_items = [
+        _tool_call_item(_TOOL_NAME, _TOOL_ARGS, _TOOL_CALL_ID_1),
+        _tool_call_output_item(_TOOL_NAME, _TOOL_RESULT, _TOOL_CALL_ID_1),
+    ]
+    return SimpleNamespace(
+        final_output=_TEST_TOOL_SINGLE_RESPONSE,
+        usage=usage,
+        new_items=new_items,
+        cost=0.0,
+    )
+
+
+def _run_test_tool_multi(agent, enhanced_prompt, provider, model, context=None):
+    """TEST_TOOL_MULTI scenario: two sequential already-executed tool call
+    round-trips (one agent turn, matching the real per-round loop in
+    `litellm.run()` which keeps calling until a round with no tool_calls),
+    then a final text response referencing both tool results."""
+    usage = {
+        "input_tokens": _TEST_TOOL_MULTI_INPUT_TOKENS,
+        "output_tokens": _TEST_TOOL_MULTI_OUTPUT_TOKENS,
+        "cached_tokens": 0,
+        "cache_creation_tokens": 0,
+        "cache_miss_tokens": 0,
+        "cache_skipped_unsupported_model": False,
+    }
+    new_items = [
+        _tool_call_item(_TOOL_NAME, _TOOL_ARGS, _TOOL_CALL_ID_1),
+        _tool_call_output_item(_TOOL_NAME, _TOOL_RESULT, _TOOL_CALL_ID_1),
+        _tool_call_item(_TOOL_NAME_2, _TOOL_ARGS_2, _TOOL_CALL_ID_2),
+        _tool_call_output_item(_TOOL_NAME_2, _TOOL_RESULT_2, _TOOL_CALL_ID_2),
+    ]
+    return SimpleNamespace(
+        final_output=_TEST_TOOL_MULTI_RESPONSE,
+        usage=usage,
+        new_items=new_items,
+        cost=0.0,
+    )
+
+
+def _run_test_provider_timeout(agent, enhanced_prompt, provider, model, context=None):
+    """TEST_PROVIDER_TIMEOUT scenario: raise the exact exception class/shape
+    a real litellm timeout raises in `litellm.run()` — `ProviderUnavailableError`
+    with a `public_message`/`log_message` pair (see `litellm.py:64-71,113-117`
+    and this module's "TEST_PROVIDER_TIMEOUT" docstring section above).
+
+    Imported lazily (not at module scope) to avoid any import-order coupling
+    with `litellm.py`, which imports *this* module lazily from inside its own
+    `run()` body.
+    """
+    from huf.ai.providers.litellm import ProviderUnavailableError
+
+    raise ProviderUnavailableError(
+        _TEST_TIMEOUT_MESSAGE,
+        log_message=_TEST_TIMEOUT_LOG_MESSAGE,
+    )
+
+
 # Scenario name -> handler. Handlers share the exact signature of `run()`.
 _SCENARIO_HANDLERS = {
     "TEST_TEXT": _run_test_text,
+    "TEST_TOOL_SINGLE": _run_test_tool_single,
+    "TEST_TOOL_MULTI": _run_test_tool_multi,
+    "TEST_PROVIDER_TIMEOUT": _run_test_provider_timeout,
 }
 
 
