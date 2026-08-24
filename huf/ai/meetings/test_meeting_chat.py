@@ -30,6 +30,16 @@ class TestMeetingChat(unittest.TestCase):
                 pass
         frappe.db.commit()
 
+    def _make_agent_run(self):
+        """
+        Meeting.summary_agent_run is a Link to Agent Run, so a fake string
+        id fails Frappe's link validation on save — create a real row so
+        tests exercise the same save() path production code does.
+        """
+        doc = frappe.get_doc({"doctype": "Agent Run"}).insert(ignore_permissions=True)
+        self.addCleanup(lambda: frappe.delete_doc("Agent Run", doc.name, ignore_permissions=True, force=True))
+        return doc.name
+
     def test_ask_meeting_success_inserts_two_messages(self):
         with patch(
             "huf.ai.meetings.meeting_chat.run_agent_sync",
@@ -70,16 +80,17 @@ class TestMeetingChat(unittest.TestCase):
 
     def test_revise_summary_success_updates_meeting(self):
         new_summary = "## Headline\nRevised.\n\n## Key Points\n- Ship it\n\n## Decisions\n- Ship now\n\n## Action Items\n- None identified."
+        agent_run_name = self._make_agent_run()
         with patch(
             "huf.ai.meetings.meeting_chat.run_agent_sync",
-            return_value={"success": True, "status": "Success", "response": new_summary, "agent_run_id": "Agent Run 2"},
+            return_value={"success": True, "status": "Success", "response": new_summary, "agent_run_id": agent_run_name},
         ):
             result = meeting_chat.revise_summary(self.meeting_name, "Make it shorter")
 
         self.assertEqual(result["summary"], new_summary)
         meeting = frappe.get_doc("Meeting", self.meeting_name)
         self.assertEqual(meeting.summary, new_summary)
-        self.assertEqual(meeting.summary_agent_run, "Agent Run 2")
+        self.assertEqual(meeting.summary_agent_run, agent_run_name)
 
         messages = meeting_chat.get_chat_history(self.meeting_name)
         self.assertEqual(messages[-1].role, "assistant")

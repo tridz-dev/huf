@@ -29,6 +29,16 @@ class TestMeetingSummary(unittest.TestCase):
                 pass
         frappe.db.commit()
 
+    def _make_agent_run(self):
+        """
+        Meeting.summary_agent_run is a Link to Agent Run, so a fake string
+        id fails Frappe's link validation on save — create a real row so
+        tests exercise the same save() path production code does.
+        """
+        doc = frappe.get_doc({"doctype": "Agent Run"}).insert(ignore_permissions=True)
+        self.addCleanup(lambda: frappe.delete_doc("Agent Run", doc.name, ignore_permissions=True, force=True))
+        return doc.name
+
     def test_prompt_includes_full_context(self):
         meeting = frappe.get_doc("Meeting", self.meeting_name)
         meeting.title = "Launch sync"
@@ -54,6 +64,7 @@ class TestMeetingSummary(unittest.TestCase):
         self.assertNotIn("Participants", prompt)
 
     def test_success_sets_summary_and_completes(self):
+        agent_run_name = self._make_agent_run()
         with (
             patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=True),
             patch(
@@ -62,7 +73,7 @@ class TestMeetingSummary(unittest.TestCase):
                     "success": True,
                     "status": "Success",
                     "response": "## Headline\nShipping the feature.",
-                    "agent_run_id": "Agent Run 1",
+                    "agent_run_id": agent_run_name,
                 },
             ),
         ):
@@ -70,7 +81,7 @@ class TestMeetingSummary(unittest.TestCase):
 
         meeting = frappe.get_doc("Meeting", self.meeting_name)
         self.assertEqual(meeting.summary, "## Headline\nShipping the feature.")
-        self.assertEqual(meeting.summary_agent_run, "Agent Run 1")
+        self.assertEqual(meeting.summary_agent_run, agent_run_name)
         self.assertEqual(meeting.status, "Completed")
         self.assertFalse(meeting.failed_step)
         self.assertFalse(meeting.last_error)
@@ -122,6 +133,7 @@ class TestMeetingSummary(unittest.TestCase):
         self.assertEqual(meeting.transcript, transcript_before)
 
     def test_retry_summary_job_reinvokes_run_meeting_summary(self):
+        agent_run_name = self._make_agent_run()
         with (
             patch("huf.ai.meetings.meeting_summary._agent_is_configured", return_value=True),
             patch(
@@ -130,7 +142,7 @@ class TestMeetingSummary(unittest.TestCase):
                     "success": True,
                     "status": "Success",
                     "response": "## Headline\nRetried summary.",
-                    "agent_run_id": "Agent Run 2",
+                    "agent_run_id": agent_run_name,
                 },
             ) as mock_run,
         ):
