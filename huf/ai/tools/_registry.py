@@ -1353,6 +1353,22 @@ BUILDER_TOOLS = [
 			_p("note", description="Optional extra context shown with the question"),
 		],
 	},
+	{
+		"tool_name": "resolve_recent_resource",
+		"description": (
+			"Resolve a vague reference like 'that agent' or 'the app I just made' to a "
+			"concrete document name. Looks at what draft_agent/draft_app have created "
+			"(with confirm=true) earlier in THIS conversation and returns the most recent "
+			"match for resource_type. Read-only; found=false means nothing of that type "
+			"has been created yet in this conversation — ask the user for the name instead "
+			"of guessing."
+		),
+		"function_path": "huf.ai.tools.builder.resolve_recent_resource",
+		"category": "Builder",
+		"parameters": [
+			_p("resource_type", required=True, description="Which kind of recently-created resource to resolve: 'agent' or 'app'"),
+		],
+	},
 ]
 
 

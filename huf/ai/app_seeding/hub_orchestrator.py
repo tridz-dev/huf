@@ -75,6 +75,7 @@ BUILDER_TOOL_NAMES = (
     "set_app_icon",
     "list_app_components",
     "render_app_component",
+    "resolve_recent_resource",
 )
 
 

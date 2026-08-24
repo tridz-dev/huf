@@ -46,6 +46,85 @@ _DECLARATIVE_TYPES = (
 )
 
 
+_MAX_RECENT_RESOURCES = 10
+
+
+def _get_conversation_data(conversation_id: str | None) -> dict:
+	"""Read and parse Agent Conversation.conversation_data as a dict.
+
+	Mirrors huf.ai.tools.lazy_discovery._get_conversation_data / _load_state's
+	shape ({"version": 1, "scope": {}, "items": [...]})  but this module only
+	needs the raw dict form to stash a "_recent_resources" key on it directly
+	(recent-resource tracking is unrelated to the items-list convention lazy
+	discovery uses for its own state).
+	"""
+	if not conversation_id:
+		return {}
+	data_json = frappe.db.get_value("Agent Conversation", conversation_id, "conversation_data")
+	if not data_json:
+		return {}
+	try:
+		data = json.loads(data_json)
+	except (json.JSONDecodeError, TypeError):
+		return {}
+	return data if isinstance(data, dict) else {}
+
+
+def _set_conversation_data(conversation_id: str, data: dict) -> None:
+	frappe.db.set_value(
+		"Agent Conversation", conversation_id, "conversation_data",
+		json.dumps(data, ensure_ascii=False, indent=2),
+	)
+
+
+def _record_recent_resource(conversation_id: str | None, resource_type: str, name: str) -> None:
+	"""Append a {type, name, created_at} entry to conversation_data._recent_resources.
+
+	Newest first, capped at _MAX_RECENT_RESOURCES. No-ops when there is no
+	conversation context (e.g. a tool invoked outside a conversation run) —
+	recent-resource tracking is a convenience for "make that an App"-style
+	follow-ups, not a hard requirement for creation to succeed.
+	"""
+	if not conversation_id or not frappe.db.exists("Agent Conversation", conversation_id):
+		return
+	data = _get_conversation_data(conversation_id)
+	recent = data.get("_recent_resources")
+	if not isinstance(recent, list):
+		recent = []
+	recent.insert(0, {"type": resource_type, "name": name, "created_at": frappe.utils.now()})
+	data["_recent_resources"] = recent[:_MAX_RECENT_RESOURCES]
+	_set_conversation_data(conversation_id, data)
+
+
+def resolve_recent_resource(resource_type: str, conversation_id: str | None = None) -> dict:
+	"""Resolve "that agent"/"the app I just made" to a concrete document name.
+
+	Inspects the current Agent Conversation's conversation_data for
+	"_recent_resources" (populated by draft_agent/draft_app on confirmed
+	creation) and returns the newest entry matching resource_type. Read-only
+	introspection of the current conversation, not a document, so this only
+	requires the builder capability — no _require_doc_permission check.
+	"""
+	_require_builder_capability()
+
+	data = _get_conversation_data(conversation_id)
+	recent = data.get("_recent_resources")
+	if not isinstance(recent, list):
+		return {
+			"found": False,
+			"message": f"No recent {resource_type} found in this conversation.",
+		}
+
+	for entry in recent:
+		if isinstance(entry, dict) and entry.get("type") == resource_type:
+			return {"found": True, "name": entry.get("name"), "type": resource_type}
+
+	return {
+		"found": False,
+		"message": f"No recent {resource_type} found in this conversation.",
+	}
+
+
 def _require_builder_capability():
 	"""Throw unless the session user is a System Manager or Huf Manager."""
 	if not set(frappe.get_roles()) & set(BUILDER_ROLES):
@@ -248,6 +327,7 @@ def draft_agent(
 	description: str = "",
 	allow_chat: bool = True,
 	confirm: bool = False,
+	conversation_id: str | None = None,
 ) -> dict:
 	"""Create a disabled (draft) Agent with a local prompt.
 
@@ -258,6 +338,12 @@ def draft_agent(
 	allow_chat defaults to True: hub-built agents are meant to be chatted
 	with (e.g. managing data tables), and only chat-enabled agents appear
 	in the chat UI pickers.
+
+	conversation_id is auto-injected from the run context (see
+	huf.ai.sdk_tools._merge_run_context) — it is not something the model
+	needs to supply. On a confirmed creation it is recorded to the
+	conversation's "_recent_resources" so later turns can resolve
+	"the agent I just made" via resolve_recent_resource.
 	"""
 	_require_builder_capability()
 	confirm = _as_bool(confirm)
@@ -302,6 +388,7 @@ def draft_agent(
 
 	agent = frappe.get_doc({"doctype": "Agent", **payload})
 	agent.insert()
+	_record_recent_resource(conversation_id, "agent", agent.name)
 
 	result = {"created": True, "agent": agent.name, "disabled": True, "allow_chat": allow_chat, "diff": diff}
 	if not _provider_has_key(provider):
@@ -827,6 +914,7 @@ def draft_app(
 	route: str | None = None,
 	category: str = "Other",
 	confirm: bool = False,
+	conversation_id: str | None = None,
 ) -> dict:
 	"""Two-phase creation of a chat-authored HUF App backed by an Agent.
 
@@ -834,6 +922,12 @@ def draft_app(
 	cloned, only linked). confirm=False computes and returns the proposed
 	App fields as a diff without touching the database; confirm=True calls
 	apps_loader.create_app_from_agent to actually create it.
+
+	conversation_id is auto-injected from the run context (see
+	huf.ai.sdk_tools._merge_run_context) — it is not something the model
+	needs to supply. On a confirmed creation it is recorded to the
+	conversation's "_recent_resources" so later turns can resolve
+	"make that an App" / "the app I just made" via resolve_recent_resource.
 	"""
 	_require_builder_capability()
 	_require_doc_permission("Agent", "read", agent_name)
@@ -869,6 +963,7 @@ def draft_app(
 		route=route,
 		category=category,
 	)
+	_record_recent_resource(conversation_id, "app", app_id)
 
 	return {"created": True, "app": result, "diff": diff}
 

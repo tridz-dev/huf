@@ -354,3 +354,68 @@ class TestSetAppIcon(IntegrationTestCase):
 		# Check icon wasn't changed
 		current_icon = frappe.db.get_value("HUF App", self.APP_ID, "icon") or ""
 		self.assertEqual(current_icon, original_icon)
+
+
+class TestResolveRecentResource(IntegrationTestCase):
+	"""Tests for builder.resolve_recent_resource ("make that an App" resolution)."""
+
+	def _make_conversation(self, conversation_data=None):
+		conversation = frappe.get_doc(
+			{
+				"doctype": "Agent Conversation",
+				"title": f"resolve-recent-test-{frappe.generate_hash(length=6)}",
+				"session_id": f"test-session-{frappe.generate_hash(length=10)}",
+				"is_active": 1,
+				"conversation_data": (
+					frappe.as_json(conversation_data) if conversation_data is not None else None
+				),
+			}
+		)
+		conversation.insert(ignore_permissions=True)
+		self.addCleanup(
+			lambda: frappe.delete_doc(
+				"Agent Conversation", conversation.name, ignore_permissions=True, force=True
+			)
+		)
+		return conversation.name
+
+	def test_denied_without_builder_role(self):
+		with patch("frappe.get_roles", return_value=DENIED_ROLES):
+			self.assertRaises(
+				frappe.PermissionError,
+				builder.resolve_recent_resource,
+				resource_type="agent",
+			)
+
+	def test_returns_not_found_on_empty_conversation(self):
+		conversation_id = self._make_conversation()
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			result = builder.resolve_recent_resource(
+				resource_type="agent", conversation_id=conversation_id
+			)
+		self.assertFalse(result["found"])
+		self.assertIn("No recent agent found", result["message"])
+
+	def test_returns_not_found_with_no_conversation_id(self):
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			result = builder.resolve_recent_resource(resource_type="app", conversation_id=None)
+		self.assertFalse(result["found"])
+
+	def test_returns_most_recent_matching_entry(self):
+		conversation_data = {
+			"_recent_resources": [
+				{"type": "app", "name": "newest-app", "created_at": "2026-08-24 12:00:00"},
+				{"type": "agent", "name": "newest-agent", "created_at": "2026-08-24 11:00:00"},
+				{"type": "agent", "name": "older-agent", "created_at": "2026-08-24 10:00:00"},
+			]
+		}
+		conversation_id = self._make_conversation(conversation_data)
+
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			result = builder.resolve_recent_resource(
+				resource_type="agent", conversation_id=conversation_id
+			)
+
+		self.assertTrue(result["found"])
+		self.assertEqual(result["name"], "newest-agent")
+		self.assertEqual(result["type"], "agent")

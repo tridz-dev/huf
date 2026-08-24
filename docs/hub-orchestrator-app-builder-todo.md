@@ -88,8 +88,28 @@ Depends on: Phase 1 (independent of 2/3a/3b — can build in parallel)
 
 ## Phase 4 — Agent → App workflow (Path A/B/C)
 Depends on: Phase 2, 3a
-- [ ] `draft_app` accepts existing OR freshly-drafted Agent
-- [ ] Conversation-context resolution ("make that an App") via `Agent Conversation.conversation_data`
+- [x] `draft_app` accepts existing OR freshly-drafted Agent
+- [x] Conversation-context resolution ("make that an App") via `Agent Conversation.conversation_data`
+      — implemented as `resolve_recent_resource(resource_type, conversation_id=None)` in
+      `huf/ai/tools/builder.py`, backed by a new `conversation_data["_recent_resources"]`
+      list (newest-first, capped at 10) that `draft_agent`/`draft_app` append to on a
+      confirmed (`confirm=True`) creation.
+
+      Conversation-context mechanism used: no existing builder tool in `builder.py`
+      received `conversation_id` as a parameter, but `huf.ai.tools.lazy_discovery.handle_load_tools`
+      and `huf.ai.sdk_tools._merge_run_context` already establish the pattern —
+      `_merge_run_context` auto-injects `conversation_id` (and `agent_run_id`,
+      `agent_name`) from the huf run context dict into a tool's call args via
+      setdefault-like semantics (LLM-supplied values win; blank/missing ones are
+      filled from context), *provided the tool function declares that parameter*.
+      `draft_agent` and `draft_app` did not previously declare `conversation_id`, so
+      this round added `conversation_id: str | None = None` to both signatures — this
+      is the same mechanism `lazy_discovery.handle_load_tools` relies on via `**kwargs`,
+      just declared explicitly instead of caught by `**kwargs`. No new plumbing was
+      invented. `resolve_recent_resource` also takes `conversation_id` for the same
+      reason and is NOT listed as a model-facing parameter in `_registry.py` (matching
+      how `draft_agent`/`draft_app` already omit it), so it is only ever populated by
+      the auto-injection path, never guessed by the model.
 
 ## Phase 5 — Unified chatbot App
 Depends on: Phase 4
