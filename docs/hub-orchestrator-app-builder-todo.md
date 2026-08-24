@@ -11,11 +11,14 @@ Base branch: `pre-develop` (per final PR target). Implementation branch:
 - 2026-08-24: Building on `pre-develop`, not `pre-dev` — `pre-develop` is a strict superset of
   `pre-dev` (0 commits behind it) and already includes PRs #640/#641. Final PR target per
   instruction is `pre-develop`.
-- 2026-08-24: PR #596 (`feature/app-capability-discovery`) sync is **deferred, not blocking**.
-  Confirmed via git ancestry + `gh pr list` that it exists only in `develop`/`pre-develop` is
-  missing it too, and no PR anywhere currently proposes bringing it in. Not part of this goal's
-  scope — noted as a future collision risk for whoever touches `apps_loader.py`/`_registry.py`
-  next, not resolved here.
+- 2026-08-24 (corrected): PR #596 (`feature/app-capability-discovery`) is **already merged and
+  present in `pre-dev`, `pre-develop`, `develop`, and `pre-dev-stg`** — an earlier check searched
+  for the wrong module path (`huf/ai/capabilities/`) and missed that a later commit renamed it to
+  `huf/ai/capability_discovery/` (13 files, confirmed present in this branch's base). No sync or
+  cherry-pick is needed. Its `apps_loader.py` extensions (DocType-ownership-via-Module-Def helper)
+  and any `_registry.py` insertions are already live in this worktree's starting state — Phase 2/3a
+  agents read the actual current files, so this should already be reconciled, but re-verify with a
+  diff review before assuming zero collision.
 
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked/deferred
 
