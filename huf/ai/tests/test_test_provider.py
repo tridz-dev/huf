@@ -11,28 +11,65 @@ Covers:
 - Marker extraction is robust to the prompt-wrapping agent_integration.py
   actually does (marker not at prompt[0]).
 - Unknown/missing scenario markers raise UnknownTestScenarioError.
-- The real RunProvider.run() fallback-routing path (huf/ai/run.py) actually
-  dispatches to this module when litellm.run() fails and the provider name
-  lowercases to "test_provider" - proving the routing contract, not just the
-  module in isolation.
+- The REAL routing path this provider is actually reached through in
+  production: `huf.ai.providers.litellm.run()`'s own
+  `provider.lower() == "test_provider"` check, near the top of that
+  coroutine, before any `frappe.get_doc`/network code. We import and call the
+  real `litellm.run()` (with `frappe`/`litellm` package imports stubbed, since
+  no bench is available here) and assert `frappe.get_doc` is never called -
+  proving the test provider is reached without touching any real
+  provider-doc/network code, on the exact same coroutine a real Agent Run
+  awaits.
 
-Run standalone (no bench):
-    python3 -m pytest huf/ai/tests/test_test_provider.py -v
+  We deliberately do NOT prove this by mocking `litellm.run` to raise
+  synchronously and relying on `huf.ai.run.RunProvider.run()`'s
+  custom-provider fallback branch: `litellm.run()` is `async def`, so calling
+  it only constructs a coroutine - a real execution failure can only surface
+  later, when the caller (`agent_integration.py:1620`,
+  `await RunProvider.run(...)`) awaits it, which is after
+  `RunProvider.run()`'s own try/except has already returned. A synchronous
+  `side_effect` mock does not simulate anything a real Agent Run can produce;
+  see `huf/ai/providers/test_provider.py`'s module docstring for the full
+  analysis.
+
+Run standalone (no bench) from the repo root:
+    PYTHONPATH=. python3 huf/ai/tests/test_test_provider.py -v
 """
 
 import asyncio
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # huf/ai/tests/conftest.py stubs sys.modules['frappe'] with a MagicMock when
 # frappe isn't importable (no bench available). Do the same defensively here
 # so this file can also be run outside that conftest's collection scope.
 if "frappe" not in sys.modules:
-    sys.modules["frappe"] = MagicMock()
+    frappe_mock = MagicMock()
+    frappe_mock.utils = MagicMock()
+    frappe_mock._ = lambda x: x
+    sys.modules["frappe"] = frappe_mock
+    sys.modules["frappe.utils"] = frappe_mock.utils
+
+# `huf.ai.providers.litellm` imports the real `litellm` PyPI package at
+# module scope. Stub it too, so this file stays runnable without a bench
+# (which is where that dependency is actually installed).
+if "litellm" not in sys.modules:
+    litellm_pkg_mock = MagicMock()
+    for _exc_name in (
+        "InternalServerError",
+        "RateLimitError",
+        "APIError",
+        "BadRequestError",
+        "ContextWindowExceededError",
+    ):
+        setattr(litellm_pkg_mock, _exc_name, type(_exc_name, (Exception,), {}))
+    sys.modules["litellm"] = litellm_pkg_mock
+    sys.modules["litellm.utils"] = MagicMock()
 
 from huf.ai.providers import test_provider  # noqa: E402
+from huf.ai.providers import litellm as litellm_module  # noqa: E402
 
 
 def _make_agent(**overrides):
@@ -120,51 +157,74 @@ class TestTestProviderDirect(unittest.TestCase):
         self.assertEqual(first.cost, second.cost)
 
 
-class TestRunProviderRoutingToTestProvider(unittest.TestCase):
-    """Prove the real huf.ai.run.RunProvider.run() fallback path actually
-    dispatches to huf.ai.providers.test_provider - not just that the module
-    works when imported and called directly.
+class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
+    """Prove the REAL routing path: `huf.ai.providers.litellm.run()`'s own
+    `provider.lower() == "test_provider"` check dispatches to
+    `huf.ai.providers.test_provider`, before any `frappe.get_doc`/network
+    code in `litellm.run()` executes.
+
+    This exercises the exact coroutine `RunProvider.run()` returns and the
+    real caller (`agent_integration.py:1620`) awaits - not a mocked
+    synchronous failure of `litellm.run` routed through the
+    `huf.ai.run.RunProvider.run()` custom-provider fallback branch (which,
+    per this module's and `test_provider.py`'s docstrings, is not reachable
+    on a real litellm execution failure since `litellm.run` is `async def`).
     """
 
-    def test_run_provider_falls_back_to_test_provider_module(self):
-        from huf.ai import run as run_module
-
+    def test_litellm_run_dispatches_to_test_provider_before_any_real_work(self):
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:TEST_TEXT"
 
-        # Force the litellm branch to fail with a generic (non-ImportError)
-        # exception, exactly like RunProvider.run's own docstring/behavior:
-        # "Generic error from LiteLLM: log it, but allow fallback to custom
-        # provider module" (huf/ai/run.py:46-52).
-        fake_litellm_module = MagicMock()
-        fake_litellm_module.run = MagicMock(side_effect=RuntimeError("boom - forcing fallback"))
+        # frappe.get_doc is the first real-provider-doc access litellm.run()
+        # performs (to load the "AI Provider" doc / API key). It must NEVER
+        # be called when routing to the test provider - proving the early
+        # return happens before any real work.
+        litellm_module.frappe.get_doc.reset_mock()
 
-        # frappe.get_module("huf.ai.providers.test_provider") must resolve to
-        # the REAL module (not a mock) so we prove actual routing, not a stub.
-        def fake_get_module(module_path):
-            if module_path == "huf.ai.providers.test_provider":
-                return test_provider
-            raise ImportError(module_path)
-
-        with patch.dict(sys.modules, {"huf.ai.providers.litellm": fake_litellm_module}), \
-             patch.object(run_module, "frappe") as fake_frappe:
-            fake_frappe.get_module.side_effect = fake_get_module
-            fake_frappe.log_error = MagicMock()
-            # frappe.throw in real frappe raises; our mock must too, or
-            # RunProvider.run would silently continue past a throw() call.
-            fake_frappe.throw = MagicMock(side_effect=Exception("frappe.throw() called"))
-
-            result_coro = run_module.RunProvider.run(
-                agent, prompt, "Test_Provider", "test-model", context=None
-            )
-            # RunProvider.run's fallback branch does `return module.run(...)`;
-            # since test_provider.run is `async def`, this yields a coroutine
-            # that the real caller (agent_integration.py) awaits.
-            result = asyncio.run(result_coro)
+        result = asyncio.run(
+            litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
 
         self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
         self.assertEqual(result.cost, 0.0)
-        fake_frappe.get_module.assert_called_once_with("huf.ai.providers.test_provider")
+        litellm_module.frappe.get_doc.assert_not_called()
+
+    def test_litellm_run_provider_name_matching_is_case_insensitive(self):
+        """`provider.lower() == "test_provider"` - exercise a mixed-case
+        `AI Provider` document name, matching how `RunProvider.run()` and
+        `litellm.run()` both lowercase the provider argument before use.
+        """
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_TEXT"
+
+        result = asyncio.run(
+            litellm_module.run(agent, prompt, "TEST_PROVIDER", "test-model", context=None)
+        )
+        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+
+    def test_real_provider_name_does_not_route_to_test_provider(self):
+        """Sanity check the routing check is scoped: a real provider name
+        must NOT be diverted into the test provider and must proceed into
+        litellm.run()'s real body (asserted here by it reaching frappe.get_doc,
+        which we make raise to keep this test hermetic - no network/DB).
+        """
+        agent = _make_agent()
+        litellm_module.frappe.get_doc.reset_mock()
+        litellm_module.frappe.get_doc.side_effect = RuntimeError("reached real provider doc lookup")
+
+        # We only care that the real (non-test-provider) path was reached -
+        # i.e. frappe.get_doc got called - not the specific exception type
+        # that eventually surfaces (with fully-mocked frappe/litellm modules,
+        # the real body's own exception handling can itself raise a
+        # different, unrelated TypeError further down; that's an artifact of
+        # this hermetic stubbing, not something this test is about).
+        with self.assertRaises(Exception):
+            asyncio.run(
+                litellm_module.run(agent, "hello", "OpenAI", "gpt-4-turbo", context=None)
+            )
+
+        litellm_module.frappe.get_doc.assert_called_once()
+        litellm_module.frappe.get_doc.side_effect = None
 
 
 if __name__ == "__main__":

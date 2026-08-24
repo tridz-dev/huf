@@ -4,20 +4,53 @@
 """
 Deterministic HUF Test Provider.
 
-Plugs into the EXISTING provider abstraction at `huf.ai.run.RunProvider.run`
-exactly like `huf.ai.providers.litellm` — it is not a separate fake execution
-engine. `RunProvider.run()` first tries `litellm.run()`; on any non-ImportError
-exception raised by litellm, it falls back to
-`frappe.get_module(f"huf.ai.providers.{provider.lower()}")` and calls that
-module's `run(agent, enhanced_prompt, provider, model, context=None)`.
+INTEGRATION POINT (corrected — read this before relying on the old fallback
+description below): this module is invoked from INSIDE
+`huf.ai.providers.litellm.run()` itself, near the very top of that coroutine
+body, before any `frappe.get_doc`/network/LLM-SDK code runs:
+
+    if provider and provider.lower() == "test_provider":
+        from huf.ai.providers import test_provider as _test_provider
+        return await _test_provider.run(agent, enhanced_prompt, provider, model, context=context)
+
+Why not the `huf.ai.run.RunProvider.run()` custom-provider fallback branch
+(`frappe.get_module(f"huf.ai.providers.{provider.lower()}")`), which this
+module used to document as its integration point? Because
+`huf.ai.providers.litellm.run()` is `async def`. Calling it —
+`litellm.run(agent, enhanced_prompt, provider, model, context=context)` in
+`RunProvider.run()` — does NOT execute its body or raise any exception from
+inside that body; it only constructs and returns a coroutine object. The
+actual execution (and any real litellm exception) happens later, when that
+coroutine is awaited by the real caller in
+`huf/ai/agent_integration.py:1620` (`await RunProvider.run(...)`) — which is
+AFTER `RunProvider.run()`'s own `try/except` around `litellm.run(...)` has
+already returned. So in a real Agent Run, that except block can only ever
+fire on a synchronous failure to *construct* the coroutine (e.g. wrong
+argument count/types) — never on a real litellm execution failure (network
+error, bad provider, etc.). Routing the test provider through that fallback
+branch would only ever be reachable by forcibly mocking `litellm.run` to
+raise synchronously, which does not simulate anything a real Agent Run can
+produce. Routing inside `litellm.run()` itself, before any real work happens,
+guarantees this module is reached on the exact same code path (the same
+coroutine, awaited by the same real caller) that a real provider call takes.
+
+`huf.ai.run.RunProvider.run()`'s custom-provider fallback branch
+(`frappe.get_module(f"huf.ai.providers.{provider.lower()}")`) is otherwise
+unused on `develop` today: no `AI Provider` seed/test record uses a provider
+name that would reach it (all routing goes through
+`huf.ai.providers.litellm`; the standalone `openai.py`/`anthropic.py`/
+`google.py`/`openrouter.py` provider modules are legacy files superseded by
+`litellm.py`'s docstring — "Replaces: openai.py, anthropic.py, google.py,
+openrouter.py" — and are not wired to any current provider config). We did
+not change that fallback branch or its missing-`await` behavior in
+`huf/ai/run.py`; this is a pre-existing latent issue in product code, called
+out here rather than silently fixed, since fixing it is out of scope for
+adding a test provider and touches real request-routing behavior.
 
 To exercise this provider through the real routing path in tests, set the
-`AI Provider` document's name (the `provider` argument routed by
-`RunProvider.run`) to something whose `.lower()` is "test_provider" (e.g.
-`Test_Provider`), so the fallback `frappe.get_module("huf.ai.providers.test_provider")`
-resolves to this module. There is nothing test-provider-specific needed in
-`run.py` itself — this module satisfies the same duck-typed contract as any
-other custom provider module.
+`AI Provider` document's name (the `provider` argument routed all the way
+from `RunProvider.run()` into `litellm.run()`) to something whose `.lower()`
+is "test_provider" (e.g. `Test_Provider`).
 
 Return contract (matches `huf.ai.providers.litellm.SimpleResult`, see
 `huf/ai/providers/litellm.py:54-60` and the docstring on `litellm.run()` at
@@ -125,11 +158,14 @@ _SCENARIO_HANDLERS = {
 async def run(agent, enhanced_prompt, provider, model, context=None):
     """Deterministic stand-in for `huf.ai.providers.litellm.run()`.
 
-    Async to match the awaited-call contract in `RunProvider.run()`
-    (`return litellm.run(...)` is awaited by its caller — see
-    `huf/ai/agent_integration.py:1620`, `await RunProvider.run(...)`) and in
-    the custom-provider fallback path (`huf/ai/run.py`), which also awaits
-    whatever `module.run(...)` returns when it is a coroutine.
+    Invoked from inside `huf.ai.providers.litellm.run()` itself (see the
+    `provider.lower() == "test_provider"` check near the top of that
+    coroutine), and `return await test_provider.run(...)`-ed from there, so
+    it is awaited by the same real call site that awaits a real litellm
+    call: `await RunProvider.run(...)` in
+    `huf/ai/agent_integration.py:1620`. See this module's top-level
+    docstring for why this is the correct integration point instead of the
+    `huf.ai.run.RunProvider.run()` custom-provider fallback branch.
 
     No network calls, no `frappe.get_doc`/DB access, no LLM SDK usage.
     """
