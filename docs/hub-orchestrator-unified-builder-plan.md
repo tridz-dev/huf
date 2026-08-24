@@ -427,20 +427,27 @@ route-uniqueness check added directly to `HUF App`, gated the same way Agent's
 | Lazy tool discovery | `lazy_discovery.py`, opt-in per-Agent | `huf/ai/tools/lazy_discovery.py` | tool | Yes, extend | MCP tools explicitly out of scope in #640 — App-builder's own large tool surface should opt in, not invent a second lazy mechanism |
 | Self-seeded reference Knowledge | none | — | — | No | **missing** — see A.7 conclusion, D.3 |
 | Public/guest App routing | Agent embed (voice-only) + Guest-branching SPA shell | `voice/api.py`, `www/huf.py` | partial | Partial | **missing**: no guest path for `HUF App`, no alias/route uniqueness, `publishable_key` pattern not generalized to Apps |
-| OTR | **zero hits anywhere in the repository** (see below) | — | — | N/A | **unresolved — do not invent a meaning** |
+| OCR (document/image extraction) | **Implemented** — `Agent.enable_ocr`, `handle_ocr_document`, PDF/image/office extraction | `huf/ai/ocr_engine.py`, `huf/ai/handlers/media.py:316` | tool/handler | Yes | not yet surfaced as an App-level `capabilities` flag (D.5) — same shallow gap as TTS/STT (Phase 8/9), not a missing capability |
 
-### OTR — explicitly unresolved
+### OCR — already implemented (correcting an earlier drafting error in this document)
 
-A rigorous case-insensitive substring search plus a stricter word-boundary search across
-the entire repository (code, docs, `.md`, frontend, backend, DocType JSON) for `OTR`/`otr`
-returned **zero genuine hits**. Every substring match found (`snapshotRef`,
-`toTriggerRow`, `nemotron-3-...` model names, `TranscriptsDisabled`) is coincidental. No
-file, directory, DocType, field, role, or comment name contains "otr" as a standalone
-token. **Per the original requirement's own instruction, this is recorded as an
-unresolved product requirement and the rest of this document does not depend on any
-assumed interpretation of it.** If "OTR" is meant to reference something outside this
-repository (a product name, an external spec, an abbreviation known only outside code),
-that must come from the requester directly — it cannot be derived from the codebase.
+An earlier pass of this document searched for the literal term "OTR" (a typo carried over
+from the source requirement) and correctly found zero hits — that string genuinely does
+not exist anywhere in the repository. The intended term was **OCR**, which is a
+first-class, fully implemented capability (see A.4): `Agent.enable_ocr` (Check),
+`AI Model.modalities` includes `OCR`/`Vision`, `huf/ai/ocr_engine.py` handles PDFs
+(LiteLLM OCR endpoint / local extraction / vision), images (vision models), and
+office/text documents (local extractors), dispatched via
+`huf/ai/handlers/media.py:handle_ocr_document` (:316) and gated the same way file uploads
+are (`huf/ai/agent_chat.py:_validate_web_file_upload`, A.4). There is nothing unresolved
+here — the only remaining work is exposing this existing Agent-level capability as an
+App-level `capabilities` flag (D.5), which is the same small task already planned for
+audio TTS/STT in Phase 8/9, not a new pipeline. See Phase 8 in the phased plan below,
+which now explicitly includes OCR/document-understanding alongside audio/transcription.
+
+(If a genuinely distinct "OTR" concept — separate from OCR — was intended, the original
+finding stands: zero hits anywhere in the repository, and that would need to come from
+the requester directly rather than being invented here.)
 
 ---
 
@@ -448,6 +455,26 @@ that must come from the requester directly — it cannot be derived from the cod
 
 - **No duplicate App systems** — confirmed by full-field inspection (A.5). One System,
   one DocType, one API surface, one frontend page. Nothing to consolidate here.
+- **Active, adjacent in-flight work — coordinate, do not collide**: there is a currently
+  active track in the `huf_workspace_v2` coordination repo, `AppCapabilityDiscovery`
+  (PR #596, branch `feature/app-capability-discovery`, base `develop`, draft as of
+  2026-08-24), titled "App Capability Discovery & App-First Agent Builder V1
+  (Phase 0-3)." It adds `huf/ai/capabilities/{apps,actions,resources,ranking,
+  events,api,models}.py` and extracts a `resolve_function_descriptor`/
+  `inspect_function_parameters` helper set out of `agent_tool_function.py`, plus a
+  DocType-ownership-via-Module-Def helper it explicitly extracts *into* `apps_loader.py`
+  — the same file this plan's Phase 2 (D.4/D.6) extends. It is solving a different
+  problem (letting a human/LLM pick an *existing installed Frappe app's* resources/
+  actions/events when building a Tool or Trigger, using `HUF App.exposed_tables` as the
+  ranking signal) rather than this plan's problem (turning an Agent into a new,
+  installable `HUF App` record). The two are complementary, not duplicative, but Phase 1
+  of this plan must read PR #596's actual landed diff (not just this summary) before
+  touching `apps_loader.py`, since both plans add functions to the same module and a
+  naming/ordering conflict is the likeliest integration risk. Confirmed via
+  `gh pr view 596 --repo tridz-dev/huf` and the `huf_workspace_v2` `TRACKS.md` index — no
+  local clone of `huf_workspace_v2` was available in this environment, so its `CONTEXT.md`
+  (git-ignored, per the workspace's own convention for active tracks) could not be read;
+  only the committed `TRACKS.md` summary row and the PR body were inspected.
 - **`publishable_key`/embed machinery is voice-only but named generically** — a future
   App-guest-access feature must decide explicitly whether to generalize this existing
   field set (adding a text/App-aware lookup path) or add App-scoped equivalents. Reusing
@@ -741,10 +768,12 @@ depends on: 1     list_apps, etc.)    pair, D.1)              │
                                   ▼               ▼
                              Phase 8         Phase 7 output feeds in
                              (Audio input/   (icon selection during
-                              transcription  draft_app/update_app, D.4)
-                              App config)
-                             depends on: 5, A.4 (already implemented,
-                             just needs App-level config surfacing)
+                              transcription/ draft_app/update_app, D.4)
+                              OCR App
+                              config)
+                             depends on: 5, A.4 (audio + OCR already
+                             implemented, just needs App-level config
+                             surfacing)
                                   │
                                   ▼
                              Phase 9 (Audio generation/TTS App config)
@@ -766,18 +795,19 @@ depends on: 1     list_apps, etc.)    pair, D.1)              │
                              silently working around them)
                              depends on: 9
 
-Phase 9 (Public/guest App routing, D.9)  — depends on: 6 (an App must be
+Phase 9b (Public/guest App routing, D.9) — depends on: 6 (an App must be
 installable before it can be made public), and reuses the Agent
 allow_guest/check_agent_access pattern from A.8 — independent of
 Phases 8/10/11, can run in parallel with them once Phase 6 lands.
 
-Phase 12 (OTR)                        — BLOCKED, unresolved (see B).
-Do not schedule implementation work until the term is defined by the
-requester; no other phase depends on this one.
+Phase 12 — removed. The original requirement's "OTR" item was a typo for
+OCR (confirmed with the requester); OCR is an existing, fully implemented
+capability (A.4) and is already covered by Phase 8's App-level capability
+exposure — no separate phase is needed.
 
 Phase 13 (Hardening: permission audit, secret audit, idempotency/retry
-review, observability)            — depends on: all of 2–11 (whichever
-subset actually shipped)
+review, observability)            — depends on: all of 2–11 and 9b
+(whichever subset actually shipped)
 
 Phase 14 (End-to-end testing + documentation) — depends on: 13
 ```
@@ -836,17 +866,18 @@ any `HUF App` record). Depends on Phase 4. Tests: G.4.
 `handle_generate_image` (A.4) for the "Generated" source. New: MIME/SVG-sanitization
 check (F). Depends on Phase 1 only — can build in parallel with 2–6. Tests: G.5.
 
-**Phase 8 — Audio input and transcription App config.** Files: expose existing
-`Agent.allow_file_upload`/STT config (A.3/A.4, already fully implemented) as
-App-level `capabilities` flags (D.5) settable via `update_app`. No new backend
-transcription code — this phase is entirely about surfacing existing capability at the
-App layer. Depends on Phase 5.
+**Phase 8 — Audio input, transcription, and OCR App config.** Files: expose existing
+`Agent.allow_file_upload`/STT config and `Agent.enable_ocr` (A.3/A.4, all already fully
+implemented) as App-level `capabilities` flags (D.5) settable via `update_app`. No new
+backend transcription or OCR code — this phase is entirely about surfacing existing
+capability at the App layer, for both spoken-audio and document/image (OCR) input. Depends
+on Phase 5.
 
 **Phase 9 — Audio generation/TTS App config.** Same shape as Phase 8, for
 `Agent.tts_model`/`tts_voice` (already implemented, A.3/A.4). Depends on Phase 8 (shares
 the provider/model-selection tooling pattern).
 
-**Phase 9(routing) — Public/guest App routing (D.9).** Files: new `is_public`/`alias`
+**Phase 9b — Public/guest App routing (D.9).** Files: new `is_public`/`alias`
 fields (D.5), a new `website_route_rules` entry (`huf/hooks.py`, following the exact
 `/huf/stream/<path:agent_name>` shape from A.8), a new lightweight `page_renderer` or a
 `huf/www/<something>.py` controller that (a) resolves `alias` → `HUF App`, checking
@@ -872,14 +903,16 @@ A.4 (`send_to_session` unimplemented, litellm_realtime doesn't persist user spee
 memory injection) as App-level capability caveats rather than claiming full support.
 Depends on Phase 9.
 
-**Phase 12 — OTR.** Blocked pending definition from the requester (B). No files, no
-dependents.
+**Phase 12 — removed.** "OTR" in the original requirement was a typo for OCR (confirmed
+with the requester, 2026-08-24); OCR is already fully implemented (A.4) and its
+App-level exposure is covered by Phase 8. No implementation work remains under this
+phase number.
 
 **Phase 13 — Hardening.** Permission re-audit of every new tool/endpoint against F,
 idempotency verification for `install_app`/`draft_app` re-runs, observability check
 (every new mutation traceable via existing `Agent Run`/`Agent Tool Call` records, A.3 —
 no new logging system needed since these are just more tool calls through the existing
-pipeline). Depends on whichever of Phases 2–11 actually shipped.
+pipeline). Depends on whichever of Phases 2–11 and 9b actually shipped.
 
 **Phase 14 — End-to-end testing + documentation.** Full Path A/B/C walkthrough in one
 Hub conversation, using the test matrix in G plus the existing Playwright e2e
