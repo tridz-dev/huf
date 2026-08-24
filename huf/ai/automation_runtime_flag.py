@@ -7,9 +7,17 @@ Stage 2 hard-cuts ``hooks.py``'s scheduler/doc-event registrations onto the
 new ``automation_scheduler.py`` / ``automation_hooks.py`` entrypoints, but
 keeps a one-line rollback available without a code revert: setting
 ``automation_trigger_runtime`` to ``"legacy"`` in ``site_config.json`` makes
-every new entrypoint that checks this flag act as disabled, while the
-untouched legacy ``agent_scheduler.py`` / ``agent_hooks.py`` files keep
-working unconditionally (they never check this flag).
+every new entrypoint that checks this flag act as disabled and hands the work
+back to the legacy ``agent_scheduler.py`` / ``agent_hooks.py`` entrypoints.
+
+Both sides check this flag, with opposite polarity: the new entrypoints
+return early when the mode is *not* ``"new"``, the legacy ones return early
+when it *is*. ``hooks.py`` registers both, so exactly one of each pair ever
+executes. The default is ``"new"``, which means the legacy scheduler and doc
+hooks are inert on any site that has not explicitly opted into ``"legacy"``
+-- tests that exercise them must patch ``automation_runtime_is_new`` rather
+than only the calling module's ``frappe``, since this module holds its own
+``frappe`` reference.
 
 Webhook and App Event trigger types have no legacy counterpart (confirmed
 by grep across the whole ``huf/`` tree -- see
