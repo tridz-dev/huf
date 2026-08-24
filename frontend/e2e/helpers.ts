@@ -30,6 +30,9 @@ export const ALL_CAPABILITIES = [
   'system.providers.manage',
   'system.integrations.manage',
   'system.mcp.manage',
+  'data.tables.manage',
+  'data.records.view_own',
+  'data.records.view_all',
 ];
 
 /**
@@ -105,5 +108,38 @@ export async function mockOfflineApis(page: Page) {
   // Sidebar agent count badge.
   await page.route('**/api/method/frappe.client.get_count**', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify({ message: 0 }) }),
+  );
+
+  // Executions page analytics strip (ExecutionAnalyticsDashboard): the
+  // generic `{message: []}` catch-all doesn't match this endpoint's
+  // object-shaped response, and the component dereferences `summary.*`
+  // unconditionally once `data` is truthy — an array is truthy too, so it
+  // renders past the loading state straight into a crash. Needs its own
+  // well-shaped mock.
+  await page.route('**/api/method/huf.ai.agent_run_analytics_api.get_execution_analytics**', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        message: {
+          summary: {
+            run_count: 0,
+            success_count: 0,
+            failed_count: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            cached_tokens: 0,
+            total_cost: 0,
+            duration_ms_sum: 0,
+            duration_count: 0,
+            success_rate: null,
+            average_duration_ms: null,
+            cache_ratio: null,
+          },
+          series: [],
+          breakdowns: [],
+          metadata: { granularity: 'hour', freshness: null, source: 'scheduled_rollup' },
+        },
+      }),
+    }),
   );
 }

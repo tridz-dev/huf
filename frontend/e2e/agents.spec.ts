@@ -10,8 +10,12 @@ test.describe('Agents', () => {
     await goto(page, '/agents');
     await waitForContent(page);
 
-    await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
-    await expect(page.getByText('Create and manage your AI agents.')).toBeVisible();
+    // "Agents" (page title, exact) and "No agents" (empty-state heading)
+    // both match a loose heading query, so pin the page title precisely.
+    await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
+    // The page has no subtitle band (see PageFrame) — the empty state is
+    // what confirms the mocked data actually rendered.
+    await expect(page.getByRole('heading', { name: 'No agents' })).toBeVisible();
   });
 
   test('filter bar is interactive', async ({ page }) => {
@@ -24,6 +28,6 @@ test.describe('Agents', () => {
       await search.fill('test agent');
       await expect(search).toHaveValue('test agent');
     }
-    await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
   });
 });
