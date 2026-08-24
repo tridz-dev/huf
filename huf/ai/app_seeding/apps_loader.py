@@ -570,6 +570,43 @@ def create_app_from_agent(
 	return doc.as_dict()
 
 
+def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
+	"""
+	Check that ``capabilities`` (the proposed ``HUF App.capabilities`` JSON
+	blob) is a subset of what the linked ``agent_doc`` (Agent doc) actually
+	supports.
+
+	Scoped to file_upload / ocr / audio_input in this phase; TTS/live-voice
+	flags are intentionally not validated here (separate phase).
+
+	Returns a list of human-readable error strings; an empty list means the
+	capabilities payload is valid.
+	"""
+	errors = []
+	if not capabilities:
+		return errors
+
+	if capabilities.get("file_upload") and not agent_doc.get("allow_file_upload"):
+		errors.append(
+			"App capability 'file_upload' requires the linked Agent to have "
+			"'allow_file_upload' enabled."
+		)
+
+	if capabilities.get("ocr") and not agent_doc.get("enable_ocr"):
+		errors.append(
+			"App capability 'ocr' requires the linked Agent to have "
+			"'enable_ocr' enabled."
+		)
+
+	if capabilities.get("audio_input") and not agent_doc.get("stt_model"):
+		errors.append(
+			"App capability 'audio_input' requires the linked Agent to have "
+			"an 'stt_model' configured."
+		)
+
+	return errors
+
+
 def update_app(app_id: str, **fields) -> dict:
 	"""
 	Apply a partial update to an existing ``HUF App`` record.
@@ -581,12 +618,30 @@ def update_app(app_id: str, **fields) -> dict:
 	saving, so an update can never leave the record in a shape a manifest
 	sync would reject.
 
+	If ``fields`` includes ``capabilities``, it is validated (subset
+	invariant against the linked Agent's capabilities, see
+	docs/adr/0001-app-runtime-model.md decision #2) before saving.
+
 	Permission checks belong in the tool layer (added in a later phase); this
 	function saves with ``ignore_permissions=True``.
 
 	Returns the updated doc as a dict.
 	"""
 	doc = frappe.get_doc("HUF App", app_id)
+
+	if "capabilities" in fields:
+		capabilities = fields["capabilities"]
+		if isinstance(capabilities, str):
+			capabilities = json.loads(capabilities) if capabilities else {}
+
+		agent_name = fields.get("agent") or doc.get("agent")
+		if capabilities and agent_name:
+			agent_doc = frappe.get_doc("Agent", agent_name)
+			errors = validate_app_capabilities(capabilities, agent_doc)
+			if errors:
+				frappe.throw("\n".join(errors), frappe.ValidationError)
+
+		fields = {**fields, "capabilities": json.dumps(capabilities)}
 
 	for fieldname, value in fields.items():
 		if doc.meta.has_field(fieldname):

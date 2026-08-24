@@ -40,10 +40,11 @@ class TestAppCreation(unittest.TestCase):
 		self._created_app_ids.append(app_id)
 		return app_id
 
-	def _make_agent(self, name):
+	def _make_agent(self, name, **kwargs):
 		"""Create a minimal Agent doc, tolerant of required-field variance
 		across environments (seam so this test degrades gracefully rather
-		than crashing when run outside a live bench)."""
+		than crashing when run outside a live bench). Extra ``kwargs`` are
+		set on the doc (e.g. allow_file_upload=1, enable_ocr=1)."""
 		if frappe.db.exists("Agent", name):
 			return name
 		doc = frappe.get_doc(
@@ -53,6 +54,7 @@ class TestAppCreation(unittest.TestCase):
 				"description": name,
 				"prompt_mode": "Local",
 				"instructions": "Test agent instructions for app-creation service tests.",
+				**kwargs,
 			}
 		)
 		doc.insert(ignore_permissions=True)
@@ -115,6 +117,39 @@ class TestAppCreation(unittest.TestCase):
 		self.assertEqual(result["title"], "Updated Title")
 		self.assertEqual(result["description"], "Original description")
 		self.assertEqual(result["category"], "Create")
+
+	def test_update_app_rejects_file_upload_capability_without_agent_support(self):
+		"""update_app raises when capabilities={'file_upload': True} is
+		requested but the linked Agent has allow_file_upload=0."""
+		app_id = self._app_id("cap_reject")
+		agent_name = self._make_agent(
+			f"tappc_agent_noupload_{self.suffix}", allow_file_upload=0
+		)
+		create_app_from_agent(
+			app_id=app_id,
+			title="Capability App",
+			agent_name=agent_name,
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			update_app(app_id, capabilities={"file_upload": True})
+
+	def test_update_app_accepts_ocr_capability_with_agent_support(self):
+		"""update_app succeeds when capabilities={'ocr': True} is requested
+		and the linked Agent has enable_ocr=1."""
+		app_id = self._app_id("cap_accept")
+		agent_name = self._make_agent(
+			f"tappc_agent_ocr_{self.suffix}", enable_ocr=1
+		)
+		create_app_from_agent(
+			app_id=app_id,
+			title="Capability App",
+			agent_name=agent_name,
+		)
+
+		result = update_app(app_id, capabilities={"ocr": True})
+
+		self.assertIn("ocr", result.get("capabilities") or "")
 
 	# ------------------------------------------------------------------
 	# install_app

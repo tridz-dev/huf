@@ -155,7 +155,12 @@ Depends on: Phase 4
 
 ## Phase 8 — Audio input, transcription, OCR App config
 Depends on: Phase 5
-- [ ] Surface existing `Agent.allow_file_upload`/STT/`enable_ocr` as App `capabilities` flags
+- [x] Surface existing `Agent.allow_file_upload`/STT/`enable_ocr` as App `capabilities` flags
+      (`validate_app_capabilities()` in `huf/ai/app_seeding/apps_loader.py`, wired into
+      `update_app()`; checks `file_upload` against `Agent.allow_file_upload`, `ocr` against
+      `Agent.enable_ocr`, `audio_input` against `Agent.stt_model`; enforces the subset
+      invariant server-side before saving; tests in
+      `huf/ai/app_seeding/tests/test_app_creation.py`)
 
 ## Phase 9 — Audio generation/TTS App config
 Depends on: Phase 8
