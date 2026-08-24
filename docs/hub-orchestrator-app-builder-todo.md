@@ -113,7 +113,8 @@ Depends on: Phase 2, 3a
 
 ## Phase 5 — Unified chatbot App
 Depends on: Phase 4
-- [ ] Verify existing chat runtime works unmodified via an App's `route` once `HUF App.agent` exists
+- [x] Verify existing chat runtime works unmodified via an App's `route` once `HUF App.agent` exists
+      (`docs/verification/phase5-chatbot-app.md` confirms: agent field added to DocType, run_agent_sync takes agent_name parameter, zero chat-code changes required)
 
 ## Phase 6 — Installation + launcher integration
 Depends on: Phase 4
