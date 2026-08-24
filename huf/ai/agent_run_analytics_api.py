@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import frappe
-from frappe.utils import add_to_date, get_datetime, now_datetime
+from frappe.utils import add_to_date, convert_utc_to_system_timezone, get_datetime, now_datetime
 
 from huf.ai.agent_run_analytics import DIMENSION_FIELDS
 
@@ -32,6 +32,26 @@ ROLLUP_FIELDS = [
     "composition_totals",
     "last_recomputed_at",
 ]
+
+
+def _to_system_naive(dt):
+    """Normalise a datetime to the site's naive local convention.
+
+    now_datetime() and every MariaDB datetime this module compares against
+    are naive, in the site's configured system timezone (System Settings ->
+    Time Zone, whatever that is set to -- not assumed to be UTC). But
+    get_datetime() on an ISO string carrying an offset/Z suffix -- exactly
+    what a browser's Date.toISOString() sends -- returns a timezone-AWARE
+    UTC datetime. Comparing/subtracting that against a naive value raises
+    TypeError; naively stripping tzinfo instead would silently shift the
+    window by the site's UTC offset (checked live at 2026-08-24: this site
+    is Asia/Kolkata, UTC+5:30 -- a blind strip is off by 5.5 hours, not off
+    by nothing). Route through Frappe's own system-timezone conversion,
+    which reads the site's configured timezone rather than assuming one.
+    """
+    if dt.tzinfo is not None:
+        dt = convert_utc_to_system_timezone(dt).replace(tzinfo=None)
+    return dt
 
 
 def _require_analytics_access():
@@ -103,8 +123,14 @@ def get_execution_analytics(
         frappe.throw("granularity must be 'hour' or 'day'")
     if dimension not in DIMENSION_FIELDS:
         frappe.throw(f"dimension must be one of {', '.join(DIMENSION_FIELDS)}")
-    end = get_datetime(to_date) if to_date else now_datetime()
-    start = get_datetime(from_date) if from_date else add_to_date(end, days=-7)
+    # from_date/to_date arrive as ISO strings with an offset/Z suffix (the
+    # frontend sends Date.toISOString()), which get_datetime() parses as
+    # timezone-aware. now_datetime()/add_to_date() and every bucket_start
+    # this gets compared against are naive, in the site's own timezone --
+    # see _to_system_naive's docstring for why a blind tzinfo strip would
+    # be silently wrong rather than merely inconsistent.
+    end = _to_system_naive(get_datetime(to_date)) if to_date else now_datetime()
+    start = _to_system_naive(get_datetime(from_date)) if from_date else add_to_date(end, days=-7)
     if start > end or (end - start).days > MAX_WINDOW_DAYS:
         frappe.throw(f"Date range must be between zero and {MAX_WINDOW_DAYS} days")
     if not frappe.db.exists("DocType", ROLLUP_DOCTYPE):
