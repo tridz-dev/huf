@@ -353,5 +353,225 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
         litellm_module.frappe.get_doc.side_effect = None
 
 
+class TestTestProviderErrorScenarios(unittest.TestCase):
+    """Exercise TEST_PROVIDER_429 / _400 / _401 / _500, each of which mirrors
+    a distinct real error-normalization bucket in `litellm.run()` (see
+    `test_provider.py`'s "Error scenarios" docstring section for the full
+    citation of each)."""
+
+    def test_provider_429_raises_bare_rate_limit_error(self):
+        """A real 429 is re-raised unchanged by litellm.run()'s
+        `except RateLimitError as e: raise e` (litellm.py ~959-968) - never
+        wrapped in ProviderUnavailableError."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_PROVIDER_429"
+
+        import litellm as litellm_pkg
+
+        with self.assertRaises(litellm_pkg.RateLimitError) as ctx:
+            asyncio.run(
+                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
+        self.assertIn("TEST_PROVIDER_429", str(ctx.exception))
+        # Must NOT be a ProviderUnavailableError - that's the whole point of
+        # this scenario's contract.
+        self.assertNotIsInstance(ctx.exception, litellm_module.ProviderUnavailableError)
+
+    def test_provider_400_raises_default_bucket_message(self):
+        """A genuine bad request falls through to the generic exception
+        handler and lands on _sanitize_provider_error_message's final
+        default bucket - the same default TEST_PROVIDER_TIMEOUT produces."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_PROVIDER_400"
+
+        with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
+            asyncio.run(
+                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
+        exc = ctx.exception
+        self.assertEqual(exc.public_message, test_provider._TEST_400_MESSAGE)
+        self.assertEqual(exc.log_message, test_provider._TEST_400_LOG_MESSAGE)
+
+    def test_provider_401_raises_not_configured_message(self):
+        """Mirrors _sanitize_provider_error_message's 'invalid api key'
+        bucket (litellm.py ~78-79)."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_PROVIDER_401"
+
+        with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
+            asyncio.run(
+                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
+        exc = ctx.exception
+        self.assertEqual(
+            exc.public_message,
+            "This provider is not configured correctly yet. Add or update its API key and try again.",
+        )
+        self.assertEqual(exc.public_message, test_provider._TEST_401_MESSAGE)
+
+    def test_provider_500_raises_temporarily_unavailable_message(self):
+        """Mirrors the explicit InternalServerError clause (litellm.py
+        ~951-957), sanitized via the 'server error' bucket (~95-107)."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_PROVIDER_500"
+
+        with self.assertRaises(litellm_module.ProviderUnavailableError) as ctx:
+            asyncio.run(
+                test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
+        exc = ctx.exception
+        self.assertEqual(
+            exc.public_message,
+            "The AI provider is temporarily unavailable. Please try again in a moment.",
+        )
+        self.assertEqual(exc.public_message, test_provider._TEST_500_MESSAGE)
+
+    def test_error_scenarios_route_through_real_litellm_dispatch(self):
+        """Each error scenario must also raise identically when reached via
+        the real litellm.run() routing check (provider.lower() ==
+        'test_provider'), not just when test_provider.run() is called
+        directly."""
+        agent = _make_agent()
+
+        for scenario_name, expected_exc_type in (
+            ("TEST_PROVIDER_400", litellm_module.ProviderUnavailableError),
+            ("TEST_PROVIDER_401", litellm_module.ProviderUnavailableError),
+            ("TEST_PROVIDER_500", litellm_module.ProviderUnavailableError),
+        ):
+            with self.subTest(scenario=scenario_name):
+                prompt = f"__TEST_SCENARIO__:{scenario_name}"
+                with self.assertRaises(expected_exc_type):
+                    asyncio.run(
+                        litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=None)
+                    )
+
+
+class TestTestProviderStructuredOutputAndCachedUsage(unittest.TestCase):
+    """Exercise TEST_STRUCTURED_OUTPUT and TEST_CACHED_USAGE, both of which
+    return litellm.SimpleResult-shaped results (no exception)."""
+
+    def test_structured_output_returns_valid_json_final_output(self):
+        import json
+
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_STRUCTURED_OUTPUT"
+
+        result = asyncio.run(
+            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
+
+        # final_output is just choice.content (litellm.py ~1082-1083) - no
+        # separate "structured output" field. It must be valid JSON text.
+        parsed = json.loads(result.final_output)
+        self.assertEqual(parsed, {"city": "Bengaluru", "condition": "Sunny", "temp_c": 29})
+        self.assertEqual(result.new_items, [])
+        self.assertEqual(result.cost, 0.0)
+
+    def test_structured_output_via_real_litellm_routing_with_response_format(self):
+        """Passing a response_format in context must not change the
+        contract: the test provider still short-circuits before any
+        response_format-aware code in litellm.run() executes."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_STRUCTURED_OUTPUT"
+        context = {"response_format": {"type": "json_object"}}
+
+        result = asyncio.run(
+            litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=context)
+        )
+        self.assertEqual(result.final_output, test_provider._TEST_STRUCTURED_OUTPUT_RESPONSE)
+
+    def test_cached_usage_scenario_has_nonzero_cached_tokens(self):
+        """Field names must match litellm.run()'s own total_usage accounting
+        exactly: 'cached_tokens' / 'cache_creation_tokens' / 'cache_miss_tokens'
+        (litellm.py ~1061-1063)."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_CACHED_USAGE"
+
+        result = asyncio.run(
+            test_provider.run(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
+
+        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+        self.assertEqual(
+            result.usage.get("cached_tokens"), test_provider._TEST_CACHED_USAGE_CACHED_TOKENS
+        )
+        self.assertGreater(result.usage.get("cached_tokens"), 0)
+        self.assertEqual(result.usage.get("cache_creation_tokens"), 0)
+        self.assertEqual(result.usage.get("cache_miss_tokens"), 0)
+        self.assertEqual(
+            result.usage.get("input_tokens"), test_provider._TEST_CACHED_USAGE_INPUT_TOKENS
+        )
+        self.assertEqual(
+            result.usage.get("output_tokens"), test_provider._TEST_CACHED_USAGE_OUTPUT_TOKENS
+        )
+
+
+class TestTestProviderStreamInterrupt(unittest.TestCase):
+    """Exercise TEST_STREAM_INTERRUPT via test_provider.run_stream() directly
+    and via the real litellm.run_stream() routing check."""
+
+    def _collect_chunks(self, agen):
+        async def _drain():
+            return [chunk async for chunk in agen]
+
+        return asyncio.run(_drain())
+
+    def test_stream_interrupt_yields_deltas_then_one_error_chunk(self):
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_STREAM_INTERRUPT"
+
+        chunks = self._collect_chunks(
+            test_provider.run_stream(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
+
+        # Two normal delta chunks, then exactly one error chunk, then done -
+        # never a raised exception out of the generator.
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual(chunks[0]["type"], "delta")
+        self.assertEqual(chunks[0]["content"], test_provider._STREAM_INTERRUPT_CHUNKS[0])
+        self.assertEqual(chunks[1]["type"], "delta")
+        self.assertEqual(chunks[1]["content"], test_provider._STREAM_INTERRUPT_CHUNKS[1])
+        self.assertEqual(
+            chunks[1]["full_response"],
+            test_provider._STREAM_INTERRUPT_CHUNKS[0] + test_provider._STREAM_INTERRUPT_CHUNKS[1],
+        )
+        self.assertEqual(chunks[2]["type"], "error")
+        self.assertEqual(chunks[2]["error"], test_provider._STREAM_INTERRUPT_ERROR_MESSAGE)
+        self.assertTrue(chunks[2]["error"].startswith("LiteLLM Streaming Error:"))
+
+    def test_stream_interrupt_via_real_litellm_run_stream_routing(self):
+        """Prove litellm.run_stream()'s own early
+        provider.lower() == 'test_provider' check dispatches to
+        test_provider.run_stream() and re-yields every chunk, before any
+        frappe.get_doc/network code in run_stream()'s real body executes."""
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:TEST_STREAM_INTERRUPT"
+
+        litellm_module.frappe.get_doc.reset_mock()
+
+        chunks = self._collect_chunks(
+            litellm_module.run_stream(agent, prompt, "Test_Provider", "test-model", context=None)
+        )
+
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual(chunks[-1]["type"], "error")
+        litellm_module.frappe.get_doc.assert_not_called()
+
+    def test_missing_marker_raises_in_run_stream(self):
+        agent = _make_agent()
+        with self.assertRaises(test_provider.UnknownTestScenarioError):
+            self._collect_chunks(
+                test_provider.run_stream(agent, "no marker here", "Test_Provider", "test-model")
+            )
+
+    def test_unknown_stream_scenario_raises(self):
+        agent = _make_agent()
+        prompt = "__TEST_SCENARIO__:NOT_A_REAL_STREAM_SCENARIO"
+        with self.assertRaises(test_provider.UnknownTestScenarioError):
+            self._collect_chunks(
+                test_provider.run_stream(agent, prompt, "Test_Provider", "test-model")
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
