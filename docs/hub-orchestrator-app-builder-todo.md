@@ -69,6 +69,18 @@ Base branch: `pre-develop` (per final PR target). Implementation branch:
   — this branch never modifies the tool-eligibility/eager-set code path those tests exercise.
   Out of scope for this track; noted here so it isn't mistaken for something we broke.
 
+- 2026-08-24: **Round 3 (Phases 8/9) verified against the same real bench.** No DocType schema
+  changes this round, so no `bench migrate` needed. `validate_app_capabilities()` added to
+  `apps_loader.py` (file_upload→`allow_file_upload`, ocr→`enable_ocr`, audio_input→`stt_model`,
+  audio_output→`tts_model`), wired into `update_app()`, enforcing the ADR's "App capabilities must
+  be a subset of Agent capabilities" invariant server-side. `test_app_creation.py` 8/8 pass
+  (4 original + 4 new), `test_app_builder_tools.py` 24/24, `test_builder_tools.py` 71/71 — zero
+  regressions. One open note from the implementing agent: `draft_app` does not yet call
+  `validate_app_capabilities` (only `update_app` does) — the ADR's language covers both, but the
+  task scope named only `update_app`; since `draft_app` doesn't currently accept a `capabilities`
+  kwarg at all (checked: it doesn't), this isn't a live gap yet, but flag it if `draft_app` grows
+  that parameter later.
+
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked/deferred
 
 ---
