@@ -422,6 +422,12 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 	``seen`` is a set of (source_app, source_file) pairs discovered during the
 	current sync run. When None, every record from an installed app is treated
 	as seen unless its source app was uninstalled.
+
+	Records with no ``source_app`` (first-party huf features seeded directly
+	by install.py, e.g. Meeting Recorder, rather than discovered via a
+	``huf/apps/`` manifest) are out of scope for this cleanup: find_seed_dirs()
+	skips scanning "huf" itself, so such a record can never appear in ``seen``
+	and would otherwise be deleted on every migrate.
 	Returns the list of deleted app_ids.
 
 	Records with ``source_app == "huf"`` (e.g. Apps created via the Hub
@@ -442,6 +448,8 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 		fields=["name", "app_id", "source_app", "source_file"],
 	)
 	for record in records:
+		if not record.source_app or record.source_app == "huf":
+			continue
 		orphaned = record.source_app not in installed_apps
 		if not orphaned and seen is not None and record.source_app != "huf":
 			orphaned = (record.source_app, record.source_file) not in seen

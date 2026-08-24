@@ -55,6 +55,12 @@ def install():
     frappe_utils.add_to_date = MagicMock()
     frappe_utils.get_datetime = MagicMock(side_effect=lambda v: v)
     frappe_utils.now_datetime = MagicMock()
+    # Identity passthrough is enough for tests that never exercise the
+    # aware/naive normalisation itself (agent_run_analytics_api.py imports
+    # this at module level, so it must exist for the module to import at
+    # all) -- tests that actually need real tz-conversion behaviour talk to
+    # a live bench instead, since pytz's tzdata isn't available here.
+    frappe_utils.convert_utc_to_system_timezone = MagicMock(side_effect=lambda v: v)
     frappe.utils = frappe_utils
 
     frappe_tests = _make_module("frappe.tests")

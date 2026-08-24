@@ -59,7 +59,7 @@ export default function MeetingsPage() {
     try {
       const { meeting_name: meetingName } = await createMeeting({});
       await startRecording(meetingName);
-      navigate(`/huf/meetings/${meetingName}/record`);
+      navigate(`/meetings/${meetingName}/record`);
     } catch (err) {
       toast.error('Could not start recording', {
         description: err instanceof Error ? err.message : 'An unexpected error occurred.',
@@ -127,7 +127,7 @@ export default function MeetingsPage() {
         renderItem={(meeting) => (
           <MeetingCard
             meeting={meeting}
-            onClick={() => navigate(`/huf/meetings/${meeting.name}`)}
+            onClick={() => navigate(`/meetings/${meeting.name}`)}
           />
         )}
         keyExtractor={(meeting) => meeting.name}

@@ -243,7 +243,7 @@ function MeetingDetailPage() {
         )}
 
         <div>
-          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate('/huf/meetings')}>
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate('/meetings')}>
             Back to meetings
           </Button>
         </div>
