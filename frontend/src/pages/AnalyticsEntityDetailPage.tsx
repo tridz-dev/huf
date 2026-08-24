@@ -132,7 +132,10 @@ export default function AnalyticsEntityDetailPage() {
       fromDate,
       granularity: GRANULARITY,
       dimension: dimension as AnalyticsDimension,
-      entity: decodeURIComponent(entity),
+      // `entity` from useParams() is already percent-decoded by React
+      // Router's route matching -- decoding it again corrupts any value
+      // containing a raw "%" (and throws a URIError for malformed ones).
+      entity,
     }).then((result) => {
       if (cancelled) return;
       setData(result);
@@ -146,7 +149,7 @@ export default function AnalyticsEntityDetailPage() {
   const summary = data?.summary;
   const series = data?.series ?? [];
   const dimensionLabel = (dimension && DIMENSION_LABELS[dimension]) || 'Dimension';
-  const entityLabel = entity ? decodeURIComponent(entity) : '';
+  const entityLabel = entity ?? '';
   const freshnessLabel = data?.metadata.freshness ? `Updated ${formatTimeAgo(data.metadata.freshness)}` : undefined;
 
   return (
