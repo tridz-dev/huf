@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import ReactFlow, {
   Background,
   Controls,
@@ -26,6 +27,7 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { FlowNodeRail, NODE_RAIL_ACTION_CATEGORY, NodeRailCategory } from './FlowNodeRail';
 import { ConvertToProcedureDialog } from './ConvertToProcedureDialog';
 import { useFlowContext } from '../contexts/FlowContext';
+import { flowService } from '../services/flowService';
 import { FlowNodeData, TriggerConfig, ActionConfig } from '../types/flow.types';
 import type { ActionOption } from '../types/modal.types';
 
@@ -48,7 +50,8 @@ export function FlowCanvas({
     updateNode,
     selectedNodeId,
     setSelectedNode,
-    setSelectedEdge
+    setSelectedEdge,
+    saveState
   } = useFlowContext();
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false);
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
@@ -85,6 +88,30 @@ export function FlowCanvas({
       });
     }
   }, [activeFlow?.id, activeFlow?.version, activeFlow?.nodes.length, activeFlow?.edges.length]); // Re-sync on ID/version change OR structural changes (add/delete)
+
+  // Persistent "was this saved as a Procedure?" indicator -- the save-time toast is
+  // one-shot, so without this a user who saved with the checkbox on and then closed
+  // the toast (or is looking at the flow later) has no way to tell whether a
+  // Procedure exists, or find it, short of guessing its name on the Procedures page.
+  const [convertedProcedure, setConvertedProcedure] = useState<string | null>(null);
+  useEffect(() => {
+    if (!activeFlow?.id) {
+      setConvertedProcedure(null);
+      return;
+    }
+    let cancelled = false;
+    flowService.getConversionStatus(activeFlow.id).then((status) => {
+      if (!cancelled) setConvertedProcedure(status.converted_procedure);
+    }).catch(() => {
+      if (!cancelled) setConvertedProcedure(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-check after every save completes (saveState -> 'saved'), not just on
+    // version bump -- the auto-convert checkbox's own conversion can complete
+    // slightly after the flow doc save itself resolves.
+  }, [activeFlow?.id, activeFlow?.version, saveState]);
 
   // Debounced update to context to batch rapid changes
   const scheduleContextUpdate = useCallback((newNodes?: Node<FlowNodeData>[], newEdges?: Edge[]) => {
@@ -554,7 +581,15 @@ export function FlowCanvas({
                 Add trigger
               </Button>
             )}
-            {activeFlow && (
+            {activeFlow && convertedProcedure && (
+              <Link to={`/procedures/${convertedProcedure}`}>
+                <Button variant="outline" size="sm">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Saved as procedure
+                </Button>
+              </Link>
+            )}
+            {activeFlow && !convertedProcedure && (
               <Button
                 variant="outline"
                 size="sm"
