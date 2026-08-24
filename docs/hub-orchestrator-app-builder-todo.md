@@ -130,8 +130,12 @@ Depends on: Phase 8
 
 ## Phase 9b — Public/guest App routing
 Depends on: Phase 6
-- [ ] `is_public`/`alias` fields, `website_route_rules` entry, guest resolver reusing
+- [x] `is_public`/`alias` fields, `website_route_rules` entry, guest resolver reusing
       `check_agent_access(agent_doc, user="Guest")`
+      (`huf/ai/app_public_renderer.py:HufAppPublicRenderer`, `/huf/apps/<path:app_alias>`
+      route + `page_renderer` entry in `huf/hooks.py`; anti-enumeration — not-public,
+      disabled, and public-but-guest-denied all raise the same
+      `frappe.PageDoesNotExistError`; tests in `huf/ai/tests/test_app_public_renderer.py`)
 
 ## Phase 10 — Video playback/output (largest net-new backend work)
 Depends on: Phase 9
