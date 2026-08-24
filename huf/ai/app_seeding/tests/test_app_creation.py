@@ -188,6 +188,48 @@ class TestAppCreation(unittest.TestCase):
 
 		self.assertIn("audio_output", result.get("capabilities") or "")
 
+	def test_update_app_rejects_live_voice_capability_without_agent_voice_enabled(self):
+		"""update_app raises when capabilities={'live_voice': True} is
+		requested but the linked Agent has voice_enabled=0 (even if a
+		voice_engine happens to be set)."""
+		app_id = self._app_id("cap_reject_live_voice")
+		agent_name = self._make_agent(f"tappc_agent_novoice_{self.suffix}")
+		frappe.db.set_value("Agent", agent_name, "voice_enabled", 0)
+		frappe.db.set_value("Agent", agent_name, "voice_engine", "litellm_realtime")
+		create_app_from_agent(
+			app_id=app_id,
+			title="Capability App",
+			agent_name=agent_name,
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			update_app(app_id, capabilities={"live_voice": True})
+
+	def test_update_app_accepts_live_voice_capability_and_warns_about_memory_gap(self):
+		"""update_app succeeds when capabilities={'live_voice': True} is
+		requested against an Agent with voice_enabled=1 and voice_engine set
+		to a real, built-in engine ('litellm_realtime') -- but the resolved
+		engine's capabilities() reports memory=False (per
+		huf/ai/voice/README.md's documented gap: no shipped voice engine
+		injects Agent memory into a live session), so the result should carry
+		a non-blocking warning about it rather than raising."""
+		app_id = self._app_id("cap_accept_live_voice")
+		agent_name = self._make_agent(f"tappc_agent_voice_{self.suffix}")
+		frappe.db.set_value("Agent", agent_name, "voice_enabled", 1)
+		frappe.db.set_value("Agent", agent_name, "voice_engine", "litellm_realtime")
+		create_app_from_agent(
+			app_id=app_id,
+			title="Capability App",
+			agent_name=agent_name,
+		)
+
+		result = update_app(app_id, capabilities={"live_voice": True})
+
+		self.assertIn("live_voice", result.get("capabilities") or "")
+		self.assertTrue(
+			any("memory" in warning.lower() for warning in result.get("warnings") or [])
+		)
+
 	# ------------------------------------------------------------------
 	# install_app
 	# ------------------------------------------------------------------

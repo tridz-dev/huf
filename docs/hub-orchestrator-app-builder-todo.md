@@ -215,7 +215,39 @@ Depends on: Phase 9
 
 ## Phase 11 — Live voice App config
 Depends on: Phase 9
-- [ ] Surface `huf/ai/voice/` engine selection at App layer; document known gaps, don't paper over
+- [x] Surface `huf/ai/voice/` engine selection at App layer; document known gaps, don't paper over.
+      Scope note: this phase is App-level config surfacing only, not new voice-engine
+      implementation -- the underlying gaps in `huf/ai/voice/` are pre-existing and out of
+      scope for this track. `validate_app_capabilities` (`huf/ai/app_seeding/apps_loader.py`)
+      now rejects `live_voice` capability with a clear error unless the linked Agent has both
+      `voice_enabled` (Check) truthy and `voice_engine` (Select) set (confirmed exact
+      fieldnames from `huf/huf/doctype/agent/agent.json`). This does **not** claim full
+      live-voice support: it only validates that the Agent is minimally configured to attempt
+      a voice session, not that the session will behave fully. `update_app` had no existing
+      mechanism for non-blocking, informational issues distinct from hard validation errors, so
+      one was added: a new `collect_app_capability_warnings()` helper (same
+      dict-of-strings-in/list-of-strings-out shape as `validate_app_capabilities`) resolves the
+      Agent's configured voice engine via `huf.ai.voice.get_engine_class` and checks its
+      `capabilities()` (`huf/ai/voice/engines/base.py`); if `memory` is `False`, `update_app`'s
+      returned dict now carries a `warnings` list (separate from the errors that `frappe.throw`
+      already blocks the save on) noting the gap, but the save still succeeds.
+      **Known upstream gaps restated here as App-level caveats** (not fixed by this phase,
+      per `huf/ai/voice/README.md`'s "Known gaps" and plan section A.4/I): an App exposing
+      `live_voice` inherits all of these limitations from the underlying engine, unchanged —
+      (1) `send_to_session` is unimplemented on both shipped engines (ElevenLabs,
+      litellm_realtime) — always raises; a live-voice App cannot inject text/tool-result content
+      into an in-progress call. (2) `litellm_realtime` never persists the user's spoken turns —
+      only agent-spoken text is captured (best-effort, via `response.audio_transcript.done`
+      frames); a live-voice App's conversation history is agent-only, not a full transcript.
+      (3) ElevenLabs persistence depends entirely on its post-call webhook firing; if it doesn't
+      (unreachable site, misconfiguration), that call persists nothing, with no fallback path.
+      (4) Neither engine injects Agent memory into a live session (`memory: False` on both,
+      confirmed via each engine's `capabilities()`) — this is the one gap this phase actively
+      surfaces as a non-blocking `update_app` warning rather than only documenting in prose.
+      Tests: `huf/ai/app_seeding/tests/test_app_creation.py` —
+      `test_update_app_rejects_live_voice_capability_without_agent_voice_enabled`,
+      `test_update_app_accepts_live_voice_capability_and_warns_about_memory_gap` (uses the real
+      built-in `litellm_realtime` engine key, no bench-external dependency needed).
 
 ## Phase 12 — removed (OTR was a typo for OCR; already covered by Phase 8)
 

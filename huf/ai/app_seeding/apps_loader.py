@@ -576,8 +576,14 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 	blob) is a subset of what the linked ``agent_doc`` (Agent doc) actually
 	supports.
 
-	Scoped to file_upload / ocr / audio_input / audio_output in this phase;
-	live-voice flags are intentionally not validated here (separate phase).
+	Covers file_upload / ocr / audio_input / audio_output / live_voice /
+	video_output. 'live_voice' is validated for basic Agent config only
+	(voice_enabled + voice_engine present) -- known upstream gaps in the
+	voice engines themselves (send_to_session unimplemented, no user-speech
+	persistence on litellm_realtime, no memory injection on either engine;
+	see huf/ai/voice/README.md's "Known gaps") are informational and
+	surfaced separately via ``collect_app_capability_warnings``, not treated
+	as hard errors here.
 
 	Returns a list of human-readable error strings; an empty list means the
 	capabilities payload is valid.
@@ -610,6 +616,18 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 			"a 'tts_model' configured."
 		)
 
+	if capabilities.get("live_voice"):
+		if not agent_doc.get("voice_enabled"):
+			errors.append(
+				"App capability 'live_voice' requires the linked Agent to have "
+				"'voice_enabled' turned on."
+			)
+		if not agent_doc.get("voice_engine"):
+			errors.append(
+				"App capability 'live_voice' requires the linked Agent to have "
+				"a 'voice_engine' configured."
+			)
+
 	if capabilities.get("video_output"):
 		# GAP (documented, not silently skipped): Agent DocType has no
 		# dedicated video-generation-model field yet (no analogue to
@@ -630,6 +648,46 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 	return errors
 
 
+def collect_app_capability_warnings(capabilities: dict, agent_doc) -> list:
+	"""
+	Return non-blocking, informational warnings about ``capabilities`` that are
+	otherwise valid (see ``validate_app_capabilities``) but have known platform
+	limitations the caller should be told about rather than silently hitting
+	at runtime.
+
+	Currently: 'live_voice' when the Agent's configured voice engine reports
+	``memory: False`` from its ``capabilities()`` (see
+	huf/ai/voice/engines/base.py and huf/ai/voice/README.md's "Known gaps" --
+	no shipped voice engine currently injects Agent memory into a live voice
+	session). This does not block saving; it is surfaced so the caller can
+	set expectations.
+	"""
+	warnings = []
+	if not capabilities:
+		return warnings
+
+	if capabilities.get("live_voice") and agent_doc.get("voice_engine"):
+		try:
+			from huf.ai.voice import get_engine_class
+
+			engine_class = get_engine_class(agent_doc.get("voice_engine"))
+			engine_capabilities = engine_class.capabilities()
+		except Exception:
+			# Engine key not resolvable (e.g. unregistered/misconfigured) --
+			# validate_app_capabilities already covers the "not set at all"
+			# case as a hard error; here we simply skip the informational
+			# warning rather than blocking the save on a lookup failure.
+			engine_capabilities = None
+
+		if engine_capabilities is not None and not engine_capabilities.get("memory", True):
+			warnings.append(
+				"Live voice for this App will not have access to Agent memory "
+				"(known platform limitation, see huf/ai/voice/README.md)."
+			)
+
+	return warnings
+
+
 def update_app(app_id: str, **fields) -> dict:
 	"""
 	Apply a partial update to an existing ``HUF App`` record.
@@ -644,14 +702,22 @@ def update_app(app_id: str, **fields) -> dict:
 	If ``fields`` includes ``capabilities``, it is validated (subset
 	invariant against the linked Agent's capabilities, see
 	docs/adr/0001-app-runtime-model.md decision #2) before saving.
+	Validation failures (see ``validate_app_capabilities``) are hard errors
+	that abort the save via ``frappe.throw``. Separately, informational,
+	non-blocking issues (currently: requesting 'live_voice' against a voice
+	engine that doesn't inject Agent memory) are collected via
+	``collect_app_capability_warnings`` and returned in the result's
+	``warnings`` key -- these never block the save.
 
 	Permission checks belong in the tool layer (added in a later phase); this
 	function saves with ``ignore_permissions=True``.
 
-	Returns the updated doc as a dict.
+	Returns the updated doc as a dict, plus a ``warnings`` key (list of
+	non-blocking informational strings, possibly empty).
 	"""
 	doc = frappe.get_doc("HUF App", app_id)
 
+	warnings = []
 	if "capabilities" in fields:
 		capabilities = fields["capabilities"]
 		if isinstance(capabilities, str):
@@ -663,6 +729,8 @@ def update_app(app_id: str, **fields) -> dict:
 			errors = validate_app_capabilities(capabilities, agent_doc)
 			if errors:
 				frappe.throw("\n".join(errors), frappe.ValidationError)
+
+			warnings = collect_app_capability_warnings(capabilities, agent_doc)
 
 		fields = {**fields, "capabilities": json.dumps(capabilities)}
 
@@ -685,7 +753,13 @@ def update_app(app_id: str, **fields) -> dict:
 		frappe.throw(error, frappe.ValidationError)
 
 	doc.save(ignore_permissions=True)
-	return doc.as_dict()
+	result = doc.as_dict()
+	# "warnings" is non-blocking/informational, distinct from the hard
+	# "errors" list that `frappe.throw`s above already prevented from
+	# reaching here (e.g. the live_voice/memory gap documented in
+	# huf/ai/voice/README.md's "Known gaps" section).
+	result["warnings"] = warnings
+	return result
 
 
 def install_app(app_id: str) -> dict:
