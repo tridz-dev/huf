@@ -151,6 +151,43 @@ class TestAppCreation(unittest.TestCase):
 
 		self.assertIn("ocr", result.get("capabilities") or "")
 
+	def test_update_app_rejects_audio_output_capability_without_agent_tts_model(self):
+		"""update_app raises when capabilities={'audio_output': True} is
+		requested but the linked Agent has no tts_model configured."""
+		app_id = self._app_id("cap_reject_audio_output")
+		agent_name = self._make_agent(f"tappc_agent_notts_{self.suffix}")
+		create_app_from_agent(
+			app_id=app_id,
+			title="Capability App",
+			agent_name=agent_name,
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			update_app(app_id, capabilities={"audio_output": True})
+
+	def test_update_app_accepts_audio_output_capability_with_agent_tts_model(self):
+		"""update_app succeeds when capabilities={'audio_output': True} is
+		requested and the linked Agent has a tts_model configured.
+
+		The Agent DocType's own validate() checks that tts_model resolves to
+		an AI Model with the 'Text-to-Speech' modality, so the field is set
+		directly via frappe.db.set_value (bypassing that unrelated
+		validation) rather than through doc.insert/save -- this test only
+		needs tts_model to be a non-empty string on the fetched Agent doc,
+		not a real, resolvable AI Model record."""
+		app_id = self._app_id("cap_accept_audio_output")
+		agent_name = self._make_agent(f"tappc_agent_tts_{self.suffix}")
+		frappe.db.set_value("Agent", agent_name, "tts_model", "some-tts-model")
+		create_app_from_agent(
+			app_id=app_id,
+			title="Capability App",
+			agent_name=agent_name,
+		)
+
+		result = update_app(app_id, capabilities={"audio_output": True})
+
+		self.assertIn("audio_output", result.get("capabilities") or "")
+
 	# ------------------------------------------------------------------
 	# install_app
 	# ------------------------------------------------------------------

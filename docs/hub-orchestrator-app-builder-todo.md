@@ -164,7 +164,10 @@ Depends on: Phase 5
 
 ## Phase 9 — Audio generation/TTS App config
 Depends on: Phase 8
-- [ ] Surface `Agent.tts_model`/`tts_voice` as App `capabilities` flags
+- [x] Surface `Agent.tts_model`/`tts_voice` as App `capabilities` flags
+      (`validate_app_capabilities()` in `huf/ai/app_seeding/apps_loader.py` now also checks
+      `audio_output` against `Agent.tts_model`; enforced server-side in `update_app()`; tests
+      in `huf/ai/app_seeding/tests/test_app_creation.py`)
 
 ## Phase 9b — Public/guest App routing
 Depends on: Phase 6

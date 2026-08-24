@@ -576,8 +576,8 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 	blob) is a subset of what the linked ``agent_doc`` (Agent doc) actually
 	supports.
 
-	Scoped to file_upload / ocr / audio_input in this phase; TTS/live-voice
-	flags are intentionally not validated here (separate phase).
+	Scoped to file_upload / ocr / audio_input / audio_output in this phase;
+	live-voice flags are intentionally not validated here (separate phase).
 
 	Returns a list of human-readable error strings; an empty list means the
 	capabilities payload is valid.
@@ -602,6 +602,12 @@ def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
 		errors.append(
 			"App capability 'audio_input' requires the linked Agent to have "
 			"an 'stt_model' configured."
+		)
+
+	if capabilities.get("audio_output") and not agent_doc.get("tts_model"):
+		errors.append(
+			"App capability 'audio_output' requires the linked Agent to have "
+			"a 'tts_model' configured."
 		)
 
 	return errors
