@@ -355,3 +355,21 @@ export async function listScheduledAutomations(): Promise<ScheduledAutomationSum
     return [];
   }
 }
+
+export interface AutomationRuntimeModeResponse {
+  mode: 'new' | 'legacy';
+}
+
+/**
+ * Get the current automation trigger runtime mode.
+ * Returns 'new' (default) or 'legacy' if the site is in legacy mode.
+ */
+export async function getAutomationRuntimeMode(): Promise<AutomationRuntimeModeResponse> {
+  try {
+    const result = await call.get('huf.ai.automation_api.get_automation_runtime_mode');
+    return (result?.message ?? result) as AutomationRuntimeModeResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching automation runtime mode');
+    return { mode: 'new' };
+  }
+}

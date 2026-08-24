@@ -19,7 +19,7 @@ from __future__ import annotations
 import frappe
 from frappe import _
 
-from huf.ai import automation_service
+from huf.ai import automation_service, automation_runtime_flag
 
 
 def _ensure_agent_automations_editable(agent_name):
@@ -587,3 +587,14 @@ def list_scheduled_automations() -> list[dict]:
         automation["trigger_next_execution"] = trigger_row.get("next_execution")
 
     return automations
+
+
+@frappe.whitelist()
+def get_automation_runtime_mode() -> dict:
+	"""
+	Get the current automation trigger runtime mode.
+
+	Returns:
+		dict with {"mode": "new"} or {"mode": "legacy"}.
+	"""
+	return {"mode": automation_runtime_flag.automation_runtime_mode()}
