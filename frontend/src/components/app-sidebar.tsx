@@ -84,6 +84,13 @@ export const buildNavItems = [
     capability: "agent.use",
     badge: "Experimental",
   },
+  {
+    title: "Automations",
+    url: "/automations",
+    icon: Zap,
+    capability: "agent.use",
+    badge: "Experimental",
+  },
 ]
 
 /**
