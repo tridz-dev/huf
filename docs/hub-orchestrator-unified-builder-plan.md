@@ -455,26 +455,28 @@ the requester directly rather than being invented here.)
 
 - **No duplicate App systems** — confirmed by full-field inspection (A.5). One System,
   one DocType, one API surface, one frontend page. Nothing to consolidate here.
-- **Active, adjacent in-flight work — coordinate, do not collide**: there is a currently
-  active track in the `huf_workspace_v2` coordination repo, `AppCapabilityDiscovery`
-  (PR #596, branch `feature/app-capability-discovery`, base `develop`, draft as of
-  2026-08-24), titled "App Capability Discovery & App-First Agent Builder V1
-  (Phase 0-3)." It adds `huf/ai/capabilities/{apps,actions,resources,ranking,
-  events,api,models}.py` and extracts a `resolve_function_descriptor`/
-  `inspect_function_parameters` helper set out of `agent_tool_function.py`, plus a
-  DocType-ownership-via-Module-Def helper it explicitly extracts *into* `apps_loader.py`
-  — the same file this plan's Phase 2 (D.4/D.6) extends. It is solving a different
-  problem (letting a human/LLM pick an *existing installed Frappe app's* resources/
-  actions/events when building a Tool or Trigger, using `HUF App.exposed_tables` as the
-  ranking signal) rather than this plan's problem (turning an Agent into a new,
-  installable `HUF App` record). The two are complementary, not duplicative, but Phase 1
-  of this plan must read PR #596's actual landed diff (not just this summary) before
-  touching `apps_loader.py`, since both plans add functions to the same module and a
-  naming/ordering conflict is the likeliest integration risk. Confirmed via
-  `gh pr view 596 --repo tridz-dev/huf` and the `huf_workspace_v2` `TRACKS.md` index — no
-  local clone of `huf_workspace_v2` was available in this environment, so its `CONTEXT.md`
-  (git-ignored, per the workspace's own convention for active tracks) could not be read;
-  only the committed `TRACKS.md` summary row and the PR body were inspected.
+- **Adjacent work — already merged, already reconciled by construction.** PR #596
+  (`feature/app-capability-discovery`), "App Capability Discovery & App-First Agent
+  Builder V1 (Phase 0-3)," **is already merged into `develop`, `pre-develop`, `pre-dev`,
+  and `pre-dev-stg`.** An earlier pass of this document incorrectly concluded it was
+  merged nowhere, because it searched for the module's original path
+  (`huf/ai/capabilities/{apps,actions,...}.py`, as named in the PR description) — a later
+  commit on that PR (`fix(capabilities): rename huf/ai/capabilities package to
+  capability_discovery`) renamed it to `huf/ai/capability_discovery/` before merge, and
+  the stale path search silently returned zero hits on every branch, including the ones
+  that do have it. Verified by direct `git ls-tree` content search (not `git
+  merge-base`/API metadata) against every remote branch for the *correct* path — 13 files
+  present under `huf/ai/capability_discovery/` in `develop`, `pre-develop`, `pre-dev`, and
+  `pre-dev-stg` alike; zero elsewhere. It adds a `resolve_function_descriptor`/
+  `inspect_function_parameters` helper set (extracted out of `agent_tool_function.py`)
+  and a DocType-ownership-via-Module-Def helper (extracted *into* `apps_loader.py`) — the
+  same file this plan's Phase 2 (D.4/D.6) extends. It solves a different problem (letting
+  a human/LLM pick an *existing installed Frappe app's* resources/actions/events when
+  building a Tool or Trigger, using `HUF App.exposed_tables` as the ranking signal) than
+  this plan's problem (turning an Agent into a new, installable `HUF App` record) — the
+  two are complementary, not duplicative — and since it's already present in whatever
+  branch this plan builds on, Phase 2 work should simply read the current
+  `apps_loader.py` as it stands rather than treat this as a future merge to plan around.
 - **`publishable_key`/embed machinery is voice-only but named generically** — a future
   App-guest-access feature must decide explicitly whether to generalize this existing
   field set (adding a text/App-aware lookup path) or add App-scoped equivalents. Reusing
