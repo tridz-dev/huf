@@ -11,6 +11,12 @@ export interface GetExecutionAnalyticsParams {
   granularity?: 'hour' | 'day';
   /** Dimension to break down `breakdowns` by. Defaults to 'provider'. */
   dimension?: AnalyticsDimension;
+  /**
+   * Scope the response to a single value of `dimension` (e.g. one agent name).
+   * When set, the API returns the same top-level shape but `breakdowns` is
+   * always `[]` — the caller already knows which entity it wants.
+   */
+  entity?: string;
 }
 
 export async function getExecutionAnalytics(
@@ -22,6 +28,7 @@ export async function getExecutionAnalytics(
       ...(params?.fromDate ? { from_date: params.fromDate } : {}),
       ...(params?.toDate ? { to_date: params.toDate } : {}),
       ...(params?.dimension ? { dimension: params.dimension } : {}),
+      ...(params?.entity ? { entity: params.entity } : {}),
     });
     return result.message as ExecutionAnalyticsResponse;
   } catch (error) {

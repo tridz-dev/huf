@@ -131,13 +131,6 @@ export const operateNavItems = [
 		badge: "Experimental",
 	},
 	{
-		title: "Analytics",
-		url: "/analytics",
-		icon: ChartNoAxesCombined,
-		capability: "agent.use",
-		badge: "Experimental",
-	},
-	{
 		title: "Playground",
 		url: "/playground",
 		icon: Terminal,

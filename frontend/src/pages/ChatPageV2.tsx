@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ChatShellFrame } from "@/components/chat/rail/ChatShellFrame";
 import ChatWindow from "@/components/chat/ChatWindowV2";
 import { ArtifactPreviewPane } from "@/components/chat/artifacts/ArtifactPreviewPane";
@@ -18,6 +18,7 @@ function ChatPage() {
     const navigate = useNavigate();
     const { chatId: routeChatId } = useParams<{ chatId?: string }>();
     const chatId = routeChatId && routeChatId !== "new" ? routeChatId : null;
+    const [searchParams] = useSearchParams();
 
     const isMobile = useIsMobile();
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -74,6 +75,16 @@ function ChatPage() {
             setSidebarOpen(false);
         }
     }, [isMobile, chatId]);
+
+    // Open analytics pane if ?pane=analytics is in the URL query string
+    useEffect(() => {
+        if (!chatId) return;
+
+        const hasAnalyticsPaneParam = searchParams.get('pane') === 'analytics';
+        if (hasAnalyticsPaneParam && !analyticsPane.isOpen) {
+            analyticsPane.open();
+        }
+    }, [chatId, analyticsPane]);
 
     // The rail, transcript, and artifact pane now coexist as three columns
     // (see design spec section 28.2) — the pane no longer forces the rail

@@ -32,6 +32,14 @@ export interface ExecutionAnalyticsResponse {
   metadata: {
     granularity: 'hour' | 'day';
     dimension: AnalyticsDimension;
+    /**
+     * The entity value the response was scoped to, echoing the `entity` param
+     * sent to `get_execution_analytics`. `null`/absent when the response is
+     * the unscoped aggregate (the normal AnalyticsPage case) — only present
+     * as a real string on an entity drill-down response, where `breakdowns`
+     * is always `[]` and `breakdowns_total_count` is always 0.
+     */
+    entity?: string | null;
     freshness: string | null;
     /**
      * Total number of distinct dimension values found in the window, before the

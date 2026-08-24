@@ -31,8 +31,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AnalyticsPage from '@/pages/AnalyticsPage';
 
 const DEFAULT_RANGE = '24h';
+
+/** Sub-tabs hosted on this page — kept in the URL so a link like
+ * `/executions?tab=analytics` opens directly on the Analytics tab. */
+const EXECUTIONS_TABS = ['runs', 'analytics'] as const;
+type ExecutionsTab = (typeof EXECUTIONS_TABS)[number];
+const DEFAULT_TAB: ExecutionsTab = 'runs';
 
 const TIME_RANGE_OPTIONS = [
   { label: 'Last 24h', value: '24h' },
@@ -60,7 +68,8 @@ function getRunStatusDot(status?: string): { variant: StatusDotVariant; label: s
   return { variant: 'run', label: status || 'Started' };
 }
 
-export default function Executions() {
+/** The "Runs" tab — this is the original Executions page body, unchanged. */
+function ExecutionsRunsTab() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<Array<{ name: string }>>([]);
@@ -520,5 +529,52 @@ export default function Executions() {
         </div>
       )}
     </PageFrame>
+  );
+}
+
+/**
+ * Merges the former `/executions` and `/analytics` routes into one page with
+ * two sub-tabs, following the same URL-synced Tabs pattern used by
+ * SkillFormPage's prompts/summary tabs. Tab state lives in `?tab=` so a link
+ * like `/executions?tab=analytics` opens directly on the Analytics tab —
+ * this is what lets a future task deep-link breakdown rows there.
+ */
+export default function Executions() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabFromUrl = searchParams.get('tab');
+  const activeTab: ExecutionsTab =
+    tabFromUrl && (EXECUTIONS_TABS as readonly string[]).includes(tabFromUrl)
+      ? (tabFromUrl as ExecutionsTab)
+      : DEFAULT_TAB;
+
+  const handleTabChange = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const sp = new URLSearchParams(prev);
+        if (value === DEFAULT_TAB) {
+          sp.delete('tab');
+        } else {
+          sp.set('tab', value);
+        }
+        return sp;
+      },
+      { replace: true }
+    );
+  };
+
+  return (
+    <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
+      <TabsList className="mx-6 mt-4 w-fit shrink-0">
+        <TabsTrigger value="runs">Runs</TabsTrigger>
+        <TabsTrigger value="analytics">Analytics</TabsTrigger>
+      </TabsList>
+      <TabsContent value="runs" className="flex-1 min-h-0">
+        <ExecutionsRunsTab />
+      </TabsContent>
+      <TabsContent value="analytics" className="flex-1 min-h-0">
+        <AnalyticsPage />
+      </TabsContent>
+    </Tabs>
   );
 }

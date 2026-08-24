@@ -16,6 +16,10 @@ export interface ConversationAnalyticsTotals {
   cost: number;
   cache_read_tokens: number;
   cache_write_tokens: number;
+  duration_ms_sum: number;
+  duration_count: number;
+  /** `null` when no run in this conversation has both a start and end time yet. */
+  average_duration_ms: number | null;
 }
 
 /**
@@ -37,6 +41,8 @@ export interface ConversationAnalyticsCurrent {
    */
   segment_tokens: Record<string, number | null> | null;
   tool_exchange_tokens: number | null;
+  /** How long this one turn took. A snapshot like the rest of `current` — never summed into `totals`. */
+  duration_ms: number | null;
 }
 
 export interface ConversationAnalyticsSeriesPoint {
@@ -50,6 +56,7 @@ export interface ConversationAnalyticsSeriesPoint {
   cost: number | null;
   status: string | null;
   start_time: string | null;
+  duration_ms: number | null;
 }
 
 export interface ConversationAnalyticsCache {
