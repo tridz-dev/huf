@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Captions, Music } from 'lucide-react';
 import {
   AudioPlayer,
@@ -29,6 +29,32 @@ function resolveFileUrl(audioFile: string): string {
   return `${FRAPPE_URL}${audioFile.startsWith('/') ? '' : '/'}${audioFile}`;
 }
 
+export interface EstimatedWordTiming {
+  word: string;
+  startSeconds: number;
+}
+
+/**
+ * ESTIMATE ONLY — linear interpolation, not real word-level ASR timing.
+ *
+ * The backend STT (`audio_service.transcribe_audio_file`) returns a single
+ * transcript string per ~30-60s chunk with no per-word timestamps, so there
+ * is no ground truth for when any individual word was actually spoken.
+ * This splits the chunk's transcript on whitespace and gives every word an
+ * equal time-slice of `durationSeconds / wordCount`. That's inaccurate for
+ * any one word (speech isn't evenly paced), but it makes captions advance
+ * roughly in step with the audio instead of sitting as one static block for
+ * the whole chunk. Never treat `startSeconds` here as exact sync.
+ */
+export function estimateWordTimings(text: string, durationSeconds: number): EstimatedWordTiming[] {
+  const words = text.trim().length > 0 ? text.trim().split(/\s+/) : [];
+  if (words.length === 0 || !(durationSeconds > 0)) {
+    return words.map((word) => ({ word, startSeconds: 0 }));
+  }
+  const secondsPerWord = durationSeconds / words.length;
+  return words.map((word, index) => ({ word, startSeconds: index * secondsPerWord }));
+}
+
 /**
  * Sequential multi-chunk playback. There is no combined-recording file on
  * the backend (PLAN.md D.4), so this plays each chunk's `audio_file` in
@@ -45,6 +71,11 @@ export function MeetingRecordingPlayer({ chunks }: MeetingRecordingPlayerProps) 
   );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showCaptions, setShowCaptions] = useState(true);
+  // Playback time within the CURRENT chunk (seconds since that chunk's
+  // `<audio>` started), used to drive the word-by-word caption estimate
+  // below. Reset to 0 whenever the chunk changes.
+  const [chunkPlaybackSeconds, setChunkPlaybackSeconds] = useState(0);
+  const audioContainerRef = useRef<HTMLDivElement>(null);
 
   // Running elapsed offset up to (not including) the current chunk, same
   // fallback logic as MeetingTranscriptPanel: prefer client_started_at,
@@ -64,6 +95,45 @@ export function MeetingRecordingPlayer({ chunks }: MeetingRecordingPlayerProps) 
     return runningSeconds;
   }, [playableChunks, currentIndex]);
 
+  const currentChunk =
+    playableChunks.length > 0 ? playableChunks[Math.min(currentIndex, playableChunks.length - 1)] : undefined;
+
+  // Reset sub-chunk playback time whenever the current chunk changes (new
+  // chunk starts from 0), then bind a native `timeupdate` listener directly
+  // to the underlying `<audio>` DOM node. `AudioPlayerElement` (ai-elements
+  // audio-player.tsx) renders a real `<audio slot="media">` element with no
+  // React ref forwarding and media-chrome's `MediaController` exposes no
+  // React context for `currentTime`, so the reliable hook is native DOM:
+  // look up the `<audio>` node under our container and listen directly.
+  useEffect(() => {
+    setChunkPlaybackSeconds(0);
+    const container = audioContainerRef.current;
+    if (!container) return undefined;
+    const audioEl = container.querySelector('audio');
+    if (!audioEl) return undefined;
+    const handleTimeUpdate = () => setChunkPlaybackSeconds(audioEl.currentTime);
+    audioEl.addEventListener('timeupdate', handleTimeUpdate);
+    return () => audioEl.removeEventListener('timeupdate', handleTimeUpdate);
+  }, [currentChunk?.name]);
+
+  // Per-chunk word timing estimate (see estimateWordTimings docs above) and
+  // the index of the word considered "current" given chunkPlaybackSeconds.
+  const wordTimings = useMemo(
+    () => estimateWordTimings(currentChunk?.transcript_text || '', currentChunk?.duration_seconds || 0),
+    [currentChunk?.transcript_text, currentChunk?.duration_seconds],
+  );
+  const activeWordIndex = useMemo(() => {
+    let index = -1;
+    for (let i = 0; i < wordTimings.length; i += 1) {
+      if (wordTimings[i].startSeconds <= chunkPlaybackSeconds) {
+        index = i;
+      } else {
+        break;
+      }
+    }
+    return index;
+  }, [wordTimings, chunkPlaybackSeconds]);
+
   if (playableChunks.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-dashed border-line px-4 py-3 text-sm text-steel">
@@ -79,7 +149,7 @@ export function MeetingRecordingPlayer({ chunks }: MeetingRecordingPlayerProps) 
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
+      <div ref={audioContainerRef} className="flex items-center gap-2">
         <AudioPlayer key={current.name} className="flex-1">
           <AudioPlayerElement
             src={resolveFileUrl(current.audio_file!)}
@@ -120,6 +190,27 @@ export function MeetingRecordingPlayer({ chunks }: MeetingRecordingPlayerProps) 
             <p className="flex-1 flex items-center justify-center gap-1.5 text-sm italic text-white/90">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
               {current.transcript_text || '[this part could not be transcribed]'}
+            </p>
+          ) : wordTimings.length > 0 ? (
+            // Karaoke-style progressive reveal: words estimated (see
+            // estimateWordTimings) to have already been "said" by
+            // chunkPlaybackSeconds render fully bright/bold, the rest stay
+            // dim. Chosen over showing only a rolling word window because
+            // it keeps the full caption visible (no layout jitter) while
+            // still visually tracking playback progress.
+            <p className="flex-1 text-center text-sm">
+              {wordTimings.map((timing, index) => (
+                <span
+                  key={index}
+                  className={cn(
+                    'transition-colors',
+                    index <= activeWordIndex ? 'font-semibold text-white' : 'text-white/50',
+                  )}
+                >
+                  {timing.word}
+                  {index < wordTimings.length - 1 ? ' ' : ''}
+                </span>
+              ))}
             </p>
           ) : (
             <p className="flex-1 text-center text-sm text-white">
