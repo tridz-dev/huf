@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 
 import frappe
+from frappe.utils import get_datetime
 
 
 RUN_KINDS = ("agent", "tool", "orchestrator")
@@ -47,6 +48,7 @@ RUN_FIELDS = [
     "run_kind",
     "status",
     "start_time",
+    "end_time",
     "input_tokens",
     "billed_input_tokens",
     "output_tokens",
@@ -89,6 +91,21 @@ def _row_is_missing_billed_input(row: dict) -> bool:
     return row.get("billed_input_tokens") is None
 
 
+def _run_duration_ms(row: dict) -> float | None:
+    """Wall-clock duration of one run, or `None` if it cannot be computed.
+
+    Same guard as `agent_run_analytics._recompute_rollup`: both timestamps
+    must be present and the duration must be non-negative (a clock skew or
+    a row with `end_time` before `start_time` is treated as unmeasured,
+    never as a negative duration)."""
+    start = row.get("start_time")
+    end = row.get("end_time")
+    if not start or not end:
+        return None
+    duration = (get_datetime(end) - get_datetime(start)).total_seconds() * 1000
+    return duration if duration >= 0 else None
+
+
 def _load_usage_snapshot(raw) -> dict:
     """Parse a run's usage_snapshot into a dict.
 
@@ -117,6 +134,11 @@ def _empty_totals() -> dict:
         "cost": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
+        # Field names match agent_run_analytics_api.py's summary shape
+        # (duration_ms_sum / duration_count / average_duration_ms) rather
+        # than inventing a second convention for the same idea.
+        "duration_ms_sum": 0,
+        "duration_count": 0,
     }
 
 
@@ -140,6 +162,11 @@ def _compute_totals(rows: list[dict]) -> tuple[dict, int]:
         totals["cost"] += row.get("cost") or 0
         totals["cache_read_tokens"] += row.get("cached_tokens") or 0
         totals["cache_write_tokens"] += row.get("cache_creation_tokens") or 0
+
+        duration = _run_duration_ms(row)
+        if duration is not None:
+            totals["duration_ms_sum"] += duration
+            totals["duration_count"] += 1
 
     return totals, runs_missing_billed_input
 
@@ -173,6 +200,9 @@ def _compute_current(latest_row: dict | None) -> dict | None:
         "context_fullness": context_fullness,
         "segment_tokens": segment_tokens,
         "tool_exchange_tokens": snapshot.get("tool_exchange_tokens"),
+        # How long this one turn took -- a snapshot like everything else in
+        # `current`, not summed into `totals.duration_ms_sum`.
+        "duration_ms": _run_duration_ms(latest_row),
     }
 
 
@@ -202,6 +232,7 @@ def _build_series(rows: list[dict]) -> list[dict]:
             "cost": row.get("cost"),
             "status": row.get("status"),
             "start_time": row.get("start_time"),
+            "duration_ms": _run_duration_ms(row),
         })
         previous_row = row
 
@@ -286,6 +317,9 @@ def get_conversation_analytics(conversation: str):
     rows = [dict(row) for row in rows]
 
     totals, runs_missing_billed_input = _compute_totals(rows)
+    totals["average_duration_ms"] = (
+        totals["duration_ms_sum"] / totals["duration_count"] if totals["duration_count"] else None
+    )
 
     latest_row = None
     for row in rows:

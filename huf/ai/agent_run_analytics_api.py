@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import frappe
-from frappe.utils import add_to_date, get_datetime, now_datetime
+from frappe.utils import add_to_date, convert_utc_to_system_timezone, get_datetime, now_datetime
 
 from huf.ai.agent_run_analytics import DIMENSION_FIELDS
 
@@ -34,6 +34,26 @@ ROLLUP_FIELDS = [
 ]
 
 
+def _to_system_naive(dt):
+    """Normalise a datetime to the site's naive local convention.
+
+    now_datetime() and every MariaDB datetime this module compares against
+    are naive, in the site's configured system timezone (System Settings ->
+    Time Zone, whatever that is set to -- not assumed to be UTC). But
+    get_datetime() on an ISO string carrying an offset/Z suffix -- exactly
+    what a browser's Date.toISOString() sends -- returns a timezone-AWARE
+    UTC datetime. Comparing/subtracting that against a naive value raises
+    TypeError; naively stripping tzinfo instead would silently shift the
+    window by the site's UTC offset (checked live at 2026-08-24: this site
+    is Asia/Kolkata, UTC+5:30 -- a blind strip is off by 5.5 hours, not off
+    by nothing). Route through Frappe's own system-timezone conversion,
+    which reads the site's configured timezone rather than assuming one.
+    """
+    if dt.tzinfo is not None:
+        dt = convert_utc_to_system_timezone(dt).replace(tzinfo=None)
+    return dt
+
+
 def _require_analytics_access():
     user = frappe.session.user
     if "System Manager" in frappe.get_roles(user):
@@ -52,6 +72,38 @@ def _query_rollups(granularity: str, start, end) -> list[dict]:
         order_by="bucket_start asc",
         limit_page_length=0,
     )
+
+
+def _add_derived_rates(row: dict) -> None:
+    """Add success_rate/average_duration_ms/cache_ratio to a summary-shaped dict, in place.
+
+    The frontend's ExecutionAnalyticsSummary type declares these three as
+    `number | null` on every series bucket and breakdown row, not just the
+    top-level summary -- series/breakdowns are typed as
+    `Array<ExecutionAnalyticsSummary & {...}>`, the same type. Skipping this
+    on series/breakdown rows previously left the keys entirely absent
+    (`undefined` in JS, not `null`), which a `=== null` guard does not catch,
+    so `undefined.toFixed(...)` crashed the whole page the first time a
+    breakdown row existed. Must be called on every row this response emits.
+    """
+    row["success_rate"] = (row["success_count"] / row["run_count"] * 100) if row["run_count"] else None
+    row["average_duration_ms"] = (row["duration_ms_sum"] / row["duration_count"]) if row["duration_count"] else None
+    row["cache_ratio"] = (row["cached_tokens"] / row["input_tokens"] * 100) if row["input_tokens"] else None
+
+
+def _filter_rows_by_entity(rows: list[dict], dimension: str, entity: str | None) -> list[dict]:
+    """Restrict rollup rows to those whose `dimension` field equals `entity`.
+
+    A falsy `entity` (None or "") is a no-op passthrough -- the caller wants
+    the unfiltered rows, matching the existing dimension-only behaviour. Only
+    an exact equality match on `row.get(dimension)` counts; a row missing the
+    dimension key (`.get` returns None) only matches when `entity` is itself
+    None, which the falsy check above already routes to passthrough, so in
+    practice it never happens through this path.
+    """
+    if not entity:
+        return rows
+    return [row for row in rows if row.get(dimension) == entity]
 
 
 def _load_composition_totals(raw) -> dict:
@@ -96,6 +148,7 @@ def get_execution_analytics(
     to_date: str | None = None,
     granularity: str = "hour",
     dimension: str = "provider",
+    entity: str | None = None,
 ):
     """Return execution analytics; auto-refreshes rollups if empty."""
     _require_analytics_access()
@@ -103,8 +156,14 @@ def get_execution_analytics(
         frappe.throw("granularity must be 'hour' or 'day'")
     if dimension not in DIMENSION_FIELDS:
         frappe.throw(f"dimension must be one of {', '.join(DIMENSION_FIELDS)}")
-    end = get_datetime(to_date) if to_date else now_datetime()
-    start = get_datetime(from_date) if from_date else add_to_date(end, days=-7)
+    # from_date/to_date arrive as ISO strings with an offset/Z suffix (the
+    # frontend sends Date.toISOString()), which get_datetime() parses as
+    # timezone-aware. now_datetime()/add_to_date() and every bucket_start
+    # this gets compared against are naive, in the site's own timezone --
+    # see _to_system_naive's docstring for why a blind tzinfo strip would
+    # be silently wrong rather than merely inconsistent.
+    end = _to_system_naive(get_datetime(to_date)) if to_date else now_datetime()
+    start = _to_system_naive(get_datetime(from_date)) if from_date else add_to_date(end, days=-7)
     if start > end or (end - start).days > MAX_WINDOW_DAYS:
         frappe.throw(f"Date range must be between zero and {MAX_WINDOW_DAYS} days")
     if not frappe.db.exists("DocType", ROLLUP_DOCTYPE):
@@ -118,6 +177,7 @@ def get_execution_analytics(
             "metadata": {
                 "granularity": granularity,
                 "dimension": dimension,
+                "entity": entity,
                 "freshness": None,
                 "breakdowns_total_count": 0,
             },
@@ -130,6 +190,8 @@ def get_execution_analytics(
         from huf.ai.agent_run_analytics import refresh_rollups
         refresh_rollups(full_backfill=True)
         rows = _query_rollups(granularity, start, end)
+
+    rows = _filter_rows_by_entity(rows, dimension, entity)
 
     summary = {
         "run_count": 0,
@@ -153,16 +215,19 @@ def get_execution_analytics(
         bucket = series_by_bucket.setdefault(row["bucket_start"], {"bucket_start": row["bucket_start"], **{key: 0 for key in summary}})
         for key in summary:
             bucket[key] += row.get(key) or 0
-        dimension_value = row.get(dimension) or "Unknown"
-        breakdown = breakdown_by_dimension.setdefault(dimension_value, {"dimension": dimension_value, **{key: 0 for key in summary}})
-        for key in summary:
-            breakdown[key] += row.get(key) or 0
+        if not entity:
+            dimension_value = row.get(dimension) or "Unknown"
+            breakdown = breakdown_by_dimension.setdefault(dimension_value, {"dimension": dimension_value, **{key: 0 for key in summary}})
+            for key in summary:
+                breakdown[key] += row.get(key) or 0
         _accumulate_composition(composition_totals, _load_composition_totals(row.get("composition_totals")))
         if row.get("last_recomputed_at") and (freshness is None or row["last_recomputed_at"] > freshness):
             freshness = row["last_recomputed_at"]
-    summary["success_rate"] = (summary["success_count"] / summary["run_count"] * 100) if summary["run_count"] else None
-    summary["average_duration_ms"] = (summary["duration_ms_sum"] / summary["duration_count"]) if summary["duration_count"] else None
-    summary["cache_ratio"] = (summary["cached_tokens"] / summary["input_tokens"] * 100) if summary["input_tokens"] else None
+    _add_derived_rates(summary)
+    for bucket in series_by_bucket.values():
+        _add_derived_rates(bucket)
+    for breakdown in breakdown_by_dimension.values():
+        _add_derived_rates(breakdown)
     breakdowns_total_count = len(breakdown_by_dimension)
     return {
         "summary": summary,
@@ -172,6 +237,7 @@ def get_execution_analytics(
         "metadata": {
             "granularity": granularity,
             "dimension": dimension,
+            "entity": entity,
             "from": start,
             "to": end,
             "freshness": freshness,
