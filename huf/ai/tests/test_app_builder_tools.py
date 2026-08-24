@@ -233,3 +233,124 @@ class TestDraftApp(IntegrationTestCase):
 		self.assertEqual(
 			frappe.db.count("HUF App", filters={"app_id": self.APP_ID}), 1
 		)
+
+
+class TestSetAppIconCapability(IntegrationTestCase):
+	"""set_app_icon must refuse users without builder roles."""
+
+	def _assert_denied(self, **kwargs):
+		with patch("frappe.get_roles", return_value=DENIED_ROLES):
+			self.assertRaises(frappe.PermissionError, builder.set_app_icon, **kwargs)
+
+	def test_set_app_icon_denied(self):
+		self._assert_denied(
+			app_id="test-app", source="path", value="/assets/icon.png"
+		)
+
+
+class TestSetAppIcon(IntegrationTestCase):
+	"""set_app_icon validation and two-phase contract tests."""
+
+	AGENT_NAME = "Test Icon Builder Agent"
+	APP_ID = "test-icon-builder-app"
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		if not frappe.db.exists("Agent", cls.AGENT_NAME):
+			provider = frappe.db.get_value("AI Provider", {}, "name")
+			model = frappe.db.get_value("AI Model", {}, "name")
+			if provider and model:
+				frappe.get_doc(
+					{
+						"doctype": "Agent",
+						"agent_name": cls.AGENT_NAME,
+						"provider": provider,
+						"model": model,
+						"instructions": "Test agent for icon builder tests.",
+						"prompt_mode": "Local",
+						"disabled": 1,
+					}
+				).insert(ignore_permissions=True)
+
+	@classmethod
+	def tearDownClass(cls):
+		frappe.db.rollback()
+		for app_id in (cls.APP_ID,):
+			if frappe.db.exists("HUF App", app_id):
+				frappe.delete_doc("HUF App", app_id, ignore_permissions=True, force=True)
+		if frappe.db.exists("Agent", cls.AGENT_NAME):
+			frappe.delete_doc("Agent", cls.AGENT_NAME, ignore_permissions=True, force=True)
+		super().tearDownClass()
+
+	def setUp(self):
+		if not frappe.db.exists("Agent", self.AGENT_NAME):
+			self.skipTest("No AI Provider/AI Model configured in this environment.")
+		if frappe.db.exists("HUF App", self.APP_ID):
+			frappe.delete_doc("HUF App", self.APP_ID, ignore_permissions=True, force=True)
+		# Create a test app to work with
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			builder.draft_app(
+				app_id=self.APP_ID,
+				title="Test App for Icon",
+				agent_name=self.AGENT_NAME,
+				confirm=True,
+			)
+
+	def test_set_app_icon_path_rejects_invalid_path(self):
+		"""Paths must start with '/' and not contain URL schemes."""
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			# Path without leading slash
+			self.assertRaises(
+				frappe.ValidationError,
+				builder.set_app_icon,
+				app_id=self.APP_ID,
+				source="path",
+				value="assets/icon.png",
+				confirm=False,
+			)
+
+	def test_set_app_icon_path_rejects_url_scheme(self):
+		"""Paths must not contain URL schemes."""
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			# Path with URL scheme
+			self.assertRaises(
+				frappe.ValidationError,
+				builder.set_app_icon,
+				app_id=self.APP_ID,
+				source="path",
+				value="https://example.com/icon.png",
+				confirm=False,
+			)
+
+	def test_set_app_icon_uploaded_rejects_nonexistent_file(self):
+		"""File doc must exist."""
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			self.assertRaises(
+				frappe.ValidationError,
+				builder.set_app_icon,
+				app_id=self.APP_ID,
+				source="uploaded",
+				value="nonexistent-file-id",
+				confirm=False,
+			)
+
+	def test_set_app_icon_preview_does_not_mutate(self):
+		"""preview (confirm=False) must not change the app's icon."""
+		original_icon = frappe.db.get_value("HUF App", self.APP_ID, "icon") or ""
+
+		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
+			result = builder.set_app_icon(
+				app_id=self.APP_ID,
+				source="path",
+				value="/assets/new-icon.png",
+				confirm=False,
+			)
+
+		# Check response shape
+		self.assertFalse(result["set"])
+		self.assertTrue(result["confirm_required"])
+
+		# Check icon wasn't changed
+		current_icon = frappe.db.get_value("HUF App", self.APP_ID, "icon") or ""
+		self.assertEqual(current_icon, original_icon)

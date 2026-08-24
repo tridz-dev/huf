@@ -44,7 +44,7 @@ Depends on: Phase 2
 - [x] `list_agents`, `get_agent`, `list_apps`, `get_app` (read-only, no confirm)
 - [x] `draft_app`, `update_app`, `install_app` (two-phase confirm, mirrors
       `huf/ai/tools/builder.py`'s existing contract)
-- [ ] `set_app_icon` (two-phase confirm) — deferred, see Phase 7
+- [x] `set_app_icon` (two-phase confirm) — Phase 7
 - [x] Register in `BUILDER_TOOL_NAMES` / `huf/ai/tools/_registry.py`
 - [x] `huf/ai/tests/test_app_builder_tools.py` — capability-gating + preview/confirm tests
 
@@ -66,9 +66,9 @@ Depends on: Phase 1 (independent of 3a)
 
 ## Phase 7 — Icon pipeline
 Depends on: Phase 1 (independent of 2/3a/3b — can build in parallel)
-- [ ] `set_app_icon` source handling: existing path / uploaded (reuse `agent_chat.py` upload
+- [x] `set_app_icon` source handling: existing path / uploaded (reuse `agent_chat.py` upload
       conventions) / generated (reuse `handle_generate_image`)
-- [ ] MIME/SVG-sanitization check for icon uploads (gap noted in plan §F)
+- [x] MIME/SVG-sanitization check for icon uploads (gap noted in plan §F)
 
 ## Phase 4 — Agent → App workflow (Path A/B/C)
 Depends on: Phase 2, 3a

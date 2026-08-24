@@ -945,6 +945,220 @@ def install_app(app_id: str, confirm: bool = False) -> dict:
 	return {"installed": True, "app": result, "diff": diff}
 
 
+# MIME types allowed for app icons (covers common formats; SVG flagged for
+# sanitization gap noted in §F of the plan — platform-wide SVG handling is
+# deferred, but this validator ensures the gap is explicit and auditable).
+_ICON_MIME_ALLOWLIST = {
+	"image/png",
+	"image/jpeg",
+	"image/webp",
+	"image/svg+xml",
+}
+
+
+def set_app_icon(app_id: str, source: str, value: str, confirm: bool = False) -> dict:
+	"""Two-phase app icon setter supporting three sources of icon data.
+
+	source is one of:
+	- "path": value is a site-local asset path (validated to start with "/",
+	  no URL scheme). Reuses the same validation rule as apps_loader._validate_route.
+	- "uploaded": value is a File doc name (looked up via frappe.get_doc("File", ...)).
+	  File must exist and its content_type must be in _ICON_MIME_ALLOWLIST.
+	  SVG uploads are flagged in comments as needing sanitization (platform-wide gap).
+	- "generated": value is an image generation prompt (str). Calls
+	  handle_generate_image and uses the resulting file.
+
+	All three branches follow the two-phase confirm contract: confirm=False
+	returns a diff with confirm_required=True; confirm=True applies the mutation
+	via apps_loader.update_app or fallback frappe.db.set_value.
+
+	Requires _require_builder_capability() + _require_doc_permission("HUF App", "write", app_id).
+	"""
+	_require_builder_capability()
+	_require_doc_permission("HUF App", "write", app_id)
+	confirm = _as_bool(confirm)
+	source = (source or "").strip().lower()
+
+	if not frappe.db.exists("HUF App", app_id):
+		frappe.throw(_("HUF App '{0}' does not exist.").format(app_id))
+
+	if source not in ("path", "uploaded", "generated"):
+		frappe.throw(
+			_("source must be one of: 'path', 'uploaded', 'generated' (got '{0}')").format(source)
+		)
+
+	current_icon = frappe.db.get_value("HUF App", app_id, "icon") or ""
+	resolved_icon_value = None
+
+	# Validate and resolve the icon value based on source
+	if source == "path":
+		# Validate as a site-local path: must start with "/" and not contain URL scheme
+		if not value.startswith("/"):
+			frappe.throw(
+				_("Icon path must be an absolute site-local path beginning with '/'")
+			)
+		if "://" in value or value.startswith("//"):
+			frappe.throw(
+				_("Icon path must not contain a URL scheme (external URLs are not allowed)")
+			)
+		resolved_icon_value = value
+
+	elif source == "uploaded":
+		# Look up the File doc and validate content_type
+		if not frappe.db.exists("File", value):
+			frappe.throw(_("File '{0}' does not exist.").format(value))
+		file_doc = frappe.get_doc("File", value)
+		content_type = file_doc.content_type or ""
+
+		if content_type not in _ICON_MIME_ALLOWLIST:
+			frappe.throw(
+				_(
+					"File content type '{0}' is not allowed for icons. "
+					"Allowed types: {1}"
+				).format(content_type, ", ".join(sorted(_ICON_MIME_ALLOWLIST)))
+			)
+
+		# SVG files require sanitization (currently a platform-wide gap; this
+		# gap is documented in the plan's §F. Flagging explicitly for audit trail).
+		if content_type == "image/svg+xml":
+			frappe.log_warning(
+				f"SVG icon upload for app '{app_id}': platform-wide SVG sanitization gap noted in plan §F",
+				"SVG Icon Upload"
+			)
+
+		# Use the file's file path/URL as the icon value
+		resolved_icon_value = file_doc.file_url or f"/files/{file_doc.file_name}"
+
+	elif source == "generated":
+		# Call handle_generate_image; the function is async, so we run it via
+		# asyncio.run() in a separate event loop (builder tools are synchronous).
+		import asyncio
+
+		# Get the agent configured for this app (if any) for context
+		agent_name = frappe.db.get_value("HUF App", app_id, "agent")
+		if not agent_name:
+			frappe.throw(
+				_(
+					"Cannot generate an icon: this app has no linked Agent. "
+					"Link an Agent to the app first via update_app(app_id, agent=...)"
+				)
+			)
+
+		try:
+			from huf.ai.handlers.media import handle_generate_image
+
+			# Run the async function in a new event loop (asyncio.run creates one)
+			result = asyncio.run(
+				handle_generate_image(
+					prompt=value,
+					agent_name=agent_name,
+					n=1,
+					size="1024x1024",
+					quality="standard",
+				)
+			)
+
+			if not result.get("success"):
+				frappe.throw(
+					_("Image generation failed: {0}").format(
+						result.get("error", "Unknown error")
+					)
+				)
+
+			images = result.get("images", [])
+			if not images:
+				frappe.throw(_("Image generation returned no images."))
+
+			# Use the first (and only, since n=1) generated image's file_id or URL
+			first_image = images[0]
+			resolved_icon_value = first_image.get("url") or first_image.get("file_id")
+
+			if not resolved_icon_value:
+				frappe.throw(_("Image generation returned no usable URL or file ID."))
+
+		except asyncio.DeprecationWarning:
+			# Python 3.10+ warns about nested event loops in some contexts;
+			# try an alternative if asyncio.run fails (e.g., in a sync context
+			# that already has a running loop). Fall back to a direct sync wrapper.
+			try:
+				from huf.ai.handlers.media import handle_generate_image as sync_wrapper
+				import sys
+
+				if sys.version_info >= (3, 10):
+					# Use asyncio.ensure_future or similar for already-running loop
+					loop = asyncio.get_event_loop()
+					result = loop.run_until_complete(
+						sync_wrapper(
+							prompt=value,
+							agent_name=agent_name,
+							n=1,
+							size="1024x1024",
+							quality="standard",
+						)
+					)
+				else:
+					result = asyncio.run(
+						sync_wrapper(
+							prompt=value,
+							agent_name=agent_name,
+							n=1,
+							size="1024x1024",
+							quality="standard",
+						)
+					)
+
+				if not result.get("success"):
+					frappe.throw(
+						_("Image generation failed: {0}").format(
+							result.get("error", "Unknown error")
+						)
+					)
+
+				images = result.get("images", [])
+				if not images:
+					frappe.throw(_("Image generation returned no images."))
+
+				first_image = images[0]
+				resolved_icon_value = first_image.get("url") or first_image.get("file_id")
+
+				if not resolved_icon_value:
+					frappe.throw(_("Image generation returned no usable URL or file ID."))
+
+			except Exception as e:
+				frappe.throw(
+					_("Image generation failed with exception: {0}").format(str(e))
+				)
+
+	# Build the diff (old icon → new icon)
+	diff = {"icon": {"old": current_icon, "new": resolved_icon_value}}
+
+	if not confirm:
+		return {
+			"set": False,
+			"confirm_required": True,
+			"app": app_id,
+			"source": source,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to set the icon.",
+		}
+
+	# Apply the mutation: try update_app first, fall back to db.set_value
+	try:
+		# update_app exists in apps_loader and handles validation/save
+		apps_loader.update_app(app_id, icon=resolved_icon_value)
+	except AttributeError:
+		# Fallback: update_app doesn't exist yet (pre-Phase 2 state)
+		frappe.db.set_value("HUF App", app_id, "icon", resolved_icon_value)
+
+	return {
+		"set": True,
+		"app": app_id,
+		"source": source,
+		"icon": resolved_icon_value,
+		"diff": diff,
+	}
+
+
 def list_provider_options() -> dict:
 	"""List AI Providers with their configuration status and models.
 

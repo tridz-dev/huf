@@ -1308,6 +1308,27 @@ BUILDER_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "set_app_icon",
+		"description": (
+			"Set an app's icon from three possible sources: existing site-local asset path, "
+			"an uploaded File doc, or a text prompt for AI image generation. All three branches "
+			"validate their inputs (path format, File MIME type, image generation success) before "
+			"applying. "
+			+ _CONFIRM_NOTE
+			+ " Note: SVG uploads are flagged for platform-wide sanitization gaps (documented "
+			"in the plan's security review §F); SVG validation is limited to acceptance, not "
+			"decontamination."
+		),
+		"function_path": "huf.ai.tools.builder.set_app_icon",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to set the icon for"),
+			_p("source", required=True, description="Source of the icon: 'path' (site-local asset path), 'uploaded' (File doc name), or 'generated' (image generation prompt)"),
+			_p("value", required=True, description="The icon value: a path string (for 'path'), a File name (for 'uploaded'), or a prompt (for 'generated')"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = set the icon"),
+		],
+	},
+	{
 		"tool_name": "ask_user",
 		"description": (
 			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "

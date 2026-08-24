@@ -72,6 +72,7 @@ BUILDER_TOOL_NAMES = (
     "draft_app",
     "update_app",
     "install_app",
+    "set_app_icon",
     "list_app_components",
     "render_app_component",
 )
