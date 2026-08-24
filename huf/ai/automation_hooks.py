@@ -202,9 +202,13 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None):
 
 		# Files: extract from configured attachment fields, run OCR on
 		# non-image/non-audio files, transcribe audio files. Reuses the same
-		# helpers as the legacy agent_hooks.run_agent_for_doc.
+		# helpers as the legacy agent_hooks.run_agent_for_doc. Both
+		# handle_ocr_document() and transcribe_audio_file() require a real
+		# agent_name (they resolve provider/model config from it) -- resolve
+		# the Automation's linked Agent once, up front.
 		files = []
 		file_attachments = trigger.get("file_attachments") or []
+		agent_name = frappe.db.get_value("Automation", trigger["automation"], "agent")
 		if file_attachments:
 			import mimetypes
 
@@ -257,12 +261,17 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None):
 							handle_ocr_document(
 								file_id=file.get("file_id"),
 								file_url=file["file_url"],
-								agent_name=None,
+								agent_name=agent_name,
 							)
 						)
 						if ocr_result and ocr_result.get("success"):
 							extracted_content.append(
 								f"--- File: {file['filename']} ---\n{ocr_result.get('text')}\n"
+							)
+						elif ocr_result:
+							frappe.logger("huf").warning(
+								f"Automation OCR skipped for {file['filename']}: "
+								f"{ocr_result.get('error')}"
 							)
 			except Exception:
 				frappe.log_error(
@@ -283,12 +292,17 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None):
 					stt_result = audio_service.transcribe_audio_file(
 						file_id=file.get("file_id"),
 						file_url=file["file_url"],
-						agent_name=None,
+						agent_name=agent_name,
 					)
 					if stt_result and stt_result.get("success"):
 						transcribed_content.append(
 							f"--- File: {file['filename']} ---\n"
 							f"{stt_result.get('transcript') or stt_result.get('text')}\n"
+						)
+					elif stt_result:
+						frappe.logger("huf").warning(
+							f"Automation transcription skipped for {file['filename']}: "
+							f"{stt_result.get('error')}"
 						)
 				except Exception:
 					frappe.log_error(

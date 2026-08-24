@@ -42,6 +42,11 @@ class EmailGatewayAdapter(GatewayAdapter):
 		self._secret = credentials.get("webhook_secret", "")
 		self._sender_email = credentials.get("sender_email", "")
 
+	@property
+	def sender_email(self) -> str:
+		"""This gateway's configured outbound sender address, if any."""
+		return self._sender_email
+
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
 		"""Verify optional secret token if configured."""
 		if not self._secret:
