@@ -93,10 +93,10 @@ class FlowService {
       schema_version: '1.0.0',
       profile: 'flow',
       fingerprint: '0'.repeat(64),
-      entry: 'empty-trigger',
+      entry: 'empty_trigger',
       nodes: [
         {
-          id: 'empty-trigger',
+          id: 'empty_trigger',
           type: 'trigger.webhook',
           config: { method: 'POST' },
           next: null,
@@ -118,7 +118,7 @@ class FlowService {
       category: category || 'Uncategorized',
       nodes: [
         {
-          id: 'empty-trigger',
+          id: 'empty_trigger',
           type: 'trigger',
           position: { x: 250, y: 100 },
           data: {

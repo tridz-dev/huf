@@ -248,7 +248,7 @@ export function FlowCanvas({
         }
       } else {
         // Create a new trigger node
-        const newNodeId = `node-trigger-${Date.now()}`;
+        const newNodeId = `node_trigger_${Date.now()}`;
         const newNode: Node<FlowNodeData> = {
           id: newNodeId,
           type: 'trigger',
@@ -283,7 +283,7 @@ export function FlowCanvas({
           const sourceNode = currentNodes.find((n) => n.id === sourceNodeForAction);
           if (!sourceNode) return currentEdges;
 
-          const newNodeId = `node-${Date.now()}`;
+          const newNodeId = `node_${Date.now()}`;
           const iconMap: Record<string, string> = {
             'agent-run': 'Bot',
             'tool-call': 'Wrench',
