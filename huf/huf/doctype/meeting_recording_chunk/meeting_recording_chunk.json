@@ -1,0 +1,156 @@
+{
+ "actions": [],
+ "creation": "2026-08-24 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "meeting",
+  "sequence",
+  "column_break_upload",
+  "audio_file",
+  "upload_status",
+  "client_started_at",
+  "duration_seconds",
+  "section_break_transcript",
+  "transcript_text",
+  "transcription_error",
+  "retry_count",
+  "is_system_owned"
+ ],
+ "fields": [
+  {
+   "fieldname": "meeting",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Meeting",
+   "options": "Meeting",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_upload",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "audio_file",
+   "fieldtype": "Attach",
+   "label": "Audio File"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "upload_status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Upload Status",
+   "options": "Pending\nUploaded\nTranscribing\nTranscribed\nFailed"
+  },
+  {
+   "fieldname": "client_started_at",
+   "fieldtype": "Datetime",
+   "label": "Client Started At"
+  },
+  {
+   "fieldname": "duration_seconds",
+   "fieldtype": "Float",
+   "label": "Duration (Seconds)"
+  },
+  {
+   "fieldname": "section_break_transcript",
+   "fieldtype": "Section Break",
+   "label": "Transcript"
+  },
+  {
+   "fieldname": "transcript_text",
+   "fieldtype": "Long Text",
+   "label": "Transcript Text"
+  },
+  {
+   "fieldname": "transcription_error",
+   "fieldtype": "Small Text",
+   "label": "Transcription Error"
+  },
+  {
+   "default": "0",
+   "fieldname": "retry_count",
+   "fieldtype": "Int",
+   "label": "Retry Count"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_system_owned",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Is System Owned",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-24 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Meeting Recording Chunk",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Viewer",
+   "share": 1,
+   "write": 0
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
