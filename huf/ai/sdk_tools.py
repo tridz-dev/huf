@@ -227,6 +227,8 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     function_path = "huf.ai.sdk_tools.handle_run_agent"
                 elif function_doc.types == "Attach File to Document":
                     function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
+                elif function_doc.types == "Send Email":
+                    function_path = "huf.ai.sdk_tools.handle_send_email"
                 elif function_doc.types == "Get Conversation Data":
                     function_path = "huf.ai.sdk_tools.handle_get_conversation_data"
                 elif function_doc.types == "Set Conversation Data":
@@ -263,7 +265,7 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     del params["additionalProperties"]
 
                 extra_args = {}
-                if function_doc.types == "Attach File to Document":
+                if function_doc.types in ("Attach File to Document", "Send Email"):
                     if function_doc.reference_doctype:
                         extra_args["reference_doctype"] = function_doc.reference_doctype
 

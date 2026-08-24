@@ -40,6 +40,7 @@ export type ToolType =
   | "Custom Function"
   | "App Provided"
   | "Attach File to Document"
+  | "Send Email"
   | "Get Report Result"
   | "Get Value"
   | "Set Value"
