@@ -17,6 +17,21 @@ the full component list) - the full allowlist with props/examples is served
 token-cheaply on demand by the `list_app_components` tool instead, matching
 the token-efficiency rationale documented for #640/#641 (A.6/D.3).
 
+source_type is deliberately "Local", not "App Provided": huf.ai.skills.hooks
+.sync_app_skills's orphan-cleanup pass deletes any "App Provided" Skill it
+doesn't find declared via a `huf_skills` hook on THIS pass -- and its
+per-app scan-caching (keyed on hooks.py's mtime) means an app can be
+legitimately skipped on a given migrate even though its declaration hasn't
+changed, which the cleanup pass then misreads as "no longer declared" and
+deletes anyway (a real, pre-existing bug in that caching/cleanup
+interaction, out of scope to fix here). A first attempt at fixing this by
+declaring the skill via a `huf_skills` hook entry still hit the same
+caching bug on a later migrate. "Local" sidesteps the entire orphan-cleanup
+subsystem: it isn't scanned, isn't a hook-discovered skill, and is
+semantically accurate -- create_design_system_skill() *is* a local,
+directly-authored skill (the same relationship Hub Orchestrator itself has
+to app_seeding.hub_orchestrator: self-seeded, not externally discovered).
+
 Entry point: create_design_system_skill(), called from huf.install
 after_install and after_migrate right after create_hub_orchestrator_agent().
 """
@@ -51,32 +66,6 @@ SKILL_DESCRIPTION = (
 	"Reference for the design-system-aware component rendering tools "
 	"(list_app_components / render_app_component)."
 )
-
-
-def get_skill_manifest() -> dict:
-	"""Manifest for the `huf_skills` hook (see huf/hooks.py).
-
-	huf.ai.skills.hooks.sync_app_skills scans every installed app's `huf_skills`
-	hook on every migrate and deletes any "App Provided" Skill not found in that
-	scan (orphan cleanup) -- including skills provided by huf itself, since it
-	scans huf like any other installed app. Without this manifest declaring the
-	skill, sync_app_skills would try to delete it on every single migrate (it
-	correctly fails, since the skill is attached to Hub Orchestrator, but the
-	failure-logging path has an unrelated framework bug that turns that into a
-	hard migrate failure). This function is the fix: it makes sync_app_skills
-	see the skill as still declared, so it upserts instead of deleting it.
-	create_design_system_skill() below still does its own idempotent
-	insert/update immediately at install/migrate time (before sync_app_skills
-	runs, per hooks.py's after_migrate ordering) so the skill and its
-	Hub Orchestrator attachment exist without waiting on a second sync pass.
-	"""
-	return {
-		"name": SKILL_NAME,
-		"title": SKILL_NAME,
-		"description": SKILL_DESCRIPTION,
-		"instructions": SKILL_INSTRUCTIONS,
-		"tools": ["list_app_components", "render_app_component"],
-	}
 
 
 @contextmanager
@@ -135,8 +124,7 @@ def create_design_system_skill() -> bool:
 		skill.title = SKILL_NAME
 		skill.description = SKILL_DESCRIPTION
 		skill.instructions = SKILL_INSTRUCTIONS
-		skill.source_type = "App Provided"
-		skill.provider_app = "huf"
+		skill.source_type = "Local"
 		skill.auto_load = 1
 		skill.status = "Active"
 		_attach_skill_tools(skill)
@@ -150,8 +138,7 @@ def create_design_system_skill() -> bool:
 				"title": SKILL_NAME,
 				"description": SKILL_DESCRIPTION,
 				"instructions": SKILL_INSTRUCTIONS,
-				"source_type": "App Provided",
-				"provider_app": "huf",
+				"source_type": "Local",
 				"auto_load": 1,
 				"status": "Active",
 			}

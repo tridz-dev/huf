@@ -379,17 +379,6 @@ to_sync_tools = "huf.ai.tool_registry.sync_discovered_tools"
 # Register integration tools from _registry
 huf_tools = "huf.ai.tools._registry.ALL_INTEGRATION_TOOLS"
 
-# Register huf's own self-seeded Skill(s) via the same huf_skills hook other
-# apps use, so sync_app_skills's orphan-cleanup recognizes it as declared
-# instead of deleting it on every migrate (it scans this hook per-app,
-# including huf itself).
-huf_skills = [
-    {
-        "skill_name": "HUF Design System Reference",
-        "function_path": "huf.ai.app_seeding.design_system_skill.get_skill_manifest",
-    },
-]
-
 # Knowledge Backends Hook
 # -----------------------
 # Register additional knowledge backends with the hook-based backend
