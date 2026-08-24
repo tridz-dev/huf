@@ -115,6 +115,44 @@ Base branch: `pre-develop` (per final PR target). Implementation branch:
   `update_app`'s return value (e.g. flagging the real, documented lack of Agent-memory injection in
   `huf/ai/voice/README.md`) — upstream voice-engine gaps were not silently papered over.
 
+- 2026-08-24: **Phase 13 hardening review + fixes, verified against the same real bench.** An
+  independent review pass found and this branch fixed four real issues (full report in commit
+  `0873c906`'s message):
+  1. **CRITICAL — every chat-created App was silently deleted on the very next `bench migrate`.**
+     A third variant of the exact orphan-cleanup bug class already hit twice this branch for Skill
+     records (Rounds 2 and 4), just never checked for `HUF App` records: `find_seed_dirs()`
+     deliberately skips scanning `"huf"` itself, so a `source_app="huf"` record (which is what
+     `create_app_from_agent` always sets) could never appear in the `seen` set
+     `cleanup_orphaned_apps()` checks membership against — meaning it was deleted, deterministically,
+     on every single migrate, not just on a caching-timing schedule. Fixed by exempting
+     `source_app == "huf"` records from the `seen`-membership check in `cleanup_orphaned_apps()`
+     (`huf/ai/app_seeding/apps_loader.py`) — the installed-apps check alone already covers them
+     correctly, since `huf` is always installed. **Verified for real, not just via unit test**: created
+     an App via `create_app_from_agent`, ran `bench migrate`, confirmed it survived
+     (`frappe.db.exists` true both before and after). Added a permanent regression test,
+     `test_chat_created_app_survives_cleanup_orphaned_apps`.
+  2. `update_app` silently skipped the "capabilities must be a subset of Agent capabilities"
+     validation (ADR 0001 decision #2) when no Agent was linked, saving the payload unvalidated.
+     Now fails closed — a non-empty `capabilities` payload with no resolvable Agent is rejected.
+  3. `resolve_recent_resource` read another user's `Agent Conversation` data with only a role check,
+     no document-level permission check — added `_require_doc_permission("Agent Conversation",
+     "read", conversation_id)`.
+  4. `render_app_component`/`list_app_components` have no capability gate. Investigated and found
+     this actually matches real, already-shipped precedent (`render_mermaid`/`render_chart` from PR
+     #641 are also ungated, for the same reason: read-only templating over caller-supplied
+     structured data, no DB writes). Left ungated with an explanatory code comment rather than adding
+     an inconsistent gate — **this plan document's own §E table claim was the thing that was wrong**,
+     not the implementation.
+
+  Full sweep after all fixes: `test_app_creation.py` 11/11 (new regression test included),
+  `test_app_builder_tools.py` 24/24, `test_design_system_tools.py` 8/8,
+  `test_app_public_renderer.py` 6/6, `test_media_handlers.py` 4/4, `test_builder_tools.py` 71/71 —
+  124 tests total, zero regressions. Items the review checked and found clean: anti-enumeration
+  property in Phase 9b's guest routing (verified sound, every rejection path raises the identical
+  exception), secret handling (no path returns a credential), `install_app` idempotency, and the
+  final Skill `source_type="Local"` fix (sound, no third variant of that specific bug remained once
+  the App-record variant above was separately fixed).
+
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked/deferred
 
 ---
@@ -287,7 +325,9 @@ Depends on: Phase 9
 
 ## Phase 13 — Hardening
 Depends on: whichever of 2-11/9b shipped
-- [ ] Permission re-audit, idempotency re-verification, observability check
+- [x] Permission re-audit, idempotency re-verification, observability check — see decision log
+      entry above: 1 critical bug (App deletion on migrate) + 3 permission/validation gaps found
+      and fixed, verified against a real bench including a real `bench migrate` cycle
 
 ## Phase 14 — End-to-end testing + documentation + draft PR
 Depends on: Phase 13
