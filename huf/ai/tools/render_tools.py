@@ -8,6 +8,15 @@ hand-authoring Mermaid DSL or Recharts JSX.
 Both handlers return the complete <artifact>...</artifact> markup string -
 the exact same tags a model would otherwise hand-author - or raise ValueError
 on bad input, matching the convention used elsewhere in huf/ai/tools/.
+
+list_app_components/render_app_component (below) apply the same
+deterministic-templating idea to arbitrary shadcn/ui component composition:
+a small, explicit allowlist mirrored from
+frontend/src/components/ui/jsx-preview.tsx's `availableComponents` map (the
+client-side hard whitelist - anything not in that map is inert when the
+model emits raw JSX), not the full 60-component design system. This keeps
+the Hub Orchestrator (and any App-backing agent) from hand-authoring props
+against components it cannot actually see the definitions of.
 """
 
 import json
@@ -263,3 +272,182 @@ def _build_pie_jsx(value_key: str, colors) -> str:
 		"  </ResponsiveContainer>\n"
 		"</Card>"
 	)
+
+
+# ---------------------------------------------------------------------------
+# Design-system-aware component rendering (list_app_components /
+# render_app_component). Allowlist mirrored from jsx-preview.tsx's
+# `availableComponents` map (frontend/src/components/ui/jsx-preview.tsx,
+# `// shadcn/ui Components - Phase 1 & 2` block) - a small, curated subset,
+# not the full 60-component design system. Each family only includes the
+# sub-components needed for a functionally complete example (e.g. Table
+# without TableHeader/TableBody/TableRow/TableHead/TableCell would not
+# render a usable table).
+# ---------------------------------------------------------------------------
+
+APP_COMPONENT_ALLOWLIST = {
+	"Card": {
+		"props": ["style", "className"],
+		"example": '<Card style={{ padding: 12 }}>\n  <CardContent>Hello</CardContent>\n</Card>',
+	},
+	"CardContent": {
+		"props": ["style", "className"],
+		"example": "<CardContent>Body content</CardContent>",
+	},
+	"Button": {
+		"props": ["variant", "size", "disabled", "onClick"],
+		"example": '<Button variant="default">Click me</Button>',
+	},
+	"Badge": {
+		"props": ["variant"],
+		"example": '<Badge variant="secondary">New</Badge>',
+	},
+	"Alert": {
+		"props": ["variant"],
+		"example": '<Alert variant="default">\n  <AlertDescription>Heads up</AlertDescription>\n</Alert>',
+	},
+	"AlertDescription": {
+		"props": [],
+		"example": "<AlertDescription>Something happened.</AlertDescription>",
+	},
+	"Progress": {
+		"props": ["value"],
+		"example": "<Progress value={60} />",
+	},
+	"Table": {
+		"props": [],
+		"example": (
+			"<Table>\n"
+			"  <TableHeader>\n"
+			"    <TableRow>\n"
+			'      <TableHead>Name</TableHead>\n'
+			"    </TableRow>\n"
+			"  </TableHeader>\n"
+			"  <TableBody>\n"
+			"    <TableRow>\n"
+			"      <TableCell>Ada</TableCell>\n"
+			"    </TableRow>\n"
+			"  </TableBody>\n"
+			"</Table>"
+		),
+	},
+	"TableHeader": {
+		"props": [],
+		"example": "<TableHeader>\n  <TableRow>\n    <TableHead>Name</TableHead>\n  </TableRow>\n</TableHeader>",
+	},
+	"TableBody": {
+		"props": [],
+		"example": "<TableBody>\n  <TableRow>\n    <TableCell>Ada</TableCell>\n  </TableRow>\n</TableBody>",
+	},
+	"TableRow": {
+		"props": [],
+		"example": "<TableRow>\n  <TableCell>Ada</TableCell>\n</TableRow>",
+	},
+	"TableHead": {
+		"props": [],
+		"example": "<TableHead>Name</TableHead>",
+	},
+	"TableCell": {
+		"props": [],
+		"example": "<TableCell>Ada</TableCell>",
+	},
+	"Tabs": {
+		"props": ["defaultValue"],
+		"example": (
+			'<Tabs defaultValue="one">\n'
+			'  <TabsList>\n'
+			'    <TabsTrigger value="one">One</TabsTrigger>\n'
+			"  </TabsList>\n"
+			'  <TabsContent value="one">Content</TabsContent>\n'
+			"</Tabs>"
+		),
+	},
+	"TabsList": {
+		"props": [],
+		"example": '<TabsList>\n  <TabsTrigger value="one">One</TabsTrigger>\n</TabsList>',
+	},
+	"TabsTrigger": {
+		"props": ["value"],
+		"example": '<TabsTrigger value="one">One</TabsTrigger>',
+	},
+	"TabsContent": {
+		"props": ["value"],
+		"example": '<TabsContent value="one">Content</TabsContent>',
+	},
+}
+
+
+def handle_list_app_components(**kwargs) -> list:
+	"""Read-only discovery tool: the design-system component allowlist as
+	structured JSON (name + accepted props + one short example each) -
+	served as a small deterministic tool response instead of a giant prompt
+	block, per the design-system-aware rendering requirement.
+
+	No confirm, no permission check - purely informational, same allowlist
+	`render_app_component` validates against below.
+	"""
+	return [
+		{"name": name, "props": spec["props"], "example": spec["example"]}
+		for name, spec in APP_COMPONENT_ALLOWLIST.items()
+	]
+
+
+def handle_render_app_component(component=None, props=None, confirm=False, **kwargs):
+	"""Two-phase templating of a single shadcn/ui component into a
+	<artifact type="chart" language="jsx"> tag (the frontend's JSX artifact
+	renderer does not distinguish charts from any other whitelisted JSX -
+	`ArtifactRenderer.tsx` just hands the body to `JSXPreview`, so reusing
+	the "chart" artifact type is correct, not a hack).
+
+	confirm=False: returns a preview of the templated markup without
+	requiring the caller to relay it. confirm=True: returns the markup to
+	relay verbatim, matching the two-phase contract used by the builder
+	tools in huf.ai.tools.builder.
+
+	Args:
+		component (str): Must be a key in APP_COMPONENT_ALLOWLIST.
+		props (dict): JSON object of prop name -> value. Every value is
+			templated as a double-quoted JSX attribute via _escape_jsx_attr.
+		confirm (bool): See above.
+
+	Returns:
+		dict with keys {"rendered": bool, "confirm_required": bool,
+		"artifact": <markup>, "message": str}.
+	"""
+	if component not in APP_COMPONENT_ALLOWLIST:
+		allowed = ", ".join(sorted(APP_COMPONENT_ALLOWLIST))
+		raise ValueError(
+			f"'component' must be one of the allowed design-system components: {allowed}. "
+			f"Got {component!r}. Call list_app_components() to see the full list with examples."
+		)
+
+	if props is None:
+		props = {}
+	if not isinstance(props, dict):
+		raise ValueError("'props' must be a JSON object of prop name -> value")
+
+	attr_parts = []
+	for key, value in props.items():
+		safe_key = str(key)
+		safe_value = _escape_jsx_attr(str(value))
+		attr_parts.append(f'{safe_key}="{safe_value}"')
+	attrs = (" " + " ".join(attr_parts)) if attr_parts else ""
+
+	jsx = f"<{component}{attrs} />"
+	artifact_title = _escape_artifact_attr(f"{component} Component")
+	artifact = f'<artifact type="chart" language="jsx" title="{artifact_title}">\n{jsx}\n</artifact>'
+
+	if not bool(confirm):
+		return {
+			"rendered": False,
+			"confirm_required": True,
+			"artifact": artifact,
+			"message": "Review the artifact preview and call again with confirm=True to relay it.",
+		}
+
+	return {
+		"rendered": True,
+		"confirm_required": False,
+		"artifact": artifact,
+		"message": "Relay the 'artifact' value verbatim in your response.",
+	}

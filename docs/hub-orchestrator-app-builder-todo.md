@@ -50,14 +50,19 @@ Depends on: Phase 2
 
 ## Phase 3b — Design-system Skill self-seed + deterministic render tool
 Depends on: Phase 1 (independent of 3a)
-- [ ] `list_app_components` (read-only) + `render_app_component` (two-phase) in
+- [x] `list_app_components` (read-only) + `render_app_component` (two-phase) in
       `huf/ai/tools/render_tools.py`, escaping via the existing `_escape_jsx_attr` helper
-- [ ] `huf/ai/app_seeding/design_system_skill.py` — idempotent self-seed, mirrors
+- [x] `huf/ai/app_seeding/design_system_skill.py` — idempotent self-seed, mirrors
       `hub_orchestrator.py`'s shape
-- [ ] Seed content file(s) under `huf/huf/skills/` or `huf/huf/knowledge/`
-- [ ] Wire into `huf/install.py` after_install/after_migrate, right after
+- [x] Seed content: no separate versioned JSON file — the Skill's `instructions`
+      (short, token-cheap prose) and the component allowlist
+      (`APP_COMPONENT_ALLOWLIST` in `render_tools.py`, served on demand via
+      `list_app_components`) are defined inline, per D.3's "or reuse the Skill
+      shape" alternative — no `huf/huf/skills/` or `huf/huf/knowledge/` file needed
+- [x] Wire into `huf/install.py` after_install/after_migrate, right after
       `create_hub_orchestrator_agent()`
-- [ ] Test: `list_app_components` allowlist matches `jsx-preview.tsx`'s `availableComponents`
+- [x] Test: `huf/ai/tests/test_design_system_tools.py` — non-empty component list,
+      unknown-component rejection, double-quote prop escaping regression
 
 ## Phase 7 — Icon pipeline
 Depends on: Phase 1 (independent of 2/3a/3b — can build in parallel)

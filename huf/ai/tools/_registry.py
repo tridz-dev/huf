@@ -1986,6 +1986,35 @@ RENDER_TOOLS = [
 			_p("title", description="Artifact title (default '<Chart Type> Chart')"),
 		],
 	},
+	{
+		"tool_name": "list_app_components",
+		"description": (
+			"Lists the small, explicit allowlist of design-system components (mirrored from "
+			"the frontend's JSX whitelist) that render_app_component can render, each with its "
+			"accepted props and a short example. Read-only, no confirm needed. Call this before "
+			"render_app_component to see what's actually available - hand-authored component "
+			"names/props outside this list will not render."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_list_app_components",
+		"category": "Render Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "render_app_component",
+		"description": (
+			"Renders a single design-system component (from the list_app_components allowlist) "
+			"with the given props. Call this instead of hand-writing shadcn/ui JSX yourself. "
+			+ _CONFIRM_NOTE
+			+ " Returns the complete <artifact> tag - relay it verbatim in your response."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_render_app_component",
+		"category": "Render Tools",
+		"parameters": [
+			_p("component", required=True, description="Component name, must be one returned by list_app_components"),
+			_p("props", type="json", description="JSON object of prop name -> value, e.g. {\"variant\": \"secondary\"}"),
+			_p("confirm", type="boolean", description="false = preview artifact only; true = return artifact to relay"),
+		],
+	},
 ]
 
 LAZY_DISCOVERY_TOOLS = [
