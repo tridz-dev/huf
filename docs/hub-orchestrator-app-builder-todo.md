@@ -41,11 +41,12 @@ Depends on: Phase 1
 
 ## Phase 3a — Hub App builder tools (discovery + two-phase CRUD)
 Depends on: Phase 2
-- [ ] `list_agents`, `get_agent`, `list_apps`, `get_app` (read-only, no confirm)
-- [ ] `draft_app`, `update_app`, `install_app`, `set_app_icon` (two-phase confirm, mirrors
+- [x] `list_agents`, `get_agent`, `list_apps`, `get_app` (read-only, no confirm)
+- [x] `draft_app`, `update_app`, `install_app` (two-phase confirm, mirrors
       `huf/ai/tools/builder.py`'s existing contract)
-- [ ] Register in `BUILDER_TOOL_NAMES` / `huf/ai/tools/_registry.py`
-- [ ] `huf/ai/tests/test_app_builder_tools.py` — capability-gating + preview/confirm tests
+- [ ] `set_app_icon` (two-phase confirm) — deferred, see Phase 7
+- [x] Register in `BUILDER_TOOL_NAMES` / `huf/ai/tools/_registry.py`
+- [x] `huf/ai/tests/test_app_builder_tools.py` — capability-gating + preview/confirm tests
 
 ## Phase 3b — Design-system Skill self-seed + deterministic render tool
 Depends on: Phase 1 (independent of 3a)

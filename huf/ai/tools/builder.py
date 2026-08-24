@@ -18,6 +18,7 @@ import json
 import frappe
 from frappe import _
 
+from huf.ai.app_seeding import apps_loader
 from huf.ai.sdk_tools import _sanitize_for_doctype
 
 BUILDER_ROLES = ("System Manager", "Huf Manager")
@@ -729,6 +730,219 @@ def delete_table_row(table_name: str, row_name: str, confirm: bool = False) -> d
 	frappe.delete_doc(doctype_name, row_name)
 
 	return {"deleted": True, "row": row_name, "diff": diff}
+
+
+def list_agents(limit: int = 20) -> dict:
+	"""List Agents the caller can see (read-only).
+
+	Respects Agent read permission; returns only lightweight identifying
+	fields, capped at ``limit``. Use get_agent for more detail on a single
+	agent, and this to discover an existing agent to turn into an App
+	(draft_app).
+	"""
+	_require_builder_capability()
+	_require_doc_permission("Agent", "read")
+
+	agents = frappe.get_list(
+		"Agent",
+		fields=["agent_name", "description", "disabled", "is_system"],
+		limit=int(limit),
+		order_by="modified desc",
+	)
+
+	return {"agents": agents, "limit": int(limit)}
+
+
+def get_agent(agent_name: str) -> dict:
+	"""Get a single Agent's summary (read-only).
+
+	Deliberately excludes instructions/prompt content and any secrets — use
+	this to check whether an agent exists and is suitable to back an App
+	(draft_app), not to read its prompt.
+	"""
+	_require_builder_capability()
+	_require_doc_permission("Agent", "read", agent_name)
+
+	agent = _get_agent(agent_name)
+
+	return {
+		"agent_name": agent.agent_name,
+		"description": agent.description,
+		"provider": agent.provider,
+		"model": agent.model,
+		"disabled": agent.disabled,
+		"is_system": agent.is_system,
+		"allow_chat": agent.allow_chat,
+	}
+
+
+def list_apps(limit: int = 20) -> dict:
+	"""List HUF App registry records the caller can see (read-only).
+
+	Mirrors list_agents. Use this to discover existing Apps before deciding
+	whether to draft_app a new one or update_app an existing one.
+	"""
+	_require_builder_capability()
+	_require_doc_permission("HUF App", "read")
+
+	apps = frappe.get_list(
+		"HUF App",
+		fields=["app_id", "title", "description", "route", "category", "enabled"],
+		limit=int(limit),
+		order_by="modified desc",
+	)
+
+	return {"apps": apps, "limit": int(limit)}
+
+
+def get_app(app_id: str) -> dict:
+	"""Get a single HUF App record's summary (read-only).
+
+	Mirrors get_agent.
+	"""
+	_require_builder_capability()
+	_require_doc_permission("HUF App", "read", app_id)
+
+	if not frappe.db.exists("HUF App", app_id):
+		frappe.throw(_("HUF App '{0}' does not exist.").format(app_id))
+	app = frappe.get_doc("HUF App", app_id)
+
+	return {
+		"app_id": app.app_id,
+		"title": app.title,
+		"description": app.description,
+		"route": app.route,
+		"icon": app.icon,
+		"category": app.category,
+		"agent": app.get("agent") if app.meta.has_field("agent") else None,
+		"enabled": app.enabled,
+	}
+
+
+def draft_app(
+	app_id: str,
+	title: str,
+	agent_name: str,
+	description: str = "",
+	route: str | None = None,
+	category: str = "Other",
+	confirm: bool = False,
+) -> dict:
+	"""Two-phase creation of a chat-authored HUF App backed by an Agent.
+
+	agent_name must resolve to an existing, accessible Agent (it is not
+	cloned, only linked). confirm=False computes and returns the proposed
+	App fields as a diff without touching the database; confirm=True calls
+	apps_loader.create_app_from_agent to actually create it.
+	"""
+	_require_builder_capability()
+	_require_doc_permission("Agent", "read", agent_name)
+	confirm = _as_bool(confirm)
+
+	if not frappe.db.exists("Agent", agent_name):
+		frappe.throw(_("Agent '{0}' does not exist.").format(agent_name))
+	if frappe.db.exists("HUF App", app_id):
+		frappe.throw(_("HUF App '{0}' already exists.").format(app_id))
+
+	diff = {
+		"app_id": app_id,
+		"title": title,
+		"description": description,
+		"agent": agent_name,
+		"route": route or f"/apps/{app_id}",
+		"category": category,
+	}
+
+	if not confirm:
+		return {
+			"created": False,
+			"confirm_required": True,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to create the App.",
+		}
+
+	result = apps_loader.create_app_from_agent(
+		app_id=app_id,
+		title=title,
+		agent_name=agent_name,
+		description=description,
+		route=route,
+		category=category,
+	)
+
+	return {"created": True, "app": result, "diff": diff}
+
+
+def update_app(app_id: str, confirm: bool = False, **fields) -> dict:
+	"""Two-phase partial update of an existing HUF App record.
+
+	confirm=False: returns an old/new diff of the proposed field changes
+	without saving. confirm=True: applies via apps_loader.update_app.
+	"""
+	_require_builder_capability()
+	_require_doc_permission("HUF App", "write", app_id)
+	confirm = _as_bool(confirm)
+
+	if not frappe.db.exists("HUF App", app_id):
+		frappe.throw(_("HUF App '{0}' does not exist.").format(app_id))
+
+	if "agent" in fields and fields["agent"]:
+		_require_doc_permission("Agent", "read", fields["agent"])
+		if not frappe.db.exists("Agent", fields["agent"]):
+			frappe.throw(_("Agent '{0}' does not exist.").format(fields["agent"]))
+
+	app = frappe.get_doc("HUF App", app_id)
+	diff = {
+		field: {"old": app.get(field), "new": value}
+		for field, value in fields.items()
+		if app.meta.has_field(field) and app.get(field) != value
+	}
+
+	if not confirm:
+		return {
+			"updated": False,
+			"confirm_required": True,
+			"app": app_id,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to apply.",
+		}
+
+	result = apps_loader.update_app(app_id, **fields)
+
+	return {"updated": bool(diff), "app": result, "diff": diff}
+
+
+def install_app(app_id: str, confirm: bool = False) -> dict:
+	"""Two-phase, idempotent install (enable) of an HUF App.
+
+	confirm=False: reports the app's current enabled state and what will
+	change, without mutating anything. confirm=True: calls
+	apps_loader.install_app, which is itself idempotent — re-running it for
+	an already-enabled app never duplicates the record.
+	"""
+	_require_builder_capability()
+	_require_doc_permission("HUF App", "write", app_id)
+	confirm = _as_bool(confirm)
+
+	if not frappe.db.exists("HUF App", app_id):
+		frappe.throw(_("HUF App '{0}' does not exist.").format(app_id))
+
+	currently_enabled = bool(frappe.db.get_value("HUF App", app_id, "enabled"))
+	diff = {"enabled": {"old": currently_enabled, "new": True}}
+
+	if not confirm:
+		return {
+			"installed": False,
+			"confirm_required": True,
+			"app": app_id,
+			"already_installed": currently_enabled,
+			"diff": diff,
+			"message": "Review the diff and call again with confirm=True to install the App.",
+		}
+
+	result = apps_loader.install_app(app_id)
+
+	return {"installed": True, "app": result, "diff": diff}
 
 
 def list_provider_options() -> dict:

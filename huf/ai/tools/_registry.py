@@ -1203,6 +1203,111 @@ BUILDER_TOOLS = [
 		"parameters": [],
 	},
 	{
+		"tool_name": "list_agents",
+		"description": (
+			"List Agents the caller can see (read-only). Returns agent_name, description, "
+			"disabled, and is_system for up to 'limit' agents. Use this to discover an "
+			"existing agent before turning it into an App with draft_app."
+		),
+		"function_path": "huf.ai.tools.builder.list_agents",
+		"category": "Builder",
+		"parameters": [
+			_p("limit", type="integer", description="Max number of agents to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "get_agent",
+		"description": (
+			"Get a single Agent's summary (read-only) — agent_name, description, provider, "
+			"model, disabled, is_system, allow_chat. Does NOT return instructions or any "
+			"secrets, only enough to decide whether the agent is a suitable App backend."
+		),
+		"function_path": "huf.ai.tools.builder.get_agent",
+		"category": "Builder",
+		"parameters": [
+			_p("agent_name", required=True, description="Name of the agent to inspect"),
+		],
+	},
+	{
+		"tool_name": "list_apps",
+		"description": (
+			"List HUF App registry records the caller can see (read-only). Returns app_id, "
+			"title, description, route, category, enabled for up to 'limit' apps."
+		),
+		"function_path": "huf.ai.tools.builder.list_apps",
+		"category": "Builder",
+		"parameters": [
+			_p("limit", type="integer", description="Max number of apps to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "get_app",
+		"description": (
+			"Get a single HUF App record's summary (read-only) — app_id, title, description, "
+			"route, icon, category, agent, enabled."
+		),
+		"function_path": "huf.ai.tools.builder.get_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to inspect"),
+		],
+	},
+	{
+		"tool_name": "draft_app",
+		"description": (
+			"Create a new HUF App backed by an existing Agent (linked, not cloned). The "
+			"agent must already exist and be readable by the caller. "
+			+ _CONFIRM_NOTE
+			+ " Use list_agents/get_agent first to pick agent_name. Fails with a clear "
+			"error if app_id already exists or agent_name does not."
+		),
+		"function_path": "huf.ai.tools.builder.draft_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="Unique App ID (also the document ID)"),
+			_p("title", required=True, description="Display title for the App"),
+			_p("agent_name", required=True, description="Existing Agent to back this App"),
+			_p("description", description="Short human description of the App"),
+			_p("route", description="Frontend route; defaults to /apps/<app_id>"),
+			_p("category", description="Launcher category, e.g. Create, Plan, Automate (default Other)"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the App"),
+		],
+	},
+	{
+		"tool_name": "update_app",
+		"description": (
+			"Apply a partial update to an existing HUF App's fields (e.g. title, "
+			"description, icon, category, agent). Only the fields passed are changed. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.update_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to update"),
+			_p("title", description="New display title"),
+			_p("description", description="New description"),
+			_p("icon", description="New icon"),
+			_p("category", description="New launcher category"),
+			_p("agent", description="Existing Agent name to re-link this App to"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "install_app",
+		"description": (
+			"Install (enable) an existing HUF App. Idempotent — re-running with the same "
+			"app_id never duplicates the record; an already-enabled app is reported as "
+			"already_installed. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.install_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to install"),
+			_p("confirm", type="boolean", description="false = preview only; true = install the App"),
+		],
+	},
+	{
 		"tool_name": "ask_user",
 		"description": (
 			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "

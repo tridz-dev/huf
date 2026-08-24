@@ -65,6 +65,13 @@ BUILDER_TOOL_NAMES = (
     "create_agent_tool",
     "list_provider_options",
     "ask_user",
+    "list_agents",
+    "get_agent",
+    "list_apps",
+    "get_app",
+    "draft_app",
+    "update_app",
+    "install_app",
 )
 
 
