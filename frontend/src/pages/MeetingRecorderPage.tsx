@@ -71,7 +71,7 @@ export default function MeetingRecorderPage() {
     try {
       await recorder.stop();
       await stopRecordingApi(meetingId);
-      navigate(`/huf/meetings/${meetingId}`);
+      navigate(`/meetings/${meetingId}`);
     } catch (error) {
       toast.error('Could not stop recording', {
         description: error instanceof Error ? error.message : 'An unexpected error occurred.',
@@ -144,7 +144,7 @@ export default function MeetingRecorderPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Button variant="link" size="sm" onClick={() => navigate('/huf/meetings')} disabled={stopping}>
+      <Button variant="link" size="sm" onClick={() => navigate('/meetings')} disabled={stopping}>
         Back to meetings
       </Button>
     </div>

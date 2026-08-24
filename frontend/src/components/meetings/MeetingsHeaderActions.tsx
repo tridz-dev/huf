@@ -21,7 +21,7 @@ export function MeetingsHeaderActions() {
   const beginRecording = async (details: { title?: string; description?: string; participants?: string }) => {
     const { meeting_name: meetingName } = await createMeeting(details);
     await startRecording(meetingName);
-    navigate(`/huf/meetings/${meetingName}/record`);
+    navigate(`/meetings/${meetingName}/record`);
   };
 
   const handleQuickStart = async () => {
