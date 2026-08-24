@@ -121,6 +121,19 @@ function validationStatus(doc: AgentProcedureDoc): { ok: boolean; label: string 
   return { ok: false, label: 'Not yet fingerprinted' };
 }
 
+/** Plain-language gloss for the tier/read-write badges rendered in the header card
+ * below — this page is the only place a non-engineer sees these terms, so the
+ * explanation lives here rather than as a tooltip buried behind a hover. */
+function tierExplainer(doc: AgentProcedureDoc): string {
+  if ((doc.status || 'Draft') === 'Draft') {
+    return 'Draft means this procedure isn’t usable by any agent yet.';
+  }
+  if (doc.is_read_only) {
+    return 'Read-only means it can only look things up, never change data — safe to turn on directly.';
+  }
+  return 'Write means it can change real data, so it needs approval below before any agent can use it.';
+}
+
 function AgentProcedureDetailPage() {
   const { procedureId } = useParams<{ procedureId: string }>();
   const navigate = useNavigate();
@@ -240,6 +253,7 @@ function AgentProcedureDetailPage() {
                 <Badge variant="outline">{procedure.status || 'Draft'}</Badge>
               </CardTitle>
               <CardDescription className="mt-1">{procedure.name}</CardDescription>
+              <p className="text-xs text-steel-soft mt-2">{tierExplainer(procedure)}</p>
             </div>
             <Button variant="outline" onClick={handleRunTest} disabled={testRunning}>
               {testRunning ? (

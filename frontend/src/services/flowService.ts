@@ -15,6 +15,7 @@ import {
   saveFlowDefinition,
   deleteFlowDefinition,
   updateFlowDefinitionFields,
+  getFlowConversionStatus,
   runFlow as apiRunFlow,
   listFlowRuns as apiListFlowRuns,
   getFlowRun as apiGetFlowRun,
@@ -145,6 +146,12 @@ class FlowService {
     await saveFlowDefinition(flow.id, graph);
     this.flowCache.set(flow.id, { ...flow, updatedAt: new Date() });
     this.notifyListeners();
+  }
+
+  /** Fetch the auto-convert-to-procedure checkbox and the outcome of the last
+   * conversion attempt for a flow (see flowApi.getFlowConversionStatus). */
+  async getConversionStatus(id: string) {
+    return getFlowConversionStatus(id);
   }
 
   /** Update a flow locally and save to backend */

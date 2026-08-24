@@ -243,6 +243,44 @@ export async function updateFlowDefinitionFields(
     }
 }
 
+/** Outcome of the "create a procedure from this flow on save" checkbox, as recorded on
+ * the Flow Definition doc. `get_flow_definition`/`save_flow_definition` don't expose
+ * these fields, so they're read straight off the doctype via the SDK. */
+export interface FlowConversionStatus {
+    auto_convert_to_procedure: boolean;
+    /** Human-readable outcome of the last conversion attempt (success or refusal reason). */
+    conversion_note: string | null;
+    /** Name of the Draft Agent Procedure created/refreshed from this flow, if any. */
+    converted_procedure: string | null;
+}
+
+/** Fetch the current auto-convert checkbox value and the outcome of the last conversion
+ * attempt (set asynchronously by the backend after save -- see flow_definition.py's
+ * _maybe_convert_to_procedure). */
+export async function getFlowConversionStatus(flowId: string): Promise<FlowConversionStatus> {
+    try {
+        const doc = await db.getDoc(doctype['Flow Definition'], flowId);
+        return {
+            auto_convert_to_procedure: Boolean(doc.auto_convert_to_procedure),
+            conversion_note: (doc.conversion_note as string) || null,
+            converted_procedure: (doc.converted_procedure as string) || null,
+        };
+    } catch (error) {
+        handleFrappeError(error, `Error fetching conversion status for flow ${flowId}`);
+    }
+}
+
+/** Toggle the "create a procedure from this flow on save" checkbox */
+export async function updateFlowAutoConvert(flowId: string, autoConvert: boolean): Promise<void> {
+    try {
+        await db.updateDoc(doctype['Flow Definition'], flowId, {
+            auto_convert_to_procedure: autoConvert ? 1 : 0,
+        });
+    } catch (error) {
+        handleFrappeError(error, `Error updating flow ${flowId}`);
+    }
+}
+
 /** Get node schemas from backend for dynamic UI construction */
 export async function getNodeSchemas(): Promise<Record<string, unknown>> {
     try {

@@ -135,9 +135,9 @@ export function ProcedureBindingsTab({ agentId }: ProcedureBindingsTabProps) {
               Procedure bindings
             </CardTitle>
             <CardDescription>
-              Deterministic Agent Procedures this agent can execute. Only read-only (Read tier)
-              procedures can be bound — write procedures require the write runtime and are not
-              eligible here.
+              Bind a saved Procedure to this agent so it can run those steps directly, instead of
+              working out what to do from scratch every time. Only read-only procedures can be bound
+              here — a write procedure needs approval first (see its detail page).
             </CardDescription>
           </div>
         </div>
@@ -175,7 +175,8 @@ export function ProcedureBindingsTab({ agentId }: ProcedureBindingsTabProps) {
           <div className="text-center py-12 border border-dashed rounded-lg bg-muted/20">
             <p className="text-muted-foreground mb-2">No procedures bound yet.</p>
             <p className="text-xs text-muted-foreground">
-              Bind a read-only procedure to let this agent execute it deterministically.
+              Bind a saved procedure so this agent can just run it, instead of deciding the steps again
+              every time.
             </p>
           </div>
         ) : (

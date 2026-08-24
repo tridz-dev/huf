@@ -124,6 +124,10 @@ function AgentProceduresPage() {
         />
       }
     >
+      <p className="text-sm font-body text-steel mb-4">
+        A Procedure is a sequence of steps an agent already worked out in chat, saved so it can repeat
+        them the same way every time — faster, and without re-deciding what to do.
+      </p>
       <div className="w-full">
         {initialLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -132,8 +136,8 @@ function AgentProceduresPage() {
         ) : procedures.length === 0 ? (
           <EmptyState
             icon={ListTree}
-            title="No procedures"
-            description="No Agent Procedures have been created yet."
+            title="No procedures yet"
+            description="Tell an agent what to do in chat, then save that exact sequence of steps as a Procedure so it runs the same way next time, instead of thinking it through again."
           />
         ) : (
           <div className="border border-line bg-panel">
