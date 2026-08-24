@@ -60,7 +60,9 @@ def _is_real_package(name):
         return not isinstance(module, MagicMock) and getattr(module, "__file__", None) is not None
     try:
         spec = importlib.util.find_spec(name)
-    except (ImportError, ValueError):
+    except Exception:
+        # find_spec imports parent packages, and a parent may itself blow up in
+        # a stubbed environment. Treat anything unresolvable as absent.
         return False
     return spec is not None and spec.origin is not None
 
@@ -161,14 +163,19 @@ def install():
     # sys.path already has the repo root on it when tests are run from there;
     # these just need to exist as importable packages pointing at the real
     # on-disk source so `import huf.ai.providers.litellm` etc. resolve normally.
-    repo_pkg = _make_module("huf")
-    if not hasattr(repo_pkg, "__path__"):
-        repo_pkg.__path__ = ["huf"]
-
-    ai_pkg = _make_module("huf.ai")
-    if not hasattr(ai_pkg, "__path__"):
-        ai_pkg.__path__ = ["huf/ai"]
-
-    providers_pkg = _make_module("huf.ai.providers")
-    if not hasattr(providers_pkg, "__path__"):
-        providers_pkg.__path__ = ["huf/ai/providers"]
+    #
+    # Gated the same way as the sections above. Under a bench, `huf` is a real
+    # installed package but its subpackages are often not imported yet, so an
+    # ungated `_make_module("huf.ai.providers")` inserts a bare module with a
+    # repo-relative `__path__` ahead of the real one, and every later
+    # `import huf.ai.providers.litellm` fails with ModuleNotFoundError.
+    for name, rel_path in (
+        ("huf", "huf"),
+        ("huf.ai", "huf/ai"),
+        ("huf.ai.providers", "huf/ai/providers"),
+    ):
+        if _is_real_package(name):
+            continue
+        pkg = _make_module(name)
+        if not hasattr(pkg, "__path__"):
+            pkg.__path__ = [rel_path]
