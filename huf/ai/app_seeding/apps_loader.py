@@ -423,23 +423,18 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 	current sync run. When None, every record from an installed app is treated
 	as seen unless its source app was uninstalled.
 
-	Records with no ``source_app`` (first-party huf features seeded directly
-	by install.py, e.g. Meeting Recorder, rather than discovered via a
-	``huf/apps/`` manifest) are out of scope for this cleanup: find_seed_dirs()
-	skips scanning "huf" itself, so such a record can never appear in ``seen``
-	and would otherwise be deleted on every migrate.
-	Returns the list of deleted app_ids.
-
-	Records with ``source_app == "huf"`` (e.g. Apps created via the Hub
-	Orchestrator chat builder, huf.ai.app_seeding.apps_loader.create_app_from_agent)
-	are exempt from the ``seen``-membership check: find_seed_dirs() explicitly
-	skips scanning "huf" itself (huf.ai.app_seeding.scanner.find_seed_dirs -
-	the manifest-discovery pipeline is for *other* apps' huf/apps/*.json files,
-	not huf's own), so a huf-sourced record can never legitimately appear in
-	``seen`` and would otherwise be deleted on every single sync/migrate
-	regardless of whether it's still wanted. "huf" is always installed, so the
-	installed-apps check above already covers the only other reason a record
+	Records with no ``source_app``, or ``source_app == "huf"`` (first-party huf
+	features seeded or created directly rather than discovered via a
+	``huf/apps/`` manifest -- e.g. Meeting Recorder seeded by install.py, or
+	Apps created via the Hub Orchestrator chat builder,
+	huf.ai.app_seeding.apps_loader.create_app_from_agent) are out of scope for
+	this cleanup entirely: find_seed_dirs() explicitly skips scanning "huf"
+	itself, so such a record can never legitimately appear in ``seen`` and
+	would otherwise be deleted on every single sync/migrate regardless of
+	whether it's still wanted. "huf" is always installed, so the
+	installed-apps check below already covers the only other reason a record
 	could be orphaned.
+	Returns the list of deleted app_ids.
 	"""
 	installed_apps = set(frappe.get_installed_apps())
 	deleted = []
@@ -451,7 +446,7 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 		if not record.source_app or record.source_app == "huf":
 			continue
 		orphaned = record.source_app not in installed_apps
-		if not orphaned and seen is not None and record.source_app != "huf":
+		if not orphaned and seen is not None:
 			orphaned = (record.source_app, record.source_file) not in seen
 		if not orphaned:
 			continue
