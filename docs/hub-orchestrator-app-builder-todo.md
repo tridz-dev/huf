@@ -81,6 +81,40 @@ Base branch: `pre-develop` (per final PR target). Implementation branch:
   kwarg at all (checked: it doesn't), this isn't a live gap yet, but flag it if `draft_app` grows
   that parameter later.
 
+- 2026-08-24: **Round 4 (Phases 10/11) verified against the same real bench — found round 2's
+  migrate-fix was itself incomplete.** `bench migrate` hard-failed again with the *exact same*
+  orphan-skill-deletion error as round 2, despite the `huf_skills` hook fix from commit `04c6c91b`.
+  Root cause (a real, pre-existing bug in `sync_app_skills`'s caching, not something introduced by
+  us): its per-app scan cache (keyed on `hooks.py` mtime) can legitimately skip re-scanning an app
+  whose declarations haven't changed since the last scan — but the orphan-cleanup pass (full scan
+  mode) only builds its "still valid" set from apps *actually rescanned this pass*, so a cache-skip
+  gets misread as "no longer declared" and the skill gets swept for deletion anyway, on a schedule
+  that depends on cache timing rather than anything we control. **Real fix (commit `0ac1c702`)**:
+  stop using `source_type: "App Provided"` for the self-seeded skill entirely — switched to
+  `source_type: "Local"` (the DocType's own default value, and semantically accurate: this skill is
+  directly authored, not hook-discovered), which sidesteps the orphan-cleanup subsystem completely
+  regardless of caching behavior. Removed the now-unnecessary `huf_skills` hook entry and
+  `get_skill_manifest()`. Verified stable across **two consecutive** `bench migrate` runs (the
+  round-2 fix looked fine on the first migrate too — it only broke on a later one — so a single
+  clean migrate is not sufficient evidence here). Full sweep after the fix: `test_app_creation.py`
+  10/10, `test_app_builder_tools.py` 24/24, `test_design_system_tools.py` 8/8,
+  `test_app_public_renderer.py` 6/6, `test_media_handlers.py` 4/4 (new), `test_builder_tools.py`
+  71/71 — 123 tests total, zero regressions. Hub Orchestrator now has 23 tools (added
+  `resolve_recent_resource` from Phase 4) and the Skill remains attached with `source_type: Local`.
+
+  **Phase 10 status is honestly partial, not "done" in the working-feature sense**: `AI Model`
+  gained a `Video` modality option and `handle_generate_video()` exists with full fail-closed
+  validation (no Video-modality model configured → clear error), but the actual generation call is
+  a documented `NotImplementedError` — confirmed via direct introspection that the installed
+  `litellm==1.95.0` has no video-generation entry point at all (unlike `image_generation`). Also:
+  `Agent` DocType has no video-generation-model field (no analogue to `image_generation_model`/
+  `tts_model`), so `validate_app_capabilities`'s `video_output` check unconditionally rejects the
+  capability with an explanatory error — a real, deliberately-not-silently-worked-around gap.
+  Phase 11 (live voice) stayed correctly scoped to config-surfacing: `live_voice` capability
+  validation (`voice_enabled` + `voice_engine` required) plus a new non-blocking `warnings` list on
+  `update_app`'s return value (e.g. flagging the real, documented lack of Agent-memory injection in
+  `huf/ai/voice/README.md`) — upstream voice-engine gaps were not silently papered over.
+
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked/deferred
 
 ---
