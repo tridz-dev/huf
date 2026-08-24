@@ -50,7 +50,9 @@ class TestAppCreation(unittest.TestCase):
 			{
 				"doctype": "Agent",
 				"agent_name": name,
-				"title": name,
+				"description": name,
+				"prompt_mode": "Local",
+				"instructions": "Test agent instructions for app-creation service tests.",
 			}
 		)
 		doc.insert(ignore_permissions=True)
