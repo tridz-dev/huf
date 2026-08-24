@@ -20,6 +20,7 @@ import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHe
 import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
+import { MeetingsHeaderActions } from './components/meetings/MeetingsHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
@@ -60,6 +61,9 @@ const Executions = lazy(() => import('./pages/Executions'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
+const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
+const MeetingRecorderPage = lazy(() => import('./pages/MeetingRecorderPage'));
+const MeetingDetailPageWrapper = lazy(() => import('./pages/MeetingDetailPageWrapper'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
@@ -732,6 +736,40 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <McpDetailsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/huf/meetings"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<MeetingsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <MeetingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/huf/meetings/:meetingId/record"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <MeetingRecorderPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/huf/meetings/:meetingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <MeetingDetailPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }
