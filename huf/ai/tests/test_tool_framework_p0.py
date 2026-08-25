@@ -141,10 +141,13 @@ class TestToolFrameworkP0(IntegrationTestCase):
     # Both use "AI Provider" as the gated reference_doctype rather than the
     # test-tool-spec builder's own default ("ToDo") because AI Provider's
     # permission list (huf/huf/doctype/ai_provider/ai_provider.json) is
-    # verified in-repo: System Manager/Huf Manager get write=1, "Huf User"
-    # is explicitly write=0. That gives a deterministic has/has-not split
-    # without depending on unverifiable core-Frappe ToDo permission
-    # defaults (ToDo ships with frappe core, not this app).
+    # verified in-repo: ONLY "System Manager" has write=1 -- "Huf Manager"
+    # and "Huf User" are both explicitly write=0 (confirmed against a real
+    # bench via `bench console`: a fresh "Huf Manager" user's
+    # frappe.has_permission("AI Provider", "write") is False). That gives a
+    # deterministic has/has-not split without depending on unverifiable
+    # core-Frappe ToDo permission defaults (ToDo ships with frappe core, not
+    # this app).
 
     def _make_gated_tool(self, name_suffix):
         doc = create_test_tool_doc(
@@ -162,9 +165,9 @@ class TestToolFrameworkP0(IntegrationTestCase):
         agent.append("agent_tool", {"tool": tool_doc.name})
         agent.save(ignore_permissions=True)
 
-        # Huf Manager has write=1 on AI Provider per the doctype's own
-        # permission list -- a real permission grant, not a superuser bypass.
-        user = self._make_user(roles=("Huf Manager",), suffix="exp1")
+        # System Manager is the only role with write=1 on AI Provider per
+        # the doctype's own permission list (see note above).
+        user = self._make_user(roles=("System Manager",), suffix="exp1")
 
         allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user)
         allowed_names = [t.name for t in allowed]
