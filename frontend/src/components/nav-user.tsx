@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { ChevronsUpDown, LogOut, Moon, Sun, Monitor } from "lucide-react"
 
 import {
@@ -34,11 +34,15 @@ const SCHEMES: { id: HufColorScheme; label: string; icon: typeof Sun }[] = [
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { logout, user } = useUser()
-  const [colorScheme, setColorSchemeState] = useState<HufColorScheme>('light')
-
-  useEffect(() => {
-    setColorSchemeState(getColorScheme())
-  }, [])
+  // Lazy-initialize from the persisted value instead of a hardcoded default
+  // + a mount effect that corrects it a tick later. NavUser sits inside the
+  // per-route subtree that App.tsx remounts on every navigation (the
+  // AnimatePresence wrapper there is keyed on `location.pathname`), so a
+  // hardcoded default here would flash "Light" as selected on every route
+  // change even while the app is actually in dark mode, until the effect
+  // caught up. Reading the source of truth synchronously at mount time
+  // removes that window entirely.
+  const [colorScheme, setColorSchemeState] = useState<HufColorScheme>(getColorScheme)
 
   if (!user) {
     return null;
