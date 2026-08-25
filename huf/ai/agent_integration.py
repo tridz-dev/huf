@@ -744,6 +744,29 @@ def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) ->
 
     return resolved
 
+def _normalize_tool_args_json(args):
+    """Return ``args`` as a JSON-encoded string suitable for storage in the
+    ``Agent Tool Call.tool_args`` field, without double-encoding it.
+
+    Per the OpenAI/litellm tool-call convention (see providers/litellm.py,
+    where ``args`` originates from ``tool_call.function.arguments``), ``args``
+    normally arrives already JSON-encoded as a string (e.g. '{"city": "X"}').
+    Calling json.dumps() on that string again would wrap it in an extra layer
+    of quoting/escaping ("double encoding"), so a plain string that is
+    already valid JSON is stored as-is. Any other caller that legitimately
+    passes structured data (a dict/list) - or a string that is NOT valid
+    JSON - still gets json.dumps()'d exactly as before.
+    """
+    if isinstance(args, str):
+        try:
+            json.loads(args)
+        except (ValueError, TypeError):
+            return json.dumps(args)
+        else:
+            return args
+    return json.dumps(args)
+
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -843,7 +866,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 if mcp_server and not doc.mcp_server:
                     update_data["mcp_server"] = mcp_server
                 if args and not doc.tool_args:
-                    update_data["tool_args"] = json.dumps(args)
+                    update_data["tool_args"] = _normalize_tool_args_json(args)
                 if result_val is not None and not doc.tool_result:
                     update_data["tool_result"] = result_val
                 if error and not doc.error_message:
@@ -868,7 +891,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "tool": name,
                 "is_mcp_tool": is_mcp_tool,
                 "mcp_server": mcp_server,
-                "tool_args": json.dumps(args) if args else None,
+                "tool_args": _normalize_tool_args_json(args) if args else None,
                 "tool_result": result_val,
                 "error_message": error,
                 "status": "Queued",
