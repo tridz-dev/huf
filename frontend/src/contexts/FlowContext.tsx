@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
 
@@ -281,6 +282,24 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       await flowService.saveFlow(activeFlow);
       setSaveState('saved');
       setHasUnsavedChanges(false);
+
+      // The "create a procedure from this flow on save" checkbox (if enabled) runs
+      // after the flow itself is saved and leaves a note on the doc explaining what
+      // happened -- surface it so the user isn't left guessing. A missing note (the
+      // checkbox was off) is silently skipped.
+      try {
+        const conversion = await flowService.getConversionStatus(activeFlowId);
+        if (conversion.conversion_note) {
+          if (conversion.converted_procedure) {
+            toast.success(conversion.conversion_note);
+          } else {
+            toast.info(conversion.conversion_note);
+          }
+        }
+      } catch (conversionErr) {
+        // Non-critical: the flow itself saved fine, just couldn't fetch the note.
+        console.error('Failed to fetch flow conversion status:', conversionErr);
+      }
     } catch (err: unknown) {
       setSaveState('error');
       console.error('Failed to save flow:', err);

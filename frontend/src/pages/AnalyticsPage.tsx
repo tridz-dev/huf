@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, ArrowUpDown } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { EmptyStat, EmptyState, GaugeRow, MetricGauge } from '@/components/dashboard';
@@ -80,7 +81,10 @@ interface BreakdownRow extends ExecutionAnalyticsSummary {
   dimension: string;
 }
 
+const ENTITY_DIMENSIONS: ReadonlySet<AnalyticsDimension> = new Set(['agent', 'provider', 'model']);
+
 export default function AnalyticsPage() {
+  const navigate = useNavigate();
   const [dimension, setDimension] = useState<AnalyticsDimension>('provider');
   const [window, setWindow] = useState<TimeWindow>('7d');
   const [data, setData] = useState<ExecutionAnalyticsResponse | null>(null);
@@ -114,6 +118,15 @@ export default function AnalyticsPage() {
 
   const dimensionLabel =
     DIMENSION_OPTIONS.find((option) => option.value === dimension)?.label ?? 'Dimension';
+
+  const handleRowClick = (row: BreakdownRow) => {
+    if (ENTITY_DIMENSIONS.has(dimension)) {
+      navigate(`/analytics/${dimension}/${encodeURIComponent(row.dimension)}`);
+    } else if (dimension === 'conversation') {
+      navigate(`/chat/${row.dimension}?pane=analytics`);
+    }
+  };
+  const rowsAreClickable = ENTITY_DIMENSIONS.has(dimension) || dimension === 'conversation';
 
   const columns = useMemo<ColumnDef<BreakdownRow>[]>(
     () => [
@@ -340,7 +353,11 @@ export default function AnalyticsPage() {
                   </TableHeader>
                   <TableBody>
                     {table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} className="h-11">
+                      <TableRow
+                        key={row.id}
+                        className={cn('h-11', rowsAreClickable && 'cursor-pointer hover:bg-paper-deep')}
+                        onClick={rowsAreClickable ? () => handleRowClick(row.original) : undefined}
+                      >
                         {row.getVisibleCells().map((cell) => (
                           <TableCell key={cell.id}>
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}

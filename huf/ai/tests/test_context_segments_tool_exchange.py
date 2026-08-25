@@ -11,15 +11,19 @@ Tests for huf.ai.context_segments.count_tool_exchange_tokens:
   - returns None if any message's count fails
   - handles both string and list-of-content-block `content` shapes
 
-`_count()` (the module's shared token counter) calls `litellm.token_counter`,
-which is stubbed in this environment (see huf/ai/tests/_stub_env.py) to
-return a deterministic value via a side_effect keyed on text length, so
-these tests can assert on exact counted totals rather than "it ran".
+`_count()` (the module's shared token counter) calls `token_counter`, which
+`huf.ai.context_segments` imports by name from litellm. This module patches
+`huf.ai.context_segments.token_counter` directly (via `unittest.mock.patch`)
+with a deterministic side_effect keyed on text length, so these tests can
+assert on exact counted totals rather than "it ran" -- and the patch works
+the same way whether litellm is real (under a bench) or stubbed (see
+huf/ai/tests/_stub_env.py for the frappe-less standalone environment).
 """
 
 import sys
 import os
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _stub_env  # noqa: E402
@@ -28,7 +32,6 @@ _stub_env.install()
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
-import litellm  # noqa: E402
 from huf.ai.context_segments import count_tool_exchange_tokens  # noqa: E402
 
 
@@ -36,12 +39,12 @@ class TestCountToolExchangeTokens(unittest.TestCase):
     def setUp(self):
         # Deterministic per-call token count: 1 "token" per character. Lets
         # tests assert exact totals without depending on a real tokenizer.
-        litellm.token_counter.side_effect = lambda model, text: len(text)
-        litellm.token_counter.return_value = None
-
-    def tearDown(self):
-        litellm.token_counter.side_effect = None
-        litellm.token_counter.return_value = 0
+        patcher = patch(
+            "huf.ai.context_segments.token_counter",
+            side_effect=lambda model, text: len(text),
+        )
+        self.mock_token_counter = patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_empty_or_none_messages_returns_zero(self):
         self.assertEqual(count_tool_exchange_tokens("gpt-4", []), 0)
@@ -147,7 +150,7 @@ class TestCountToolExchangeTokens(unittest.TestCase):
                 raise RuntimeError("tokenizer exploded")
             return len(text)
 
-        litellm.token_counter.side_effect = flaky_counter
+        self.mock_token_counter.side_effect = flaky_counter
         messages = [{"role": "tool", "content": "will fail"}]
         result = count_tool_exchange_tokens("gpt-4", messages)
         self.assertIsNone(result)

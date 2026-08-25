@@ -17,6 +17,7 @@ from huf.ai.tool_functions import (
     set_value,
     get_report_result,
     attach_file_to_document,
+    send_email,
 )
 from huf.ai.transaction import commit_if_background
 
@@ -803,4 +804,28 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
     except Exception as e:
         # Boundary exception handler: tool contract requires returning JSON error to LLM
         logger.warning(f"handle_attach_file_to_document failed: {e!s}\n{frappe.get_traceback()}")
+        return {"success": False, "error": str(e)}
+
+
+def handle_send_email(to=None, subject=None, message=None, body=None, reference_doctype=None, reference_name=None, gateway=None, **kwargs):
+    """
+    SDK handler that wraps send_email. Accepts 'message' or 'body' for the email content.
+    """
+    if not reference_doctype:
+        reference_doctype = frappe.flags.get("current_function_doctype")
+
+    try:
+        return send_email(
+            to=to,
+            subject=subject,
+            message=message or body,
+            reference_doctype=reference_doctype,
+            reference_name=reference_name,
+            gateway=gateway,
+        )
+    except (frappe.DoesNotExistError, frappe.PermissionError, frappe.ValidationError, ValueError, KeyError) as e:
+        return {"success": False, "error": str(e)}
+    except Exception as e:
+        # Boundary exception handler: tool contract requires returning JSON error to LLM
+        logger.warning(f"handle_send_email failed: {e!s}\n{frappe.get_traceback()}")
         return {"success": False, "error": str(e)}

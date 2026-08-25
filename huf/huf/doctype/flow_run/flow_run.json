@@ -10,6 +10,8 @@
   "flow_definition",
   "flow_id",
   "flow_version",
+  "pinned_fingerprint",
+  "pinned_definition",
   "column_break_ov1",
   "mode",
   "status",
@@ -59,6 +61,21 @@
    "fieldtype": "Int",
    "label": "Flow Version",
    "read_only": 1
+  },
+  {
+   "fieldname": "pinned_fingerprint",
+   "fieldtype": "Data",
+   "label": "Pinned Fingerprint",
+   "read_only": 1,
+   "description": "sha256 of the definition content this run pinned at start. Immutable for the life of the run."
+  },
+  {
+   "fieldname": "pinned_definition",
+   "fieldtype": "JSON",
+   "label": "Pinned Definition",
+   "read_only": 1,
+   "hidden": 1,
+   "description": "The exact graph this run executes, snapshotted at start."
   },
   {
    "fieldname": "column_break_ov1",

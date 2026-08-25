@@ -48,6 +48,38 @@ export async function getAutomation(automation: string): Promise<Automation | un
   }
 }
 
+export interface ConversationDraftMessage {
+  role: string;
+  content: string;
+}
+
+export interface ConversationAutomationDraft {
+  conversation: string;
+  agent: string;
+  title?: string;
+  messages: ConversationDraftMessage[];
+}
+
+/**
+ * Best-effort automation draft sourced from an existing Agent Conversation
+ * -- backs the chat header's "Create automation from this chat" action.
+ * Does not call an LLM; just returns the conversation's Agent and its plain
+ * messages so the Automation form can pre-fill the Agent and let the user
+ * write the Task Instruction themselves.
+ */
+export async function draftAutomationFromConversation(
+  conversationName: string
+): Promise<ConversationAutomationDraft | undefined> {
+  try {
+    const result = await call.post('huf.ai.automation_api.draft_automation_from_conversation', {
+      conversation_name: conversationName,
+    });
+    return (result?.message ?? result) as ConversationAutomationDraft;
+  } catch (error) {
+    handleFrappeError(error, 'Error drafting automation from conversation');
+  }
+}
+
 export interface CreateAutomationParams {
   automation_name: string;
   agent: string;
@@ -322,5 +354,23 @@ export async function listScheduledAutomations(): Promise<ScheduledAutomationSum
   } catch (error) {
     handleFrappeError(error, 'Error fetching scheduled automations');
     return [];
+  }
+}
+
+export interface AutomationRuntimeModeResponse {
+  mode: 'new' | 'legacy';
+}
+
+/**
+ * Get the current automation trigger runtime mode.
+ * Returns 'new' (default) or 'legacy' if the site is in legacy mode.
+ */
+export async function getAutomationRuntimeMode(): Promise<AutomationRuntimeModeResponse> {
+  try {
+    const result = await call.get('huf.ai.automation_api.get_automation_runtime_mode');
+    return (result?.message ?? result) as AutomationRuntimeModeResponse;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching automation runtime mode');
+    return { mode: 'new' };
   }
 }

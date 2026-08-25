@@ -14,10 +14,12 @@ import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Checkbox } from '../ui/checkbox';
 import { useFlowContext } from '../../contexts/FlowContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, Loader2, AlertTriangle } from 'lucide-react';
+import { getFlowConversionStatus, updateFlowAutoConvert } from '../../services/flowApi';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +43,7 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
   const [category, setCategory] = useState('');
   const [maxHops, setMaxHops] = useState(100);
   const [mode, setMode] = useState<'normal' | 'agentic'>('normal');
+  const [autoConvertToProcedure, setAutoConvertToProcedure] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -54,6 +57,10 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
       const settings = activeFlow.settings || {};
       setMode((settings.mode as 'normal' | 'agentic') || 'normal');
       setMaxHops(typeof settings.max_hops === 'number' ? settings.max_hops : 100);
+
+      getFlowConversionStatus(activeFlow.id)
+        .then((status) => setAutoConvertToProcedure(status.auto_convert_to_procedure))
+        .catch(() => setAutoConvertToProcedure(false));
     }
   }, [activeFlow, open]);
 
@@ -108,8 +115,24 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
           max_hops: maxHops,
         },
       });
+      await updateFlowAutoConvert(activeFlow.id, autoConvertToProcedure);
       toast.success('Flow settings updated');
       onClose();
+
+      // Same best-effort note as the canvas Save button -- the checkbox above just
+      // changed, so tell the user what the backend did about it.
+      try {
+        const conversion = await getFlowConversionStatus(activeFlow.id);
+        if (conversion.conversion_note) {
+          if (conversion.converted_procedure) {
+            toast.success(conversion.conversion_note);
+          } else {
+            toast.info(conversion.conversion_note);
+          }
+        }
+      } catch (conversionErr) {
+        console.error('Failed to fetch flow conversion status:', conversionErr);
+      }
     } catch (err) {
       toast.error('Failed to update settings', { description: err instanceof Error ? err.message : 'Unknown error' });
     } finally {
@@ -185,6 +208,23 @@ export function FlowSettingsModal({ open, onClose }: FlowSettingsModalProps) {
                 min={1}
                 max={1000}
               />
+            </div>
+          </div>
+          <div className="flex flex-row items-start gap-2">
+            <Checkbox
+              id="auto-convert-to-procedure"
+              checked={autoConvertToProcedure}
+              onCheckedChange={(checked) => setAutoConvertToProcedure(checked === true)}
+              className="mt-0.5"
+            />
+            <div className="grid gap-1 leading-none">
+              <Label htmlFor="auto-convert-to-procedure" className="font-normal">
+                Create a procedure from this flow on save
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Every save recompiles this flow into a draft, reusable procedure -- only
+                works for flows with no AI-driven steps (agent runs, routers, or approvals).
+              </p>
             </div>
           </div>
         </DialogScrollBody>

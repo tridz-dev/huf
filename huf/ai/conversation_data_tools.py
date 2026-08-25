@@ -165,9 +165,11 @@ def api_get_conversation_data(conversation_id: str, name: str = None):
     agent = frappe.db.get_value("Agent Conversation", conversation_id, "agent")
     if not agent:
         return {"success": False, "error": "Agent Conversation not found"}
-        
-    api_permission = frappe.db.get_value("Agent", agent, "conversation_data_api_permission")
-    if api_permission not in ("Read", "Write"):
+
+    enabled, api_permission = frappe.db.get_value(
+        "Agent", agent, ["enable_conversation_data", "conversation_data_api_permission"]
+    )
+    if not enabled or api_permission not in ("Read", "Write"):
         frappe.throw("Agent does not allow reading conversation data via API", frappe.PermissionError)
         
     if name:
@@ -184,9 +186,11 @@ def api_set_conversation_data(conversation_id: str, name: str, value: Any, value
     agent = frappe.db.get_value("Agent Conversation", conversation_id, "agent")
     if not agent:
         return {"success": False, "error": "Agent Conversation not found"}
-        
-    api_permission = frappe.db.get_value("Agent", agent, "conversation_data_api_permission")
-    if api_permission != "Write":
+
+    enabled, api_permission = frappe.db.get_value(
+        "Agent", agent, ["enable_conversation_data", "conversation_data_api_permission"]
+    )
+    if not enabled or api_permission != "Write":
         frappe.throw("Agent does not allow writing conversation data via API", frappe.PermissionError)
         
     if isinstance(auto_inject, str):

@@ -78,6 +78,9 @@ CAPABILITIES: dict[str, str] = {
 	"ssh.approve": "Approve SSH Executions",
 	# --- Docker Execution ---
 	"docker.run": "Run Docker Execution Tool",
+	# --- Developer Platform ---
+	"developer.access": "Access Developer Platform",
+	"developer.keys.manage": "Manage Developer API Keys",
 }
 
 # Capabilities granted to each default Huf Role.
@@ -114,6 +117,8 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"ssh.run",
 		"ssh.approve",
 		"docker.run",
+		"developer.access",
+		"developer.keys.manage",
 	],
 	"Huf User": [
 		"agent.use",
@@ -127,6 +132,8 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"data.records.edit_own",
 		"code_execution.run",
 		"ssh.run",
+		"developer.access",
+		"developer.keys.manage",
 	],
 	"Huf Viewer": [
 		"agent.use",

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ArrowLeft, Home, ChartColumnIncreasing, ChartNoAxesCombined, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import { ArrowLeft, Home, ChartColumnIncreasing, SquareAsterisk, FileText, Workflow, Database, Layers, MessageSquare, Zap, Server, Users, BookOpen, Link2, Terminal, Settings, LayoutGrid, Brain, Sparkles, SquareChevronRight, ChevronsLeftRightEllipsis, GlobeLock, Keyboard, SlidersHorizontal, type LucideIcon } from "lucide-react"
 import { useLocation } from "react-router-dom"
 
 import { NavMain } from "@/components/nav-main"
@@ -71,6 +71,13 @@ export const buildNavItems = [
     badge: "Experimental",
   },
   {
+    title: "Procedures",
+    url: "/procedures",
+    icon: Layers,
+    capability: "flows.use",
+    badge: "Experimental",
+  },
+  {
     title: "Intelligence",
     url: "/memory",
     icon: Brain,
@@ -81,6 +88,13 @@ export const buildNavItems = [
     title: "Skills",
     url: "/skills",
     icon: Sparkles,
+    capability: "agent.use",
+    badge: "Experimental",
+  },
+  {
+    title: "Automations",
+    url: "/automations",
+    icon: Zap,
     capability: "agent.use",
     badge: "Experimental",
   },
@@ -131,13 +145,6 @@ export const operateNavItems = [
 		badge: "Experimental",
 	},
 	{
-		title: "Analytics",
-		url: "/analytics",
-		icon: ChartNoAxesCombined,
-		capability: "agent.use",
-		badge: "Experimental",
-	},
-	{
 		title: "Playground",
 		url: "/playground",
 		icon: Terminal,
@@ -166,6 +173,7 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
         icon: Users,
         capability: ["users.manage", "roles.manage"],
       },
+      { title: "Developer", url: "/settings/developer", icon: Terminal, capability: null },
     ],
   },
 ]

@@ -1,0 +1,1002 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://huf.internal/spec/graph-ir.schema.json",
+  "title": "HUF Graph IR",
+  "description": "Shared graph intermediate representation for the Procedure profile (Agent Procedure) and the Flow profile (Flow Definition). Profile is selected externally by the containing DocType's validator, which MUST validate against $defs/ProcedureGraph or $defs/FlowGraph -- never against the permissive root schema. The root 'oneOf' exists only for tooling convenience (e.g. a generic linter) and is NOT how profile separation is enforced; see graph-ir.md section 1.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ProcedureGraph"
+    },
+    {
+      "$ref": "#/$defs/FlowGraph"
+    }
+  ],
+  "$defs": {
+    "NodeId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "Fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256 hex digest of the graph's canonical form. See graph-ir.md section 7."
+    },
+    "Reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "$from"
+      ],
+      "properties": {
+        "$from": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(input|trigger|row|foreach\\.(item|index)|[a-zA-Z_][a-zA-Z0-9_]*)(\\.[a-zA-Z_][a-zA-Z0-9_]*|\\[[0-9]+\\])*$"
+        }
+      }
+    },
+    "Literal": {
+      "description": "A JSON literal: string, number, boolean, or null. Not an array or object -- those are composed explicitly where allowed (see Value).",
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "null"
+      ]
+    },
+    "Value": {
+      "description": "Anything that can appear as a node config input: a literal, a structured reference, or an array/object composed of Values.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Reference"
+        },
+        {
+          "$ref": "#/$defs/Literal"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Value"
+          }
+        },
+        {
+          "type": "object",
+          "not": {
+            "required": [
+              "$from"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/Value"
+          }
+        }
+      ]
+    },
+    "Expression": {
+      "description": "A restricted-grammar expression string, evaluated by the shared expression evaluator (graph-ir.md section 4). The JSON Schema layer enforces only the syntactic envelope (non-empty, length-capped); the grammar itself (allowed AST nodes) is enforced by the evaluator at compile time and again at run time.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "ToolId": {
+      "description": "A literal, statically-known tool identifier. Never a Reference -- this is what makes the tool closure provable before activation (I3). See graph-ir.md section 6.",
+      "type": "string",
+      "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*$",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "DocPermission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "doctype"
+      ],
+      "properties": {
+        "doctype": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Optional column allowlist. Absent means all permitted fields."
+        }
+      }
+    },
+    "PermissionEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read",
+        "write",
+        "http",
+        "code"
+      ],
+      "properties": {
+        "read": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocPermission"
+          }
+        },
+        "write": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocPermission"
+          }
+        },
+        "http": {
+          "description": "'none', or an explicit allowlist of host patterns. Empty envelopes must use 'none', not [].",
+          "oneOf": [
+            {
+              "const": "none"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            }
+          ]
+        },
+        "code": {
+          "description": "'none', or an explicit allowlist of Execution Profile ids this graph may invoke via code.execute (see section 8, extension point, unspecified).",
+          "oneOf": [
+            {
+              "const": "none"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1
+            }
+          ]
+        }
+      }
+    },
+    "ResourceLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_nodes",
+        "max_rows",
+        "max_output_bytes",
+        "max_parallel_calls",
+        "max_foreach_iterations",
+        "max_external_calls",
+        "max_writes",
+        "max_wall_time_ms",
+        "fail_closed"
+      ],
+      "properties": {
+        "max_nodes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_output_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_parallel_calls": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_foreach_iterations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_external_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_writes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_wall_time_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fail_closed": {
+          "const": true,
+          "description": "Always true. Every limit breach aborts the run; there is no soft-limit mode."
+        }
+      }
+    },
+    "Contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_schema",
+        "output_schema",
+        "applies_when",
+        "permission_envelope",
+        "limits"
+      ],
+      "properties": {
+        "input_schema": {
+          "type": "object",
+          "description": "A JSON Schema (draft 2020-12) describing the graph's typed input parameters. Referenced via {\"$from\": \"input.<field>\"}."
+        },
+        "output_schema": {
+          "type": "object",
+          "description": "A JSON Schema (draft 2020-12) the terminal output node's value must satisfy."
+        },
+        "applies_when": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
+          "description": "All must evaluate truthy against {input: <input>} before node 0 executes, or the run aborts with RECIPE_NOT_APPLICABLE and no side effects occur. May be empty."
+        },
+        "permission_envelope": {
+          "$ref": "#/$defs/PermissionEnvelope"
+        },
+        "limits": {
+          "$ref": "#/$defs/ResourceLimits"
+        }
+      }
+    },
+    "TransformOp": {
+      "enum": [
+        "select",
+        "filter",
+        "sort",
+        "limit",
+        "group_by",
+        "aggregate",
+        "join",
+        "lookup",
+        "batch",
+        "distinct",
+        "coalesce"
+      ]
+    },
+    "NodeCommon": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "type": {
+          "type": "string"
+        },
+        "config": {
+          "type": "object"
+        },
+        "next": {
+          "description": "Default successor node id. Absent or null means this node is terminal for its chain.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "on_error": {
+          "description": "Node to route to if this node raises. Absent or null means an error here fails the whole run.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ToolCallNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "tool.call"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tool_id",
+                "input"
+              ],
+              "properties": {
+                "tool_id": {
+                  "$ref": "#/$defs/ToolId"
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TransformNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "transform"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "op",
+                "input"
+              ],
+              "properties": {
+                "op": {
+                  "$ref": "#/$defs/TransformOp"
+                },
+                "input": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ConditionNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "condition"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "expression",
+                "on_true",
+                "on_false"
+              ],
+              "properties": {
+                "expression": {
+                  "$ref": "#/$defs/Expression"
+                },
+                "on_true": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "on_false": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ForeachNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "foreach"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "items",
+                "body",
+                "max_iterations",
+                "on_item_error",
+                "collect"
+              ],
+              "properties": {
+                "items": {
+                  "$ref": "#/$defs/Reference"
+                },
+                "item_var": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+                  "default": "item"
+                },
+                "index_var": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+                  "default": "index"
+                },
+                "body": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/NodeId"
+                  },
+                  "minItems": 1,
+                  "description": "Node ids, defined at top level of the same graph, that run once per item, in chain order via their own next pointers. These nodes must not be reachable from the main entry chain by any other path."
+                },
+                "max_iterations": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "on_item_error": {
+                  "enum": [
+                    "fail",
+                    "skip"
+                  ]
+                },
+                "collect": {
+                  "$ref": "#/$defs/Reference",
+                  "description": "Reference (typically into a body node's output) evaluated once per item to build the foreach node's output list."
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ParallelNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "parallel"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "branches",
+                "join"
+              ],
+              "properties": {
+                "branches": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "$ref": "#/$defs/NodeId"
+                    }
+                  },
+                  "description": "Each inner array is a chain of node ids, defined at top level, run in sequence within that branch. Branches run concurrently, bounded by max_parallel_calls."
+                },
+                "join": {
+                  "const": "all",
+                  "description": "The only supported join policy: the parallel node completes only once every branch has completed or failed."
+                },
+                "max_parallel_calls": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ValidateNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "validate"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "assertions"
+              ],
+              "properties": {
+                "assertions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "expression",
+                      "code",
+                      "message"
+                    ],
+                    "properties": {
+                      "expression": {
+                        "$ref": "#/$defs/Expression"
+                      },
+                      "code": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "message": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "OutputNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "output"
+            },
+            "next": {
+              "type": "null"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ],
+              "properties": {
+                "value": {
+                  "$ref": "#/$defs/Value"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ProcedureNode": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ToolCallNode"
+        },
+        {
+          "$ref": "#/$defs/TransformNode"
+        },
+        {
+          "$ref": "#/$defs/ConditionNode"
+        },
+        {
+          "$ref": "#/$defs/ForeachNode"
+        },
+        {
+          "$ref": "#/$defs/ParallelNode"
+        },
+        {
+          "$ref": "#/$defs/ValidateNode"
+        },
+        {
+          "$ref": "#/$defs/OutputNode"
+        }
+      ]
+    },
+    "AgentRunNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "agent.run"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "agent",
+                "prompt"
+              ],
+              "properties": {
+                "agent": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "prompt_bindings": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/$defs/Value"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RouterLlmNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "router.llm"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "prompt",
+                "options",
+                "default"
+              ],
+              "properties": {
+                "prompt": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "options": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "label",
+                      "node_id"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "node_id": {
+                        "$ref": "#/$defs/NodeId"
+                      }
+                    }
+                  }
+                },
+                "default": {
+                  "$ref": "#/$defs/NodeId"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HumanApprovalNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "human.approval"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "message",
+                "approve_next",
+                "reject_next"
+              ],
+              "properties": {
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "approve_next": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "reject_next": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "timeout_next": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "timeout_ms": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TriggerWebhookNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.webhook"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "method"
+              ],
+              "properties": {
+                "method": {
+                  "enum": [
+                    "GET",
+                    "POST"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TriggerScheduleNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.schedule"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cron"
+              ],
+              "properties": {
+                "cron": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TriggerDocEventNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "trigger.doc-event"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "doctype",
+                "event"
+              ],
+              "properties": {
+                "doctype": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "event": {
+                  "enum": [
+                    "after_insert",
+                    "on_update",
+                    "on_submit",
+                    "on_cancel",
+                    "on_trash"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "FlowNode": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ToolCallNode"
+        },
+        {
+          "$ref": "#/$defs/TransformNode"
+        },
+        {
+          "$ref": "#/$defs/ConditionNode"
+        },
+        {
+          "$ref": "#/$defs/ForeachNode"
+        },
+        {
+          "$ref": "#/$defs/ParallelNode"
+        },
+        {
+          "$ref": "#/$defs/ValidateNode"
+        },
+        {
+          "$ref": "#/$defs/OutputNode"
+        },
+        {
+          "$ref": "#/$defs/AgentRunNode"
+        },
+        {
+          "$ref": "#/$defs/RouterLlmNode"
+        },
+        {
+          "$ref": "#/$defs/HumanApprovalNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerWebhookNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerScheduleNode"
+        },
+        {
+          "$ref": "#/$defs/TriggerDocEventNode"
+        }
+      ]
+    },
+    "ProcedureGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile",
+        "fingerprint",
+        "entry",
+        "nodes",
+        "contract"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "profile": {
+          "const": "procedure",
+          "description": "Informational only. The authoritative gate is that this document validates against $defs/ProcedureGraph, whose node enum structurally excludes every Flow-only type -- see graph-ir.md section 1."
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/Fingerprint"
+        },
+        "entry": {
+          "$ref": "#/$defs/NodeId",
+          "description": "Procedure profile has exactly one entry point; there are no triggers."
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/ProcedureNode"
+          }
+        },
+        "contract": {
+          "$ref": "#/$defs/Contract"
+        }
+      }
+    },
+    "FlowGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "profile",
+        "fingerprint",
+        "entry",
+        "nodes",
+        "contract"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "profile": {
+          "const": "flow",
+          "description": "Informational only. The authoritative gate is that this document validates against $defs/FlowGraph."
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/Fingerprint"
+        },
+        "entry": {
+          "description": "One node id, or (when the graph starts from one or more triggers) an array of trigger node ids.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NodeId"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/NodeId"
+              }
+            }
+          ]
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FlowNode"
+          }
+        },
+        "contract": {
+          "$ref": "#/$defs/Contract"
+        }
+      }
+    }
+  }
+}

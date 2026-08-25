@@ -39,12 +39,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from frappe.utils.data import add_to_date, now_datetime
-from frappe.utils.file_manager import save_file
 
 
 def get_files_path(is_private: bool = True) -> str:
 	return frappe.get_site_path("private" if is_private else "public", "files")
 
+from huf.ai.context_artifacts import create_context_artifact
 from huf.ai.http_handler import handle_http_request
 from huf.ai.tool_functions import get_report_result
 from huf.ai.tools.execution_sandbox import (
@@ -339,27 +339,19 @@ def _write_back_artifacts(call, shared_dir: str, names: list) -> tuple:
 			with open(path, "rb") as fh:
 				content = fh.read()
 			context_policy, summary, token_estimate = _classify_artifact(name, content)
-			artifact = frappe.get_doc(
-				{
-					"doctype": "Agent Context Artifact",
-					"conversation": call.conversation,
-					"agent_run": call.agent_run,
-					"artifact_type": "File",
-					"visibility": "user_visible",
-					"context_policy": context_policy,
-					"summary": summary,
-					"token_estimate": token_estimate,
-				}
+			# Delegates to the generic producer (huf.ai.context_artifacts) so this
+			# write-back also emits the Agent Message handle that makes the
+			# artifact visible to the model (F-15) -- previously nothing did.
+			create_context_artifact(
+				call.conversation,
+				agent_run=call.agent_run,
+				payload=content,
+				artifact_type="File",
+				summary=summary,
+				context_policy=context_policy,
+				token_estimate=token_estimate,
+				filename=name,
 			)
-			artifact.insert(ignore_permissions=True)
-			saved = save_file(name, content, "Agent Context Artifact", artifact.name, is_private=True)
-			file_url = getattr(saved, "file_url", None) or (
-				saved.get("file_url") if isinstance(saved, dict) else None
-			)
-			if not file_url:
-				raise ValueError(f"save_file returned no file_url for {name!r}")
-			artifact.payload_file = file_url
-			artifact.save(ignore_permissions=True)
 			written += 1
 		except Exception as exc:  # noqa: BLE001 - report and stop (fail closed)
 			frappe.log_error(

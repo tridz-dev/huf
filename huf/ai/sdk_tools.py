@@ -1,27 +1,38 @@
+import asyncio
 import inspect
 import json
 import re
-import asyncio
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import frappe
 from agents import FunctionTool
 from frappe import _
 
-from huf.ai.tool_types import MUTATING_TOOL_TYPES, _GUEST_DOCTYPE_PINNED_TYPES
-from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.conversation_data_tools import *
+from huf.ai.conversation_data_tools import _load_state
+from huf.ai.handlers.agent_runner import *
 
 # Re-export handler functions so existing function_path strings and imports keep working.
 from huf.ai.handlers.crud import *
-from huf.ai.conversation_data_tools import *
-from huf.ai.handlers.media import *
-from huf.ai.handlers.agent_runner import *
-from huf.ai.tools.perplexity import handle_perplexity_search
 
 # Explicit re-exports for underscore-prefixed helpers used by other modules/tests.
 from huf.ai.handlers.crud import _sanitize_for_doctype
-from huf.ai.conversation_data_tools import _load_state
+from huf.ai.handlers.media import *
 from huf.ai.handlers.media import _resolve_tts_config
+from huf.ai.tool_invocation import (
+    CLIENT_SIDE_TOOL_FUNCTION_PATH,
+    CLIENT_SIDE_TOOL_TYPE,
+    DYNAMIC_FUNCTION_PATH_TYPES,
+    TYPE_TO_FUNCTION_PATH,
+    build_extra_args,
+)
+from huf.ai.tool_invocation import (
+    check_tool_permission as _check_tool_permission,
+)
+from huf.ai.tool_registry import PermissionAwareToolRegistry
+from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES
+from huf.ai.tools.perplexity import handle_perplexity_search
 
 logger = frappe.logger("huf")
 
@@ -76,22 +87,11 @@ def _merge_run_context(args_dict: dict, ctx) -> dict:
     return args_dict
 
 
-def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_guest: bool = False):
-    """Guard function to block dangerous tools for Guest users"""
-    user = frappe.session.user
-
-    # Guest cannot use mutating tools unless explicitly allowed
-    if user == "Guest":
-        if allowed_for_guest:
-            return {"allowed": True}
-
-        if tool_type in MUTATING_TOOL_TYPES:
-            return {
-                "allowed": False,
-                "error": f"Guest users cannot use {tool_type} tools. Please log in."
-            }
-
-    return {"allowed": True}
+# _check_tool_permission moved to huf.ai.tool_invocation.check_tool_permission
+# (T-10) so the deterministic tool path shares the same guest/mutating-type
+# gate; imported above as _check_tool_permission to keep this call site
+# unchanged. The old signature accepted an unused `context` positional arg
+# -- dropped, see the call site below.
 
 
 # Tools that must always be built eagerly for a lazy-discovery agent: the
@@ -181,72 +181,28 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     # fetch its schema) until the model discovers it.
                     continue
 
-            function_path = None
-            if function_doc.types in ["Custom Function", "App Provided"]:
+            # Resolution moved to huf.ai.tool_invocation (T-10): one
+            # type->function_path map shared with the deterministic tool
+            # path, instead of a hand-duplicated if/elif chain. Behavior is
+            # identical to the chain this replaced -- Custom
+            # Function/App Provided and Client Side Tool still short-circuit
+            # with their own continue guard before the static-map lookup.
+            _tool_doc_dict = {
+                "types": function_doc.types,
+                "function_path": function_doc.function_path,
+                "function_name": function_doc.function_name,
+            }
+            if function_doc.types in DYNAMIC_FUNCTION_PATH_TYPES:
                 if not function_doc.function_path:
                     continue
                 function_path = function_doc.function_path
-            elif function_doc.types == "Client Side Tool":
-                function_path = "huf.ai.client_side_tool.client_side_function"
+            elif function_doc.types == CLIENT_SIDE_TOOL_TYPE:
+                function_path = CLIENT_SIDE_TOOL_FUNCTION_PATH
                 if not function_doc.function_name:
                     continue
             else:
-                if function_doc.types == "Get List":
-                    function_path = "huf.ai.sdk_tools.handle_get_list"
-                elif function_doc.types == "Get Document":
-                    function_path = "huf.ai.sdk_tools.handle_get_document"
-                elif function_doc.types == "Update Document":
-                    function_path = "huf.ai.sdk_tools.handle_update_document"
-                elif function_doc.types == "Create Document":
-                    function_path = "huf.ai.sdk_tools.handle_create_document"
-                elif function_doc.types == "Delete Document":
-                    function_path = "huf.ai.sdk_tools.handle_delete_document"
-                elif function_doc.types == "Get Multiple Documents":
-                    function_path = "huf.ai.sdk_tools.handle_get_documents"
-                elif function_doc.types == "Create Multiple Documents":
-                    function_path = "huf.ai.sdk_tools.handle_create_documents"
-                elif function_doc.types == "Update Multiple Documents":
-                    function_path = "huf.ai.sdk_tools.handle_update_documents"
-                elif function_doc.types == "Delete Multiple Documents":
-                    function_path = "huf.ai.sdk_tools.handle_delete_documents"
-                elif function_doc.types == "Submit Document":
-                    function_path = "huf.ai.sdk_tools.handle_submit_document"
-                elif function_doc.types == "Cancel Document":
-                    function_path = "huf.ai.sdk_tools.handle_cancel_document"
-                elif function_doc.types == "Get Value":
-                    function_path = "huf.ai.sdk_tools.handle_get_value"
-                elif function_doc.types == "Set Value":
-                    function_path = "huf.ai.sdk_tools.handle_set_value"
-                elif function_doc.types == "Get Report Result":
-                    function_path = "huf.ai.sdk_tools.handle_get_report_result"
-                elif function_doc.types == "GET":
-                    function_path = "huf.ai.http_handler.handle_get_request"
-                elif function_doc.types == "POST":
-                    function_path = "huf.ai.http_handler.handle_post_request"
-                elif function_doc.types == "Run Agent":
-                    function_path = "huf.ai.sdk_tools.handle_run_agent"
-                elif function_doc.types == "Attach File to Document":
-                    function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
-                elif function_doc.types == "Get Conversation Data":
-                    function_path = "huf.ai.sdk_tools.handle_get_conversation_data"
-                elif function_doc.types == "Set Conversation Data":
-                    function_path = "huf.ai.sdk_tools.handle_set_conversation_data"
-                elif function_doc.types == "Load Conversation Data":
-                    function_path = "huf.ai.sdk_tools.handle_load_conversation_data"
-                elif function_doc.types == "Perplexity Search":
-                    function_path = "huf.ai.tools.perplexity.handle_perplexity_search"
-                elif function_doc.types == "Save Memory Record":
-                    function_path = "huf.ai.memory_tools.handle_save_memory_record"
-                elif function_doc.types == "Search Memory Records":
-                    function_path = "huf.ai.memory_tools.handle_search_memory_records"
-                elif function_doc.types == "Get Memory Record":
-                    function_path = "huf.ai.memory_tools.handle_get_memory_record"
-                elif function_doc.types == "Archive Memory Record":
-                    function_path = "huf.ai.memory_tools.handle_archive_memory_record"
-                elif function_doc.types == "Promote Memory to Knowledge":
-                    function_path = "huf.ai.memory_tools.handle_promote_memory_to_knowledge"
-
-                else:
+                function_path = TYPE_TO_FUNCTION_PATH.get(function_doc.types)
+                if not function_path:
                     continue
 
             if function_doc:
@@ -262,31 +218,17 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                 if "additionalProperties" in params:
                     del params["additionalProperties"]
 
-                extra_args = {}
-                if function_doc.types == "Attach File to Document":
-                    if function_doc.reference_doctype:
-                        extra_args["reference_doctype"] = function_doc.reference_doctype
-
-                elif (
-                    function_doc.types
-                    in [
-                        "Get Document", "Get Multiple Documents", "Get List",
-                        "Create Document", "Create Multiple Documents",
-                        "Update Document", "Update Multiple Documents",
-                        "Delete Document", "Delete Multiple Documents",
-                        "Submit Document", "Cancel Document", "Get Amended Document"
-                    ]
-                    and function_doc.reference_doctype
-                ):
-                    extra_args["reference_doctype"] = function_doc.reference_doctype
-
-                elif function_doc.types == "Client Side Tool":
-                    if function_doc.function_name:
-                        extra_args["function_name"] = function_doc.function_name
-
-                elif function_doc.types == "Run Agent":
-                    if function_doc.agent:
-                        extra_args["target_agent_name"] = function_doc.agent
+                # extra_args derivation moved to
+                # huf.ai.tool_invocation.build_extra_args (T-10) -- same
+                # branches, same values. GET/POST's tool_name is deliberately
+                # NOT taken from there: this file injects it via the
+                # dedicated `_function.__name__ in [...]` check below
+                # (unconditional overwrite, using the friendly `name`), which
+                # predates this refactor and is left untouched.
+                _tool_doc_dict["reference_doctype"] = function_doc.reference_doctype
+                _tool_doc_dict["agent"] = function_doc.agent
+                extra_args = build_extra_args(_tool_doc_dict)
+                extra_args.pop("tool_name", None)
 
                 # Client Side Tool calls block (waiting on the browser to report a
                 # result via submit_client_tool_result); run them off the event loop.
@@ -316,6 +258,38 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
             frappe.logger("huf").debug(
                 f"Error processing function {function_doc.name}: {e!s}"
             )
+
+    if lazy_enabled:
+        # The discovery tools themselves are not something an agent author is
+        # expected to attach via agent_tool - without them the model could
+        # never unlock anything else, so build them unconditionally (same
+        # pattern as the memory tools below): looked up by tool_name from the
+        # Agent Tool Function records synced from LAZY_DISCOVERY_TOOLS
+        # (huf.ai.tools._registry), not gated on the agent's tool list.
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        for tool_name in _LAZY_DISCOVERY_TOOL_NAMES:
+            if tool_name in existing_tool_names:
+                continue
+            function_name = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
+            if not function_name:
+                continue
+            try:
+                function_doc = frappe.get_doc("Agent Tool Function", function_name)
+                params = {}
+                if function_doc.params:
+                    params = json.loads(function_doc.params)
+                tool = create_function_tool(
+                    function_doc.tool_name,
+                    function_doc.description,
+                    function_doc.function_path,
+                    params,
+                    tool_type=function_doc.types,
+                )
+                if tool:
+                    tools.append(tool)
+                    existing_tool_names.add(tool_name)
+            except Exception as e:
+                frappe.logger("huf").debug(f"Error wiring lazy discovery tool {tool_name}: {e!s}")
 
     # Load tools from attached skills (mandatory and optional)
     try:
@@ -419,6 +393,28 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
             except Exception as e:
                 frappe.logger("huf").debug(f"Error wiring memory tool {tool_name}: {e!s}")
 
+    # Bound Agent Procedures (T-31): exposed as tool-like capabilities computed at
+    # request time from enabled Agent Procedure Binding rows, never as an Agent Tool
+    # Function row per (agent, procedure) pair. See huf.ai.graph.procedure_binding for
+    # the read-only re-check (I8) and the hard per-agent cap this applies.
+    try:
+        from huf.ai.graph.procedure_binding import build_procedure_binding_tools
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        for tool in build_procedure_binding_tools(agent, **kwargs):
+            tool_name = getattr(tool, "name", "")
+            # T-34: when lazy discovery is on, a bound procedure's schema only enters
+            # context once the model has unlocked it via load_tools (same
+            # discovered_tool_names / "_lazy_tools" mechanism as ordinary tools above).
+            # When lazy discovery is off this branch never runs and behaviour is
+            # byte-for-byte the T-31 eager path.
+            if lazy_enabled and tool_name not in discovered_tool_names:
+                continue
+            if tool_name not in existing_tool_names:
+                tools.append(tool)
+                existing_tool_names.add(tool_name)
+    except Exception as e:
+        frappe.logger("huf").debug(f"Error building bound-procedure tools for agent: {e!s}")
+
     existing_types = [t.name for t in tools] if tools else []
     if "get_result_context" not in existing_types:
         tool = create_function_tool(
@@ -435,6 +431,16 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     "reference_name": {
                         "type": "string",
                         "description": "The name/ID of the referenced record"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "For Agent Context Artifact: line offset to start reading the "
+                        "payload from (0-based). Ignored for other reference types."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "For Agent Context Artifact: maximum number of lines of the "
+                        "payload to return. Ignored for other reference types."
                     }
                 },
                 "required": ["reference_doctype", "reference_name"]
@@ -489,7 +495,7 @@ def create_function_tool(
 
             # Permission check before execution
             if tool_type:
-                perm_check = _check_tool_permission(tool_type, ctx, allowed_for_guest=allowed_for_guest)
+                perm_check = _check_tool_permission(tool_type, allowed_for_guest=allowed_for_guest)
                 if not perm_check["allowed"]:
                     return json.dumps({"error": perm_check["error"], "denied": True})
 
@@ -641,12 +647,25 @@ ALLOWED_RESULT_CONTEXT_DOCTYPES = frozenset({
 })
 
 
-def handle_get_result_context(reference_doctype: str, reference_name: str, **kwargs):
+def handle_get_result_context(
+    reference_doctype: str,
+    reference_name: str,
+    offset: int = None,
+    limit: int = None,
+    **kwargs,
+):
     """
     Get the full result context of an out-of-band message reference by its handle.
 
     Only explicitly allow-listed DocTypes are exposed, and the caller must have
-    Frappe read permission on the requested document.
+    Frappe read permission on the requested document. Permission is re-checked
+    here against the *reader* on every call (I1, I2) -- a handle stored in an
+    earlier message is never itself authority, only a pointer.
+
+    ``offset``/``limit`` (line-based) bound how much of an ``Agent Context
+    Artifact``'s payload is read back in a single call -- see
+    ``huf.ai.context_artifacts.read_context_artifact_payload``. They are
+    ignored for ``Agent Tool Call``.
     """
     try:
         if not reference_doctype or not reference_name:
@@ -679,13 +698,23 @@ def handle_get_result_context(reference_doctype: str, reference_name: str, **kwa
                 "error_message": doc.error_message
             }
 
-        # If it's Agent Context Artifact, retrieve payload
+        # If it's Agent Context Artifact, retrieve payload. Fix for F-12: every
+        # artifact that exists in production is artifact_type="File" with an
+        # empty payload_json, so returning payload_json alone (the old
+        # behaviour) returned nothing -- drill-down had never worked end to
+        # end. read_context_artifact_payload reads payload_file when present,
+        # bounded by offset/limit so a large artifact still can't re-enter
+        # context unbounded (I7).
         if reference_doctype == "Agent Context Artifact":
+            from huf.ai.context_artifacts import read_context_artifact_payload
+
+            payload = read_context_artifact_payload(doc, offset=offset, limit=limit)
             return {
                 "success": True,
                 "artifact_type": doc.artifact_type,
                 "summary": doc.summary,
-                "payload_json": doc.payload_json,
+                "payload_file": doc.payload_file,
+                "payload": payload,
                 "reference_doctype": doc.reference_doctype,
                 "reference_name": doc.reference_name
             }
