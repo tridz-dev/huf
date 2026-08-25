@@ -42,6 +42,12 @@ class TestAgentConfigPersistenceP0(IntegrationTestCase):
 		frappe.set_user("Administrator")
 		for name in self._agent_names:
 			if frappe.db.exists("Agent", name):
+				# System agents are undeletable via the normal on_trash hook
+				# (agent.py::on_trash) -- flip the flag directly in the DB
+				# (bypassing validate()) so teardown can still clean up a
+				# fixture that was deliberately made a system agent mid-test.
+				frappe.db.set_value("Agent", name, "is_system", 0)
+				frappe.db.commit()
 				frappe.delete_doc("Agent", name, ignore_permissions=True, force=True)
 		frappe.db.delete("AI Model", {"name": self.model})
 		frappe.db.delete("AI Provider", {"name": self.provider})
