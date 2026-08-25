@@ -175,6 +175,9 @@ permission_query_conditions = {
     "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
     "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
     "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
+    "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
+    "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
+    "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
 }
 #
 # has_permission = {
@@ -274,6 +277,7 @@ scheduler_events = {
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
         "huf.ai.agent_chat.purge_trashed_conversations",
+        "huf.ai.context_artifacts.purge_expired_context_artifacts",
     ],
     "cron": {
         "*/1 * * * *": [

@@ -6,6 +6,7 @@
  "engine": "InnoDB",
  "field_order": [
   "agent_run",
+  "agent_procedure_run",
   "conversation",
   "tool",
   "is_mcp_tool",
@@ -30,6 +31,14 @@
    "fieldtype": "Link",
    "label": "Agent Run",
    "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "description": "Telemetry linkage (I5): Agent Run -> Agent Procedure Run -> many Agent Tool Call. Set when this call happened inside a Procedure run's execution.",
+   "fieldname": "agent_procedure_run",
+   "fieldtype": "Link",
+   "label": "Agent Procedure Run",
+   "options": "Agent Procedure Run",
    "read_only": 1
   },
   {

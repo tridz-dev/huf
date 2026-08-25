@@ -19,7 +19,12 @@
   "is_system",
   "column_break_set1",
   "updated_by",
-  "updated_at"
+  "updated_at",
+  "procedure_section",
+  "auto_convert_to_procedure",
+  "column_break_proc1",
+  "converted_procedure",
+  "conversion_note"
  ],
  "fields": [
   {
@@ -62,9 +67,9 @@
    "read_only": 1
   },
   {
-   "default": "1",
+   "default": "1.0.0",
    "fieldname": "schema_version",
-   "fieldtype": "Int",
+   "fieldtype": "Data",
    "label": "Schema Version",
    "read_only": 1
   },
@@ -88,7 +93,9 @@
    "default": "0",
    "fieldname": "is_system",
    "fieldtype": "Check",
-   "label": "Is System"
+   "hidden": 1,
+   "label": "Is System",
+   "read_only": 1
   },
   {
    "fieldname": "column_break_set1",
@@ -106,11 +113,40 @@
    "fieldtype": "Datetime",
    "label": "Updated At",
    "read_only": 1
+  },
+  {
+   "fieldname": "procedure_section",
+   "fieldtype": "Section Break",
+   "label": "Deterministic Procedure"
+  },
+  {
+   "default": "0",
+   "description": "On save, if this Flow contains no agent.run / router.llm / human.approval node, create (or refresh) a Draft Agent Procedure compiled from it. Never activates or binds anything automatically — see Agent Procedure Binding to enable it for an Agent.",
+   "fieldname": "auto_convert_to_procedure",
+   "fieldtype": "Check",
+   "label": "Create a Procedure from this Flow on save"
+  },
+  {
+   "fieldname": "column_break_proc1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "converted_procedure",
+   "fieldtype": "Link",
+   "label": "Draft Procedure",
+   "options": "Agent Procedure",
+   "read_only": 1
+  },
+  {
+   "fieldname": "conversion_note",
+   "fieldtype": "Small Text",
+   "label": "Conversion Note",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-18 10:00:00.000000",
+ "modified": "2026-08-24 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Flow Definition",

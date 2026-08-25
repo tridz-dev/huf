@@ -1182,6 +1182,14 @@ def _orphan_conversation_links(conversation: str):
     for link in link_fields:
         if link.doctype == "Agent Conversation":
             continue
+        if link.doctype == "Agent Context Artifact":
+            # T-11b (F-16): artifacts get a real cascade -- delete, not orphan --
+            # via AgentConversation.on_trash -> context_artifacts.delete_conversation_artifacts.
+            # That cascade runs inside frappe.delete_doc's on_trash step, which is *after*
+            # this function (called by hard_delete_conversation before delete_doc), so it
+            # must still see this conversation's artifacts; nulling the link here first
+            # would silently orphan them instead.
+            continue
         meta = frappe.get_meta(link.doctype)
         if meta.istable:
             # Child tables are deleted along with their parent document; nothing to orphan.
