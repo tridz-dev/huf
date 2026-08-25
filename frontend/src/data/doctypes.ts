@@ -40,6 +40,7 @@ export const doctype = {
   "Huf Data Table": "Huf Data Table",
   "Agent Context Artifact": "Agent Context Artifact",
   "Agent Run Feedback": "Agent Run Feedback",
+  "Batch Job": "Batch Job",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

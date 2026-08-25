@@ -401,6 +401,9 @@ export interface AgentTriggerDoc {
   disabled?: 0 | 1;
   scheduled_interval?: string;
   interval_count?: number;
+  /** Only meaningful for Schedule triggers: run the agent instantly (default) or as an
+   * end-of-day batch at lower cost. */
+  execution_mode?: 'Realtime' | 'Batch';
   reference_doctype?: string;
   doc_event?: string;
   condition?: string;

@@ -59,6 +59,7 @@ const ChatScheduledPage = lazy(() =>
 const Executions = lazy(() => import('./pages/Executions'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
+const BatchJobsPage = lazy(() => import('./pages/BatchJobsPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
@@ -558,6 +559,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <AgentRunDetailPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/batch-jobs"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <BatchJobsPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
