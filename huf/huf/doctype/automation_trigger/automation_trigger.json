@@ -24,6 +24,7 @@
   "end_at",
   "misfire_policy",
   "interval_count",
+  "execution_mode",
   "last_execution",
   "next_execution",
   "section_break_docevent",
@@ -169,6 +170,15 @@
    "fieldname": "interval_count",
    "fieldtype": "Int",
    "label": "Interval Count"
+  },
+  {
+   "default": "Realtime",
+   "depends_on": "eval: doc.trigger_type == \"Schedule\"",
+   "description": "Batch mode submits the run to the provider's async batch queue instead of running it live: same-day (not instant) turnaround for roughly 50% lower token cost.",
+   "fieldname": "execution_mode",
+   "fieldtype": "Select",
+   "label": "Execution Mode",
+   "options": "Realtime\nBatch"
   },
   {
    "depends_on": "eval: doc.trigger_type == \"Schedule\"",

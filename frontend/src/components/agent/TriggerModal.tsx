@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 import { TriggerFieldsRenderer } from './TriggerFieldsRenderer';
 import { triggerFieldsConfig } from './TriggerFieldsConfig';
 import { TriggerDocEventExtras } from './TriggerDocEventExtras';
+import { TriggerScheduleExtras } from './TriggerScheduleExtras';
 import { AppPicker } from '@/components/capabilities/AppPicker';
 import { ResourceCard } from '@/components/capabilities/ResourceCard';
 import { ResourceDetail } from '@/components/capabilities/ResourceDetail';
@@ -107,6 +108,7 @@ const triggerFormSchema = z.object({
       },
       { message: 'Interval count must be a positive whole number' }
     ),
+  execution_mode: z.enum(['Realtime', 'Batch']).optional(),
   reference_doctype: z.string().optional(),
   doc_event: z.string().optional(),
   condition: z.string().optional(),
@@ -171,6 +173,7 @@ export function TriggerModal({
       trigger_type: 'Schedule',
       active: true,
       interval_count: undefined,
+      execution_mode: 'Realtime',
       file_attachments: [],
     },
   });
@@ -208,6 +211,7 @@ export function TriggerModal({
           active: editingTrigger.disabled === 0 || editingTrigger.disabled === undefined,
           scheduled_interval: editingTrigger.scheduled_interval,
           interval_count: editingTrigger.interval_count?.toString() || undefined,
+          execution_mode: (editingTrigger.execution_mode as 'Realtime' | 'Batch') || 'Realtime',
           reference_doctype: editingTrigger.reference_doctype,
           doc_event: editingTrigger.doc_event,
           condition: editingTrigger.condition,
@@ -225,6 +229,7 @@ export function TriggerModal({
           active: true,
           interval_count: undefined,
           scheduled_interval: undefined,
+          execution_mode: 'Realtime',
           reference_doctype: undefined,
           doc_event: undefined,
           condition: undefined,
@@ -529,6 +534,12 @@ export function TriggerModal({
             {watchTriggerType === 'Doc Event' && (
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               <TriggerDocEventExtras control={triggerForm.control as unknown as Control<any>} />
+            )}
+
+            {/* Schedule extras: Instant vs Batch execution mode */}
+            {watchTriggerType === 'Schedule' && (
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              <TriggerScheduleExtras control={triggerForm.control as unknown as Control<any>} />
             )}
               </>
             )}
