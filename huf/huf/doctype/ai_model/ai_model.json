@@ -48,7 +48,7 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Modality",
-   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR\nSpeech-to-Speech"
+   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR\nSpeech-to-Speech\nVideo"
   },
   {
    "description": "Configure internal model reasoning support and overrides.",

@@ -71,6 +71,13 @@ export const buildNavItems = [
     badge: "Experimental",
   },
   {
+    title: "Procedures",
+    url: "/procedures",
+    icon: Layers,
+    capability: "flows.use",
+    badge: "Experimental",
+  },
+  {
     title: "Intelligence",
     url: "/memory",
     icon: Brain,
@@ -166,6 +173,7 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
         icon: Users,
         capability: ["users.manage", "roles.manage"],
       },
+      { title: "Developer", url: "/settings/developer", icon: Terminal, capability: null },
     ],
   },
 ]

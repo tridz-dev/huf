@@ -1,0 +1,249 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-08-23 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_tab",
+  "procedure",
+  "procedure_id",
+  "column_break_gen1",
+  "status",
+  "agent_run",
+  "pinned_definition_tab",
+  "pinned_fingerprint",
+  "pinned_definition_json",
+  "io_tab",
+  "input_payload",
+  "output_payload",
+  "column_break_io1",
+  "started_at",
+  "completed_at",
+  "steps_tab",
+  "steps",
+  "recovery_tab",
+  "completed_steps",
+  "failed_step",
+  "column_break_recovery1",
+  "committed_writes",
+  "pending_writes",
+  "intermediate_outputs",
+  "error",
+  "safe_recovery_actions"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
+  {
+   "description": "The specific Agent Procedure version this run executes.",
+   "fieldname": "procedure",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Procedure",
+   "options": "Agent Procedure",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "description": "Denormalized from procedure.procedure_id for grouping/reporting across versions of the same logical procedure.",
+   "fieldname": "procedure_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Procedure ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_gen1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Queued",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Queued\nRunning\nPaused\nCompleted\nFailed\nCancelled"
+  },
+  {
+   "description": "Telemetry linkage (I5): Agent Run -> Agent Procedure Run -> many Agent Tool Call.",
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "in_standard_filter": 1,
+   "label": "Agent Run",
+   "options": "Agent Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pinned_definition_tab",
+   "fieldtype": "Tab Break",
+   "label": "Pinned Definition"
+  },
+  {
+   "description": "fingerprint of procedure at the moment this run started. Execution and resume always read pinned_definition_json below, never procedure's current version (I6, GT-01) -- procedure may move on to a newer version while this run is still in flight.",
+   "fieldname": "pinned_fingerprint",
+   "fieldtype": "Data",
+   "label": "Pinned Fingerprint",
+   "length": 64,
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "description": "Exact copy of procedure.definition_json captured at run creation. The runtime executes this copy, never a re-fetch of Agent Procedure.",
+   "fieldname": "pinned_definition_json",
+   "fieldtype": "JSON",
+   "label": "Pinned Definition JSON",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "io_tab",
+   "fieldtype": "Tab Break",
+   "label": "Input / Output"
+  },
+  {
+   "fieldname": "input_payload",
+   "fieldtype": "JSON",
+   "label": "Input Payload"
+  },
+  {
+   "fieldname": "output_payload",
+   "fieldtype": "JSON",
+   "label": "Output Payload"
+  },
+  {
+   "fieldname": "column_break_io1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "steps_tab",
+   "fieldtype": "Tab Break",
+   "label": "Steps"
+  },
+  {
+   "description": "Per-node state, one row per graph node visited. A frontier, not a single cursor (GT-02) -- see Agent Procedure Step.",
+   "fieldname": "steps",
+   "fieldtype": "Table",
+   "label": "Steps",
+   "options": "Agent Procedure Step"
+  },
+  {
+   "fieldname": "recovery_tab",
+   "fieldtype": "Tab Break",
+   "label": "Recovery"
+  },
+  {
+   "description": "List of node_ids that reached Completed. Denormalized read-convenience over steps (GOAL.md 2.4); T-32 reads this.",
+   "fieldname": "completed_steps",
+   "fieldtype": "JSON",
+   "label": "Completed Steps"
+  },
+  {
+   "description": "node_id of the step that failed and stopped the run, if any.",
+   "fieldname": "failed_step",
+   "fieldtype": "Data",
+   "label": "Failed Step"
+  },
+  {
+   "fieldname": "column_break_recovery1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Writes that succeeded and cannot be rolled back -- T-32 fallback protocol must never retry these.",
+   "fieldname": "committed_writes",
+   "fieldtype": "JSON",
+   "label": "Committed Writes"
+  },
+  {
+   "description": "Writes that were planned/attempted but whose outcome is unconfirmed.",
+   "fieldname": "pending_writes",
+   "fieldtype": "JSON",
+   "label": "Pending Writes"
+  },
+  {
+   "description": "Node outputs produced so far, keyed by node_id -- lets a resumed/fallback run reuse prior work instead of recomputing (subject to I7 budget rules).",
+   "fieldname": "intermediate_outputs",
+   "fieldtype": "JSON",
+   "label": "Intermediate Outputs"
+  },
+  {
+   "description": "Structured failure detail: {node_id, type, message, ...}. Not a raw traceback string -- see GOAL.md section 2.4.",
+   "fieldname": "error",
+   "fieldtype": "JSON",
+   "label": "Error"
+  },
+  {
+   "description": "Actions T-32's fallback protocol may safely take given committed_writes/pending_writes (e.g. retry, skip, escalate to agentic execution per I9).",
+   "fieldname": "safe_recovery_actions",
+   "fieldtype": "JSON",
+   "label": "Safe Recovery Actions"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-23 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Procedure Run",
+ "naming_rule": "Expression (old style)",
+ "autoname": "AGPR-.#####",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

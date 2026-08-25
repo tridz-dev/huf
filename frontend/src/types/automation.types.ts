@@ -18,6 +18,8 @@ export type AutomationScheduledInterval = 'Hourly' | 'Daily' | 'Weekly' | 'Month
 
 export type AutomationMisfirePolicy = 'Skip' | 'Run Immediately' | 'Queue';
 
+export type AutomationExecutionMode = 'Realtime' | 'Batch';
+
 export type AutomationDocEvent =
   | 'before_insert'
   | 'after_insert'
@@ -105,6 +107,8 @@ export interface AutomationTrigger {
   misfire_policy?: AutomationMisfirePolicy | '';
   /** Legacy interval count field, preserved for migration compatibility. */
   interval_count?: number;
+  /** Schedule-only. Defaults to 'Realtime' server-side. */
+  execution_mode?: AutomationExecutionMode | '';
   last_execution?: string;
   next_execution?: string;
 

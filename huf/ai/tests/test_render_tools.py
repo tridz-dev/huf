@@ -209,6 +209,15 @@ class TestPromptInstructionSelection(unittest.TestCase):
 		manager.agent_doc.agent_name = "test-agent"
 		manager.effective_model = "test-model"
 		manager.effective_provider = "test-provider"
+		# create_agent() calls self.provider.get_model(...) - production callers
+		# always go through AgentManager.__init__ -> _setup_client(), which sets
+		# this up from the Agent's configured AI Provider. This test builds the
+		# manager via __new__() to skip all of that DB/network-touching setup,
+		# so the seam has to be stubbed by hand here.
+		manager.provider = mock.MagicMock()
+		# The Agents SDK validates this: Agent(model=...) rejects anything that
+		# isn't a string, a Model, or None, so a bare MagicMock will not do.
+		manager.provider.get_model.return_value = "test-model"
 		manager.tools = [mock.MagicMock(name=n, description="d") for n in tool_names]
 		for tool, n in zip(manager.tools, tool_names):
 			tool.name = n

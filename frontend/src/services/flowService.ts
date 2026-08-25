@@ -15,6 +15,7 @@ import {
   saveFlowDefinition,
   deleteFlowDefinition,
   updateFlowDefinitionFields,
+  getFlowConversionStatus,
   runFlow as apiRunFlow,
   listFlowRuns as apiListFlowRuns,
   getFlowRun as apiGetFlowRun,
@@ -23,7 +24,7 @@ import {
   resumeFlowRun as apiResumeFlowRun,
 } from './flowApi';
 import type { FlowRunSummary, FlowRunDetail } from './flowApi';
-import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend } from './flowSerializer';
+import { serializeFlow, deserializeFlow, mapBackendStatusToFrontend, defaultContract } from './flowSerializer';
 import type { BackendFlowGraph } from './flowApi';
 
 class FlowService {
@@ -87,25 +88,24 @@ class FlowService {
   async createFlow(name: string, category?: string): Promise<Flow> {
     const flowId = `flow-${Date.now()}`;
 
-    // Build a minimal valid graph
+    // Build a minimal valid graph (shared graph-IR Flow profile -- see flowSerializer.ts)
     const defaultGraph: BackendFlowGraph = {
-      schema_version: 1,
-      id: flowId,
-      version: 1,
-      entry: 'empty-trigger',
+      schema_version: '1.0.0',
+      profile: 'flow',
+      fingerprint: '0'.repeat(64),
+      entry: 'empty_trigger',
       nodes: [
         {
-          id: 'empty-trigger',
+          id: 'empty_trigger',
           type: 'trigger.webhook',
-          config: {},
+          config: { method: 'POST' },
+          next: null,
           _position: { x: 250, y: 100 },
           _label: 'Select trigger',
           _icon: 'Webhook',
         },
       ],
-      edges: [],
-      settings: { mode: 'normal', max_hops: 100 },
-      metadata: { name, category },
+      contract: defaultContract(),
     };
 
     await saveFlowDefinition(flowId, defaultGraph);
@@ -118,7 +118,7 @@ class FlowService {
       category: category || 'Uncategorized',
       nodes: [
         {
-          id: 'empty-trigger',
+          id: 'empty_trigger',
           type: 'trigger',
           position: { x: 250, y: 100 },
           data: {
@@ -146,6 +146,12 @@ class FlowService {
     await saveFlowDefinition(flow.id, graph);
     this.flowCache.set(flow.id, { ...flow, updatedAt: new Date() });
     this.notifyListeners();
+  }
+
+  /** Fetch the auto-convert-to-procedure checkbox and the outcome of the last
+   * conversion attempt for a flow (see flowApi.getFlowConversionStatus). */
+  async getConversionStatus(id: string) {
+    return getFlowConversionStatus(id);
   }
 
   /** Update a flow locally and save to backend */

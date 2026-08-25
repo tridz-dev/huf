@@ -3615,6 +3615,36 @@ def get_message_permission_conditions(user):
 	return f"(`tabAgent Message`.conversation IN (SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
 
 
+def get_context_artifact_permission_conditions(user):
+	"""
+	Restrict Agent Context Artifact list to artifacts belonging to
+	conversations the user owns, unless the user has chat.view_all
+	capability. Mirrors get_conversation_permission_conditions.
+
+	Fix for F-13: previously the only permission row on this DocType was
+	System Manager, so ordinary users could never read their own
+	conversation's artifacts while any System Manager could read everyone's.
+	Re-evaluated against frappe.session.user (or the explicit ``user``
+	argument) on every query -- there is no cached/stale authority here (I1,
+	I2): a handle to an artifact never grants access beyond what the reader
+	independently has on the owning conversation.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	return (
+		"(`tabAgent Context Artifact`.conversation IN "
+		f"(SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
+	)
+
+
 def get_run_permission_conditions(user):
 	"""
 	Restrict Agent Run list to runs the user owns,

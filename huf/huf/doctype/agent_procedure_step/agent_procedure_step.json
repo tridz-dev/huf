@@ -1,0 +1,132 @@
+{
+ "actions": [],
+ "creation": "2026-08-23 10:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "node_id",
+  "node_type",
+  "status",
+  "column_break_step1",
+  "attempt",
+  "parent_step",
+  "started_at",
+  "completed_at",
+  "output_section",
+  "output_json",
+  "error",
+  "idempotency_section",
+  "operation_key",
+  "idempotency_key",
+  "column_break_idem1",
+  "recovery_mode"
+ ],
+ "fields": [
+  {
+   "description": "Graph node id this row tracks (spec/graph-ir.md Node.id).",
+   "fieldname": "node_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Node ID",
+   "reqd": 1
+  },
+  {
+   "fieldname": "node_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Node Type"
+  },
+  {
+   "default": "Pending",
+   "description": "Per-node state, independent of every other step -- this is the frontier: many rows may be Ready/Running at once (T-30 bounded-parallel scheduler reads/writes this), unlike Flow Run's single current_node_id (GT-02).",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nReady\nRunning\nCompleted\nFailed\nSkipped"
+  },
+  {
+   "fieldname": "column_break_step1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "fieldname": "attempt",
+   "fieldtype": "Int",
+   "label": "Attempt"
+  },
+  {
+   "description": "node_id of the foreach/parallel node whose body/branch this step belongs to, if any. Null for main-chain steps.",
+   "fieldname": "parent_step",
+   "fieldtype": "Data",
+   "label": "Parent Step"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At"
+  },
+  {
+   "fieldname": "output_section",
+   "fieldtype": "Section Break",
+   "label": "Output"
+  },
+  {
+   "fieldname": "output_json",
+   "fieldtype": "JSON",
+   "label": "Output JSON"
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error"
+  },
+  {
+   "fieldname": "idempotency_section",
+   "fieldtype": "Section Break",
+   "label": "Idempotency (T-40, D5)"
+  },
+  {
+   "description": "Human-legible operation identity, e.g. '<procedure>:<node>:<target>'. Not run-scoped (D5) -- companion to idempotency_key, never used for dedup matching itself.",
+   "fieldname": "operation_key",
+   "fieldtype": "Data",
+   "label": "Operation Key"
+  },
+  {
+   "description": "Content-derived dedup key (D5): sha256(procedure version + procedure name + normalised inputs + target document identity). Not run-scoped -- the same key across two different Agent Procedure Runs is what proves cross-run idempotency, not just retry-within-a-run safety.",
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Idempotency Key"
+  },
+  {
+   "fieldname": "column_break_idem1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Declared in the graph (node.config.recovery), never inferred at runtime (GOAL.md 2.3): retry / resume / abort / compensate. Only set for write-classified tool.call steps.",
+   "fieldname": "recovery_mode",
+   "fieldtype": "Select",
+   "label": "Recovery Mode",
+   "options": "\nretry\nresume\nabort\ncompensate"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-23 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Agent Procedure Step",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

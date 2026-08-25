@@ -16,6 +16,7 @@ propagation rules documented in its docstring:
 import sys
 import os
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _stub_env  # noqa: E402
@@ -79,13 +80,12 @@ class TestReconcileCompositionUnknownPropagation(unittest.TestCase):
         # sum(segments) = 50, tool_exchange = 0 -> counted = 50 vs reported = 100
         # delta_ratio = 0.5, well beyond the default 0.15 tolerance
         segments = {"system": 20, "tools": 10, "knowledge": 0, "history": 15, "message": 5}
-        result = reconcile_composition(segments, tool_exchange_tokens=0, provider_prompt_tokens=100)
+        with patch("huf.ai.context_segments.frappe.logger") as mock_logger:
+            result = reconcile_composition(segments, tool_exchange_tokens=0, provider_prompt_tokens=100)
         self.assertFalse(result["within_tolerance"])
         self.assertAlmostEqual(result["delta_ratio"], 0.5)
 
-        import frappe
-
-        self.assertTrue(frappe.logger.called or frappe.logger("huf").warning.called)
+        mock_logger.return_value.warning.assert_called_once()
 
     def test_within_tolerance_boundary_is_inclusive(self):
         # delta_ratio exactly equal to tolerance (0.15) must count as within

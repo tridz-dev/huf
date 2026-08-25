@@ -35,6 +35,13 @@ export type MessageType = {
     startedAt?: number;
     /** Elapsed ms between startedAt and the tool reaching a terminal (output-available/output-error) state. */
     durationMs?: number;
+    /**
+     * `Agent Procedure Run` this call belongs to, when it was executed as
+     * part of a deterministic procedure rather than a direct model tool
+     * call. Tool calls in the same message that share this id collapse
+     * into one `ProcedureRunRow` per D8 instead of rendering N rows.
+     */
+    agentProcedureRun?: string;
   }[];
   injected_memories?: string[];
   /** Provider thinking/reasoning text, shown collapsed above the answer. */

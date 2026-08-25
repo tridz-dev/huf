@@ -61,6 +61,15 @@ const ChatScheduledPage = lazy(() =>
 const Executions = lazy(() => import('./pages/Executions'));
 const AnalyticsEntityDetailPage = lazy(() => import('./pages/AnalyticsEntityDetailPage'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
+const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
+const AgentContextArtifactDetailPageWrapper = lazy(
+  () => import('./pages/AgentContextArtifactDetailPageWrapper')
+);
+const AgentProceduresPage = lazy(() => import('./pages/AgentProceduresPage'));
+const AgentProcedureDetailPageWrapper = lazy(
+  () => import('./pages/AgentProcedureDetailPageWrapper')
+);
+const BatchJobsPage = lazy(() => import('./pages/BatchJobsPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
@@ -98,6 +107,7 @@ const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
+const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
@@ -579,7 +589,64 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
-          <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
+          <Route
+            path="/artifacts"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentContextArtifactsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/artifacts/:artifactId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentContextArtifactDetailPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/artifacts/*" element={<Navigate to="/artifacts" replace />} />
+          <Route
+            path="/procedures"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AgentProceduresPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/procedures/:procedureId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <AgentProcedureDetailPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/procedures/*" element={<Navigate to="/procedures" replace />} />
+          <Route
+            path="/batch-jobs"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <BatchJobsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
@@ -600,6 +667,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GeneralSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/developer"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DeveloperSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>
