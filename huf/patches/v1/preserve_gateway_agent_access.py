@@ -46,8 +46,8 @@ def execute():
 			frappe.db.set_value("Agent", agent_name, "allow_guest", 1, update_modified=False)
 		except Exception as e:
 			frappe.log_error(
-				f"Could not backfill allow_guest for gateway-bound Agent '{agent_name}': {e}",
-				"Preserve Gateway Agent Access",
+				title="Preserve Gateway Agent Access",
+				message=f"Could not backfill allow_guest for gateway-bound Agent '{agent_name}': {e}",
 			)
 
 	frappe.db.commit()

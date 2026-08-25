@@ -236,8 +236,8 @@ def load_pending_execution(approval_doc) -> dict:
 			payload = None
 	if not isinstance(payload, dict):
 		frappe.log_error(
-			f"pending ssh execution hold for approval {approval_doc.name} is missing or corrupt",
-			"Huf SSH Execution Approval",
+			title="Huf SSH Execution Approval",
+			message=f"pending ssh execution hold for approval {approval_doc.name} is missing or corrupt",
 		)
 		raise PendingExecutionExpired(approval_doc.name)
 
@@ -625,7 +625,7 @@ def execute_job(
 			"connection_name": connection_label,
 		}
 		call.save(ignore_permissions=True)
-		frappe.log_error(f"execute_job failed for {agent_tool_call_name}: {exc}", "Huf SSH Execution")
+		frappe.log_error(title="Huf SSH Execution", message=f"execute_job failed for {agent_tool_call_name}: {exc}")
 	finally:
 		if transport is not None:
 			try:

@@ -744,7 +744,10 @@ def auto_sync_mcp_server_tools():
         try:
             # Check if sync is due
             if not server.last_sync or time_diff_in_hours(now_datetime(), server.last_sync) >= server.auto_sync_interval:
-                frappe.log_error(f"Auto-syncing MCP Tools: {server.name}", "MCP Tools Auto Synced")
+                frappe.log_error(
+                    title="MCP Tools Auto Synced",
+                    message=f"Auto-syncing MCP Tools: {server.name}",
+                )
                 sync_mcp_server_tools(server.name)
         except Exception as e:
             frappe.log_error(

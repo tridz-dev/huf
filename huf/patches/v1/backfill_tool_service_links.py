@@ -56,8 +56,8 @@ def _ensure_builtin_services():
 			doc.save(ignore_permissions=True)
 		except Exception as e:
 			frappe.log_error(
-				f"Could not assert Integration Service '{service_name}': {e}",
-				"Backfill Tool Service Links",
+				title="Backfill Tool Service Links",
+				message=f"Could not assert Integration Service '{service_name}': {e}",
 			)
 
 
@@ -68,6 +68,6 @@ def _resync_tools():
 		sync_discovered_tools(use_cache=False)
 	except Exception as e:
 		frappe.log_error(
-			f"Tool re-sync failed during service backfill: {e}",
-			"Backfill Tool Service Links",
+			title="Backfill Tool Service Links",
+			message=f"Tool re-sync failed during service backfill: {e}",
 		)

@@ -66,7 +66,7 @@ class ExtractionResult:
 
 def _log_error(message: str, title: str = "OCR Engine"):
     try:
-        frappe.log_error(message, title)
+        frappe.log_error(title=title, message=message)
     except Exception as exc:  # fallback logging protection
         frappe.logger("huf").warning(f"Error logging failed: {exc!s}")
 

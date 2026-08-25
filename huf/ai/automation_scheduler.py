@@ -174,7 +174,7 @@ def _submit_batch_job_for_automation_trigger(t, automation_doc, prompt):
 		status_map = _ANTHROPIC_STATUS_TO_BATCH_JOB_STATUS
 	else:
 		unsupported_msg = f"Unsupported provider brand for batch submission: {provider_brand}"
-		frappe.log_error(unsupported_msg, "Batch Job Submit")
+		frappe.log_error(title="Batch Job Submit", message=unsupported_msg)
 		batch_job.status = "Failed"
 		batch_job.error_message = unsupported_msg
 		batch_job.save(ignore_permissions=True)

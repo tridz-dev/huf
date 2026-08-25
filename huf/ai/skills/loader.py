@@ -219,8 +219,8 @@ def load_all_skill_tools(agent_doc, user: str) -> list[FunctionTool]:
                 )
             except Exception as e:
                 frappe.log_error(
-                    f"Error creating skill tool '{name}' from skill '{skill.name}': {e!s}",
-                    "Skill Tool Loading Error",
+                    title="Skill Tool Loading Error",
+                    message=f"Error creating skill tool '{name}' from skill '{skill.name}': {e!s}",
                 )
                 continue
 
@@ -361,7 +361,7 @@ def create_list_skills_tool(agent_name: str) -> Optional[FunctionTool]:
         )
     except Exception as e:
         frappe.log_error(
-            f"Error creating list_skills tool for agent '{agent_name}': {e!s}",
-            "Skill Tool Loading Error",
+            title="Skill Tool Loading Error",
+            message=f"Error creating list_skills tool for agent '{agent_name}': {e!s}",
         )
         return None

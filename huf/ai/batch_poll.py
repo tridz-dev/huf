@@ -272,16 +272,16 @@ def _process_batch_job(job: dict) -> None:
 
 	if not provider_batch_id:
 		frappe.log_error(
-			f"Batch Job {job_name} is {job.get('status')} but has no provider_batch_id.",
-			"Batch Job Poll",
+			title="Batch Job Poll",
+			message=f"Batch Job {job_name} is {job.get('status')} but has no provider_batch_id.",
 		)
 		return
 
 	provider_module = _get_provider_module(provider)
 	if not provider_module:
 		frappe.log_error(
-			f"Batch Job {job_name} has unsupported/unexpected provider '{provider}'; skipping poll.",
-			"Batch Job Poll",
+			title="Batch Job Poll",
+			message=f"Batch Job {job_name} has unsupported/unexpected provider '{provider}'; skipping poll.",
 		)
 		return
 
@@ -292,8 +292,8 @@ def _process_batch_job(job: dict) -> None:
 	mapped_status = status_map.get(native_status)
 	if not mapped_status:
 		frappe.log_error(
-			f"Batch Job {job_name}: unrecognized native status '{native_status}' from {provider}.",
-			"Batch Job Poll",
+			title="Batch Job Poll",
+			message=f"Batch Job {job_name}: unrecognized native status '{native_status}' from {provider}.",
 		)
 		return
 
@@ -319,8 +319,8 @@ def _process_batch_job(job: dict) -> None:
 		except Exception as e:  # noqa: BLE001 -- boundary catch: conversation writeback is best-effort and
 			# must never block result_summary/estimated_cost/completed_at from being saved
 			frappe.log_error(
-				f"Batch Job {job_name}: failed to write results to Agent Conversation: {e}",
-				"Batch Job Poll",
+				title="Batch Job Poll",
+				message=f"Batch Job {job_name}: failed to write results to Agent Conversation: {e}",
 			)
 	elif mapped_status in _TERMINAL_NO_RESULTS_STATUSES:
 		doc.completed_at = now_datetime()

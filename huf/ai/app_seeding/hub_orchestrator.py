@@ -276,4 +276,4 @@ def on_ai_provider_update(doc, method=None):
         if doc.get_password("api_key", raise_exception=False):
             provision_hub_orchestrator(provider_doc=doc)
     except Exception as e:
-        frappe.log_error(f"Hub Orchestrator re-provisioning failed: {e}", "Hub Orchestrator")
+        frappe.log_error(title="Hub Orchestrator", message=f"Hub Orchestrator re-provisioning failed: {e}")

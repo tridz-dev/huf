@@ -32,14 +32,11 @@ def cleanup_orphaned_files():
 						wal_path = file_path + ext
 						if os.path.exists(wal_path):
 							os.remove(wal_path)
-					frappe.log_error(
-						f"Removed orphaned knowledge file: {filename}",
-						"Knowledge Maintenance"
-					)
+					frappe.log_error(title="Knowledge Maintenance", message=f"Removed orphaned knowledge file: {filename}")
 				except Exception as e:
 					frappe.log_error(
-						f"Error removing orphaned file {filename}: {str(e)}",
-						"Knowledge Maintenance"
+						title="Knowledge Maintenance",
+						message=f"Error removing orphaned file {filename}: {str(e)}",
 					)
 
 
@@ -61,7 +58,4 @@ def optimize_indexes():
 				conn.execute("VACUUM")
 				conn.close()
 			except Exception as e:
-				frappe.log_error(
-					f"Error optimizing {source.name}: {str(e)}",
-					"Knowledge Maintenance"
-				)
+				frappe.log_error(title="Knowledge Maintenance", message=f"Error optimizing {source.name}: {str(e)}")

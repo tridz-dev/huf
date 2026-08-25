@@ -421,12 +421,9 @@ def expire_stale_memory_records():
 			frappe.db.set_value("Memory Record", row["name"], "status", "Expired", update_modified=False)
 		if expired:
 			frappe.db.commit()
-			frappe.log_error(
-				f"Expired {len(expired)} stale Memory Records",
-				"Memory Expiry"
-			)
+			frappe.log_error(title="Memory Expiry", message=f"Expired {len(expired)} stale Memory Records")
 	except Exception as e:
-		frappe.log_error(f"Memory expiry scheduler failed: {str(e)}", "Memory Expiry Error")
+		frappe.log_error(title="Memory Expiry Error", message=f"Memory expiry scheduler failed: {str(e)}")
 
 
 def extract_memory_from_run(run_id):
