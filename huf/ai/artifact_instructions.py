@@ -16,6 +16,21 @@ import re
 
 import frappe
 
+MERMAID_ARTIFACT_INSTRUCTIONS = """
+4. MERMAID DIAGRAMS
+<artifact type="mermaid" title="Flowchart">
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Do something]
+    B -->|No| D[Stop]
+</artifact>
+"""
+
+MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL = """
+4. MERMAID DIAGRAMS
+To show a diagram, call the render_mermaid tool with your nodes/edges and relay its returned artifact tag verbatim in your response. Do not hand-write Mermaid syntax yourself.
+"""
+
 AI_ELEMENT_INSTRUCTIONS = """
 SYSTEM INSTRUCTION - HUF RICH ELEMENTS:
 The HUF chat UI renders special elements when you output them with the exact tags below.
@@ -44,15 +59,7 @@ Any plain text or markdown document.
   <circle cx="50" cy="50" r="40" fill="blue" />
 </svg>
 </artifact>
-
-4. MERMAID DIAGRAMS
-<artifact type="mermaid" title="Flowchart">
-graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Do something]
-    B -->|No| D[Stop]
-</artifact>
-
+""" + MERMAID_ARTIFACT_INSTRUCTIONS + """
 5. WEB PREVIEW (iframe a public URL)
 <web-preview url="https://example.com" title="Example Site" />
 
@@ -63,6 +70,21 @@ graph TD
 Always use this open/close form and put the JSX in the tag body. Never pass JSX
 via a jsx="..." attribute — JSX contains > and quote characters, which terminate
 the attribute early and cause the whole element to be dropped without rendering.
+
+7. FRAPPE DATA VIEWS (frappe-list, frappe-form, frappe-report)
+When the user asks to see/list/browse/filter records of a Frappe/ERPNext doctype,
+fill out a form, or view a report, call render_frappe_view with mode='list'|'form'|'report'
+instead of returning raw JSON. Return its artifact tag verbatim.
+
+Example calls:
+- List mode: render_frappe_view(doctype="Customer", mode="list", filters=[["disabled", "=", 0]])
+- Form mode: render_frappe_view(doctype="Task", mode="form", name="TASK-001")
+- Report mode: render_frappe_view(doctype="Sales Invoice", mode="report", filters={"status": "Draft"})
+
+The tool returns complete <artifact> tags — relay them as-is in your response. Copy the
+JSON body character-for-character; do not retype it, reformat it, or rename any of its
+keys (in particular, the record/rows key is always "data" — never rename it to "doc" or
+anything else).
 
 GENERAL RULES:
 - Only use the tags above (plus the chart artifact format described separately). Unknown types render as plain text.

@@ -833,7 +833,7 @@ def get_node_schemas() -> dict:
 			"has_backend": True,
 			"config_schema": [
 				{"name": "agent_name", "label": "Agent", "type": "agent_select", "required": True},
-				{"name": "input.prompt_template", "label": "Prompt Template", "type": "text", "supports_variables": True},
+				{"name": "input.prompt_template", "label": "Prompt Template", "type": "text"},
 				{"name": "conversation_mode", "label": "Conversation Mode", "type": "select", "options": ["flow_shared", "isolated"], "default": "flow_shared"},
 				{"name": "input.inject_flow_context", "label": "Inject Flow Context", "type": "boolean", "default": False},
 				{"name": "output.save_response_to_context", "label": "Save Response To", "type": "string", "description": "Context key for result"},
@@ -871,12 +871,12 @@ def get_node_schemas() -> dict:
 			"config_schema": [
 				{"name": "title", "label": "Title", "type": "string", "default": "Approval Required"},
 				{"name": "instructions", "label": "Instructions", "type": "text"},
-				{"name": "context_summary", "label": "Context Summary", "type": "text", "supports_variables": True, "description": "Summary shown to approver with context variables"},
+				{"name": "context_summary", "label": "Context Summary", "type": "text", "description": "Summary shown to the approver"},
 				{"name": "approval_type", "label": "Approval Type", "type": "select", "options": ["role", "user"], "default": "role"},
 				{"name": "approver_role", "label": "Approver Role", "type": "role_select", "show_if": {"field": "approval_type", "value": "role"}},
 				{"name": "approver_users", "label": "Approver Users", "type": "string", "show_if": {"field": "approval_type", "value": "user"}},
 				{"name": "reference_doctype", "label": "Reference DocType", "type": "doctype_select", "description": "Link approval to a specific document type"},
-				{"name": "reference_name", "label": "Reference Document", "type": "string", "supports_variables": True, "description": "Document name (supports {{variables}})"},
+				{"name": "reference_name", "label": "Reference Document", "type": "string", "description": "Document name"},
 				{"name": "store_decision_in_context", "label": "Store Decision Key", "type": "string", "default": "approval"},
 			],
 		},
@@ -899,10 +899,10 @@ def get_node_schemas() -> dict:
 			"description": "Make an HTTP request to an external API",
 			"has_backend": True,
 			"config_schema": [
-				{"name": "url", "label": "URL", "type": "string", "required": True, "supports_variables": True},
+				{"name": "url", "label": "URL", "type": "string", "required": True},
 				{"name": "method", "label": "Method", "type": "select", "options": ["GET", "POST", "PUT", "PATCH", "DELETE"], "default": "GET"},
 				{"name": "headers", "label": "Headers", "type": "json", "description": "Request headers as JSON object"},
-				{"name": "body", "label": "Body", "type": "json", "description": "Request body (POST/PUT only)", "supports_variables": True},
+				{"name": "body", "label": "Body", "type": "json", "description": "Request body (POST/PUT only)"},
 				{"name": "timeout", "label": "Timeout (seconds)", "type": "number", "default": 30},
 				{"name": "save_result_to_context", "label": "Save Result To", "type": "string", "description": "Context key for result"},
 			],
@@ -1187,3 +1187,117 @@ def get_pending_approvals(limit: int = 50) -> list:
 			})
 
 	return results
+
+
+# ---------------------------------------------------------------------------
+# Flow -> Procedure conversion (T-52)
+#
+# "Flow is what you draw, Procedure is what it compiles to -- the same picture
+# at two stages." The determinism check, entry rewiring and Procedure-graph
+# compilation live in huf.ai.procedure_conversion (frappe-free, unit tested on
+# its own); this layer only adds permission checks and the Agent Procedure
+# creation, following the same whitelisted-endpoint shape as the rest of this
+# module.
+# ---------------------------------------------------------------------------
+
+
+def _load_flow_graph(flow_id: str) -> tuple[frappe.Document, dict]:
+	doc = frappe.get_doc("Flow Definition", flow_id)
+	defn = json.loads(doc.definition_json) if isinstance(doc.definition_json, str) else doc.definition_json
+	if not isinstance(defn, dict):
+		frappe.throw(_("Flow '{0}' has no valid definition to convert").format(flow_id))
+	return doc, defn
+
+
+@frappe.whitelist()
+def analyze_flow_conversion(flow_id: str) -> dict:
+	"""
+	Read-only preview of converting a Flow to an Agent Procedure. Creates nothing.
+
+	Args:
+	    flow_id: Flow Definition name
+
+	Returns:
+	    dict -- either {"convertible": False, "reason": "..."} or
+	    {"convertible": True, "reads": [...], "writes": [...],
+	     "atomic_operations": N, "estimated_round_trip_reduction_pct": N}
+	"""
+	if not frappe.has_permission("Flow Definition", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	from huf.ai.procedure_conversion import analyze_conversion
+
+	_doc, flow_graph = _load_flow_graph(flow_id)
+	result = analyze_conversion(flow_graph)
+
+	if not result.convertible:
+		return {"convertible": False, "reason": result.reason}
+
+	return {"convertible": True, **result.summary.as_dict()}
+
+
+@frappe.whitelist()
+def convert_flow_to_procedure(flow_id: str, procedure_id: str | None = None) -> dict:
+	"""
+	Convert a deterministic Flow into a Draft Agent Procedure.
+
+	Refuses -- with a specific reason, no partial conversion -- for any flow that is
+	not structurally deterministic (contains an ``agent.run``, ``router.llm`` or
+	``human.approval`` step) or that does not itself validate. The created record is
+	always ``tier="Draft"``, ``status="Draft"`` -- this endpoint never activates a
+	procedure (I8); a human reviews and enables it separately.
+
+	Args:
+	    flow_id: Flow Definition to convert
+	    procedure_id: Logical procedure id to create/append a version to. Defaults to
+	        ``"{flow_id}-procedure"``. Re-converting the same flow under the same
+	        procedure_id creates a new, immutable version (T-20), it never edits one.
+
+	Returns:
+	    dict with the created Agent Procedure's name/procedure_id/version, plus the
+	    same reads/writes/estimated-reduction summary as analyze_flow_conversion.
+	"""
+	if not frappe.has_permission("Flow Definition", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not frappe.has_permission("Agent Procedure", "create"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	from huf.ai.procedure_conversion import analyze_conversion
+
+	flow_doc, flow_graph = _load_flow_graph(flow_id)
+	result = analyze_conversion(flow_graph)
+
+	if not result.convertible:
+		frappe.throw(result.reason, title=_("Flow Is Not Convertible"))
+
+	resolved_procedure_id = procedure_id or f"{flow_id}-procedure"
+
+	procedure = frappe.get_doc(
+		{
+			"doctype": "Agent Procedure",
+			"procedure_id": resolved_procedure_id,
+			"procedure_name": _("{0} (from Flow)").format(flow_doc.flow_name or flow_id),
+			"definition_json": frappe.as_json(result.procedure_graph),
+			"tier": "Draft",
+			"status": "Draft",
+			"provenance": frappe.as_json(
+				{
+					"source": "flow_conversion",
+					"source_flow_id": flow_id,
+					"source_flow_fingerprint": flow_graph.get("fingerprint"),
+					"converted_by": frappe.session.user,
+					"converted_at": str(now_datetime()),
+				}
+			),
+		}
+	)
+	procedure.insert()
+
+	return {
+		"name": procedure.name,
+		"procedure_id": procedure.procedure_id,
+		"version": procedure.version,
+		"status": procedure.status,
+		"tier": procedure.tier,
+		**result.summary.as_dict(),
+	}

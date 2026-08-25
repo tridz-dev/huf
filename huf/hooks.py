@@ -66,6 +66,14 @@ website_route_rules = [
     {"from_route": "/huf/stream/<path:agent_name>", "to_route": "huf/stream"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"},
 
+    # Public developer API (v1) routes must come before the catch-all /huf route
+    {"from_route": "/huf/api/v1", "to_route": "huf/api/v1"},
+    {"from_route": "/huf/api/v1/<path:endpoint>", "to_route": "huf/api/v1"},
+
+    # Public/guest App routing (Phase 9b, D.9) — must come before the
+    # catch-all /huf/<path:app_path> route below.
+    {"from_route": "/huf/apps/<path:app_alias>", "to_route": "huf/apps"},
+
     # Docs routes must come before the catch-all /huf route
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
     {
@@ -79,7 +87,9 @@ website_route_rules = [
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [
-    "huf.ai.agent_stream_renderer.AgentStreamRenderer"
+    "huf.ai.agent_stream_renderer.AgentStreamRenderer",
+    "huf.ai.app_public_renderer.HufAppPublicRenderer",
+    "huf.api.v1.router.ApiV1Router",
 ]
 
 
@@ -165,6 +175,9 @@ permission_query_conditions = {
     "Agent Conversation": "huf.ai.agent_integration.get_conversation_permission_conditions",
     "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
     "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
+    "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
+    "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
+    "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
 }
 #
 # has_permission = {
@@ -207,6 +220,11 @@ doc_events = {
         "after_insert": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
         "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
         "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
+    },
+    "Automation Trigger": {
+        "after_insert": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "on_update": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
     },
     "AI Provider": {
         "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
@@ -259,6 +277,7 @@ scheduler_events = {
         # P2-10: Proactively mark expired Memory Records (past effective_until) as Expired
         "huf.ai.memory_tools.expire_stale_memory_records",
         "huf.ai.agent_chat.purge_trashed_conversations",
+        "huf.ai.context_artifacts.purge_expired_context_artifacts",
     ],
     "cron": {
         "*/1 * * * *": [
@@ -267,11 +286,15 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+        ],
+        "*/15 * * * *": [
+            "huf.ai.batch_poll.poll_pending_batch_jobs",
         ]
     },
     "hourly": [
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
-        "huf.ai.mcp_oauth.auto_refresh_oauth_tokens"
+        "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
+        "huf.ai.meetings.meeting_recording.cleanup_stale_recordings"
     ]
 }
 

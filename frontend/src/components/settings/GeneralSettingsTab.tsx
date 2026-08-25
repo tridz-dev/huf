@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Image, RotateCcw } from 'lucide-react';
+import { Image, RotateCcw, Wrench } from 'lucide-react';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/contexts/PermissionsContext';
+import { runErpnextDemoSetup } from '@/services/erpnextDemoSetupApi';
 import {
   type HufTheme,
   getTheme,
@@ -64,6 +68,10 @@ function GeneralSettingsTab({
   const [theme, setThemeState] = useState<HufTheme>(DEFAULT_THEME);
   const [internalScenery, setInternalScenery] = useState<boolean>(false);
   const [internalOpacity, setInternalOpacity] = useState<number>(DEFAULT_OPACITY);
+  const { hufRole } = usePermissions();
+  // Backend maps Administrator / System Manager to the "Huf Admin" Huf role.
+  const isAdmin = hufRole === 'Huf Admin';
+  const [demoSetupRunning, setDemoSetupRunning] = useState(false);
 
   const scenery = sceneryProp ?? internalScenery;
   const opacity = opacityProp ?? internalOpacity;
@@ -103,6 +111,29 @@ function GeneralSettingsTab({
     }
     setInternalOpacity(clamped);
     setSceneryOpacity(clamped);
+  };
+
+  const handleErpnextDemoSetup = async () => {
+    setDemoSetupRunning(true);
+    try {
+      const result = await runErpnextDemoSetup();
+      if (!result) {
+        return;
+      }
+      if (result.skipped_reason) {
+        toast.info(`Skipped: ${result.skipped_reason}`);
+        return;
+      }
+      if (result.created.length === 0) {
+        toast.success('ERPNext demo data already set up — nothing new to create');
+      } else {
+        toast.success(`Created ${result.created.length} ERPNext demo record(s)`, {
+          description: result.created.join(', '),
+        });
+      }
+    } finally {
+      setDemoSetupRunning(false);
+    }
   };
 
   return (
@@ -208,6 +239,44 @@ function GeneralSettingsTab({
           </div>
         </CardContent>
       </Card>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Developer tools</CardTitle>
+            <CardDescription>
+              Utilities for demoing and testing HUF against a fresh ERPNext install. Visible to
+              System Managers only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between rounded-lg border border-line p-4">
+              <div className="space-y-0.5">
+                <Label>Set up ERPNext demo data for testing</Label>
+                <p className="text-sm text-muted-foreground">
+                  Creates a Warehouse Type, Item Group, Customer Group, Territory, Price List, and
+                  Fiscal Year — the minimum master data a Procedure needs to exercise a
+                  customer/invoice/payment scenario. Safe to run more than once; only missing
+                  records are created.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleErpnextDemoSetup}
+                disabled={demoSetupRunning}
+              >
+                {demoSetupRunning ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wrench className="h-4 w-4" />
+                )}
+                Set up demo data
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

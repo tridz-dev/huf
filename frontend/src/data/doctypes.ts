@@ -29,6 +29,11 @@ export const doctype = {
   "OpenAI Settings": "OpenAI Settings",
   "Flow Definition": "Flow Definition",
   "Flow Run": "Flow Run",
+  "Agent Procedure": "Agent Procedure",
+  "Agent Procedure Run": "Agent Procedure Run",
+  "Agent Procedure Step": "Agent Procedure Step",
+  "Agent Procedure Binding": "Agent Procedure Binding",
+  "Agent Tool Call": "Agent Tool Call",
   "Knowledge Source": "Knowledge Source",
   "Knowledge Input": "Knowledge Input",
   "Memory Policy": "Memory Policy",
@@ -40,6 +45,9 @@ export const doctype = {
   "Huf Data Table": "Huf Data Table",
   "Agent Context Artifact": "Agent Context Artifact",
   "Agent Run Feedback": "Agent Run Feedback",
+  Meeting: "Meeting",
+  "Meeting Recording Chunk": "Meeting Recording Chunk",
+  "Batch Job": "Batch Job",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

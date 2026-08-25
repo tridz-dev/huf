@@ -53,6 +53,17 @@ export interface GeneratePromptResult {
   prompt: string;
 }
 
+export interface ImprovePromptParams {
+  prompt_body: string;
+  instruction?: string;
+  provider?: string;
+  model?: string;
+}
+
+export interface ImprovePromptResult {
+  prompt: string;
+}
+
 export interface EvaluateRunParams {
   response: string;
   criteria: string;
@@ -148,6 +159,16 @@ export async function generatePrompt(params: GeneratePromptParams): Promise<Gene
     return (result?.message ?? result) as GeneratePromptResult;
   } catch (error) {
     handleFrappeError(error, 'Error generating prompt');
+    throw error;
+  }
+}
+
+export async function improvePrompt(params: ImprovePromptParams): Promise<ImprovePromptResult> {
+  try {
+    const result = await call.post('huf.ai.console_api.improve_prompt', params);
+    return (result?.message ?? result) as ImprovePromptResult;
+  } catch (error) {
+    handleFrappeError(error, 'Error improving prompt');
     throw error;
   }
 }

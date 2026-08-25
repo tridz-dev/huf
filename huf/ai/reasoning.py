@@ -185,9 +185,19 @@ def resolve_reasoning(
         else:
             # Standard OpenAI / DeepSeek / LiteLLM reasoning_effort
             if policy.effort in ("low", "medium", "high"):
-                resolved_native["reasoning_effort"] = policy.effort
+                if policy.effort in capabilities.supported_efforts:
+                    resolved_native["reasoning_effort"] = policy.effort
+                elif capabilities.supported_efforts:
+                    # Requested effort isn't supported by this model; fall back to
+                    # its closest supported tier instead of silently sending an
+                    # unsupported value.
+                    resolved_native["reasoning_effort"] = capabilities.supported_efforts[
+                        len(capabilities.supported_efforts) // 2
+                    ]
             elif policy.mode == "on":
-                resolved_native["reasoning_effort"] = "medium"
+                resolved_native["reasoning_effort"] = (
+                    "medium" if "medium" in capabilities.supported_efforts else capabilities.supported_efforts[0]
+                ) if capabilities.supported_efforts else "medium"
 
             if policy.summary in ("concise", "detailed"):
                 resolved_native["reasoning_summary"] = policy.summary

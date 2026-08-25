@@ -74,7 +74,6 @@ export const triggerFieldsConfig: TriggerTypeFieldConfig = {
         'before_submit',
         'on_submit',
         'on_update',
-        'after_submit',
         'on_cancel',
         'before_rename',
         'after_rename',

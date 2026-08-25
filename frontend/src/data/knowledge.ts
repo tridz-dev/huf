@@ -6,16 +6,30 @@
 export const knowledgeTypes = [
 	{ label: 'SQLite FTS', value: 'sqlite_fts' },
 	{ label: 'SQLite Vec', value: 'sqlite_vec' },
+	{ label: 'SQLite Hybrid (FTS + Vec)', value: 'sqlite_hybrid' },
 	{ label: 'ChromaDB', value: 'chroma' },
 	{ label: 'PGVector', value: 'pgvector' },
 	{ label: 'zvec (Embedded)', value: 'zvec' },
 	{ label: 'Redis', value: 'redis' },
+	{ label: 'Weaviate', value: 'weaviate' },
+	{ label: 'FAISS', value: 'faiss' },
+	{ label: 'Pinecone', value: 'pinecone' },
 
 ] as const;
 
 export type KnowledgeTypeOption = (typeof knowledgeTypes)[number]['value'];
 
-export const VECTOR_KNOWLEDGE_TYPES = ['sqlite_vec', 'chroma', 'pgvector', 'redis', 'zvec'] as const;
+export const VECTOR_KNOWLEDGE_TYPES = [
+	'sqlite_vec',
+	'sqlite_hybrid',
+	'chroma',
+	'pgvector',
+	'redis',
+	'zvec',
+	'weaviate',
+	'faiss',
+	'pinecone',
+] as const;
 
 
 export function isVectorKnowledgeType(type: string): boolean {
@@ -25,10 +39,14 @@ export function isVectorKnowledgeType(type: string): boolean {
 export const knowledgeTypeLabels: Record<string, string> = {
 	sqlite_fts: 'FTS',
 	sqlite_vec: 'Vec',
+	sqlite_hybrid: 'Hybrid',
 	chroma: 'Chroma',
 	pgvector: 'PGVector',
 	zvec: 'zvec',
 	redis: 'Redis',
+	weaviate: 'Weaviate',
+	faiss: 'FAISS',
+	pinecone: 'Pinecone',
 
 };
 

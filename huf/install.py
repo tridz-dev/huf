@@ -104,6 +104,9 @@ def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
     create_hub_orchestrator_agent()
+    create_design_system_skill()
+    create_meeting_summary_agent()
+    create_meeting_recorder_app()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
@@ -196,6 +199,21 @@ def after_migrate():
 		create_hub_orchestrator_agent()
 	except Exception as e:
 		logger.warning(f"Failed to seed Hub Orchestrator agent after migrate: {e!s}")
+
+	try:
+		create_design_system_skill()
+	except Exception as e:
+		logger.warning(f"Failed to seed HUF Design System Reference skill after migrate: {e!s}")
+
+	try:
+		create_meeting_summary_agent()
+	except Exception as e:
+		logger.warning(f"Failed to seed Meeting Summary agent after migrate: {e!s}")
+
+	try:
+		create_meeting_recorder_app()
+	except Exception as e:
+		logger.warning(f"Failed to seed Meeting Recorder HUF App after migrate: {e!s}")
 
 	try:
 		from huf.ai.app_seeding.apps_loader import sync_huf_apps
@@ -517,6 +535,151 @@ def create_hub_orchestrator_agent():
 		_create()
 	except Exception as e:
 		logger.warning(f"Failed to seed Hub Orchestrator agent: {e!s}")
+
+
+def create_design_system_skill():
+	"""
+	Idempotent: seed the "HUF Design System Reference" Skill (list_app_components /
+	render_app_component reference) and attach it to Hub Orchestrator.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.app_seeding.design_system_skill import create_design_system_skill as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed HUF Design System Reference skill: {e!s}")
+
+
+MEETING_SUMMARY_AGENT_NAME = "Meeting Summary Agent"
+
+MEETING_SUMMARY_PREFERRED_MODELS = [
+	"gemini-3.5-flash-lite",
+	"gemini-3.1-flash-lite",
+	"gemini-3.5-flash",
+	"gemini-2.5-flash",
+]
+
+MEETING_SUMMARY_INSTRUCTIONS = """You turn a raw meeting transcript into a structured Markdown summary.
+
+Output exactly these Markdown sections, in this order:
+1. `## Headline` — one sentence capturing what the meeting was about.
+2. `## Key Points` — a bullet list of the main discussion points.
+3. `## Decisions` — a bullet list of decisions that were made. If none were made, write "None identified."
+4. `## Action Items` — a bullet list of concrete follow-up actions, with an owner if the transcript names one. If there are none, write "None identified."
+
+Base the summary only on the transcript and any meeting title, description, or participants provided. Do not invent details that are not in the transcript.
+
+If asked, in a follow-up chat message, to revise the summary, output the complete revised summary again in the same four-section Markdown format — never a partial diff or just the changed section."""
+
+
+def _meeting_summary_model():
+	"""First AI Model on the Google provider, preferring the light chat models."""
+	if not frappe.db.exists("AI Provider", "Google"):
+		return None
+
+	models = frappe.get_all(
+		"AI Model",
+		filters={"provider": "Google"},
+		pluck="name",
+		order_by="creation asc",
+	)
+	for preferred in MEETING_SUMMARY_PREFERRED_MODELS:
+		if preferred in models:
+			return preferred
+	return models[0] if models else None
+
+
+def create_meeting_summary_agent():
+	"""
+	Idempotent: seed the "Meeting Summary Agent" system agent used to turn a
+	finalized Meeting transcript into a structured Markdown summary (see
+	huf.ai.meetings.meeting_summary.run_meeting_summary).
+
+	This agent's name is also hardcoded by Phase 4's meeting_transcription.py
+	(TRANSCRIPTION_AGENT) to resolve STT config for chunk transcription, so
+	its name must stay exactly "Meeting Summary Agent".
+
+	Provider/model default to the Google/Gemini AI Model records seeded by
+	create_demo_ai_models(), following the same "pick a sensible default,
+	never hardcode a key" convention as create_hub_orchestrator_agent(). If
+	no Google AI Model is configured yet, the agent is seeded disabled so it
+	does not block install; it can be reconfigured from the Agent list once
+	a provider/model is available.
+
+	Safe to call on both after_install and after_migrate.
+	"""
+	fields = {
+		"agent_name": MEETING_SUMMARY_AGENT_NAME,
+		"description": "Summarizes a finalized Meeting transcript into headline, key points, and action items.",
+		"prompt_mode": "Local",
+		"instructions": MEETING_SUMMARY_INSTRUCTIONS,
+		"is_system": 1,
+		"allow_chat": 0,
+		"persist_conversation": 0,
+		"run_immediately": 1,
+		"allow_guest": 0,
+	}
+
+	model = _meeting_summary_model()
+	if model:
+		fields["provider"] = "Google"
+		fields["model"] = model
+		fields["disabled"] = 0
+	else:
+		fields["disabled"] = 1
+
+	previous_in_seeding = getattr(frappe.flags, "in_seeding", False)
+	frappe.flags.in_seeding = True
+	try:
+		if frappe.db.exists("Agent", MEETING_SUMMARY_AGENT_NAME):
+			doc = frappe.get_doc("Agent", MEETING_SUMMARY_AGENT_NAME)
+			for fieldname, value in fields.items():
+				doc.set(fieldname, value)
+			doc.save(ignore_permissions=True)
+			return
+
+		doc = frappe.get_doc({"doctype": "Agent", **fields})
+		if not model:
+			doc.flags.ignore_mandatory = True
+		doc.insert(ignore_permissions=True)
+	finally:
+		frappe.flags.in_seeding = previous_in_seeding
+
+
+def create_meeting_recorder_app():
+	"""
+	Idempotent: seed the "Meeting Recorder" HUF App manifest entry.
+
+	Meeting Recorder is a first-party huf feature, not a third-party app
+	manifest discovered via huf.ai.app_seeding.apps_loader (that scanner
+	explicitly skips the "huf" app itself), so it is seeded directly here
+	following the same get_value-check-then-insert-or-update pattern used
+	for the other install.py-seeded primitives (e.g. create_hub_orchestrator_agent).
+	Safe to call on both after_install and after_migrate.
+	"""
+	app_id = "meeting-recorder"
+	fields = {
+		"title": "Meeting Recorder",
+		"description": "Record, transcribe, and summarize meetings.",
+		"route": "/huf/meetings",
+		"icon": "mic",
+		"category": "Productivity",
+		"enabled": 1,
+		"sync_status": "Active",
+		"source_app": "huf",
+	}
+
+	existing_name = frappe.db.get_value("HUF App", {"app_id": app_id}, "name")
+	if existing_name:
+		frappe.db.set_value("HUF App", existing_name, fields)
+		return
+
+	doc = frappe.get_doc({"doctype": "HUF App", "app_id": app_id, **fields})
+	try:
+		doc.insert(ignore_permissions=True)
+	except Exception as e:
+		logger.warning(f"Failed to seed Meeting Recorder HUF App: {e!s}")
 
 
 def create_image_generation_tool():

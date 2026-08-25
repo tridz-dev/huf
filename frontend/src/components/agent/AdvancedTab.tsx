@@ -576,7 +576,7 @@ export function AdvancedTab({
 						)}
 					/>
 
-					{form.watch('reasoning_mode') === 'On' && (
+					{['On', 'Auto'].includes(form.watch('reasoning_mode') || 'Auto') && (
 						<FormField
 							control={form.control}
 							name="reasoning_budget_tokens"

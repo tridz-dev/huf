@@ -134,8 +134,12 @@ interface AgentRunDetail extends AgentRunDoc {
   input_tokens?: number | null;
   output_tokens?: number | null;
   cached_tokens?: number | null;
+  cache_creation_tokens?: number | null;
   cost?: number | null;
   cost_source?: string | null;
+  round_count?: number | null;
+  execution_mode?: 'sync' | 'stream' | null;
+  provider_path?: 'litellm' | 'legacy_fallback' | null;
 }
 
 async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null> {
@@ -428,6 +432,32 @@ function AgentRunDetailPage() {
               <DefinitionRow label="Model" value={run.model || 'Unknown'} mono />
               <DefinitionRow label="Started" value={startedAt} />
               <DefinitionRow label="Duration" value={duration} />
+              <DefinitionRow
+                label="Rounds"
+                value={typeof run.round_count === 'number' ? run.round_count.toLocaleString() : 'Not measured'}
+              />
+              <DefinitionRow
+                label="Execution mode"
+                value={
+                  run.execution_mode === 'sync'
+                    ? 'Sync'
+                    : run.execution_mode === 'stream'
+                      ? 'Streaming'
+                      : 'Not available'
+                }
+              />
+              <DefinitionRow
+                label="Provider path"
+                value={
+                  run.provider_path === 'legacy_fallback' ? (
+                    <span className="text-warning">Fallback provider (cache and cost not recorded)</span>
+                  ) : run.provider_path === 'litellm' ? (
+                    'Standard'
+                  ) : (
+                    'Not available'
+                  )
+                }
+              />
             </DefinitionColumn>
 
             <DefinitionColumn heading="Tokens & Cost">
@@ -467,18 +497,21 @@ function AgentRunDetailPage() {
                 showLegend
                 cacheState={
                   typeof contextMetrics.metrics.cache_read_share === 'number'
-                    ? {
-                        cacheRead: run.cached_tokens || 0,
-                        cacheWrite: 0,
-                        uncached: Math.max(
-                          (contextMetrics.total_tokens || run.input_tokens || 0) - (run.cached_tokens || 0),
-                          0
-                        ),
-                      }
+                    ? (() => {
+                        const cacheRead = run.cached_tokens || 0;
+                        const cacheWrite = run.cache_creation_tokens || 0;
+                        const inputTokens = contextMetrics.total_tokens || run.input_tokens || 0;
+                        return {
+                          cacheRead,
+                          cacheWrite,
+                          // Matches cache_metrics.py's convention: max(input - read - write, 0).
+                          uncached: Math.max(inputTokens - cacheRead - cacheWrite, 0),
+                        };
+                      })()
                     : undefined
                 }
               />
-              <div className="grid grid-cols-4 gap-x-4 gap-y-2 border-t border-line pt-3">
+              <div className="grid grid-cols-3 gap-x-4 gap-y-2 border-t border-line pt-3">
                 <ContextStat label="Prefix stability" value={contextMetrics.metrics.prefix_stability} capitalize />
                 <ContextStat
                   label="Effective multiplier"
@@ -494,14 +527,6 @@ function AgentRunDetailPage() {
                     typeof contextMetrics.metrics.counterfactual_savings === 'number'
                       ? `$${contextMetrics.metrics.counterfactual_savings.toFixed(6)}`
                       : 'Unavailable'
-                  }
-                />
-                <ContextStat
-                  label="Wasted writes"
-                  value={
-                    typeof contextMetrics.metrics.wasted_writes_tokens === 'number'
-                      ? contextMetrics.metrics.wasted_writes_tokens.toLocaleString()
-                      : 'Not yet tracked'
                   }
                 />
               </div>

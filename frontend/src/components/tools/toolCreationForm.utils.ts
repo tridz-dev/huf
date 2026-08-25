@@ -515,6 +515,7 @@ export const FALLBACK_TOOL_CATEGORY = 'Miscellaneous';
  */
 const TEMPLATE_DEFAULT_CATEGORY: Record<string, string> = {
   document_operation: 'Data Operations',
+  notification: 'Automation & Workflow',
   external_api: 'Integrations',
   platform_utility: 'AI & Generation',
   run_agent: 'Automation & Workflow',

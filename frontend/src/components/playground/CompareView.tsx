@@ -3,12 +3,21 @@ import { ArrowRightLeft, Copy, GitCompare, Pencil } from 'lucide-react';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ShortcutKey } from '@/components/ui/shortcut-key';
+import { useKeyboardShortcut } from '@/lib/shortcuts/useKeyboardShortcut';
+import { formatBinding } from '@/lib/shortcuts/registry';
+import { usePlatform } from '@/lib/shortcuts/platform';
 import { ConfigStrip } from './ConfigStrip';
 import { PromptPanel } from './PromptPanel';
 import { ResponsePanel } from './ResponsePanel';
 import { RunLedger, type RunLedgerProps } from './RunLedger';
 import { wordDiff } from './wordDiff';
 import type { PlaygroundConfig, SlotState } from './types';
+
+const COPY_A_TO_B_BINDING = { key: 'c', mod: true, shift: true } as const;
+const SWAP_BINDING = { key: 'x', mod: true, shift: true } as const;
+const TOGGLE_DIFF_BINDING = { key: 'd', mod: true, shift: true } as const;
 
 interface CompareViewProps {
   agents: AgentDoc[];
@@ -105,6 +114,7 @@ export function CompareView({
   const [labelA, setLabelA] = useState('Baseline');
   const [labelB, setLabelB] = useState('Challenger');
   const [diffEnabled, setDiffEnabled] = useState(true);
+  const platform = usePlatform();
 
   const diff = useMemo(() => {
     if (!diffEnabled) return null;
@@ -131,61 +141,22 @@ export function CompareView({
     setLabelB(nextLabelB);
   };
 
+  const toggleDiff = () => setDiffEnabled((on) => !on);
+
+  useKeyboardShortcut(COPY_A_TO_B_BINDING, handleCopyAtoB, { allowInEditable: true });
+  useKeyboardShortcut(SWAP_BINDING, handleSwap, { allowInEditable: true });
+  useKeyboardShortcut(TOGGLE_DIFF_BINDING, toggleDiff, { allowInEditable: true });
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      {/* Control row */}
-      <div className="flex items-center justify-between px-5 pt-3">
+      <div className="flex items-center px-5 pt-3">
         <div className="flex items-center gap-2 font-mono text-eyebrow uppercase text-steel-soft">
           Two configurations
         </div>
-        <div className="flex items-center gap-4">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleCopyAtoB}
-            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
-          >
-            <Copy className="h-3.5 w-3.5" strokeWidth={1.8} />
-            Copy A → B
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={handleSwap}
-            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-steel hover:bg-transparent hover:text-ink"
-          >
-            <ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
-            Swap
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            role="switch"
-            aria-checked={diffEnabled}
-            onClick={() => setDiffEnabled((on) => !on)}
-            className="h-auto gap-1.5 p-0 text-[12.5px] font-normal text-ink hover:bg-transparent"
-          >
-            <GitCompare className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />
-            Diff responses
-            <span
-              className={cn(
-                'relative inline-flex h-[19px] w-[32px] shrink-0 items-center rounded-full p-[2px] transition-colors',
-                diffEnabled ? 'bg-signal' : 'bg-steel-soft',
-              )}
-            >
-              <span
-                className={cn(
-                  'block h-[15px] w-[15px] rounded-full bg-panel shadow-sm transition-transform',
-                  diffEnabled ? 'translate-x-[13px]' : 'translate-x-0',
-                )}
-              />
-            </span>
-          </Button>
-        </div>
       </div>
 
-      {/* Columns */}
-      <div className="grid flex-1 grid-cols-1 gap-4 p-5 lg:grid-cols-2">
+      {/* Columns, with a center console acting on both */}
+      <div className="grid flex-1 grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_auto_1fr] lg:items-stretch">
         <div>
           <EditableLabel glyph="A" label={labelA} onLabelChange={setLabelA} />
           <ConfigStrip
@@ -210,6 +181,72 @@ export function CompareView({
             onRun={onRunA}
             className="mt-4 min-h-[170px]"
           />
+        </div>
+
+        <div className="flex flex-row items-center justify-center gap-3 border-y border-line py-2 lg:h-full lg:w-14 lg:flex-col lg:justify-center lg:gap-4 lg:border-x lg:border-y-0 lg:py-4">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleCopyAtoB}
+                aria-label="Copy A to B"
+                className="text-steel hover:bg-paper-deep hover:text-ink"
+              >
+                <Copy className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="flex items-center gap-2">
+              <span>Copy A → B</span>
+              <ShortcutKey keys={formatBinding(COPY_A_TO_B_BINDING, platform)} size="sm" />
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleSwap}
+                aria-label="Swap A and B"
+                className="text-steel hover:bg-paper-deep hover:text-ink"
+              >
+                <ArrowRightLeft className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="flex items-center gap-2">
+              <span>Swap A and B</span>
+              <ShortcutKey keys={formatBinding(SWAP_BINDING, platform)} size="sm" />
+            </TooltipContent>
+          </Tooltip>
+
+          <div className="h-6 w-px bg-line lg:h-px lg:w-6" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                role="switch"
+                aria-checked={diffEnabled}
+                aria-label="Toggle diff responses"
+                onClick={toggleDiff}
+                className={cn(
+                  'hover:bg-paper-deep',
+                  diffEnabled ? 'text-signal' : 'text-steel',
+                )}
+              >
+                <GitCompare className="h-3.5 w-3.5" strokeWidth={1.8} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="flex items-center gap-2">
+              <span>Diff responses: {diffEnabled ? 'on' : 'off'}</span>
+              <ShortcutKey keys={formatBinding(TOGGLE_DIFF_BINDING, platform)} size="sm" />
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <div>
