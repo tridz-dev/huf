@@ -454,18 +454,34 @@ def resolve_stt_config(agent_name: str = None, model: str = None) -> dict:
 
 
 def _resolve_file_doc(file_id: str = None, file_url: str = None):
-    """Resolve a Frappe File document from an ID or URL."""
-    if file_id:
-        return frappe.get_doc("File", file_id)
+    """
+    Resolve a Frappe File document from an ID or URL.
 
+    Enforces the caller's read permission on the resolved File so a
+    ``file_id``/``file_url`` referencing a File the caller cannot read
+    (e.g. a private file owned by another user) is never handed back for
+    transcription. Callers that need an existing File document must go
+    through this function rather than calling ``frappe.get_doc("File", ...)``
+    directly.
+    """
     file_doc = None
-    if file_url:
+
+    if file_id:
+        file_doc = frappe.get_doc("File", file_id)
+    elif file_url:
         try:
             file_doc = frappe.get_doc("File", {"file_url": file_url})
         except (frappe.DoesNotExistError, frappe.DataError):
             # Try alternative lookup
             file_name = file_url.replace("/files/", "")
             file_doc = frappe.get_doc("File", {"file_name": file_name})
+
+    if file_doc and not frappe.has_permission("File", "read", doc=file_doc):
+        frappe.throw(
+            _("Not permitted to read File {0}").format(file_doc.name),
+            frappe.PermissionError,
+        )
+
     return file_doc
 
 
@@ -515,6 +531,8 @@ def transcribe_audio_file(
         elif file_id:
             try:
                 file_doc = _resolve_file_doc(file_id=file_id)
+            except frappe.PermissionError:
+                raise
             except Exception as e:
                 return {"success": False, "error": f"File not found: {e!s}"}
         elif file_url:
@@ -568,6 +586,10 @@ def transcribe_audio_file(
             "stt_source": stt_config["source"],
         }
 
+    except frappe.PermissionError:
+        # Let permission failures propagate as a real 403, not a
+        # success:False payload indistinguishable from a provider error.
+        raise
     except Exception as e:
         frappe.log_error(title="Audio Transcription Service", message=f"Audio transcription error: {e!s}")
         return {"success": False, "error": str(e)}
