@@ -36,6 +36,7 @@ class DeterministicTestToolFailure(Exception):
     used to test the tool-handler-exception failure path end to end."""
 
 
+@frappe.whitelist()
 def echo(**kwargs) -> dict:
     """Return the input arguments unchanged (JSON-serializable).
 
@@ -48,6 +49,7 @@ def echo(**kwargs) -> dict:
     return {"echoed": dict(kwargs)}
 
 
+@frappe.whitelist()
 def deterministic_add(numbers: list = None) -> dict:
     """Deterministic arithmetic: sum a list of numbers, returning a fixed,
     computable result. No randomness, no clock, no I/O.
@@ -57,6 +59,7 @@ def deterministic_add(numbers: list = None) -> dict:
     return {"success": True, "sum": total, "count": len(values)}
 
 
+@frappe.whitelist()
 def deterministic_fail(**kwargs) -> dict:
     """Always raises a known exception type/message.
 
@@ -69,6 +72,7 @@ def deterministic_fail(**kwargs) -> dict:
     raise DeterministicTestToolFailure("deterministic_fail: intentional test failure")
 
 
+@frappe.whitelist()
 def permission_protected_mutation(record_id: str, value: str) -> dict:
     """A mutation gated by a specific required permission.
 
@@ -104,6 +108,7 @@ def permission_protected_mutation(record_id: str, value: str) -> dict:
 MAX_SLEEP_SECONDS = 2.0
 
 
+@frappe.whitelist()
 def slow_or_timeout(duration: float = 0.1) -> dict:
     """Sleep for a deterministic, test-controllable duration (capped) to
     exercise timeout-path testing without ever hanging the suite.

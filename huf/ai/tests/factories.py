@@ -323,7 +323,7 @@ def build_echo_tool_spec(**overrides):
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_echo"),
         description="Test tool: returns its input arguments unchanged.",
-        function_path=f"{_TEST_TOOL_FUNCTION_MODULE}.echo",
+        function_path=overrides.pop("function_path", f"{_TEST_TOOL_FUNCTION_MODULE}.echo"),
         parameters={"type": "object", "properties": {}, "additionalProperties": True},
         is_read_only=1,
         **overrides,
@@ -335,7 +335,7 @@ def build_deterministic_add_tool_spec(**overrides):
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_add"),
         description="Test tool: deterministically sums a list of numbers.",
-        function_path=f"{_TEST_TOOL_FUNCTION_MODULE}.deterministic_add",
+        function_path=overrides.pop("function_path", f"{_TEST_TOOL_FUNCTION_MODULE}.deterministic_add"),
         parameters={
             "type": "object",
             "properties": {"numbers": {"type": "array", "items": {"type": "number"}}},
@@ -351,7 +351,7 @@ def build_deterministic_fail_tool_spec(**overrides):
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_deterministic_fail"),
         description="Test tool: always raises a known exception (failure-path testing).",
-        function_path=f"{_TEST_TOOL_FUNCTION_MODULE}.deterministic_fail",
+        function_path=overrides.pop("function_path", f"{_TEST_TOOL_FUNCTION_MODULE}.deterministic_fail"),
         parameters={"type": "object", "properties": {}},
         is_read_only=1,
         **overrides,
@@ -370,7 +370,7 @@ def build_permission_protected_mutation_tool_spec(**overrides):
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_permission_protected_mutation"),
         description="Test tool: mutation gated on write permission for a reference doctype.",
-        function_path=f"{_TEST_TOOL_FUNCTION_MODULE}.permission_protected_mutation",
+        function_path=overrides.pop("function_path", f"{_TEST_TOOL_FUNCTION_MODULE}.permission_protected_mutation"),
         parameters={
             "type": "object",
             "properties": {"record_id": {"type": "string"}, "value": {"type": "string"}},
@@ -387,7 +387,7 @@ def build_slow_or_timeout_tool_spec(**overrides):
     return _build_test_tool_spec(
         tool_name=overrides.pop("tool_name", "test_slow_or_timeout"),
         description="Test tool: sleeps for a capped, deterministic duration (timeout-path testing).",
-        function_path=f"{_TEST_TOOL_FUNCTION_MODULE}.slow_or_timeout",
+        function_path=overrides.pop("function_path", f"{_TEST_TOOL_FUNCTION_MODULE}.slow_or_timeout"),
         parameters={
             "type": "object",
             "properties": {"duration": {"type": "number", "description": "Seconds to sleep, capped at 2.0"}},
