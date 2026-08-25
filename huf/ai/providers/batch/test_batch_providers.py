@@ -51,37 +51,25 @@ def _fake_frappe_throw(msg, *args, **kwargs):
 	raise _FrappeThrow(msg)
 
 
-# Install minimal stub packages BEFORE importing the modules under test, since
-# openai_batch.py / anthropic_batch.py import `frappe`, `litellm`, and
-# `anthropic` at module scope.
-_install_stub_module(
-	"frappe",
-	throw=_fake_frappe_throw,
-	get_doc=MagicMock(),
-	log_error=MagicMock(),
-	get_traceback=MagicMock(return_value=""),
-)
-_install_stub_module("frappe.db", get_value=MagicMock())
-sys.modules["frappe"].db = sys.modules["frappe.db"]  # type: ignore[attr-defined]
+# Every stub below MUTATES whatever is already in sys.modules -- it setattr's
+# onto the existing module object rather than only creating missing ones. Under
+# `bench run-tests` those existing objects are the REAL frappe, litellm and huf
+# packages, so installing the stubs replaces frappe.throw, frappe.db (with a
+# bare module that has no .commit), and huf.ai.providers.litellm's helpers for
+# the rest of the process. That aborted the whole backend suite:
+# `AttributeError: module 'frappe.db' has no attribute 'commit'` in frappe's own
+# _cleanup_after_tests. Detect a live site and, when there is one, install
+# nothing and skip the module -- these are standalone pure-logic tests.
+try:
+	import frappe as _maybe_real_frappe
 
-_install_stub_module(
-	"litellm",
-	acreate_file=MagicMock(),
-	acreate_batch=MagicMock(),
-	aretrieve_batch=MagicMock(),
-	afile_content=MagicMock(),
-)
+	_HAS_REAL_FRAPPE = bool(getattr(getattr(_maybe_real_frappe, "local", None), "site", None))
+except Exception:
+	_HAS_REAL_FRAPPE = False
 
-_anthropic_stub = _install_stub_module("anthropic", AsyncAnthropic=MagicMock())
-
-# huf.ai.providers.litellm is a real repo module but importing it drags in the
-# `frappe`/`litellm` deps above (now stubbed) plus repo-internal helpers we
-# don't want to fight with; stub the two symbols openai_batch/anthropic_batch
-# actually import from it instead of importing the real module.
-_huf_ai_providers_litellm_stub = _install_stub_module(
-	"huf.ai.providers.litellm",
-	_resolve_api_key=MagicMock(return_value="test-api-key"),
-	_resolve_api_base=MagicMock(return_value=None),
+_SKIP_REASON = (
+	"standalone mocked tests -- run outside bench: "
+	"python3 -m unittest huf.ai.providers.batch.test_batch_providers"
 )
 
 
@@ -91,40 +79,78 @@ class ProviderUnavailableError(Exception):
 		self.log_message = log_message
 
 
-_huf_ai_providers_litellm_stub.ProviderUnavailableError = ProviderUnavailableError
+if not _HAS_REAL_FRAPPE:
+	# Install minimal stub packages BEFORE importing the modules under test, since
+	# openai_batch.py / anthropic_batch.py import `frappe`, `litellm`, and
+	# `anthropic` at module scope.
+	_install_stub_module(
+		"frappe",
+		throw=_fake_frappe_throw,
+		get_doc=MagicMock(),
+		log_error=MagicMock(),
+		get_traceback=MagicMock(return_value=""),
+	)
+	_install_stub_module("frappe.db", get_value=MagicMock())
+	sys.modules["frappe"].db = sys.modules["frappe.db"]  # type: ignore[attr-defined]
 
-# Make sure the parent packages resolve for `from huf.ai.providers.litellm import ...`
-# WITHOUT executing the real huf/__init__.py (which hard-imports frappe at
-# module scope and would blow up before this stub-installation code even
-# runs, if the real package were imported normally). We stub `huf`, `huf.ai`,
-# and `huf.ai.providers` as bare packages, but point their `__path__` at the
-# real on-disk directories so that the real `huf.ai.providers.batch`
-# subpackage (and its real openai_batch.py/anthropic_batch.py modules) still
-# get found and imported normally below -- only the *parent* __init__.py
-# files are skipped, since a module already present in sys.modules is never
-# re-imported/re-executed.
-import pathlib
+	_install_stub_module(
+		"litellm",
+		acreate_file=MagicMock(),
+		acreate_batch=MagicMock(),
+		aretrieve_batch=MagicMock(),
+		afile_content=MagicMock(),
+	)
 
-_THIS_DIR = pathlib.Path(__file__).resolve().parent  # .../huf/ai/providers/batch
-_PROVIDERS_DIR = _THIS_DIR.parent  # .../huf/ai/providers
-_AI_DIR = _PROVIDERS_DIR.parent  # .../huf/ai
-_HUF_PKG_DIR = _AI_DIR.parent  # .../huf (the inner "huf" Python package dir)
+	_anthropic_stub = _install_stub_module("anthropic", AsyncAnthropic=MagicMock())
 
-_huf_pkg_stub = _install_stub_module("huf")
-_huf_pkg_stub.__path__ = [str(_HUF_PKG_DIR)]  # type: ignore[attr-defined]
-
-_huf_ai_stub = _install_stub_module("huf.ai")
-_huf_ai_stub.__path__ = [str(_AI_DIR)]  # type: ignore[attr-defined]
-
-_huf_ai_providers_stub = _install_stub_module("huf.ai.providers")
-_huf_ai_providers_stub.__path__ = [str(_PROVIDERS_DIR)]  # type: ignore[attr-defined]
-
-sys.modules["huf.ai"].providers = sys.modules["huf.ai.providers"]  # type: ignore[attr-defined]
-sys.modules["huf.ai.providers"].litellm = _huf_ai_providers_litellm_stub  # type: ignore[attr-defined]
-
-from huf.ai.providers.batch import anthropic_batch, openai_batch
+	# huf.ai.providers.litellm is a real repo module but importing it drags in the
+	# `frappe`/`litellm` deps above (now stubbed) plus repo-internal helpers we
+	# don't want to fight with; stub the two symbols openai_batch/anthropic_batch
+	# actually import from it instead of importing the real module.
+	_huf_ai_providers_litellm_stub = _install_stub_module(
+		"huf.ai.providers.litellm",
+		_resolve_api_key=MagicMock(return_value="test-api-key"),
+		_resolve_api_base=MagicMock(return_value=None),
+	)
 
 
+	_huf_ai_providers_litellm_stub.ProviderUnavailableError = ProviderUnavailableError
+
+	# Make sure the parent packages resolve for `from huf.ai.providers.litellm import ...`
+	# WITHOUT executing the real huf/__init__.py (which hard-imports frappe at
+	# module scope and would blow up before this stub-installation code even
+	# runs, if the real package were imported normally). We stub `huf`, `huf.ai`,
+	# and `huf.ai.providers` as bare packages, but point their `__path__` at the
+	# real on-disk directories so that the real `huf.ai.providers.batch`
+	# subpackage (and its real openai_batch.py/anthropic_batch.py modules) still
+	# get found and imported normally below -- only the *parent* __init__.py
+	# files are skipped, since a module already present in sys.modules is never
+	# re-imported/re-executed.
+	import pathlib
+
+	_THIS_DIR = pathlib.Path(__file__).resolve().parent  # .../huf/ai/providers/batch
+	_PROVIDERS_DIR = _THIS_DIR.parent  # .../huf/ai/providers
+	_AI_DIR = _PROVIDERS_DIR.parent  # .../huf/ai
+	_HUF_PKG_DIR = _AI_DIR.parent  # .../huf (the inner "huf" Python package dir)
+
+	_huf_pkg_stub = _install_stub_module("huf")
+	_huf_pkg_stub.__path__ = [str(_HUF_PKG_DIR)]  # type: ignore[attr-defined]
+
+	_huf_ai_stub = _install_stub_module("huf.ai")
+	_huf_ai_stub.__path__ = [str(_AI_DIR)]  # type: ignore[attr-defined]
+
+	_huf_ai_providers_stub = _install_stub_module("huf.ai.providers")
+	_huf_ai_providers_stub.__path__ = [str(_PROVIDERS_DIR)]  # type: ignore[attr-defined]
+
+	sys.modules["huf.ai"].providers = sys.modules["huf.ai.providers"]  # type: ignore[attr-defined]
+	sys.modules["huf.ai.providers"].litellm = _huf_ai_providers_litellm_stub  # type: ignore[attr-defined]
+
+	from huf.ai.providers.batch import anthropic_batch, openai_batch
+else:  # pragma: no cover - bench run; module is skipped wholesale below
+	anthropic_batch = openai_batch = None
+
+
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestOpenAIBuildJsonl(unittest.TestCase):
 	def test_build_jsonl_shapes_each_line_by_custom_id(self):
 		requests = [
@@ -159,6 +185,7 @@ class TestOpenAIBuildJsonl(unittest.TestCase):
 			openai_batch._build_jsonl([{"model": "gpt-4o-mini"}])
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestOpenAIStatusMap(unittest.TestCase):
 	def test_covers_all_documented_openai_statuses(self):
 		documented_statuses = {
@@ -187,6 +214,7 @@ class TestOpenAIStatusMap(unittest.TestCase):
 		self.assertTrue(mapped_values.issubset(valid_batch_job_statuses))
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestAnthropicBuildBatchRequests(unittest.TestCase):
 	def test_build_batch_requests_shapes_by_custom_id_and_strips_stream(self):
 		requests = [
@@ -215,6 +243,7 @@ class TestAnthropicBuildBatchRequests(unittest.TestCase):
 			anthropic_batch._build_batch_requests([{"model": "claude-3-5-sonnet-latest"}])
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestAnthropicStatusMap(unittest.TestCase):
 	def test_covers_all_documented_anthropic_statuses(self):
 		documented_statuses = {"in_progress", "canceling", "ended"}
@@ -234,6 +263,7 @@ class TestAnthropicStatusMap(unittest.TestCase):
 		self.assertTrue(mapped_values.issubset(valid_batch_job_statuses))
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
 class TestOpenAIFetchResultsParsing(unittest.IsolatedAsyncioTestCase):
 	"""Exercises fetch_results()'s JSONL-parsing/custom_id-keying logic via a
 	mocked litellm.aretrieve_batch/afile_content, without any real network or
