@@ -201,7 +201,7 @@ export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorP
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                  <p className="text-xs text-warning">
                     Copy this now -- it will not be shown again. Send it as an{' '}
                     <code className="font-mono">X-Webhook-Key</code> header on every call.
                   </p>
