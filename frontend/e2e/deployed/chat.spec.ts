@@ -3,9 +3,12 @@ import { test, expect } from '@playwright/test';
 // 'Test New UI' is not a seeded agent on this bench (confirmed via
 // frappe.client.get_list against the live site — only "_Test P31 Agent
 // c8b0c902", "_TestAgent", "Demo Assistant", and "Hub Orchestrator" exist).
-// "Demo Assistant" is enabled and has a model configured, so it actually
-// runs a response instead of failing with "Could not find Agent".
-const TEST_AGENT = process.env.E2E_TEST_AGENT || 'Demo Assistant';
+// "Hub Orchestrator" is the agent the Hub landing page itself uses to chat
+// (gpt-4o-mini via the OpenAI provider), so it's a real, currently-working
+// agent on this bench, unlike "Demo Assistant" (its Google provider has no
+// API key configured here, so it fails with "Password not found for AI
+// Provider Google api_key").
+const TEST_AGENT = process.env.E2E_TEST_AGENT || 'Hub Orchestrator';
 
 test.describe('Chat flow', () => {
   test('starting a new chat and getting a response', async ({ page }) => {

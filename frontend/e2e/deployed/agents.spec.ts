@@ -13,7 +13,14 @@ test.describe('Agents', () => {
     // agents. "Test New UI" is not a seeded agent on this bench (confirmed
     // via frappe.client.get_list); "Demo Assistant" is the seeded agent
     // that actually exists.
-    const firstAgentCard = page.locator('a, [role="button"], div').filter({ hasText: /Demo Assistant/i }).first();
+    //
+    // ItemCard/BaseCard (components/dashboard/cards/*.tsx) renders the card
+    // as a plain <div onClick=...> with no anchor and no role — matching
+    // 'a, [role="button"], div' with hasText picks up the first ancestor
+    // div containing that text anywhere in the DOM (often a much higher-up
+    // layout wrapper), which isn't clickable/navigable. Clicking the title
+    // text itself lets the click bubble up to the card's own onClick.
+    const firstAgentCard = page.getByText('Demo Assistant', { exact: true }).first();
     if (await firstAgentCard.count()) {
       await firstAgentCard.click();
       await expect(page).toHaveURL(/\/huf\/agents\//);
