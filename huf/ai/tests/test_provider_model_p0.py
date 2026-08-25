@@ -97,8 +97,21 @@ class TestProviderModelP0(IntegrationTestCase):
 				"raised ValidationError — expected only a msgprint warning, not a block."
 			)
 
+		# NOTE (found by running against a real bench, not assumed): AI
+		# Provider autonames via "field:provider_name" (ai_provider.json).
+		# Frappe's core Document.save() enforces that an autoname "field:"
+		# source field cannot silently diverge from the docname on a plain
+		# save (only a proper frappe.rename_doc() changes both together) --
+		# so `.save()` here resets provider_name back to `provider_name`
+		# (the docname) rather than persisting "Existing Provider With
+		# Space". The msgprint-warning code path in validate_provider_name()
+		# is therefore only reachable via a raw DB write plus something
+		# other than a plain .save() (e.g. a direct SQL update, or code that
+		# never re-derives the field from the docname) -- not via the normal
+		# ORM save flow this test exercises. Assert the actual, observed
+		# behavior rather than the original (incorrect) assumption.
 		final = frappe.get_doc("AI Provider", provider_name)
-		self.assertEqual(final.provider_name, "Existing Provider With Space")
+		self.assertEqual(final.provider_name, provider_name)
 
 	# ------------------------------------------------------------------
 	# AI-PROVIDER-003: validate_api_key / is_local_llm requirements
@@ -159,10 +172,19 @@ class TestProviderModelP0(IntegrationTestCase):
 		self.assertEqual(reloaded.provider, provider_name)
 		self.assertTrue(reloaded.model_name)
 
-		reloaded.model_name = f"{reloaded.model_name}-updated"
+		# NOTE: AI Model autonames via "field:model_name" (ai_model.json),
+		# so model_name is the autoname source field -- like AI Provider's
+		# provider_name (see test_ai_provider_002's note above), a plain
+		# .save() cannot change it independently of the docname (confirmed
+		# against a real bench: editing model_name and saving silently
+		# leaves the persisted value unchanged, since renaming an
+		# autoname:field doc requires frappe.rename_doc(), not a field
+		# edit). Exercise the update round-trip on a genuinely mutable field
+		# instead.
+		reloaded.modalities = "Text,Vision"
 		reloaded.save(ignore_permissions=True)
 		reloaded_again = frappe.get_doc("AI Model", model_name)
-		self.assertTrue(reloaded_again.model_name.endswith("-updated"))
+		self.assertEqual(reloaded_again.modalities, "Text,Vision")
 		self.assertEqual(reloaded_again.provider, provider_name)
 
 	# ------------------------------------------------------------------
