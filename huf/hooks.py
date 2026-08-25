@@ -272,6 +272,9 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+        ],
+        "*/15 * * * *": [
+            "huf.ai.batch_poll.poll_pending_batch_jobs",
         ]
     },
     "hourly": [

@@ -257,6 +257,7 @@ export interface CreateTriggerParams {
   end_at?: string;
   misfire_policy?: string;
   interval_count?: number;
+  execution_mode?: string;
   // Doc Event
   reference_doctype?: string;
   doc_event?: string;
