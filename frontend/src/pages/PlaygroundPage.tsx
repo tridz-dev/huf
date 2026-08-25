@@ -41,6 +41,7 @@ function PlaygroundPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savePromptOverride, setSavePromptOverride] = useState<string | null>(null);
+  const [loadedTemplate, setLoadedTemplate] = useState<AgentPromptDoc | null>(null);
 
   // Close the global app sidebar so the playground uses the full viewport width.
   useEffect(() => {
@@ -103,6 +104,7 @@ function PlaygroundPage() {
     } else {
       setPlaygroundConfig((prev) => ({ ...prev, prompt: prompt.prompt_body }));
     }
+    setLoadedTemplate(prompt);
   };
 
   const handleRestore = (entry: LedgerEntry) => {
@@ -210,6 +212,23 @@ function PlaygroundPage() {
           if (!open) setSavePromptOverride(null);
         }}
         promptBody={savePromptOverride ?? activePromptBody()}
+        loadedTemplate={savePromptOverride === null ? loadedTemplate : null}
+        onSaved={(result) => {
+          if (savePromptOverride !== null) return;
+          if (result.mode === 'update') {
+            setLoadedTemplate((prev) =>
+              prev ? { ...prev, title: result.title ?? prev.title, version: result.version ?? prev.version } : prev,
+            );
+          } else if (result.mode === 'version' || result.mode === 'fork') {
+            setLoadedTemplate((prev) =>
+              prev
+                ? { ...prev, name: result.name, title: result.title ?? prev.title, version: result.version ?? 1 }
+                : prev,
+            );
+          } else {
+            setLoadedTemplate(null);
+          }
+        }}
       />
     </>
   );

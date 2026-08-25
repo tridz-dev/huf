@@ -94,7 +94,42 @@ def _check_tool_permission(tool_type: str, context: dict = None, allowed_for_gue
     return {"allowed": True}
 
 
-def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
+# Tools that must always be built eagerly for a lazy-discovery agent: the
+# discovery tools themselves (without them the agent could never unlock
+# anything else) plus the small set of always-on utility tools.
+_LAZY_DISCOVERY_TOOL_NAMES = {"list_tool_groups", "search_tools", "describe_tool_group", "load_tools"}
+_LAZY_DISCOVERY_ALWAYS_EAGER_TOOL_NAMES = _LAZY_DISCOVERY_TOOL_NAMES | {
+    "get_conversation_data", "set_conversation_data", "load_conversation_data",
+    "ask_user", "get_result_context",
+}
+
+
+def _get_lazy_discovered_tool_names(kwargs: dict) -> set:
+    """Tool names already unlocked via lazy discovery for the current conversation.
+
+    Fails safe (empty set) whenever no conversation context is available or
+    conversation_data can't be read, so lazy-tool agents never break outside
+    a conversation run (e.g. no conversation_id in this run context yet).
+    """
+    conversation_id = (kwargs or {}).get("conversation_id")
+    if not conversation_id:
+        return set()
+
+    try:
+        data_json = frappe.db.get_value("Agent Conversation", conversation_id, "conversation_data")
+        state = _load_state(data_json)
+        for item in state["items"]:
+            if item.get("name") == "_lazy_tools":
+                discovered = (item.get("value") or {}).get("discovered") or []
+                return set(discovered)
+    except Exception as e:
+        logger.debug(f"Could not resolve lazy-discovered tools for {conversation_id}: {e!s}")
+        return set()
+
+    return set()
+
+
+def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[FunctionTool]:
     """
     Create function tools for Huf Agent
 
@@ -106,8 +141,16 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
     agent.model when omitted) — passed through to the permission-aware
     registry so an AI Model's capability overrides (see huf.ai.capability_discovery)
     can gate tools like ask_user regardless of the agent's own setting.
+
+    When agent.enable_lazy_tools is set, native tools not yet unlocked via the
+    lazy-discovery flow (see huf.ai.tools.lazy_discovery) are skipped entirely
+    instead of being built, to save tokens on the tool schema payload sent to
+    the model. This is gated on kwargs["conversation_id"]; callers that don't
+    pass one get the fail-safe (nothing discovered yet) rather than an error.
     """
     tools = []
+    lazy_enabled = bool(getattr(agent, "enable_lazy_tools", False))
+    discovered_tool_names = _get_lazy_discovered_tool_names(kwargs) if lazy_enabled else set()
 
     # Load MCP tools from linked MCP servers
     if hasattr(agent, "agent_mcp_server") and agent.agent_mcp_server:
@@ -127,6 +170,16 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
 
     for function_doc in allowed_tool_docs:
         try:
+            if lazy_enabled:
+                tool_name = function_doc.tool_name or ""
+                is_always_eager = (
+                    tool_name in _LAZY_DISCOVERY_ALWAYS_EAGER_TOOL_NAMES
+                    or "memory" in tool_name.lower()
+                )
+                if not is_always_eager and tool_name not in discovered_tool_names:
+                    # Deferred: skip building this tool entirely (don't even
+                    # fetch its schema) until the model discovers it.
+                    continue
 
             function_path = None
             if function_doc.types in ["Custom Function", "App Provided"]:
@@ -174,6 +227,8 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
                     function_path = "huf.ai.sdk_tools.handle_run_agent"
                 elif function_doc.types == "Attach File to Document":
                     function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
+                elif function_doc.types == "Send Email":
+                    function_path = "huf.ai.sdk_tools.handle_send_email"
                 elif function_doc.types == "Get Conversation Data":
                     function_path = "huf.ai.sdk_tools.handle_get_conversation_data"
                 elif function_doc.types == "Set Conversation Data":
@@ -210,7 +265,7 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
                     del params["additionalProperties"]
 
                 extra_args = {}
-                if function_doc.types == "Attach File to Document":
+                if function_doc.types in ("Attach File to Document", "Send Email"):
                     if function_doc.reference_doctype:
                         extra_args["reference_doctype"] = function_doc.reference_doctype
 
@@ -263,6 +318,38 @@ def create_agent_tools(agent, model_name: str = None) -> list[FunctionTool]:
             frappe.logger("huf").debug(
                 f"Error processing function {function_doc.name}: {e!s}"
             )
+
+    if lazy_enabled:
+        # The discovery tools themselves are not something an agent author is
+        # expected to attach via agent_tool - without them the model could
+        # never unlock anything else, so build them unconditionally (same
+        # pattern as the memory tools below): looked up by tool_name from the
+        # Agent Tool Function records synced from LAZY_DISCOVERY_TOOLS
+        # (huf.ai.tools._registry), not gated on the agent's tool list.
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        for tool_name in _LAZY_DISCOVERY_TOOL_NAMES:
+            if tool_name in existing_tool_names:
+                continue
+            function_name = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
+            if not function_name:
+                continue
+            try:
+                function_doc = frappe.get_doc("Agent Tool Function", function_name)
+                params = {}
+                if function_doc.params:
+                    params = json.loads(function_doc.params)
+                tool = create_function_tool(
+                    function_doc.tool_name,
+                    function_doc.description,
+                    function_doc.function_path,
+                    params,
+                    tool_type=function_doc.types,
+                )
+                if tool:
+                    tools.append(tool)
+                    existing_tool_names.add(tool_name)
+            except Exception as e:
+                frappe.logger("huf").debug(f"Error wiring lazy discovery tool {tool_name}: {e!s}")
 
     # Load tools from attached skills (mandatory and optional)
     try:

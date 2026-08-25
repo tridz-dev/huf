@@ -13,10 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Plus, Trash2, RefreshCw, FileText, Link, Type, Loader2, Upload } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, FileText, Link, Type, Loader2, Upload, X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { knowledgeInputTypes } from '@/data/knowledge';
 import type { KnowledgeInputDoc, KnowledgeInputType } from '@/types/knowledge.types';
 import {
@@ -26,6 +28,14 @@ import {
   reprocessInput,
 } from '@/services/knowledgeApi';
 import { file as frappeFile } from '@/lib/frappe-sdk';
+
+interface QueuedUpload {
+  id: string;
+  fileName: string;
+  progress: number;
+  status: 'uploading' | 'creating' | 'error';
+  error?: string;
+}
 
 interface KnowledgeInputsModalProps {
   open: boolean;
@@ -81,13 +91,11 @@ export function KnowledgeInputsModal({
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<QueuedUpload[]>([]);
 
   // Create form state
   const [inputType, setInputType] = useState<KnowledgeInputType>('File');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   const [text, setText] = useState('');
   const [url, setUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,55 +120,76 @@ export function KnowledgeInputsModal({
 
   const resetForm = () => {
     setInputType('File');
-    setSelectedFile(null);
-    setUploadedFileUrl('');
     setText('');
     setUrl('');
-    setUploading(false);
-    setUploadProgress(0);
     setShowCreate(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (f) {
-      setSelectedFile(f);
-      setUploadedFileUrl('');
-    }
+  const uploadOneFile = useCallback(
+    async (file: File) => {
+      const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      setUploadQueue((q) => [...q, { id, fileName: file.name, progress: 0, status: 'uploading' }]);
+      try {
+        const response = await frappeFile.uploadFile(
+          file,
+          {
+            isPrivate: true,
+            doctype: 'Knowledge Input',
+          },
+          (completed, total) => {
+            if (total) {
+              const progress = Math.round((completed / total) * 100);
+              setUploadQueue((q) => q.map((item) => (item.id === id ? { ...item, progress } : item)));
+            }
+          },
+        );
+        const res = response as { data?: { message?: { file_url?: string } } };
+        const fileUrl = res?.data?.message?.file_url;
+        if (!fileUrl) throw new Error('No file URL returned');
+
+        setUploadQueue((q) => q.map((item) => (item.id === id ? { ...item, status: 'creating' } : item)));
+        await createKnowledgeInput({
+          knowledge_source: knowledgeSource,
+          input_type: 'File',
+          file: fileUrl,
+        });
+        setUploadQueue((q) => q.filter((item) => item.id !== id));
+        await loadInputs();
+        onSourceChanged();
+      } catch {
+        setUploadQueue((q) =>
+          q.map((item) => (item.id === id ? { ...item, status: 'error', error: 'Upload failed' } : item)),
+        );
+        toast.error(`Failed to upload ${file.name}`);
+      }
+    },
+    [knowledgeSource, loadInputs, onSourceChanged],
+  );
+
+  const handleFilesSelected = useCallback(
+    (files: FileList | File[] | null) => {
+      if (!files || files.length === 0) return;
+      Array.from(files).forEach((file) => {
+        void uploadOneFile(file);
+      });
+    },
+    [uploadOneFile],
+  );
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFilesSelected(e.target.files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleUploadFile = async () => {
-    if (!selectedFile) {
-      toast.error('Please select a file first');
-      return;
-    }
-    setUploading(true);
-    setUploadProgress(0);
-    try {
-      const response = await frappeFile.uploadFile(
-        selectedFile,
-        {
-          isPrivate: true,
-          doctype: 'Knowledge Input',
-        },
-        (completed, total) => {
-          if (total) setUploadProgress(Math.round((completed / total) * 100));
-        },
-      );
-      const res = response as { data?: { message?: { file_url?: string } } };
-      const fileUrl = res?.data?.message?.file_url;
-      if (fileUrl) {
-        setUploadedFileUrl(fileUrl);
-        toast.success('File uploaded');
-      } else {
-        toast.error('Upload succeeded but no file URL returned');
-      }
-    } catch {
-      toast.error('Failed to upload file');
-    } finally {
-      setUploading(false);
-    }
+  const handleDropzoneDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFilesSelected(e.dataTransfer.files);
+  };
+
+  const dismissQueuedUpload = (id: string) => {
+    setUploadQueue((q) => q.filter((item) => item.id !== id));
   };
 
   const handleCreate = async () => {
@@ -169,10 +198,6 @@ export function KnowledgeInputsModal({
       input_type: inputType,
     };
 
-    if (inputType === 'File' && !uploadedFileUrl) {
-      toast.error('Please upload a file first');
-      return;
-    }
     if (inputType === 'Text' && !text.trim()) {
       toast.error('Text content is required');
       return;
@@ -182,7 +207,6 @@ export function KnowledgeInputsModal({
       return;
     }
 
-    if (inputType === 'File') data.file = uploadedFileUrl;
     if (inputType === 'Text') data.text = text;
     if (inputType === 'URL') data.url = url;
 
@@ -267,34 +291,67 @@ export function KnowledgeInputsModal({
 
               {inputType === 'File' && (
                 <div className="space-y-3">
-                  <Label>File</Label>
-                  <div className="flex items-center gap-2">
+                  <Label>Files</Label>
+                  <div
+                    className={cn(
+                      'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed p-6 text-center transition-colors cursor-pointer',
+                      dragOver ? 'border-primary bg-primary/5' : 'border-input',
+                    )}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOver(true);
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDropzoneDrop}
+                  >
+                    <Upload className="w-6 h-6 text-steel-soft" />
+                    <p className="text-sm">Drag and drop files here, or click to browse</p>
+                    <p className="text-xs text-steel-soft">Select multiple files to upload them all at once</p>
                     <Input
                       ref={fileInputRef}
                       type="file"
-                      onChange={handleFileSelect}
-                      className="flex-1"
-                      disabled={uploading}
+                      multiple
+                      onChange={handleFileInputChange}
+                      className="hidden"
                     />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleUploadFile}
-                      disabled={!selectedFile || uploading || !!uploadedFileUrl}
-                    >
-                      {uploading ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Upload className="w-4 h-4 mr-2" />
-                      )}
-                      {uploading ? `${uploadProgress}%` : 'Upload'}
-                    </Button>
                   </div>
-                  {uploadedFileUrl && (
-                    <p className="text-xs text-steel-soft">
-                      Uploaded: <span className="font-mono">{uploadedFileUrl}</span>
-                    </p>
+
+                  {uploadQueue.length > 0 && (
+                    <div className="space-y-2">
+                      {uploadQueue.map((item) => (
+                        <div key={item.id} className="flex items-center gap-3 rounded-md border p-2.5">
+                          {item.status === 'error' ? (
+                            <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+                          ) : (
+                            <Loader2 className="w-4 h-4 animate-spin text-steel-soft flex-shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate">{item.fileName}</p>
+                            {item.status === 'error' ? (
+                              <p className="text-xs text-destructive">{item.error}</p>
+                            ) : (
+                              <>
+                                <p className="text-xs text-steel-soft">
+                                  {item.status === 'uploading' ? `Uploading... ${item.progress}%` : 'Creating input...'}
+                                </p>
+                                <Progress value={item.status === 'uploading' ? item.progress : 100} className="h-1 mt-1" />
+                              </>
+                            )}
+                          </div>
+                          {item.status === 'error' && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => dismissQueuedUpload(item.id)}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
@@ -324,16 +381,14 @@ export function KnowledgeInputsModal({
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={resetForm}>
-                  Cancel
+                  {inputType === 'File' ? 'Done' : 'Cancel'}
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleCreate}
-                  disabled={creating || uploading || (inputType === 'File' && !uploadedFileUrl)}
-                >
-                  {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                  Create
-                </Button>
+                {inputType !== 'File' && (
+                  <Button size="sm" onClick={handleCreate} disabled={creating}>
+                    {creating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Create
+                  </Button>
+                )}
               </div>
             </div>
           )}

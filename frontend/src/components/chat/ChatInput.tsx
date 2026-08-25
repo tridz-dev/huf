@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from "react";
 import { toast } from "sonner";
-import { ArrowUp, Plus, Square } from "lucide-react";
+import { ArrowUp, Mic, MicOff, Phone, PhoneOff, Plus, Square } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   sendMessage,
@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import type { MessageType } from './types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
+import { useVoiceCall } from '@/hooks/useVoiceCall';
+import { VoiceCallOverlay } from './VoiceCallOverlay';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -106,6 +108,47 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         status: 'uploading' | 'ready' | 'error';
         error?: string;
     } | null>(null);
+
+    // "Talk to this agent" voice call. The Agent object available here is
+    // just `agentName` (no `voice_enabled`/`voice_engine` — plumbing that in
+    // would require changes to how agent data flows into ChatInput), so the
+    // call button is always shown and relies on `start_session` throwing a
+    // clear backend error for agents without a voice engine configured,
+    // surfaced below via the same toast convention as the rest of this file.
+    const voiceCall = useVoiceCall(agentName, chatId ?? undefined);
+    const voiceCallErrorRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (voiceCall.status === 'error' && voiceCall.error && voiceCall.error !== voiceCallErrorRef.current) {
+            voiceCallErrorRef.current = voiceCall.error;
+            toast.error(voiceCall.error);
+        }
+        if (voiceCall.status !== 'error') {
+            voiceCallErrorRef.current = null;
+        }
+    }, [voiceCall.status, voiceCall.error]);
+
+    const handleStartVoiceCall = useCallback(() => {
+        void voiceCall.start();
+    }, [voiceCall]);
+
+    const handleEndVoiceCall = useCallback(() => {
+        void voiceCall.stop();
+    }, [voiceCall]);
+
+    // Which view represents a live/connecting call: the full-viewport
+    // overlay (default) or the collapsed compact bar. Purely a UI
+    // preference — unrelated to useVoiceCall's own state machine — so it
+    // lives here rather than inside the hook. Each new call defaults back
+    // to the prominent overlay, so a "minimized" choice from a previous
+    // call never carries over.
+    const [isVoiceOverlayMinimized, setIsVoiceOverlayMinimized] = useState(false);
+    const prevVoiceStatusRef = useRef(voiceCall.status);
+    useEffect(() => {
+        if (prevVoiceStatusRef.current === 'idle' && voiceCall.status === 'connecting') {
+            setIsVoiceOverlayMinimized(false);
+        }
+        prevVoiceStatusRef.current = voiceCall.status;
+    }, [voiceCall.status]);
 
     const clearRunTimeout = useCallback(() => {
         if (runTimeoutRef.current) {
@@ -913,8 +956,98 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         return null;
     }
 
+    // 'connecting'/'live' default to the prominent full-viewport overlay —
+    // this is the "just started a call" moment where a takeover view matters
+    // most. 'error'/'ended' are terminal/transient and stay on the compact
+    // bar below (a full-screen takeover for an error is overkill). Minimizing
+    // the overlay also falls back to the compact bar without ending the call.
+    if ((voiceCall.status === 'connecting' || voiceCall.status === 'live') && !isVoiceOverlayMinimized) {
+        return (
+            <VoiceCallOverlay
+                voiceCall={voiceCall}
+                agentName={agentName}
+                onEndCall={handleEndVoiceCall}
+                onStartCall={handleStartVoiceCall}
+                onMinimize={() => setIsVoiceOverlayMinimized(true)}
+            />
+        );
+    }
+
+    if (voiceCall.status !== 'idle') {
+        const statusLabel =
+            voiceCall.status === 'connecting'
+                ? 'Connecting…'
+                : voiceCall.status === 'live'
+                    ? (voiceCall.isMuted ? 'Muted' : 'Live')
+                    : voiceCall.status === 'error'
+                        ? (voiceCall.error || 'Call error')
+                        : 'Call ended';
+
+        return (
+            <div className="flex-none px-[26px] pb-4 animate-drop motion-reduce:animate-none">
+                <div
+                    key={voiceCall.status}
+                    className="flex items-center gap-2.5 rounded-chat-bubble border border-input bg-panel px-[13px] py-[11px] transition-colors duration-300 animate-drop motion-reduce:animate-none"
+                >
+                    {/* Orb: glows/pulses while the agent's audio is live and unmuted,
+                        a subtler idle pulse while connecting, and a static muted/idle
+                        look otherwise — mirrors the loading-state visual language in
+                        MessageLoadingState.tsx (icon + shimmer) at a glance-able size. */}
+                    <span className="relative flex size-7 shrink-0 items-center justify-center">
+                        {voiceCall.status === 'live' && !voiceCall.isMuted && (
+                            <span className="absolute inset-0 rounded-full bg-destructive/40 animate-ping motion-reduce:animate-none" />
+                        )}
+                        <span
+                            className={cn(
+                                "relative rounded-full transition-all duration-300 ease-out",
+                                voiceCall.status === 'live' && !voiceCall.isMuted && "size-3.5 bg-destructive shadow-md",
+                                voiceCall.status === 'live' && voiceCall.isMuted && "size-2.5 bg-steel-soft opacity-70",
+                                voiceCall.status === 'connecting' && "size-2.5 bg-steel-soft animate-pulse motion-reduce:animate-none",
+                                (voiceCall.status === 'error' || voiceCall.status === 'ended') && "size-2 bg-steel-soft"
+                            )}
+                        />
+                    </span>
+                    <span className="flex-1 text-[13px] text-ui-text truncate">{statusLabel}</span>
+                    {voiceCall.status === 'live' && (
+                        <button
+                            type="button"
+                            onClick={voiceCall.isMuted ? voiceCall.unmute : voiceCall.mute}
+                            className="shrink-0 text-steel hover:text-ink"
+                            aria-label={voiceCall.isMuted ? "Unmute microphone" : "Mute microphone"}
+                            title={voiceCall.isMuted ? "Unmute microphone" : "Mute microphone"}
+                        >
+                            {voiceCall.isMuted ? <MicOff className="size-[17px]" /> : <Mic className="size-[17px]" />}
+                        </button>
+                    )}
+                    {(voiceCall.status === 'live' || voiceCall.status === 'connecting') && (
+                        <Button
+                            type="button"
+                            onClick={handleEndVoiceCall}
+                            className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                            aria-label="End call"
+                            title="End call"
+                        >
+                            <PhoneOff className="size-3.5" />
+                        </Button>
+                    )}
+                    {(voiceCall.status === 'error' || voiceCall.status === 'ended') && (
+                        <Button
+                            type="button"
+                            onClick={handleStartVoiceCall}
+                            className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                            aria-label="Talk to this agent"
+                            title="Talk to this agent"
+                        >
+                            <Phone className="size-3.5" />
+                        </Button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex-none px-[26px] pb-4">
+        <div className="flex-none px-[26px] pb-4 animate-drop motion-reduce:animate-none">
             <form onSubmit={handleSubmit}>
                 <div className={cn(
                     "rounded-chat-bubble border border-input bg-panel",
@@ -993,6 +1126,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     // control reads as the bare glyph spec 28.1 draws.
                                     className="shrink-0"
                                 />
+                            )}
+                            {!message.trim() && !pendingFile && voiceCall.status === 'idle' && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={handleStartVoiceCall}
+                                    disabled={isSubmitting}
+                                    className="shrink-0 bg-transparent text-steel hover:bg-transparent hover:text-ink"
+                                    aria-label="Talk to this agent"
+                                    title="Talk to this agent"
+                                >
+                                    <Phone className="size-[17px]" />
+                                </Button>
                             )}
                             {isStreamingResponse ? (
                                 <Button

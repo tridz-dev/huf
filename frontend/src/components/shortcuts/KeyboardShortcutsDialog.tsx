@@ -9,7 +9,7 @@ import { ShortcutKey } from '@/components/ui/shortcut-key';
 import { SHORTCUTS, formatBinding, type ShortcutScope } from '@/lib/shortcuts/registry';
 import { usePlatform } from '@/lib/shortcuts/platform';
 
-const SCOPE_ORDER: ShortcutScope[] = ['Global', 'Chat', 'Sidebar'];
+const SCOPE_ORDER: ShortcutScope[] = ['Global', 'Chat', 'Playground', 'Sidebar'];
 
 interface KeyboardShortcutsDialogProps {
   open: boolean;

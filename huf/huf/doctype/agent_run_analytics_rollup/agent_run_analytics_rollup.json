@@ -4,7 +4,7 @@
  "creation": "2026-07-26 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": ["bucket_start", "granularity", "dimension_key", "agent", "provider", "model", "run_kind", "run_count", "success_count", "failed_count", "input_tokens", "output_tokens", "cached_tokens", "total_cost", "duration_ms_sum", "duration_count", "last_recomputed_at"],
+ "field_order": ["bucket_start", "granularity", "dimension_key", "agent", "provider", "model", "conversation", "run_kind", "run_count", "success_count", "failed_count", "input_tokens", "output_tokens", "cached_tokens", "cache_creation_tokens", "total_cost", "composition_totals", "duration_ms_sum", "duration_count", "last_recomputed_at"],
  "fields": [
   {"fieldname":"bucket_start","fieldtype":"Datetime","in_list_view":1,"label":"Bucket Start","read_only":1},
   {"fieldname":"granularity","fieldtype":"Select","in_list_view":1,"label":"Granularity","options":"hour\nday","read_only":1},
@@ -12,6 +12,7 @@
   {"fieldname":"agent","fieldtype":"Link","in_list_view":1,"label":"Agent","options":"Agent","read_only":1},
   {"fieldname":"provider","fieldtype":"Link","in_list_view":1,"label":"Provider","options":"AI Provider","read_only":1},
   {"fieldname":"model","fieldtype":"Link","in_list_view":1,"label":"Model","options":"AI Model","read_only":1},
+  {"fieldname":"conversation","fieldtype":"Link","in_list_view":1,"label":"Conversation","options":"Agent Conversation","read_only":1},
   {"fieldname":"run_kind","fieldtype":"Data","label":"Run Kind","read_only":1},
   {"fieldname":"run_count","fieldtype":"Int","label":"Run Count","read_only":1},
   {"fieldname":"success_count","fieldtype":"Int","label":"Success Count","read_only":1},
@@ -19,7 +20,9 @@
   {"fieldname":"input_tokens","fieldtype":"Int","label":"Input Tokens","read_only":1},
   {"fieldname":"output_tokens","fieldtype":"Int","label":"Output Tokens","read_only":1},
   {"fieldname":"cached_tokens","fieldtype":"Int","label":"Cached Tokens","read_only":1},
+  {"fieldname":"cache_creation_tokens","fieldtype":"Int","label":"Cache Creation Tokens","read_only":1},
   {"fieldname":"total_cost","fieldtype":"Float","label":"Total Cost","read_only":1},
+  {"fieldname":"composition_totals","fieldtype":"JSON","label":"Composition Totals","description":"Summed context-composition segment tokens for this bucket. Keys mirror Agent Run usage_snapshot segment categories. Null means not measured, which is not the same as zero.","read_only":1},
   {"fieldname":"duration_ms_sum","fieldtype":"Float","label":"Duration Sum (ms)","read_only":1},
   {"fieldname":"duration_count","fieldtype":"Int","label":"Duration Count","read_only":1},
   {"fieldname":"last_recomputed_at","fieldtype":"Datetime","label":"Last Recomputed At","read_only":1}

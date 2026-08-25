@@ -565,6 +565,58 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
         </Card>
       )}
 
+      {watchKnowledgeType === 'sqlite_hybrid' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>SQLite Hybrid settings</CardTitle>
+            <CardDescription>
+              Combines SQLite FTS keyword search with SQLite Vec similarity search (reciprocal rank fusion)
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'weaviate' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Weaviate connection settings</CardTitle>
+            <CardDescription>Connect HUF Knowledge to a Weaviate vector database</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'faiss' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>FAISS settings</CardTitle>
+            <CardDescription>
+              Embedded similarity search index — runs in-process, stores to a local file
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
+      {watchKnowledgeType === 'pinecone' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pinecone connection settings</CardTitle>
+            <CardDescription>Connect HUF Knowledge to a Pinecone vector database</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <AdvancedConfigFields knowledgeType={watchKnowledgeType} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Chunking settings</CardTitle>

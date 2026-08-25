@@ -16,6 +16,21 @@ import re
 
 import frappe
 
+MERMAID_ARTIFACT_INSTRUCTIONS = """
+4. MERMAID DIAGRAMS
+<artifact type="mermaid" title="Flowchart">
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Do something]
+    B -->|No| D[Stop]
+</artifact>
+"""
+
+MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL = """
+4. MERMAID DIAGRAMS
+To show a diagram, call the render_mermaid tool with your nodes/edges and relay its returned artifact tag verbatim in your response. Do not hand-write Mermaid syntax yourself.
+"""
+
 AI_ELEMENT_INSTRUCTIONS = """
 SYSTEM INSTRUCTION - HUF RICH ELEMENTS:
 The HUF chat UI renders special elements when you output them with the exact tags below.
@@ -44,15 +59,7 @@ Any plain text or markdown document.
   <circle cx="50" cy="50" r="40" fill="blue" />
 </svg>
 </artifact>
-
-4. MERMAID DIAGRAMS
-<artifact type="mermaid" title="Flowchart">
-graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Do something]
-    B -->|No| D[Stop]
-</artifact>
-
+""" + MERMAID_ARTIFACT_INSTRUCTIONS + """
 5. WEB PREVIEW (iframe a public URL)
 <web-preview url="https://example.com" title="Example Site" />
 

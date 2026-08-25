@@ -11,6 +11,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai import gateway_service
+from huf.ai.gateway_adapters.types import GatewayReply
 
 
 def gateway(**overrides):
@@ -299,12 +300,20 @@ class TestPairingReplyEnabled(unittest.TestCase):
         mock_frappe.get_all.return_value = []
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect
         adapter = MagicMock()
-        mock_adapter_cls.return_value = adapter
+        # Two-level wiring: _adapter_class_for_provider returns a class,
+        # the code instantiates it, so the returned instance must be adapter.
+        mock_adapter_cls.return_value.return_value = adapter
 
         gw = gateway(direct_policy="Pairing", integration_settings="INT-001", pairing_reply_enabled=1)
-        gateway_service._create_pairing_request(gw, "42")
+        code = gateway_service._create_pairing_request(gw, "42")
 
+        mock_adapter_cls.assert_called_once_with("Telegram")
         adapter.send_reply.assert_called_once()
+        call_args = adapter.send_reply.call_args
+        reply = call_args[0][0]
+        assert isinstance(reply, GatewayReply)
+        assert reply.conversation_id == "42"
+        assert code in reply.text
 
     @patch("huf.ai.gateway_webhook._adapter_class_for_provider")
     @patch("huf.ai.gateway_service.frappe")
@@ -332,13 +341,21 @@ class TestPairingReplyEnabled(unittest.TestCase):
         mock_frappe.get_all.return_value = []
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect
         adapter = MagicMock()
-        mock_adapter_cls.return_value = adapter
+        # Two-level wiring: _adapter_class_for_provider returns a class,
+        # the code instantiates it, so the returned instance must be adapter.
+        mock_adapter_cls.return_value.return_value = adapter
 
         gw = gateway(direct_policy="Pairing", integration_settings="INT-001")
         assert not hasattr(gw, "pairing_reply_enabled")
-        gateway_service._create_pairing_request(gw, "42")
+        code = gateway_service._create_pairing_request(gw, "42")
 
+        mock_adapter_cls.assert_called_once_with("Telegram")
         adapter.send_reply.assert_called_once()
+        call_args = adapter.send_reply.call_args
+        reply = call_args[0][0]
+        assert isinstance(reply, GatewayReply)
+        assert reply.conversation_id == "42"
+        assert code in reply.text
 
 
 class TestApproveGatewayPairing(unittest.TestCase):
@@ -353,7 +370,9 @@ class TestApproveGatewayPairing(unittest.TestCase):
         `expires_at`, so `_has_access_entry`'s `expires_at >= now` filter made
         an approved entry silently stop matching once that TTL elapsed."""
         entry = access_entry(expires_at=None)
-        mock_frappe.get_all.return_value = [{"name": entry.name, "pairing_code": "PAIR-7A9K"}]
+        # frappe.get_all returns frappe._dict rows, and _find_pending_entry_by_code
+        # reads row.pairing_code by attribute -- a plain dict here would raise.
+        mock_frappe.get_all.return_value = [frappe._dict({"name": entry.name, "pairing_code": "PAIR-7A9K"})]
         mock_frappe.get_doc.return_value = entry
         mock_frappe.has_permission.return_value = True
         mock_frappe.session.user = "admin@example.com"
@@ -401,7 +420,9 @@ class TestApproveGatewayPairing(unittest.TestCase):
     @patch("huf.ai.gateway_service.frappe")
     def test_expired_entry_is_rejected(self, mock_frappe):
         entry = access_entry(expires_at=datetime(2020, 1, 1))
-        mock_frappe.get_all.return_value = [{"name": entry.name, "pairing_code": "PAIR-7A9K"}]
+        # frappe.get_all returns frappe._dict rows, and _find_pending_entry_by_code
+        # reads row.pairing_code by attribute -- a plain dict here would raise.
+        mock_frappe.get_all.return_value = [frappe._dict({"name": entry.name, "pairing_code": "PAIR-7A9K"})]
         mock_frappe.get_doc.return_value = entry
         mock_frappe.has_permission.return_value = True
         mock_frappe.ValidationError = ValueError
@@ -414,7 +435,9 @@ class TestApproveGatewayPairing(unittest.TestCase):
     @patch("huf.ai.gateway_service.frappe")
     def test_already_approved_entry_is_rejected(self, mock_frappe):
         entry = access_entry(state="Approved")
-        mock_frappe.get_all.return_value = [{"name": entry.name, "pairing_code": "PAIR-7A9K"}]
+        # frappe.get_all returns frappe._dict rows, and _find_pending_entry_by_code
+        # reads row.pairing_code by attribute -- a plain dict here would raise.
+        mock_frappe.get_all.return_value = [frappe._dict({"name": entry.name, "pairing_code": "PAIR-7A9K"})]
         mock_frappe.get_doc.return_value = entry
         mock_frappe.has_permission.return_value = True
         mock_frappe.ValidationError = ValueError

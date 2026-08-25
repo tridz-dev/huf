@@ -33,3 +33,8 @@ Rules:
 8. Put flex layouts on Card (`style={{ display: "flex", gap: 12 }}`) or use div wrappers.
 9. Pair charts with a markdown table for the underlying data when helpful.
 """
+
+CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL = """
+SYSTEM INSTRUCTION - CHART ARTIFACTS:
+To show a chart, call the render_chart tool with your data and relay its returned artifact tag verbatim in your response. Do not hand-write chart JSX yourself.
+"""

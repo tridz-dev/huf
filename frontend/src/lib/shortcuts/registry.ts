@@ -1,7 +1,7 @@
 import type { ShortcutBinding } from './matching';
 import { getModifierKey, type Platform } from './platform';
 
-export type ShortcutScope = 'Global' | 'Chat' | 'Sidebar';
+export type ShortcutScope = 'Global' | 'Chat' | 'Sidebar' | 'Playground';
 
 export interface ShortcutDescriptor {
   id: string;
@@ -53,6 +53,24 @@ export const SHORTCUTS: ShortcutDescriptor[] = [
     binding: { key: 'Enter', shift: true },
     description: 'Insert new line',
     scope: 'Chat',
+  },
+  {
+    id: 'playground-copy-a-to-b',
+    binding: { key: 'c', mod: true, shift: true },
+    description: 'Copy A → B',
+    scope: 'Playground',
+  },
+  {
+    id: 'playground-swap',
+    binding: { key: 'x', mod: true, shift: true },
+    description: 'Swap A and B',
+    scope: 'Playground',
+  },
+  {
+    id: 'playground-toggle-diff',
+    binding: { key: 'd', mod: true, shift: true },
+    description: 'Toggle diff responses',
+    scope: 'Playground',
   },
 ];
 

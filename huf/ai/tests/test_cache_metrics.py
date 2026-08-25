@@ -9,7 +9,7 @@ class TestCacheMetrics(UnitTestCase):
         metrics = compute_run_metrics(run)
         self.assertIsNone(metrics["cache_read_share"])
         self.assertIsNone(metrics["effective_input_multiplier"])
-        self.assertIsNone(metrics["wasted_writes_tokens"])
+        self.assertNotIn("wasted_writes_tokens", metrics)
         self.assertEqual(metrics["prefix_stability"], "unavailable")
 
     def test_cache_read_share_and_multiplier(self):

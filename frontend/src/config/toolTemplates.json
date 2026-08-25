@@ -22,6 +22,15 @@
       ]
     },
     {
+      "id": "notification",
+      "name": "Notification",
+      "description": "Send an email, e.g. an acknowledgement to the contact on a triggering document.",
+      "icon": "mail",
+      "toolTypes": [
+        "Send Email"
+      ]
+    },
+    {
       "id": "external_api",
       "name": "External API Request",
       "description": "Connect to third-party services via HTTP/REST (e.g., Google Search, Stripe, Slack).",
