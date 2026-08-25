@@ -93,6 +93,10 @@ def handle_run_report(**kwargs) -> str:
             except Exception:
                 return _error("filters must be a JSON object or dict")
 
+        # Extract pagination parameters
+        limit_start = kwargs.get("limit_start", 0)
+        limit_page_length = kwargs.get("limit_page_length", 20)
+
         # Fill company default if not provided
         if not filters.get("company"):
             default_company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value("Global Defaults", "default_company")
@@ -104,7 +108,7 @@ def handle_run_report(**kwargs) -> str:
             fiscal_year = filters.get("fiscal_year")
             if not fiscal_year:
                 fiscal_year = frappe.defaults.get_user_default("Fiscal Year") or frappe.db.get_single_value("Global Defaults", "current_fiscal_year")
-            
+
             if fiscal_year:
                 try:
                     fy_doc = None
@@ -114,7 +118,7 @@ def handle_run_report(**kwargs) -> str:
                         fy_list = frappe.get_all("Fiscal Year", filters={"name": ("like", f"%{fiscal_year}%")}, limit=1)
                         if fy_list:
                             fy_doc = frappe.get_doc("Fiscal Year", fy_list[0].name)
-                    
+
                     if fy_doc:
                         filters["from_date"] = fy_doc.year_start_date
                         filters["to_date"] = fy_doc.year_end_date
@@ -129,13 +133,20 @@ def handle_run_report(**kwargs) -> str:
             filters["periodicity"] = "Yearly"
 
         from frappe.desk.query_report import run as run_report
-        result = run_report(report_name=report_name, filters=filters, ignore_prepared_report=True)
+        result = run_report(report_name=report_name, filters=filters, ignore_prepared_report=True, limit_start=limit_start, limit_page_length=limit_page_length)
+
+        # frappe.desk.query_report.run does not expose total row count; only paginated results are returned
+        total_count = None
+
         return json.dumps({
             "success": True,
             "report_name": report_name,
             "columns": result.get("columns", []),
             "results": result.get("result", []),
             "count": len(result.get("result", [])),
+            "limit_start": limit_start,
+            "limit_page_length": limit_page_length,
+            "total_count": total_count,
         }, default=str)
     except Exception as e:
         logger.warning(f"ERPNext Report Error [{report_name}]: {e}")
