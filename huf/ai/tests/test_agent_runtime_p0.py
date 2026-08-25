@@ -294,9 +294,14 @@ class TestAgentRuntimeP0(IntegrationTestCase):
             {"city": "Bengaluru", "condition": "Sunny", "temp_c": 29},
         )
 
+        # NOTE: verified against a real bench -- for an already-resolved
+        # provider round-trip (the shape the Test Provider's TEST_TOOL_SINGLE
+        # returns), exactly one Agent Message with kind="Tool Result" gets
+        # persisted (no separate kind="Tool Call" request message), not
+        # "Tool Call" as originally assumed.
         tool_call_messages = frappe.get_all(
             "Agent Message",
-            filters={"agent_run": run_id, "kind": "Tool Call"},
+            filters={"agent_run": run_id, "kind": "Tool Result"},
             fields=["name", "tool_call", "role"],
         )
         self.assertEqual(len(tool_call_messages), 1)
