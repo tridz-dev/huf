@@ -1,5 +1,5 @@
 import frappe
-from huf.ai.remote_agents.adapter import get_adapter
+from huf.ai.remote_agents.adapter import RemoteAgentNotImplementedError, get_adapter
 
 def execute_remote_tool(agent_run, tool_call, parameters):
     """
@@ -23,6 +23,12 @@ def execute_remote_tool(agent_run, tool_call, parameters):
         return {"status": "failed", "error": "Permission denied for remote connection"}
         
     # Create local Delegated Agent Run
+    if not frappe.db.exists("DocType", "Delegated Agent Run"):
+        raise RemoteAgentNotImplementedError(
+            "Delegated Agent Run tracking is not yet implemented — remote tool-call "
+            "execution is not available in this release."
+        )
+
     delegated_run = frappe.get_doc({
         "doctype": "Delegated Agent Run",
         "local_agent_run": agent_run.name,

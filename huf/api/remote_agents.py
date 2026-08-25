@@ -5,6 +5,9 @@ from frappe import _
 def list_agents():
     # Only return agents that are enabled for remote delegation
     # Placeholder implementation
+    if not frappe.has_permission("Agent", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     agents = frappe.get_all("Agent", filters={"disabled": 0}, fields=["name", "agent_name", "description"])
     return {
         "server_name": frappe.local.site,
@@ -15,6 +18,9 @@ def list_agents():
 @frappe.whitelist(allow_guest=False)
 def get_agent_manifest(agent_name):
     agent = frappe.get_doc("Agent", agent_name)
+    if not frappe.has_permission("Agent", "read", doc=agent):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     return {
         "id": agent.name,
         "name": agent.agent_name,
@@ -24,7 +30,8 @@ def get_agent_manifest(agent_name):
         "capabilities": ["chat"],
         "stateful": True,
         "long_running": True,
-        "streaming": True
+        # V1 does not support streaming; deferred to V2 per RFC §4.2.
+        "streaming": False
     }
 
 @frappe.whitelist(allow_guest=False)

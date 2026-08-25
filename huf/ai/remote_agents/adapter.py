@@ -396,6 +396,11 @@ class HufNativeAdapter(RemoteAgentAdapter):
 class AgentCommunicationProtocolAdapter(RemoteAgentAdapter):
     """
     Placeholder adapter implementation for Agent Communication Protocol (ACP).
+
+    NOT YET IMPLEMENTED: this class exists to reserve the shape of a future
+    standard-ACP integration. Every method below unconditionally raises
+    RemoteAgentNotImplementedError. It does not perform real ACP interop
+    of any kind — do not mistake its presence for working support.
     """
 
     def __init__(self, base_url: str = "", **kwargs):
@@ -431,6 +436,11 @@ class AgentCommunicationProtocolAdapter(RemoteAgentAdapter):
 class AgentClientProtocolAdapter(RemoteAgentAdapter):
     """
     Placeholder adapter implementation for Agent Client Protocol (coding agents / IDE bridge).
+
+    NOT YET IMPLEMENTED: this class exists to reserve the shape of a future
+    standard-ACP integration. Every method below unconditionally raises
+    RemoteAgentNotImplementedError. It does not perform real ACP interop
+    of any kind — do not mistake its presence for working support.
     """
 
     def __init__(self, base_url: str = "", **kwargs):

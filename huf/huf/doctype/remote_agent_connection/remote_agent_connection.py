@@ -8,6 +8,8 @@ import frappe
 from frappe import _
 from frappe.model.document import Document
 
+from huf.ai.remote_agents.adapter import HufNativeAdapter, RemoteAgentAdapterError
+
 
 class RemoteAgentConnection(Document):
 	def validate(self):
@@ -24,6 +26,17 @@ class RemoteAgentConnection(Document):
 			parsed = urlparse(clean_url)
 			if not parsed.scheme or parsed.scheme.lower() not in ("http", "https", "ws", "wss"):
 				frappe.throw(_("Invalid Base URL scheme. Must start with http://, https://, ws://, or wss://."))
+			# Websocket transport is not implemented: HufNativeAdapter._request() (adapter.py)
+			# only accepts http/https via validate_remote_url(), so a ws:// or wss:// URL would
+			# save successfully here but always fail at request time with no clear reason why.
+			# Reject it up front instead.
+			if parsed.scheme.lower() in ("ws", "wss"):
+				frappe.throw(
+					_(
+						"WebSocket transport (ws:// or wss://) is not yet implemented. "
+						"Please use an http:// or https:// Base URL."
+					)
+				)
 			if not parsed.netloc:
 				frappe.throw(_("Invalid Base URL format."))
 			self.base_url = clean_url
@@ -78,29 +91,28 @@ class RemoteAgentConnection(Document):
 			return {"status": "unknown", "message": _("Transport type '{0}' test not supported.").format(self.transport)}
 
 		try:
-			import requests
+			adapter = HufNativeAdapter(
+				base_url=self.base_url,
+				auth_type=self.auth_type,
+				auth_secret=self.get_auth_secret(),
+				timeout=5,
+			)
+			# Goes through adapter._request(), which runs validate_remote_url() (SSRF
+			# protection) and sends allow_redirects=False, same as every other adapter call.
+			adapter._request("GET", "/.well-known/huf-agent.json")
 
-			headers = {}
-			secret = self.get_auth_secret()
-			if self.auth_type == "bearer_token" and secret:
-				headers["Authorization"] = f"Bearer {secret}"
-			elif self.auth_type == "site_token" and secret:
-				headers["X-Site-Token"] = secret
-
-			url = self.base_url.rstrip("/")
-			response = requests.get(f"{url}/.well-known/huf-agent.json", headers=headers, timeout=5)
-			if response.status_code == 200:
-				self.health_status = "healthy"
-				self.last_error = ""
-				self.last_health_check = frappe.utils.now_datetime()
-				self.save(ignore_permissions=True)
-				return {"status": "healthy", "message": _("Connection successful.")}
-			else:
-				self.health_status = "degraded"
-				self.last_error = f"HTTP {response.status_code}: {response.text[:200]}"
-				self.last_health_check = frappe.utils.now_datetime()
-				self.save(ignore_permissions=True)
-				return {"status": "degraded", "message": self.last_error}
+			self.health_status = "healthy"
+			self.last_error = ""
+			self.last_health_check = frappe.utils.now_datetime()
+			self.save(ignore_permissions=True)
+			return {"status": "healthy", "message": _("Connection successful.")}
+		except RemoteAgentAdapterError as e:
+			err_msg = str(e)
+			self.health_status = "degraded"
+			self.last_error = err_msg[:500]
+			self.last_health_check = frappe.utils.now_datetime()
+			self.save(ignore_permissions=True)
+			return {"status": "degraded", "message": self.last_error}
 		except Exception as e:
 			err_msg = str(e)
 			self.health_status = "failed"
@@ -121,20 +133,16 @@ class RemoteAgentConnection(Document):
 			frappe.throw(_("Base URL is required to refresh manifest."))
 
 		try:
-			import requests
+			adapter = HufNativeAdapter(
+				base_url=self.base_url,
+				auth_type=self.auth_type,
+				auth_secret=self.get_auth_secret(),
+				timeout=10,
+			)
+			# Goes through adapter._request(), which runs validate_remote_url() (SSRF
+			# protection) and sends allow_redirects=False, same as every other adapter call.
+			manifest_data = adapter._request("GET", "/.well-known/huf-agent.json")
 
-			headers = {}
-			secret = self.get_auth_secret()
-			if self.auth_type == "bearer_token" and secret:
-				headers["Authorization"] = f"Bearer {secret}"
-			elif self.auth_type == "site_token" and secret:
-				headers["X-Site-Token"] = secret
-
-			url = self.base_url.rstrip("/")
-			response = requests.get(f"{url}/.well-known/huf-agent.json", headers=headers, timeout=10)
-			response.raise_for_status()
-
-			manifest_data = response.json()
 			self.manifest_json = json.dumps(manifest_data, indent=2)
 			self.health_status = "healthy"
 			self.last_error = ""
@@ -153,7 +161,9 @@ class RemoteAgentConnection(Document):
 @frappe.whitelist()
 def test_connection_cmd(connection_name):
 	doc = frappe.get_doc("Remote Agent Connection", connection_name)
-	doc.check_permission("read")
+	# test_connection() persists health-status fields via self.save(ignore_permissions=True),
+	# so this action mutates state and requires write permission, not just read.
+	doc.check_permission("write")
 	return doc.test_connection()
 
 
