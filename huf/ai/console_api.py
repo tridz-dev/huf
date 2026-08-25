@@ -389,7 +389,7 @@ def _parse_evaluation_json(raw: str) -> dict:
 	try:
 		data = json.loads(cleaned)
 	except json.JSONDecodeError as e:
-		frappe.log_error(f"evaluate_run JSON parse failed. Raw: {raw!r}", "Console Evaluation")
+		frappe.log_error(title="Console Evaluation", message=f"evaluate_run JSON parse failed. Raw: {raw!r}")
 		frappe.throw(_("Evaluation returned invalid JSON. Please try again."))
 
 	if not isinstance(data, dict):

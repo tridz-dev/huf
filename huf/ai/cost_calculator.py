@@ -272,8 +272,8 @@ def calculate_cost(
             return cost, "custom"
     except Exception as e:
         frappe.log_error(
-            f"HUF custom cost calculation failed for '{model_name}': {str(e)}",
-            "Cost Calculator",
+            title="Cost Calculator",
+            message=f"HUF custom cost calculation failed for '{model_name}': {str(e)}",
         )
 
     # ── Priority 2: LiteLLM auto-lookup ─────────────────────────────────────
@@ -286,8 +286,8 @@ def calculate_cost(
                 return float(litellm_cost), "litellm"
         except Exception as e:
             frappe.log_error(
-                f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}",
-                "Cost Calculator Priority 2",
+                title="Cost Calculator Priority 2",
+                message=f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}",
             )
 
     # ── Priority 3: Local provider without pricing ───────────────────────────

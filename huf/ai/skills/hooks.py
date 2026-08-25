@@ -130,18 +130,15 @@ def _call_skill_function(function_path: str, app_name: str) -> dict[str, Any] | 
         func = getattr(module, fn_name, None)
         if not callable(func):
             frappe.log_error(
-                _("Skill function '{0}' is not callable for app '{1}'").format(function_path, app_name),
-                "Skill Sync",
+                title="Skill Sync",
+                message=_("Skill function '{0}' is not callable for app '{1}'").format(function_path, app_name),
             )
             return None
         return func()
     except Exception as e:
-        frappe.log_error(
-            _("Failed to call skill function '{0}' for app '{1}': {2}").format(
+        frappe.log_error(title="Skill Sync", message=_("Failed to call skill function '{0}' for app '{1}': {2}").format(
                 function_path, app_name, str(e)
-            ),
-            "Skill Sync",
-        )
+            ))
     return None
 
 
@@ -199,7 +196,7 @@ def sync_app_skills(apps_to_scan=None, use_cache=True) -> dict[str, Any]:
     try:
         skills_by_app = get_skills_by_app(apps_to_scan, use_cache=cache_enabled)
     except Exception as e:
-        frappe.log_error(f"Failed to get skills from apps: {str(e)}", "Skill Sync Error")
+        frappe.log_error(title="Skill Sync Error", message=f"Failed to get skills from apps: {str(e)}")
         return {
             "synced_apps": [],
             "total_skills": 0,
@@ -250,14 +247,14 @@ def sync_app_skills(apps_to_scan=None, use_cache=True) -> dict[str, Any]:
 
                 if warnings:
                     for warning in warnings:
-                        frappe.log_error(warning, "Skill Sync Warning")
+                        frappe.log_error(title="Skill Sync Warning", message=warning)
             except Exception as e:
                 error_msg = str(e)
                 skill_name = skill_def.get("skill_name", "unknown") if isinstance(skill_def, dict) else "unknown"
                 errors.append(f"App '{app}': Skill '{skill_name}': {error_msg}")
                 frappe.log_error(
-                    f"Error syncing skill '{skill_name}' from app '{app}': {error_msg}",
-                    "Skill Sync Error",
+                    title="Skill Sync Error",
+                    message=f"Error syncing skill '{skill_name}' from app '{app}': {error_msg}",
                 )
                 continue
 
@@ -296,12 +293,12 @@ def sync_app_skills(apps_to_scan=None, use_cache=True) -> dict[str, Any]:
                     f"Failed to delete orphaned skill '{skill.skill_name}': {str(e)}"
                 )
                 frappe.log_error(
-                    f"Failed to delete orphaned skill '{skill.skill_name}': {str(e)}",
-                    "Skill Sync Error",
+                    title="Skill Sync Error",
+                    message=f"Failed to delete orphaned skill '{skill.skill_name}': {str(e)}",
                 )
     except Exception as e:
         errors.append(f"Failed to cleanup orphaned skills: {str(e)}")
-        frappe.log_error(f"Failed to cleanup orphaned skills: {str(e)}", "Skill Sync Error")
+        frappe.log_error(title="Skill Sync Error", message=f"Failed to cleanup orphaned skills: {str(e)}")
 
     if errors:
         frappe.log_error(

@@ -78,7 +78,10 @@ def seed_app(app_name: str, huf_dir: Path) -> SeedResult:
                 except Exception as e:
                     result.skipped += 1
                     result.errors.append(f"Error parsing {file_path.name}: {e}")
-                    frappe.log_error(f"Error parsing seed file {file_path}: {e}", "App Seeding Error")
+                    frappe.log_error(
+                        title="App Seeding Error",
+                        message=f"Error parsing seed file {file_path}: {e}",
+                    )
     finally:
         frappe.flags.in_seeding = False
 
@@ -103,9 +106,9 @@ def on_app_installed(app_name):
         if huf_dir.is_dir():
             res = seed_app(app_name, huf_dir)
             if res.errors:
-                frappe.log_error(f"Seeding errors for {app_name}: {res.errors}", "App Seeding")
+                frappe.log_error(title="App Seeding", message=f"Seeding errors for {app_name}: {res.errors}")
     except Exception as e:
-        frappe.log_error(f"Error in on_app_installed for {app_name}: {e}", "App Seeding Error")
+        frappe.log_error(title="App Seeding Error", message=f"Error in on_app_installed for {app_name}: {e}")
 
 @frappe.whitelist()
 def seed_all_apps():

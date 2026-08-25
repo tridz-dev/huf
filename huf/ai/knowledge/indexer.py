@@ -183,7 +183,7 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 
 		frappe.db.commit()
 
-		frappe.log_error(f"Knowledge Input Processing Error: {doc.name}", frappe.get_traceback())
+		frappe.log_error(title=frappe.get_traceback(), message=f"Knowledge Input Processing Error: {doc.name}")
 
 		return {
 			"status": "error",
@@ -264,7 +264,7 @@ def rebuild_knowledge_index(knowledge_source: str) -> dict:
 		source.save(ignore_permissions=True)
 		frappe.db.commit()
 
-		frappe.log_error(f"Knowledge Index Rebuild Error: {source.name}", frappe.get_traceback())
+		frappe.log_error(title=frappe.get_traceback(), message=f"Knowledge Index Rebuild Error: {source.name}")
 
 		return {
 			"status": "error",

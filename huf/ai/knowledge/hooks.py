@@ -15,7 +15,10 @@ def on_knowledge_source_created(doc, method):
 		backend = backend_class()
 		backend.initialize(doc.name, _build_backend_config(doc))
 	except Exception as e:
-		frappe.log_error(f"Error initializing knowledge source {doc.name}: {e!s}", "Knowledge Source Error")
+		frappe.log_error(
+			title="Knowledge Source Error",
+			message=f"Error initializing knowledge source {doc.name}: {e!s}",
+		)
 
 
 def on_knowledge_source_updated(doc, method):
@@ -48,7 +51,8 @@ def on_knowledge_source_deleted(doc, method):
 				os.remove(wal_path)
 	except Exception as e:
 		frappe.log_error(
-			f"Error cleaning up knowledge source {doc.name}: {e!s}", "Knowledge Source Cleanup Error"
+			title="Knowledge Source Cleanup Error",
+			message=f"Error cleaning up knowledge source {doc.name}: {e!s}",
 		)
 
 
@@ -70,5 +74,6 @@ def on_knowledge_input_deleted(doc, method):
 		update_source_stats(source, backend)
 	except Exception as e:
 		frappe.log_error(
-			f"Error deleting chunks for input {doc.name}: {e!s}", "Knowledge Input Cleanup Error"
+			title="Knowledge Input Cleanup Error",
+			message=f"Error deleting chunks for input {doc.name}: {e!s}",
 		)

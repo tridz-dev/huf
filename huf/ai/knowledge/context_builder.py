@@ -59,10 +59,7 @@ def build_knowledge_context(
 				sources_used.append(source_name)
 				
 		except Exception as e:
-			frappe.log_error(
-				f"Knowledge context error for {source_name}",
-				frappe.get_traceback()
-			)
+			frappe.log_error(title=frappe.get_traceback(), message=f"Knowledge context error for {source_name}")
 	
 	if not all_chunks:
 		return {

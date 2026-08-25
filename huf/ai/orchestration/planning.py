@@ -56,14 +56,14 @@ def run_planning(agent_name, user_prompt, provider, model, conversation_id=None)
             return result.get("response", "")
         else:
             frappe.log_error(
-                f"Planning failed for agent {agent_name}: {result.get('error')}",
-                "Orchestration Planning Error"
+                title="Orchestration Planning Error",
+                message=f"Planning failed for agent {agent_name}: {result.get('error')}",
             )
             return ""
 
     except Exception as e:
         frappe.log_error(
-            f"Planning exception for agent {agent_name}: {str(e)}",
-            "Orchestration Planning Error"
+            title="Orchestration Planning Error",
+            message=f"Planning exception for agent {agent_name}: {str(e)}",
         )
         return ""

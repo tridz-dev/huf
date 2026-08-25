@@ -181,7 +181,10 @@ async def handle_generate_image(
                     image_bytes = base64.b64decode(image_b64)
                 elif image_url:
                     # Unexpected image URL format; retain Error Log for investigation.
-                    frappe.log_error(f"Unsupported image URL format: {image_url}", "Image Generation")
+                    frappe.log_error(
+                        title="Image Generation",
+                        message=f"Unsupported image URL format: {image_url}",
+                    )
                     continue
 
                 if not image_bytes:
@@ -309,7 +312,7 @@ async def handle_generate_image(
 
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
-        frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
+        frappe.log_error(title="Image Generation Tool", message=f"Image generation error: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -380,7 +383,7 @@ async def handle_ocr_document(
 
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard OCR failure: retain Error Log for admin attention.
-        frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
+        frappe.log_error(title="OCR Tool", message=f"OCR error: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -920,7 +923,7 @@ async def handle_transcribe_audio(
 
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard transcription failure: retain Error Log for admin attention.
-        frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
+        frappe.log_error(title="Audio Transcription Tool", message=f"Audio transcription error: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -1029,5 +1032,5 @@ async def handle_generate_video(
         return {"success": False, "error": str(e)}
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
-        frappe.log_error(f"Video generation error: {e!s}", "Video Generation Tool")
+        frappe.log_error(title="Video Generation Tool", message=f"Video generation error: {e!s}")
         return {"success": False, "error": str(e)}

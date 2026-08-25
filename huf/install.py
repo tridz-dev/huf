@@ -1622,8 +1622,8 @@ def create_default_memory_policies():
 			doc.insert(ignore_permissions=True)
 		except Exception as e:
 			frappe.log_error(
-				f"Error creating memory policy {preset['policy_name']}: {str(e)}",
-				"Memory Policy Creation",
+				title="Memory Policy Creation",
+				message=f"Error creating memory policy {preset['policy_name']}: {str(e)}",
 			)
 
 	frappe.db.commit()

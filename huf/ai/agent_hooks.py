@@ -292,7 +292,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                                     f"{ocr_result.get('text')}\n"
                                 )
                 except Exception as e:
-                    frappe.log_error(f"Doc Event OCR Error: {str(e)}", "Agent Hooks OCR")
+                    frappe.log_error(title="Agent Hooks OCR", message=f"Doc Event OCR Error: {str(e)}")
                 finally:
                     loop.close()
 

@@ -233,7 +233,10 @@ def _file_dict_to_data_image_url(file_dict: dict) -> dict | None:
         file_doc = _resolve_file_doc(file_id=file_id, file_url=file_url)
         file_path = file_doc.get_full_path()
         if not os.path.exists(file_path):
-            frappe.log_error(f"Image file not found on disk: {file_path}", "LiteLLM Image Embed")
+            frappe.log_error(
+                title="LiteLLM Image Embed",
+                message=f"Image file not found on disk: {file_path}",
+            )
             return None
 
         mime_type, _ = _mime_type_and_extension(file_path, file_doc.file_type)
@@ -695,8 +698,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 model_supports_caching = False
                 cache_skipped_unsupported_model = True
                 frappe.log_error(
-                    f"Failed to check prompt caching support for model {normalized_model}",
-                    "LiteLLM Prompt Caching"
+                    title="LiteLLM Prompt Caching",
+                    message=f"Failed to check prompt caching support for model {normalized_model}",
                 )
 
         if not isinstance(dynamic_suffix, str):
@@ -958,8 +961,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         frappe.cache().set_value(capability_cache_key, 1)
 
                         frappe.log_error(
-                            f"Provider '{provider}' returned bad request. Retrying without tools and caching capability limitation. Error: {str(e)}", 
-                            "LiteLLM Auto-Recovery"
+                            title="LiteLLM Auto-Recovery",
+                            message=f"Provider '{provider}' returned bad request. Retrying without tools and caching capability limitation. Error: {str(e)}",
                         )
                         completion_kwargs.pop("tools", None)
                         completion_kwargs.pop("tool_choice", None)
@@ -1878,13 +1881,13 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                     if not updated:
                                                         message_name = None
                                                         frappe.log_error(
-                                                            f"Failed to update tool call message for call_id={call_id}, tool_call_doc={tool_call_doc}",
-                                                            "Tool Call Message Update"
+                                                            title="Tool Call Message Update",
+                                                            message=f"Failed to update tool call message for call_id={call_id}, tool_call_doc={tool_call_doc}",
                                                         )
                                                 else:
                                                     frappe.log_error(
-                                                        f"No Agent Message found for tool call call_id={call_id}, tool_call_doc={tool_call_doc}",
-                                                        "Tool Call Message Update"
+                                                        title="Tool Call Message Update",
+                                                        message=f"No Agent Message found for tool call call_id={call_id}, tool_call_doc={tool_call_doc}",
                                                     )
 
                                                 tool_result_for_socket = (
