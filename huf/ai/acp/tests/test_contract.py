@@ -29,7 +29,7 @@ from huf.ai.acp.protocol import (
 from huf.ai.acp.server import AcpServer
 from huf.ai.acp.transport import AcpTransport
 
-REVIEWS_DIR = Path(__file__).resolve().parents[4] / "REVIEWS"
+REVIEWS_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 class _FakeWriter:

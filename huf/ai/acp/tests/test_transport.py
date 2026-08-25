@@ -18,7 +18,7 @@ from huf.ai.acp.protocol import (
 )
 from huf.ai.acp.transport import AcpRpcError, AcpTransport, AcpTransportClosed
 
-FIXTURES_DIR = Path(__file__).resolve().parents[4] / "REVIEWS"
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 class _FakeWriter:

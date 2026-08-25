@@ -1,8 +1,9 @@
 """Contract tests that replay captured ``kimi acp`` transcripts.
 
-The fixtures under ``Tracks/safwan-erooth.AcpInteropProtocol/REVIEWS/`` are the
-ground-truth wire format. These tests replay them against our own transport,
-server, and client implementations without requiring ``kimi`` to be installed.
+The fixtures under ``tests/fixtures/`` are the ground-truth wire format,
+captured live against a real ``kimi acp`` process. These tests replay them
+against our own transport, server, and client implementations without
+requiring ``kimi`` to be installed or a live subprocess at test time.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from huf.ai.acp.protocol import (
 from huf.ai.acp.server import AcpServer
 from huf.ai.acp.transport import AcpTransport
 
-REVIEWS_DIR = Path(__file__).resolve().parents[4] / "REVIEWS"
+REVIEWS_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 def _fixture_pairs() -> list[tuple[str, Path, Path]]:
