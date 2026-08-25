@@ -42,6 +42,7 @@ export const doctype = {
   "Agent Run Feedback": "Agent Run Feedback",
   Meeting: "Meeting",
   "Meeting Recording Chunk": "Meeting Recording Chunk",
+  "Batch Job": "Batch Job",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

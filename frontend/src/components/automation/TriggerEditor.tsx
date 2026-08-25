@@ -137,6 +137,30 @@ export function TriggerEditor({ trigger, onChange, permissions }: TriggerEditorP
         />
       </div>
 
+      {trigger.trigger_type === 'Schedule' && (
+        <div className="space-y-1.5">
+          <Label>Execution mode</Label>
+          <Select
+            onValueChange={(value) => onChange({ execution_mode: value as AutomationTrigger['execution_mode'] })}
+            value={trigger.execution_mode || 'Realtime'}
+            disabled={disabled}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Realtime">Instant</SelectItem>
+              <SelectItem value="Batch">Batch</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-steel-soft">
+            {trigger.execution_mode === 'Batch'
+              ? 'Runs later today instead of immediately, at a lower cost.'
+              : 'Runs as soon as the schedule fires.'}
+          </p>
+        </div>
+      )}
+
       {(trigger.trigger_type === 'Schedule' ||
         trigger.trigger_type === 'App Event' ||
         trigger.trigger_type === 'Doc Event') && (
