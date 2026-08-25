@@ -73,10 +73,16 @@ def upload_chunk(
         audio_service.validate_audio_filename(file_doc.file_name)
         audio_file = file_doc.name
     else:
+        # No attached_to_doctype/attached_to_name here: the chunk doc that
+        # this file will belong to doesn't exist yet (it's created below),
+        # and File.validate_attachment_references() throws "Attached To
+        # Name must be a string or an integer" if attached_to_doctype is
+        # set while attached_to_name is empty. The file is linked to its
+        # chunk via the attached_to_doctype/attached_to_name db_set below,
+        # once the chunk has a name.
         saved = audio_service.save_audio_upload(
             f"chunk-{meeting}-{sequence}.webm",
             audio_b64,
-            attached_to_doctype="Meeting Recording Chunk",
             is_private=1,
         )
         audio_file = saved["file_id"]
@@ -93,7 +99,14 @@ def upload_chunk(
     chunk.insert()
 
     if audio_file:
-        frappe.db.set_value("File", audio_file, "attached_to_name", chunk.name)
+        frappe.db.set_value(
+            "File",
+            audio_file,
+            {
+                "attached_to_doctype": "Meeting Recording Chunk",
+                "attached_to_name": chunk.name,
+            },
+        )
 
     meeting_doc.db_set("chunk_count", cint(meeting_doc.chunk_count) + 1)
 
