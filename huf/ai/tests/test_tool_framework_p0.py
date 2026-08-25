@@ -166,7 +166,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
         # permission list -- a real permission grant, not a superuser bypass.
         user = self._make_user(roles=("Huf Manager",), suffix="exp1")
 
-        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user.name)
+        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user)
         allowed_names = [t.name for t in allowed]
         self.assertIn(tool_doc.name, allowed_names)
 
@@ -185,7 +185,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
             "test precondition failed: Huf User unexpectedly has write on AI Provider",
         )
 
-        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user.name)
+        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user)
         allowed_names = [t.name for t in allowed]
         self.assertNotIn(tool_doc.name, allowed_names)
 
