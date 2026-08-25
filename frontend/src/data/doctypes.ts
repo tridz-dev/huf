@@ -42,6 +42,12 @@ export const doctype = {
   "Agent Run Feedback": "Agent Run Feedback",
   Meeting: "Meeting",
   "Meeting Recording Chunk": "Meeting Recording Chunk",
+  "ACP Command Registry": "ACP Command Registry",
+  "ACP Registry Env Var": "ACP Registry Env Var",
+  "ACP Registry Role": "ACP Registry Role",
+  "Remote Agent Connection": "Remote Agent Connection",
+  "Remote Agent Policy": "Remote Agent Policy",
+  "Remote Agent Policy Agent": "Remote Agent Policy Agent",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

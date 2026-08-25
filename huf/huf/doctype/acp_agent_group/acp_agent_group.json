@@ -1,0 +1,147 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:group_name",
+ "creation": "2026-08-25 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "group_name",
+  "enabled",
+  "section_mode",
+  "mode",
+  "require_all",
+  "section_timeouts",
+  "per_child_timeout",
+  "overall_timeout",
+  "min_success_count",
+  "section_members",
+  "members",
+  "section_ui",
+  "cancellation_mode",
+  "ui_notes",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "group_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Group Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "section_mode",
+   "fieldtype": "Section Break",
+   "label": "Orchestration Mode"
+  },
+  {
+   "default": "parallel",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "\nparallel\nsequential",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "description": "When checked, the fan-out is marked partial if any child fails or times out.",
+   "fieldname": "require_all",
+   "fieldtype": "Check",
+   "label": "Require All"
+  },
+  {
+   "fieldname": "section_timeouts",
+   "fieldtype": "Section Break",
+   "label": "Timeouts"
+  },
+  {
+   "default": "60",
+   "fieldname": "per_child_timeout",
+   "fieldtype": "Int",
+   "label": "Per-Child Timeout (seconds)"
+  },
+  {
+   "default": "180",
+   "fieldname": "overall_timeout",
+   "fieldtype": "Int",
+   "label": "Overall Timeout (seconds)"
+  },
+  {
+   "description": "Optional. If set, the fan-out status becomes insufficient_success when fewer than this many children succeed.",
+   "fieldname": "min_success_count",
+   "fieldtype": "Int",
+   "label": "Minimum Success Count"
+  },
+  {
+   "fieldname": "section_members",
+   "fieldtype": "Section Break",
+   "label": "Members"
+  },
+  {
+   "fieldname": "members",
+   "fieldtype": "Table",
+   "label": "Members",
+   "options": "ACP Agent Group Member"
+  },
+  {
+   "fieldname": "section_ui",
+   "fieldtype": "Section Break",
+   "label": "UI / Cancellation"
+  },
+  {
+   "default": "cancel_all",
+   "description": "P2.8: behaviour when the user cancels a running fan-out from the group UI.",
+   "fieldname": "cancellation_mode",
+   "fieldtype": "Select",
+   "label": "Cancellation Mode",
+   "options": "\ncancel_all\nnone"
+  },
+  {
+   "description": "P2.8: design notes for the group UI (e.g. progress bars, per-child status chips, bulk retry).",
+   "fieldname": "ui_notes",
+   "fieldtype": "Small Text",
+   "label": "UI Notes"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-25 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "ACP Agent Group",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "autoname": "field:registry_name",
+ "creation": "2026-08-25 08:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "registry_name",
+  "enabled",
+  "binary_path",
+  "argv_shape",
+  "working_directory",
+  "auth_required",
+  "auth_env_key",
+  "max_wall_time_seconds",
+  "notes",
+  "env_allow_list_section",
+  "env_allow_list",
+  "allowed_roles_section",
+  "allowed_roles"
+ ],
+ "fields": [
+  {
+   "fieldname": "registry_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Registry Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "description": "Absolute path to the executable.",
+   "fieldname": "binary_path",
+   "fieldtype": "Data",
+   "label": "Binary Path",
+   "reqd": 1
+  },
+  {
+   "description": "Fixed argument list as a JSON array of strings, e.g. [\"acp\"].",
+   "fieldname": "argv_shape",
+   "fieldtype": "JSON",
+   "label": "Argument Shape",
+   "reqd": 1
+  },
+  {
+   "description": "Fixed, non-overridable working directory for spawned processes.",
+   "fieldname": "working_directory",
+   "fieldtype": "Data",
+   "label": "Working Directory",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "auth_required",
+   "fieldtype": "Check",
+   "label": "Auth Required"
+  },
+  {
+   "depends_on": "eval:doc.auth_required",
+   "description": "Env key under which the connection's auth secret is injected.",
+   "fieldname": "auth_env_key",
+   "fieldtype": "Data",
+   "label": "Auth Env Key",
+   "mandatory_depends_on": "eval:doc.auth_required"
+  },
+  {
+   "default": "300",
+   "fieldname": "max_wall_time_seconds",
+   "fieldtype": "Int",
+   "label": "Max Wall Time (seconds)"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "env_allow_list_section",
+   "fieldtype": "Section Break",
+   "label": "Allowed Environment Variables"
+  },
+  {
+   "fieldname": "env_allow_list",
+   "fieldtype": "Table",
+   "label": "Env Allow List",
+   "options": "ACP Registry Env Var"
+  },
+  {
+   "fieldname": "allowed_roles_section",
+   "fieldtype": "Section Break",
+   "label": "Allowed Roles"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "ACP Registry Role"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-25 08:00:00",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "ACP Command Registry",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

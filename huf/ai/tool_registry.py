@@ -36,7 +36,8 @@ class PermissionAwareToolRegistry:
         "Delete Document", "Delete Multiple Documents",
         "Submit Document", "Cancel Document",
         "Set Value", "POST", "Run Agent",
-        "Attach File to Document", "Builder", "Send Email"
+        "Attach File to Document", "Builder", "Send Email",
+        "Remote ACP Agent"
     }
 
     @classmethod

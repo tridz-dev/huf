@@ -157,6 +157,7 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
       { title: "AI providers & models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
       { title: "MCP servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
+      { title: "ACP connections", url: "/acp-connections", icon: Terminal, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },
       { title: "Code execution", url: "/execution-profiles", icon: SquareChevronRight, capability: "agent.use" },
       { title: "SSH connections", url: "/ssh-connections", icon: ChevronsLeftRightEllipsis, capability: "agent.use" },

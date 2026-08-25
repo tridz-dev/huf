@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"session_51d95aa4-17ee-4761-a24b-454dd4bdcda8","prompt":[{"type":"text","text":"Say hello and stop."}]}}

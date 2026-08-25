@@ -68,6 +68,9 @@ realtime = [
     "uvicorn[standard]",
 ]
 
+[project.scripts]
+huf-acp = "huf.ai.acp.cli:main"
+
 [build-system]
 requires = ["flit_core >=3.4,<4"]
 build-backend = "flit_core.buildapi"
@@ -110,8 +113,13 @@ ignore = [
     "F405", # can't detect undefined names from * import
     "F722", # syntax error in forward type annotation
     "W191", # indentation contains tabs
+    "TRY003", # allow long messages in exception constructors
 ]
 typing-modules = ["frappe.types.DF"]
+
+[tool.ruff.lint.per-file-ignores]
+"huf/ai/acp/tests/*" = ["S101", "S105", "S106", "S108", "BLE001", "RUF006"]
+"huf/ai/remote_agents/tests/*" = ["S101", "S105", "S106", "S108", "BLE001", "RUF006"]
 
 [tool.ruff.format]
 quote-style = "double"

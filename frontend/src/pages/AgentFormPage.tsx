@@ -2378,6 +2378,7 @@ export function AgentFormPage() {
                   onAddTools={() => setShowToolsModal(true)}
                   onRemoveTool={handleRemoveTool}
                   onEditTool={handleEditTool}
+                  onAttachAcpTools={handleAddTools}
                   locked={systemLocked}
                   mcpServers={mcpServers}
                   onAddMCP={() => setShowMCPServersModal(true)}

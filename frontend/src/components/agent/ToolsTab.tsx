@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users, Terminal } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,7 +8,15 @@ import type { AgentToolFunctionRef, AgentToolType } from '@/types/agent.types';
 import type { MCPServerRef } from '@/services/mcpApi';
 import { getToolIconForType } from '../tools/toolIconMap';
 import { getAgentsUsingTool } from '@/services/toolApi';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type { AcpConnection } from '@/services/acpApi';
+import {
+  getAcpConnections,
+  ensureRemoteAcpToolForConnection,
+  toAcpToolNameSlug,
+} from '@/services/acpApi';
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
@@ -16,6 +24,7 @@ interface ToolsTabProps {
   onAddTools: () => void;
   onRemoveTool: (toolId: string) => void;
   onEditTool?: (toolId: string) => void;
+  onAttachAcpTools?: (tools: AgentToolFunctionRef[]) => void;
   // MCP Server props
   mcpServers?: MCPServerRef[];
   onAddMCP?: () => void;
@@ -29,9 +38,11 @@ interface ToolsTabProps {
 
 export function ToolsTab({
   selectedTools,
+  toolTypes,
   onAddTools,
   onRemoveTool,
   onEditTool,
+  onAttachAcpTools,
   mcpServers = [],
   onAddMCP,
   onRemoveMCP,
@@ -68,6 +79,66 @@ export function ToolsTab({
 
     loadToolUsage();
   }, [selectedTools]);
+
+  // --- Remote ACP Agents section ------------------------------------------
+  const [acpConnections, setAcpConnections] = useState<AcpConnection[]>([]);
+  const [acpLoading, setAcpLoading] = useState(false);
+  const [acpToggling, setAcpToggling] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setAcpLoading(true);
+    getAcpConnections()
+      .then((connections) => {
+        if (!cancelled) setAcpConnections(connections);
+      })
+      .catch((error) => {
+        console.error('Error loading ACP connections:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setAcpLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const acpToolMap = useMemo(() => {
+    const map = new Map<string, AgentToolFunctionRef>();
+    for (const tool of selectedTools) {
+      if (tool.types !== 'Remote ACP Agent') continue;
+      const slug = toAcpToolNameSlug(tool.tool_name || tool.name).replace(/^acp_/, '');
+      if (slug) map.set(slug, tool);
+    }
+    return map;
+  }, [selectedTools]);
+
+  const handleAcpToggle = async (connection: AcpConnection, enabled: boolean) => {
+    if (!onAttachAcpTools) return;
+    setAcpToggling(connection.name);
+    try {
+      if (enabled) {
+        const tool = await ensureRemoteAcpToolForConnection(connection, toolTypes);
+        const alreadyAttached = selectedTools.some((t) => t.name === tool.name);
+        if (!alreadyAttached) {
+          onAttachAcpTools([tool]);
+          toast.success(`"${connection.connection_name}" enabled as a remote ACP tool`);
+        }
+      } else {
+        const slug = toAcpToolNameSlug(connection.connection_name);
+        const tool = acpToolMap.get(slug);
+        if (tool) {
+          onRemoveTool(tool.name);
+          toast.success(`"${connection.connection_name}" removed from this agent`);
+        }
+      }
+    } catch (error) {
+      toast.error(getFrappeErrorMessage(error) || 'Could not update ACP tool');
+    } finally {
+      setAcpToggling(null);
+    }
+  };
+
   const handleMCPAction = (action: string, serverId?: string) => {
     switch (action) {
       case 'add':
@@ -319,6 +390,96 @@ export function ToolsTab({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Remote ACP Agents Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Terminal className="w-5 h-5" />
+                Remote ACP Agents
+              </CardTitle>
+              <CardDescription>
+                Let this agent call external ACP agents over stdio.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() => window.open('/huf/acp-connections', '_blank')}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Manage connections
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {acpLoading ? (
+            <div className="text-center py-8 text-sm text-steel-soft">Loading connections…</div>
+          ) : acpConnections.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="flex justify-center mb-4">
+                <div className="rounded-full bg-paper-deep p-3">
+                  <Terminal className="w-6 h-6 text-steel-soft" />
+                </div>
+              </div>
+              <p className="font-body text-steel mb-2">No ACP connections configured</p>
+              <p className="text-xs text-steel-soft mb-4">
+                Create a connection on the ACP Connections page, then enable it here.
+              </p>
+            </div>
+          ) : (
+            <div className="">
+              {acpConnections.map((connection) => {
+                const slug = toAcpToolNameSlug(connection.connection_name);
+                const attached = acpToolMap.has(slug);
+                return (
+                  <div
+                    key={connection.name}
+                    className="flex flex-col lg:flex-row items-start lg:items-center lg:justify-between gap-3 rounded-md border p-4 hover:bg-paper-deep transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h4 className="font-medium text-sm">{connection.connection_name}</h4>
+                        {connection.enabled === 1 ? (
+                          <Badge variant="default" size="sm" className="shrink-0">
+                            enabled
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" size="sm" className="shrink-0">
+                            disabled
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-steel-soft">
+                        Protocol: ACP (stdio)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Switch
+                        checked={attached}
+                        disabled={locked || acpToggling === connection.name}
+                        onCheckedChange={(checked) => handleAcpToggle(connection, checked)}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(`/huf/acp-connections?tab=connections`, '_blank')}
+                        title="Open connection"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

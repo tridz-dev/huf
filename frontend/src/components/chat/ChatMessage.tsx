@@ -31,6 +31,7 @@ import {
 } from '@/components/ai-elements/audio-player';
 import type { LoadingType } from './ChatInput';
 import { MemoryContextBadge } from '../memory/MemoryContextBadge';
+import { AcpToolCallBlock } from '../acp/AcpToolCallBlock';
 
 const frappeUrl = import.meta.env.VITE_FRAPPE_URL || window.location.origin;
 
@@ -84,6 +85,11 @@ export function ChatMessage({
     const handleRegenerate = precedingUserMessage && onRegenerate
         ? () => onRegenerate(precedingUserMessage)
         : undefined;
+
+    type ToolItem = NonNullable<MessageType['tools']>[number];
+    const isAcpTool = (tool: ToolItem) =>
+        tool.name.startsWith('acp_') ||
+        (tool.parameters && 'connection_name' in tool.parameters);
 
     // TODO(tool-call-approval-api): there is no backend/socket endpoint yet to
     // approve or deny a pending tool call (only flow-run-level approvals exist,
@@ -141,6 +147,8 @@ export function ChatMessage({
                             onApprove={handleToolCallApprove}
                             onDeny={handleToolCallDeny}
                         />
+                    ) : isAcpTool(message.tools[0]) ? (
+                        <AcpToolCallBlock key={`${message.key}-tool-0`} tool={message.tools[0]} />
                     ) : (
                         <Tool key={`${message.key}-tool-0`}>
                             <ToolHeader

@@ -96,6 +96,7 @@ const IntegrationServiceFormPageWrapper = lazy(
 );
 const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
+const AcpConnectionsPage = lazy(() => import('./pages/AcpConnectionsPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 
@@ -722,6 +723,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <GatewayDetailsPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/acp-connections"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AcpConnectionsPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />

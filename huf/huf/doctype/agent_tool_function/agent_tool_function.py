@@ -140,6 +140,18 @@ class AgentToolFunction(Document):
 		self.prepare_function_params()
 		self.validate_json()
 		self.validate_tool_name()
+		self.validate_remote_acp_agent()
+
+	def validate_remote_acp_agent(self):
+		"""Ensure Remote ACP Agent tools route to the ACP tool handler."""
+		if self.types != "Remote ACP Agent":
+			return
+
+		if not self.function_path:
+			self.function_path = "huf.ai.acp.tool_handler.run_acp_agent_tool"
+
+		# No DocType reference is required for an ACP remote call.
+		self.reference_doctype = None
 
 	def validate_tool_name(self):
 		if not re.match(r'^[a-zA-Z0-9_-]{1,128}$', self.tool_name or ""):
@@ -650,6 +662,23 @@ class AgentToolFunction(Document):
 				},
 				"required": ["prompt"],
 				"additionalProperties": False
+			}
+
+		elif self.types == "Remote ACP Agent":
+			params = {
+				"type": "object",
+				"properties": {
+					"connection_name": {
+						"type": "string",
+						"description": "Name of the Remote Agent Connection to use"
+					},
+					"prompt": {
+						"type": "string",
+						"description": "The instruction or question for the remote ACP agent"
+					},
+				},
+				"required": ["connection_name", "prompt"],
+				"additionalProperties": False,
 			}
 
 		elif self.types == "Perplexity Search":

@@ -1,0 +1,149 @@
+{
+  "actions": [],
+  "allow_rename": 1,
+  "autoname": "field:policy_name",
+  "creation": "2026-08-25 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "policy_name",
+    "enabled",
+    "section_caller",
+    "caller_type",
+    "caller_reference",
+    "section_scope",
+    "scope_type",
+    "default_agent",
+    "allowed_agents",
+    "section_capabilities",
+    "capability_scope",
+    "max_run_duration_seconds",
+    "allow_file_tools",
+    "allow_shell_tools",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "policy_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Policy Name",
+      "reqd": 1,
+      "unique": 1
+    },
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "in_list_view": 1,
+      "label": "Enabled"
+    },
+    {
+      "fieldname": "section_caller",
+      "fieldtype": "Section Break",
+      "label": "Caller"
+    },
+    {
+      "fieldname": "caller_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Caller Type",
+      "options": "api_key\nremote_connection\nuser",
+      "reqd": 1
+    },
+    {
+      "depends_on": "eval:doc.caller_type",
+      "fieldname": "caller_reference",
+      "fieldtype": "Data",
+      "label": "Caller Reference"
+    },
+    {
+      "fieldname": "section_scope",
+      "fieldtype": "Section Break",
+      "label": "Agent Scope"
+    },
+    {
+      "fieldname": "scope_type",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "label": "Scope Type",
+      "options": "single_agent\nagent_list",
+      "reqd": 1
+    },
+    {
+      "depends_on": "eval:doc.scope_type == 'single_agent'",
+      "fieldname": "default_agent",
+      "fieldtype": "Link",
+      "label": "Default Agent",
+      "options": "Agent"
+    },
+    {
+      "depends_on": "eval:doc.scope_type == 'agent_list'",
+      "fieldname": "allowed_agents",
+      "fieldtype": "Table",
+      "label": "Allowed Agents",
+      "options": "Remote Agent Policy Agent"
+    },
+    {
+      "fieldname": "section_capabilities",
+      "fieldtype": "Section Break",
+      "label": "Capabilities"
+    },
+    {
+      "description": "JSON object matching the Gateway capability vocabulary",
+      "fieldname": "capability_scope",
+      "fieldtype": "JSON",
+      "label": "Capability Scope"
+    },
+    {
+      "default": "300",
+      "fieldname": "max_run_duration_seconds",
+      "fieldtype": "Int",
+      "label": "Max Run Duration (seconds)"
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_file_tools",
+      "fieldtype": "Check",
+      "label": "Allow File Tools"
+    },
+    {
+      "default": "0",
+      "fieldname": "allow_shell_tools",
+      "fieldtype": "Check",
+      "label": "Allow Shell Tools"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    }
+  ],
+  "grid_page_length": 50,
+  "index_web_pages_for_search": 1,
+  "links": [],
+  "modified": "2026-08-25 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Huf",
+  "name": "Remote Agent Policy",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "track_changes": 1
+}

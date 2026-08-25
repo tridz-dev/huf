@@ -58,7 +58,8 @@ export type ToolType =
    * @deprecated Legacy value kept for backward compatibility with saved docs.
    * New tools should use "Transcription" (displayed as "Audio Transcription").
    */
-  | "Speech to Text";
+  | "Speech to Text"
+  | "Remote ACP Agent";
 
 export type AgentToolFunctionRef = {
   name: string;
