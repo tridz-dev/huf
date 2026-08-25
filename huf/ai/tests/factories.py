@@ -136,7 +136,9 @@ def make_ai_provider(provider_name=None, provider_brand="openai", **overrides):
     """
     fields = {
         "doctype": "AI Provider",
-        "provider_name": provider_name or f"Test Provider {_hash()}",
+        # Single word: AIProvider.validate_provider_name() rejects whitespace
+        # on insert (the name becomes the LiteLLM model routing prefix).
+        "provider_name": provider_name or f"TestProvider{_hash()}",
         "provider_brand": provider_brand,
         "api_key": "test-key-not-used",
     }
