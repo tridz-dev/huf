@@ -504,7 +504,11 @@ def _run_test_provider_429(agent, enhanced_prompt, provider, model, context=None
     """
     from litellm import RateLimitError
 
-    raise RateLimitError(_TEST_429_LOG_MESSAGE)
+    raise RateLimitError(
+        _TEST_429_LOG_MESSAGE,
+        llm_provider=provider,
+        model=model,
+    )
 
 
 def _run_test_provider_400(agent, enhanced_prompt, provider, model, context=None):

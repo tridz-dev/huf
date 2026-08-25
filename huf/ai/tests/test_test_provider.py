@@ -304,16 +304,18 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
         # frappe.get_doc is the first real-provider-doc access litellm.run()
         # performs (to load the "AI Provider" doc / API key). It must NEVER
         # be called when routing to the test provider - proving the early
-        # return happens before any real work.
-        litellm_module.frappe.get_doc.reset_mock()
+        # return happens before any real work. patch.object works whether
+        # `litellm_module.frappe` is the stubbed fake (no bench) or the real
+        # `frappe` package (running under a real bench's `bench run-tests`),
+        # unlike relying on it already being a Mock.
+        with unittest.mock.patch.object(litellm_module.frappe, "get_doc") as mock_get_doc:
+            result = asyncio.run(
+                litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
 
-        result = asyncio.run(
-            litellm_module.run(agent, prompt, "Test_Provider", "test-model", context=None)
-        )
-
-        self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
-        self.assertEqual(result.cost, 0.0)
-        litellm_module.frappe.get_doc.assert_not_called()
+            self.assertEqual(result.final_output, test_provider._TEST_TEXT_RESPONSE)
+            self.assertEqual(result.cost, 0.0)
+            mock_get_doc.assert_not_called()
 
     def test_litellm_run_provider_name_matching_is_case_insensitive(self):
         """`provider.lower() == "test_provider"` - exercise a mixed-case
@@ -335,8 +337,6 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
         which we make raise to keep this test hermetic - no network/DB).
         """
         agent = _make_agent()
-        litellm_module.frappe.get_doc.reset_mock()
-        litellm_module.frappe.get_doc.side_effect = RuntimeError("reached real provider doc lookup")
 
         # We only care that the real (non-test-provider) path was reached -
         # i.e. frappe.get_doc got called - not the specific exception type
@@ -344,13 +344,15 @@ class TestLiteLLMRunRoutesToTestProvider(unittest.TestCase):
         # the real body's own exception handling can itself raise a
         # different, unrelated TypeError further down; that's an artifact of
         # this hermetic stubbing, not something this test is about).
-        with self.assertRaises(Exception):
-            asyncio.run(
-                litellm_module.run(agent, "hello", "OpenAI", "gpt-4-turbo", context=None)
-            )
+        with unittest.mock.patch.object(
+            litellm_module.frappe, "get_doc", side_effect=RuntimeError("reached real provider doc lookup")
+        ) as mock_get_doc:
+            with self.assertRaises(Exception):
+                asyncio.run(
+                    litellm_module.run(agent, "hello", "OpenAI", "gpt-4-turbo", context=None)
+                )
 
-        litellm_module.frappe.get_doc.assert_called_once()
-        litellm_module.frappe.get_doc.side_effect = None
+            mock_get_doc.assert_called_once()
 
 
 class TestTestProviderErrorScenarios(unittest.TestCase):
@@ -547,15 +549,14 @@ class TestTestProviderStreamInterrupt(unittest.TestCase):
         agent = _make_agent()
         prompt = "__TEST_SCENARIO__:TEST_STREAM_INTERRUPT"
 
-        litellm_module.frappe.get_doc.reset_mock()
+        with unittest.mock.patch.object(litellm_module.frappe, "get_doc") as mock_get_doc:
+            chunks = self._collect_chunks(
+                litellm_module.run_stream(agent, prompt, "Test_Provider", "test-model", context=None)
+            )
 
-        chunks = self._collect_chunks(
-            litellm_module.run_stream(agent, prompt, "Test_Provider", "test-model", context=None)
-        )
-
-        self.assertEqual(len(chunks), 3)
-        self.assertEqual(chunks[-1]["type"], "error")
-        litellm_module.frappe.get_doc.assert_not_called()
+            self.assertEqual(len(chunks), 3)
+            self.assertEqual(chunks[-1]["type"], "error")
+            mock_get_doc.assert_not_called()
 
     def test_missing_marker_raises_in_run_stream(self):
         agent = _make_agent()
