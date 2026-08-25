@@ -132,9 +132,22 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         "test_provider" for ``litellm.run()``'s routing check to fire --
         see this module's docstring for the full citation chain.
         """
-        provider = make_ai_provider(provider_name=f"Test_Provider_{frappe.generate_hash(length=6)}")
-        self._track("AI Provider", provider.name)
-        model = make_ai_model(provider=provider.name, model_name="test-model")
+        # MUST be exactly "Test_Provider" (case-insensitively) -- litellm.py's
+        # routing check is `provider.lower() == "test_provider"`, an EXACT
+        # match, not a prefix/substring check. A hash-suffixed unique name
+        # (e.g. "Test_Provider_c0121c") never matches, silently falls
+        # through to a REAL litellm completion attempt against a
+        # non-existent provider, and fails closed -- found by running this
+        # suite against a real bench (litellm's own "unrecognized provider"
+        # error was logged to stderr, not raised where these tests looked).
+        # Idempotent get-or-create + reuse across test methods, since the
+        # docname is fixed and AI Provider enforces a unique provider_name.
+        if frappe.db.exists("AI Provider", "Test_Provider"):
+            provider = frappe.get_doc("AI Provider", "Test_Provider")
+        else:
+            provider = make_ai_provider(provider_name="Test_Provider")
+            self._track("AI Provider", provider.name)
+        model = make_ai_model(provider=provider.name, model_name=f"test-model-{frappe.generate_hash(length=6)}")
         self._track("AI Model", model.name)
 
         agent_overrides.setdefault(
@@ -298,10 +311,11 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         run = frappe.get_doc("Agent Run", run_id)
         self.assertEqual(run.status, "Failed")
         self.assertTrue(run.error_message)
-        self.assertIn(
-            "The AI provider could not complete this request for test-model.",
-            run.error_message,
-        )
+        # The persisted message includes the "<provider>/<model>" routing
+        # prefix (e.g. "for Test_Provider/test-model-<hash>."), not just the
+        # bare model name -- assert the stable substring only.
+        self.assertIn("The AI provider could not complete this request for", run.error_message)
+        self.assertIn("test-model", run.error_message)
 
     # -- AGENT-RUN-004 ------------------------------------------------------
 
