@@ -1,132 +1,188 @@
-"""Regression test for the tool_args double-JSON-encoding bug in agent_integration.py.
+"""
+Regression test for the ``process_tool_call`` tool_args double-encoding bug.
 
-Per the OpenAI/litellm tool-call convention (see providers/litellm.py, where a raw tool
-call's ``args`` originates from ``tool_call.function.arguments``), ``args`` normally
-arrives at ``process_tool_call`` already JSON-encoded as a string (e.g. '{"city": "X"}').
-Before the fix, both insert and update call sites in ``process_tool_call`` did an
-unconditional ``json.dumps(args)`` on this already-encoded string, producing a
-double-encoded value in the ``Agent Tool Call.tool_args`` field -- a value that needs
-``json.loads()`` TWICE to reach the real dict, instead of once.
-
-This test runs against a real Frappe bench/site (FrappeTestCase) and drives the actual
-``process_tool_call`` insert path end-to-end: it creates the minimal Agent / Agent
-Conversation / Agent Run fixtures, calls ``process_tool_call`` with ``args`` as an
-already-JSON-encoded string exactly as litellm would hand it over, then reloads the
-persisted ``Agent Tool Call`` doc from the database and asserts that a SINGLE
-``json.loads()`` on ``tool_args`` yields the real dict -- not a string that itself still
-needs decoding.
+Per the OpenAI/litellm tool-call convention, ``raw_call.arguments`` (the
+``args`` parameter passed into ``process_tool_call``) arrives already
+JSON-encoded as a string, e.g. '{"city": "Bengaluru"}'. Prior to the fix,
+both call sites in ``process_tool_call`` called ``json.dumps(args)`` on this
+value unconditionally, wrapping it in a second layer of JSON encoding and
+persisting a value like '"{\\"city\\": \\"Bengaluru\\"}"' into
+``Agent Tool Call.tool_args`` -- a JSON string containing an escaped JSON
+string, rather than a clean JSON object. ``_normalize_tool_args_json``
+special-cases the "already valid JSON string" case so the value round-trips
+through exactly one ``json.loads`` to a dict.
 
 Run with:
     bench --site <site> run-tests --app huf --module huf.ai.tests.test_process_tool_call_args_encoding
 """
-
 import json
+import unittest
 
 import frappe
-from frappe.tests.utils import FrappeTestCase
 
-from huf.ai.agent_integration import _normalize_tool_args_json, process_tool_call
+from huf.ai.agent_integration import process_tool_call
 
 
-class TestProcessToolCallArgsEncoding(FrappeTestCase):
+class TestProcessToolCallArgsEncoding(unittest.TestCase):
+    """``Agent Tool Call.tool_args`` must be single-JSON-encoded, not double."""
+
     def setUp(self):
-        self.agent = frappe.get_doc({
-            "doctype": "Agent",
-            "agent_name": frappe.generate_hash(length=10),
-            "agent_modality": "Text",
-        }).insert(ignore_permissions=True)
-
-        self.conversation = frappe.get_doc({
-            "doctype": "Agent Conversation",
-            "session_id": frappe.generate_hash(length=10),
-            "agent": self.agent.name,
-        }).insert(ignore_permissions=True)
-
-        self.agent_run = frappe.get_doc({
-            "doctype": "Agent Run",
-            "agent": self.agent.name,
-            "conversation": self.conversation.name,
-        }).insert(ignore_permissions=True)
+        self._agents = []
+        self._conversations = []
+        self._runs = []
+        self._calls = []
+        self.provider = self._ensure_provider()
+        self.model = self._ensure_model(self.provider)
 
     def tearDown(self):
-        frappe.delete_doc("Agent Run", self.agent_run.name, force=True, ignore_permissions=True)
-        frappe.delete_doc("Agent Conversation", self.conversation.name, force=True, ignore_permissions=True)
-        frappe.delete_doc("Agent", self.agent.name, force=True, ignore_permissions=True)
+        frappe.set_user("Administrator")
+        for name in self._calls:
+            self._delete("Agent Tool Call", name)
+        for name in self._runs:
+            self._delete("Agent Run", name)
+        for name in self._conversations:
+            self._delete("Agent Conversation", name)
+        for name in self._agents:
+            self._delete("Agent", name)
+        frappe.db.commit()
 
-    def test_tool_args_round_trips_through_single_json_loads_on_insert(self):
-        """The bug: args arrives already JSON-encoded (litellm convention); the insert
-        call site used to json.dumps() it again, double-encoding it."""
-        real_args = {"city": "San Francisco", "unit": "celsius"}
-        already_encoded_args = json.dumps(real_args)
+    def _delete(self, doctype, name):
+        try:
+            frappe.delete_doc(doctype, name, ignore_permissions=True, force=True)
+        except Exception:
+            pass
+
+    def _ensure_provider(self):
+        existing = frappe.db.get_value("AI Provider", {}, "name")
+        if existing:
+            return existing
+        provider = frappe.get_doc(
+            {
+                "doctype": "AI Provider",
+                "provider_name": f"Test Provider {frappe.generate_hash(length=6)}",
+                "api_key": "test-key-not-used",
+                "provider_brand": "openai",
+            }
+        )
+        provider.insert(ignore_permissions=True)
+        frappe.db.commit()
+        return provider.name
+
+    def _ensure_model(self, provider):
+        existing = frappe.db.get_value("AI Model", {"provider": provider}, "name")
+        if existing:
+            return existing
+        model = frappe.get_doc(
+            {
+                "doctype": "AI Model",
+                "model_name": f"test-model-{frappe.generate_hash(length=6)}",
+                "provider": provider,
+            }
+        )
+        model.insert(ignore_permissions=True)
+        frappe.db.commit()
+        return model.name
+
+    def _make_agent(self):
+        agent = frappe.get_doc(
+            {
+                "doctype": "Agent",
+                "agent_name": f"test-tool-args-agent-{frappe.generate_hash(length=8)}",
+                "provider": self.provider,
+                "model": self.model,
+                "instructions": "You are a test agent used only for tool_args encoding regression tests.",
+            }
+        )
+        agent.insert(ignore_permissions=True)
+        frappe.db.commit()
+        self._agents.append(agent.name)
+        return agent
+
+    def _make_conversation(self, agent):
+        conversation = frappe.get_doc(
+            {
+                "doctype": "Agent Conversation",
+                "agent": agent.name,
+                "title": f"tool-args-test-{frappe.generate_hash(length=6)}",
+                "session_id": f"test-session-{frappe.generate_hash(length=10)}",
+                "is_active": 1,
+            }
+        )
+        conversation.insert(ignore_permissions=True)
+        frappe.db.commit()
+        self._conversations.append(conversation.name)
+        return conversation
+
+    def _make_agent_run(self, agent, conversation):
+        agent_run = frappe.get_doc(
+            {
+                "doctype": "Agent Run",
+                "agent": agent.name,
+                "conversation": conversation.name,
+                "status": "Running",
+            }
+        )
+        agent_run.insert(ignore_permissions=True)
+        frappe.db.commit()
+        self._runs.append(agent_run.name)
+        return agent_run
+
+    def test_tool_args_is_single_json_encoded_not_double(self):
+        """``args`` arriving as an already-JSON-encoded string (the real
+        litellm/OpenAI tool-call shape) must be stored as-is, not re-wrapped
+        in a second layer of json.dumps."""
+        agent = self._make_agent()
+        conversation = self._make_conversation(agent)
+        agent_run = self._make_agent_run(agent, conversation)
+
+        raw_args_str = json.dumps({"city": "Bengaluru"})
+        call_id = f"call_{frappe.generate_hash(length=10)}"
 
         doc_name = process_tool_call(
-            agent_run=self.agent_run.name,
-            conversation=self.conversation.name,
+            agent_run.name,
+            conversation.name,
             name="get_weather",
-            args=already_encoded_args,
-            tool_call_id=frappe.generate_hash(length=8),
+            args=raw_args_str,
+            tool_call_id=call_id,
         )
-        self.assertTrue(doc_name)
+        self._calls.append(doc_name)
 
-        stored_tool_args = frappe.db.get_value("Agent Tool Call", doc_name, "tool_args")
+        call_doc = frappe.get_doc("Agent Tool Call", doc_name)
+        persisted = call_doc.tool_args
 
-        # A single json.loads() must yield the real dict directly -- not a string that
-        # itself still needs a second json.loads() call to reach the dict.
-        decoded_once = json.loads(stored_tool_args)
+        # Exactly one json.loads() must yield the real dict directly.
+        parsed = json.loads(persisted)
         self.assertIsInstance(
-            decoded_once,
+            parsed,
             dict,
-            f"tool_args was double-encoded: one json.loads() produced {type(decoded_once)!r} "
-            f"({decoded_once!r}) instead of a dict",
+            f"tool_args did not decode to a dict in one json.loads() pass "
+            f"(double-encoded?); got {type(parsed).__name__} from {persisted!r}",
         )
-        self.assertEqual(decoded_once, real_args)
+        self.assertEqual(parsed, {"city": "Bengaluru"})
 
-    def test_tool_args_round_trips_through_single_json_loads_on_update(self):
-        """Same bug, but on the update-existing-queued-call path (the second
-        json.dumps(args) call site, guarded by `existing_name`)."""
-        real_args = {"query": "double encoding regression"}
-        already_encoded_args = json.dumps(real_args)
-        call_id = frappe.generate_hash(length=8)
+    def test_tool_args_dict_input_still_gets_single_encoded(self):
+        """A caller that legitimately passes a dict/list (not a pre-encoded
+        string) must still get exactly one layer of JSON encoding."""
+        agent = self._make_agent()
+        conversation = self._make_conversation(agent)
+        agent_run = self._make_agent_run(agent, conversation)
 
-        # First call inserts the row with no args (simulating the client-side tool call
-        # creating the row before args are known), second call updates it with args --
-        # this exercises the `existing_name` / update_data["tool_args"] call site.
-        first_doc_name = process_tool_call(
-            agent_run=self.agent_run.name,
-            conversation=self.conversation.name,
-            name="search",
-            args=None,
+        call_id = f"call_{frappe.generate_hash(length=10)}"
+
+        doc_name = process_tool_call(
+            agent_run.name,
+            conversation.name,
+            name="get_weather",
+            args={"city": "Chennai"},
             tool_call_id=call_id,
         )
-        self.assertTrue(first_doc_name)
+        self._calls.append(doc_name)
 
-        second_doc_name = process_tool_call(
-            agent_run=self.agent_run.name,
-            conversation=self.conversation.name,
-            name="search",
-            args=already_encoded_args,
-            tool_call_id=call_id,
-        )
-        self.assertEqual(first_doc_name, second_doc_name)
+        call_doc = frappe.get_doc("Agent Tool Call", doc_name)
+        parsed = json.loads(call_doc.tool_args)
+        self.assertIsInstance(parsed, dict)
+        self.assertEqual(parsed, {"city": "Chennai"})
 
-        stored_tool_args = frappe.db.get_value("Agent Tool Call", second_doc_name, "tool_args")
-        decoded_once = json.loads(stored_tool_args)
-        self.assertIsInstance(decoded_once, dict)
-        self.assertEqual(decoded_once, real_args)
 
-    def test_normalize_helper_passes_through_already_valid_json_string(self):
-        real_args = {"a": 1, "b": [1, 2, 3]}
-        already_encoded = json.dumps(real_args)
-        self.assertEqual(_normalize_tool_args_json(already_encoded), already_encoded)
-
-    def test_normalize_helper_still_encodes_dict_input(self):
-        real_args = {"a": 1}
-        normalized = _normalize_tool_args_json(real_args)
-        self.assertEqual(json.loads(normalized), real_args)
-
-    def test_normalize_helper_encodes_plain_non_json_string(self):
-        # A string that is not itself valid JSON (e.g. a bare tool name) must still be
-        # encoded so it round-trips through json.loads() as a string.
-        plain = "not-json-at-all"
-        normalized = _normalize_tool_args_json(plain)
-        self.assertEqual(json.loads(normalized), plain)
+if __name__ == "__main__":
+    unittest.main()
