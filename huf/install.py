@@ -104,6 +104,7 @@ def after_install():
     create_demo_ai_providers()
     create_demo_ai_models()
     create_hub_orchestrator_agent()
+    create_design_system_skill()
     create_meeting_summary_agent()
     create_meeting_recorder_app()
     create_image_generation_tool()
@@ -198,6 +199,11 @@ def after_migrate():
 		create_hub_orchestrator_agent()
 	except Exception as e:
 		logger.warning(f"Failed to seed Hub Orchestrator agent after migrate: {e!s}")
+
+	try:
+		create_design_system_skill()
+	except Exception as e:
+		logger.warning(f"Failed to seed HUF Design System Reference skill after migrate: {e!s}")
 
 	try:
 		create_meeting_summary_agent()
@@ -529,6 +535,20 @@ def create_hub_orchestrator_agent():
 		_create()
 	except Exception as e:
 		logger.warning(f"Failed to seed Hub Orchestrator agent: {e!s}")
+
+
+def create_design_system_skill():
+	"""
+	Idempotent: seed the "HUF Design System Reference" Skill (list_app_components /
+	render_app_component reference) and attach it to Hub Orchestrator.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.app_seeding.design_system_skill import create_design_system_skill as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed HUF Design System Reference skill: {e!s}")
 
 
 MEETING_SUMMARY_AGENT_NAME = "Meeting Summary Agent"
