@@ -123,8 +123,8 @@ def resolve_embedding_config(knowledge_source: str) -> dict[str, Any]:
 	Resolve embedding configuration from a Knowledge Source document.
 
 	Reads the embedding_model, vector_dimension, and embedding_provider fields
-	from the Knowledge Source DocType and resolves the API key from the linked
-	AI Provider.
+	from the Knowledge Source DocType and resolves the API key and API base from
+	the linked AI Provider.
 
 	Args:
 		knowledge_source: Name of the Knowledge Source document.
@@ -143,17 +143,25 @@ def resolve_embedding_config(knowledge_source: str) -> dict[str, Any]:
 	if source.embedding_provider:
 		provider = frappe.get_doc("AI Provider", source.embedding_provider)
 		api_key = provider.get_password("api_key") if provider.api_key else None
-		api_base = getattr(provider, "api_base", None) or None
-		# Fallback: local LLM providers use url+port instead of api_base
+		# Precedence: api_base_url field > url+port (local LLM) > site_config fallback
+		api_base = (getattr(provider, "api_base_url", None) or "").strip() or None
 		if not api_base and getattr(provider, "is_local_llm", False):
-			url = getattr(provider, "url", None)
-			port = getattr(provider, "port", None)
+			url = (getattr(provider, "url", None) or "").strip() or None
+			port = str(getattr(provider, "port", None) or "").strip() or None
 			if url:
-				api_base = f"{url}:{port}" if port else url
+				url = url.rstrip("/")
+				api_base = f"{url}:{port}" if port and not url.endswith(f":{port}") else url
 
 	# Fallback to site_config for Ollama
 	if not api_base:
 		api_base = frappe.conf.get("ollama_api_base") or None
+
+	# LiteLLM requires a provider-prefixed model identifier (e.g. "ollama/nomic-embed-text").
+	# If the stored model name is not already prefixed, prepend the linked provider's brand.
+	if model and "/" not in model and source.embedding_provider:
+		provider_brand = frappe.db.get_value("AI Provider", source.embedding_provider, "provider_brand")
+		if provider_brand:
+			model = f"{provider_brand}/{model}"
 
 	return {
 		"model": model,

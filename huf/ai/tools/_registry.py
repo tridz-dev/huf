@@ -1841,6 +1841,22 @@ DOCUMENT_ARTIFACT_TOOLS = [
 	},
 ]
 
+
+CODE_EXECUTION_TOOLS = [
+	{
+		"tool_name": "run_python",
+		"description": (
+			"Execute sandboxed Python code inside a restricted subprocess. "
+			"Requires the agent to have code execution enabled and an Execution Profile selected."
+		),
+		"function_path": "huf.ai.tools.code_execution.run_python",
+		"category": "Code Execution",
+		"parameters": [
+			_p("code", required=True, description="Python source code to execute"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -1855,6 +1871,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS
 	+ DOCUMENT_ARTIFACT_TOOLS
+	+ CODE_EXECUTION_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

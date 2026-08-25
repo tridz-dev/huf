@@ -124,6 +124,8 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_voice_config()
+        self._validate_max_upload_size()
         self._validate_skills()
         self._validate_starter_prompts()
         self._validate_allowed_users_and_roles()
@@ -363,6 +365,48 @@ class Agent(Document):
                     _("Selected STT Model does not support modality: Transcription"),
                     title=_("Invalid Model Capability"),
                 )
+
+    def _validate_voice_config(self):
+        """Ensure voice_config is valid JSON when voice is enabled."""
+        if not getattr(self, "voice_enabled", 0):
+            return
+
+        raw_config = getattr(self, "voice_config", None)
+        if not raw_config:
+            return
+
+        try:
+            json.loads(raw_config)
+        except (TypeError, ValueError):
+            frappe.throw(
+                _("Voice Configuration must be valid JSON."),
+                title=_("Invalid Voice Configuration"),
+            )
+
+    def _validate_max_upload_size(self):
+        """Reject a negative Max Upload Size (MB).
+
+        The `non_negative: 1` DocType constraint on this Int field is a UI
+        hint only (grays out the minus sign / shows a warning in Desk) — it is
+        not enforced by `Document.save()` for a value set programmatically
+        (e.g. via `frappe.get_doc(...).save()` or the REST API), so an
+        explicit check is required here. This mirrors the same pattern used
+        for other `non_negative` fields in this codebase, e.g.
+        `KnowledgeSource.validate_vector_settings` and
+        `ExecutionProfile.validate`, both of which also re-check in Python
+        despite already being marked `non_negative` in their DocType JSON.
+
+        A negative value here would silently break the upload-size gate in
+        `huf.ai.agent_chat`: `min(max_upload_size_mb, 25)` would pick the
+        negative value, producing a negative byte ceiling that makes every
+        upload appear to exceed the limit.
+        """
+        max_upload_size_mb = getattr(self, "max_upload_size_mb", None)
+        if max_upload_size_mb is not None and max_upload_size_mb < 0:
+            frappe.throw(
+                _("Max Upload Size (MB) cannot be negative."),
+                title=_("Invalid Upload Size"),
+            )
 
     def _validate_prompt_caching(self):
         if not self.model:
