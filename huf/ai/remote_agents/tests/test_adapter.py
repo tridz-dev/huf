@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 import sys
 from typing import Any
 
@@ -154,3 +155,56 @@ class TestRemoteAgentAdapterABC:
 	def test_abstract_methods(self):
 		with pytest.raises(TypeError):
 			RemoteAgentAdapter()
+
+
+class TestAcpStdioAdapterAgainstRealPeer:
+	"""Real E2E for the production adapter class (not the raw AcpClient, not a fake server).
+
+	This is the exact class huf.ai.remote_agents.tool_handler / execute_remote_tool
+	constructs when a Remote Agent Connection resolves to protocol_type=acp_stdio — so a
+	pass here is real evidence the P3.2 client-side code path works against a live,
+	independent ACP implementation, not just against our own fake-server test double.
+
+	Uses opencode acp rather than kimi acp: kimi's account backing this workspace hit its
+	billing-cycle usage limit (see test_client.py's now-skipping
+	test_client_prompt_against_real_kimi), so this is the peer that's actually available.
+	"""
+
+	@pytest.mark.skipif(shutil.which("opencode") is None, reason="opencode CLI not installed")
+	def test_fetch_manifest_against_real_opencode(self):
+		adapter = AcpStdioAdapter(
+			connection_name="e2e-opencode",
+			launch_command="opencode",
+			launch_args=["acp"],
+			timeout=30,
+		)
+
+		async def _run():
+			return await adapter.fetch_manifest()
+
+		manifest = asyncio.run(_run())
+		assert manifest["server_name"] == "OpenCode"
+		assert manifest["protocol_version"] == 1
+		assert manifest["raw_manifest"]["agentInfo"]["name"] == "OpenCode"
+
+	@pytest.mark.skipif(shutil.which("opencode") is None, reason="opencode CLI not installed")
+	def test_recursion_guard_rejects_before_spawning_real_process(self):
+		"""The recursion guard must reject a self-referential call chain BEFORE spawning
+		the external process — not after. Passing call_chain=[the hop we're about to make]
+		simulates "this call already happened once" and asserts create_run() short-circuits
+		to a structured error dict rather than actually launching a second opencode process."""
+		adapter = AcpStdioAdapter(
+			connection_name="e2e-opencode",
+			launch_command="opencode",
+			launch_args=["acp"],
+			timeout=30,
+			call_chain=["acp:e2e-opencode:default"],
+		)
+
+		async def _run():
+			return await adapter.create_run("default", {"prompt": "should never reach opencode"})
+
+		result = asyncio.run(_run())
+		assert result["status"] == "error"
+		assert result["error"] == "recursive_call"
+		assert result["run_id"] is None

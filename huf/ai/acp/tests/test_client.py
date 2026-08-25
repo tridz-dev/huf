@@ -120,3 +120,26 @@ def test_client_prompt_against_real_kimi() -> None:
 
 	assert isinstance(response, str)
 	assert response.strip()
+
+
+@pytest.mark.skipif(shutil.which("opencode") is None, reason="opencode CLI not installed")
+def test_client_prompt_against_real_opencode() -> None:
+	"""Second live ACP peer, independent of kimi's account/quota.
+
+	kimi and opencode are both real, independent ACP implementations (kimi-code,
+	OpenCode) — this test exists specifically so the real-peer contract isn't
+	dependent on a single vendor's billing cycle. Added 2026-08-25 after
+	test_client_prompt_against_real_kimi started skipping on a 403 quota error;
+	this one hit a live opencode acp process and got a genuine response instead.
+	"""
+
+	async def _run() -> str:
+		return await run_acp_prompt(["opencode", "acp"], "Say hello and stop.", timeout=20.0)
+
+	try:
+		response = asyncio.run(_run())
+	except Exception as exc:
+		pytest.skip(f"opencode acp not functional in this environment: {exc}")
+
+	assert isinstance(response, str)
+	assert response.strip()

@@ -122,7 +122,7 @@ class AcpClient:
 		"""Call ``session/new`` and store the returned session id."""
 		params: dict[str, Any] = {
 			"cwd": cwd or os.getcwd(),
-			"mcpServers": mcp_servers if mcp_servers is not None else {},
+			"mcpServers": mcp_servers if mcp_servers is not None else [],
 		}
 		result = await self._transport.call(METHOD_SESSION_NEW, params, timeout=self.timeout)
 		self._session_id = result.get("sessionId")
