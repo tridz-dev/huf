@@ -9,8 +9,11 @@ test.describe('Agents', () => {
     // page title itself is the stable render signal now.
     await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
 
-    // At least one agent card should be present on a bench that already has agents.
-    const firstAgentCard = page.locator('a, [role="button"], div').filter({ hasText: /Test New UI/i }).first();
+    // At least one agent card should be present on a bench that already has
+    // agents. "Test New UI" is not a seeded agent on this bench (confirmed
+    // via frappe.client.get_list); "Demo Assistant" is the seeded agent
+    // that actually exists.
+    const firstAgentCard = page.locator('a, [role="button"], div').filter({ hasText: /Demo Assistant/i }).first();
     if (await firstAgentCard.count()) {
       await firstAgentCard.click();
       await expect(page).toHaveURL(/\/huf\/agents\//);

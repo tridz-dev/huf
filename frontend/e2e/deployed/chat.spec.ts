@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-const TEST_AGENT = process.env.E2E_TEST_AGENT || 'Test New UI';
+// 'Test New UI' is not a seeded agent on this bench (confirmed via
+// frappe.client.get_list against the live site — only "_Test P31 Agent
+// c8b0c902", "_TestAgent", "Demo Assistant", and "Hub Orchestrator" exist).
+// "Demo Assistant" is enabled and has a model configured, so it actually
+// runs a response instead of failing with "Could not find Agent".
+const TEST_AGENT = process.env.E2E_TEST_AGENT || 'Demo Assistant';
 
 test.describe('Chat flow', () => {
   test('starting a new chat and getting a response', async ({ page }) => {
@@ -36,16 +41,17 @@ test.describe('Chat flow', () => {
   test('existing conversation history loads', async ({ page }) => {
     await page.goto('chat');
 
-    // ChatPageV2 has no page-level "Chat" heading — the chat rail's "New
-    // chat" control (ChatRailNav.tsx) is the stable render signal instead.
-    await expect(page.getByText('New chat')).toBeVisible();
+    // ChatPageV2 has no page-level "Chat" heading — the chat rail nav's
+    // "New" link (ChatRailNav.tsx, to /chat/new) is the stable render
+    // signal instead.
+    await expect(page.getByRole('link', { name: 'New' })).toBeVisible();
 
     // "Recents" is a collapsible section header (a plain button, not a
     // tab role — see SectionHeader in ChatRailHistory.tsx) and is expanded
-    // by default, so the conversation list should already be visible.
-    const recentsSection = page.getByText('Recents', { exact: true });
-    if (await recentsSection.count()) {
-      await expect(page.getByText(/ago$/).first()).toBeVisible({ timeout: 10000 });
-    }
+    // by default, so the conversation list (or its "No conversations yet"
+    // empty state) should already be visible without clicking anything.
+    await expect(
+      page.getByText(/ago$/).first().or(page.getByText('No conversations yet')),
+    ).toBeVisible({ timeout: 10000 });
   });
 });

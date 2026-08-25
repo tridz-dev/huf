@@ -2,7 +2,13 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Dashboard', () => {
   test('loads with metrics and tabs', async ({ page }) => {
-    await page.goto('');
+    // The root path ('') now renders HubSimplePage, a distinct landing page
+    // (see App.tsx: path="/" -> HubSimplePage, path="/dashboard" -> HomePage
+    // with the metrics/tabs dashboard). UnifiedLayout also defaults the
+    // sidebar to collapsed icon-only on '/' specifically
+    // (defaultOpen = location.pathname !== '/'), which is why nav links had
+    // no accessible text when this test navigated to root.
+    await page.goto('dashboard');
 
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     // Metric labels are sentence case in the current UI (HomePage.tsx),
@@ -16,7 +22,7 @@ test.describe('Dashboard', () => {
   });
 
   test('sidebar navigation reaches core pages', async ({ page }) => {
-    await page.goto('');
+    await page.goto('dashboard');
 
     await page.getByRole('link', { name: 'Agents', exact: true }).click();
     await expect(page).toHaveURL(/\/huf\/agents$/);
