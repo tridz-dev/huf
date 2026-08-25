@@ -45,7 +45,22 @@ from unittest.mock import MagicMock
 # huf/ai/tests/conftest.py stubs sys.modules['frappe'] with a MagicMock when
 # frappe isn't importable (no bench available). Do the same defensively here
 # so this file can also be run outside that conftest's collection scope.
-if "frappe" not in sys.modules:
+#
+# IMPORTANT: gate on whether the REAL package is importable, not merely on
+# whether something has already populated sys.modules['frappe']/['litellm'].
+# Under `bench run-tests`, this file can be the first thing to import
+# `litellm` in the whole process (nothing else may have done `import litellm`
+# yet at test-collection time) - a "not in sys.modules" check is true even
+# though the real, installed package is perfectly importable, and a naive
+# stub then overwrites sys.modules with a bare MagicMock for the rest of the
+# process, breaking every subsequent real `from litellm import
+# RateLimitError` (a stubbed RateLimitError has no custom __init__, so a real
+# `raise RateLimitError(msg, llm_provider=..., model=...)` call anywhere else
+# in the process fails with "takes no keyword arguments"). Found by running
+# this suite against a real bench for the first time.
+try:
+    import frappe  # noqa: F401
+except ImportError:
     frappe_mock = MagicMock()
     frappe_mock.utils = MagicMock()
     frappe_mock._ = lambda x: x
@@ -54,8 +69,11 @@ if "frappe" not in sys.modules:
 
 # `huf.ai.providers.litellm` imports the real `litellm` PyPI package at
 # module scope. Stub it too, so this file stays runnable without a bench
-# (which is where that dependency is actually installed).
-if "litellm" not in sys.modules:
+# (which is where that dependency is actually installed) - but only when the
+# real package genuinely isn't there (see note above).
+try:
+    import litellm  # noqa: F401
+except ImportError:
     litellm_pkg_mock = MagicMock()
     for _exc_name in (
         "InternalServerError",

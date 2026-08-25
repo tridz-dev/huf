@@ -30,7 +30,9 @@ from unittest.mock import MagicMock, patch
 # frappe isn't importable (no bench available). Do the same defensively here
 # so this file can also be run outside that conftest's collection scope -
 # same pattern as test_test_provider.py.
-if "frappe" not in sys.modules:
+try:
+    import frappe  # noqa: F401
+except ImportError:
     frappe_mock = MagicMock()
     frappe_mock._ = lambda x: x
     sys.modules["frappe"] = frappe_mock

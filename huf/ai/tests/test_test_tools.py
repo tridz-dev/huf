@@ -31,7 +31,9 @@ from unittest.mock import MagicMock
 
 # Mirrors huf/ai/tests/conftest.py + test_test_provider.py's defensive stub,
 # so this file is runnable standalone without a bench.
-if "frappe" not in sys.modules:
+try:
+    import frappe  # noqa: F401
+except ImportError:
     frappe_mock = MagicMock()
     frappe_mock.utils = MagicMock()
     frappe_mock._ = lambda x: x
