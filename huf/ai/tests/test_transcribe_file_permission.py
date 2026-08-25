@@ -57,6 +57,7 @@ class TestTranscribeFilePermission(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": f"huf-transcribe-perm-test-agent-{frappe.generate_hash(length=8)}",
 				"agent_modality": "Text",
+				"instructions": "You are a test agent used only for permission regression tests.",
 			}
 		)
 		agent.insert(ignore_permissions=True)
