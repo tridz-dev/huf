@@ -53,8 +53,18 @@ test.describe('Chat flow', () => {
     // tab role — see SectionHeader in ChatRailHistory.tsx) and is expanded
     // by default, so the conversation list (or its "No conversations yet"
     // empty state) should already be visible without clicking anything.
+    //
+    // The rail no longer renders a relative "X ago" timestamp per
+    // conversation (useChatList.ts computes `timestampLabel` via
+    // formatTimeAgo, but nothing in ChatRailHistory/ConversationItem
+    // consumes it), so "/ago$/" never matches current UI. Each history
+    // entry is a link titled "Conversation with <agent>" instead — assert
+    // on that real, currently-rendered element.
     await expect(
-      page.getByText(/ago$/).first().or(page.getByText('No conversations yet')),
+      page
+        .getByRole('link', { name: /^Conversation with /i })
+        .first()
+        .or(page.getByText('No conversations yet')),
     ).toBeVisible({ timeout: 10000 });
   });
 });
