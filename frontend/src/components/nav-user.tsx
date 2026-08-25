@@ -120,8 +120,16 @@ export function NavUser() {
                     className="absolute inset-y-1 bg-ink rounded-full pointer-events-none"
                     style={{
                       width: 'calc((100% - 8px) / 3)',
-                      transform: `translateX(calc(4px + ${SCHEMES.findIndex(s => s.id === colorScheme)} * (100% / 3 - 8px / 3)))`,
-                      transition: 'transform 200ms ease',
+                      // `left`, not `transform: translateX()` — percentages inside
+                      // translateX() resolve against the THUMB's own width (CSS
+                      // Transforms spec), not the track's, so a %-based offset here
+                      // barely moves it (a prior version of this code hit exactly
+                      // that bug: the thumb only slid ~1/3 as far as intended,
+                      // landing between segments instead of under the selected one).
+                      // `left` percentages correctly resolve against the containing
+                      // block (this track), so this actually lands on target.
+                      left: `calc(4px + ${SCHEMES.findIndex(s => s.id === colorScheme)} * (100% / 3 - 8px / 3))`,
+                      transition: 'left 200ms ease',
                     }}
                   />
 
