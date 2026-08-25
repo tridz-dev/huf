@@ -26,3 +26,49 @@ rules:
         # The centralized transaction wrapper itself is allowed to commit.
         - huf/ai/transaction.py
     severity: ERROR
+
+  - id: huf-log-error-positional-fstring-title
+    languages:
+      - python
+    message: >
+      frappe.log_error() maps positional args to (title, message) — the DB column
+      for 'title' has a 140-char limit. Passing a long/dynamic f-string as the
+      FIRST positional argument crashes with a length-validation error instead of
+      logging cleanly, e.g. frappe.log_error(f"Some dynamic message: {e}", "Label").
+      Use keyword arguments with a short static title instead:
+      frappe.log_error(title="Short Static Label", message=f"...dynamic details...").
+      See huf/ai/agent_integration.py (commit 1a43e76c) for the corrected pattern.
+    pattern-either:
+      - pattern: frappe.log_error(f"...", ...)
+      - pattern: frappe.log_error(f"...")
+    paths:
+      include:
+        - huf/**
+    severity: ERROR
+
+  - id: huf-tool-function-missing-whitelist
+    languages:
+      - python
+    message: >
+      Functions in huf/ai/tool_functions.py and huf/ai/test_tools.py are handlers
+      that 'Agent Tool Function' records of type 'Custom Function' resolve via
+      function_path and require to be @frappe.whitelist()-decorated (see
+      AgentToolFunction.validate() in
+      huf/huf/doctype/agent_tool_function/agent_tool_function.py, which calls
+      is_whitelisted(f) and raises at runtime if the function isn't decorated).
+      Add '@frappe.whitelist()' immediately above this function, or prefix its
+      name with '_' if it is a private helper not meant to be wired as a tool.
+    patterns:
+      - pattern: |
+          def $FUNC(...):
+              ...
+      - pattern-not-inside: |
+          @frappe.whitelist(...)
+          def $FUNC(...):
+              ...
+      - pattern-not-regex: '^def _.*'
+    paths:
+      include:
+        - huf/ai/tool_functions.py
+        - huf/ai/test_tools.py
+    severity: WARNING
