@@ -166,7 +166,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
         # permission list -- a real permission grant, not a superuser bypass.
         user = self._make_user(roles=("Huf Manager",), suffix="exp1")
 
-        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user)
+        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user.name)
         allowed_names = [t.name for t in allowed]
         self.assertIn(tool_doc.name, allowed_names)
 
@@ -185,7 +185,7 @@ class TestToolFrameworkP0(IntegrationTestCase):
             "test precondition failed: Huf User unexpectedly has write on AI Provider",
         )
 
-        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user)
+        allowed = PermissionAwareToolRegistry.get_allowed_tools(agent, user.name)
         allowed_names = [t.name for t in allowed]
         self.assertNotIn(tool_doc.name, allowed_names)
 
@@ -295,17 +295,25 @@ class TestToolFrameworkP0(IntegrationTestCase):
         # Also broken *module* path (import error), still None not raise.
         self.assertIsNone(get_function_from_name("huf.ai.this_module_does_not_exist_p33.some_fn"))
 
+        # Note: Agent Tool Function.validate() (agent_tool_function.py:808-814)
+        # eagerly resolves function_path via frappe.get_attr() and throws at
+        # SAVE TIME if it doesn't resolve -- so a broken path can never
+        # actually be persisted as a real DocType record in the first place.
+        # The "silent vanishing" this test is about only applies to
+        # create_function_tool()'s own resilience against an unresolvable
+        # tool_name passed directly (e.g. the underlying function existed at
+        # save time and was later removed/renamed) -- exercised below without
+        # going through doc persistence, which would correctly reject it.
         doc = create_test_tool_doc(
             "deterministic_add",
             tool_name=f"{PREFIX.replace(' ', '_').lower()}_broken_path",
-            function_path=broken_path,
         )
         self._track("Agent Tool Function", doc.name)
 
         tool = create_function_tool(
             name=doc.tool_name,
             description=doc.description,
-            tool_name=doc.function_path,
+            tool_name=broken_path,
             parameters=json.loads(doc.params) if doc.params else {},
             tool_type=doc.types,
         )
