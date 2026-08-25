@@ -35,7 +35,7 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "label": "Artifact Type",
-   "options": "code\ndocument\nmarkdown\nhtml\nsvg\nmermaid\nchart\njsx\nvideo\nimage\nweb-preview\ntext",
+   "options": "code\ndocument\nmarkdown\nhtml\nsvg\nmermaid\nchart\njsx\nvideo\nimage\nweb-preview\ntext\nfrappe-list\nfrappe-form\nfrappe-report",
    "reqd": 1
   },
   {

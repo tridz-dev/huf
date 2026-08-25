@@ -66,6 +66,10 @@ website_route_rules = [
     {"from_route": "/huf/stream/<path:agent_name>", "to_route": "huf/stream"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"},
 
+    # Public developer API (v1) routes must come before the catch-all /huf route
+    {"from_route": "/huf/api/v1", "to_route": "huf/api/v1"},
+    {"from_route": "/huf/api/v1/<path:endpoint>", "to_route": "huf/api/v1"},
+
     # Docs routes must come before the catch-all /huf route
     {"from_route": "/huf/docs", "to_route": "huf/docs"},
     {
@@ -79,7 +83,8 @@ website_route_rules = [
 
 # Register custom page renderer for SSE streaming and docs
 page_renderer = [
-    "huf.ai.agent_stream_renderer.AgentStreamRenderer"
+    "huf.ai.agent_stream_renderer.AgentStreamRenderer",
+    "huf.api.v1.router.ApiV1Router"
 ]
 
 
@@ -276,6 +281,9 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+        ],
+        "*/15 * * * *": [
+            "huf.ai.batch_poll.poll_pending_batch_jobs",
         ]
     },
     "hourly": [

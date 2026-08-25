@@ -69,6 +69,7 @@ const AgentProceduresPage = lazy(() => import('./pages/AgentProceduresPage'));
 const AgentProcedureDetailPageWrapper = lazy(
   () => import('./pages/AgentProcedureDetailPageWrapper')
 );
+const BatchJobsPage = lazy(() => import('./pages/BatchJobsPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
@@ -106,6 +107,7 @@ const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
+const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
@@ -633,6 +635,18 @@ function AppShell() {
             }
           />
           <Route path="/procedures/*" element={<Navigate to="/procedures" replace />} />
+          <Route
+            path="/batch-jobs"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <BatchJobsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
             path="/settings"
@@ -653,6 +667,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GeneralSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/developer"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DeveloperSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

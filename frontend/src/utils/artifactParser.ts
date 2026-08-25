@@ -107,6 +107,9 @@ export function isValidArtifactType(type: string): type is ArtifactType {
 		'markdown',
 		'video',
 		'chart',
+		'frappe-list',
+		'frappe-form',
+		'frappe-report',
 	];
 	return validTypes.includes(type as ArtifactType);
 }
