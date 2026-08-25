@@ -1359,7 +1359,7 @@ def _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, inv
             external_id=external_id,
         )
     except Exception as hook_err:
-        frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+        frappe.log_error(title="Agent Integration Error", message=f"Error in Sub-Agent Failure Hook: {str(hook_err)}")
 
     # 2. Real-Time UI Notification
     frappe.publish_realtime(
@@ -2063,7 +2063,7 @@ def _execute_agent_run(
         log_error_msg = getattr(e, "log_message", error_msg)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
+        frappe.log_error(title="Huf Provider", message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}")
         _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
         # Handle Sub-Agent Failure Lifecycle Hook
@@ -2870,7 +2870,7 @@ async def run_agent_stream(
                         error_msg = _(
                             "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
                         )
-                        frappe.log_error(f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')", "Huf Provider")
+                        frappe.log_error(title="Huf Provider", message=f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')")
                         frappe.db.set_value("Agent Run", run_doc.name, {
                             "status": "Failed",
                             "error_message": error_msg,
@@ -3259,7 +3259,7 @@ async def run_agent_stream(
                 # pulled, bad model prefix) — message is self-explanatory, no
                 # traceback needed. The run is still marked Failed below.
                 log_error_msg = getattr(e, "log_message", error_msg)
-                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
+                frappe.log_error(title="Huf Provider", message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}")
             else:
                 frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             if "ContextWindowExceededError" in error_msg:
