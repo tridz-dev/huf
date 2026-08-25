@@ -80,11 +80,12 @@ class TestProviderModelP0(IntegrationTestCase):
 		# already-inserted row, mirroring how such a record could exist in
 		# practice (e.g. imported/migrated data) without ever having passed
 		# through validate_provider_name() as a new doc.
-		frappe.db.set_value("AI Provider", provider_name, "provider_name", "Existing Provider With Space")
+		space_name = f"Existing Provider With Space {frappe.generate_hash(6)}"
+		frappe.db.set_value("AI Provider", provider_name, "provider_name", space_name)
 		frappe.db.commit()
 
 		reloaded = frappe.get_doc("AI Provider", provider_name)
-		self.assertEqual(reloaded.provider_name, "Existing Provider With Space")
+		self.assertEqual(reloaded.provider_name, space_name)
 
 		# .save() on this now-existing doc must NOT raise — only msgprint-warn.
 		# This is the documented is_new()-conditional asymmetry in
