@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Check, ChevronsUpDown, LogOut, Moon, Sun, Monitor } from "lucide-react"
+import { ChevronsUpDown, LogOut, Moon, Sun, Monitor } from "lucide-react"
 
 import {
   DropdownMenu,
@@ -109,21 +109,34 @@ export function NavUser() {
               <DropdownMenuLabel className="text-xs text-steel-soft px-2 py-1.5 font-normal">
                 Appearance
               </DropdownMenuLabel>
-              {SCHEMES.map(({ id, label, icon: Icon }) => (
-                <DropdownMenuItem
-                  key={id}
-                  onClick={() => handleSchemeChange(id)}
-                  className="flex items-center justify-between"
-                >
-                  <span className="flex items-center">
-                    <Icon className="mr-2 h-4 w-4" />
-                    {label}
-                  </span>
-                  {colorScheme === id && (
-                    <Check className="h-4 w-4 text-steel" />
-                  )}
-                </DropdownMenuItem>
-              ))}
+              <div className="px-2 py-2">
+                <div className="relative flex w-full h-8 rounded-full border border-line bg-panel p-1">
+                  {/* Sliding thumb background */}
+                  <div
+                    className="absolute inset-y-1 bg-ink rounded-full pointer-events-none"
+                    style={{
+                      width: 'calc((100% - 8px) / 3)',
+                      transform: `translateX(calc(4px + ${SCHEMES.findIndex(s => s.id === colorScheme)} * (100% / 3 - 8px / 3)))`,
+                      transition: 'transform 200ms ease',
+                    }}
+                  />
+
+                  {/* Segment buttons */}
+                  {SCHEMES.map(({ id, label, icon: Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleSchemeChange(id)}
+                      className={`relative z-10 flex-1 flex items-center justify-center gap-1 text-xs font-medium transition-colors rounded-[calc(var(--r-full)-2px)] ${
+                        colorScheme === id ? 'text-paper' : 'text-steel'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
