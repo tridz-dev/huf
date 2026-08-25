@@ -442,6 +442,79 @@ ERPNEXT_REPORT_TOOLS = [
         ],
     },
 ]
+FRAPPE_GENERIC_TOOLS = [
+    {
+        "tool_name": "frappe_get_doctype_meta",
+        "description": "Get the field schema for any doctype: fieldname, label, fieldtype, options, reqd, read_only, depends_on, fetch_from. Select fields include their option list; Link fields include the linked doctype; Table fields include one level of child-doctype field schema. Denies User, Role, Role Profile, *Script, Property Setter, File, OAuth*/Integration* doctypes, and Single doctypes.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_get_doctype_meta",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name, e.g. 'Task', 'Project'"),
+        ],
+    },
+    {
+        "tool_name": "frappe_list_records",
+        "description": "List records of any doctype with filters, field selection, and pagination — a generic read, permission- and permlevel-checked. Use frappe_get_doctype_meta first if you don't know the doctype's fields.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_list_records",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("filters", type="json", description="JSON filter dict or list of [fieldname, operator, value] conditions"),
+            _p("fields", type="json", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
+            _p("limit_start", type="integer", description="Offset for pagination (default 0)"),
+            _p("limit_page_length", type="integer", description="Max rows to return (default 20)"),
+            _p("order_by", description="SQL-style order-by clause, e.g. 'modified desc'"),
+        ],
+    },
+    {
+        "tool_name": "frappe_get_record",
+        "description": "Get a single record of any doctype by name, permission- and permlevel-checked.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_get_record",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("name", required=True, description="Document name/ID"),
+        ],
+    },
+    {
+        "tool_name": "frappe_create_record",
+        "description": "Validate a proposed new record for any doctype (permission check, field allowlist, required-field check) and return a DRAFT payload. This does NOT write to the database — the actual create happens client-side, as the logged-in user, through the normal Frappe REST API.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_create_record",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs for the new record"),
+        ],
+    },
+    {
+        "tool_name": "frappe_update_record",
+        "description": "Validate a proposed field update to an existing record of any doctype (permission check, field allowlist) and return a DRAFT payload. This does NOT write to the database — the actual update happens client-side, as the logged-in user, through the normal Frappe REST API.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_update_record",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("name", required=True, description="Document name/ID to update"),
+            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs to change"),
+        ],
+    },
+    {
+        "tool_name": "render_frappe_view",
+        "description": "Fetch data/meta for any doctype and emit it as a frappe-list, frappe-form, or frappe-report <artifact> block for the frontend to render, instead of returning raw JSON. Returns the complete <artifact> tag — relay it verbatim in your response.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_render_frappe_view",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("mode", required=True, description="One of 'list', 'form', 'report'"),
+            _p("filters", type="json", description="JSON filter dict/list (list and report modes)"),
+            _p("fields", type="json", description="JSON list of fieldnames to include"),
+            _p("name", description="Document name (form mode)"),
+            _p("limit_start", type="integer", description="Offset for pagination (list/report modes)"),
+            _p("limit_page_length", type="integer", description="Max rows (list/report modes)"),
+            _p("order_by", description="SQL-style order-by clause"),
+        ],
+    },
+]
+
 GMAIL_TOOLS = [
 	{
 		"tool_name": "gmail_get_emails",
@@ -2124,6 +2197,7 @@ ALL_INTEGRATION_TOOLS = (
 	+ ERPNEXT_CRM_TOOLS
 	+ ERPNEXT_INVENTORY_TOOLS
 	+ ERPNEXT_REPORT_TOOLS
+	+ FRAPPE_GENERIC_TOOLS
 	+ BUILDER_TOOLS
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS

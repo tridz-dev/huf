@@ -103,6 +103,19 @@ class TestMeetingApi(unittest.TestCase):
         self.assertIn("has_more", result)
         self.assertLessEqual(len(result["meetings"]), 2)
 
+    def test_list_meetings_includes_failure_reason(self):
+        name = self._create()
+        doc = frappe.get_doc("Meeting", name)
+        doc.status = "Failed"
+        doc.failed_step = "Model Not Configured"
+        doc.last_error = "No AI model is configured for the Meeting Summary Agent."
+        doc.save(ignore_permissions=True)
+
+        result = meeting_api.list_meetings(status="Failed", limit=50)
+        row = next(m for m in result["meetings"] if m["name"] == name)
+        self.assertEqual(row["failed_step"], "Model Not Configured")
+        self.assertEqual(row["last_error"], "No AI model is configured for the Meeting Summary Agent.")
+
     def test_list_meetings_filters_by_status(self):
         draft = self._create()
         recording = self._create()
@@ -121,11 +134,78 @@ class TestMeetingApi(unittest.TestCase):
         meeting_api.start_recording(name)
         meeting_api.stop_recording(name)
 
-        with patch("frappe.enqueue") as mock_enqueue:
+        with (
+            patch("huf.ai.meetings.meeting_api._agent_is_configured", return_value=True),
+            patch("frappe.enqueue") as mock_enqueue,
+        ):
             result = meeting_api.retry_summary(name)
 
         mock_enqueue.assert_called_once()
         self.assertEqual(result["status"], "Summarizing")
+
+    def test_retry_summary_clears_stale_failure_fields(self):
+        name = self._create()
+        doc = frappe.get_doc("Meeting", name)
+        doc.status = "Failed"
+        doc.failed_step = "Summary"
+        doc.last_error = "provider down"
+        doc.error_log = "[2026-08-24 00:00:00] provider down"
+        doc.save(ignore_permissions=True)
+
+        with (
+            patch("huf.ai.meetings.meeting_api._agent_is_configured", return_value=True),
+            patch("frappe.enqueue"),
+        ):
+            meeting_api.retry_summary(name)
+
+        doc.reload()
+        self.assertFalse(doc.failed_step)
+        self.assertFalse(doc.last_error)
+        self.assertIn("provider down", doc.error_log)
+
+    def test_retry_summary_throws_when_model_not_configured(self):
+        name = self._create()
+
+        with patch("huf.ai.meetings.meeting_api._agent_is_configured", return_value=False):
+            with self.assertRaises(frappe.ValidationError):
+                meeting_api.retry_summary(name)
+
+    def test_retry_chunk_transcription_throws_when_model_not_configured(self):
+        name = self._create()
+        chunk = frappe.get_doc({
+            "doctype": "Meeting Recording Chunk",
+            "meeting": name,
+            "sequence": 0,
+            "upload_status": "Failed",
+        }).insert(ignore_permissions=True)
+
+        with patch("huf.ai.meetings.meeting_api._agent_is_configured", return_value=False):
+            with self.assertRaises(frappe.ValidationError):
+                meeting_api.retry_chunk_transcription(chunk.name)
+
+    def test_retry_chunk_transcription_clears_stale_failure_fields(self):
+        name = self._create()
+        doc = frappe.get_doc("Meeting", name)
+        doc.status = "Failed"
+        doc.failed_step = "Transcription"
+        doc.last_error = "provider down"
+        doc.save(ignore_permissions=True)
+        chunk = frappe.get_doc({
+            "doctype": "Meeting Recording Chunk",
+            "meeting": name,
+            "sequence": 0,
+            "upload_status": "Failed",
+        }).insert(ignore_permissions=True)
+
+        with (
+            patch("huf.ai.meetings.meeting_api._agent_is_configured", return_value=True),
+            patch("frappe.enqueue"),
+        ):
+            meeting_api.retry_chunk_transcription(chunk.name)
+
+        doc.reload()
+        self.assertFalse(doc.failed_step)
+        self.assertFalse(doc.last_error)
 
 
 if __name__ == "__main__":

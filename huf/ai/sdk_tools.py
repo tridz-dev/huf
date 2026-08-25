@@ -227,6 +227,8 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     function_path = "huf.ai.sdk_tools.handle_run_agent"
                 elif function_doc.types == "Attach File to Document":
                     function_path = "huf.ai.sdk_tools.handle_attach_file_to_document"
+                elif function_doc.types == "Send Email":
+                    function_path = "huf.ai.sdk_tools.handle_send_email"
                 elif function_doc.types == "Get Conversation Data":
                     function_path = "huf.ai.sdk_tools.handle_get_conversation_data"
                 elif function_doc.types == "Set Conversation Data":
@@ -263,7 +265,7 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                     del params["additionalProperties"]
 
                 extra_args = {}
-                if function_doc.types == "Attach File to Document":
+                if function_doc.types in ("Attach File to Document", "Send Email"):
                     if function_doc.reference_doctype:
                         extra_args["reference_doctype"] = function_doc.reference_doctype
 
@@ -316,6 +318,38 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
             frappe.logger("huf").debug(
                 f"Error processing function {function_doc.name}: {e!s}"
             )
+
+    if lazy_enabled:
+        # The discovery tools themselves are not something an agent author is
+        # expected to attach via agent_tool - without them the model could
+        # never unlock anything else, so build them unconditionally (same
+        # pattern as the memory tools below): looked up by tool_name from the
+        # Agent Tool Function records synced from LAZY_DISCOVERY_TOOLS
+        # (huf.ai.tools._registry), not gated on the agent's tool list.
+        existing_tool_names = {getattr(t, "name", "") for t in tools}
+        for tool_name in _LAZY_DISCOVERY_TOOL_NAMES:
+            if tool_name in existing_tool_names:
+                continue
+            function_name = frappe.db.get_value("Agent Tool Function", {"tool_name": tool_name}, "name")
+            if not function_name:
+                continue
+            try:
+                function_doc = frappe.get_doc("Agent Tool Function", function_name)
+                params = {}
+                if function_doc.params:
+                    params = json.loads(function_doc.params)
+                tool = create_function_tool(
+                    function_doc.tool_name,
+                    function_doc.description,
+                    function_doc.function_path,
+                    params,
+                    tool_type=function_doc.types,
+                )
+                if tool:
+                    tools.append(tool)
+                    existing_tool_names.add(tool_name)
+            except Exception as e:
+                frappe.logger("huf").debug(f"Error wiring lazy discovery tool {tool_name}: {e!s}")
 
     # Load tools from attached skills (mandatory and optional)
     try:

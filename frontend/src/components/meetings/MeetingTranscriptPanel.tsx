@@ -11,7 +11,7 @@ interface MeetingTranscriptPanelProps {
 }
 
 /** `mm:ss` (or `h:mm:ss` past an hour) elapsed-from-start timestamp for a chunk. */
-function formatElapsed(seconds: number): string {
+export function formatElapsed(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);

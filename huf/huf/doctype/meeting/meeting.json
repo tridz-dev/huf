@@ -22,6 +22,10 @@
   "section_break_context",
   "context_prompted_at",
   "context_completed",
+  "section_break_failure",
+  "failed_step",
+  "last_error",
+  "error_log",
   "is_system_owned"
  ],
  "fields": [
@@ -120,6 +124,32 @@
    "fieldname": "context_completed",
    "fieldtype": "Check",
    "label": "Context Completed"
+  },
+  {
+   "collapsible": 1,
+   "depends_on": "eval:doc.status=='Failed' || doc.error_log",
+   "fieldname": "section_break_failure",
+   "fieldtype": "Section Break",
+   "label": "Failure Details"
+  },
+  {
+   "fieldname": "failed_step",
+   "fieldtype": "Select",
+   "label": "Failed Step",
+   "options": "\nModel Not Configured\nTranscription\nSummary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Long Text",
+   "label": "Error Log",
+   "read_only": 1
   },
   {
    "default": "1",

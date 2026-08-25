@@ -84,6 +84,13 @@ export const buildNavItems = [
     capability: "agent.use",
     badge: "Experimental",
   },
+  {
+    title: "Automations",
+    url: "/automations",
+    icon: Zap,
+    capability: "agent.use",
+    badge: "Experimental",
+  },
 ]
 
 /**
@@ -159,6 +166,7 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
         icon: Users,
         capability: ["users.manage", "roles.manage"],
       },
+      { title: "Developer", url: "/settings/developer", icon: Terminal, capability: null },
     ],
   },
 ]

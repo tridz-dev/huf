@@ -27,11 +27,7 @@ function AutomationFormPageWrapper() {
     }
   }, [automationId, isNew]);
 
-  // No standalone "/automations" registry page exists in this pass (see
-  // this track's CONTEXT.md non-goals) -- there is nowhere useful to link
-  // an "Automations" ancestor crumb back to, so this page's breadcrumb is
-  // just its own name.
-  const breadcrumbs = [{ label: automationName }];
+  const breadcrumbs = [{ label: 'Automations', href: '/automations' }, { label: automationName }];
 
   return (
     <UnifiedLayout breadcrumbs={breadcrumbs}>

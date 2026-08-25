@@ -114,8 +114,12 @@ class TestWeaviateBackend(unittest.TestCase):
 
 		self._previous_site = getattr(frappe.local, "site", None)
 		frappe.local.site = "test_site"
-		# frappe.throw/msgprint and logging need these bound outside a site context.
+		# frappe.throw/msgprint and logging need these bound outside a site context,
+		# and restored because bench run-tests runs inside a real frappe process
+		# whose frappe.local.flags carries state the rest of the suite depends on.
+		self._previous_flags = getattr(frappe.local, "flags", None)
 		frappe.local.flags = frappe._dict()
+		self._previous_message_log = getattr(frappe.local, "message_log", None)
 		frappe.local.message_log = []
 
 		self.patcher_config = patch("huf.ai.knowledge.embedding.resolve_embedding_config")
@@ -145,6 +149,18 @@ class TestWeaviateBackend(unittest.TestCase):
 				del frappe.local.site
 		else:
 			frappe.local.site = self._previous_site
+
+		if self._previous_flags is None:
+			if hasattr(frappe.local, "flags"):
+				del frappe.local.flags
+		else:
+			frappe.local.flags = self._previous_flags
+
+		if self._previous_message_log is None:
+			if hasattr(frappe.local, "message_log"):
+				del frappe.local.message_log
+		else:
+			frappe.local.message_log = self._previous_message_log
 
 	def _initialize(self, config=None, knowledge_source="test_source"):
 		"""Initialize the backend with weaviate-client and the adapter mocked."""
@@ -521,10 +537,18 @@ class TestWeaviateBackendRegistry(unittest.TestCase):
 
 	def setUp(self):
 		self._clear_registry_cache()
-		# frappe.get_attr consults local.flags outside install/uninstall.
+		# frappe.get_attr consults local.flags outside install/uninstall,
+		# and restored because bench run-tests runs inside a real frappe process.
+		self._previous_flags = getattr(frappe.local, "flags", None)
 		frappe.local.flags = frappe._dict()
 
 	def tearDown(self):
+		if self._previous_flags is None:
+			if hasattr(frappe.local, "flags"):
+				del frappe.local.flags
+		else:
+			frappe.local.flags = self._previous_flags
+
 		self._clear_registry_cache()
 
 	def test_weaviate_is_builtin(self):

@@ -31,6 +31,7 @@ const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AutomationFormPageWrapper = lazy(() => import('./pages/AutomationFormPageWrapper'));
+const AutomationsPage = lazy(() => import('./pages/AutomationsPage'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
 const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
@@ -60,6 +61,7 @@ const ChatScheduledPage = lazy(() =>
 const Executions = lazy(() => import('./pages/Executions'));
 const AnalyticsEntityDetailPage = lazy(() => import('./pages/AnalyticsEntityDetailPage'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
+const BatchJobsPage = lazy(() => import('./pages/BatchJobsPage'));
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
 const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
@@ -97,6 +99,7 @@ const HubSimplePage = lazy(() => import('./pages/HubSimplePage'));
 const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
+const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
@@ -209,6 +212,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <AgentFormPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/automations"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AutomationsPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
@@ -566,6 +581,18 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/batch-jobs"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <BatchJobsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route path="/artifacts/*" element={<Navigate to="/executions" replace />} />
           <Route path="/channels/*" element={<Navigate to="/gateways" replace />} />
           <Route
@@ -587,6 +614,18 @@ function AppShell() {
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GeneralSettingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/developer"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DeveloperSettingsPage />
                   </Suspense>
                 </UnifiedLayout>
               </ProtectedRoute>

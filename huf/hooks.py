@@ -66,6 +66,10 @@ website_route_rules = [
     {"from_route": "/huf/stream/<path:agent_name>", "to_route": "huf/stream"},
     {"from_route": "/huf/stream", "to_route": "huf/stream"},
 
+    # Public developer API (v1) routes must come before the catch-all /huf route
+    {"from_route": "/huf/api/v1", "to_route": "huf/api/v1"},
+    {"from_route": "/huf/api/v1/<path:endpoint>", "to_route": "huf/api/v1"},
+
     # Public/guest App routing (Phase 9b, D.9) — must come before the
     # catch-all /huf/<path:app_path> route below.
     {"from_route": "/huf/apps/<path:app_alias>", "to_route": "huf/apps"},
@@ -85,6 +89,7 @@ website_route_rules = [
 page_renderer = [
     "huf.ai.agent_stream_renderer.AgentStreamRenderer",
     "huf.ai.app_public_renderer.HufAppPublicRenderer",
+    "huf.api.v1.router.ApiV1Router",
 ]
 
 
@@ -213,6 +218,11 @@ doc_events = {
         "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
         "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
     },
+    "Automation Trigger": {
+        "after_insert": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "on_update": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+    },
     "AI Provider": {
         "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
     },
@@ -272,6 +282,9 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+        ],
+        "*/15 * * * *": [
+            "huf.ai.batch_poll.poll_pending_batch_jobs",
         ]
     },
     "hourly": [

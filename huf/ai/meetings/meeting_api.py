@@ -15,6 +15,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, now_datetime
 
+from huf.ai.meetings import meeting_summary, meeting_transcription
+from huf.ai.meetings.meeting_transcription import MODEL_NOT_CONFIGURED_MESSAGE, _agent_is_configured
+
 RUNNING_STATUSES = ("Recording", "Paused")
 
 
@@ -201,6 +204,8 @@ def list_meetings(start: int = 0, limit: int = 20, status: str = None, search: s
             "duration_seconds",
             "chunk_count",
             "summary",
+            "failed_step",
+            "last_error",
             "modified",
         ],
         order_by="modified desc",
@@ -228,12 +233,19 @@ def retry_chunk_transcription(chunk_name: str):
         frappe.throw(_("chunk_name is required"))
 
     chunk = frappe.get_doc("Meeting Recording Chunk", chunk_name)
-    _get_meeting(chunk.meeting, "write")
+    meeting = _get_meeting(chunk.meeting, "write")
+
+    if not _agent_is_configured(meeting_transcription.TRANSCRIPTION_AGENT):
+        frappe.throw(_(MODEL_NOT_CONFIGURED_MESSAGE))
 
     chunk.upload_status = "Uploaded"
     chunk.transcription_error = None
     chunk.retry_count = cint(chunk.retry_count) + 1
     chunk.save()
+
+    meeting.failed_step = None
+    meeting.last_error = None
+    meeting.save()
 
     frappe.enqueue(
         "huf.ai.meetings.meeting_transcription.transcribe_meeting_chunk",
@@ -256,7 +268,12 @@ def retry_summary(meeting_name: str):
     """
     meeting = _get_meeting(meeting_name, "write")
 
+    if not _agent_is_configured(meeting_summary.SUMMARY_AGENT):
+        frappe.throw(_(MODEL_NOT_CONFIGURED_MESSAGE))
+
     meeting.status = "Summarizing"
+    meeting.failed_step = None
+    meeting.last_error = None
     meeting.save()
 
     frappe.enqueue(
