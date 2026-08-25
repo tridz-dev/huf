@@ -8,7 +8,9 @@ test.describe('Chat flow', () => {
 
     await page.goto(`chat/new?agent=${encodeURIComponent(TEST_AGENT)}`);
 
-    const textarea = page.getByPlaceholder('Type your message...');
+    // The composer placeholder copy is now "Write a message…" (see
+    // ChatInput.tsx), not "Type your message...".
+    const textarea = page.getByPlaceholder('Write a message…');
     await expect(textarea).toBeVisible();
 
     const prompt = 'Hello, please reply with a short test message.';
@@ -33,12 +35,16 @@ test.describe('Chat flow', () => {
 
   test('existing conversation history loads', async ({ page }) => {
     await page.goto('chat');
-    await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
 
-    // Recents tab should list at least one prior conversation on a bench with history.
-    const recentsTab = page.getByRole('tab', { name: 'Recents' });
-    if (await recentsTab.count()) {
-      await recentsTab.click();
+    // ChatPageV2 has no page-level "Chat" heading — the chat rail's "New
+    // chat" control (ChatRailNav.tsx) is the stable render signal instead.
+    await expect(page.getByText('New chat')).toBeVisible();
+
+    // "Recents" is a collapsible section header (a plain button, not a
+    // tab role — see SectionHeader in ChatRailHistory.tsx) and is expanded
+    // by default, so the conversation list should already be visible.
+    const recentsSection = page.getByText('Recents', { exact: true });
+    if (await recentsSection.count()) {
       await expect(page.getByText(/ago$/).first()).toBeVisible({ timeout: 10000 });
     }
   });

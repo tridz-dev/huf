@@ -5,8 +5,10 @@ test.describe('Dashboard', () => {
     await page.goto('');
 
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
-    await expect(page.getByText('Total Agent Runs')).toBeVisible();
-    await expect(page.getByText('Success Rate')).toBeVisible();
+    // Metric labels are sentence case in the current UI (HomePage.tsx),
+    // not the title case the spec previously assumed.
+    await expect(page.getByText('Total agent runs')).toBeVisible();
+    await expect(page.getByText('Success rate')).toBeVisible();
 
     // Dashboard tabs: Agents / Flows / Executions
     const agentsTab = page.getByRole('tab', { name: /^Agents$/i }).or(page.getByText('Agents', { exact: true }));
