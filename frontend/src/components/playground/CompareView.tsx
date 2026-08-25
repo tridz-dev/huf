@@ -56,8 +56,8 @@ function EditableLabel({ glyph, label, onLabelChange }: EditableLabelProps) {
     <div className="mb-2 flex items-center gap-2">
       <span
         className={cn(
-          'inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] text-[11px] font-medium text-white',
-          isColumnA ? 'bg-ink' : 'bg-signal',
+          'inline-flex h-[18px] w-[18px] items-center justify-center rounded-[6px] text-[11px] font-medium',
+          isColumnA ? 'bg-ink text-paper' : 'bg-signal text-white',
         )}
       >
         {glyph}

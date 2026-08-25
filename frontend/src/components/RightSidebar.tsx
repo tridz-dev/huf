@@ -1242,7 +1242,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
       {scheduleNextRun ? (
         <div className="border-t border-border p-3 bg-card flex items-center gap-2">
-          <div className="flex items-center gap-1.5 min-w-0 rounded-md bg-[#fbfbfd] dark:bg-white/5 px-2 py-1">
+          <div className="flex items-center gap-1.5 min-w-0 rounded-md bg-paper px-2 py-1">
             <Clock className="w-3 h-3 text-muted-foreground shrink-0" />
             <span className="text-[12px] leading-none text-muted-foreground truncate">
               {scheduleNextRun}

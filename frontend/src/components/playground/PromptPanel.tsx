@@ -116,7 +116,7 @@ export function PromptPanel({
                 <span
                   key={index}
                   className={cn(
-                    segment.type === 'removed' && 'bg-red-100 text-red-900 line-through decoration-red-400',
+                    segment.type === 'removed' && 'bg-destructive-tint text-destructive line-through decoration-destructive',
                   )}
                 >
                   {segment.text}
@@ -130,7 +130,7 @@ export function PromptPanel({
               {diff.b.map((segment, index) => (
                 <span
                   key={index}
-                  className={cn(segment.type === 'added' && 'bg-emerald-100 text-emerald-900')}
+                  className={cn(segment.type === 'added' && 'bg-good-tint text-good')}
                 >
                   {segment.text}
                 </span>

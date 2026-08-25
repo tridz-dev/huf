@@ -182,7 +182,7 @@ export function MeetingRecordingPlayer({ chunks }: MeetingRecordingPlayerProps) 
         </button>
       </div>
       {showCaptions && (
-        <div className="flex items-start gap-2 rounded-md bg-ink/85 px-4 py-2 text-center">
+        <div className="flex items-start gap-2 rounded-md bg-black/85 px-4 py-2 text-center">
           <span className="mt-0.5 shrink-0 font-mono text-xs tabular-nums text-white/70" aria-hidden>
             {formatElapsed(currentElapsedSeconds)}
           </span>

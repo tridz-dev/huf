@@ -619,16 +619,16 @@ function AgentSwitcher({
                 align="start"
                 className="w-[300px] rounded-[12px] border-input p-0 shadow-lg"
             >
-                <div className="border-b border-[#f4f4f7] p-2">
+                <div className="border-b border-paper-deep p-2">
                     {/* 8px, not rounded-lg: --r-lg is 14px here, which reads as a pill
                         at 28px tall. Spec 28.4 draws a rounded rectangle. */}
-                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-[#f4f4f7] px-[9px]">
+                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-paper-deep px-[9px]">
                         <Search className="size-[14px] shrink-0 text-steel-soft" />
                         <input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                             placeholder="Search agents"
-                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-[#98989d]"
+                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-steel-soft"
                         />
                     </div>
                 </div>
@@ -658,7 +658,7 @@ function AgentSwitcher({
                                             type="button"
                                             onClick={() => handleSelect(agentItem.name)}
                                             className={
-                                                (isCurrent ? "bg-paper-deep " : "hover:bg-[#f9f9fb] ") +
+                                                (isCurrent ? "bg-paper-deep " : "hover:bg-paper-deep ") +
                                                 (hasModel ? "" : "opacity-55 ") +
                                                 "flex h-[34px] items-center gap-[9px] px-3 text-left"
                                             }

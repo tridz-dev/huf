@@ -143,7 +143,7 @@ export function VoiceCallOverlay({ voiceCall, agentName, onEndCall, onStartCall,
                         <Button
                             type="button"
                             onClick={onStartCall}
-                            className="flex !size-16 items-center justify-center !rounded-full bg-ink p-0 text-white hover:bg-ink/90"
+                            className="flex !size-16 items-center justify-center !rounded-full bg-ink p-0 text-paper hover:bg-ink/90"
                             aria-label="Talk to this agent"
                             title="Talk to this agent"
                         >
