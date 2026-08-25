@@ -68,9 +68,16 @@ class TestFaissBackend(unittest.TestCase):
 		else:
 			frappe.local.site = self._previous_site
 
-		if self._previous_flags is not None:
+		if self._previous_flags is None:
+			if hasattr(frappe.local, "flags"):
+				del frappe.local.flags
+		else:
 			frappe.local.flags = self._previous_flags
-		if self._previous_message_log is not None:
+
+		if self._previous_message_log is None:
+			if hasattr(frappe.local, "message_log"):
+				del frappe.local.message_log
+		else:
 			frappe.local.message_log = self._previous_message_log
 
 	def _initialize(self, config=None, index_exists=False, sidecar=None):
@@ -452,10 +459,19 @@ class TestFaissBackendRegistry(unittest.TestCase):
 
 	def setUp(self):
 		self._clear_registry_cache()
-		# frappe.get_attr consults local.flags outside install/uninstall.
+		# frappe.get_attr consults local.flags outside install/uninstall; restored in
+		# tearDown because bench run-tests runs inside a real process with a real
+		# frappe.local.flags that the rest of the suite depends on.
+		self._previous_flags = getattr(frappe.local, "flags", None)
 		frappe.local.flags = frappe._dict()
 
 	def tearDown(self):
+		if self._previous_flags is None:
+			if hasattr(frappe.local, "flags"):
+				del frappe.local.flags
+		else:
+			frappe.local.flags = self._previous_flags
+
 		self._clear_registry_cache()
 
 	def test_faiss_is_builtin(self):

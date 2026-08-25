@@ -211,6 +211,11 @@ doc_events = {
         "on_update": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
         "on_trash": ["huf.ai.agent_hooks.clear_doc_event_agents_cache", "huf.ai.automation_hooks.clear_doc_event_automation_cache"],
     },
+    "Automation Trigger": {
+        "after_insert": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "on_update": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+        "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
+    },
     "AI Provider": {
         "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
     },
@@ -275,7 +280,8 @@ scheduler_events = {
     },
     "hourly": [
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
-        "huf.ai.mcp_oauth.auto_refresh_oauth_tokens"
+        "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
+        "huf.ai.meetings.meeting_recording.cleanup_stale_recordings"
     ]
 }
 

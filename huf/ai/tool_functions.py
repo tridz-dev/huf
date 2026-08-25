@@ -500,6 +500,92 @@ def _process_single_attachment(doctype, document_id, file_path):
         return None
 
 
+def send_email(
+    to: str | list,
+    subject: str,
+    message: str,
+    reference_doctype: str = None,
+    reference_name: str = None,
+    gateway: str = None,
+):
+    """
+    Send an email using frappe.sendmail, with proper error handling
+
+    Args:
+        to: Recipient email address, or list of addresses
+        subject: Email subject
+        message: Email body (plain text or HTML)
+        reference_doctype: Optional DocType to thread this email against
+        reference_name: Optional document name to thread this email against
+        gateway: Optional Gateway name (provider "Email") to send from --
+            uses that gateway's configured sender address instead of the
+            site's default outgoing Email Account
+    """
+    try:
+        recipients = to if isinstance(to, list) else [to]
+        recipients = [r.strip() for r in recipients if r and isinstance(r, str) and r.strip()]
+
+        if not recipients:
+            return {"success": False, "error": "At least one recipient email address is required"}
+
+        for recipient in recipients:
+            try:
+                frappe.utils.validate_email_address(recipient, throw=True)
+            except frappe.InvalidEmailAddressError:
+                return {"success": False, "error": f"Invalid email address: {recipient}"}
+
+        if not subject:
+            return {"success": False, "error": "Subject is required"}
+
+        if not message:
+            return {"success": False, "error": "Message is required"}
+
+        if reference_doctype and reference_name:
+            if not frappe.db.exists(reference_doctype, reference_name):
+                return {
+                    "success": False,
+                    "error": f"{reference_doctype} {reference_name} not found",
+                }
+
+            if not frappe.has_permission(reference_doctype, "read", doc=reference_name):
+                return {
+                    "success": False,
+                    "error": f"You do not have permission to read {reference_doctype} {reference_name}",
+                    "permission_denied": True,
+                }
+
+        sender = None
+        if gateway:
+            gateway_doc = frappe.get_doc("Gateway", gateway)
+            if gateway_doc.provider != "Email":
+                return {"success": False, "error": f"Gateway {gateway} is not an Email gateway"}
+            if not gateway_doc.is_enabled:
+                return {"success": False, "error": f"Gateway {gateway} is disabled"}
+
+            from huf.ai.gateway_webhook import get_gateway_adapter
+
+            sender = get_gateway_adapter(gateway_doc).sender_email or None
+
+        frappe.sendmail(
+            recipients=recipients,
+            subject=subject,
+            message=message,
+            sender=sender,
+            reference_doctype=reference_doctype,
+            reference_name=reference_name,
+            delayed=True,
+        )
+
+        return {
+            "success": True,
+            "message": f"Email sent to {', '.join(recipients)}",
+            "recipients": recipients,
+        }
+    except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
+        frappe.log_error(f"Error sending email to {to}: {e!s}")
+        return {"success": False, "error": str(e)}
+
+
 def attach_file_to_document(doctype: str, document_id: str, **kwargs):
     """
     Attach multiple files to a document. 

@@ -441,7 +441,7 @@ export function AgentFormPage() {
         reasoning_budget_tokens: undefined,
         reasoning_summary: 'None',
         agent_color: '',
-        show_tool_execution_details: false,
+        show_tool_execution_details: true,
         voice_enabled: false,
         voice_engine: undefined,
         voice_config: '{}',

@@ -68,6 +68,7 @@ TYPE_TO_FUNCTION_PATH: dict[str, str] = {
 	"POST": "huf.ai.http_handler.handle_post_request",
 	"Run Agent": "huf.ai.sdk_tools.handle_run_agent",
 	"Attach File to Document": "huf.ai.sdk_tools.handle_attach_file_to_document",
+	"Send Email": "huf.ai.sdk_tools.handle_send_email",
 	"Get Conversation Data": "huf.ai.sdk_tools.handle_get_conversation_data",
 	"Set Conversation Data": "huf.ai.sdk_tools.handle_set_conversation_data",
 	"Load Conversation Data": "huf.ai.sdk_tools.handle_load_conversation_data",
@@ -98,6 +99,7 @@ REFERENCE_DOCTYPE_PIN_TYPES = frozenset({
 	"Delete Document", "Delete Multiple Documents",
 	"Submit Document", "Cancel Document", "Get Amended Document",
 	"Attach File to Document",
+	"Send Email",
 })
 
 # Bare tool-name aliases usable without a backing Agent Tool Function

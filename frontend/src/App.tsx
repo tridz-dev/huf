@@ -20,6 +20,7 @@ import { ExecutionProfilesHeaderActions } from './components/ExecutionProfilesHe
 import { SSHConnectionsHeaderActions } from './components/SSHConnectionsHeaderActions';
 import { PageLoader } from './components/PageLoader';
 import { DataHeaderActions } from './components/DataHeaderActions';
+import { MeetingsHeaderActions } from './components/meetings/MeetingsHeaderActions';
 import { DataTableBuilderWrapper } from './pages/DataTableBuilderWrapper';
 import { DataTableViewWrapper } from './pages/DataTableViewWrapper';
 import { Toaster } from './components/ui/sonner';
@@ -30,6 +31,7 @@ const AppsPage = lazy(() => import('./pages/AppsPage'));
 const AgentsPage = lazy(() => import('./pages/AgentsPage'));
 const AgentFormPageWrapper = lazy(() => import('./pages/AgentFormPageWrapper'));
 const AutomationFormPageWrapper = lazy(() => import('./pages/AutomationFormPageWrapper'));
+const AutomationsPage = lazy(() => import('./pages/AutomationsPage'));
 const AgentPromptsPage = lazy(() => import('./pages/AgentPromptsPage'));
 const AgentPromptFormPageWrapper = lazy(() => import('./pages/AgentPromptFormPageWrapper'));
 const AgentSummaryPromptsPage = lazy(() => import('./pages/AgentSummaryPromptsPage'));
@@ -57,6 +59,7 @@ const ChatScheduledPage = lazy(() =>
   import('./pages/chat/ChatPlaceholderPages').then((m) => ({ default: m.ChatScheduledPage }))
 );
 const Executions = lazy(() => import('./pages/Executions'));
+const AnalyticsEntityDetailPage = lazy(() => import('./pages/AnalyticsEntityDetailPage'));
 const AgentRunDetailPageWrapper = lazy(() => import('./pages/AgentRunDetailPageWrapper'));
 const AgentContextArtifactsPage = lazy(() => import('./pages/AgentContextArtifactsPage'));
 const AgentContextArtifactDetailPageWrapper = lazy(
@@ -68,6 +71,9 @@ const AgentProcedureDetailPageWrapper = lazy(
 );
 const McpDetailsPageWrapper = lazy(() => import('./pages/McpDetailsPageWrapper'));
 const McpListingPage = lazy(() => import('./pages/McpListingPage'));
+const MeetingsPage = lazy(() => import('./pages/MeetingsPage'));
+const MeetingRecorderPage = lazy(() => import('./pages/MeetingRecorderPage'));
+const MeetingDetailPageWrapper = lazy(() => import('./pages/MeetingDetailPageWrapper'));
 const KnowledgeSourcesPage = lazy(() => import('./pages/KnowledgeSourcesPage'));
 const KnowledgeSourceFormPageWrapper = lazy(() => import('./pages/KnowledgeSourceFormPageWrapper'));
 const MemoryPage = lazy(() => import('./pages/MemoryPage'));
@@ -212,6 +218,18 @@ function AppShell() {
                 <Suspense fallback={<PageLoader />}>
                   <AgentFormPageWrapper />
                 </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/automations"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AutomationsPage />
+                  </Suspense>
+                </UnifiedLayout>
               </ProtectedRoute>
             }
           />
@@ -546,6 +564,19 @@ function AppShell() {
               </ProtectedRoute>
             }
           />
+          <Route path="/analytics" element={<Navigate to="/executions?tab=analytics" replace />} />
+          <Route
+            path="/analytics/:dimension/:entity"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <AnalyticsEntityDetailPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/executions/:runId"
             element={
@@ -785,6 +816,40 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <McpDetailsPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meetings"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout headerActions={<MeetingsHeaderActions />}>
+                  <Suspense fallback={<PageLoader />}>
+                    <MeetingsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meetings/:meetingId/record"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <MeetingRecorderPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meetings/:meetingId"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <MeetingDetailPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }

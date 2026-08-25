@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Play, Pause, Copy, Archive, ExternalLink, Loader2, Workflow } from 'lucide-react';
+import { Plus, Play, Pause, Copy, Archive, ExternalLink, Loader2, Workflow, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -21,8 +22,14 @@ import {
   pauseAutomation,
   resumeAutomation,
   archiveAutomation,
+  getAutomationRuntimeMode,
 } from '@/services/automationApi';
 import type { Automation, AutomationTriggerType } from '@/types/automation.types';
+import {
+  formatAutomationTimestamp,
+  automationStatusBadgeVariant,
+  automationTriggerTypesLabel,
+} from '@/utils/automationDisplay';
 
 interface AutomationsTabProps {
   agentId: string;
@@ -33,43 +40,16 @@ interface AutomationRow extends Automation {
   triggerTypes: AutomationTriggerType[];
 }
 
-const MAX_TRIGGER_TYPES_SHOWN = 2;
-
-function formatTimestamp(value?: string): string {
-  if (!value) return '—';
-  const date = new Date(value.includes(' ') ? value.replace(' ', 'T') : value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-}
-
-function statusBadgeVariant(status: Automation['status']): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'Active':
-      return 'default';
-    case 'Error':
-      return 'destructive';
-    case 'Archived':
-      return 'outline';
-    default:
-      return 'secondary';
-  }
-}
-
-function triggerTypesLabel(types: AutomationTriggerType[]): string {
-  if (types.length === 0) return 'No triggers';
-  const shown = types.slice(0, MAX_TRIGGER_TYPES_SHOWN);
-  const overflow = types.length - shown.length;
-  return overflow > 0 ? `${shown.join(', ')} +${overflow} more` : shown.join(', ');
-}
+const formatTimestamp = formatAutomationTimestamp;
+const statusBadgeVariant = automationStatusBadgeVariant;
+const triggerTypesLabel = automationTriggerTypesLabel;
 
 export function AutomationsTab({ agentId }: AutomationsTabProps) {
   const navigate = useNavigate();
   const [rows, setRows] = useState<AutomationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [runtimeMode, setRuntimeMode] = useState<'new' | 'legacy'>('new');
 
   const loadAutomations = useCallback(async () => {
     setLoading(true);
@@ -92,6 +72,7 @@ export function AutomationsTab({ agentId }: AutomationsTabProps) {
 
   useEffect(() => {
     loadAutomations();
+    getAutomationRuntimeMode().then((response) => setRuntimeMode(response.mode));
   }, [loadAutomations]);
 
   const handleAddAutomation = () => {
@@ -171,6 +152,15 @@ export function AutomationsTab({ agentId }: AutomationsTabProps) {
         </Button>
       </CardHeader>
       <CardContent>
+        {runtimeMode === 'legacy' && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Legacy Automation Runtime Active</AlertTitle>
+            <AlertDescription>
+              This site is running in legacy mode. New Automations defined in this interface will not execute. Contact your administrator to enable the new automation runtime.
+            </AlertDescription>
+          </Alert>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-12 text-steel-soft">
             <Loader2 className="w-5 h-5 animate-spin" />

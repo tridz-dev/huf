@@ -1727,6 +1727,7 @@ def _create_flow_agent_run(flow_run, node: dict, run_kind: str, prompt: str = ""
 			"status": "Started",
 			"prompt": prompt,
 			"flow_run": flow_run.name,
+			"conversation": getattr(flow_run, "conversation", None),
 			"flow_node_id": node.get("id"),
 			"flow_id": flow_run.flow_id,
 			"run_kind": run_kind,

@@ -87,6 +87,21 @@ def run_automation(
 			frappe.ValidationError,
 		)
 
+	# Automatic triggers (Doc Event, Schedule, Webhook, App Event -- anything
+	# that supplies a trigger_name) only run a "live" Automation. Manual runs
+	# (trigger_name=None, from "Run now" or chat) are exempt so a Draft
+	# automation can still be tested before it's activated. Without this
+	# gate, `status` is purely decorative: pause_automation/archive_automation
+	# only ever set `status`, never `disabled`, so a Paused or Archived
+	# automation's triggers would keep firing exactly like an Active one.
+	if trigger_name and automation.status != "Active":
+		frappe.throw(
+			_("Automation '{0}' is not Active (status: {1}) -- resume it to let triggers run.").format(
+				automation_name, automation.status
+			),
+			frappe.ValidationError,
+		)
+
 	if not automation.agent:
 		frappe.throw(
 			_("Automation '{0}' has no agent configured.").format(automation_name),

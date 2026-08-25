@@ -717,18 +717,6 @@ class ConversationManager:
         """Mark conversation as inactive"""
         frappe.db.set_value("Agent Conversation", conversation_name, "is_active", 0)
 
-    def summarize_conversation(self, conversation_name, history, provider, model, agent_name, limit=20, ratio=0.7):
-        """Summarize conversation if it exceeds the limit"""
-        if len(history) <= limit:
-            return None, history
-
-        split_index = int(len(history) * ratio)
-        to_summarize, remaining = safe_history_split(history, split_index)
-
-        summary_prompt = "Summarize the following conversation history concisely, capturing key information, context, and decisions. Maintain the flow of information."
-
-        return to_summarize, remaining
-
     def get_stored_summary(self, conversation_name):
         return frappe.db.get_value("Agent Conversation", conversation_name, "summary")
 
