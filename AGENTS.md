@@ -7,6 +7,54 @@ Huf is a comprehensive Frappe application for creating and managing conversation
 
 The application is built on the Frappe Framework (Python) and uses the standard Frappe directory structure. The core logic for agent integration is located in `huf/ai/`, with a modern React-based frontend providing visual flow building and real-time streaming capabilities.
 
+## Key Working Branches
+
+Seven branches on `tridz-dev/huf` are **key working branches** — long-lived integration lines,
+not feature branches. Base work on them, target PRs at them, and never delete, rename or
+force-push them. Anything else under `refs/heads/` is disposable.
+
+| Branch | Role |
+|--------|------|
+| `develop` | Repository default and primary integration base. |
+| `pre-develop` | Pre-integration line that feature PRs land in before promotion to `develop`. |
+| `pre-dev` | Older pre-integration line, still referenced by sync branches. |
+| `pre-dev-stg` | Staging cut of the pre-dev line, used for live-bench QA sweeps. |
+| `stage-1` | Staged integration line. |
+| `stage-2` | Staged integration line. |
+| `test-1` | Shared test line. |
+
+**Verify a branch exists before you target it.** This list states intent, not live state — being
+"key" has not stopped one from disappearing. A stale `origin/<branch>` remote-tracking ref keeps
+resolving locally long after the branch is gone upstream, and is silently dropped by the next
+`git fetch --prune`, so check the remote directly:
+
+```bash
+git ls-remote --heads origin <branch>          # empty output means it does not exist
+gh api repos/tridz-dev/huf/branches/<branch>   # 404 means it does not exist
+```
+
+### Incident: `pre-develop` and `pre-dev` deleted, 2026-08-25
+
+Both branches were absent from `refs/heads/` on 2026-08-25, with `pre-develop` having received
+PR #660 as recently as 2026-08-24T20:19Z. 55 commits were on `pre-develop` and not on `develop`
+— PRs #638 through #660, including the HUF Meeting Recorder (v1 and wave 2), the voice
+transcript/captions work, the analytics observability rebuild (#645), lazy tool discovery and
+the Automation trigger audit. No remote branch contains that tip (`8e6a8b04`).
+
+Recovery, in order of fidelity:
+
+1. A local clone that still has the tip. `refs/heads/rescue/pre-develop` and tag
+   `rescue/pre-develop-tip-8e6a8b04` were pinned in one on 2026-08-25 — full history, every
+   merge commit. Pin such a ref BEFORE running `git fetch --prune`, which drops the
+   remote-tracking ref that is otherwise the only pointer to it.
+2. `refs/pull/<N>/head` on GitHub still resolves for merged PRs (verified for #649, #657, #660),
+   so each contributing branch survives even though the integration branch does not. This gives
+   the source branches, not the merge result.
+3. Worktrees and disposable benches checked out from the branch.
+
+Re-creating a deleted key branch is a team decision, not an agent's: push it back only once
+someone confirms the deletion was accidental.
+
 ## Repo Layout
 -   `huf/`: The root of the Frappe app.
 -   `doc/` branches: Used for planning, documenting features, and R&D. (e.g., `doc/KnowledgePlan`)
