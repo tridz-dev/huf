@@ -119,7 +119,7 @@ class TestProcessToolCallArgsEncoding(unittest.TestCase):
                 "doctype": "Agent Run",
                 "agent": agent.name,
                 "conversation": conversation.name,
-                "status": "Running",
+                "status": "Started",
             }
         )
         agent_run.insert(ignore_permissions=True)
