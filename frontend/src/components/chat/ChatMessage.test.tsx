@@ -35,9 +35,19 @@ vi.mock('sonner', () => ({
 // `@/lib/frappe-sdk`'s `call`. Mock it so we can assert it is never invoked
 // by the approve/deny buttons, and so the real FrappeApp client (which talks
 // to `window.location.origin`) never gets constructed in this jsdom test.
+//
+// `db.getDocList` must resolve to an array (not the default `vi.fn()`
+// undefined return): ChatMessage now also renders via
+// `useProcedureRunLookup`/`useProcedureRunSummaries`
+// (agentProcedureRunApi.ts's `getProcedureRunsForToolCalls`), added by the
+// Agent Procedure feature merged in from `pre-develop`. That call does
+// `for (const row of rows)` over the resolved value; an unmocked `undefined`
+// throws "rows is not iterable" as an unhandled rejection, which crashes
+// the render for any test with more than one ChatMessage instance mounted
+// (the duplicate-id test below).
 vi.mock('@/lib/frappe-sdk', () => ({
 	call: { post: vi.fn(), get: vi.fn() },
-	db: { getDoc: vi.fn(), getDocList: vi.fn() },
+	db: { getDoc: vi.fn(), getDocList: vi.fn().mockResolvedValue([]) },
 	auth: { getLoggedInUser: vi.fn() },
 	frappe: {},
 }));
@@ -284,7 +294,7 @@ describe('ChatMessage list rendering — duplicate message ids are NOT deduplica
 		});
 
 		render(
-			<>
+			<MemoryRouter>
 				{[duplicated, { ...duplicated }].map((message) => (
 					// React key intentionally NOT unique here (both are
 					// `message.key`), mirroring how ChatMessageList keys its
@@ -298,7 +308,7 @@ describe('ChatMessage list rendering — duplicate message ids are NOT deduplica
 						scrollToBottomAfterPaint={noop}
 					/>
 				))}
-			</>
+			</MemoryRouter>
 		);
 
 		expect(screen.getAllByText('Duplicate content')).toHaveLength(2);
