@@ -639,7 +639,28 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             f"{sorted(_SCENARIO_HANDLERS)}"
         )
 
-    return handler(agent, enhanced_prompt, provider, model, context=context)
+    result = handler(agent, enhanced_prompt, provider, model, context=context)
+    _fill_missing_usage_fields(result)
+    return result
+
+
+def _fill_missing_usage_fields(result):
+    """Backfill usage keys that `litellm.run()` always populates but that
+    scenario handlers above predate (e.g. `peak_context_tokens`, added by
+    the prompt-cache-auto-mode work in `providers/litellm.py` ~line 1494-1495
+    as `max(peak_context_tokens, round_input_tokens)`). `Agent Run.
+    peak_context_tokens` is an Int column with a DB-level `NOT NULL DEFAULT
+    0`; agent_integration.py reads it via `usage_payload.get(...)`, which
+    returns `None` for an absent key, and inserting an explicit `None`
+    overrides that DEFAULT and fails the query with
+    `(1048, "Column 'peak_context_tokens' cannot be null")` -- found by
+    running this suite against a real bench post-merge. A single-round test
+    scenario's peak context is just its own input token count, mirroring
+    the real accounting for a one-round call.
+    """
+    usage = getattr(result, "usage", None)
+    if isinstance(usage, dict) and "peak_context_tokens" not in usage:
+        usage["peak_context_tokens"] = usage.get("input_tokens", 0)
 
 
 # --- Streaming scenarios (`run_stream`) --------------------------------
