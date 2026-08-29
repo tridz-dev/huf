@@ -1,0 +1,81 @@
+name: Live LLM E2E (manual, opt-in)
+
+# Deliberately NOT wired to `pull_request`/`push` — see GOAL.md §29 and
+# docs/testing/CI_TIERS.md: "Avoid live external LLM dependencies in
+# authoritative PR CI"/"Real-provider compatibility should exist as a
+# separate optional/nightly suite". This is that suite: it runs
+# `frontend/e2e/deployed/chat.spec.ts` against a REAL running HUF site with
+# a REAL, currently-credentialed AI Provider, so it makes a real, billed
+# LLM call. Trigger it by hand only when you specifically need proof that a
+# real provider round-trip still works end-to-end (e.g. before a release,
+# or after touching provider/streaming code) — not as a gate on every PR.
+#
+# `new-chat-gets-a-real-reply` (deployed/chat.spec.ts) is the one spec in
+# this repo's whole E2E suite that talks to a live external LLM; it is
+# inherently rate-limit/latency-flaky by nature of hitting a real provider
+# (see docs/testing/CURRENT_STATE.md's P4.3 note), which is exactly why it
+# lives here instead of blocking `e2e-tests.yml` (the mocked/offline suite
+# every PR runs).
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL of a running HUF site (e.g. https://your-bench.example.com/huf/)"
+        required: true
+      test_agent:
+        description: "Name of a real, currently-credentialed Agent on that site to chat with"
+        required: false
+        default: "Hub Orchestrator"
+
+permissions:
+  contents: read
+
+jobs:
+  live-llm-smoke:
+    name: E2E · Playwright (deployed, live LLM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      BASE_URL: ${{ github.event.inputs.base_url }}
+      E2E_TEST_AGENT: ${{ github.event.inputs.test_agent }}
+      E2E_USER: ${{ secrets.E2E_LIVE_USER }}
+      E2E_PASSWORD: ${{ secrets.E2E_LIVE_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        run: npx playwright install --with-deps chromium
+
+      - name: Run deployed suite against a real LLM
+        run: npm run test:e2e:deployed -- e2e/deployed/chat.spec.ts
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-live-llm
+          path: frontend/e2e-report-deployed/
+          retention-days: 7
+
+      - name: Upload Playwright traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-live-llm
+          path: frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

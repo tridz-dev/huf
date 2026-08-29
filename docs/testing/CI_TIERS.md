@@ -85,7 +85,7 @@ accessibility, selected visual regression.
 | API contracts P0/P1 | Same backend job — contract suites live as ordinary Python tests under `huf/ai/tests/test_http_contract_agent_p0.py` and `huf/ai/tests/test_http_contract_automation_tool_p0.py`, executed by the same `run-tests --app huf` call, so they run inside `server-tests.yml` | same | Covered, but only implicitly — there is no separate named job/step that isolates or reports P0/P1 contract status; a P0 contract failure looks identical to any other backend test failure in the workflow UI. |
 | Security static checks | *(none in CI)* | — | **GAP, and the most significant one found.** `.semgrep.yml` exists at repo root with real rules (e.g. `huf-no-explicit-frappe-commit`), but no workflow file anywhere under `.github/workflows/` invokes `semgrep`. There is also no CodeQL workflow, no `dependency-review` action, and no `pip-audit`/frontend audit step in any workflow. Every "security static checks" item GOAL.md lists for Tier 1 is unimplemented as CI. |
 | Mocked Playwright | `e2e-tests.yml` job `e2e` (`.github/workflows/e2e-tests.yml`, `npm run test:e2e` → `playwright test` using `frontend/playwright.config.ts`, `testDir: './e2e'`) | PR/push to `develop`, paths `frontend/**` | Covered |
-| Critical full-stack Playwright (against a real backend, not mocked) | *(none in CI)* | — | **GAP** — `e2e-tests.yml`'s own title is "E2E Tests (offline)" and its only suite is the mocked/offline one; there is a separate `frontend/playwright.deployed.config.ts` (`testDir: './e2e/deployed'`, with an `auth.setup.ts` project) clearly built for a real, running instance, and a `test:e2e:deployed` npm script, but no workflow file runs it. |
+| Critical full-stack Playwright (against a real backend, not mocked) | *(none in CI)* | — | **GAP, intentionally.** `e2e-tests.yml`'s own title is "E2E Tests (offline)" and its only suite is the mocked/offline one. `frontend/playwright.deployed.config.ts` (`testDir: './e2e/deployed'`, with an `auth.setup.ts` project) + `test:e2e:deployed` run against a real instance and DO now have a workflow (`live-llm-e2e.yml`), but it is manual-only by design — see Tier 3 below — since the one live spec in that suite makes a real, billed LLM call. |
 | Critical accessibility | Bundled into `e2e-tests.yml`'s `npm run test:e2e` run — `frontend/e2e/accessibility.spec.ts` uses `@axe-core/playwright`'s `AxeBuilder` and lives in the same `testDir` (`./e2e`) that `playwright.config.ts` matches via `testMatch: /\.spec\.ts$/`, so it executes as part of the same Playwright invocation, just with no dedicated job name calling it out | same as mocked Playwright | Covered, implicitly (same caveat as API contracts: a failure here surfaces generically as an `e2e-tests.yml` failure, not as an "accessibility" failure). |
 | Selected visual regression | Same mechanism — `frontend/e2e/visual-regression.spec.ts` (+ its `visual-regression.spec.ts-snapshots/` baseline directory) is picked up by the same `playwright test` run in `e2e-tests.yml` | same | Covered, implicitly, same caveat. |
 
@@ -112,12 +112,16 @@ job as Tier 1, not an expanded nightly variant (no separate cross-browser
 matrix, no larger security/fuzz pass, no scheduled/`cron` trigger anywhere in
 `.github/workflows/`).
 
-**GAP.** There is no `nightly-e2e.yml` in this worktree as of this writing (per
-this task's instructions, that file is explicitly out of scope — it is another
-work-stream's deliverable, not invented here). No cross-browser matrix,
-migration/install pipeline (GOAL.md §18's `new bench → new site → install →
-migrate → seed → smoke` sequence), scheduled dependency audit, or mutation
-testing exists in this repo's CI today.
+**Update (post prompt-cache-auto-mode merge):** `.github/workflows/nightly-e2e.yml`
+now exists — scheduled (`cron: "0 2 * * *"`) plus manual `workflow_dispatch`,
+running the mocked/offline suite across Chromium+Firefox+WebKit (`npm run
+test:e2e:nightly` → `playwright.nightly.config.ts`). This covers the
+cross-browser bullet only; it is still the same mocked/offline suite as
+Tier 1, not an expanded nightly pass.
+
+**GAP (remaining).** No migration/install pipeline (GOAL.md §18's `new bench
+→ new site → install → migrate → seed → smoke` sequence), scheduled
+dependency audit, or mutation testing exists in this repo's CI today.
 
 ---
 
@@ -166,9 +170,18 @@ remote host.
 
 Separately: `frontend/playwright.deployed.config.ts` + `frontend/e2e/deployed/`
 + the `test:e2e:deployed` npm script look purpose-built for exactly the
-"production-like smoke, critical browser flows" GOAL.md asks Tier 3 to cover,
-but no workflow file invokes `test:e2e:deployed` anywhere — it currently has
-to be run by hand.
+"production-like smoke, critical browser flows" GOAL.md asks Tier 3 to cover.
+**Update:** `.github/workflows/live-llm-e2e.yml` now invokes
+`test:e2e:deployed` — but deliberately only via manual `workflow_dispatch`
+against a `base_url` input, never on `push`/`pull_request`. This is
+intentional, not a partial fix: `deployed/chat.spec.ts`'s
+`new-chat-gets-a-real-reply` test makes a real, billed call to a live
+external LLM and is inherently rate-limit/latency-flaky by nature of that
+(GOAL.md §29's "avoid live external LLM dependencies in authoritative PR
+CI" / §4's "real-provider compatibility should exist as a separate
+optional/nightly suite"), so it is opt-in-on-demand rather than gated into
+any automatic trigger. It still is not wired into `deploy-huf.yml` as an
+actual release gate — that remains the gap this section describes.
 
 **No security gates** (the GOAL.md Tier 3 bullet) exist in either workflow —
 consistent with the Tier 1 finding that no Semgrep/CodeQL/dependency-review
@@ -220,5 +233,5 @@ parity). What already works locally and fast today, and should be used as-is:
 |---|---|---|
 | 0 | changed-file lint, TS, affected Vitest, affected Python tests, changed-file design parity | Partial — `.pre-commit-config.yaml` covers lint/format only |
 | 1 | lint, typecheck, unit, build, design parity, backend, API contracts, security static checks, mocked Playwright, full-stack Playwright, accessibility, visual regression | Partial — typecheck/unit/build/backend/mocked-Playwright/accessibility/visual-regression covered; lint, design parity, security static checks, and full-stack (non-mocked) Playwright are gaps |
-| 2 | all backend, all E2E, golden traces, cross-browser, larger security, dependency audits, migration/install, provider compat, mutation testing | Not present — no dedicated nightly/scheduled workflow exists in this worktree |
-| 3 | clean install, migrate, build, production-like smoke, critical browser flows, security gates | Not gated — `deploy-huf.yml` and `fasterdocker-publish.yml` both deploy/publish unconditionally on `push: develop`, with no dependency on test workflows passing; `test:e2e:deployed` exists but is never invoked by CI |
+| 2 | all backend, all E2E, golden traces, cross-browser, larger security, dependency audits, migration/install, provider compat, mutation testing | Partial — `nightly-e2e.yml` covers cross-browser (mocked/offline only); golden traces, larger security, dependency audits, migration/install, mutation testing remain gaps |
+| 3 | clean install, migrate, build, production-like smoke, critical browser flows, security gates | Not gated as a release gate — `deploy-huf.yml`/`fasterdocker-publish.yml` still deploy/publish unconditionally on `push: develop`. `test:e2e:deployed` is now invoked, by `live-llm-e2e.yml`, but only via manual `workflow_dispatch` (opt-in, real-LLM smoke, never a release gate) |

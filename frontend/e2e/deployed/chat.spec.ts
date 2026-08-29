@@ -11,6 +11,15 @@ import { test, expect } from '@playwright/test';
 const TEST_AGENT = process.env.E2E_TEST_AGENT || 'Hub Orchestrator';
 
 test.describe('Chat flow', () => {
+  // This is the one spec in the whole E2E suite that talks to a live
+  // external LLM (via TEST_AGENT's real, currently-configured provider) --
+  // deliberately NOT run by e2e-tests.yml (the mocked/offline suite every
+  // PR runs) or by anything else that's part of authoritative CI. It runs
+  // only via the manual .github/workflows/live-llm-e2e.yml, on demand, when
+  // full end-to-end assurance against a real provider is specifically
+  // needed. It is inherently rate-limit/latency-flaky by nature of hitting
+  // a real provider -- that's expected here, not a bug to chase, precisely
+  // because it never blocks a PR.
   test('starting a new chat and getting a response', async ({ page }) => {
     test.setTimeout(75000);
 
