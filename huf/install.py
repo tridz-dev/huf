@@ -160,7 +160,13 @@ def after_migrate():
 	"""
 	create_huf_roles()
 	create_demo_ai_providers()
-	create_demo_ai_models()
+	try:
+		create_demo_ai_models()
+	except Exception:
+		# Seeding walks every catalogue row and saves through full AI Model
+		# validation, so a single unexpected row must not abort the desktop
+		# icon, tool creation and everything else below.
+		frappe.log_error(title="huf after_migrate: AI Model seeding failed", message=frappe.get_traceback())
 	try:
 		setup_desktop_icon_as_workspace("huf")
 	except frappe.LinkValidationError:
@@ -244,15 +250,15 @@ def _log_seed_results(results, logger):
 
 def create_demo_ai_providers():
     providers = [
-        # {"doctype": "AI Provider", "provider_name": "xAI", "provider_brand": "xai", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Mistral", "provider_brand": "mistral", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "Alibaba", "provider_brand": "alibaba", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "DashScope", "provider_brand": "alibaba", "api_key": ""},
         # {"doctype": "AI Provider", "provider_name": "Meta", "provider_brand": "meta", "api_key": ""},
         # {"doctype": "AI Provider", "provider_name": "TogetherAI", "provider_brand": "togetherai", "api_key": ""},
         # {"doctype": "AI Provider", "provider_name": "Azure OpenAI", "provider_brand": "azure", "api_key": ""},
-        # {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "provider_brand": "amazon-bedrock", "api_key": ""},
         # {"doctype": "AI Provider", "provider_name": "Ollama", "provider_brand": "ollama", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "xAI", "provider_brand": "xai", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Mistral", "provider_brand": "mistral", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Alibaba", "provider_brand": "alibaba", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "AWS Bedrock", "provider_brand": "amazon-bedrock", "api_key": ""},
+        {"doctype": "AI Provider", "provider_name": "Vertex AI", "provider_brand": "google-vertex", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "ElevenLabs", "provider_brand": "elevenlabs", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "Groq", "provider_brand": "groq", "api_key": ""},
         {"doctype": "AI Provider", "provider_name": "DeepSeek", "provider_brand": "deepseek", "api_key": ""},
@@ -280,13 +286,42 @@ def create_demo_ai_models():
 
     Modality values must match the options configured on the AI Model DocType:
     Text, Image, Text-to-Speech, Transcription, Embeddings, Vision, OCR.
-    """
 
-    deprecated_models = ()
+    Models are sourced from huf.ai.model_catalogue.MODELS (auto-generated from
+    litellm.model_cost by scripts/gen_model_catalogue.py) plus EXTRA_MODELS
+    below. The catalogue is a curated subset, not a strict superset, of every
+    model this function has ever hand-seeded -- EXTRA_MODELS preserves every
+    previously-seeded model_name the catalogue does not (yet) cover, so
+    migrate never deletes a model that was seeded before. Deprecated models
+    are the union of the catalogue's DEPRECATED tuple and EXTRA_DEPRECATED_MODELS
+    (any extras-list models later found to be deprecated upstream).
+    """
+    from huf.ai.model_catalogue import DEPRECATED as _CATALOGUE_DEPRECATED
+    from huf.ai.model_catalogue import MODELS as _CATALOGUE_MODELS
+
+    # Extras-list models later confirmed deprecated upstream (merged with the
+    # catalogue's own DEPRECATED tuple, never dropped).
+    EXTRA_DEPRECATED_MODELS = ()
+
+    deprecated_models = tuple(dict.fromkeys((*_CATALOGUE_DEPRECATED, *EXTRA_DEPRECATED_MODELS)))
 
     for model_name in deprecated_models:
-        if frappe.db.exists("AI Model", model_name):
-            frappe.delete_doc("AI Model", model_name, ignore_permissions=True, force=True)
+        if not frappe.db.exists("AI Model", model_name):
+            continue
+        try:
+            # Deliberately NOT force=True. Thirteen link fields across Agent,
+            # Agent Run, Agent Message, Agent Conversation, Agent Settings and
+            # Automation point at AI Model, and force=True bypasses Frappe's
+            # link guard entirely -- a deprecated model that is still in use
+            # would be deleted out from under them, leaving dangling foreign
+            # keys that surface much later as broken agents. Upstream marking a
+            # model deprecated is not a reason to break a site that still runs
+            # it; leave the row and let the operator retarget it.
+            frappe.delete_doc("AI Model", model_name, ignore_permissions=True)
+        except frappe.LinkExistsError:
+            frappe.logger("huf").info(
+                f"AI Model {model_name} is deprecated upstream but still referenced; leaving it in place."
+            )
 
     TEXT = "Text"
     VISION = "Vision"
@@ -295,196 +330,168 @@ def create_demo_ai_models():
     STT = "Transcription"
     EMB = "Embeddings"
 
-    def _m(model_name, provider, *modalities):
-        entry = {"doctype": "AI Model", "model_name": model_name, "provider": provider}
+    def _x(model_name, provider, *modalities):
+        entry = {"model_name": model_name, "provider": provider}
         if modalities:
             entry["modalities"] = ",".join(modalities)
         return entry
 
-    models = [
-        # ElevenLabs
-        _m("eleven_multilingual_v2", "ElevenLabs", TTS),
-        _m("eleven_turbo_v2_5", "ElevenLabs", TTS),
-        _m("eleven_flash_v2_5", "ElevenLabs", TTS),
-        # Hugging Face
-        _m("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
-        # Cohere
-        _m("command-a-03-2025", "Cohere", TEXT),
-        # Perplexity
-        _m("sonar-pro", "Perplexity", TEXT),
-        _m("sonar", "Perplexity", TEXT),
-        _m("sonar-reasoning", "Perplexity", TEXT),
-        _m("sonar-reasoning-pro", "Perplexity", TEXT),
-        _m("sonar-deep-research", "Perplexity", TEXT),
-        # Google Gemini (direct)
-        _m("gemini-3.6-flash", "Google", TEXT, VISION),
-        _m("gemini-3.5-flash", "Google", TEXT, VISION),
-        _m("gemini-3.5-flash-lite", "Google", TEXT, VISION),
-        _m("gemini-3.1-flash-lite", "Google", TEXT, VISION),
-        _m("gemini-3.1-pro-preview", "Google", TEXT, VISION),
-        _m("gemini-3-flash-preview", "Google", TEXT, VISION),
-        _m("gemini-2.5-pro", "Google", TEXT, VISION),
-        _m("gemini-2.5-flash", "Google", TEXT, VISION),
-        _m("gemma-3-27b-it", "Google", TEXT, VISION),
-        _m("gemma-3-9b-it", "Google", TEXT, VISION),
-        _m("nano-banana-pro", "Google", IMAGE),
-        _m("gemini-3.1-flash-image", "Google", IMAGE),
-        _m("gemini-3.1-flash-lite-image", "Google", IMAGE),
-        _m("gemini-2.5-flash-image", "Google", IMAGE),
-        _m("gemini-3.1-flash-tts-preview", "Google", TTS),
-        _m("gemini-2.5-flash-tts-preview", "Google", TTS),
-        _m("gemini-2.5-pro-tts-preview", "Google", TTS),
-        _m("computer-use-preview", "Google", TEXT, VISION),
-        _m("gemini-deep-research-preview", "Google", TEXT),
-        _m("gemini-deep-research-max-preview", "Google", TEXT),
-        _m("text-embedding-004", "Google", EMB),
-        _m("gemini-embedding-001", "Google", EMB),
-        _m("gemini-embedding-2", "Google", EMB),
-        # Anthropic
-        _m("claude-fable-5", "Anthropic", TEXT, VISION),
-        _m("claude-mythos-5", "Anthropic", TEXT, VISION),
-        _m("claude-opus-5", "Anthropic", TEXT, VISION),
-        _m("claude-opus-4.8", "Anthropic", TEXT, VISION),
-        _m("claude-sonnet-5", "Anthropic", TEXT, VISION),
-        _m("claude-haiku-4.5", "Anthropic", TEXT, VISION),
-        # DeepSeek (direct)
-        _m("deepseek-v4-pro", "DeepSeek", TEXT),
-        _m("deepseek-v4-flash", "DeepSeek", TEXT),
-        _m("deepseek-chat-v3.1", "DeepSeek", TEXT),
-        _m("deepseek-chat-v3-0324", "DeepSeek", TEXT),
-        # Moonshot (direct)
-        _m("kimi-k3", "Moonshot", TEXT, VISION),
-        _m("kimi-k2.7", "Moonshot", TEXT, VISION),
-        _m("kimi-k2.6", "Moonshot", TEXT, VISION),
-        _m("kimi-k2.5", "Moonshot", TEXT, VISION),
-        # OpenRouter
-        _m("openrouter/free", "OpenRouter", TEXT),
-        _m("openai/gpt-5", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5-mini", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5-nano", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.5-pro", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.4-pro", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.4", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.4-mini", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.4-nano", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.3-codex", "OpenRouter", TEXT),
-        _m("openai/gpt-5.2", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.2-pro", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.1", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-4o-mini", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-4o-mini-tts", "OpenRouter", TTS),
-        _m("openai/gpt-4o-transcribe", "OpenRouter", STT),
-        _m("openai/gpt-4o-mini-transcribe", "OpenRouter", STT),
-        _m("openai/gpt-transcribe", "OpenRouter", STT),
-        _m("openai/gpt-live-transcribe", "OpenRouter", STT),
-        _m("openai/gpt-realtime-whisper", "OpenRouter", STT),
-        _m("openai/gpt-oss-20b", "OpenRouter", TEXT),
-        _m("openai/gpt-image-2", "OpenRouter", IMAGE),
-        _m("openai/gpt-image-1", "OpenRouter", IMAGE),
-        _m("openai/gpt-image-1-mini", "OpenRouter", IMAGE),
-        _m("openai/chatgpt-image-latest", "OpenRouter", IMAGE),
-        _m("openai/chat-latest", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.3-chat-latest", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-5.2-chat-latest", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-3.6-flash", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-3.5-flash", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-3.5-flash-lite", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-3.1-flash-lite", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-3.1-pro-preview", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-3-flash-preview", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-2.5-pro", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-2.5-flash", "OpenRouter", TEXT, VISION),
-        _m("google/gemini-2.5-flash-lite-preview-06-17", "OpenRouter", TEXT, VISION),
-        _m("google/gemma-3-27b-it", "OpenRouter", TEXT, VISION),
-        _m("google/gemma-4-31b-it", "OpenRouter", TEXT, VISION),
-        _m("google/gemma-4-26b-a4b-it", "OpenRouter", TEXT, VISION),
-        _m("anthropic/claude-opus-5", "OpenRouter", TEXT, VISION),
-        _m("anthropic/claude-sonnet-5", "OpenRouter", TEXT, VISION),
-        _m("deepseek/deepseek-v4-pro", "OpenRouter", TEXT),
-        _m("deepseek/deepseek-v4-flash", "OpenRouter", TEXT),
-        _m("deepseek/deepseek-chat-v3-0324", "OpenRouter", TEXT),
-        _m("deepseek/deepseek-chat-v3.1", "OpenRouter", TEXT),
-        _m("z-ai/glm-5.2", "OpenRouter", TEXT),
-        _m("moonshotai/kimi-k3", "OpenRouter", TEXT, VISION),
-        _m("moonshotai/kimi-k2.7", "OpenRouter", TEXT, VISION),
-        _m("minimax/minimax-m3", "OpenRouter", TEXT),
-        _m("minimax/minimax-m2.7", "OpenRouter", TEXT),
-        _m("minimax/minimax-m2", "OpenRouter", TEXT),
-        _m("microsoft/phi-4", "OpenRouter", TEXT),
-        _m("qwen/qwen3.7-max", "OpenRouter", TEXT),
-        _m("qwen/qwen3.6-plus", "OpenRouter", TEXT),
-        _m("qwen/qwen3-vl-235b-a22b-instruct", "OpenRouter", TEXT, VISION),
-        _m("qwen/qwen3-coder", "OpenRouter", TEXT),
-        # OpenRouter free-tier variants
-        _m("google/gemma-4-31b-it:free", "OpenRouter", TEXT, VISION),
-        _m("google/gemma-4-26b-a4b-it:free", "OpenRouter", TEXT, VISION),
-        _m("openai/gpt-oss-20b:free", "OpenRouter", TEXT),
-        _m("nvidia/nemotron-3-super-120b-a12b:free", "OpenRouter", TEXT),
-        _m("nvidia/nemotron-3-ultra-550b-a55b:free", "OpenRouter", TEXT),
-        _m("nvidia/nemotron-3-nano-30b-a3b:free", "OpenRouter", TEXT),
-        _m("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "OpenRouter", TEXT),
-        _m("nvidia/nemotron-nano-12b-v2-vl:free", "OpenRouter", TEXT, VISION),
-        _m("nvidia/nemotron-nano-9b-v2:free", "OpenRouter", TEXT),
-        _m("nvidia/nemotron-3.5-content-safety:free", "OpenRouter", TEXT),
-        _m("cohere/north-mini-code:free", "OpenRouter", TEXT),
-        _m("poolside/laguna-m.1:free", "OpenRouter", TEXT),
-        _m("poolside/laguna-xs-2.1:free", "OpenRouter", TEXT),
-        _m("poolside/laguna-s-2.1:free", "OpenRouter", TEXT),
-        _m("inclusionai/ling-3.0-flash:free", "OpenRouter", TEXT),
-        _m("tencent/hy3:free", "OpenRouter", TEXT),
-        # OpenAI (direct)
-        _m("gpt-5.6-sol", "OpenAI", TEXT, VISION),
-        _m("gpt-5.6-terra", "OpenAI", TEXT, VISION),
-        _m("gpt-5.6-luna", "OpenAI", TEXT, VISION),
-        _m("gpt-5.5", "OpenAI", TEXT, VISION),
-        _m("gpt-5.5-pro", "OpenAI", TEXT, VISION),
-        _m("gpt-5.4", "OpenAI", TEXT, VISION),
-        _m("gpt-5.4-pro", "OpenAI", TEXT, VISION),
-        _m("gpt-5.4-mini", "OpenAI", TEXT, VISION),
-        _m("gpt-5.4-nano", "OpenAI", TEXT, VISION),
-        _m("gpt-5.3-codex", "OpenAI", TEXT),
-        _m("gpt-5.2", "OpenAI", TEXT, VISION),
-        _m("gpt-5.2-pro", "OpenAI", TEXT, VISION),
-        _m("gpt-5.1", "OpenAI", TEXT, VISION),
-        _m("gpt-5", "OpenAI", TEXT, VISION),
-        _m("gpt-5-mini", "OpenAI", TEXT, VISION),
-        _m("gpt-5-nano", "OpenAI", TEXT, VISION),
-        _m("chat-latest", "OpenAI", TEXT, VISION),
-        _m("gpt-5.3-chat-latest", "OpenAI", TEXT, VISION),
-        _m("gpt-5.2-chat-latest", "OpenAI", TEXT, VISION),
-        _m("gpt-4o-mini", "OpenAI", TEXT, VISION),
-        _m("gpt-4o-mini-tts", "OpenAI", TTS),
-        _m("tts-1", "OpenAI", TTS),
-        _m("tts-1-hd", "OpenAI", TTS),
-        _m("whisper-1", "OpenAI", STT),
-        _m("gpt-4o-transcribe", "OpenAI", STT),
-        _m("gpt-4o-mini-transcribe", "OpenAI", STT),
-        _m("gpt-transcribe", "OpenAI", STT),
-        _m("gpt-live-transcribe", "OpenAI", STT),
-        _m("gpt-realtime-whisper", "OpenAI", STT),
-        _m("gpt-image-2", "OpenAI", IMAGE),
-        _m("gpt-image-1", "OpenAI", IMAGE),
-        _m("gpt-image-1-mini", "OpenAI", IMAGE),
-        _m("chatgpt-image-latest", "OpenAI", IMAGE),
-        _m("gpt-oss-20b", "OpenAI", TEXT),
-        _m("text-embedding-3-small", "OpenAI", EMB),
-        _m("text-embedding-3-large", "OpenAI", EMB),
-        _m("text-embedding-ada-002", "OpenAI", EMB),
+    # Models seeded by earlier hand-maintained lists that
+    # huf.ai.model_catalogue.MODELS does not (yet) curate from
+    # litellm.model_cost -- preserved so migrate never deletes a model that
+    # was previously seeded. See create_demo_ai_models docstring.
+    EXTRA_MODELS = [
+        _x("eleven_turbo_v2_5", "ElevenLabs", TTS),
+        _x("eleven_flash_v2_5", "ElevenLabs", TTS),
+        _x("huggingface/meta-llama/Llama-3.2-3B-Instruct", "Huggingface", TEXT),
+        _x("gemma-3-9b-it", "Google", TEXT, VISION),
+        _x("nano-banana-pro", "Google", IMAGE),
+        _x("gemini-2.5-flash-tts-preview", "Google", TTS),
+        _x("gemini-2.5-pro-tts-preview", "Google", TTS),
+        _x("computer-use-preview", "Google", TEXT, VISION),
+        _x("gemini-deep-research-preview", "Google", TEXT),
+        _x("gemini-deep-research-max-preview", "Google", TEXT),
+        _x("text-embedding-004", "Google", EMB),
+        _x("claude-opus-4.8", "Anthropic", TEXT, VISION),
+        _x("claude-sonnet-5", "Anthropic", TEXT, VISION),
+        _x("claude-haiku-4.5", "Anthropic", TEXT, VISION),
+        _x("deepseek-chat-v3.1", "DeepSeek", TEXT),
+        _x("deepseek-chat-v3-0324", "DeepSeek", TEXT),
+        _x("kimi-k2.7", "Moonshot", TEXT, VISION),
+        _x("openai/gpt-5", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5-mini", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5-nano", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.5-pro", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.4-pro", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.4", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.4-mini", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.4-nano", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.3-codex", "OpenRouter", TEXT),
+        _x("openai/gpt-5.1", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-4o-mini", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-4o-mini-tts", "OpenRouter", TTS),
+        _x("openai/gpt-4o-transcribe", "OpenRouter", STT),
+        _x("openai/gpt-4o-mini-transcribe", "OpenRouter", STT),
+        _x("openai/gpt-transcribe", "OpenRouter", STT),
+        _x("openai/gpt-live-transcribe", "OpenRouter", STT),
+        _x("openai/gpt-realtime-whisper", "OpenRouter", STT),
+        _x("openai/gpt-image-2", "OpenRouter", IMAGE),
+        _x("openai/gpt-image-1", "OpenRouter", IMAGE),
+        _x("openai/gpt-image-1-mini", "OpenRouter", IMAGE),
+        _x("openai/chatgpt-image-latest", "OpenRouter", IMAGE),
+        _x("openai/chat-latest", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.3-chat-latest", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-5.2-chat-latest", "OpenRouter", TEXT, VISION),
+        _x("google/gemini-3.6-flash", "OpenRouter", TEXT, VISION),
+        _x("google/gemini-3.5-flash", "OpenRouter", TEXT, VISION),
+        _x("google/gemini-3.5-flash-lite", "OpenRouter", TEXT, VISION),
+        _x("google/gemini-2.5-pro", "OpenRouter", TEXT, VISION),
+        _x("google/gemini-2.5-flash", "OpenRouter", TEXT, VISION),
+        _x("google/gemini-2.5-flash-lite-preview-06-17", "OpenRouter", TEXT, VISION),
+        _x("google/gemma-3-27b-it", "OpenRouter", TEXT, VISION),
+        _x("google/gemma-4-31b-it", "OpenRouter", TEXT, VISION),
+        _x("google/gemma-4-26b-a4b-it", "OpenRouter", TEXT, VISION),
+        _x("anthropic/claude-sonnet-5", "OpenRouter", TEXT, VISION),
+        _x("deepseek/deepseek-v4-flash", "OpenRouter", TEXT),
+        _x("deepseek/deepseek-chat-v3-0324", "OpenRouter", TEXT),
+        _x("z-ai/glm-5.2", "OpenRouter", TEXT),
+        _x("moonshotai/kimi-k3", "OpenRouter", TEXT, VISION),
+        _x("moonshotai/kimi-k2.7", "OpenRouter", TEXT, VISION),
+        _x("minimax/minimax-m3", "OpenRouter", TEXT),
+        _x("minimax/minimax-m2.7", "OpenRouter", TEXT),
+        _x("minimax/minimax-m2", "OpenRouter", TEXT),
+        _x("microsoft/phi-4", "OpenRouter", TEXT),
+        _x("qwen/qwen3.7-max", "OpenRouter", TEXT),
+        _x("qwen/qwen3-vl-235b-a22b-instruct", "OpenRouter", TEXT, VISION),
+        _x("google/gemma-4-31b-it:free", "OpenRouter", TEXT, VISION),
+        _x("google/gemma-4-26b-a4b-it:free", "OpenRouter", TEXT, VISION),
+        _x("openai/gpt-oss-20b:free", "OpenRouter", TEXT),
+        _x("nvidia/nemotron-3-super-120b-a12b:free", "OpenRouter", TEXT),
+        _x("nvidia/nemotron-3-ultra-550b-a55b:free", "OpenRouter", TEXT),
+        _x("nvidia/nemotron-3-nano-30b-a3b:free", "OpenRouter", TEXT),
+        _x("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "OpenRouter", TEXT),
+        _x("nvidia/nemotron-nano-12b-v2-vl:free", "OpenRouter", TEXT, VISION),
+        _x("nvidia/nemotron-nano-9b-v2:free", "OpenRouter", TEXT),
+        _x("nvidia/nemotron-3.5-content-safety:free", "OpenRouter", TEXT),
+        _x("cohere/north-mini-code:free", "OpenRouter", TEXT),
+        _x("poolside/laguna-m.1:free", "OpenRouter", TEXT),
+        _x("poolside/laguna-xs-2.1:free", "OpenRouter", TEXT),
+        _x("poolside/laguna-s-2.1:free", "OpenRouter", TEXT),
+        _x("inclusionai/ling-3.0-flash:free", "OpenRouter", TEXT),
+        _x("tencent/hy3:free", "OpenRouter", TEXT),
+        _x("gpt-oss-20b", "OpenAI", TEXT),
     ]
 
+    deprecated_set = set(deprecated_models)
+    models = list(_CATALOGUE_MODELS) + [m for m in EXTRA_MODELS if m["model_name"] not in deprecated_set]
+
+    # EXTRA_MODELS are hand-seeded names LiteLLM has no entry for under that exact
+    # key -- mostly OpenRouter-namespaced or decorated variants of a model the
+    # catalogue already describes ("anthropic/claude-sonnet-5" vs "claude-sonnet-5",
+    # "google/gemma-4-31b-it:free" vs "gemma-4-31b-it"). They would otherwise be
+    # seeded with no context_window at all, which surfaces in the UI as a model
+    # whose context limit is unknown. Backfill them from their catalogue twin,
+    # matched on the bare model name with any provider path and decorative
+    # ":suffix" removed. Only fields the extra does not already define are filled.
+    _BACKFILL_FIELDS = ("context_window", "max_output_tokens", "modalities", "supports_reasoning")
+
+    def _bare_name(model_name: str) -> str:
+        bare = model_name.rsplit("/", 1)[-1]
+        return bare.split(":", 1)[0].lower()
+
+    catalogue_by_bare: dict[str, dict] = {}
+    for entry in _CATALOGUE_MODELS:
+        # First writer wins: the catalogue is emitted in curated order, so the
+        # canonical entry precedes any near-duplicate.
+        catalogue_by_bare.setdefault(_bare_name(entry["model_name"]), entry)
+
+    for model in models:
+        twin = catalogue_by_bare.get(_bare_name(model["model_name"]))
+        if twin is None or twin is model:
+            continue
+        for field in _BACKFILL_FIELDS:
+            if not model.get(field) and twin.get(field):
+                model[field] = twin[field]
+
     for m in models:
-        if not frappe.db.exists("AI Model", m["model_name"]):
-            doc = frappe.get_doc(m)
-            doc.flags.ignore_mandatory = True
-            doc.flags.ignore_validate = True
-            doc.insert(ignore_permissions=True)
-        elif m.get("modalities"):
-            existing = frappe.get_doc("AI Model", m["model_name"])
-            if not existing.get("modalities"):
-                existing.modalities = m["modalities"]
-                existing.save(ignore_permissions=True)
+        # Per-row isolation. The insert path runs with validation off, but
+        # the update path calls existing.save(), which runs full AI Model
+        # validation on a user-editable row -- an out-of-range `modalities`
+        # value or a half-filled custom-pricing pair raises there. Without
+        # this the sweep aborted mid-way and migrate committed a half-applied
+        # seed: rows before the bad one written, every row after it (plus the
+        # whole EXTRA_MODELS tail and the bare-name backfill) silently
+        # skipped. Skip the offending row and carry on instead.
+        try:
+            if not frappe.db.exists("AI Model", m["model_name"]):
+                doc = frappe.get_doc(dict(m, doctype="AI Model"))
+                doc.flags.ignore_mandatory = True
+                doc.flags.ignore_validate = True
+                doc.insert(ignore_permissions=True)
+            else:
+                existing = frappe.get_doc("AI Model", m["model_name"])
+                dirty = False
+                if m.get("modalities") and not existing.get("modalities"):
+                    existing.modalities = m["modalities"]
+                    dirty = True
+                if m.get("context_window") and not existing.get("context_window"):
+                    existing.context_window = m["context_window"]
+                    dirty = True
+                if m.get("max_output_tokens") and not existing.get("max_output_tokens"):
+                    existing.max_output_tokens = m["max_output_tokens"]
+                    dirty = True
+                if m.get("supports_reasoning") and not existing.get("supports_reasoning"):
+                    existing.supports_reasoning = m["supports_reasoning"]
+                    dirty = True
+                if dirty:
+                    existing.save(ignore_permissions=True)
 
 
+        except Exception:
+            frappe.log_error(
+                title="huf: AI Model seed skipped",
+                message=f"{m.get('model_name')}\n\n{frappe.get_traceback()}",
+            )
 def seed_voice_engines():
 	"""Ensure a Voice Engine row exists for every engine discovered by the registry.
 
