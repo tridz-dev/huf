@@ -186,7 +186,13 @@ def after_migrate():
 		)
 	except Exception as e:
 		logger.warning(f"Failed to sync tools after migrate: {e!s}")
-		
+
+	try:
+		from huf.huf.erpnext_knowledge_seed import seed_erpnext_knowledge
+		seed_erpnext_knowledge()
+	except Exception as e:
+		logger.warning(f"Failed to seed ERPNext docs knowledge after migrate: {e!s}")
+
 	try:
 		from huf.ai.app_seeding.seeder import seed_all
 		results = list(seed_all())
