@@ -109,9 +109,19 @@ MAX_SLEEP_SECONDS = 2.0
 
 
 @frappe.whitelist()
-def slow_or_timeout(duration: float = 0.1) -> dict:
+def slow_or_timeout(duration=0.1) -> dict:
     """Sleep for a deterministic, test-controllable duration (capped) to
     exercise timeout-path testing without ever hanging the suite.
+
+    Deliberately untyped on ``duration``: a newer Frappe framework version
+    (pulled in via the pre-develop merge) added parameter-type coercion/
+    validation on `@frappe.whitelist()`-decorated functions driven by their
+    type hints, which runs BEFORE this function's own body -- a `duration:
+    float` hint made an invalid value (e.g. a non-numeric string, the exact
+    case `test_invalid_duration_falls_back_to_default` exercises) raise
+    `FrappeTypeError` at the decorator layer instead of ever reaching the
+    `try/except (TypeError, ValueError)` fallback below. Leaving this
+    parameter untyped keeps that fallback in charge of invalid input.
     """
     try:
         requested = float(duration)
