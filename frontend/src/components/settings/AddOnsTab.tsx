@@ -5,6 +5,23 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { FeatureCard } from '@/components/settings/FeatureCard';
 import { getDeskAiSettings, updateDeskAiSettings } from '@/services/deskAiSettingsApi';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import type { FrappeErrorShape } from '@/lib/frappe-error';
+
+/**
+ * True only for "the DeskAI Settings doctype doesn't exist" (deskai app not
+ * installed) — NOT for permission errors, network failures, or other bugs,
+ * which should surface as a real error rather than the misleading
+ * "not installed" card.
+ */
+function isDocTypeMissingError(error: unknown): boolean {
+  const err = error as FrappeErrorShape | null | undefined;
+  const excType = err?.exc_type ?? '';
+  const message = err?.message ?? '';
+  return (
+    excType.includes('DoesNotExistError') ||
+    /doctype.*(not found|does not exist)/i.test(message)
+  );
+}
 
 export { AddOnsTab };
 export default AddOnsTab;
@@ -21,7 +38,7 @@ const DESKAI_PITCH =
   'about ERPNext data, and act on documents without leaving the page you’re on. It brings the same ' +
   'intelligence powering your Huf agents right into the tools your team already uses every day.';
 
-type LoadState = 'loading' | 'ready' | 'not-installed';
+type LoadState = 'loading' | 'ready' | 'not-installed' | 'error';
 
 function AddOnsTab() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -34,16 +51,26 @@ function AddOnsTab() {
     getDeskAiSettings()
       .then((settings) => {
         if (cancelled) return;
-        setEnabled(settings.enabled === 1);
+        setEnabled(Number(settings.enabled) === 1);
         setLoadState('ready');
       })
       .catch((error) => {
         if (cancelled) return;
-        // The `deskai` app is optional. If its `DeskAI Settings` doctype
-        // doesn't exist on this site, the read 404s — treat that as
-        // "not installed" rather than a failure to surface.
-        console.warn('DeskAI Settings unavailable (deskai app likely not installed):', error);
-        setLoadState('not-installed');
+        if (isDocTypeMissingError(error)) {
+          // The `deskai` app is optional — its `DeskAI Settings` doctype
+          // doesn't exist on this site, so treat this as "not installed"
+          // rather than a failure to surface.
+          console.warn('DeskAI Settings unavailable (deskai app not installed):', error);
+          setLoadState('not-installed');
+        } else {
+          // A real failure (permissions, network, bug) — don't tell the
+          // user to "install the app" when it's actually installed.
+          console.error('Failed to load DeskAI settings:', error);
+          toast.error('Failed to load DeskAI settings', {
+            description: getFrappeErrorMessage(error),
+          });
+          setLoadState('error');
+        }
       });
 
     return () => {
