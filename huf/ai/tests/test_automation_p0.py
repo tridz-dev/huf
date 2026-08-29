@@ -116,6 +116,16 @@ class TestAutomationP0(IntegrationTestCase):
     def _make_automation(self, agent, **overrides):
         overrides.setdefault("automation_name", f"{PREFIX} {frappe.generate_hash(length=8)}")
         overrides.setdefault("instruction", "__TEST_SCENARIO__:TEST_TEXT")
+        # `Automation.status` defaults to "Draft" (make_automation()'s own
+        # docstring), but automation_runner.py::run_automation now refuses
+        # to fire a non-"Active" Automation ("... is not Active (status:
+        # Draft) -- resume it to let triggers run."), added alongside this
+        # merge's automation-lifecycle work. Every test in this file submits
+        # a real trigger fire and asserts on its outcome, so it needs a
+        # runnable (Active) Automation by default, same as
+        # `_make_test_provider_agent()` above always returns a runnable
+        # Agent rather than a minimal-but-inert one.
+        overrides.setdefault("status", "Active")
         automation = make_automation(agent=agent.name, **overrides)
         self._track("Automation", automation.name)
         return automation
