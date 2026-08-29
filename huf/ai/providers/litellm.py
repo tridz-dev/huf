@@ -27,6 +27,7 @@ from litellm import InternalServerError, RateLimitError, APIError, BadRequestErr
 from litellm.utils import trim_messages
 from huf.ai.tool_serializer import serialize_tools
 from huf.ai.prompt_cache_capabilities import model_supports_prompt_caching
+from huf.ai.prompt_cache.capabilities import resolve_capabilities
 from huf.ai.transaction import transaction_checkpoint
 from huf.ai.cost_calculator import calculate_cost
 from huf.ai.conversation_manager import repair_message_sequence
@@ -123,6 +124,31 @@ def _raise_provider_unavailable(raw_message: str, normalized_model: str | None =
 _L1_CAPABILITY_CACHE = {}
 
 
+def _estimate_prefix_tokens(messages: list) -> int:
+    """
+    Estimate total tokens in all messages up to and including the last message.
+    Used to check if the cacheable prefix meets the model's minimum threshold.
+
+    This is a conservative estimate: 1 token per 4 characters of text.
+    Actual token count may vary slightly per model.
+    """
+    total_chars = 0
+    for msg in messages:
+        content = msg.get("content", "")
+        if isinstance(content, str):
+            total_chars += len(content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    text = block.get("text", "")
+                    if isinstance(text, str):
+                        total_chars += len(text)
+
+    # Conservative estimate: 1 token per 4 characters
+    # Add 10% margin for overhead (roles, formatting, etc.)
+    return int(total_chars / 4 * 1.1)
+
+
 def _is_transient_litellm_error(exc: Exception) -> bool:
     """Return True for transient network errors that a retry may resolve."""
     msg = str(exc).lower()
@@ -167,6 +193,247 @@ def _get_prompt_cache_options(context: dict | None) -> dict:
     return options if isinstance(options, dict) else {}
 
 
+# --- Prompt cache mode resolution -------------------------------------------------
+#
+# `Agent.prompt_cache_mode` (Select: Auto/Off/Advanced) is the single authority over
+# prompt caching. The four legacy fields (enable_prompt_caching, cache_control_type,
+# cache_system_message, cache_conversation_history) are read ONLY in Advanced mode.
+#
+# The crux: an Agent with mode=Auto caches even though its legacy
+# `enable_prompt_caching` checkbox is 0 — Auto does not consult that field at all.
+# A missing/blank/unrecognised mode resolves to Auto, never Off: the migration patch
+# leaves prompt_cache_mode NULL on Agents that had no legacy caching data, and
+# treating NULL as Off would silently switch caching off for exactly those rows.
+#
+# Both run() and run_stream() call _resolve_cache_settings(); neither reads the
+# legacy fields directly any more. Routing both paths through one function is what
+# makes sync/stream divergence structurally impossible.
+
+PROMPT_CACHE_MODE_AUTO = "Auto"
+PROMPT_CACHE_MODE_OFF = "Off"
+PROMPT_CACHE_MODE_ADVANCED = "Advanced"
+
+_PROMPT_CACHE_MODES = {
+    "auto": PROMPT_CACHE_MODE_AUTO,
+    "off": PROMPT_CACHE_MODE_OFF,
+    "advanced": PROMPT_CACHE_MODE_ADVANCED,
+}
+
+# HUF's provider-appropriate defaults for Auto mode. Cache the instruction/system
+# prefix and place the single moving boundary on the latest user message; the
+# per-segment legacy checkboxes do not gate anything here.
+_AUTO_CACHE_CONTROL_TYPE = "ephemeral"
+
+
+def resolve_prompt_cache_mode(agent_doc) -> str:
+    """Normalise Agent.prompt_cache_mode. Missing/blank/unknown -> Auto (never Off)."""
+    raw = None
+    if agent_doc is not None:
+        try:
+            raw = agent_doc.get("prompt_cache_mode")
+        except AttributeError:
+            raw = getattr(agent_doc, "prompt_cache_mode", None)
+    if not isinstance(raw, str):
+        return PROMPT_CACHE_MODE_AUTO
+    return _PROMPT_CACHE_MODES.get(raw.strip().lower(), PROMPT_CACHE_MODE_AUTO)
+
+
+class ResolvedCacheSettings:
+    """Effective, mode-resolved prompt-cache settings for one provider call."""
+
+    __slots__ = (
+        "mode",
+        "enabled",
+        "cache_control_type",
+        "cache_static_prefix",
+        "cache_system_message",
+        "cache_dynamic_content",
+        "allow_provider_cache_params",
+    )
+
+    def __init__(
+        self,
+        mode,
+        enabled,
+        cache_control_type,
+        cache_static_prefix,
+        cache_system_message,
+        cache_dynamic_content,
+        allow_provider_cache_params,
+    ):
+        self.mode = mode
+        self.enabled = enabled
+        self.cache_control_type = cache_control_type
+        self.cache_static_prefix = cache_static_prefix
+        self.cache_system_message = cache_system_message
+        self.cache_dynamic_content = cache_dynamic_content
+        self.allow_provider_cache_params = allow_provider_cache_params
+
+    def as_dict(self) -> dict:
+        return {slot: getattr(self, slot) for slot in self.__slots__}
+
+    def __eq__(self, other):
+        if not isinstance(other, ResolvedCacheSettings):
+            return NotImplemented
+        return self.as_dict() == other.as_dict()
+
+    def __repr__(self):
+        return f"ResolvedCacheSettings({self.as_dict()})"
+
+
+# Table/checkbox fields on Agent that can contribute a callable tool. Any one of
+# them means a single user turn may run more than one provider round.
+_AGENT_TOOL_BEARING_FIELDS = (
+    "agent_tool",
+    "agent_mcp_server",
+    "agent_skill",
+    "ssh_connections",
+    "enable_lazy_tools",
+    "enable_memory_search_tool",
+    "enable_memory_write_tool",
+)
+
+
+def _agent_field(agent_doc, fieldname):
+    """Read one field off an Agent that may be a dict, a Document, or a namespace."""
+    if agent_doc is None:
+        return None
+    try:
+        return agent_doc.get(fieldname)
+    except (AttributeError, TypeError):
+        return getattr(agent_doc, fieldname, None)
+
+
+def _agent_can_tool_loop(agent_doc) -> bool:
+    """True when this Agent can emit tool calls, i.e. one user turn can run
+    several provider rounds.
+
+    This is the gate for Auto's dynamic (latest-user-message) breakpoint. See
+    _resolve_cache_settings() for the measurement that motivates it.
+    """
+    for fieldname in _AGENT_TOOL_BEARING_FIELDS:
+        if _agent_field(agent_doc, fieldname):
+            return True
+    return False
+
+
+def _resolve_cache_settings(
+    agent_doc, prompt_cache_options=None, is_local_llm=False, agent_has_tools=None
+):
+    """Resolve prompt_cache_mode into the effective per-segment cache gates.
+
+    Called from BOTH run() and run_stream() so the two paths can never diverge.
+
+    Auto      -> caching on with HUF defaults; legacy fields and the granular
+                 prompt_cache_options flags are ignored. The system/static
+                 breakpoint is unconditional; the dynamic (latest-user-message)
+                 breakpoint is placed ONLY when the Agent can emit tool calls.
+
+                 Why the dynamic breakpoint is conditional (measured on
+                 caching-phase0.local, claude-haiku-4-5, 23k-char system prompt):
+
+                 * Across user TURNS the dynamic entry is never read back. The
+                   latest user turn is sent as the enhanced_prompt wrapper
+                   ("Current user message: ...") but re-enters the next request
+                   from conversation history as the bare persisted text, so the
+                   block sitting at the breakpoint differs on the very next call
+                   and the longest matching prefix stops at the system block.
+                   Measured on a fresh conversation with a strictly growing
+                   history: cache_read stayed pinned at 5088 (the system prefix)
+                   for four consecutive calls while cache_creation was paid every
+                   call. Net effect for a tool-less agent: 53.6% saving with the
+                   dynamic breakpoint vs 59.1% without it.
+                 * Within ONE turn's tool loop the breakpoint IS read back: the
+                   marked block is fixed while tool_calls/tool results append
+                   after it. Measured over a forced 4-round turn: 11094 units
+                   with the dynamic breakpoint vs 12182 without (8.9% cheaper).
+
+                 The gate is derived from the Agent doc's tool-bearing
+                 fields, NOT from the runtime `agent.tools` list: HUF attaches
+                 the `get_result_context` internal-capability tool to every
+                 agent, so `bool(agent.tools)` is unconditionally true and
+                 cannot discriminate. `agent_has_tools` stays available for a
+                 caller that has a better-filtered signal (and for tests).
+
+                 This field alone (`cache_dynamic_content`) only says a turn
+                 CAN loop, not that it WILL. A tool-bearing agent that resolves
+                 in a single round still paid for a marker it never read back
+                 within the turn: round 0 wrote it (1.25x on the dynamic
+                 suffix) and there was no round 1 to read it. Because of that,
+                 run()/run_stream() apply a SECOND, round-level gate on top of
+                 this one: the dynamic marker is attached to the user message
+                 only from round_num >= 1 onward (i.e. once a second provider
+                 round is actually happening), never at round 0. Break-even is
+                 3 rounds: the extra write costs write_rate/read_rate ~= 1.25x
+                 once, and each later round that reads it back instead of
+                 re-writing it saves ~1.25x - 0.10x = ~1.15x of that same
+                 block, i.e. round 2 recoups most of the round-1 write and
+                 round 3 is where the loop is unambiguously cheaper than never
+                 marking at all. A single-round turn now costs nothing extra
+                 for the dynamic breakpoint, regardless of this field's value.
+    Off       -> full bypass; no HUF-injected cache_control markers and no
+                 cache-related provider kwargs, whatever the legacy fields say.
+    Advanced  -> the pre-existing behaviour: legacy `enable_prompt_caching` acts
+                 as the sub-toggle, the legacy per-segment checkboxes and
+                 cache_control_type apply, and prompt_cache_options'
+                 cache_static_prefix / cache_dynamic_content overrides are honoured.
+    """
+    options = prompt_cache_options if isinstance(prompt_cache_options, dict) else {}
+    mode = resolve_prompt_cache_mode(agent_doc)
+
+    # Local providers (Ollama/LM Studio) do not support cache_control blocks.
+    if mode == PROMPT_CACHE_MODE_OFF or is_local_llm:
+        return ResolvedCacheSettings(
+            mode=mode,
+            enabled=False,
+            cache_control_type=_AUTO_CACHE_CONTROL_TYPE,
+            cache_static_prefix=False,
+            cache_system_message=False,
+            cache_dynamic_content=False,
+            # Off must set no cache-related provider options at all. Local LLMs keep
+            # the pre-existing behaviour of passing them through untouched.
+            allow_provider_cache_params=(mode != PROMPT_CACHE_MODE_OFF),
+        )
+
+    if mode == PROMPT_CACHE_MODE_ADVANCED:
+        enabled = bool(agent_doc.get("enable_prompt_caching", 0)) if agent_doc else False
+        cache_control_type = (
+            (agent_doc.get("cache_control_type") if agent_doc else None) or _AUTO_CACHE_CONTROL_TYPE
+        )
+        cache_system_message = bool(agent_doc.get("cache_system_message", 0)) if agent_doc else False
+        cache_dynamic_content = (
+            bool(agent_doc.get("cache_conversation_history", 0)) if agent_doc else False
+        )
+        override = options.get("cache_dynamic_content")
+        if isinstance(override, bool):
+            cache_dynamic_content = override
+        return ResolvedCacheSettings(
+            mode=mode,
+            enabled=enabled,
+            cache_control_type=cache_control_type,
+            cache_static_prefix=bool(options.get("cache_static_prefix", True)),
+            cache_system_message=cache_system_message,
+            cache_dynamic_content=cache_dynamic_content,
+            allow_provider_cache_params=True,
+        )
+
+    # Auto: HUF's provider-appropriate defaults. The dynamic breakpoint only
+    # earns its 1.25x write when a turn can run more than one round.
+    if isinstance(agent_has_tools, bool):
+        can_tool_loop = agent_has_tools
+    else:
+        can_tool_loop = _agent_can_tool_loop(agent_doc)
+    return ResolvedCacheSettings(
+        mode=PROMPT_CACHE_MODE_AUTO,
+        enabled=True,
+        cache_control_type=_AUTO_CACHE_CONTROL_TYPE,
+        cache_static_prefix=True,
+        cache_system_message=True,
+        cache_dynamic_content=can_tool_loop,
+        allow_provider_cache_params=True,
+    )
+
+
 def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cache_control_type: str):
     """Build provider-compatible message content payload with optional cache marker."""
     if not cache_enabled:
@@ -178,39 +445,77 @@ def _build_text_content(text: str, provider_name: str, cache_enabled: bool, cach
     return [{"type": "text", "text": text}]
 
 
-def _format_conversation_history(
-    conversation_history: list,
-    provider_name: str,
-    cache_enabled: bool,
-    cache_control_type: str,
-) -> list:
-    """Format conversation history messages, applying cache_control to the history prefix breakpoint if enabled."""
+def _apply_dynamic_cache_marker(content, provider_name: str, cache_control_type: str):
+    """Attach the dynamic (latest-user-message) cache_control marker to an
+    already-built user message content payload, in place of building it fresh.
+
+    Used by the round gate in run()/run_stream(): round 0's user content is
+    always built marker-free (via _build_text_content(..., cache_enabled=False,
+    ...)), and this function upgrades that same content once round_num >= 1,
+    preserving any non-text parts (e.g. image blocks) already appended to it.
+
+    Anthropic-only, mirroring _build_text_content: other providers' content is
+    returned unchanged.
+    """
+    if provider_name != "anthropic":
+        return content
+
+    if isinstance(content, str):
+        return [{"type": "text", "text": content, "cache_control": {"type": cache_control_type}}]
+
+    if isinstance(content, list):
+        new_content = list(content)
+        for i, part in enumerate(new_content):
+            if isinstance(part, dict) and part.get("type") == "text":
+                marked = dict(part)
+                marked["cache_control"] = {"type": cache_control_type}
+                new_content[i] = marked
+                return new_content
+        # No text part to mark (unexpected shape) — leave content untouched
+        # rather than guess where a marker would belong.
+        return content
+
+    return content
+
+
+def _find_last_user_message_index(messages: list) -> int:
+    """Scan `messages` backwards for the last entry with role == "user".
+
+    Used by the dynamic-marker round gate in run()/run_stream() in place of a
+    fixed index captured before trim_messages()/repair_message_sequence()
+    ran. Those two calls can drop or rewrite entries (e.g.
+    repair_message_sequence() strips an assistant message carrying
+    unfulfilled tool_calls and inserts a synthetic one, which is exactly what
+    a sliding-window get_conversation_history() produces when it cuts through
+    a previous tool loop) — a captured-once index then points at the wrong
+    message and the marker silently never applies. After round 0 only
+    assistant/tool messages are appended, so at the point the gate fires the
+    last user message in the current list is always the turn anchor; the
+    scan is re-run fresh each time rather than trusting a stale offset.
+
+    Returns -1 if no user message is found.
+    """
+    for i in range(len(messages) - 1, -1, -1):
+        msg = messages[i]
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            return i
+    return -1
+
+
+def _format_conversation_history(conversation_history: list) -> list:
+    """Format conversation history messages without adding cache markers.
+
+    Cache markers are applied only to the current user message, not to the history,
+    to avoid wasting breakpoint budget and ensure the marker is placed on stable,
+    reusable content (the latest user turn).
+
+    Note: The provider_name and cache_control_type parameters have been removed
+    since cache markers are now exclusively applied to the current user message.
+    """
     if not conversation_history:
         return []
 
     formatted = [dict(msg) for msg in conversation_history]
-    if not cache_enabled:
-        return formatted
-
-    last_msg = dict(formatted[-1])
-    content = last_msg.get("content")
-
-    if isinstance(content, str):
-        last_msg["content"] = _build_text_content(content, provider_name, True, cache_control_type)
-    elif isinstance(content, list) and len(content) > 0:
-        content_copy = [dict(b) if isinstance(b, dict) else b for b in content]
-        last_block = content_copy[-1]
-        if isinstance(last_block, dict):
-            last_block_copy = dict(last_block)
-            if provider_name == "anthropic":
-                last_block_copy["cache_control"] = {"type": cache_control_type}
-            content_copy[-1] = last_block_copy
-        last_msg["content"] = content_copy
-    elif content is None or content == "":
-        if provider_name == "anthropic":
-            last_msg["content"] = [{"type": "text", "text": "", "cache_control": {"type": cache_control_type}}]
-
-    formatted[-1] = last_msg
     return formatted
 
 
@@ -635,6 +940,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         # This prevents errors when models don't support certain parameters
         litellm.drop_params = True
 
+        # Enable graceful handling of missing Anthropic thinking blocks.
+        # IMPORTANT: modify_params is a GLOBAL LiteLLM module setting and must NEVER be passed
+        # per-request (which causes "Unsupported keyword arguments" errors).
+        # This setting allows Anthropic to gracefully skip thinking blocks when the model doesn't
+        # support them, rather than failing the entire completion request.
+        # Reference: huf/ai/reasoning.py for context on thinking block handling.
+        litellm.modify_params = True
+
         # Get Agent DocType directly to access temperature/top_p (most reliable source)
         # Each agent has its own temperature, prompt, and settings from the Agent DocType
         agent_doc = None
@@ -660,34 +973,36 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         is_local_llm = bool(provider_doc.get("is_local_llm", 0))
         api_base = _resolve_api_base(provider_doc)
 
-        # Check prompt caching configuration
-        enable_prompt_caching = False
-        cache_control_type = "ephemeral"
-        cache_system_message = False
-        cache_conversation_history = False
+        # Check prompt caching configuration.
+        # Agent.prompt_cache_mode is authoritative; the four legacy fields are read
+        # only in Advanced mode. Resolution is shared by run() and run_stream() via
+        # _resolve_cache_settings() so the two paths cannot drift apart.
         prompt_cache_options = _get_prompt_cache_options(context)
         static_prefix = (prompt_cache_options.get("static_prefix") or "").strip()
         dynamic_suffix = prompt_cache_options.get("dynamic_suffix")
         openai_prompt_cache_retention = prompt_cache_options.get("openai_prompt_cache_retention")
         gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
-        cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
-        cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
 
-        if agent_doc:
-            enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
-            cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
-            cache_system_message = bool(agent_doc.get("cache_system_message", 0))
-            cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+        cache_settings = _resolve_cache_settings(
+            agent_doc, prompt_cache_options, is_local_llm=is_local_llm
+        )
+        enable_prompt_caching = cache_settings.enabled
+        cache_control_type = cache_settings.cache_control_type
+        cache_static_prefix = cache_settings.cache_static_prefix
+        cache_system_message = cache_settings.cache_system_message
+        cache_dynamic_content = cache_settings.cache_dynamic_content
 
-        if is_local_llm:
-            # Local providers (Ollama/LM Studio) do not support prompt-caching cache_control blocks.
-            enable_prompt_caching = False
+        if not cache_settings.allow_provider_cache_params:
+            # Off means no HUF-injected cache controls of any kind.
+            openai_prompt_cache_retention = None
+            gemini_cached_content = None
 
         max_context_chars = _get_agent_max_context_chars(agent_doc)
 
         # Check if model supports prompt caching
         model_supports_caching = False
         cache_skipped_unsupported_model = False
+        cache_skipped_below_min_tokens = False
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
@@ -700,6 +1015,20 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 frappe.log_error(
                     title="LiteLLM Prompt Caching",
                     message=f"Failed to check prompt caching support for model {normalized_model}",
+                )
+
+        # Resolve model capabilities to check minimum cacheable token threshold
+        provider_brand = provider_doc.get("provider_brand") or normalized_model.split("/")[0]
+        min_cacheable_tokens = None
+        if model_supports_caching and enable_prompt_caching:
+            try:
+                capabilities = resolve_capabilities(provider_brand, model)
+                min_cacheable_tokens = capabilities.min_cacheable_tokens
+            except Exception as e:
+                # Failure in resolve_capabilities should not break the completion.
+                # Log and continue with caching enabled (assume adequate tokens).
+                logger.warning(
+                    f"Failed to resolve prompt cache capabilities for {provider_brand}/{model}: {e!s}"
                 )
 
         if not isinstance(dynamic_suffix, str):
@@ -733,35 +1062,39 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
-            history_cache_enabled = (
-                enable_prompt_caching and model_supports_caching and cache_conversation_history
-            )
             messages.extend(
                 _format_conversation_history(
                     context["conversation_history"],
-                    provider_name,
-                    history_cache_enabled,
-                    cache_control_type,
                 )
             )
         
-        # Add user message with cache_control if conversation history caching is enabled
-        cache_dynamic_content = cache_conversation_history
-        if isinstance(cache_dynamic_content_override, bool):
-            cache_dynamic_content = cache_dynamic_content_override
-
+        # Add user message. cache_dynamic_content is resolved once by
+        # _resolve_cache_settings() above (Auto -> tool-capable Agent,
+        # Advanced -> legacy cache_conversation_history plus the
+        # prompt_cache_options["cache_dynamic_content"] override, Off ->
+        # forced off) but the marker itself is round-gated: it is never
+        # placed at round 0, only from round 1 onward (see the round loop
+        # below and _resolve_cache_settings()'s docstring for why).
+        dynamic_cache_eligible = (
+            enable_prompt_caching and model_supports_caching and cache_dynamic_content
+        )
         user_content = _build_text_content(
             dynamic_suffix,
             provider_name,
-            enable_prompt_caching and model_supports_caching and cache_dynamic_content,
+            False,
             cache_control_type,
         )
-        
+
         # Append images if any are passed in context (embedded as base64 data URIs)
         if context and context.get("files"):
             user_content = _append_context_images_to_user_content(user_content, context.get("files"))
-        
+
         messages.append({"role": "user", "content": user_content})
+        # messages is re-trimmed (deep-copied) and repaired every round below,
+        # which can drop/rewrite entries (see _find_last_user_message_index's
+        # docstring) — so the round gate re-scans for the last user message
+        # fresh each time rather than trusting an index captured here.
+        dynamic_marker_applied = False
 
         # Convert tools
         tools = None
@@ -786,6 +1119,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             "peak_context_tokens": 0,
             "round_count": 0,
             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+            "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
             # Tokens contributed by tool-call requests/results across all rounds
             # (see context_segments.count_tool_exchange_tokens); None if any
             # round's count failed. round_prompt_tokens is the per-round
@@ -806,7 +1140,27 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
         for round_num in range(MAX_ROUNDS):
 
+            # Round gate for the dynamic (latest-user-message) cache marker:
+            # attach it only once a second provider round is actually
+            # happening (round_num >= 1), never at round 0. Applied at most
+            # once — after that the marker rides along in `messages` (and
+            # through each round's deep-copy/repair below) without being
+            # rebuilt. See _resolve_cache_settings()'s docstring.
+            if dynamic_cache_eligible and not dynamic_marker_applied and round_num >= 1:
+                _dynamic_idx = _find_last_user_message_index(messages)
+                if _dynamic_idx >= 0:
+                    target = dict(messages[_dynamic_idx])
+                    target["content"] = _apply_dynamic_cache_marker(
+                        target["content"], provider_name, cache_control_type
+                    )
+                    messages[_dynamic_idx] = target
+                    dynamic_marker_applied = True
+
             # Temperature / Top P
+            # Note: Agent.temperature and Agent.top_p have doctype defaults of 1.0.
+            # We treat 1.0 as "not explicitly configured" and only send if != 1.0.
+            # This prevents sending unsupported parameters to newer Claude models
+            # and avoids conflicts when both are sent together.
             temperature = None
             top_p = None
 
@@ -823,15 +1177,37 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 if top_p is None:
                     top_p = getattr(agent.model_settings, "top_p", None)
 
-            if temperature is None:
-                temperature = 0.7
+            # Treat doctype default (1.0) as "not explicitly set"
+            if temperature == 1.0:
+                temperature = None
+            if top_p == 1.0:
+                top_p = None
+
+            # Apply sampling parameter precedence: if both are set, send only temperature
+            if temperature is not None and top_p is not None:
+                top_p = None  # temperature wins
 
             # Build completion params
             completion_kwargs = {
                 "model": normalized_model,
-                "temperature": temperature,
                 "timeout": _DEFAULT_LITELLM_TIMEOUT,
             }
+
+            # Only add temperature if explicitly configured and not already known
+            # (from a prior call this process, or a prior worker via frappe.cache())
+            # to be rejected by this model. Mirrors the tool/json capability_cache_key
+            # pattern above/below: skip the failed round-trip once the negative
+            # result is known. See the BadRequestError handler below, which is what
+            # first discovers and caches this.
+            temperature_cache_key = f"litellm_temperature_unsupported:{normalized_model}"
+            if temperature is not None:
+                _temp_unsupported = _L1_CAPABILITY_CACHE.get(temperature_cache_key)
+                if _temp_unsupported is None:
+                    _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
+                    if _temp_unsupported:
+                        _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
+                if not _temp_unsupported:
+                    completion_kwargs["temperature"] = temperature
 
             if api_base:
                 completion_kwargs["api_base"] = api_base
@@ -864,7 +1240,8 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             if gemini_cached_content:
                 completion_kwargs["cached_content"] = gemini_cached_content
 
-            if top_p:
+            # Only add top_p if explicitly configured and not overridden by temperature
+            if top_p is not None:
                 completion_kwargs["top_p"] = top_p
 
             provider_name = normalized_model.split("/")[0]
@@ -935,6 +1312,37 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 completion_kwargs["tools"] = tools
                 completion_kwargs["tool_choice"] = "auto"
 
+            # Check if cacheable prefix meets model's minimum token threshold
+            # (only on first round; once set, the flag persists across rounds).
+            # Wrapped in its own try/except — same shape as run_stream()'s
+            # equivalent block below — so a failure in the (best-effort, regex-free)
+            # estimator degrades identically in both paths: caching just proceeds
+            # unflagged, the completion is never broken by a diagnostic check.
+            if (
+                enable_prompt_caching
+                and model_supports_caching
+                and not cache_skipped_below_min_tokens
+                and min_cacheable_tokens is not None
+            ):
+                try:
+                    estimated_prefix_tokens = _estimate_prefix_tokens(completion_kwargs.get("messages", []))
+                    if estimated_prefix_tokens < min_cacheable_tokens:
+                        cache_skipped_below_min_tokens = True
+                        # total_usage was built before the round loop with the initial
+                        # (False) value; mutate it now so the determination actually
+                        # reaches the returned usage dict. Guarded by the `not
+                        # cache_skipped_below_min_tokens` check above, so this only
+                        # fires once and the True value persists across later rounds.
+                        total_usage["cache_skipped_below_min_tokens"] = True
+                        logger.info(
+                            f"Prompt caching disabled: cacheable prefix is {estimated_prefix_tokens} tokens "
+                            f"but model {normalized_model} requires minimum {min_cacheable_tokens} tokens"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to estimate cacheable prefix tokens for {normalized_model}: {e!s}"
+                    )
+
             # LiteLLM call
             try:
                 try:
@@ -942,18 +1350,32 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 except BadRequestError as e:
                     err_msg = str(e).lower()
                     conflict_keywords = [
-                        "response_format", 
-                        "response mime type", 
-                        "tool", 
+                        "response_format",
+                        "response mime type",
+                        "tool",
                         "function calling",
-                        "json", 
+                        "json",
                         "unsupported"
                     ]
-                    
+
                     is_config_conflict = (
-                        completion_kwargs.get("tools") 
+                        completion_kwargs.get("tools")
                         and completion_kwargs.get("response_format")
                         and any(k in err_msg for k in conflict_keywords)
+                    )
+
+                    # Model-specific: newer Claude models (e.g. claude-sonnet-5) reject
+                    # any explicit non-1.0 temperature outright ("`temperature` is
+                    # deprecated for this model"), unlike claude-opus-4-5 which accepts
+                    # it — so this must be a live retry-and-cache, not a blanket drop.
+                    # Mirrors get_simple_completion()'s fallback in this same file.
+                    is_temperature_conflict = (
+                        completion_kwargs.get("temperature") is not None
+                        and "temperature" in err_msg
+                        and any(
+                            k in err_msg
+                            for k in ("deprecated", "unsupported", "not supported", "does not support")
+                        )
                     )
 
                     if is_config_conflict:
@@ -966,7 +1388,18 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         )
                         completion_kwargs.pop("tools", None)
                         completion_kwargs.pop("tool_choice", None)
-                        
+
+                        response = await _litellm_completion_with_retry(**completion_kwargs)
+                    elif is_temperature_conflict:
+                        _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
+                        frappe.cache().set_value(temperature_cache_key, 1)
+
+                        frappe.log_error(
+                            title="LiteLLM Auto-Recovery",
+                            message=f"Model '{normalized_model}' rejected temperature. Retrying without it and caching capability limitation. Error: {str(e)}",
+                        )
+                        completion_kwargs.pop("temperature", None)
+
                         response = await _litellm_completion_with_retry(**completion_kwargs)
                     else:
                         raise e
@@ -1379,32 +1812,34 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         is_local_llm = bool(provider_doc.get("is_local_llm", 0))
         api_base = _resolve_api_base(provider_doc)
 
-        # Check prompt caching configuration
-        enable_prompt_caching = False
-        cache_control_type = "ephemeral"
-        cache_system_message = False
-        cache_conversation_history = False
+        # Check prompt caching configuration.
+        # Agent.prompt_cache_mode is authoritative; the four legacy fields are read
+        # only in Advanced mode. Resolution is shared by run() and run_stream() via
+        # _resolve_cache_settings() so the two paths cannot drift apart.
         prompt_cache_options = _get_prompt_cache_options(context)
         static_prefix = (prompt_cache_options.get("static_prefix") or "").strip()
         dynamic_suffix = prompt_cache_options.get("dynamic_suffix")
         openai_prompt_cache_retention = prompt_cache_options.get("openai_prompt_cache_retention")
         gemini_cached_content = prompt_cache_options.get("gemini_cached_content")
-        cache_static_prefix = bool(prompt_cache_options.get("cache_static_prefix", True))
-        cache_dynamic_content_override = prompt_cache_options.get("cache_dynamic_content")
 
-        if agent_doc:
-            enable_prompt_caching = bool(agent_doc.get("enable_prompt_caching", 0))
-            cache_control_type = agent_doc.get("cache_control_type") or "ephemeral"
-            cache_system_message = bool(agent_doc.get("cache_system_message", 0))
-            cache_conversation_history = bool(agent_doc.get("cache_conversation_history", 0))
+        cache_settings = _resolve_cache_settings(
+            agent_doc, prompt_cache_options, is_local_llm=is_local_llm
+        )
+        enable_prompt_caching = cache_settings.enabled
+        cache_control_type = cache_settings.cache_control_type
+        cache_static_prefix = cache_settings.cache_static_prefix
+        cache_system_message = cache_settings.cache_system_message
+        cache_dynamic_content = cache_settings.cache_dynamic_content
 
-        if is_local_llm:
-            # Local providers (Ollama/LM Studio) do not support prompt-caching cache_control blocks.
-            enable_prompt_caching = False
+        if not cache_settings.allow_provider_cache_params:
+            # Off means no HUF-injected cache controls of any kind.
+            openai_prompt_cache_retention = None
+            gemini_cached_content = None
 
         # Check if model supports prompt caching
         model_supports_caching = False
         cache_skipped_unsupported_model = False
+        cache_skipped_below_min_tokens = False
         if enable_prompt_caching:
             try:
                 model_supports_caching = model_supports_prompt_caching(model, provider)
@@ -1417,6 +1852,21 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 frappe.log_error(
                     message=f"Failed to check prompt caching support for model {normalized_model}",
                     title="LiteLLM Prompt Caching"
+                )
+
+        # Resolve model capabilities to check minimum cacheable token threshold
+        # (mirrors run()'s equivalent block above).
+        provider_brand = provider_doc.get("provider_brand") or normalized_model.split("/")[0]
+        min_cacheable_tokens = None
+        if model_supports_caching and enable_prompt_caching:
+            try:
+                capabilities = resolve_capabilities(provider_brand, model)
+                min_cacheable_tokens = capabilities.min_cacheable_tokens
+            except Exception as e:
+                # Failure in resolve_capabilities should not break the completion.
+                # Log and continue with caching enabled (assume adequate tokens).
+                logger.warning(
+                    f"Failed to resolve prompt cache capabilities for {provider_brand}/{model}: {e!s}"
                 )
 
         if not isinstance(dynamic_suffix, str):
@@ -1450,34 +1900,41 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         
         # Insert Conversation History if available
         if context and context.get("conversation_history"):
-            history_cache_enabled = (
-                enable_prompt_caching and model_supports_caching and cache_conversation_history
-            )
             messages.extend(
                 _format_conversation_history(
                     context["conversation_history"],
-                    provider_name,
-                    history_cache_enabled,
-                    cache_control_type,
                 )
             )
         
-        cache_dynamic_content = cache_conversation_history
-        if isinstance(cache_dynamic_content_override, bool):
-            cache_dynamic_content = cache_dynamic_content_override
-
+        # cache_dynamic_content is resolved once by _resolve_cache_settings() above
+        # (Auto -> tool-capable Agent, Advanced -> legacy
+        # cache_conversation_history plus the
+        # prompt_cache_options["cache_dynamic_content"] override, Off -> forced
+        # off) but the marker itself is round-gated: it is never placed at
+        # round 0, only from round 1 onward (see the round loop below and
+        # _resolve_cache_settings()'s docstring for why).
+        dynamic_cache_eligible = (
+            enable_prompt_caching and model_supports_caching and cache_dynamic_content
+        )
         user_content = _build_text_content(
             dynamic_suffix,
             provider_name,
-            enable_prompt_caching and model_supports_caching and cache_dynamic_content,
+            False,
             cache_control_type,
         )
-        
+
         # Append images if any are passed in context (embedded as base64 data URIs)
         if context and context.get("files"):
             user_content = _append_context_images_to_user_content(user_content, context.get("files"))
-        
+
         messages.append({"role": "user", "content": user_content})
+        # Unlike run(), messages here is only trimmed/repaired ONCE before the
+        # round loop (see below) and then mutated in place — appended to, not
+        # replaced — across subsequent rounds. That one-time repair can still
+        # drop/rewrite entries (see _find_last_user_message_index's
+        # docstring), so the round gate re-scans for the last user message
+        # fresh each time rather than trusting an index captured before repair ran.
+        dynamic_marker_applied = False
 
         # Convert tools to OpenAI format
         tools = None
@@ -1494,6 +1951,10 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 logger.warning(f"Failed to build local overrides for '{provider}': {e!s}")
 
         # Get temperature and top_p
+        # Note: Agent.temperature and Agent.top_p have doctype defaults of 1.0.
+        # We treat 1.0 as "not explicitly configured" and only send if != 1.0.
+        # This prevents sending unsupported parameters to newer Claude models
+        # and avoids conflicts when both are sent together.
         temperature = None
         top_p = None
 
@@ -1511,17 +1972,39 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 getattr(agent.model_settings, "top_p", None) if top_p is None else top_p
             )
 
-        if temperature is None:
-            temperature = 0.7
+        # Treat doctype default (1.0) as "not explicitly set"
+        if temperature == 1.0:
+            temperature = None
+        if top_p == 1.0:
+            top_p = None
+
+        # Apply sampling parameter precedence: if both are set, send only temperature
+        if temperature is not None and top_p is not None:
+            top_p = None  # temperature wins
 
         completion_kwargs = {
             "model": normalized_model,
             "messages": messages,
-            "temperature": temperature,
             "stream": True,  # Enable streaming
             "stream_options": {"include_usage": True}, # Request usage stats in stream
             "timeout": _DEFAULT_LITELLM_TIMEOUT,
         }
+
+        # Only add temperature if explicitly configured and not already known
+        # (from a prior call this process, or a prior worker via frappe.cache())
+        # to be rejected by this model. See the BadRequestError handler around
+        # the streaming completion call below, which is what first discovers
+        # and caches this. Mirrors run()'s equivalent block.
+        temperature_cache_key = f"litellm_temperature_unsupported:{normalized_model}"
+        if temperature is not None:
+            _temp_unsupported = _L1_CAPABILITY_CACHE.get(temperature_cache_key)
+            if _temp_unsupported is None:
+                _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
+                if _temp_unsupported:
+                    _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
+            if not _temp_unsupported:
+                completion_kwargs["temperature"] = temperature
+
         if api_base:
             completion_kwargs["api_base"] = api_base
 
@@ -1543,7 +2026,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         )
         completion_kwargs["messages"] = messages
 
-        if top_p:
+        # Only add top_p if explicitly configured and not overridden by temperature
+        if top_p is not None:
             completion_kwargs["top_p"] = top_p
 
         if openai_prompt_cache_retention:
@@ -1631,6 +2115,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "peak_context_tokens": 0,
             "round_count": 0,
             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+            "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
             # See the matching fields in run()'s total_usage init for what
             # these mean and why tool_exchange_tokens can degrade to None.
             "tool_exchange_tokens": 0,
@@ -1639,10 +2124,85 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         stream_total_cost = 0.0
 
         for round_num in range(MAX_ROUNDS):
+            # Round gate for the dynamic (latest-user-message) cache marker:
+            # attach it only once a second provider round is actually
+            # happening (round_num >= 1), never at round 0. Applied at most
+            # once — `messages` is the same list object mutated in place
+            # across rounds here (see the append above), so this reaches
+            # completion_kwargs["messages"] without reassigning it. See
+            # _resolve_cache_settings()'s docstring.
+            if dynamic_cache_eligible and not dynamic_marker_applied and round_num >= 1:
+                _dynamic_idx = _find_last_user_message_index(messages)
+                if _dynamic_idx >= 0:
+                    target = dict(messages[_dynamic_idx])
+                    target["content"] = _apply_dynamic_cache_marker(
+                        target["content"], provider_name, cache_control_type
+                    )
+                    messages[_dynamic_idx] = target
+                    dynamic_marker_applied = True
+
             try:
+                # Check if cacheable prefix meets model's minimum token threshold
+                # (mirrors run()'s equivalent check; once set, the flag persists
+                # across rounds via the `not cache_skipped_below_min_tokens` guard).
+                # Wrapped in its own try/except — deliberately narrower than the
+                # round-level try below — so an estimator failure is logged and
+                # skipped here, never misreported by the broad API-error handlers
+                # further down (which would otherwise abort the whole round as if
+                # the LLM call itself had failed).
+                if (
+                    enable_prompt_caching
+                    and model_supports_caching
+                    and not cache_skipped_below_min_tokens
+                    and min_cacheable_tokens is not None
+                ):
+                    try:
+                        estimated_prefix_tokens = _estimate_prefix_tokens(completion_kwargs.get("messages", []))
+                        if estimated_prefix_tokens < min_cacheable_tokens:
+                            cache_skipped_below_min_tokens = True
+                            stream_total_usage["cache_skipped_below_min_tokens"] = True
+                            logger.info(
+                                f"Prompt caching disabled: cacheable prefix is {estimated_prefix_tokens} tokens "
+                                f"but model {normalized_model} requires minimum {min_cacheable_tokens} tokens"
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to estimate cacheable prefix tokens for {normalized_model}: {e!s}"
+                        )
+
                 # Use LiteLLM completion with stream=True
                 # LiteLLM completion() supports streaming when stream=True
-                stream = await _litellm_completion_with_retry(**completion_kwargs)
+                try:
+                    stream = await _litellm_completion_with_retry(**completion_kwargs)
+                except BadRequestError as e:
+                    err_msg = str(e).lower()
+                    # Model-specific: newer Claude models (e.g. claude-sonnet-5) reject
+                    # any explicit non-1.0 temperature outright ("`temperature` is
+                    # deprecated for this model"), unlike claude-opus-4-5 which accepts
+                    # it — so this must be a live retry-and-cache, not a blanket drop.
+                    # Mirrors get_simple_completion()'s fallback in this same file, and
+                    # run()'s equivalent handler.
+                    is_temperature_conflict = (
+                        completion_kwargs.get("temperature") is not None
+                        and "temperature" in err_msg
+                        and any(
+                            k in err_msg
+                            for k in ("deprecated", "unsupported", "not supported", "does not support")
+                        )
+                    )
+                    if is_temperature_conflict:
+                        _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
+                        frappe.cache().set_value(temperature_cache_key, 1)
+
+                        frappe.log_error(
+                            title="LiteLLM Auto-Recovery",
+                            message=f"Model '{normalized_model}' rejected temperature. Retrying without it and caching capability limitation. Error: {str(e)}",
+                        )
+                        completion_kwargs.pop("temperature", None)
+
+                        stream = await _litellm_completion_with_retry(**completion_kwargs)
+                    else:
+                        raise e
 
                 # Buffer for tool calls and thinking blocks
                 current_tool_calls = {}

@@ -46,6 +46,7 @@ export function GeneralTab({
   locked = false,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
+  const watchPromptCacheMode = form.watch('prompt_cache_mode');
   const watchModel = form.watch('model');
   const promptMode = form.watch('prompt_mode');
   const watchModality = form.watch('agent_modality');
@@ -457,6 +458,33 @@ We generally recommend altering this or temperature but not both.`}
         <CardContent className="grid gap-6 sm:grid-cols-2">
           <FormField
             control={form.control}
+            name="prompt_cache_mode"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Prompt Cache Mode</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value || 'Auto'} disabled={locked}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select cache mode" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Auto">Auto</SelectItem>
+                    <SelectItem value="Off">Off</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Auto lets HUF choose provider-appropriate cache placement; Off disables HUF-injected caching; Advanced exposes granular controls.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {watchPromptCacheMode === 'Advanced' && (
+          <FormField
+            control={form.control}
             name="enable_prompt_caching"
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-md border p-4 sm:col-span-2">
@@ -472,8 +500,9 @@ We generally recommend altering this or temperature but not both.`}
               </FormItem>
             )}
           />
+          )}
 
-          {watchEnablePromptCaching && watchProvider && watchModel && cacheStatus && !cacheStatus.supported && (
+          {watchPromptCacheMode === 'Advanced' && watchEnablePromptCaching && watchProvider && watchModel && cacheStatus && !cacheStatus.supported && (
             <Alert className="sm:col-span-2 border-warning/50 bg-warning/10 text-warning">
               <AlertTriangle className="h-4 w-4 text-warning" />
               <AlertTitle className="font-semibold text-sm">Silent Degradation Warning: Prompt Caching Not Supported</AlertTitle>
@@ -490,7 +519,7 @@ We generally recommend altering this or temperature but not both.`}
             </Alert>
           )}
 
-          {watchEnablePromptCaching && (
+          {watchPromptCacheMode === 'Advanced' && watchEnablePromptCaching && (
             <FormField
               control={form.control}
               name="cache_control_type"
@@ -517,7 +546,7 @@ We generally recommend altering this or temperature but not both.`}
             />
           )}
 
-          {watchEnablePromptCaching && (
+          {watchPromptCacheMode === 'Advanced' && watchEnablePromptCaching && (
             <FormField
               control={form.control}
               name="cache_system_message"
@@ -537,7 +566,7 @@ We generally recommend altering this or temperature but not both.`}
             />
           )}
 
-          {watchEnablePromptCaching && (
+          {watchPromptCacheMode === 'Advanced' && watchEnablePromptCaching && (
             <FormField
               control={form.control}
               name="cache_conversation_history"

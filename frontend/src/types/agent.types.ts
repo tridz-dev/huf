@@ -291,6 +291,7 @@ export interface AgentDoc {
   cache_control_type?: string | null; // ephemeral or auto (DocType)
   cache_system_message?: number; // 0 or 1
   cache_conversation_history?: number; // 0 or 1
+  prompt_cache_mode?: 'Auto' | 'Off' | 'Advanced' | null;
   context_strategy?: string | null; // Summarize, FIFO, or None
   summary_model?: string | null; // AI Model name for summarization when strategy is Summarize
   summary_ratio?: number | null; // Ratio of history to summarize (0-1)

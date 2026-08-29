@@ -96,6 +96,7 @@ const AGENT_LIST_FIELDS = [
   'agent_prompt',
   'enable_multi_run',
   'enable_prompt_caching',
+  'prompt_cache_mode',
   'allow_guest',
   'is_system',
   'provider_brand',

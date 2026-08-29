@@ -31,6 +31,7 @@ from huf.ai.agent_access import assert_agent_access, check_agent_access as _chec
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
+from huf.ai.tool_serializer import serialize_tools
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -1760,8 +1761,23 @@ def _execute_agent_run(
             run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
         )
 
+        # Serialize tools for prefix fingerprinting
+        try:
+            tools_schema = serialize_tools(getattr(agent, "tools", None) or [])
+        except Exception as e:
+            tools_schema = None
+            frappe.logger("huf").warning(
+                f"Failed to serialize tools for prefix fingerprinting (sync, agent={agent_name}): {e!s}"
+            )
+
+        # Get static prefix and latest user message for prefix fingerprinting
+        static_prefix = (resolved_prompt_cache.get("static_prefix") or "").strip() if resolved_prompt_cache else None
+
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model_name, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history,
+            tools=tools_schema,
+            static_prefix=static_prefix if static_prefix else None,
+            latest_user=prompt
         )
         tools_breakdown = compute_tools_breakdown(
             _normalize_model_name(resolved_model_name, resolved_provider),
@@ -1951,6 +1967,7 @@ def _execute_agent_run(
         cached_tokens = 0
         cache_creation_tokens = 0
         cache_skipped_unsupported_model = False
+        cache_skipped_below_min_tokens = False
 
         if usage:
 
@@ -1963,8 +1980,10 @@ def _execute_agent_run(
             usage_dict = normalise_usage_payload(usage)
             if usage_dict is not None:
                 cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
+                cache_skipped_below_min_tokens = bool(usage_dict.get("cache_skipped_below_min_tokens", False))
             else:
                 cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
+                cache_skipped_below_min_tokens = bool(getattr(usage, "cache_skipped_below_min_tokens", False))
 
             try:
                 # Prefer cost directly from the result
@@ -2080,6 +2099,7 @@ def _execute_agent_run(
                     "cache_read_tokens": cached_tokens,
                     "cache_creation_tokens": cache_creation_tokens,
                     "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                    "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
                     "total_tokens": total_tokens,
                     "completeness": "provider_reported" if usage else "estimated",
                     "segment_tokens": segment_tokens,
@@ -2985,8 +3005,23 @@ async def run_agent_stream(
             run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
         )
 
+        # Serialize tools for prefix fingerprinting
+        try:
+            tools_schema = serialize_tools(getattr(agent, "tools", None) or [])
+        except Exception as e:
+            tools_schema = None
+            frappe.logger("huf").warning(
+                f"Failed to serialize tools for prefix fingerprinting (stream, agent={agent_name}): {e!s}"
+            )
+
+        # Get static prefix and latest user message for prefix fingerprinting
+        static_prefix = (resolved_prompt_cache.get("static_prefix") or "").strip() if resolved_prompt_cache else None
+
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model_name, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history,
+            tools=tools_schema,
+            static_prefix=static_prefix if static_prefix else None,
+            latest_user=prompt
         )
         tools_breakdown = compute_tools_breakdown(
             _normalize_model_name(resolved_model_name, resolved_provider),
@@ -3091,6 +3126,7 @@ async def run_agent_stream(
                     cached_tokens = 0
                     cache_creation_tokens = 0
                     cache_skipped_unsupported_model = False
+                    cache_skipped_below_min_tokens = False
                     total_tokens = 0
                     usage_dict = None
 
@@ -3105,8 +3141,10 @@ async def run_agent_stream(
                         usage_dict = normalise_usage_payload(usage)
                         if usage_dict is not None:
                             cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
+                            cache_skipped_below_min_tokens = bool(usage_dict.get("cache_skipped_below_min_tokens", False))
                         else:
                             cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
+                            cache_skipped_below_min_tokens = bool(getattr(usage, "cache_skipped_below_min_tokens", False))
 
                         # usage is normally a plain dict here, so getattr() would always miss;
                         # read the normalised payload and fall back to the parts.
@@ -3245,6 +3283,7 @@ async def run_agent_stream(
                             "cache_read_tokens": cached_tokens,
                             "cache_creation_tokens": cache_creation_tokens,
                             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                            "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
                             "total_tokens": total_tokens,
                             "completeness": "provider_reported" if usage else "estimated",
                             "segment_tokens": segment_tokens,
