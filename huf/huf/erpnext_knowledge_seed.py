@@ -229,7 +229,7 @@ def _seed_knowledge_inputs_for_section(section_key, cfg):
 
 	created = 0
 	for fname in sorted(os.listdir(section_dir)):
-		if not fname.endswith(".md") or fname == "INDEX.md":
+		if not fname.endswith(".md") or fname.startswith("INDEX"):
 			continue
 		if fname in existing_file_names:
 			continue
