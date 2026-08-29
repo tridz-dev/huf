@@ -122,6 +122,32 @@ function AddOnsTab() {
     );
   }
 
+  if (loadState === 'error') {
+    // A real failure (permissions, network) -- never fall through to a live
+    // toggle here: it would render as confidently "off" and any click would
+    // just fail again. Most likely cause is that DeskAI Settings write
+    // access is restricted (e.g. System Manager only) for this user.
+    return (
+      <Card className="border-dashed">
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+              <Bot className="h-4.5 w-4.5 text-steel-soft" />
+            </div>
+            <div>
+              <h3 className="text-[14px] font-semibold text-ink">DeskAI</h3>
+              <p className="font-body text-[13px] text-steel mt-1 max-w-prose">
+                Couldn&rsquo;t load DeskAI settings — you may not have access to change them, or the
+                request failed. Ask a System Manager, or try again.
+              </p>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0" />
+      </Card>
+    );
+  }
+
   return (
     <FeatureCard
       icon={Bot}
