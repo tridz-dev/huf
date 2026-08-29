@@ -19,6 +19,8 @@ import asyncio
 import base64
 import json
 import os
+import re
+import time
 from types import SimpleNamespace
 
 import frappe
@@ -119,9 +121,52 @@ def _raise_provider_unavailable(raw_message: str, normalized_model: str | None =
     )
 
 
-# High-performance in-memory cache for provider capabilities
-# Stores capability flags to avoid Redis hits on every request
-_L1_CAPABILITY_CACHE = {}
+# High-performance in-memory cache for provider capabilities.
+#
+# This sits IN FRONT of Redis, so it has to honour the same expiry Redis does.
+# It previously stored a bare flag with no expiry and no eviction: once a
+# negative result was recorded, the Redis key could expire but the worker kept
+# reading its own copy forever, and `frappe.cache().delete_value()` could not
+# reach it. That reinstated exactly the permanent poisoning the Redis TTL was
+# added to prevent, for the lifetime of the process.
+#
+# Entries are therefore (value, expires_at) and are keyed per site: frappe's own
+# cache is site-scoped, but a worker process is shared across sites on a
+# multi-tenant bench, so an unscoped key let one site's negative result suppress
+# a parameter for every other site in that process.
+_L1_CAPABILITY_CACHE: dict[str, tuple[object, float]] = {}
+_L1_CAPABILITY_CACHE_MAX_ENTRIES = 2048
+
+
+def _site_scoped_key(key: str) -> str:
+    """Namespace a capability cache key by site, mirroring frappe.cache()."""
+    site = getattr(frappe.local, "site", None) or "__no_site__"
+    return f"{site}:{key}"
+
+
+def _l1_get(key: str):
+    """Read a non-expired L1 entry, or None."""
+    entry = _L1_CAPABILITY_CACHE.get(key)
+    if entry is None:
+        return None
+    value, expires_at = entry
+    if expires_at <= time.time():
+        _L1_CAPABILITY_CACHE.pop(key, None)
+        return None
+    return value
+
+
+def _l1_set(key: str, value, ttl: int) -> None:
+    """Record an L1 entry with the same lifetime as its Redis counterpart."""
+    if len(_L1_CAPABILITY_CACHE) >= _L1_CAPABILITY_CACHE_MAX_ENTRIES:
+        # Cheap bound: drop everything already expired, and if that frees
+        # nothing, clear outright rather than grow without limit.
+        now = time.time()
+        for k in [k for k, (_, exp) in _L1_CAPABILITY_CACHE.items() if exp <= now]:
+            _L1_CAPABILITY_CACHE.pop(k, None)
+        if len(_L1_CAPABILITY_CACHE) >= _L1_CAPABILITY_CACHE_MAX_ENTRIES:
+            _L1_CAPABILITY_CACHE.clear()
+    _L1_CAPABILITY_CACHE[key] = (value, time.time() + ttl)
 
 
 def _estimate_prefix_tokens(messages: list) -> int:
@@ -191,6 +236,59 @@ def _get_prompt_cache_options(context: dict | None) -> dict:
         return {}
     options = context.get("prompt_cache_options")
     return options if isinstance(options, dict) else {}
+
+
+# --- Sampling parameter rejection detection -----------------------------------
+#
+# Providers reject an unsupported sampling parameter with a free-text message. A
+# bare `"top_p" in err_msg` substring test is not safe: providers routinely list
+# the parameters they DO accept after naming the one they actually rejected, e.g.
+#     "Unsupported parameter: 'response_format' is not supported with this model.
+#      Supported parameters: temperature, top_p, max_tokens."
+# Reading that as a top_p rejection drops top_p, retries, fails again on the real
+# cause, and poisons the negative cache for that model. So strip any trailing
+# "supported parameters: ..." enumeration before looking for the parameter, and
+# match the parameter as a whole word rather than a substring.
+
+# Strip only the enumeration itself -- up to the next sentence end or newline --
+# not the rest of the message. A greedy match to end-of-string erased any
+# rejection that came AFTER the accepted-parameter list, e.g.
+#   "unsupported parameter: 'response_format'. supported parameters: temperature,
+#    max_tokens. additionally, top_p is not supported for this model."
+# where the real top_p rejection is the final sentence.
+_SUPPORTED_PARAMS_ENUMERATION_RE = re.compile(r"\bsupported parameters?\s*:[^.\n]*", re.IGNORECASE)
+
+# URLs in error bodies routinely contain a parameter name as a doc anchor
+# ("see https://docs.../api#top_p"). Matching that as a rejection would drop the
+# parameter and cache a negative result for a model that supports it.
+_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_REJECTION_VERBS = (
+    "deprecated",
+    "unsupported",
+    "not supported",
+    "does not support",
+    "does not accept",
+    "not accepted",
+    "not permitted",
+    "not allowed",
+)
+
+# Negative capability results are cached so a known-bad combination does not pay a
+# failed round-trip on every call. They expire so that a provider adding support --
+# or a single false positive slipping through -- self-heals, instead of disabling
+# the parameter for that model forever with no invalidation path.
+_SAMPLING_NEGATIVE_CACHE_TTL = 60 * 60 * 24 * 7  # 7 days
+
+
+def _param_rejected(err_msg: str, param: str) -> bool:
+    """True when `err_msg` names `param` as the parameter the model rejected."""
+    if not err_msg:
+        return False
+    subject = _URL_RE.sub("", err_msg)
+    subject = _SUPPORTED_PARAMS_ENUMERATION_RE.sub("", subject)
+    if not re.search(rf"\b{re.escape(param)}\b", subject):
+        return False
+    return any(verb in subject for verb in _REJECTION_VERBS)
 
 
 # --- Prompt cache mode resolution -------------------------------------------------
@@ -1215,13 +1313,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # pattern above/below: skip the failed round-trip once the negative
             # result is known. See the BadRequestError handler below, which is what
             # first discovers and caches this.
-            temperature_cache_key = f"litellm_temperature_unsupported:{normalized_model}"
+            temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
+            top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
             if temperature is not None:
-                _temp_unsupported = _L1_CAPABILITY_CACHE.get(temperature_cache_key)
+                _temp_unsupported = _l1_get(temperature_cache_key)
                 if _temp_unsupported is None:
                     _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
                     if _temp_unsupported:
-                        _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
+                        _l1_set(temperature_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
                 if not _temp_unsupported:
                     completion_kwargs["temperature"] = temperature
 
@@ -1258,7 +1357,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             # Only add top_p if explicitly configured and not overridden by temperature
             if top_p is not None:
-                completion_kwargs["top_p"] = top_p
+                _tp_unsupported = _l1_get(top_p_cache_key)
+                if _tp_unsupported is None:
+                    _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
+                    if _tp_unsupported:
+                        _l1_set(top_p_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+                if not _tp_unsupported:
+                    completion_kwargs["top_p"] = top_p
 
             provider_name = normalized_model.split("/")[0]
             _setup_api_key(provider_name, api_key, completion_kwargs)
@@ -1297,14 +1402,14 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
             completion_kwargs.update(build_reasoning_kwargs(r_res))
 
-            capability_cache_key = f"litellm_tool_json_conflict:{provider_name}"
+            capability_cache_key = _site_scoped_key(f"litellm_tool_json_conflict:{provider_name}")
             
-            known_conflict = _L1_CAPABILITY_CACHE.get(capability_cache_key)
+            known_conflict = _l1_get(capability_cache_key)
              
             if known_conflict is None:
                 known_conflict = frappe.cache().get_value(capability_cache_key)
                 if known_conflict:
-                    _L1_CAPABILITY_CACHE[capability_cache_key] = 1
+                    _l1_set(capability_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
             
             is_json_mode = context and context.get("response_format")
             
@@ -1387,16 +1492,17 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     # Mirrors get_simple_completion()'s fallback in this same file.
                     is_temperature_conflict = (
                         completion_kwargs.get("temperature") is not None
-                        and "temperature" in err_msg
-                        and any(
-                            k in err_msg
-                            for k in ("deprecated", "unsupported", "not supported", "does not support")
-                        )
+                        and _param_rejected(err_msg, "temperature")
+                    )
+
+                    is_top_p_conflict = (
+                        completion_kwargs.get("top_p") is not None
+                        and _param_rejected(err_msg, "top_p")
                     )
 
                     if is_config_conflict:
-                        _L1_CAPABILITY_CACHE[capability_cache_key] = 1
-                        frappe.cache().set_value(capability_cache_key, 1)
+                        _l1_set(capability_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+                        frappe.cache().set_value(capability_cache_key, 1, expires_in_sec=_SAMPLING_NEGATIVE_CACHE_TTL)
 
                         frappe.log_error(
                             title="LiteLLM Auto-Recovery",
@@ -1407,14 +1513,25 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
                         response = await _litellm_completion_with_retry(**completion_kwargs)
                     elif is_temperature_conflict:
-                        _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
-                        frappe.cache().set_value(temperature_cache_key, 1)
+                        _l1_set(temperature_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+                        frappe.cache().set_value(temperature_cache_key, 1, expires_in_sec=_SAMPLING_NEGATIVE_CACHE_TTL)
 
                         frappe.log_error(
                             title="LiteLLM Auto-Recovery",
                             message=f"Model '{normalized_model}' rejected temperature. Retrying without it and caching capability limitation. Error: {str(e)}",
                         )
                         completion_kwargs.pop("temperature", None)
+
+                        response = await _litellm_completion_with_retry(**completion_kwargs)
+                    elif is_top_p_conflict:
+                        _l1_set(top_p_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+                        frappe.cache().set_value(top_p_cache_key, 1, expires_in_sec=_SAMPLING_NEGATIVE_CACHE_TTL)
+
+                        frappe.log_error(
+                            title="LiteLLM Auto-Recovery",
+                            message=f"Model '{normalized_model}' rejected top_p. Retrying without it and caching capability limitation. Error: {str(e)}",
+                        )
+                        completion_kwargs.pop("top_p", None)
 
                         response = await _litellm_completion_with_retry(**completion_kwargs)
                     else:
@@ -2028,13 +2145,14 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         # to be rejected by this model. See the BadRequestError handler around
         # the streaming completion call below, which is what first discovers
         # and caches this. Mirrors run()'s equivalent block.
-        temperature_cache_key = f"litellm_temperature_unsupported:{normalized_model}"
+        temperature_cache_key = _site_scoped_key(f"litellm_temperature_unsupported:{normalized_model}")
+        top_p_cache_key = _site_scoped_key(f"litellm_top_p_unsupported:{normalized_model}")
         if temperature is not None:
-            _temp_unsupported = _L1_CAPABILITY_CACHE.get(temperature_cache_key)
+            _temp_unsupported = _l1_get(temperature_cache_key)
             if _temp_unsupported is None:
                 _temp_unsupported = frappe.cache().get_value(temperature_cache_key)
                 if _temp_unsupported:
-                    _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
+                    _l1_set(temperature_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
             if not _temp_unsupported:
                 completion_kwargs["temperature"] = temperature
 
@@ -2061,7 +2179,13 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
         # Only add top_p if explicitly configured and not overridden by temperature
         if top_p is not None:
-            completion_kwargs["top_p"] = top_p
+            _tp_unsupported = _l1_get(top_p_cache_key)
+            if _tp_unsupported is None:
+                _tp_unsupported = frappe.cache().get_value(top_p_cache_key)
+                if _tp_unsupported:
+                    _l1_set(top_p_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+            if not _tp_unsupported:
+                completion_kwargs["top_p"] = top_p
 
         if openai_prompt_cache_retention:
             completion_kwargs["prompt_cache_retention"] = openai_prompt_cache_retention
@@ -2217,21 +2341,33 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     # run()'s equivalent handler.
                     is_temperature_conflict = (
                         completion_kwargs.get("temperature") is not None
-                        and "temperature" in err_msg
-                        and any(
-                            k in err_msg
-                            for k in ("deprecated", "unsupported", "not supported", "does not support")
-                        )
+                        and _param_rejected(err_msg, "temperature")
+                    )
+
+                    is_top_p_conflict = (
+                        completion_kwargs.get("top_p") is not None
+                        and _param_rejected(err_msg, "top_p")
                     )
                     if is_temperature_conflict:
-                        _L1_CAPABILITY_CACHE[temperature_cache_key] = 1
-                        frappe.cache().set_value(temperature_cache_key, 1)
+                        _l1_set(temperature_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+                        frappe.cache().set_value(temperature_cache_key, 1, expires_in_sec=_SAMPLING_NEGATIVE_CACHE_TTL)
 
                         frappe.log_error(
                             title="LiteLLM Auto-Recovery",
                             message=f"Model '{normalized_model}' rejected temperature. Retrying without it and caching capability limitation. Error: {str(e)}",
                         )
                         completion_kwargs.pop("temperature", None)
+
+                        stream = await _litellm_completion_with_retry(**completion_kwargs)
+                    elif is_top_p_conflict:
+                        _l1_set(top_p_cache_key, 1, _SAMPLING_NEGATIVE_CACHE_TTL)
+                        frappe.cache().set_value(top_p_cache_key, 1, expires_in_sec=_SAMPLING_NEGATIVE_CACHE_TTL)
+
+                        frappe.log_error(
+                            title="LiteLLM Auto-Recovery",
+                            message=f"Model '{normalized_model}' rejected top_p. Retrying without it and caching capability limitation. Error: {str(e)}",
+                        )
+                        completion_kwargs.pop("top_p", None)
 
                         stream = await _litellm_completion_with_retry(**completion_kwargs)
                     else:

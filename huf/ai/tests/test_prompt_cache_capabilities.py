@@ -503,3 +503,88 @@ class TestRegressionValidInput(unittest.TestCase):
 		cap = resolve_capabilities("Anthropic", "Claude-Sonnet-4")
 		self.assertTrue(cap.supported)
 		self.assertEqual(cap.mechanism, "explicit_breakpoint")
+
+
+
+class TestOpenRouterSuffixStripping(unittest.TestCase):
+	"""Test OpenRouter suffix stripping functionality."""
+
+	def setUp(self):
+		"""Ensure routes are built."""
+		_build_known_routes()
+
+	def test_strip_openrouter_suffix_free(self):
+		"""Test stripping :free suffix."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		self.assertEqual(_strip_openrouter_suffix("model:free"), "model")
+		self.assertEqual(_strip_openrouter_suffix("minimax-m3:free"), "minimax-m3")
+
+	def test_strip_openrouter_suffix_nitro(self):
+		"""Test stripping :nitro suffix."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		self.assertEqual(_strip_openrouter_suffix("model:nitro"), "model")
+
+	def test_strip_openrouter_suffix_beta(self):
+		"""Test stripping :beta suffix."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		self.assertEqual(_strip_openrouter_suffix("model:beta"), "model")
+
+	def test_strip_openrouter_suffix_extended(self):
+		"""Test stripping :extended suffix."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		self.assertEqual(_strip_openrouter_suffix("model:extended"), "model")
+
+	def test_strip_openrouter_suffix_version_not_stripped(self):
+		"""Test that version suffixes like :0, :1, :70b are NOT stripped."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		# Version suffixes should NOT be stripped
+		self.assertEqual(_strip_openrouter_suffix("model:0"), "model:0")
+		self.assertEqual(_strip_openrouter_suffix("model:1"), "model:1")
+		self.assertEqual(_strip_openrouter_suffix("model:70b"), "model:70b")
+
+	def test_strip_openrouter_suffix_no_suffix(self):
+		"""Test that models without suffix are returned unchanged."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		self.assertEqual(_strip_openrouter_suffix("model"), "model")
+		self.assertEqual(_strip_openrouter_suffix("minimax-m3"), "minimax-m3")
+
+	def test_strip_openrouter_suffix_invalid_input(self):
+		"""Test that invalid input returns None."""
+		from huf.ai.prompt_cache.capabilities import _strip_openrouter_suffix
+		self.assertIsNone(_strip_openrouter_suffix(None))
+		self.assertIsNone(_strip_openrouter_suffix(""))
+		self.assertIsNone(_strip_openrouter_suffix("   "))
+		self.assertIsNone(_strip_openrouter_suffix(123))
+
+	def test_resolve_openrouter_suffix_still_unknown_fallback(self):
+		"""Verify that genuinely unknown models still fall back gracefully."""
+		cap = resolve_capabilities("openrouter", "does-not-exist-xyz:free")
+		self.assertFalse(cap.supported)
+		self.assertEqual(cap.mechanism, "unsupported")
+		self.assertEqual(cap.source, "fallback")
+
+	def test_resolve_known_route_with_suffix_fallback(self):
+		"""Test that when a known route has a suffix added, it still doesn't break."""
+		# Haiku is known, but add a :free suffix (which shouldn't match in known_route but shouldn't crash)
+		cap = resolve_capabilities("anthropic", "claude-haiku-4-5-20251001:free")
+		# This should still work because the known route is consulted first
+		# and partial matching should find it
+		self.assertTrue(cap.supported)
+		self.assertEqual(cap.mechanism, "explicit_breakpoint")
+		self.assertEqual(cap.min_cacheable_tokens, 2048)
+
+	def test_resolve_basic_models_unchanged(self):
+		"""Regression test: ensure basic models still resolve identically."""
+		test_cases = [
+			("anthropic", "claude-haiku-4-5-20251001", True, "explicit_breakpoint", "known_route_table"),
+			("anthropic", "claude-3-5-sonnet-20241022", True, "explicit_breakpoint", "known_route_table"),
+			("openai", "gpt-4o", True, "implicit_prefix", "known_route_table"),
+			("google", "gemini-1.5-pro", True, "implicit_prefix", "known_route_table"),
+			("ollama", "llama-2", False, "unsupported", "known_route_table"),
+		]
+		for provider, model, expected_supported, expected_mechanism, expected_source in test_cases:
+			with self.subTest(provider=provider, model=model):
+				cap = resolve_capabilities(provider, model)
+				self.assertEqual(cap.supported, expected_supported)
+				self.assertEqual(cap.mechanism, expected_mechanism)
+				self.assertEqual(cap.source, expected_source)

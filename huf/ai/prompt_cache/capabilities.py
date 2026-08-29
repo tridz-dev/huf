@@ -270,10 +270,55 @@ def _lookup_known_route(
 	return None
 
 
+
+
+def _strip_openrouter_suffix(model_name: object) -> Optional[str]:
+	"""
+	Strip known OpenRouter decorative suffixes from a model name.
+	
+	Returns the model name with the suffix removed, or None if model_name
+	is invalid. Returns the original model_name if no recognized suffix is found.
+	
+	Suffixes stripped (these are decorative pricing/tier indicators, not model variants):
+	- :free (OpenRouter pricing tier)
+	- :nitro (OpenRouter performance tier)
+	- :beta (beta variant)
+	- :extended (extended context variant)
+	
+	Does NOT strip version suffixes like :0, :1, :70b, etc., which represent
+	distinct model variants in litellm.model_cost.
+	"""
+	if not _is_valid_string(model_name):
+		return None
+	
+	model_str = str(model_name).strip()
+	
+	# Decorative OpenRouter suffixes. Order is irrelevant: none of these is a
+	# suffix of another, so at most one endswith() can match.
+	decorative_suffixes = [":extended", ":beta", ":nitro", ":free"]
+	
+	for suffix in decorative_suffixes:
+		if model_str.endswith(suffix):
+			return model_str[:-len(suffix)]
+	
+	# No recognized suffix found
+	return model_str
+
+# Shortest normalized name allowed to participate in a substring match. See
+# _search_litellm_for_model() for why an unguarded substring test is unsafe.
+_MIN_FUZZY_MATCH_LEN = 8
+
+
 def _lookup_litellm(provider_brand: object, model: object) -> Optional[PromptCacheCapabilities]:
 	"""
 	Attempt to resolve capabilities from LiteLLM metadata.
 	Defensively imports litellm and tolerates its absence.
+	
+	Resolution strategy:
+	1. Try exact/substring match on normalized model name
+	2. If not found, retry with OpenRouter decorative suffixes stripped
+	3. Return None if still not found (will fall through to conservative fallback)
+	
 	Returns None if provider_brand or model is invalid.
 	"""
 	# Defensive: check for None, non-string, empty, or whitespace-only
@@ -293,32 +338,80 @@ def _lookup_litellm(provider_brand: object, model: object) -> Optional[PromptCac
 		if normalized is None:
 			return None
 
-		for db_key in litellm.model_cost.keys():
-			db_key_normalized = _normalize_model_name(db_key)
-			if db_key_normalized is None:
-				continue
-			if normalized in db_key_normalized or db_key_normalized in normalized:
+		def _capabilities_from_entry(entry: dict) -> Optional[PromptCacheCapabilities]:
+			"""Build capabilities from a litellm.model_cost entry, or None if it says nothing."""
+			if entry.get("cache_read_input_token_cost") is None:
+				return None
+			# LiteLLM indicates support but we don't know specifics
+			return PromptCacheCapabilities(
+				supported=True,
+				mechanism="implicit_prefix",  # Conservative default
+				supports_explicit_breakpoints=False,
+				supports_affinity_key=False,
+				supports_named_cached_content=False,
+				max_breakpoints_per_request=None,
+				ttl_values=tuple(),
+				min_cacheable_tokens=None,
+				reports_cache_read_tokens=None,
+				reports_cache_write_tokens=None,
+				source="litellm",
+			)
+
+		# Helper to search litellm for a given normalized model name
+		def _search_litellm_for_model(search_normalized: str) -> Optional[PromptCacheCapabilities]:
+			"""Search litellm.model_cost for a model and return capabilities if found.
+
+			An exact match on the normalized name always wins. The substring
+			fallback exists so a dated snapshot still resolves to its family
+			(e.g. "gpt-5-nano" -> "gpt-5-nano-2025-08-07"), but it is guarded by
+			a minimum length: _normalize_model_name() keeps only the segment
+			after the last "/", and litellm.model_cost contains keys that reduce
+			to strings as short as "free" (openrouter/openrouter/free), "o1",
+			"o3", "nova", "gpt-5" and "auto". Unguarded, any of those being a
+			substring of the query matched an unrelated provider's entry and
+			answered the capability question from the wrong model.
+			"""
+			fuzzy: Optional[PromptCacheCapabilities] = None
+			for db_key in litellm.model_cost.keys():
+				db_key_normalized = _normalize_model_name(db_key)
+				if db_key_normalized is None:
+					continue
 				entry = litellm.model_cost[db_key]
-				if entry.get("cache_read_input_token_cost") is not None:
-					# LiteLLM indicates support but we don't know specifics
-					return PromptCacheCapabilities(
-						supported=True,
-						mechanism="implicit_prefix",  # Conservative default
-						supports_explicit_breakpoints=False,
-						supports_affinity_key=False,
-						supports_named_cached_content=False,
-						max_breakpoints_per_request=None,
-						ttl_values=tuple(),
-						min_cacheable_tokens=None,
-						reports_cache_read_tokens=None,
-						reports_cache_write_tokens=None,
-						source="litellm",
-					)
+				if db_key_normalized == search_normalized:
+					# An exact hit is authoritative in BOTH directions. Falling
+					# through to the substring scan when litellm's own entry for
+					# this model has no cache_read_input_token_cost let a
+					# different model answer for it -- that is how TTS and
+					# transcription models ("gpt-4o-mini-tts",
+					# "gemini-2.5-flash-preview-tts") were reported as
+					# prompt-cache-capable, by borrowing a chat model's entry.
+					# Returning None hands the decision to the conservative
+					# fallback, which is the correct "not supported" answer.
+					return _capabilities_from_entry(entry)
+				if fuzzy is not None:
+					continue
+				if min(len(search_normalized), len(db_key_normalized)) < _MIN_FUZZY_MATCH_LEN:
+					continue
+				if search_normalized in db_key_normalized or db_key_normalized in search_normalized:
+					fuzzy = _capabilities_from_entry(entry)
+			return fuzzy
+
+		# Try original normalized name first
+		result = _search_litellm_for_model(normalized)
+		if result is not None:
+			return result
+
+		# Try with OpenRouter suffixes stripped
+		stripped = _strip_openrouter_suffix(normalized)
+		if stripped is not None and stripped != normalized:
+			result = _search_litellm_for_model(stripped)
+			if result is not None:
+				return result
+
 	except (AttributeError, KeyError, TypeError):
 		pass
 
 	return None
-
 
 def resolve_capabilities(provider_brand: object, model: object) -> PromptCacheCapabilities:
 	"""
