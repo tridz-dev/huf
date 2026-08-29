@@ -2077,6 +2077,24 @@ def _execute_agent_run(
             model_context_window = resolve_model_context_window(
                 resolved_model, resolved_provider, provider_brand
             )
+            # `Agent Run.{peak_context_tokens,round_count,model_context_window}`
+            # are DB-level `NOT NULL DEFAULT 0` Int columns (confirmed via
+            # `describe`), even though the values feeding them above are
+            # legitimately `None` for "truly unmeasured" (e.g.
+            # resolve_model_context_window()'s own documented contract, or a
+            # usage payload that never set peak_context_tokens/round_count).
+            # 0 is the doctype's own stated sentinel for "not set" (see
+            # resolve_model_context_window()'s docstring: "0 and NULL both
+            # mean 'not set'"), so coalescing here — same pattern already
+            # used for billed_input_tokens above — avoids failing the whole
+            # Agent Run write with `(1048, "Column '<name>' cannot be
+            # null")` for any model/usage shape that leaves these unset.
+            if peak_context_tokens is None:
+                peak_context_tokens = 0
+            if round_count is None:
+                round_count = 0
+            if model_context_window is None:
+                model_context_window = 0
 
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
@@ -3256,6 +3274,14 @@ async def run_agent_stream(
                     model_context_window = resolve_model_context_window(
                         resolved_model, resolved_provider, provider_brand
                     )
+                    # Same NOT NULL DEFAULT 0 coalescing as the sync write path
+                    # above — see that site's comment for the full rationale.
+                    if peak_context_tokens is None:
+                        peak_context_tokens = 0
+                    if round_count is None:
+                        round_count = 0
+                    if model_context_window is None:
+                        model_context_window = 0
 
                     stream_run_update = {
                         "status": "Success",
