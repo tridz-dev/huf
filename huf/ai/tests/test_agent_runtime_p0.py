@@ -264,25 +264,20 @@ class TestAgentRuntimeP0(IntegrationTestCase):
         self.assertEqual(tc.tool, "get_weather")
         self.assertEqual(tc.call_id, "test-tool-call-1")
         self.assertEqual(tc.status, "Completed")
-        # REAL PRODUCT BUG, confirmed against a real bench (not fixed here --
-        # see the coordinator's report): `log_tool_call`/`process_tool_call`
-        # (agent_integration.py:786, :735/:760) do `json.dumps(args)` where
-        # `args` is `raw_call.arguments`, which per the OpenAI/litellm
-        # tool-call convention is ALREADY a JSON-encoded string (not a dict).
-        # This double-encodes `tool_args` on every single tool call ever
-        # logged: the persisted value is a JSON string literal wrapping the
-        # real JSON text, so one `json.loads()` only unwraps the outer
-        # layer and returns the inner JSON text as a STRING, not a dict.
-        # The frontend's `safeParseJsonRecord(event.tool_args)`
-        # (chatMessageList.mappers.ts:101) does exactly one JSON.parse too,
-        # so this is very likely live in production tool-call argument
-        # display, not just a test artifact. Asserting the ACTUAL (buggy)
-        # current behavior here -- this regression test must be updated
-        # (not silently left passing) once the real double-encoding bug is
-        # fixed, per project convention for "test discovers a real bug."
-        once = json.loads(tc.tool_args)
-        self.assertIsInstance(once, str, "tool_args is double-JSON-encoded (see comment above)")
-        self.assertEqual(json.loads(once), {"city": "Bengaluru"})
+        # Previously a REAL PRODUCT BUG (confirmed against a real bench):
+        # `log_tool_call`/`process_tool_call` used to `json.dumps(args)`
+        # where `args` was already a JSON-encoded string per the
+        # OpenAI/litellm tool-call convention, double-encoding `tool_args`
+        # on every logged tool call. Fixed upstream by
+        # `fix/tool-args-double-encoding` (merged into `pre-develop` as PR
+        # #676, pulled into this branch via the pre-develop merge) -- one
+        # `json.loads()` now returns the real dict directly, matching the
+        # frontend's single `safeParseJsonRecord` unwrap
+        # (chatMessageList.mappers.ts:101). Updated per this file's own
+        # "must be updated once the real double-encoding bug is fixed"
+        # convention, rather than leaving this test silently asserting the
+        # since-fixed buggy shape.
+        self.assertEqual(json.loads(tc.tool_args), {"city": "Bengaluru"})
         # ``process_tool_call`` stores dict/list JSON results verbatim (not
         # wrapped in {"output": ...} -- that wrapping only applies to
         # non-dict/list results, see agent_integration.py::process_tool_call).
