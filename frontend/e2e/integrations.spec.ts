@@ -9,28 +9,33 @@ test.describe('Integrations, Knowledge & MCP', () => {
   test('integrations page renders', async ({ page }) => {
     await goto(page, '/integrations');
     await waitForContent(page);
-    await expect(
-      page.getByText('Connect external services like Slack, Telegram, GitHub, and Google Workspace'),
-    ).toBeVisible();
+    // IntegrationSettingsListingPage has no PageFrame title/subtitle band —
+    // its filter bar's search input is the reliable, unambiguous marker
+    // that this page (kind: 'integrations') rendered.
+    await expect(page.getByPlaceholder('Search integrations...')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No integrations' })).toBeVisible();
   });
 
   test('integration services page renders', async ({ page }) => {
     await goto(page, '/integration-services');
     await waitForContent(page);
-    await expect(
-      page.getByText('Define integration service catalogs and credential schemas used by Integration Settings'),
-    ).toBeVisible();
+    await expect(page.getByPlaceholder('Search services...')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No integration services' })).toBeVisible();
   });
 
   test('knowledge sources page renders', async ({ page }) => {
     await goto(page, '/knowledge');
     await waitForContent(page);
-    await expect(page.getByText('Manage knowledge sources for your AI agents')).toBeVisible();
+    await expect(page.getByPlaceholder('Search knowledge sources...')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No knowledge sources' })).toBeVisible();
   });
 
   test('mcp servers page renders', async ({ page }) => {
     await goto(page, '/mcp');
     await waitForContent(page);
-    await expect(page.getByRole('heading', { name: 'MCP Servers' })).toBeVisible();
+    // "MCP servers" (page title, exact) and "No MCP servers" (empty-state
+    // heading) both match a loose heading query — pin the page title.
+    await expect(page.getByRole('heading', { name: 'MCP servers', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'No MCP servers', exact: true })).toBeVisible();
   });
 });

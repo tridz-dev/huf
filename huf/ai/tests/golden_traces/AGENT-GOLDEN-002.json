@@ -1,0 +1,97 @@
+{
+  "agent": {
+    "agent_name": "golden-002-tool-agent",
+    "instructions": "You are a deterministic test agent with tools.",
+    "max_turns": 10,
+    "model": "test-model",
+    "provider": "Test_Provider"
+  },
+  "context": {},
+  "cost": 0.0,
+  "error": null,
+  "final_output": "Based on the tool result, it is currently Sunny at 29C in Bengaluru.",
+  "messages": [
+    {
+      "content": "Current user message:\n__TEST_SCENARIO__:TEST_TOOL_SINGLE What's the weather in Bengaluru?\n",
+      "id": "<MSG_ID:0>",
+      "kind": "Message",
+      "role": "user"
+    },
+    {
+      "content": {
+        "arguments": {
+          "city": "Bengaluru"
+        },
+        "id": "<TOOL_CALL_ID:0>",
+        "name": "get_weather"
+      },
+      "id": "<MSG_ID:1>",
+      "kind": "Tool Call",
+      "role": "assistant"
+    },
+    {
+      "content": {
+        "id": "<TOOL_CALL_ID:0>",
+        "name": "get_weather",
+        "output": {
+          "city": "Bengaluru",
+          "condition": "Sunny",
+          "temp_c": 29
+        }
+      },
+      "id": "<MSG_ID:2>",
+      "kind": "Tool Result",
+      "role": "tool"
+    },
+    {
+      "content": "Based on the tool result, it is currently Sunny at 29C in Bengaluru.",
+      "id": "<MSG_ID:3>",
+      "kind": "Message",
+      "role": "assistant"
+    }
+  ],
+  "prompt": "Current user message:\n__TEST_SCENARIO__:TEST_TOOL_SINGLE What's the weather in Bengaluru?\n",
+  "run": {
+    "creation": "<TIMESTAMP>",
+    "run_id": "<RUN_ID>",
+    "status": "Success"
+  },
+  "scenario": "AGENT-GOLDEN-002",
+  "state_transitions": [
+    "queued",
+    "started",
+    "tool_call",
+    "tool_result",
+    "completed"
+  ],
+  "terminal_status": "Success",
+  "tool_calls": [
+    {
+      "tool_args": {
+        "city": "Bengaluru"
+      },
+      "tool_call_id": "<TOOL_CALL_ID:0>",
+      "tool_name": "get_weather",
+      "type": "tool_call"
+    },
+    {
+      "tool_call_id": "<TOOL_CALL_ID:0>",
+      "tool_name": "get_weather",
+      "tool_result": {
+        "city": "Bengaluru",
+        "condition": "Sunny",
+        "temp_c": 29
+      },
+      "type": "tool_result"
+    }
+  ],
+  "tool_definitions": [],
+  "usage": {
+    "cache_creation_tokens": 0,
+    "cache_miss_tokens": 0,
+    "cache_skipped_unsupported_model": false,
+    "cached_tokens": 0,
+    "input_tokens": 20,
+    "output_tokens": 15
+  }
+}

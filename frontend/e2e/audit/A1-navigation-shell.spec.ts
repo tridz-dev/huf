@@ -32,9 +32,12 @@ test.describe('A1 — Navigation & shell', () => {
     await goto(page, '/dashboard');
     await waitForContent(page);
 
+    // Settings is a second-level rail (see app-sidebar.tsx settingsNavGroups),
+    // and the item labels changed: 'AI Providers' + 'Models' merged into
+    // 'AI providers & models', and MCP is now lowercase 'MCP servers'.
     await page.getByRole('button', { name: 'Settings' }).click();
-    await expect(page.getByRole('link', { name: 'AI Providers', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'MCP Servers', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'AI providers & models', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'MCP servers', exact: true })).toBeVisible();
     await screenshot(page, 'sidebar-settings-expanded');
   });
 

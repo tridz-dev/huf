@@ -9,6 +9,9 @@ test.describe('Data', () => {
   test('data page renders', async ({ page }) => {
     await goto(page, '/data');
     await waitForContent(page);
-    await expect(page.getByText('Create and manage custom data tables')).toBeVisible();
+    // The page has no subtitle band (see PageFrame); the empty state's
+    // description is what confirms the mocked (empty) data rendered.
+    await expect(page.getByRole('heading', { name: 'Data', exact: true })).toBeVisible();
+    await expect(page.getByText('Create your first table to start managing structured data.')).toBeVisible();
   });
 });

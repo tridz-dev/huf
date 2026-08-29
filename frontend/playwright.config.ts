@@ -24,8 +24,16 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:8080',
+    // vite.config.ts's `base` is '/assets/huf/frontend/' (the production
+    // deploy path served by Frappe/nginx) — a plain `vite dev` only serves
+    // index.html under that same base, and that base prefix also collides
+    // with the dev-server's own `/assets/*` backend proxy rule (see
+    // proxyOptions.ts), producing a 500 instead of the app. Override the
+    // base for e2e only, via CLI flag (same mechanism `yarn build` already
+    // uses for its own base override), so the fresh server matches
+    // `baseURL` below without touching vite.config.ts's default.
+    command: 'npm run dev -- --base=/huf/',
+    url: 'http://localhost:8080/huf/',
     reuseExistingServer: true,
     timeout: 120000,
   },

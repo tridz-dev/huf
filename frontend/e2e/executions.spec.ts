@@ -10,7 +10,9 @@ test.describe('Executions', () => {
     await goto(page, '/executions');
     await waitForContent(page);
 
-    await expect(page.getByRole('heading', { name: 'Executions' })).toBeVisible();
-    await expect(page.getByText('Inspect agent runs and their results.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Executions', exact: true })).toBeVisible();
+    // No subtitle band exists (see PageFrame) — the empty state confirms
+    // the mocked (empty) data actually rendered.
+    await expect(page.getByRole('heading', { name: 'No executions' })).toBeVisible();
   });
 });

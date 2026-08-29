@@ -935,6 +935,22 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         Returns:
                 SimpleResult: Result with final_output, usage, and new_items
     """
+    # Deterministic HUF Test Provider routing. Checked first, before any
+    # frappe.get_doc/network/LLM-SDK code below, so it is reached on the
+    # exact same code path (this coroutine, once awaited by the real caller
+    # in `agent_integration.py`) a real provider would take - not via the
+    # `RunProvider.run()` custom-provider fallback branch in `huf/ai/run.py`,
+    # which can only ever trigger on a synchronous failure to *construct*
+    # this coroutine (this function is `async def`, so a real litellm
+    # execution failure happens only when the caller awaits the returned
+    # coroutine, after `RunProvider.run()` has already returned - see
+    # `huf/ai/providers/test_provider.py`'s module docstring for the full
+    # analysis). See `huf/ai/providers/test_provider.py` for scenario docs.
+    if provider and provider.lower() == "test_provider":
+        from huf.ai.providers import test_provider as _test_provider
+
+        return await _test_provider.run(agent, enhanced_prompt, provider, model, context=context)
+
     try:
         # Configure LiteLLM to drop unsupported params (for models like gpt-5 that only support temperature=1)
         # This prevents errors when models don't support certain parameters
@@ -1782,6 +1798,23 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     - tool_call: dict (for tool_call type)
                     - error: str (for error type)
     """
+    # Deterministic HUF Test Provider routing, mirroring the early check in
+    # `run()` above (see that check's comment and
+    # `huf/ai/providers/test_provider.py`'s module docstring for the full
+    # analysis of why this must happen before any real work below). Since
+    # this function is an async generator (contains `yield`), we cannot
+    # `return await` a delegate call the way `run()` does - instead we
+    # delegate to `test_provider.run_stream()` (itself an async generator)
+    # and re-yield every chunk it produces, then return.
+    if provider and provider.lower() == "test_provider":
+        from huf.ai.providers import test_provider as _test_provider
+
+        async for _chunk in _test_provider.run_stream(
+            agent, enhanced_prompt, provider, model, context=context
+        ):
+            yield _chunk
+        return
+
     try:
         litellm.drop_params = True
 
