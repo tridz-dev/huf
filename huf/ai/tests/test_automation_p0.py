@@ -147,7 +147,10 @@ class TestAutomationP0(IntegrationTestCase):
         fresh ``.reload()``/re-fetch from the DB — not just the in-memory
         object returned by ``.insert()``."""
         agent = self._make_test_provider_agent()
-        automation = self._make_automation(agent)
+        # This test asserts the doctype's own persisted default (Draft),
+        # not a fired run, so it opts out of the Active default the other
+        # tests in this file need — see _make_automation()'s comment.
+        automation = self._make_automation(agent, status="Draft")
 
         next_execution = frappe.utils.now_datetime().replace(microsecond=0)
         trigger = self._make_trigger(
