@@ -645,22 +645,26 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
 
 
 def _fill_missing_usage_fields(result):
-    """Backfill usage keys that `litellm.run()` always populates but that
-    scenario handlers above predate (e.g. `peak_context_tokens`, added by
-    the prompt-cache-auto-mode work in `providers/litellm.py` ~line 1494-1495
-    as `max(peak_context_tokens, round_input_tokens)`). `Agent Run.
-    peak_context_tokens` is an Int column with a DB-level `NOT NULL DEFAULT
-    0`; agent_integration.py reads it via `usage_payload.get(...)`, which
-    returns `None` for an absent key, and inserting an explicit `None`
-    overrides that DEFAULT and fails the query with
-    `(1048, "Column 'peak_context_tokens' cannot be null")` -- found by
-    running this suite against a real bench post-merge. A single-round test
-    scenario's peak context is just its own input token count, mirroring
-    the real accounting for a one-round call.
+    """Backfill usage keys that `litellm.run()`'s `total_usage` baseline
+    (`providers/litellm.py` ~line 1129-1146) always populates but that
+    scenario handlers above predate -- both added by the
+    prompt-cache-auto-mode merge. `Agent Run.peak_context_tokens` and
+    `Agent Run.round_count` are Int columns with a DB-level `NOT NULL
+    DEFAULT 0`; `agent_integration.py` reads each straight off
+    `usage_payload.get(...)` with no `None` fallback (unlike
+    `billed_input_tokens`, which IS guarded), so an absent key becomes an
+    explicit `None` that overrides the column DEFAULT and fails the insert
+    with `(1048, "Column '<name>' cannot be null")` -- found by running this
+    suite against a real bench post-merge, one field at a time. A
+    single-round test scenario's peak context is just its own input token
+    count, and its round_count is 1, mirroring the real one-round-call
+    accounting.
     """
     usage = getattr(result, "usage", None)
-    if isinstance(usage, dict) and "peak_context_tokens" not in usage:
-        usage["peak_context_tokens"] = usage.get("input_tokens", 0)
+    if not isinstance(usage, dict):
+        return
+    usage.setdefault("peak_context_tokens", usage.get("input_tokens", 0))
+    usage.setdefault("round_count", 1)
 
 
 # --- Streaming scenarios (`run_stream`) --------------------------------
