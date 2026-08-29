@@ -119,10 +119,7 @@ def knowledge_search(
 			continue
 			
 		except Exception as e:
-			frappe.log_error(
-				f"Knowledge search error for {source_name}",
-				frappe.get_traceback()
-			)
+			frappe.log_error(title=frappe.get_traceback(), message=f"Knowledge search error for {source_name}")
 			continue
 	
 	# Sort by score across all sources

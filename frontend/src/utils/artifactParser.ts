@@ -106,6 +106,10 @@ export function isValidArtifactType(type: string): type is ArtifactType {
 		'react-component',
 		'markdown',
 		'video',
+		'chart',
+		'frappe-list',
+		'frappe-form',
+		'frappe-report',
 	];
 	return validTypes.includes(type as ArtifactType);
 }

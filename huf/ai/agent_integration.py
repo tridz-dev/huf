@@ -28,7 +28,10 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
+from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
+from huf.ai.tool_serializer import serialize_tools
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -93,8 +96,9 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 
 class AgentManager:
     """Manages the creation and execution of agents."""
-    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None):
+    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None):
         self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
+        self.conversation_id = conversation_id
         (
             self.effective_provider,
             self.effective_model,
@@ -109,19 +113,92 @@ class AgentManager:
         self.model_override = model_override
         # self.file_handler = file_handler
         self.tools = []
+        # Maps tool name -> one of the five `tools_breakdown.by_source` origins
+        # (user_configured | builtin_registry | internal_capability | knowledge |
+        # mcp). Populated by _setup_tools() and read by compute_tools_breakdown()
+        # at the two agent_integration call sites — see context_segments.py.
+        self.tool_sources = {}
         self._setup_client()
         self._setup_tools()
 
+    def _classify_agent_tool_sources(self, tool_names):
+        """Classify tools produced by create_agent_tools() into source buckets.
+
+        create_agent_tools() merges several origins into a single flat list
+        with no surviving type tag: user-authored `Agent Tool Function`
+        docs, tools seeded from the registry/app-discovery pipeline (synced
+        via huf.ai.tool_registry.sync_discovered_tools, which stamps
+        `types = "App Provided"` — see huf/ai/tool_registry.py), the
+        always-on `ask_user` builder tool, and a handful of tools built
+        directly in code with no backing `Agent Tool Function` doc at all
+        (get_conversation_data/set_conversation_data/load_conversation_data,
+        get_result_context). ask_user is itself seeded the same
+        "App Provided" way but is explicitly an internal capability, not a
+        registry integration, so it is special-cased ahead of the doc
+        lookup.
+
+        Tools with no backing doc are bucketed as internal_capability too:
+        they are intrinsic to the agent runtime (not a user choice, not a
+        registry integration), the same category ask_user and list_skills
+        belong to.
+
+        Classifies the whole batch in ONE query rather than one per tool:
+        _setup_tools() runs on every agent run, and this is observability
+        data, so it must not add a query per tool to a hot path.
+        """
+        sources = {}
+        lookup_names = [name for name in tool_names if name and name != "ask_user"]
+
+        types_by_name = {}
+        if lookup_names:
+            try:
+                rows = frappe.get_all(
+                    "Agent Tool Function",
+                    filters={"tool_name": ["in", lookup_names]},
+                    fields=["tool_name", "types"],
+                    limit_page_length=0,
+                )
+                types_by_name = {row["tool_name"]: row.get("types") for row in rows}
+            except Exception as e:
+                # Classification is observability; never fail a run over it.
+                logger.warning(f"Failed to classify tool sources: {e!s}")
+
+        for tool_name in tool_names:
+            if not tool_name:
+                continue
+            if tool_name == "ask_user":
+                sources[tool_name] = "internal_capability"
+                continue
+            tool_type = types_by_name.get(tool_name)
+            if tool_type == "App Provided":
+                sources[tool_name] = "builtin_registry"
+            elif tool_type:
+                sources[tool_name] = "user_configured"
+            else:
+                sources[tool_name] = "internal_capability"
+
+        return sources
 
     def _setup_tools(self):
         """Create SDK Tools from existing functions, skills, and MCP servers."""
         self.tools=[]
+        self.tool_sources = {}
 
         try:
             from huf.ai.sdk_tools import create_agent_tools
-            agent_tools = create_agent_tools(self.agent_doc, model_name=self.effective_model)
+            agent_tools = create_agent_tools(
+                self.agent_doc,
+                model_name=self.effective_model,
+                conversation_id=self.conversation_id,
+                agent_name=self.agent_doc.name,
+            )
             if agent_tools:
                 self.tools.extend(agent_tools)
+                self.tool_sources.update(
+                    self._classify_agent_tool_sources(
+                        [getattr(tool, "name", None) for tool in agent_tools]
+                    )
+                )
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
 
@@ -152,6 +229,10 @@ class AgentManager:
                 tool_map = {tool.name: tool for tool in self.tools}
                 for tool in merged_mcp_tools:
                     tool_map[tool.name] = tool
+                    # An MCP server tool always wins the source tag for its
+                    # name, mirroring tool_map's own overwrite-by-name
+                    # semantics immediately below.
+                    self.tool_sources[tool.name] = "mcp"
                 self.tools = list(tool_map.values())
         except Exception as e:
             logger.warning(f"Failed to load skill MCP tools: {e!s}")
@@ -164,6 +245,7 @@ class AgentManager:
                 existing_names = {tool.name for tool in self.tools}
                 if list_skills_tool.name not in existing_names:
                     self.tools.append(list_skills_tool)
+                    self.tool_sources[list_skills_tool.name] = "internal_capability"
         except Exception as e:
             logger.warning(f"Failed to load skills listing tool: {e!s}")
 
@@ -190,6 +272,7 @@ class AgentManager:
                         top_k=top_k,
                     )
                 self.tools.append(knowledge_search_tool)
+                self.tool_sources[knowledge_search_tool.name] = "knowledge"
 
             # 2. Get Knowledge Sources Tool
             sources_tool_def = create_get_knowledge_sources_tool(self.agent_doc.agent_name)
@@ -199,6 +282,7 @@ class AgentManager:
                     """List all knowledge sources available to this agent."""
                     return handle_get_knowledge_sources(agent_name=self.agent_doc.agent_name)
                 self.tools.append(get_knowledge_sources_tool)
+                self.tool_sources[get_knowledge_sources_tool.name] = "knowledge"
 
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
@@ -368,8 +452,8 @@ class AgentManager:
                 instructions += "\n\n" + "\n\n".join(system_prompts)
         except Exception as e:
             frappe.log_error(
-                f"Error injecting skill instructions: {str(e)}",
-                "Skill Instruction Error",
+                title="Skill Instruction Error",
+                message=f"Error injecting skill instructions: {str(e)}",
             )
 
         # Enhance instructions with tool descriptions
@@ -413,14 +497,24 @@ class AgentManager:
             """
 
         if getattr(self.agent_doc, "enable_memory", False):
-            instructions += """
+            can_search = getattr(self.agent_doc, "enable_memory_search_tool", False)
+            can_write = getattr(self.agent_doc, "enable_memory_write_tool", False)
 
-                SYSTEM INSTRUCTION - LONG-TERM MEMORY:
-                You have access to a persistent memory system across sessions.
-                1. AUTOMATIC RECALL: Use the 'search_memory_records' tool whenever the user refers to past interactions, preferences, or context.
-                2. PROACTIVE SAVING: Use the 'save_memory_record' tool when the user shares new facts, preferences, or important details about themselves or a project.
-                3. ACCURACY: When saving, provide a clear 'title' and detailed 'summary_text'. Set 'record_type' and 'scope_type' appropriately.
-            """
+            memory_lines = ["SYSTEM INSTRUCTION - LONG-TERM MEMORY:", "You have access to a persistent memory system across sessions."]
+            if can_search:
+                memory_lines.append(
+                    "1. AUTOMATIC RECALL: Use the 'search_memory_records' tool whenever the user refers to past interactions, preferences, or context."
+                )
+            if can_write:
+                memory_lines.append(
+                    "2. PROACTIVE SAVING: Use the 'save_memory_record' tool when the user shares new facts, preferences, or important details about themselves or a project."
+                )
+                memory_lines.append(
+                    "3. ACCURACY: When saving, provide a clear 'title' and detailed 'summary_text'. Set 'record_type' and 'scope_type' appropriately."
+                )
+
+            if can_search or can_write:
+                instructions += "\n\n                " + "\n                ".join(memory_lines) + "\n            "
 
             if getattr(self.agent_doc, "memory_policy", None):
                 try:
@@ -439,15 +533,33 @@ class AgentManager:
             from huf.ai.capabilities import capability_enabled
 
             if capability_enabled(self.agent_doc, self.effective_model, "rich_elements"):
-                from huf.ai.chart_artifact_instructions import CHART_ARTIFACT_INSTRUCTIONS
+                from huf.ai.chart_artifact_instructions import (
+                    CHART_ARTIFACT_INSTRUCTIONS,
+                    CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
+                )
                 from huf.ai.artifact_instructions import (
                     AI_ELEMENT_INSTRUCTIONS,
                     MEDIA_ELEMENT_INSTRUCTIONS,
+                    MERMAID_ARTIFACT_INSTRUCTIONS,
+                    MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
                     agent_has_media_tools,
                 )
 
-                instructions += CHART_ARTIFACT_INSTRUCTIONS
-                instructions += AI_ELEMENT_INSTRUCTIONS
+                resolved_tool_names = {tool.name for tool in self.tools}
+
+                if "render_chart" in resolved_tool_names:
+                    instructions += CHART_ARTIFACT_INSTRUCTIONS_WITH_TOOL
+                else:
+                    instructions += CHART_ARTIFACT_INSTRUCTIONS
+
+                element_instructions = AI_ELEMENT_INSTRUCTIONS
+                if "render_mermaid" in resolved_tool_names:
+                    element_instructions = element_instructions.replace(
+                        MERMAID_ARTIFACT_INSTRUCTIONS,
+                        MERMAID_ARTIFACT_INSTRUCTIONS_WITH_TOOL,
+                    )
+                instructions += element_instructions
+
                 if agent_has_media_tools(self.agent_doc):
                     instructions += MEDIA_ELEMENT_INSTRUCTIONS
 
@@ -476,8 +588,8 @@ class AgentManager:
                         instructions += "\n\n" + project_instructions
             except Exception as e:
                 frappe.log_error(
-                    f"Error injecting project instructions: {str(e)}",
-                    "Project Instruction Error",
+                    title="Project Instruction Error",
+                    message=f"Error injecting project instructions: {str(e)}",
                 )
 
         model_settings = ModelSettings(
@@ -633,6 +745,29 @@ def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) ->
 
     return resolved
 
+def _normalize_tool_args_json(args):
+    """Return ``args`` as a JSON-encoded string suitable for storage in the
+    ``Agent Tool Call.tool_args`` field, without double-encoding it.
+
+    Per the OpenAI/litellm tool-call convention (see providers/litellm.py,
+    where ``args`` originates from ``tool_call.function.arguments``), ``args``
+    normally arrives already JSON-encoded as a string (e.g. '{"city": "X"}').
+    Calling json.dumps() on that string again would wrap it in an extra layer
+    of quoting/escaping ("double encoding"), so a plain string that is
+    already valid JSON is stored as-is. Any other caller that legitimately
+    passes structured data (a dict/list) - or a string that is NOT valid
+    JSON - still gets json.dumps()'d exactly as before.
+    """
+    if isinstance(args, str):
+        try:
+            json.loads(args)
+        except (ValueError, TypeError):
+            return json.dumps(args)
+        else:
+            return args
+    return json.dumps(args)
+
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -732,7 +867,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 if mcp_server and not doc.mcp_server:
                     update_data["mcp_server"] = mcp_server
                 if args and not doc.tool_args:
-                    update_data["tool_args"] = json.dumps(args)
+                    update_data["tool_args"] = _normalize_tool_args_json(args)
                 if result_val is not None and not doc.tool_result:
                     update_data["tool_result"] = result_val
                 if error and not doc.error_message:
@@ -757,7 +892,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "tool": name,
                 "is_mcp_tool": is_mcp_tool,
                 "mcp_server": mcp_server,
-                "tool_args": json.dumps(args) if args else None,
+                "tool_args": _normalize_tool_args_json(args) if args else None,
                 "tool_result": result_val,
                 "error_message": error,
                 "status": "Queued",
@@ -853,7 +988,16 @@ def run_background_summarization(conversation_name, agent_name):
 
         # Calculate overflow, ensuring we don't split tool-call pairs
         overflow_count = len(history) - history_limit
-        to_summarize, _remaining = safe_history_split(history, overflow_count)
+        try:
+            summary_ratio = float(agent_doc.summary_ratio or 0.7)
+        except (TypeError, ValueError):
+            summary_ratio = 0.7
+        summary_ratio = min(max(summary_ratio, 0.1), 0.95)
+        # summary_ratio controls how much of the history gets folded into the
+        # summary once overflow triggers; never compress less than the overflow.
+        ratio_count = int(len(history) * summary_ratio)
+        to_summarize_count = min(max(overflow_count, ratio_count), len(history) - 1)
+        to_summarize, _remaining = safe_history_split(history, to_summarize_count)
 
         from huf.ai.providers.litellm import get_simple_completion
         summary_model = agent_doc.summary_model or agent_doc.model
@@ -1359,7 +1503,10 @@ def _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, inv
             external_id=external_id,
         )
     except Exception as hook_err:
-        frappe.log_error(title="Agent Integration Error", message=f"Error in Sub-Agent Failure Hook: {str(hook_err)}")
+        frappe.log_error(
+            title="Agent Integration Error",
+            message=f"Error in Sub-Agent Failure Hook: {str(hook_err)}",
+        )
 
     # 2. Real-Time UI Notification
     frappe.publish_realtime(
@@ -1469,6 +1616,7 @@ def _execute_agent_run(
             agent_name,
             provider_override=resolved_provider,
             model_override=resolved_model,
+            conversation_id=conversation_id,
         )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
@@ -1573,8 +1721,8 @@ def _execute_agent_run(
                 prompt = "\n\n".join(user_prompts) + "\n\n" + (prompt or "")
         except Exception as e:
             frappe.log_error(
-                f"Error injecting user skill prompts: {str(e)}",
-                "Skill Prompt Error",
+                title="Skill Prompt Error",
+                message=f"Error injecting user skill prompts: {str(e)}",
             )
 
         base_prompt = f"""
@@ -1595,12 +1743,46 @@ def _execute_agent_run(
         else:
             enhanced_prompt = base_prompt
 
-        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        from huf.ai.context_segments import (
+            compute_segment_tokens,
+            compute_prefix_breakpoints,
+            compute_tools_breakdown,
+            reconcile_composition,
+        )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
+
+        # Opt-in only -- off unless a site operator sets
+        # huf_retain_system_prompts_enabled in site_config. See
+        # huf/ai/system_prompt_retention.py for why this defaults off (D15).
+        from huf.ai.system_prompt_retention import maybe_snapshot_system_prompt
+        maybe_snapshot_system_prompt(
+            run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
+        )
+
+        # Serialize tools for prefix fingerprinting
+        try:
+            tools_schema = serialize_tools(getattr(agent, "tools", None) or [])
+        except Exception as e:
+            tools_schema = None
+            frappe.logger("huf").warning(
+                f"Failed to serialize tools for prefix fingerprinting (sync, agent={agent_name}): {e!s}"
+            )
+
+        # Get static prefix and latest user message for prefix fingerprinting
+        static_prefix = (resolved_prompt_cache.get("static_prefix") or "").strip() if resolved_prompt_cache else None
+
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model_name, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history,
+            tools=tools_schema,
+            static_prefix=static_prefix if static_prefix else None,
+            latest_user=prompt
+        )
+        tools_breakdown = compute_tools_breakdown(
+            _normalize_model_name(resolved_model_name, resolved_provider),
+            getattr(agent, "tools", None),
+            manager.tool_sources,
         )
 
         context = {
@@ -1785,71 +1967,23 @@ def _execute_agent_run(
         cached_tokens = 0
         cache_creation_tokens = 0
         cache_skipped_unsupported_model = False
+        cache_skipped_below_min_tokens = False
 
         if usage:
 
-            if isinstance(usage, dict):
-                input_tokens = (getattr(usage, "prompt_tokens", usage.get("input_tokens", 0)) if isinstance(usage, dict) else 0) or 0
-                output_tokens = (getattr(usage, "completion_tokens", usage.get("output_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+            round_usage = extract_round_usage(usage)
+            input_tokens = round_usage["input_tokens"]
+            output_tokens = round_usage["output_tokens"]
+            cached_tokens = round_usage["cache_read_tokens"]
+            cache_creation_tokens = round_usage["cache_write_tokens"]
 
-                details = getattr(usage, "prompt_tokens_details", None)
-                if not details and isinstance(usage, dict):
-                    details = usage.get("prompt_tokens_details")
-
-                if details:
-                    if isinstance(details, dict):
-                        cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
-                        cache_creation_tokens = (
-                            details.get("cache_creation_input_tokens")
-                            or details.get("cache_write_tokens")
-                            or details.get("cache_creation_tokens")
-                            or 0
-                        )
-                    else:
-                        cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
-                        cache_creation_tokens = (
-                            getattr(details, "cache_creation_input_tokens", None)
-                            or getattr(details, "cache_write_tokens", None)
-                            or getattr(details, "cache_creation_tokens", None)
-                            or 0
-                        )
-                elif isinstance(usage, dict):
-                    cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                    cache_creation_tokens = (
-                        usage.get("cache_creation_tokens")
-                        or usage.get("cache_creation_input_tokens")
-                        or usage.get("cache_write_input_tokens")
-                        or usage.get("cache_miss_tokens")
-                        or 0
-                    )
-
-                if not cache_creation_tokens and isinstance(usage, dict):
-                    cache_creation_tokens = (
-                        usage.get("cache_creation_tokens")
-                        or usage.get("cache_creation_input_tokens")
-                        or usage.get("cache_write_input_tokens")
-                        or usage.get("cache_miss_tokens")
-                        or 0
-                    )
-
-                if isinstance(usage, dict):
-                    cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
-
+            usage_dict = normalise_usage_payload(usage)
+            if usage_dict is not None:
+                cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
+                cache_skipped_below_min_tokens = bool(usage_dict.get("cache_skipped_below_min_tokens", False))
             else:
-                input_tokens = (getattr(usage, "input_tokens", getattr(usage, "prompt_tokens", 0))) or 0
-                output_tokens = (getattr(usage, "output_tokens", getattr(usage, "completion_tokens", 0))) or 0
-                cached_tokens = getattr(usage, "cached_tokens", None) or 0
-                cache_creation_tokens = (
-                    getattr(usage, "cache_creation_tokens", None)
-                    or getattr(usage, "cache_creation_input_tokens", None)
-                    or getattr(usage, "cache_write_input_tokens", None)
-                    or getattr(usage, "cache_miss_tokens", None)
-                    or 0
-                )
                 cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
-
-            cached_tokens = cached_tokens or 0
-            cache_creation_tokens = cache_creation_tokens or 0
+                cache_skipped_below_min_tokens = bool(getattr(usage, "cache_skipped_below_min_tokens", False))
 
             try:
                 # Prefer cost directly from the result
@@ -1886,9 +2020,16 @@ def _execute_agent_run(
                 )
                 cost = 0.0
 
-            try:
-                total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) if usage else (input_tokens + output_tokens)
+            # Computed OUTSIDE the try below: the conversation-metrics update
+            # swallows its exceptions, and total_tokens is read again by the
+            # Agent Run write further down. Leaving the assignment inside the
+            # try would let a failure there surface as a NameError at the later
+            # read instead of the warning this except is meant to produce.
+            # usage is normally a plain dict here, so getattr() would always miss;
+            # read the normalised payload and fall back to the parts.
+            total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
+            try:
                 frappe.db.sql("""
                     UPDATE `tabAgent Conversation`
                     SET
@@ -1904,23 +2045,72 @@ def _execute_agent_run(
                     f"Failed to update conversation metrics: {str(e)}"
                 )
 
+            # usage_dict carries the richer provider-usage shape (see
+            # providers/litellm.py _finalize_usage_totals); fields absent from
+            # it (older provider shapes, or a usage payload that failed to
+            # normalise) are written as None, never coerced to 0 — a 0 would
+            # silently distort every downstream average.
+            usage_payload = usage_dict or {}
+            billed_input_tokens = usage_payload.get("billed_input_tokens")
+            if billed_input_tokens is None:
+                billed_input_tokens = input_tokens
+            peak_context_tokens = usage_payload.get("peak_context_tokens")
+            round_count = usage_payload.get("round_count")
+            tool_exchange_tokens = usage_payload.get("tool_exchange_tokens")
+            round_prompt_tokens = usage_payload.get("round_prompt_tokens") or []
+            # round_prompt_tokens[0] is the round-1, pre-call prompt size —
+            # the same measurement point as segment_tokens. Comparing against
+            # the run's summed billed_input_tokens instead would flag a
+            # divergence on every multi-round run and make the warning useless.
+            round1_prompt_tokens = round_prompt_tokens[0] if round_prompt_tokens else None
+            composition_reconciliation = reconcile_composition(
+                segment_tokens, tool_exchange_tokens, round1_prompt_tokens
+            )
+
+            # Snapshotted at write time so later AI Model edits cannot rewrite
+            # history for this run.
+            provider_brand = (
+                frappe.get_cached_value("AI Provider", resolved_provider, "provider_brand")
+                if resolved_provider
+                else None
+            )
+            model_context_window = resolve_model_context_window(
+                resolved_model, resolved_provider, provider_brand
+            )
+
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
                 "cached_tokens": cached_tokens,
+                "cache_creation_tokens": cache_creation_tokens,
                 "cost": cost,
+                "billed_input_tokens": billed_input_tokens,
+                "peak_context_tokens": peak_context_tokens,
+                "total_tokens": total_tokens,
+                "cache_skipped_unsupported_model": 1 if cache_skipped_unsupported_model else 0,
+                "round_count": round_count,
+                "model_context_window": model_context_window,
+                "provider_path": getattr(result, "provider_path", None),
+                "execution_mode": "sync",
                 "usage_snapshot": json.dumps({
-                    "schema_version": 1,
+                    "schema_version": 2,
                     "input_tokens": input_tokens,
                     "output_tokens": output_tokens,
-                    "cache_read_tokens": cached_tokens if usage else None,
-                    "cache_creation_tokens": cache_creation_tokens if usage else None,
-                    "cache_miss_tokens": cache_creation_tokens if usage else None,
+                    "cache_read_tokens": cached_tokens,
+                    "cache_creation_tokens": cache_creation_tokens,
                     "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                    "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
                     "total_tokens": total_tokens,
                     "completeness": "provider_reported" if usage else "estimated",
                     "segment_tokens": segment_tokens,
+                    "tools_breakdown": tools_breakdown,
                     "prefix_breakpoints": prefix_breakpoints,
+                    "billed_input_tokens": billed_input_tokens,
+                    "peak_context_tokens": peak_context_tokens,
+                    "round_count": round_count,
+                    "tool_exchange_tokens": tool_exchange_tokens,
+                    "round_prompt_tokens": round_prompt_tokens,
+                    "composition_reconciliation": composition_reconciliation,
                 }),
                 "cost_source": "provider_reported" if getattr(result, "cost", None) is not None else "unknown",
                 "cost_calculation_status": "calculated" if cost is not None else "unavailable",
@@ -2063,7 +2253,10 @@ def _execute_agent_run(
         log_error_msg = getattr(e, "log_message", error_msg)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        frappe.log_error(title="Huf Provider", message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}")
+        frappe.log_error(
+            title="Huf Provider",
+            message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}",
+        )
         _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
         # Handle Sub-Agent Failure Lifecycle Hook
@@ -2684,6 +2877,7 @@ async def run_agent_stream(
             agent_name,
             provider_override=resolved_provider,
             model_override=resolved_model,
+            conversation_id=conversation.name,
         )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
@@ -2793,12 +2987,46 @@ async def run_agent_stream(
         else:
             enhanced_prompt = base_prompt
 
-        from huf.ai.context_segments import compute_segment_tokens, compute_prefix_breakpoints
+        from huf.ai.context_segments import (
+            compute_segment_tokens,
+            compute_prefix_breakpoints,
+            compute_tools_breakdown,
+            reconcile_composition,
+        )
         segment_tokens = compute_segment_tokens(
             agent_doc, agent, resolved_model_name, resolved_provider, history, knowledge_context, prompt
         )
+
+        # Opt-in only -- off unless a site operator sets
+        # huf_retain_system_prompts_enabled in site_config. See
+        # huf/ai/system_prompt_retention.py for why this defaults off (D15).
+        from huf.ai.system_prompt_retention import maybe_snapshot_system_prompt
+        maybe_snapshot_system_prompt(
+            run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
+        )
+
+        # Serialize tools for prefix fingerprinting
+        try:
+            tools_schema = serialize_tools(getattr(agent, "tools", None) or [])
+        except Exception as e:
+            tools_schema = None
+            frappe.logger("huf").warning(
+                f"Failed to serialize tools for prefix fingerprinting (stream, agent={agent_name}): {e!s}"
+            )
+
+        # Get static prefix and latest user message for prefix fingerprinting
+        static_prefix = (resolved_prompt_cache.get("static_prefix") or "").strip() if resolved_prompt_cache else None
+
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model_name, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history,
+            tools=tools_schema,
+            static_prefix=static_prefix if static_prefix else None,
+            latest_user=prompt
+        )
+        tools_breakdown = compute_tools_breakdown(
+            _normalize_model_name(resolved_model_name, resolved_provider),
+            getattr(agent, "tools", None),
+            manager.tool_sources,
         )
 
         context["conversation_history"] = history
@@ -2870,7 +3098,10 @@ async def run_agent_stream(
                         error_msg = _(
                             "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
                         )
-                        frappe.log_error(title="Huf Provider", message=f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')")
+                        frappe.log_error(
+                            title="Huf Provider",
+                            message=f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')",
+                        )
                         frappe.db.set_value("Agent Run", run_doc.name, {
                             "status": "Failed",
                             "error_message": error_msg,
@@ -2895,74 +3126,29 @@ async def run_agent_stream(
                     cached_tokens = 0
                     cache_creation_tokens = 0
                     cache_skipped_unsupported_model = False
+                    cache_skipped_below_min_tokens = False
                     total_tokens = 0
+                    usage_dict = None
 
                     if usage:
 
-                        if isinstance(usage, dict):
-                            input_tokens = (getattr(usage, "prompt_tokens", usage.get("prompt_tokens", 0)) if isinstance(usage, dict) else 0) or 0
-                            output_tokens = (getattr(usage, "completion_tokens", usage.get("completion_tokens", 0)) if isinstance(usage, dict) else 0) or 0
+                        round_usage = extract_round_usage(usage)
+                        input_tokens = round_usage["input_tokens"]
+                        output_tokens = round_usage["output_tokens"]
+                        cached_tokens = round_usage["cache_read_tokens"]
+                        cache_creation_tokens = round_usage["cache_write_tokens"]
 
-                            details = getattr(usage, "prompt_tokens_details", None)
-                            if not details and isinstance(usage, dict):
-                                details = usage.get("prompt_tokens_details")
-
-                            if details:
-                                if isinstance(details, dict):
-                                    cached_tokens = details.get("cached_tokens") or details.get("cache_hit_tokens") or 0
-                                    cache_creation_tokens = (
-                                        details.get("cache_creation_input_tokens")
-                                        or details.get("cache_write_tokens")
-                                        or details.get("cache_creation_tokens")
-                                        or 0
-                                    )
-                                else:
-                                    cached_tokens = getattr(details, "cached_tokens", None) or getattr(details, "cache_hit_tokens", None) or 0
-                                    cache_creation_tokens = (
-                                        getattr(details, "cache_creation_input_tokens", None)
-                                        or getattr(details, "cache_write_tokens", None)
-                                        or getattr(details, "cache_creation_tokens", None)
-                                        or 0
-                                    )
-                            elif isinstance(usage, dict):
-                                cached_tokens = usage.get("cached_tokens") or usage.get("cache_hit_tokens") or 0
-                                cache_creation_tokens = (
-                                    usage.get("cache_creation_tokens")
-                                    or usage.get("cache_creation_input_tokens")
-                                    or usage.get("cache_write_input_tokens")
-                                    or usage.get("cache_miss_tokens")
-                                    or 0
-                                )
-
-                            if not cache_creation_tokens and isinstance(usage, dict):
-                                cache_creation_tokens = (
-                                    usage.get("cache_creation_tokens")
-                                    or usage.get("cache_creation_input_tokens")
-                                    or usage.get("cache_write_input_tokens")
-                                    or usage.get("cache_miss_tokens")
-                                    or 0
-                                )
-
-                            if isinstance(usage, dict):
-                                cache_skipped_unsupported_model = bool(usage.get("cache_skipped_unsupported_model", False))
-
-                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens))
+                        usage_dict = normalise_usage_payload(usage)
+                        if usage_dict is not None:
+                            cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
+                            cache_skipped_below_min_tokens = bool(usage_dict.get("cache_skipped_below_min_tokens", False))
                         else:
-                            input_tokens = (getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", 0))) or 0
-                            output_tokens = (getattr(usage, "completion_tokens", getattr(usage, "output_tokens", 0))) or 0
-                            cached_tokens = getattr(usage, "cached_tokens", None) or 0
-                            cache_creation_tokens = (
-                                getattr(usage, "cache_creation_tokens", None)
-                                or getattr(usage, "cache_creation_input_tokens", None)
-                                or getattr(usage, "cache_write_input_tokens", None)
-                                or getattr(usage, "cache_miss_tokens", None)
-                                or 0
-                            )
                             cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
-                            total_tokens = getattr(usage, "total_tokens", (input_tokens + output_tokens)) or (input_tokens + output_tokens)
+                            cache_skipped_below_min_tokens = bool(getattr(usage, "cache_skipped_below_min_tokens", False))
 
-                    cached_tokens = cached_tokens or 0
-                    cache_creation_tokens = cache_creation_tokens or 0
+                        # usage is normally a plain dict here, so getattr() would always miss;
+                        # read the normalised payload and fall back to the parts.
+                        total_tokens = (usage_dict or {}).get("total_tokens") or (input_tokens + output_tokens)
 
                     if input_tokens == 0 or output_tokens == 0:
                         try:
@@ -3036,6 +3222,41 @@ async def run_agent_stream(
                     r_res_stream = context.get("reasoning_resolution") if context else None
                     r_snap_stream = json.dumps(r_res_stream.to_dict()) if r_res_stream else None
 
+                    # usage_dict carries the richer provider-usage shape (see
+                    # providers/litellm.py _finalize_usage_totals); fields absent
+                    # from it (no usage on this chunk, an older provider shape,
+                    # or a payload that failed to normalise) are written as
+                    # None, never coerced to 0 — a 0 would silently distort
+                    # every downstream average.
+                    usage_payload = usage_dict or {}
+                    billed_input_tokens = usage_payload.get("billed_input_tokens")
+                    if billed_input_tokens is None:
+                        billed_input_tokens = input_tokens
+                    peak_context_tokens = usage_payload.get("peak_context_tokens")
+                    round_count = usage_payload.get("round_count")
+                    tool_exchange_tokens = usage_payload.get("tool_exchange_tokens")
+                    round_prompt_tokens = usage_payload.get("round_prompt_tokens") or []
+                    # round_prompt_tokens[0] is the round-1, pre-call prompt size —
+                    # the same measurement point as segment_tokens. Comparing
+                    # against the run's summed billed_input_tokens instead would
+                    # flag a divergence on every multi-round run and make the
+                    # warning useless.
+                    round1_prompt_tokens = round_prompt_tokens[0] if round_prompt_tokens else None
+                    composition_reconciliation = reconcile_composition(
+                        segment_tokens, tool_exchange_tokens, round1_prompt_tokens
+                    )
+
+                    # Snapshotted at write time so later AI Model edits cannot
+                    # rewrite history for this run.
+                    provider_brand = (
+                        frappe.get_cached_value("AI Provider", resolved_provider, "provider_brand")
+                        if resolved_provider
+                        else None
+                    )
+                    model_context_window = resolve_model_context_window(
+                        resolved_model, resolved_provider, provider_brand
+                    )
+
                     stream_run_update = {
                         "status": "Success",
                         "response": full_response,
@@ -3045,19 +3266,35 @@ async def run_agent_stream(
                         "input_tokens": input_tokens,
                         "output_tokens": output_tokens,
                         "cached_tokens": cached_tokens,
+                        "cache_creation_tokens": cache_creation_tokens,
                         "cost": cost,
+                        "billed_input_tokens": billed_input_tokens,
+                        "peak_context_tokens": peak_context_tokens,
+                        "total_tokens": total_tokens,
+                        "cache_skipped_unsupported_model": 1 if cache_skipped_unsupported_model else 0,
+                        "round_count": round_count,
+                        "model_context_window": model_context_window,
+                        "provider_path": "litellm",
+                        "execution_mode": "stream",
                         "usage_snapshot": json.dumps({
-                            "schema_version": 1,
+                            "schema_version": 2,
                             "input_tokens": input_tokens,
                             "output_tokens": output_tokens,
-                            "cache_read_tokens": cached_tokens if usage else None,
-                            "cache_creation_tokens": cache_creation_tokens if usage else None,
-                            "cache_miss_tokens": cache_creation_tokens if usage else None,
+                            "cache_read_tokens": cached_tokens,
+                            "cache_creation_tokens": cache_creation_tokens,
                             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                            "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
                             "total_tokens": total_tokens,
                             "completeness": "provider_reported" if usage else "estimated",
                             "segment_tokens": segment_tokens,
+                            "tools_breakdown": tools_breakdown,
                             "prefix_breakpoints": prefix_breakpoints,
+                            "billed_input_tokens": billed_input_tokens,
+                            "peak_context_tokens": peak_context_tokens,
+                            "round_count": round_count,
+                            "tool_exchange_tokens": tool_exchange_tokens,
+                            "round_prompt_tokens": round_prompt_tokens,
+                            "composition_reconciliation": composition_reconciliation,
                         }),
                         "cost_source": "provider_reported" if chunk.get("cost") is not None else "unknown",
                         "cost_calculation_status": "calculated" if cost is not None else "unavailable",
@@ -3259,7 +3496,10 @@ async def run_agent_stream(
                 # pulled, bad model prefix) — message is self-explanatory, no
                 # traceback needed. The run is still marked Failed below.
                 log_error_msg = getattr(e, "log_message", error_msg)
-                frappe.log_error(title="Huf Provider", message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}")
+                frappe.log_error(
+                    title="Huf Provider",
+                    message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}",
+                )
             else:
                 frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             if "ContextWindowExceededError" in error_msg:
@@ -3447,6 +3687,36 @@ def get_message_permission_conditions(user):
 
 	# Filter by conversation ownership
 	return f"(`tabAgent Message`.conversation IN (SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
+
+
+def get_context_artifact_permission_conditions(user):
+	"""
+	Restrict Agent Context Artifact list to artifacts belonging to
+	conversations the user owns, unless the user has chat.view_all
+	capability. Mirrors get_conversation_permission_conditions.
+
+	Fix for F-13: previously the only permission row on this DocType was
+	System Manager, so ordinary users could never read their own
+	conversation's artifacts while any System Manager could read everyone's.
+	Re-evaluated against frappe.session.user (or the explicit ``user``
+	argument) on every query -- there is no cached/stale authority here (I1,
+	I2): a handle to an artifact never grants access beyond what the reader
+	independently has on the owning conversation.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "chat.view_all"):
+		return None
+
+	return (
+		"(`tabAgent Context Artifact`.conversation IN "
+		f"(SELECT name FROM `tabAgent Conversation` WHERE owner = {frappe.db.escape(user)}))"
+	)
 
 
 def get_run_permission_conditions(user):

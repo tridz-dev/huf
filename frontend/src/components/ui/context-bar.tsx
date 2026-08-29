@@ -10,7 +10,14 @@ export interface ContextBarCacheState {
 export interface ContextBarProps {
   segments: SegmentTokens;
   cacheState?: ContextBarCacheState;
-  total: number;
+  /**
+   * The model's context window, in tokens. Null when the window is
+   * unknown (unresolvable model metadata) — in that case the composition
+   * strip is rendered proportionally against the sum of known segments
+   * instead of a guessed denominator, and no headroom is drawn, so the
+   * user is never shown a made-up "free space" figure.
+   */
+  total: number | null;
   size?: 'sm' | 'md';
   /** Render a visible swatch legend below the bars (run detail context panel). */
   showLegend?: boolean;
@@ -37,6 +44,9 @@ const SEGMENT_ORDER: Array<{ key: keyof SegmentTokens; label: string; color: str
   { key: 'knowledge', label: 'Knowledge', color: 'bg-good' },
   { key: 'history', label: 'History', color: 'bg-warning' },
   { key: 'message', label: 'Message', color: 'bg-signal' },
+  // Neutral tone (shared with cache-write below): red is reserved for
+  // failure states, so tool exchange gets steel rather than a new hue.
+  { key: 'tool_exchange', label: 'Tool exchange', color: 'bg-steel' },
 ];
 
 /**
@@ -56,7 +66,13 @@ export function ContextBar({
 }: ContextBarProps) {
   const height = size === 'sm' ? 'h-1' : 'h-2';
   const known = SEGMENT_ORDER.reduce((sum, { key }) => sum + (segments[key] ?? 0), 0);
-  const headroom = total > known ? total - known : 0;
+  const hasWindow = typeof total === 'number' && total > 0;
+  // With no known window, fall back to the sum of known segments as the
+  // denominator so the composition strip always fills 100% of what was
+  // actually measured, instead of drawing a headroom sliver against a
+  // fabricated total.
+  const denominator = hasWindow ? (total as number) : known;
+  const headroom = hasWindow && (total as number) > known ? (total as number) - known : 0;
 
   const cacheTotal = cacheState ? cacheState.cacheRead + cacheState.cacheWrite + cacheState.uncached : 0;
 
@@ -68,11 +84,14 @@ export function ContextBar({
       onClick={onClick}
       type={onClick ? 'button' : undefined}
     >
-      <div className={cn('flex w-full overflow-hidden rounded-full bg-muted', height)}>
+      <div
+        className={cn('flex w-full overflow-hidden rounded-full bg-muted', height)}
+        title={!hasWindow ? 'Context window size is not known for this run — showing measured composition only.' : undefined}
+      >
         {SEGMENT_ORDER.map(({ key, label, color }) => {
           const value = segments[key];
           if (!value) return null;
-          const pct = total > 0 ? (value / total) * 100 : 0;
+          const pct = denominator > 0 ? (value / denominator) * 100 : 0;
           return (
             <div
               key={key}
@@ -85,11 +104,14 @@ export function ContextBar({
         {headroom > 0 && (
           <div
             className="bg-transparent"
-            style={{ width: `${(headroom / total) * 100}%` }}
+            style={{ width: `${(headroom / denominator) * 100}%` }}
             title={`Headroom: ${headroom.toLocaleString()} tokens`}
           />
         )}
       </div>
+      {!hasWindow && (
+        <span className="text-[11px] text-steel">Context window not measured — showing known composition only.</span>
+      )}
 
       {cacheState && cacheTotal > 0 && (
         <div className={cn('flex w-full overflow-hidden rounded-full bg-muted', height)}>
@@ -127,10 +149,12 @@ export function ContextBar({
             <LegendSwatch color={UNCACHED_COLOR} />
             Fresh input {formatPct(cacheState.uncached / cacheTotal)}
           </span>
-          <span className="flex items-center gap-1.5">
-            <LegendSwatch color={cn(FREE_COLOR, 'border border-line')} />
-            Window free {total > 0 ? formatPct(headroom / total) : '0%'}
-          </span>
+          {hasWindow && (
+            <span className="flex items-center gap-1.5">
+              <LegendSwatch color={cn(FREE_COLOR, 'border border-line')} />
+              Window free {formatPct(headroom / denominator)}
+            </span>
+          )}
         </div>
       )}
     </Wrapper>

@@ -10,7 +10,10 @@
   "description",
   "column_break_main",
   "route",
+  "alias",
   "icon",
+  "icon_source",
+  "agent",
   "category",
   "sort_order",
   "section_break_details",
@@ -18,7 +21,9 @@
   "launch_mode",
   "required_huf_version",
   "permission_method",
+  "is_public",
   "exposed_tables",
+  "capabilities",
   "enabled",
   "section_break_sync",
   "source_app",
@@ -67,6 +72,25 @@
    "label": "Icon"
   },
   {
+   "fieldname": "icon_source",
+   "fieldtype": "Select",
+   "label": "Icon Source",
+   "options": "Path\nUploaded\nGenerated\nDefault",
+   "default": "Path"
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent"
+  },
+  {
+   "fieldname": "alias",
+   "fieldtype": "Data",
+   "label": "Alias",
+   "unique": 1
+  },
+  {
    "default": "Other",
    "fieldname": "category",
    "fieldtype": "Data",
@@ -106,10 +130,21 @@
    "label": "Permission Method"
   },
   {
+   "fieldname": "is_public",
+   "fieldtype": "Check",
+   "label": "Is Public",
+   "default": 0
+  },
+  {
    "fieldname": "exposed_tables",
    "fieldtype": "Small Text",
    "label": "Exposed Tables",
    "read_only": 1
+  },
+  {
+   "fieldname": "capabilities",
+   "fieldtype": "Small Text",
+   "label": "Capabilities"
   },
   {
    "default": "1",

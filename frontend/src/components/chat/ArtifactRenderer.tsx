@@ -40,6 +40,11 @@ import { Mermaid } from '@/components/ui/mermaid';
 import { JSXPreview, JSXPreviewContent, JSXPreviewExport } from '@/components/ui/jsx-preview';
 import { Video } from '@/components/ai-elements/video';
 import { DocumentPreview } from '@/components/chat/DocumentPreview';
+import { FrappeListView } from '@/components/chat/frappe-views/FrappeListView';
+import { FrappeFormView } from '@/components/chat/frappe-views/FrappeFormView';
+import { FrappeReportView } from '@/components/chat/frappe-views/FrappeReportView';
+import type { FrappeViewPayload } from '@/types/artifact.types';
+import { TableIcon } from 'lucide-react';
 
 /** Ids minted by the client-side parser for transient, unsaved artifacts. */
 const TRANSIENT_ARTIFACT_ID = /^artifact-\d+-\d+$/;
@@ -75,6 +80,9 @@ const ARTIFACT_ICONS: Record<ArtifactType, typeof CodeIcon> = {
 	jsx: LayoutIcon,
 	chart: BarChartIcon,
 	video: VideoIcon,
+	'frappe-list': TableIcon,
+	'frappe-form': FileTextIcon,
+	'frappe-report': TableIcon,
 };
 
 // Map common language aliases to Shiki language names
@@ -97,6 +105,55 @@ function normalizeLanguage(language?: string): string {
 	if (!language) return 'text';
 	const lower = language.toLowerCase();
 	return LANGUAGE_MAP[lower] || lower;
+}
+
+/**
+ * Parses a frappe-list/frappe-form/frappe-report artifact body (JSON per
+ * FrappeViewPayload, emitted by
+ * huf/ai/tools/frappe_generic.py::handle_render_frappe_view) and renders the
+ * matching view component. Malformed JSON (or a payload missing the fields
+ * these views need) falls back to a plain error message rather than
+ * throwing, since this runs inside a streaming chat message.
+ */
+function renderFrappeView(type: 'frappe-list' | 'frappe-form' | 'frappe-report', content: string) {
+	let payload: FrappeViewPayload;
+	try {
+		payload = JSON.parse(content) as FrappeViewPayload;
+	} catch (error) {
+		console.error('Failed to parse frappe view artifact payload:', error);
+		return (
+			<div className="text-sm text-destructive p-4">
+				Could not parse this Frappe view - invalid JSON.
+			</div>
+		);
+	}
+
+	// Defensive normalization: a model asked to relay the tool's artifact tag
+	// "verbatim" can still occasionally paraphrase a key name (observed:
+	// gemini-3.6-flash emitting `doc` instead of `data` for mode="form"
+	// while otherwise reproducing the payload faithfully). Recover the
+	// common single-key-rename case rather than showing a hard error for
+	// data that's actually all there.
+	if (payload && payload.data === undefined && (payload as unknown as Record<string, unknown>).doc !== undefined) {
+		payload = { ...payload, data: (payload as unknown as Record<string, unknown>).doc } as FrappeViewPayload;
+	}
+
+	if (!payload || !payload.meta || payload.data === undefined) {
+		return (
+			<div className="text-sm text-destructive p-4">
+				This Frappe view is missing required data (meta/data).
+			</div>
+		);
+	}
+
+	switch (type) {
+		case 'frappe-list':
+			return <FrappeListView payload={payload} />;
+		case 'frappe-form':
+			return <FrappeFormView payload={payload} />;
+		case 'frappe-report':
+			return <FrappeReportView payload={payload} />;
+	}
 }
 
 export function ArtifactRenderer({
@@ -161,6 +218,12 @@ export function ArtifactRenderer({
 			extension = 'md';
 		} else if (artifact.type === 'jsx' || artifact.type === 'chart') {
 			extension = 'jsx';
+		} else if (
+			artifact.type === 'frappe-list' ||
+			artifact.type === 'frappe-form' ||
+			artifact.type === 'frappe-report'
+		) {
+			extension = 'json';
 		}
 
 		a.download = artifact.title
@@ -306,6 +369,11 @@ export function ArtifactRenderer({
 						</details>
 					</div>
 				);
+
+			case 'frappe-list':
+			case 'frappe-form':
+			case 'frappe-report':
+				return renderFrappeView(artifact.type, artifact.content);
 
 			default:
 				return (

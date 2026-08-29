@@ -1,0 +1,459 @@
+# Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
+# For license information, please see license.txt
+
+"""Agent-facing tool handlers that template structured JSON into the existing
+Mermaid/chart <artifact> tag formats, so a model passes data instead of
+hand-authoring Mermaid DSL or Recharts JSX.
+
+Both handlers return the complete <artifact>...</artifact> markup string -
+the exact same tags a model would otherwise hand-author - or raise ValueError
+on bad input, matching the convention used elsewhere in huf/ai/tools/.
+
+list_app_components/render_app_component (below) apply the same
+deterministic-templating idea to arbitrary shadcn/ui component composition:
+a small, explicit allowlist mirrored from
+frontend/src/components/ui/jsx-preview.tsx's `availableComponents` map (the
+client-side hard whitelist - anything not in that map is inert when the
+model emits raw JSX), not the full 60-component design system. This keeps
+the Hub Orchestrator (and any App-backing agent) from hand-authoring props
+against components it cannot actually see the definitions of.
+"""
+
+import json
+
+VALID_DIAGRAM_TYPES = ("graph TD", "graph LR", "flowchart TD", "flowchart LR")
+VALID_CHART_TYPES = ("bar", "line", "pie", "area")
+
+# Characters that break Mermaid node/edge syntax inside a label.
+_MERMAID_LABEL_ESCAPES = {
+	"[": "(",
+	"]": ")",
+	"|": "-",
+	'"': "'",
+}
+
+# Default palette for pie-chart slices when the caller does not supply colors.
+_DEFAULT_PIE_COLORS = ["#007BFF", "#28A745", "#FFC107", "#DC3545", "#6F42C1", "#20C997", "#FD7E14"]
+
+
+def _escape_mermaid_label(label: str) -> str:
+	escaped = label
+	for char, replacement in _MERMAID_LABEL_ESCAPES.items():
+		escaped = escaped.replace(char, replacement)
+	return escaped
+
+
+def _escape_artifact_attr(value: str) -> str:
+	"""Sanitize a value that will be templated into an `<artifact ...>` tag
+	attribute (e.g. title="...").
+
+	The frontend's artifact parser (frontend/src/utils/artifactParser.ts)
+	extracts the outer `<artifact ...>` tag with a plain regex, not an HTML/DOM
+	parser: `ARTIFACT_REGEX` stops at the first `>` and `ATTR_REGEX` stops at
+	the first matching quote. An unescaped `"` or `>` in a templated value
+	(e.g. an LLM- or user-supplied chart/diagram title) would truncate or
+	corrupt the tag boundary, leaking the rest of the artifact body as raw
+	text into the chat. Strip the characters that matter to that regex rather
+	than trying to HTML-encode them (this isn't HTML, so entities like
+	`&quot;` would just render literally).
+	"""
+	if not value:
+		return value
+	return value.replace('"', "'").replace("<", "(").replace(">", ")")
+
+
+def _escape_jsx_attr(value: str) -> str:
+	"""Sanitize a value templated into a double-quoted JSX attribute
+	(e.g. dataKey="...", fill="..."). Prevents a caller-supplied field name or
+	color from closing the attribute early and injecting additional JSX
+	attributes/props into the generated chart component.
+	"""
+	if not value:
+		return value
+	return value.replace('"', "'").replace("{", "(").replace("}", ")")
+
+
+def handle_render_mermaid(diagram_type=None, nodes=None, edges=None, title=None, **kwargs) -> str:
+	"""Template structured nodes/edges into a Mermaid <artifact> tag.
+
+	Args:
+		diagram_type (str): One of "graph TD", "graph LR", "flowchart TD", "flowchart LR".
+		nodes (list[dict]): Each {"id": str, "label": str, "shape": optional, ignored}.
+		edges (list[dict]): Each {"from": str, "to": str, "label": optional str}.
+		title (str): Artifact title, defaults to "Diagram".
+
+	Returns:
+		The complete <artifact type="mermaid" ...>...</artifact> string.
+	"""
+	if diagram_type not in VALID_DIAGRAM_TYPES:
+		raise ValueError(f"'diagram_type' must be one of {VALID_DIAGRAM_TYPES}, got {diagram_type!r}")
+
+	if not isinstance(nodes, list) or not nodes:
+		raise ValueError("'nodes' must be a non-empty list of {id, label} objects")
+
+	if edges is None:
+		edges = []
+	if not isinstance(edges, list):
+		raise ValueError("'edges' must be a list of {from, to, label} objects")
+
+	node_ids = set()
+	node_lines = []
+	for i, node in enumerate(nodes):
+		if not isinstance(node, dict):
+			raise ValueError(f"nodes[{i}] must be an object with 'id' and 'label'")
+		node_id = (node.get("id") or "").strip()
+		label = (node.get("label") or "").strip()
+		if not node_id:
+			raise ValueError(f"nodes[{i}] is missing a required non-empty 'id'")
+		if not label:
+			raise ValueError(f"nodes[{i}] (id={node_id!r}) is missing a required non-empty 'label'")
+		if node_id in node_ids:
+			raise ValueError(f"Duplicate node id {node_id!r} - node ids must be unique")
+		node_ids.add(node_id)
+		node_lines.append(f"    {node_id}[{_escape_mermaid_label(label)}]")
+
+	edge_lines = []
+	for i, edge in enumerate(edges):
+		if not isinstance(edge, dict):
+			raise ValueError(f"edges[{i}] must be an object with 'from' and 'to'")
+		src = (edge.get("from") or "").strip()
+		dst = (edge.get("to") or "").strip()
+		if not src or not dst:
+			raise ValueError(f"edges[{i}] must have non-empty 'from' and 'to'")
+		if src not in node_ids:
+			raise ValueError(f"edges[{i}] references unknown node id 'from'={src!r} - it must match a declared node id")
+		if dst not in node_ids:
+			raise ValueError(f"edges[{i}] references unknown node id 'to'={dst!r} - it must match a declared node id")
+
+		edge_label = (edge.get("label") or "").strip()
+		if edge_label:
+			edge_lines.append(f"    {src} -->|{_escape_mermaid_label(edge_label)}| {dst}")
+		else:
+			edge_lines.append(f"    {src} --> {dst}")
+
+	dsl_lines = [diagram_type] + node_lines + edge_lines
+	dsl = "\n".join(dsl_lines)
+
+	_sanity_check_mermaid_dsl(dsl)
+
+	artifact_title = _escape_artifact_attr((title or "Diagram").strip())
+	return f'<artifact type="mermaid" title="{artifact_title}">\n{dsl}\n</artifact>'
+
+
+def _sanity_check_mermaid_dsl(dsl: str) -> None:
+	"""Best-effort structural check on generated DSL before returning it."""
+	if dsl.count("[") != dsl.count("]"):
+		raise ValueError("Generated Mermaid DSL has unbalanced [] brackets - this is a bug in render_mermaid")
+	if "[]" in dsl.replace(" ", ""):
+		raise ValueError("Generated Mermaid DSL has an empty node label - this is a bug in render_mermaid")
+	for line in dsl.splitlines()[1:]:
+		stripped = line.strip()
+		if not stripped:
+			continue
+		is_edge_line = "-->" in stripped
+		is_node_line = "[" in stripped
+		if stripped.startswith("-->") or not (is_edge_line or is_node_line):
+			raise ValueError(f"Generated Mermaid DSL line looks malformed: {stripped!r}")
+
+
+_CHART_TAG_TEMPLATES = {
+	"bar": {
+		"import_component": "BarChart",
+		"series_component": "Bar",
+	},
+	"line": {
+		"import_component": "LineChart",
+		"series_component": "Line",
+	},
+	"area": {
+		"import_component": "AreaChart",
+		"series_component": "Area",
+	},
+}
+
+
+def handle_render_chart(chart_type=None, data=None, series_keys=None, x_key="label", colors=None, title=None, **kwargs) -> str:
+	"""Template structured data into a JSX chart <artifact> tag matching the
+	rules in huf.ai.chart_artifact_instructions (allowed tags/components,
+	backtick template literals, no CardHeader/CardTitle, etc).
+
+	Args:
+		chart_type (str): One of "bar", "line", "pie", "area".
+		data (list[dict]): Non-empty rows, each containing at least x_key.
+		series_keys (list[str]): Fields to plot; defaults to ["value"].
+		x_key (str): Field used for the category/x axis. Ignored for "pie".
+		colors (list[str]): Optional palette, mainly used for pie slices.
+		title (str): Artifact title.
+
+	Returns:
+		The complete <artifact type="chart" language="jsx" ...>...</artifact> string.
+	"""
+	if chart_type not in VALID_CHART_TYPES:
+		raise ValueError(f"'chart_type' must be one of {VALID_CHART_TYPES}, got {chart_type!r}")
+
+	if not isinstance(data, list) or not data:
+		raise ValueError("'data' must be a non-empty list of objects")
+
+	for i, row in enumerate(data):
+		if not isinstance(row, dict):
+			raise ValueError(f"data[{i}] must be an object")
+		if chart_type != "pie" and x_key not in row:
+			raise ValueError(f"data[{i}] is missing the required x_key field {x_key!r}")
+
+	if not series_keys:
+		series_keys = ["value"]
+	if not isinstance(series_keys, list) or not series_keys:
+		raise ValueError("'series_keys' must be a non-empty list of field names")
+
+	for i, row in enumerate(data):
+		for key in series_keys:
+			if key not in row:
+				raise ValueError(f"data[{i}] is missing series_key field {key!r}")
+
+	data_declaration = f"const data = {json.dumps(data)};"
+	artifact_title = _escape_artifact_attr((title or f"{chart_type.capitalize()} Chart").strip())
+
+	if chart_type == "pie":
+		jsx = _build_pie_jsx(series_keys[0], colors)
+	else:
+		jsx = _build_axis_chart_jsx(chart_type, x_key, series_keys, colors)
+
+	body = f"{data_declaration}\n\n{jsx}"
+	return f'<artifact type="chart" language="jsx" title="{artifact_title}">\n{body}\n</artifact>'
+
+
+def _build_axis_chart_jsx(chart_type: str, x_key: str, series_keys: list, colors) -> str:
+	template = _CHART_TAG_TEMPLATES[chart_type]
+	container = template["import_component"]
+	series_component = template["series_component"]
+	palette = colors or _DEFAULT_PIE_COLORS
+
+	series_lines = []
+	for i, key in enumerate(series_keys):
+		color = _escape_jsx_attr(str(palette[i % len(palette)]))
+		safe_key = _escape_jsx_attr(str(key))
+		series_lines.append(f'      <{series_component} dataKey="{safe_key}" fill="{color}" stroke="{color}" />')
+	series_jsx = "\n".join(series_lines)
+
+	safe_x_key = _escape_jsx_attr(str(x_key))
+	return (
+		"<Card style={{ padding: 12 }}>\n"
+		'  <ResponsiveContainer width="100%" height={320}>\n'
+		f"    <{container} data={{data}}>\n"
+		f'      <XAxis dataKey="{safe_x_key}" />\n'
+		"      <YAxis />\n"
+		"      <Tooltip />\n"
+		"      <Legend />\n"
+		f"{series_jsx}\n"
+		f"    </{container}>\n"
+		"  </ResponsiveContainer>\n"
+		"</Card>"
+	)
+
+
+def _build_pie_jsx(value_key: str, colors) -> str:
+	palette = colors or _DEFAULT_PIE_COLORS
+	colors_declaration = f"const colors = {json.dumps(palette)};"
+	safe_value_key = _escape_jsx_attr(str(value_key))
+
+	return (
+		f"{colors_declaration}\n\n"
+		"<Card style={{ padding: 12 }}>\n"
+		'  <ResponsiveContainer width="100%" height={320}>\n'
+		"    <PieChart>\n"
+		f'      <Pie data={{data}} dataKey="{safe_value_key}" nameKey="label" outerRadius={{120}}>\n'
+		"        {data.map((entry, index) => (\n"
+		'          <Cell key={`cell-${index}`} fill={colors[index % colors.length] || "#8884d8"} />\n'
+		"        ))}\n"
+		"      </Pie>\n"
+		"      <Tooltip />\n"
+		"      <Legend />\n"
+		"    </PieChart>\n"
+		"  </ResponsiveContainer>\n"
+		"</Card>"
+	)
+
+
+# ---------------------------------------------------------------------------
+# Design-system-aware component rendering (list_app_components /
+# render_app_component). Allowlist mirrored from jsx-preview.tsx's
+# `availableComponents` map (frontend/src/components/ui/jsx-preview.tsx,
+# `// shadcn/ui Components - Phase 1 & 2` block) - a small, curated subset,
+# not the full 60-component design system. Each family only includes the
+# sub-components needed for a functionally complete example (e.g. Table
+# without TableHeader/TableBody/TableRow/TableHead/TableCell would not
+# render a usable table).
+# ---------------------------------------------------------------------------
+
+APP_COMPONENT_ALLOWLIST = {
+	"Card": {
+		"props": ["style", "className"],
+		"example": '<Card style={{ padding: 12 }}>\n  <CardContent>Hello</CardContent>\n</Card>',
+	},
+	"CardContent": {
+		"props": ["style", "className"],
+		"example": "<CardContent>Body content</CardContent>",
+	},
+	"Button": {
+		"props": ["variant", "size", "disabled", "onClick"],
+		"example": '<Button variant="default">Click me</Button>',
+	},
+	"Badge": {
+		"props": ["variant"],
+		"example": '<Badge variant="secondary">New</Badge>',
+	},
+	"Alert": {
+		"props": ["variant"],
+		"example": '<Alert variant="default">\n  <AlertDescription>Heads up</AlertDescription>\n</Alert>',
+	},
+	"AlertDescription": {
+		"props": [],
+		"example": "<AlertDescription>Something happened.</AlertDescription>",
+	},
+	"Progress": {
+		"props": ["value"],
+		"example": "<Progress value={60} />",
+	},
+	"Table": {
+		"props": [],
+		"example": (
+			"<Table>\n"
+			"  <TableHeader>\n"
+			"    <TableRow>\n"
+			'      <TableHead>Name</TableHead>\n'
+			"    </TableRow>\n"
+			"  </TableHeader>\n"
+			"  <TableBody>\n"
+			"    <TableRow>\n"
+			"      <TableCell>Ada</TableCell>\n"
+			"    </TableRow>\n"
+			"  </TableBody>\n"
+			"</Table>"
+		),
+	},
+	"TableHeader": {
+		"props": [],
+		"example": "<TableHeader>\n  <TableRow>\n    <TableHead>Name</TableHead>\n  </TableRow>\n</TableHeader>",
+	},
+	"TableBody": {
+		"props": [],
+		"example": "<TableBody>\n  <TableRow>\n    <TableCell>Ada</TableCell>\n  </TableRow>\n</TableBody>",
+	},
+	"TableRow": {
+		"props": [],
+		"example": "<TableRow>\n  <TableCell>Ada</TableCell>\n</TableRow>",
+	},
+	"TableHead": {
+		"props": [],
+		"example": "<TableHead>Name</TableHead>",
+	},
+	"TableCell": {
+		"props": [],
+		"example": "<TableCell>Ada</TableCell>",
+	},
+	"Tabs": {
+		"props": ["defaultValue"],
+		"example": (
+			'<Tabs defaultValue="one">\n'
+			'  <TabsList>\n'
+			'    <TabsTrigger value="one">One</TabsTrigger>\n'
+			"  </TabsList>\n"
+			'  <TabsContent value="one">Content</TabsContent>\n'
+			"</Tabs>"
+		),
+	},
+	"TabsList": {
+		"props": [],
+		"example": '<TabsList>\n  <TabsTrigger value="one">One</TabsTrigger>\n</TabsList>',
+	},
+	"TabsTrigger": {
+		"props": ["value"],
+		"example": '<TabsTrigger value="one">One</TabsTrigger>',
+	},
+	"TabsContent": {
+		"props": ["value"],
+		"example": '<TabsContent value="one">Content</TabsContent>',
+	},
+}
+
+
+def handle_list_app_components(**kwargs) -> list:
+	"""Read-only discovery tool: the design-system component allowlist as
+	structured JSON (name + accepted props + one short example each) -
+	served as a small deterministic tool response instead of a giant prompt
+	block, per the design-system-aware rendering requirement.
+
+	No confirm, no permission check - purely informational, same allowlist
+	`render_app_component` validates against below. Deliberately matches
+	handle_render_mermaid/handle_render_chart (PR #641, already shipped)
+	which are also ungated: all four are read-only templating over caller-
+	supplied structured data, produce no DB writes, and expose nothing an
+	authenticated chat user couldn't already see. Gating only the two
+	App-component tools while leaving their Mermaid/chart siblings ungated
+	would be an inconsistency, not a security improvement.
+	"""
+	return [
+		{"name": name, "props": spec["props"], "example": spec["example"]}
+		for name, spec in APP_COMPONENT_ALLOWLIST.items()
+	]
+
+
+def handle_render_app_component(component=None, props=None, confirm=False, **kwargs):
+	"""Two-phase templating of a single shadcn/ui component into a
+	<artifact type="chart" language="jsx"> tag (the frontend's JSX artifact
+	renderer does not distinguish charts from any other whitelisted JSX -
+	`ArtifactRenderer.tsx` just hands the body to `JSXPreview`, so reusing
+	the "chart" artifact type is correct, not a hack).
+
+	confirm=False: returns a preview of the templated markup without
+	requiring the caller to relay it. confirm=True: returns the markup to
+	relay verbatim, matching the two-phase contract used by the builder
+	tools in huf.ai.tools.builder.
+
+	Args:
+		component (str): Must be a key in APP_COMPONENT_ALLOWLIST.
+		props (dict): JSON object of prop name -> value. Every value is
+			templated as a double-quoted JSX attribute via _escape_jsx_attr.
+		confirm (bool): See above.
+
+	Returns:
+		dict with keys {"rendered": bool, "confirm_required": bool,
+		"artifact": <markup>, "message": str}.
+	"""
+	if component not in APP_COMPONENT_ALLOWLIST:
+		allowed = ", ".join(sorted(APP_COMPONENT_ALLOWLIST))
+		raise ValueError(
+			f"'component' must be one of the allowed design-system components: {allowed}. "
+			f"Got {component!r}. Call list_app_components() to see the full list with examples."
+		)
+
+	if props is None:
+		props = {}
+	if not isinstance(props, dict):
+		raise ValueError("'props' must be a JSON object of prop name -> value")
+
+	attr_parts = []
+	for key, value in props.items():
+		safe_key = str(key)
+		safe_value = _escape_jsx_attr(str(value))
+		attr_parts.append(f'{safe_key}="{safe_value}"')
+	attrs = (" " + " ".join(attr_parts)) if attr_parts else ""
+
+	jsx = f"<{component}{attrs} />"
+	artifact_title = _escape_artifact_attr(f"{component} Component")
+	artifact = f'<artifact type="chart" language="jsx" title="{artifact_title}">\n{jsx}\n</artifact>'
+
+	if not bool(confirm):
+		return {
+			"rendered": False,
+			"confirm_required": True,
+			"artifact": artifact,
+			"message": "Review the artifact preview and call again with confirm=True to relay it.",
+		}
+
+	return {
+		"rendered": True,
+		"confirm_required": False,
+		"artifact": artifact,
+		"message": "Relay the 'artifact' value verbatim in your response.",
+	}

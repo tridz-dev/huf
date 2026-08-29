@@ -34,7 +34,10 @@ def process_orchestrations():
                         last_update = orch.modified
 
                     if time_diff_in_seconds(now_datetime(), last_update) > JOB_TIMEOUT_SECONDS:
-                        frappe.log_error(f"Orchestration {o.name} Step {step.step_index} timed out. Marking failed.", "Orchestration Scheduler")
+                        frappe.log_error(
+                            title="Orchestration Scheduler",
+                            message=f"Orchestration {o.name} Step {step.step_index} timed out. Marking failed.",
+                        )
                         step.status = "failed"
                         orch.error_log = (orch.error_log or "") + f"\nStep {step.step_index} timed out (stuck for > 15m)."
                         orch.status = "Failed"

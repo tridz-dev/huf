@@ -15,7 +15,12 @@ Priority order:
 Formula (industry standard — same as Langfuse, Portkey, Anthropic):
   cost = (input_tokens  / 1_000_000) * input_cost_per_1m_tokens
        + (output_tokens / 1_000_000) * output_cost_per_1m_tokens
-       + (cached_tokens / 1_000_000) * cached_input_cost_per_1m_tokens  # optional
+       + (cached_tokens / 1_000_000) * cached_input_cost_per_1m_tokens              # optional
+       + (cache_creation_tokens / 1_000_000) * cached_input_write_cost_per_1m_tokens  # optional
+
+cached_tokens and cache_creation_tokens are both subsets of input_tokens (not
+additional tokens on top of it), so they are subtracted from input_tokens
+before the regular input rate is applied.
 
 Usage:
   from huf.ai.cost_calculator import calculate_cost
@@ -47,6 +52,7 @@ def get_model_pricing(model_name: str) -> dict | None:
         input_cost_per_1m_tokens       (float)
         output_cost_per_1m_tokens      (float)
         cached_input_cost_per_1m_tokens (float | None)
+        cached_input_write_cost_per_1m_tokens (float | None)
     or None if no custom pricing is configured for the model.
     """
     if not model_name:
@@ -71,6 +77,7 @@ def get_model_pricing(model_name: str) -> dict | None:
                 "input_cost_per_1m_tokens",
                 "output_cost_per_1m_tokens",
                 "cached_input_cost_per_1m_tokens",
+                "cached_input_write_cost_per_1m_tokens",
             ],
             as_dict=True,
         )
@@ -108,6 +115,14 @@ def get_model_pricing(model_name: str) -> dict | None:
             if model_doc.get("cached_input_cost_per_1m_tokens") is not None
             else None
         ),
+        # Cache-CREATION (write) rate. Treated as "configured" only when
+        # non-zero — this Float field has no separate presence flag, so a
+        # bare 0 means "not set" rather than "free cache writes".
+        "cached_input_write_cost_per_1m_tokens": (
+            float(model_doc["cached_input_write_cost_per_1m_tokens"])
+            if model_doc.get("cached_input_write_cost_per_1m_tokens")
+            else None
+        ),
     }
 
     try:
@@ -123,6 +138,7 @@ def _calculate_from_custom_pricing(
     input_tokens: int,
     output_tokens: int,
     cached_tokens: int = 0,
+    cache_creation_tokens: int = 0,
 ) -> float:
     """
     Apply the standard token-cost formula using custom pricing.
@@ -130,27 +146,50 @@ def _calculate_from_custom_pricing(
     Industry standard formula:
       cost = (input  / 1M) * input_price
            + (output / 1M) * output_price
-           + (cached / 1M) * cached_price    (if cached_price is set)
+           + (cached / 1M) * cached_price          (if cached_price is set)
+           + (cache_creation / 1M) * cache_write_price  (if a non-zero write rate is set)
 
-    For cached tokens: if no explicit cached_price is configured we do NOT
-    double-charge them — they are already counted inside input_tokens by the
-    provider, so we simply skip the separate cached line.
+    Both cached (read) tokens and cache-creation (write) tokens are a subset
+    of input_tokens as reported by the provider/LiteLLM — not additional
+    tokens on top of it. If no explicit rate is configured for either one we
+    do NOT double-charge them and we do NOT drop them either: they simply
+    stay inside input_tokens and get billed at the regular input rate.
     """
     input_price = pricing["input_cost_per_1m_tokens"]
     output_price = pricing["output_cost_per_1m_tokens"]
     cached_price = pricing.get("cached_input_cost_per_1m_tokens")
+    cache_write_price = pricing.get("cached_input_write_cost_per_1m_tokens")
 
     cost = 0.0
+    remaining_input = input_tokens
 
     if cached_price is not None and cached_tokens > 0:
-        # Cached tokens are usually a subset of input tokens.
-        # We bill the cached portion at the cached rate, and the remainder at the regular rate.
-        non_cached_input = max(0, input_tokens - cached_tokens)
-        cost += (non_cached_input / 1_000_000) * input_price
+        # Cached (read) tokens are a subset of input tokens.
+        # Bill the cached portion at the cached rate, remove it from the pool
+        # billed at the regular rate.
+        remaining_input = max(0, remaining_input - cached_tokens)
         cost += (cached_tokens / 1_000_000) * cached_price
-    else:
-        # Standard calculation (no caching discount)
-        cost += (input_tokens / 1_000_000) * input_price
+
+    # Falsy (0 or None) means "not configured", not "configured as free". The
+    # AI Model field is a plain Float with no separate presence flag, so a bare
+    # 0 cannot be distinguished from unset -- get_model_pricing() already
+    # normalises it, and this check keeps the invariant even for a caller that
+    # builds a pricing dict without going through it. Unconfigured cache-write
+    # tokens stay in the base-rate pool rather than being billed as free.
+    # (The cache-READ rate deliberately keeps its existing `is not None` check:
+    # 0 has always meant a genuinely free read there, and changing it would
+    # alter costs already being reported.)
+    if cache_write_price and cache_creation_tokens > 0:
+        # Cache-creation (write) tokens are likewise a subset of input tokens.
+        # Same treatment: bill separately at the write rate, remove from the
+        # pool billed at the regular rate.
+        remaining_input = max(0, remaining_input - cache_creation_tokens)
+        cost += (cache_creation_tokens / 1_000_000) * cache_write_price
+
+    # Regular input rate for whatever is left (i.e. everything that wasn't
+    # priced separately above — including cached/cache-creation tokens when
+    # no explicit rate was configured for them).
+    cost += (remaining_input / 1_000_000) * input_price
 
     # Always add output cost
     cost += (output_tokens / 1_000_000) * output_price
@@ -196,6 +235,8 @@ def calculate_cost(
     output_tokens: int,
     cached_tokens: int = 0,
     litellm_response=None,
+    *,
+    cache_creation_tokens: int = 0,
 ) -> tuple[float, str]:
     """
     Calculate the cost of an LLM call and return ``(cost_usd, source)``.
@@ -207,11 +248,15 @@ def calculate_cost(
       "unknown"         — neither source has pricing; cost is 0.0
 
     Args:
-        model_name:       The model name (AI Model docname, e.g. "gpt-4o")
-        input_tokens:     Number of prompt/input tokens
-        output_tokens:    Number of completion/output tokens
-        cached_tokens:    Number of cached tokens (prompt cache hits), default 0
-        litellm_response: Raw litellm completion response object for fallback
+        model_name:            The model name (AI Model docname, e.g. "gpt-4o")
+        input_tokens:          Number of prompt/input tokens
+        output_tokens:         Number of completion/output tokens
+        cached_tokens:         Number of cached tokens (prompt cache reads), default 0
+        litellm_response:      Raw litellm completion response object for fallback
+        cache_creation_tokens: Number of cache-creation tokens (prompt cache writes),
+                                default 0. Only consulted by the custom-pricing branch —
+                                the LiteLLM branch derives it from ``litellm_response``
+                                itself. Keyword-only so existing callers are unaffected.
     """
     # ── Priority 1: HUF custom pricing ──────────────────────────────────────
     try:
@@ -222,12 +267,13 @@ def calculate_cost(
                 input_tokens=int(input_tokens or 0),
                 output_tokens=int(output_tokens or 0),
                 cached_tokens=int(cached_tokens or 0),
+                cache_creation_tokens=int(cache_creation_tokens or 0),
             )
             return cost, "custom"
     except Exception as e:
         frappe.log_error(
-            f"HUF custom cost calculation failed for '{model_name}': {str(e)}",
-            "Cost Calculator",
+            title="Cost Calculator",
+            message=f"HUF custom cost calculation failed for '{model_name}': {str(e)}",
         )
 
     # ── Priority 2: LiteLLM auto-lookup ─────────────────────────────────────
@@ -240,8 +286,8 @@ def calculate_cost(
                 return float(litellm_cost), "litellm"
         except Exception as e:
             frappe.log_error(
-                f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}",
-                "Cost Calculator Priority 2",
+                title="Cost Calculator Priority 2",
+                message=f"LiteLLM auto-lookup failed for '{model_name}': {str(e)}",
             )
 
     # ── Priority 3: Local provider without pricing ───────────────────────────

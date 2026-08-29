@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Check, ChevronsUpDown, LogOut, Moon, Sun, Monitor } from "lucide-react"
+import { useState } from "react"
+import { ChevronsUpDown, LogOut, Moon, Sun, Monitor } from "lucide-react"
 
 import {
   DropdownMenu,
@@ -34,11 +34,15 @@ const SCHEMES: { id: HufColorScheme; label: string; icon: typeof Sun }[] = [
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { logout, user } = useUser()
-  const [colorScheme, setColorSchemeState] = useState<HufColorScheme>('light')
-
-  useEffect(() => {
-    setColorSchemeState(getColorScheme())
-  }, [])
+  // Lazy-initialize from the persisted value instead of a hardcoded default
+  // + a mount effect that corrects it a tick later. NavUser sits inside the
+  // per-route subtree that App.tsx remounts on every navigation (the
+  // AnimatePresence wrapper there is keyed on `location.pathname`), so a
+  // hardcoded default here would flash "Light" as selected on every route
+  // change even while the app is actually in dark mode, until the effect
+  // caught up. Reading the source of truth synchronously at mount time
+  // removes that window entirely.
+  const [colorScheme, setColorSchemeState] = useState<HufColorScheme>(getColorScheme)
 
   if (!user) {
     return null;
@@ -109,21 +113,42 @@ export function NavUser() {
               <DropdownMenuLabel className="text-xs text-steel-soft px-2 py-1.5 font-normal">
                 Appearance
               </DropdownMenuLabel>
-              {SCHEMES.map(({ id, label, icon: Icon }) => (
-                <DropdownMenuItem
-                  key={id}
-                  onClick={() => handleSchemeChange(id)}
-                  className="flex items-center justify-between"
-                >
-                  <span className="flex items-center">
-                    <Icon className="mr-2 h-4 w-4" />
-                    {label}
-                  </span>
-                  {colorScheme === id && (
-                    <Check className="h-4 w-4 text-steel" />
-                  )}
-                </DropdownMenuItem>
-              ))}
+              <div className="px-2 py-2">
+                <div className="relative flex w-full h-8 rounded-full border border-line bg-panel p-1">
+                  {/* Sliding thumb background */}
+                  <div
+                    className="absolute inset-y-1 bg-ink rounded-full pointer-events-none"
+                    style={{
+                      width: 'calc((100% - 8px) / 3)',
+                      // `left`, not `transform: translateX()` — percentages inside
+                      // translateX() resolve against the THUMB's own width (CSS
+                      // Transforms spec), not the track's, so a %-based offset here
+                      // barely moves it (a prior version of this code hit exactly
+                      // that bug: the thumb only slid ~1/3 as far as intended,
+                      // landing between segments instead of under the selected one).
+                      // `left` percentages correctly resolve against the containing
+                      // block (this track), so this actually lands on target.
+                      left: `calc(4px + ${SCHEMES.findIndex(s => s.id === colorScheme)} * (100% / 3 - 8px / 3))`,
+                      transition: 'left 200ms ease',
+                    }}
+                  />
+
+                  {/* Segment buttons */}
+                  {SCHEMES.map(({ id, label, icon: Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleSchemeChange(id)}
+                      className={`relative z-10 flex-1 flex items-center justify-center gap-1 text-xs font-medium transition-colors rounded-[calc(var(--r-full)-2px)] ${
+                        colorScheme === id ? 'text-paper' : 'text-steel'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">

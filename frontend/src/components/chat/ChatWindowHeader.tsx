@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import {
     ArrowLeft,
+    BarChart3,
     Check,
     ChevronDown,
     MoreVertical,
@@ -12,6 +13,7 @@ import {
     Plus,
     Search,
     Settings,
+    Zap,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -29,6 +31,7 @@ import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
 import { DEFAULT_COLD_START_AGENT } from "./useChatAgentIdentity";
+import { draftAutomationFromConversation } from "@/services/automationApi";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
@@ -39,6 +42,12 @@ interface ChatWindowHeaderProps {
     /** Toggles the artifact preview pane. The toggle button only renders when
      * this is provided, so the control is never present-but-inert. */
     onToggleArtifactPane?: () => void;
+    /** Whether the right-docked conversation analytics pane is currently open.
+     * Sibling of artifactPaneOpen - drives the analytics toggle's fill state. */
+    analyticsPaneOpen?: boolean;
+    /** Toggles the analytics pane. Sibling of onToggleArtifactPane: the
+     * toggle button only renders when this is provided. */
+    onToggleAnalyticsPane?: () => void;
     /** Whether the left rail is collapsed. When true, the header gains a
      * leading icon cluster (expand rail, Dashboard, New, divider) in place
      * of the plain sidebar-open button (spec 28.5). */
@@ -53,6 +62,8 @@ export function ChatWindowHeader({
     onToggleSidebar,
     artifactPaneOpen,
     onToggleArtifactPane,
+    analyticsPaneOpen,
+    onToggleAnalyticsPane,
     railCollapsed,
     onExpandRail,
 }: ChatWindowHeaderProps) {
@@ -72,6 +83,23 @@ export function ChatWindowHeader({
     const [conversationProject, setConversationProject] = useState<string | null>(null);
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [dataPanelOpen, setDataPanelOpen] = useState(false);
+    const [creatingAutomation, setCreatingAutomation] = useState(false);
+
+    async function handleCreateAutomationFromChat() {
+        if (!chatId || creatingAutomation) return;
+        setCreatingAutomation(true);
+        try {
+            const draft = await draftAutomationFromConversation(chatId);
+            if (!draft?.agent) return;
+            // AutomationFormPage already reads `?agent=` to pre-select the
+            // Agent on the create form; the rest (instruction, description)
+            // is left for the user to fill in from what they just discussed
+            // -- see huf.ai.automation_api.draft_automation_from_conversation.
+            navigate(`/automations/new?agent=${encodeURIComponent(draft.agent)}`);
+        } finally {
+            setCreatingAutomation(false);
+        }
+    }
 
     useEffect(() => {
         let cancelled = false;
@@ -207,21 +235,23 @@ export function ChatWindowHeader({
                     </button>
                 </AgentSwitcher>
                 <span className="flex-1" />
+                <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
                 <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
             </header>
         );
     }
 
-    // Spec 28.2: with the artifact pane open, the header simplifies down to
-    // the title, a flex spacer, and the artifact toggle — the picker
-    // chevron, model text, and overflow dots all drop out.
-    if (artifactPaneOpen) {
+    // Spec 28.2: with the artifact pane (or the sibling analytics pane) open,
+    // the header simplifies down to the title, a flex spacer, and the pane
+    // toggles — the picker chevron, model text, and overflow dots all drop out.
+    if (artifactPaneOpen || analyticsPaneOpen) {
         return (
             <header className={headerClassName}>
                 <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
                     {conversationTitle || agent.agent_name}
                 </span>
                 <span className="flex-1" />
+                <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
                 <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
             </header>
         );
@@ -312,6 +342,18 @@ export function ChatWindowHeader({
                             Conversation data
                         </DropdownMenuItem>
                     )}
+                    {chatId && (
+                        <DropdownMenuItem
+                            disabled={creatingAutomation}
+                            onSelect={() => {
+                                void handleCreateAutomationFromChat();
+                            }}
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                        >
+                            <Zap className="size-[15px]" />
+                            Create automation from this chat
+                        </DropdownMenuItem>
+                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
 
@@ -325,6 +367,7 @@ export function ChatWindowHeader({
                 />
             )}
 
+            <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
             <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
         </header>
     );
@@ -421,6 +464,34 @@ function ArtifactPaneToggle({ open, onToggle }: ArtifactPaneToggleProps) {
                 )}
             </svg>
             <span className="sr-only">{open ? "Hide artifacts" : "Show artifacts"}</span>
+        </Button>
+    );
+}
+
+interface AnalyticsPaneToggleProps {
+    open?: boolean;
+    onToggle?: () => void;
+}
+
+/**
+ * Sibling of `ArtifactPaneToggle`, following its exact shape: ghost icon
+ * button, `h-8 w-8`, `text-steel hover:text-ink` when closed / `text-ink`
+ * when open, rendered only when `onToggle` is provided so a conversation
+ * with no analytics available never shows an inert control.
+ */
+function AnalyticsPaneToggle({ open, onToggle }: AnalyticsPaneToggleProps) {
+    if (!onToggle) return null;
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={open ? "h-8 w-8 text-ink hover:text-ink" : "h-8 w-8 text-steel hover:text-ink"}
+            onClick={onToggle}
+        >
+            <BarChart3 className="size-[17px]" strokeWidth={open ? 2.25 : 2} aria-hidden="true" />
+            <span className="sr-only">{open ? "Hide analytics" : "Show analytics"}</span>
         </Button>
     );
 }
@@ -548,16 +619,16 @@ function AgentSwitcher({
                 align="start"
                 className="w-[300px] rounded-[12px] border-input p-0 shadow-lg"
             >
-                <div className="border-b border-[#f4f4f7] p-2">
+                <div className="border-b border-paper-deep p-2">
                     {/* 8px, not rounded-lg: --r-lg is 14px here, which reads as a pill
                         at 28px tall. Spec 28.4 draws a rounded rectangle. */}
-                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-[#f4f4f7] px-[9px]">
+                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-paper-deep px-[9px]">
                         <Search className="size-[14px] shrink-0 text-steel-soft" />
                         <input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                             placeholder="Search agents"
-                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-[#98989d]"
+                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-steel-soft"
                         />
                     </div>
                 </div>
@@ -587,7 +658,7 @@ function AgentSwitcher({
                                             type="button"
                                             onClick={() => handleSelect(agentItem.name)}
                                             className={
-                                                (isCurrent ? "bg-paper-deep " : "hover:bg-[#f9f9fb] ") +
+                                                (isCurrent ? "bg-paper-deep " : "hover:bg-paper-deep ") +
                                                 (hasModel ? "" : "opacity-55 ") +
                                                 "flex h-[34px] items-center gap-[9px] px-3 text-left"
                                             }

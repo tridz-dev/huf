@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   TriggerEditor,
   type EditableAutomationTrigger,
@@ -126,6 +127,7 @@ export function AutomationFormPage() {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('general');
   const [automation, setAutomation] = useState<Automation | null>(null);
 
   // General
@@ -317,6 +319,7 @@ export function AutomationFormPage() {
             disabled: fields.disabled,
             scheduled_interval: fields.scheduled_interval,
             interval_count: fields.interval_count,
+            execution_mode: fields.execution_mode,
             reference_doctype: fields.reference_doctype,
             doc_event: fields.doc_event,
             condition: fields.condition,
@@ -333,6 +336,7 @@ export function AutomationFormPage() {
             disabled: fields.disabled,
             scheduled_interval: fields.scheduled_interval,
             interval_count: fields.interval_count,
+            execution_mode: fields.execution_mode,
             reference_doctype: fields.reference_doctype,
             doc_event: fields.doc_event,
             condition: fields.condition,
@@ -373,6 +377,7 @@ export function AutomationFormPage() {
   }
 
   return (
+    <div className="h-full overflow-auto">
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
@@ -393,7 +398,19 @@ export function AutomationFormPage() {
         </div>
       </div>
 
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="task">Task</TabsTrigger>
+          <TabsTrigger value="trigger">
+            Trigger{triggerRows.length > 0 ? ` (${triggerRows.length})` : ''}
+          </TabsTrigger>
+          <TabsTrigger value="execution">Execution</TabsTrigger>
+          {!isNew && automation && <TabsTrigger value="history">History</TabsTrigger>}
+        </TabsList>
+
       {/* General */}
+      <TabsContent value="general" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>General</CardTitle>
@@ -462,8 +479,10 @@ export function AutomationFormPage() {
           )}
         </CardContent>
       </Card>
+      </TabsContent>
 
       {/* Task */}
+      <TabsContent value="task" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Task</CardTitle>
@@ -515,8 +534,10 @@ export function AutomationFormPage() {
           </div>
         </CardContent>
       </Card>
+      </TabsContent>
 
       {/* Trigger */}
+      <TabsContent value="trigger" className="space-y-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
@@ -557,8 +578,10 @@ export function AutomationFormPage() {
           ))}
         </CardContent>
       </Card>
+      </TabsContent>
 
       {/* Execution */}
+      <TabsContent value="execution" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Execution</CardTitle>
@@ -587,9 +610,11 @@ export function AutomationFormPage() {
           </div>
         </CardContent>
       </Card>
+      </TabsContent>
 
       {/* History */}
       {!isNew && automation && (
+        <TabsContent value="history" className="space-y-6">
         <Card>
           <CardHeader>
             <CardTitle>History</CardTitle>
@@ -616,7 +641,10 @@ export function AutomationFormPage() {
             </Button>
           </CardContent>
         </Card>
+        </TabsContent>
       )}
+      </Tabs>
+    </div>
     </div>
   );
 }

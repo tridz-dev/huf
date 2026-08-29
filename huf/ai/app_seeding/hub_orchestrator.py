@@ -65,6 +65,17 @@ BUILDER_TOOL_NAMES = (
     "create_agent_tool",
     "list_provider_options",
     "ask_user",
+    "list_agents",
+    "get_agent",
+    "list_apps",
+    "get_app",
+    "draft_app",
+    "update_app",
+    "install_app",
+    "set_app_icon",
+    "list_app_components",
+    "render_app_component",
+    "resolve_recent_resource",
 )
 
 
@@ -265,4 +276,4 @@ def on_ai_provider_update(doc, method=None):
         if doc.get_password("api_key", raise_exception=False):
             provision_hub_orchestrator(provider_doc=doc)
     except Exception as e:
-        frappe.log_error(f"Hub Orchestrator re-provisioning failed: {e}", "Hub Orchestrator")
+        frappe.log_error(title="Hub Orchestrator", message=f"Hub Orchestrator re-provisioning failed: {e}")

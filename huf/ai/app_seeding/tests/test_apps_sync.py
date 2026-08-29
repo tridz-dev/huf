@@ -281,6 +281,41 @@ class TestAppsSync(unittest.TestCase):
 		)
 		self.assertIn(app_id, summary["deleted_apps"])
 
+	def test_first_party_huf_record_survives_sync(self):
+		"""A HUF App record seeded directly by huf's own install.py (source_app
+		'huf' or blank, e.g. Meeting Recorder) is never manifest-discovered
+		-- find_seed_dirs() explicitly skips scanning 'huf' itself -- so it
+		must be exempt from cleanup_orphaned_apps, or it would be deleted on
+		every single migrate."""
+		app_id = self._app_id("first_party")
+		doc = frappe.get_doc({
+			"doctype": "HUF App",
+			"app_id": app_id,
+			"title": "First Party Test App",
+			"description": "Simulates a directly-seeded first-party app.",
+			"route": f"/{app_id}",
+			"icon": "mic",
+			"category": "Productivity",
+			"enabled": 1,
+			"sync_status": "Active",
+			"source_app": "huf",
+		})
+		doc.insert(ignore_permissions=True)
+		frappe.db.commit()
+
+		original_find_seed_dirs = apps_loader.find_seed_dirs
+		apps_loader.find_seed_dirs = lambda: {}
+		try:
+			summary = sync_huf_apps()
+		finally:
+			apps_loader.find_seed_dirs = original_find_seed_dirs
+
+		self.assertTrue(
+			frappe.db.exists("HUF App", app_id),
+			"First-party huf-sourced record must survive orphan cleanup",
+		)
+		self.assertNotIn(app_id, summary["deleted_apps"])
+
 	@unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
 	def test_uninstalled_provider_app_removes_registry_entries(self):
 		"""The after_app_uninstall hook deletes all entries of the provider."""

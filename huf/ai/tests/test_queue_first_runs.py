@@ -493,10 +493,9 @@ class TestQueueFirstRuns(unittest.TestCase):
     @patch("huf.ai.prompt_resolver.resolve_prompt")
     @patch("huf.ai.agent_scheduler.frappe")
     @patch("huf.ai.agent_scheduler.run_agent_sync")
-    def test_scheduler_submits_queued_run(
-        self, mock_run, mock_frappe, mock_resolve_prompt, mock_runtime_is_new
-    ):
-        """Scheduled triggers are background workers; they hand runs to the queue."""
+    def test_scheduler_submits_queued_run(self, mock_run, mock_frappe, mock_resolve_prompt, mock_runtime_is_new):
+        """Legacy scheduler (site pins automation_trigger_runtime to "legacy"):
+        scheduled triggers are background workers; they hand runs to the queue."""
         mock_frappe.session.user = "Administrator"
         mock_frappe.has_permission.return_value = True
         mock_frappe.db.exists.return_value = True
@@ -531,6 +530,17 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)
         self.assertEqual(mock_run.call_args.args, ("Scheduled Agent", "scheduled prompt", "Test Provider", "test-model"))
+
+    @patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=True)
+    @patch("huf.ai.agent_scheduler.frappe")
+    @patch("huf.ai.agent_scheduler.run_agent_sync")
+    def test_legacy_scheduler_no_ops_under_new_runtime(self, mock_run, mock_frappe, mock_runtime_is_new):
+        """Legacy scheduler no-ops under the default "new" automation runtime,
+        leaving run_due_automations (huf.ai.automation_scheduler) as the sole executor."""
+        agent_scheduler.run_scheduled_agents()
+
+        mock_run.assert_not_called()
+        mock_frappe.get_all.assert_not_called()
 
 
     # ------------------------------------------------------------------

@@ -21,14 +21,26 @@ const THEME_MODES: Record<HufTheme, HufColorScheme> = {
   morning: 'light',
 };
 
+function isEffectivelyDark(): boolean {
+  const scheme = getColorScheme();
+  if (scheme === 'dark') return true;
+  if (scheme === 'light') return false;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function applyEffectiveTheme() {
-  // No-op by design: the app now ships a single "apple-quiet" UI direction
-  // defined directly in src/index.css's :root, not a runtime-selected
-  // theme. Setting a data-theme attribute here would re-activate the old
-  // [data-theme="winter/midnight/summer/morning"] CSS blocks (still present
-  // as dead code, not a priority to remove) and override the new design.
-  // getTheme/setTheme/getColorScheme/etc below are kept so any UI that
-  // still calls them doesn't throw, but they no longer affect rendering.
+  // The app ships a single light direction ("Apple-quiet" v3.0, defined in
+  // :root) plus one dark counterpart ([data-theme="midnight"], redesigned to
+  // match it — see index.css). Light mode is the *absence* of a data-theme
+  // attribute (falls through to :root), not the old named-theme picker —
+  // getTheme/setTheme/HufTheme below are legacy leftovers from the
+  // multi-named-theme picker (winter/summer/morning), kept only so any
+  // stale caller doesn't throw; they no longer drive which theme renders.
+  if (isEffectivelyDark()) {
+    document.documentElement.setAttribute('data-theme', 'midnight');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
 }
 
 export function getTheme(): HufTheme {

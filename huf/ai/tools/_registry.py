@@ -442,6 +442,79 @@ ERPNEXT_REPORT_TOOLS = [
         ],
     },
 ]
+FRAPPE_GENERIC_TOOLS = [
+    {
+        "tool_name": "frappe_get_doctype_meta",
+        "description": "Get the field schema for any doctype: fieldname, label, fieldtype, options, reqd, read_only, depends_on, fetch_from. Select fields include their option list; Link fields include the linked doctype; Table fields include one level of child-doctype field schema. Denies User, Role, Role Profile, *Script, Property Setter, File, OAuth*/Integration* doctypes, and Single doctypes.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_get_doctype_meta",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name, e.g. 'Task', 'Project'"),
+        ],
+    },
+    {
+        "tool_name": "frappe_list_records",
+        "description": "List records of any doctype with filters, field selection, and pagination — a generic read, permission- and permlevel-checked. Use frappe_get_doctype_meta first if you don't know the doctype's fields.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_list_records",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("filters", type="json", description="JSON filter dict or list of [fieldname, operator, value] conditions"),
+            _p("fields", type="json", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
+            _p("limit_start", type="integer", description="Offset for pagination (default 0)"),
+            _p("limit_page_length", type="integer", description="Max rows to return (default 20)"),
+            _p("order_by", description="SQL-style order-by clause, e.g. 'modified desc'"),
+        ],
+    },
+    {
+        "tool_name": "frappe_get_record",
+        "description": "Get a single record of any doctype by name, permission- and permlevel-checked.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_get_record",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("name", required=True, description="Document name/ID"),
+        ],
+    },
+    {
+        "tool_name": "frappe_create_record",
+        "description": "Validate a proposed new record for any doctype (permission check, field allowlist, required-field check) and return a DRAFT payload. This does NOT write to the database — the actual create happens client-side, as the logged-in user, through the normal Frappe REST API.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_create_record",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs for the new record"),
+        ],
+    },
+    {
+        "tool_name": "frappe_update_record",
+        "description": "Validate a proposed field update to an existing record of any doctype (permission check, field allowlist) and return a DRAFT payload. This does NOT write to the database — the actual update happens client-side, as the logged-in user, through the normal Frappe REST API.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_update_record",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("name", required=True, description="Document name/ID to update"),
+            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs to change"),
+        ],
+    },
+    {
+        "tool_name": "render_frappe_view",
+        "description": "Fetch data/meta for any doctype and emit it as a frappe-list, frappe-form, or frappe-report <artifact> block for the frontend to render, instead of returning raw JSON. Returns the complete <artifact> tag — relay it verbatim in your response.",
+        "function_path": "huf.ai.tools.frappe_generic.handle_render_frappe_view",
+        "category": "Frappe Generic Tools",
+        "parameters": [
+            _p("doctype", required=True, description="Target DocType name"),
+            _p("mode", required=True, description="One of 'list', 'form', 'report'"),
+            _p("filters", type="json", description="JSON filter dict/list (list and report modes)"),
+            _p("fields", type="json", description="JSON list of fieldnames to include"),
+            _p("name", description="Document name (form mode)"),
+            _p("limit_start", type="integer", description="Offset for pagination (list/report modes)"),
+            _p("limit_page_length", type="integer", description="Max rows (list/report modes)"),
+            _p("order_by", description="SQL-style order-by clause"),
+        ],
+    },
+]
+
 GMAIL_TOOLS = [
 	{
 		"tool_name": "gmail_get_emails",
@@ -1203,6 +1276,132 @@ BUILDER_TOOLS = [
 		"parameters": [],
 	},
 	{
+		"tool_name": "list_agents",
+		"description": (
+			"List Agents the caller can see (read-only). Returns agent_name, description, "
+			"disabled, and is_system for up to 'limit' agents. Use this to discover an "
+			"existing agent before turning it into an App with draft_app."
+		),
+		"function_path": "huf.ai.tools.builder.list_agents",
+		"category": "Builder",
+		"parameters": [
+			_p("limit", type="integer", description="Max number of agents to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "get_agent",
+		"description": (
+			"Get a single Agent's summary (read-only) — agent_name, description, provider, "
+			"model, disabled, is_system, allow_chat. Does NOT return instructions or any "
+			"secrets, only enough to decide whether the agent is a suitable App backend."
+		),
+		"function_path": "huf.ai.tools.builder.get_agent",
+		"category": "Builder",
+		"parameters": [
+			_p("agent_name", required=True, description="Name of the agent to inspect"),
+		],
+	},
+	{
+		"tool_name": "list_apps",
+		"description": (
+			"List HUF App registry records the caller can see (read-only). Returns app_id, "
+			"title, description, route, category, enabled for up to 'limit' apps."
+		),
+		"function_path": "huf.ai.tools.builder.list_apps",
+		"category": "Builder",
+		"parameters": [
+			_p("limit", type="integer", description="Max number of apps to return (default 20)"),
+		],
+	},
+	{
+		"tool_name": "get_app",
+		"description": (
+			"Get a single HUF App record's summary (read-only) — app_id, title, description, "
+			"route, icon, category, agent, enabled."
+		),
+		"function_path": "huf.ai.tools.builder.get_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to inspect"),
+		],
+	},
+	{
+		"tool_name": "draft_app",
+		"description": (
+			"Create a new HUF App backed by an existing Agent (linked, not cloned). The "
+			"agent must already exist and be readable by the caller. "
+			+ _CONFIRM_NOTE
+			+ " Use list_agents/get_agent first to pick agent_name. Fails with a clear "
+			"error if app_id already exists or agent_name does not."
+		),
+		"function_path": "huf.ai.tools.builder.draft_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="Unique App ID (also the document ID)"),
+			_p("title", required=True, description="Display title for the App"),
+			_p("agent_name", required=True, description="Existing Agent to back this App"),
+			_p("description", description="Short human description of the App"),
+			_p("route", description="Frontend route; defaults to /apps/<app_id>"),
+			_p("category", description="Launcher category, e.g. Create, Plan, Automate (default Other)"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = create the App"),
+		],
+	},
+	{
+		"tool_name": "update_app",
+		"description": (
+			"Apply a partial update to an existing HUF App's fields (e.g. title, "
+			"description, icon, category, agent). Only the fields passed are changed. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.update_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to update"),
+			_p("title", description="New display title"),
+			_p("description", description="New description"),
+			_p("icon", description="New icon"),
+			_p("category", description="New launcher category"),
+			_p("agent", description="Existing Agent name to re-link this App to"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = apply and save"),
+		],
+	},
+	{
+		"tool_name": "install_app",
+		"description": (
+			"Install (enable) an existing HUF App. Idempotent — re-running with the same "
+			"app_id never duplicates the record; an already-enabled app is reported as "
+			"already_installed. "
+			+ _CONFIRM_NOTE
+		),
+		"function_path": "huf.ai.tools.builder.install_app",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to install"),
+			_p("confirm", type="boolean", description="false = preview only; true = install the App"),
+		],
+	},
+	{
+		"tool_name": "set_app_icon",
+		"description": (
+			"Set an app's icon from three possible sources: existing site-local asset path, "
+			"an uploaded File doc, or a text prompt for AI image generation. All three branches "
+			"validate their inputs (path format, File MIME type, image generation success) before "
+			"applying. "
+			+ _CONFIRM_NOTE
+			+ " Note: SVG uploads are flagged for platform-wide sanitization gaps (documented "
+			"in the plan's security review §F); SVG validation is limited to acceptance, not "
+			"decontamination."
+		),
+		"function_path": "huf.ai.tools.builder.set_app_icon",
+		"category": "Builder",
+		"parameters": [
+			_p("app_id", required=True, description="ID of the App to set the icon for"),
+			_p("source", required=True, description="Source of the icon: 'path' (site-local asset path), 'uploaded' (File doc name), or 'generated' (image generation prompt)"),
+			_p("value", required=True, description="The icon value: a path string (for 'path'), a File name (for 'uploaded'), or a prompt (for 'generated')"),
+			_p("confirm", type="boolean", description="false = preview diff only; true = set the icon"),
+		],
+	},
+	{
 		"tool_name": "ask_user",
 		"description": (
 			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "
@@ -1225,6 +1424,22 @@ BUILDER_TOOLS = [
 			_p("allow_free_text", type="boolean", description="Allow a free-text answer in addition to options (default true)"),
 			_p("suggested_answers", description="JSON list of suggested free-text answers"),
 			_p("note", description="Optional extra context shown with the question"),
+		],
+	},
+	{
+		"tool_name": "resolve_recent_resource",
+		"description": (
+			"Resolve a vague reference like 'that agent' or 'the app I just made' to a "
+			"concrete document name. Looks at what draft_agent/draft_app have created "
+			"(with confirm=true) earlier in THIS conversation and returns the most recent "
+			"match for resource_type. Read-only; found=false means nothing of that type "
+			"has been created yet in this conversation — ask the user for the name instead "
+			"of guessing."
+		),
+		"function_path": "huf.ai.tools.builder.resolve_recent_resource",
+		"category": "Builder",
+		"parameters": [
+			_p("resource_type", required=True, description="Which kind of recently-created resource to resolve: 'agent' or 'app'"),
 		],
 	},
 ]
@@ -1841,6 +2056,137 @@ DOCUMENT_ARTIFACT_TOOLS = [
 	},
 ]
 
+# ---------------------------------------------------------------------------
+# Render Tools — structured JSON in, existing <artifact> markup out. Replace
+# hand-authoring Mermaid DSL / Recharts JSX with a small structured payload.
+# ---------------------------------------------------------------------------
+
+RENDER_TOOLS = [
+	{
+		"tool_name": "render_mermaid",
+		"description": (
+			"Renders a Mermaid diagram from structured nodes/edges. Call this instead of "
+			"writing Mermaid syntax yourself. Returns the complete <artifact type=\"mermaid\"> "
+			"tag - relay it verbatim in your response."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_render_mermaid",
+		"category": "Render Tools",
+		"parameters": [
+			_p("diagram_type", required=True, description="One of: 'graph TD', 'graph LR', 'flowchart TD', 'flowchart LR'"),
+			_p("nodes", type="json", required=True, description="JSON list of nodes [{id, label}], e.g. [{\"id\": \"a\", \"label\": \"Start\"}]"),
+			_p("edges", type="json", description="JSON list of edges [{from, to, label}], e.g. [{\"from\": \"a\", \"to\": \"b\", \"label\": \"next\"}]. from/to must match declared node ids"),
+			_p("title", description="Artifact title (default 'Diagram')"),
+		],
+	},
+	{
+		"tool_name": "render_chart",
+		"description": (
+			"Renders a bar/line/pie/area chart from structured data. Call this instead of "
+			"hand-writing Recharts JSX yourself. Returns the complete "
+			"<artifact type=\"chart\" language=\"jsx\"> tag - relay it verbatim in your response."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_render_chart",
+		"category": "Render Tools",
+		"parameters": [
+			_p("chart_type", required=True, description="One of: 'bar', 'line', 'pie', 'area'"),
+			_p("data", type="json", required=True, description="JSON list of row objects, each containing at least the x_key field and every series_key field"),
+			_p("series_keys", type="json", description="JSON list of field names to plot as series/values (default ['value'])"),
+			_p("x_key", description="Field used for the category/x axis, ignored for 'pie' (default 'label')"),
+			_p("colors", type="json", description="Optional JSON list of hex colors, mainly used for pie slices"),
+			_p("title", description="Artifact title (default '<Chart Type> Chart')"),
+		],
+	},
+	{
+		"tool_name": "list_app_components",
+		"description": (
+			"Lists the small, explicit allowlist of design-system components (mirrored from "
+			"the frontend's JSX whitelist) that render_app_component can render, each with its "
+			"accepted props and a short example. Read-only, no confirm needed. Call this before "
+			"render_app_component to see what's actually available - hand-authored component "
+			"names/props outside this list will not render."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_list_app_components",
+		"category": "Render Tools",
+		"parameters": [],
+	},
+	{
+		"tool_name": "render_app_component",
+		"description": (
+			"Renders a single design-system component (from the list_app_components allowlist) "
+			"with the given props. Call this instead of hand-writing shadcn/ui JSX yourself. "
+			+ _CONFIRM_NOTE
+			+ " Returns the complete <artifact> tag - relay it verbatim in your response."
+		),
+		"function_path": "huf.ai.tools.render_tools.handle_render_app_component",
+		"category": "Render Tools",
+		"parameters": [
+			_p("component", required=True, description="Component name, must be one returned by list_app_components"),
+			_p("props", type="json", description="JSON object of prop name -> value, e.g. {\"variant\": \"secondary\"}"),
+			_p("confirm", type="boolean", description="false = preview artifact only; true = return artifact to relay"),
+		],
+	},
+]
+
+LAZY_DISCOVERY_TOOLS = [
+	{
+		"tool_name": "list_tool_groups",
+		"description": (
+			"List the groups your available tools are organized into (by service), with a tool "
+			"count and a one-line summary for each group. Use this first when you have many tools "
+			"and are not sure which ones are relevant yet - then call describe_tool_group on a "
+			"promising group to see its individual tools, and load_tools to actually make the ones "
+			"you need callable. If you already know roughly what you're looking for, call "
+			"search_tools instead and skip straight to load_tools."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_list_tool_groups",
+		"category": "Tool Discovery",
+		"parameters": [],
+	},
+	{
+		"tool_name": "search_tools",
+		"description": (
+			"Search for tools by keyword or description across everything you're permitted to use. "
+			"Use this when you know roughly what you want to do (e.g. 'send an email', 'create an "
+			"invoice') but don't know the exact tool name. Returns matching tools with their service "
+			"and description - call load_tools with the tool_name(s) you want before using them."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_search_tools",
+		"category": "Tool Discovery",
+		"parameters": [
+			_p("query", required=True, description="Keywords describing the action or capability you're looking for"),
+			_p("limit", type="integer", description="Max results to return (default 10)"),
+		],
+	},
+	{
+		"tool_name": "describe_tool_group",
+		"description": (
+			"List every tool in a specific service group (as returned by list_tool_groups), with "
+			"each tool's full description. Use this after list_tool_groups to see the individual "
+			"tools within a group you're interested in, then call load_tools with the tool_name(s) "
+			"you need."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_describe_tool_group",
+		"category": "Tool Discovery",
+		"parameters": [
+			_p("service", required=True, description="The service/group name, as returned by list_tool_groups"),
+		],
+	},
+	{
+		"tool_name": "load_tools",
+		"description": (
+			"Make the named tools callable for the rest of this conversation. Call this after "
+			"list_tool_groups + describe_tool_group, or after search_tools, once you know exactly "
+			"which tool(s) you need. Returns each accepted tool's description and parameters so you "
+			"can call it immediately, plus any requested names you're not permitted to use."
+		),
+		"function_path": "huf.ai.tools.lazy_discovery.handle_load_tools",
+		"category": "Tool Discovery",
+		"parameters": [
+			_p("tool_names", type="json", required=True, description="List of tool_name strings to load"),
+		],
+	},
+]
+
 ALL_INTEGRATION_TOOLS = (
 	# Platform capabilities — no external account to connect.
 	RECIPIENT_TOOLS
@@ -1851,10 +2197,13 @@ ALL_INTEGRATION_TOOLS = (
 	+ ERPNEXT_CRM_TOOLS
 	+ ERPNEXT_INVENTORY_TOOLS
 	+ ERPNEXT_REPORT_TOOLS
+	+ FRAPPE_GENERIC_TOOLS
 	+ BUILDER_TOOLS
 	+ SSH_TOOLS
 	+ DOCKER_TOOLS
 	+ DOCUMENT_ARTIFACT_TOOLS
+	+ RENDER_TOOLS
+	+ LAZY_DISCOVERY_TOOLS
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")

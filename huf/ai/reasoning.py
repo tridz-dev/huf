@@ -185,9 +185,19 @@ def resolve_reasoning(
         else:
             # Standard OpenAI / DeepSeek / LiteLLM reasoning_effort
             if policy.effort in ("low", "medium", "high"):
-                resolved_native["reasoning_effort"] = policy.effort
+                if policy.effort in capabilities.supported_efforts:
+                    resolved_native["reasoning_effort"] = policy.effort
+                elif capabilities.supported_efforts:
+                    # Requested effort isn't supported by this model; fall back to
+                    # its closest supported tier instead of silently sending an
+                    # unsupported value.
+                    resolved_native["reasoning_effort"] = capabilities.supported_efforts[
+                        len(capabilities.supported_efforts) // 2
+                    ]
             elif policy.mode == "on":
-                resolved_native["reasoning_effort"] = "medium"
+                resolved_native["reasoning_effort"] = (
+                    "medium" if "medium" in capabilities.supported_efforts else capabilities.supported_efforts[0]
+                ) if capabilities.supported_efforts else "medium"
 
             if policy.summary in ("concise", "detailed"):
                 resolved_native["reasoning_summary"] = policy.summary
@@ -204,20 +214,21 @@ def resolve_reasoning(
 def build_reasoning_kwargs(resolution: ReasoningResolution) -> Dict[str, Any]:
     """
     Produce clean completion_kwargs dict from a ReasoningResolution.
+
+    Note: modify_params is a global LiteLLM module setting, not a per-request kwarg.
+    It is kept in resolved for introspection but filtered here to prevent forwarding to the provider.
     """
     if not resolution or not resolution.resolved:
         return {}
-    
+
     kwargs = {}
     resolved = resolution.resolved
-    
+
     if "reasoning_effort" in resolved:
         kwargs["reasoning_effort"] = resolved["reasoning_effort"]
     if "thinking" in resolved:
         kwargs["thinking"] = resolved["thinking"]
-    if "modify_params" in resolved:
-        kwargs["modify_params"] = resolved["modify_params"]
     if "reasoning_summary" in resolved:
         kwargs["reasoning_summary"] = resolved["reasoning_summary"]
-        
+
     return kwargs

@@ -244,7 +244,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		return result
 
 	except RequestException as e:
-		frappe.log_error(f"HTTP Request Error: {e!s}", "HTTP Handler")
+		frappe.log_error(title="HTTP Handler", message=f"HTTP Request Error: {e!s}")
 		return {
 			"success": False,
 			"error": str(e),

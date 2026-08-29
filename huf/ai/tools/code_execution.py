@@ -39,12 +39,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from frappe.utils.data import add_to_date, now_datetime
-from frappe.utils.file_manager import save_file
 
 
 def get_files_path(is_private: bool = True) -> str:
 	return frappe.get_site_path("private" if is_private else "public", "files")
 
+from huf.ai.context_artifacts import create_context_artifact
 from huf.ai.http_handler import handle_http_request
 from huf.ai.tool_functions import get_report_result
 from huf.ai.tools.execution_sandbox import (
@@ -339,32 +339,24 @@ def _write_back_artifacts(call, shared_dir: str, names: list) -> tuple:
 			with open(path, "rb") as fh:
 				content = fh.read()
 			context_policy, summary, token_estimate = _classify_artifact(name, content)
-			artifact = frappe.get_doc(
-				{
-					"doctype": "Agent Context Artifact",
-					"conversation": call.conversation,
-					"agent_run": call.agent_run,
-					"artifact_type": "File",
-					"visibility": "user_visible",
-					"context_policy": context_policy,
-					"summary": summary,
-					"token_estimate": token_estimate,
-				}
+			# Delegates to the generic producer (huf.ai.context_artifacts) so this
+			# write-back also emits the Agent Message handle that makes the
+			# artifact visible to the model (F-15) -- previously nothing did.
+			create_context_artifact(
+				call.conversation,
+				agent_run=call.agent_run,
+				payload=content,
+				artifact_type="File",
+				summary=summary,
+				context_policy=context_policy,
+				token_estimate=token_estimate,
+				filename=name,
 			)
-			artifact.insert(ignore_permissions=True)
-			saved = save_file(name, content, "Agent Context Artifact", artifact.name, is_private=True)
-			file_url = getattr(saved, "file_url", None) or (
-				saved.get("file_url") if isinstance(saved, dict) else None
-			)
-			if not file_url:
-				raise ValueError(f"save_file returned no file_url for {name!r}")
-			artifact.payload_file = file_url
-			artifact.save(ignore_permissions=True)
 			written += 1
 		except Exception as exc:  # noqa: BLE001 - report and stop (fail closed)
 			frappe.log_error(
-				f"artifact write-back failed for {name!r} in {shared_dir}: {exc}",
-				"Huf Code Execution",
+				title="Huf Code Execution",
+				message=f"artifact write-back failed for {name!r} in {shared_dir}: {exc}",
 			)
 			return written, f"{type(exc).__name__}: {exc}"
 	return written, None
@@ -424,7 +416,8 @@ def _prepare_shared_dir(call) -> dict | None:
 		return None
 	except Exception as exc:  # noqa: BLE001 - storage/seed errors fail closed
 		frappe.log_error(
-			f"shared dir preparation failed for {call.name}: {exc}", "Huf Code Execution"
+			title="Huf Code Execution",
+			message=f"shared dir preparation failed for {call.name}: {exc}",
 		)
 		_fail_call(
 			call,
@@ -489,7 +482,8 @@ def _finalize_shared_dir(call, ctx: dict) -> None:
 		call.save(ignore_permissions=True)
 	except Exception as exc:  # noqa: BLE001 - finalizer must never mask the run outcome
 		frappe.log_error(
-			f"shared dir finalization failed for {call.name}: {exc}", "Huf Code Execution"
+			title="Huf Code Execution",
+			message=f"shared dir finalization failed for {call.name}: {exc}",
 		)
 
 
@@ -789,16 +783,16 @@ def load_pending_execution(approval_doc) -> dict:
 			payload = None
 	if not isinstance(payload, dict):
 		frappe.log_error(
-			f"pending execution hold for approval {approval_doc.name} is missing or corrupt",
-			"Huf Code Execution Approval",
+			title="Huf Code Execution Approval",
+			message=f"pending execution hold for approval {approval_doc.name} is missing or corrupt",
 		)
 		raise PendingExecutionExpired(approval_doc.name)
 
 	code = payload.get("code")
 	if not isinstance(code, str) or not code or _sha256(code) != (approval_doc.code_ref or ""):
 		frappe.log_error(
-			f"pending execution hold for approval {approval_doc.name} failed integrity check",
-			"Huf Code Execution Approval",
+			title="Huf Code Execution Approval",
+			message=f"pending execution hold for approval {approval_doc.name} failed integrity check",
 		)
 		frappe.throw(
 			"The parked execution payload failed its integrity check; refusing to enqueue.",
@@ -808,8 +802,8 @@ def load_pending_execution(approval_doc) -> dict:
 	acting_user = payload.get("acting_user")
 	if not isinstance(acting_user, str) or not acting_user:
 		frappe.log_error(
-			f"pending execution hold for approval {approval_doc.name} has no acting user",
-			"Huf Code Execution Approval",
+			title="Huf Code Execution Approval",
+			message=f"pending execution hold for approval {approval_doc.name} has no acting user",
 		)
 		frappe.throw(
 			"The original requesting user for this execution is no longer resolvable; "
@@ -983,9 +977,7 @@ def _make_broker_handler(profile_snapshot: dict, acting_user: str | None):
 				frappe.set_user(previous_user)
 			return True, _json_safe(result)
 		except Exception as exc:  # noqa: BLE001 - broker must never crash the worker
-			frappe.log_error(
-				f"broker call {capability!r} failed: {exc}", "Huf Code Execution Broker"
-			)
+			frappe.log_error(title="Huf Code Execution Broker", message=f"broker call {capability!r} failed: {exc}")
 			return False, f"{type(exc).__name__}: {exc}"
 
 	def _thread_start():
@@ -1384,8 +1376,8 @@ def execute_job(
 		call.limits_hit = 0
 		call.save(ignore_permissions=True)
 		frappe.log_error(
-			f"execute_job failed for {agent_tool_call_name}: {exc}",
-			"Huf Code Execution",
+			title="Huf Code Execution",
+			message=f"execute_job failed for {agent_tool_call_name}: {exc}",
 		)
 	finally:
 		if shared_ctx is not None:

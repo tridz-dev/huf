@@ -35,6 +35,7 @@ import type { AgentPromptOption } from '../components/agent/PromptTemplateSectio
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
 import { SkillsTab } from '../components/agent/SkillsTab';
+import { ProcedureBindingsTab } from '../components/agent/ProcedureBindingsTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
 import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
@@ -127,6 +128,7 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     cache_control_type: agent.cache_control_type || '',
     cache_system_message: agent.cache_system_message === 1,
     cache_conversation_history: agent.cache_conversation_history === 1,
+    prompt_cache_mode: (agent.prompt_cache_mode as any) || 'Auto',
     context_strategy: agent.context_strategy || undefined,
     summary_model: agent.summary_model || undefined,
     summary_ratio: agent.summary_ratio !== undefined && agent.summary_ratio !== null ? agent.summary_ratio : undefined,
@@ -206,7 +208,7 @@ export function AgentFormPage() {
   const tabConfig = useMemo(() => ({
     general: {
       label: 'General',
-      fields: ['agent_name', 'agent_modality', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
+      fields: ['agent_name', 'agent_modality', 'provider', 'model', 'temperature', 'top_p', 'disabled', 'run_immediately', 'description', 'instructions', 'starter_prompts', 'enable_prompt_caching', 'cache_control_type', 'cache_system_message', 'cache_conversation_history', 'prompt_cache_mode', 'prompt_mode', 'agent_prompt', 'prompt_version_locked', 'template_version_at_attach'],
       default: true,
       disabled: false,
     },
@@ -242,6 +244,12 @@ export function AgentFormPage() {
     },
     skills: {
       label: 'Skills',
+      fields: [],
+      default: false,
+      disabled: false,
+    },
+    procedures: {
+      label: 'Procedures',
       fields: [],
       default: false,
       disabled: false,
@@ -408,7 +416,8 @@ export function AgentFormPage() {
         enable_prompt_caching: false,
         cache_control_type: "",
         cache_system_message: false,
-        cache_conversation_history:false,
+        cache_conversation_history: false,
+        prompt_cache_mode: 'Auto',
         context_strategy: undefined,
         summary_model: undefined,
         summary_ratio: undefined,
@@ -434,7 +443,7 @@ export function AgentFormPage() {
         reasoning_budget_tokens: undefined,
         reasoning_summary: 'None',
         agent_color: '',
-        show_tool_execution_details: false,
+        show_tool_execution_details: true,
         voice_enabled: false,
         voice_engine: undefined,
         voice_config: '{}',
@@ -1189,6 +1198,7 @@ export function AgentFormPage() {
             cache_control_type: data.cache_control_type || '',
             cache_system_message: data.cache_system_message === 1,
             cache_conversation_history: data.cache_conversation_history === 1,
+            prompt_cache_mode: data.prompt_cache_mode || 'Auto',
             context_strategy: data.context_strategy || undefined,
             summary_model: data.summary_model || undefined,
             summary_ratio: data.summary_ratio !== undefined && data.summary_ratio !== null ? data.summary_ratio : undefined,
@@ -1369,7 +1379,9 @@ export function AgentFormPage() {
 
   useEffect(() => {
     // General is the bootstrap request above; only secondary sections are lazy-loaded here.
-    if (!id || isNew || activeTab === 'general' || activeTab === 'triggers') return;
+    // Procedures has no corresponding Agent doctype section -- ProcedureBindingsTab fetches
+    // its own data (Agent Procedure Binding records) directly, so there is nothing to load here.
+    if (!id || isNew || activeTab === 'general' || activeTab === 'triggers' || activeTab === 'procedures') return;
     const section = activeTab as AgentConfigSection;
     if (loadedSections.has(section)) return;
 
@@ -1505,6 +1517,7 @@ export function AgentFormPage() {
         cache_control_type: values.cache_control_type || '',
         cache_system_message: values.cache_system_message ? 1 : 0,
         cache_conversation_history: values.cache_conversation_history ? 1 : 0,
+        prompt_cache_mode: values.prompt_cache_mode || 'Auto',
         context_strategy: values.context_strategy || undefined,
         summary_model: values.summary_model || undefined,
         summary_ratio: values.summary_ratio !== undefined ? values.summary_ratio : undefined,
@@ -2403,6 +2416,10 @@ export function AgentFormPage() {
                   skillOptions={skillOptions}
                   onChange={setAgentSkills}
                 />
+              </TabsContent>
+
+              <TabsContent value="procedures" className="space-y-4">
+                <ProcedureBindingsTab agentId={isNew ? undefined : id} />
               </TabsContent>
 
               <TabsContent value="permissions" className="space-y-4">

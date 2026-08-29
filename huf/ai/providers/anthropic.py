@@ -171,5 +171,5 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         return SimpleResult("Agent stopped after max rounds of tool calls.", total_usage, all_new_items)
 
     except Exception as e:
-        frappe.log_error(f"Anthropic Provider Error: {str(e)}", "Anthropic Provider")
+        frappe.log_error(title="Anthropic Provider", message=f"Anthropic Provider Error: {str(e)}")
         return SimpleResult(f"Anthropic API Error: {str(e)}")

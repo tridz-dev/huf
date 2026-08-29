@@ -26,7 +26,10 @@ def find_seed_dirs() -> dict:
             if huf_dir_alt.is_dir():
                 result[app] = huf_dir_alt
         except Exception as e:
-            frappe.log_error(f"Error checking app {app} for seed directory: {e}", "App Seeding Scanner")
+            frappe.log_error(
+                title="App Seeding Scanner",
+                message=f"Error checking app {app} for seed directory: {e}",
+            )
     return result
 
 def get_seed_files(huf_dir: Path, type_folder: str) -> list:
@@ -44,6 +47,6 @@ def get_seed_files(huf_dir: Path, type_folder: str) -> list:
             if item.is_file() and item.name.endswith(".json"):
                 files.append(item)
     except Exception as e:
-        frappe.log_error(f"Error reading seed directory {type_dir}: {e}", "App Seeding Scanner")
+        frappe.log_error(title="App Seeding Scanner", message=f"Error reading seed directory {type_dir}: {e}")
         
     return files

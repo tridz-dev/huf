@@ -134,12 +134,19 @@ def save_memory_record(
 	if conversation_id and not scope_type:
 		scope_type = "Conversation"
 
+	if agent_name and not _is_manager():
+		enable_memory, enable_write, agent_policy_name = frappe.db.get_value(
+			"Agent", agent_name, ["enable_memory", "enable_memory_write_tool", "memory_policy"]
+		)
+		if not enable_memory or not enable_write:
+			frappe.throw("This agent does not have memory write access enabled", frappe.PermissionError)
+	else:
+		agent_policy_name = frappe.db.get_value("Agent", agent_name, "memory_policy") if agent_name else None
+
 	# P0-4: Load policy before auth check so _can_write_memory can enforce write switches
 	policy = None
-	if agent_name:
-		agent_policy_name = frappe.db.get_value("Agent", agent_name, "memory_policy")
-		if agent_policy_name:
-			policy = frappe.get_doc("Memory Policy", agent_policy_name)
+	if agent_policy_name:
+		policy = frappe.get_doc("Memory Policy", agent_policy_name)
 
 	resolved_scope_key = _resolve_scope_key(scope_type, scope_key, conversation_id, agent_name)
 	if not resolved_scope_key or not _can_write_memory(
@@ -305,6 +312,13 @@ def get_memory_record(memory_record, conversation_id=None, agent_name=None, **kw
 
 @frappe.whitelist()
 def search_memory_records(query=None, record_type=None, scope_type=None, status="Active", limit=10, conversation_id=None, agent_name=None, **kwargs):
+	if agent_name and not _is_manager():
+		enable_memory, enable_search = frappe.db.get_value(
+			"Agent", agent_name, ["enable_memory", "enable_memory_search_tool"]
+		)
+		if not enable_memory or not enable_search:
+			frappe.throw("This agent does not have memory search access enabled", frappe.PermissionError)
+
 	max_rows = min(max(int(limit or 10), 1), 50)
 	filters = {}
 	if status:
@@ -407,12 +421,9 @@ def expire_stale_memory_records():
 			frappe.db.set_value("Memory Record", row["name"], "status", "Expired", update_modified=False)
 		if expired:
 			frappe.db.commit()
-			frappe.log_error(
-				f"Expired {len(expired)} stale Memory Records",
-				"Memory Expiry"
-			)
+			frappe.log_error(title="Memory Expiry", message=f"Expired {len(expired)} stale Memory Records")
 	except Exception as e:
-		frappe.log_error(f"Memory expiry scheduler failed: {str(e)}", "Memory Expiry Error")
+		frappe.log_error(title="Memory Expiry Error", message=f"Memory expiry scheduler failed: {str(e)}")
 
 
 def extract_memory_from_run(run_id):

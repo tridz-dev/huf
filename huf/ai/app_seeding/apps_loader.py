@@ -323,7 +323,7 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 			f"'{existing.source_app}'; manifest from app '{source_app}' "
 			f"({source_file}) was rejected."
 		)
-		frappe.log_error(note, "HUF App Registration Collision")
+		frappe.log_error(title="HUF App Registration Collision", message=note)
 		# Surface the collision on the registry without overwriting the
 		# existing valid registration.
 		frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
@@ -371,8 +371,8 @@ def _record_invalid_manifest(data, error: str, source_app: str, source_file: str
 	registry is keyed by it); otherwise the failure is only logged.
 	"""
 	frappe.log_error(
-		f"Invalid HUF App manifest in {source_file} from app '{source_app}': {error}",
-		"HUF App Sync",
+		title="HUF App Sync",
+		message=f"Invalid HUF App manifest in {source_file} from app '{source_app}': {error}",
 	)
 	if not isinstance(data, dict):
 		return
@@ -407,10 +407,7 @@ def _record_invalid_manifest(data, error: str, source_app: str, source_file: str
 				ignore_permissions=True
 			)
 	except Exception as e:
-		frappe.log_error(
-			f"Failed to record invalid HUF App manifest '{app_id}': {e}",
-			"HUF App Sync",
-		)
+		frappe.log_error(title="HUF App Sync", message=f"Failed to record invalid HUF App manifest '{app_id}': {e}")
 
 
 def cleanup_orphaned_apps(seen: set | None = None) -> list:
@@ -422,6 +419,18 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 	``seen`` is a set of (source_app, source_file) pairs discovered during the
 	current sync run. When None, every record from an installed app is treated
 	as seen unless its source app was uninstalled.
+
+	Records with no ``source_app``, or ``source_app == "huf"`` (first-party huf
+	features seeded or created directly rather than discovered via a
+	``huf/apps/`` manifest -- e.g. Meeting Recorder seeded by install.py, or
+	Apps created via the Hub Orchestrator chat builder,
+	huf.ai.app_seeding.apps_loader.create_app_from_agent) are out of scope for
+	this cleanup entirely: find_seed_dirs() explicitly skips scanning "huf"
+	itself, so such a record can never legitimately appear in ``seen`` and
+	would otherwise be deleted on every single sync/migrate regardless of
+	whether it's still wanted. "huf" is always installed, so the
+	installed-apps check below already covers the only other reason a record
+	could be orphaned.
 	Returns the list of deleted app_ids.
 	"""
 	installed_apps = set(frappe.get_installed_apps())
@@ -431,6 +440,8 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 		fields=["name", "app_id", "source_app", "source_file"],
 	)
 	for record in records:
+		if not record.source_app or record.source_app == "huf":
+			continue
 		orphaned = record.source_app not in installed_apps
 		if not orphaned and seen is not None:
 			orphaned = (record.source_app, record.source_file) not in seen
@@ -440,10 +451,7 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 			frappe.delete_doc("HUF App", record.name, ignore_permissions=True, force=True)
 			deleted.append(record.app_id or record.name)
 		except Exception as e:
-			frappe.log_error(
-				f"Failed to delete orphaned HUF App '{record.name}': {e}",
-				"HUF App Sync",
-			)
+			frappe.log_error(title="HUF App Sync", message=f"Failed to delete orphaned HUF App '{record.name}': {e}")
 	return deleted
 
 
@@ -476,10 +484,7 @@ def sync_huf_apps() -> dict:
 					summary["errors"].append(
 						{"app": app_name, "file": source_file, "error": f"Error parsing manifest: {e}"}
 					)
-					frappe.log_error(
-						f"Error parsing HUF App manifest {file_path}: {e}",
-						"HUF App Sync",
-					)
+					frappe.log_error(title="HUF App Sync", message=f"Error parsing HUF App manifest {file_path}: {e}")
 					continue
 
 				seen.add((app_name, source_file))
@@ -501,16 +506,298 @@ def sync_huf_apps() -> dict:
 		except Exception as e:
 			frappe.db.rollback()
 			summary["errors"].append({"app": app_name, "file": None, "error": str(e)})
-			frappe.log_error(
-				f"HUF App sync failed for provider app '{app_name}': {e}",
-				"HUF App Sync",
-			)
+			frappe.log_error(title="HUF App Sync", message=f"HUF App sync failed for provider app '{app_name}': {e}")
 
 	deleted = cleanup_orphaned_apps(seen)
 	summary["deleted"] = len(deleted)
 	summary["deleted_apps"] = deleted
 	frappe.db.commit()
 	return summary
+
+
+def create_app_from_agent(
+	app_id: str,
+	title: str,
+	agent_name: str,
+	description: str = "",
+	route: str | None = None,
+	category: str = "Other",
+	icon: str | None = None,
+) -> dict:
+	"""
+	Create a chat-authored ``HUF App`` backed by an existing Agent.
+
+	``agent_name`` must resolve to an existing ``Agent`` doc; a chat-authored
+	App is just another manifest source, so this builds a manifest dict
+	matching ``ALLOWED_FIELDS`` and hands it to the existing
+	``validate_manifest()``/``upsert_huf_app()`` pipeline rather than
+	reimplementing their validation logic.
+
+	Note: the ``Agent`` link is not yet a field on the ``HUF App`` DocType
+	(see plan §D.5); once added, this function should also stamp it onto the
+	created doc. Access control (``_require_doc_permission`` on the Agent) is
+	the tool layer's responsibility, added in a later phase.
+
+	Returns the created ``HUF App`` doc as a dict.
+	"""
+	if not frappe.db.exists("Agent", agent_name):
+		frappe.throw(
+			f"Agent '{agent_name}' does not exist",
+			frappe.ValidationError,
+		)
+
+	manifest = {
+		"manifest_version": SUPPORTED_MANIFEST_VERSION,
+		"app_id": app_id,
+		"title": title,
+		"description": description,
+		"route": route or f"/apps/{app_id}",
+		"icon": icon or "",
+		"category": category,
+		"launch_mode": "route",
+	}
+
+	normalized, error = validate_manifest(manifest)
+	if error:
+		frappe.throw(error, frappe.ValidationError)
+
+	ok, error = upsert_huf_app(manifest, source_app="huf", source_file="chat")
+	if not ok:
+		frappe.throw(error, frappe.ValidationError)
+
+	doc = frappe.get_doc("HUF App", app_id)
+	if doc.meta.has_field("agent"):
+		frappe.db.set_value("HUF App", app_id, "agent", agent_name, update_modified=False)
+		doc.reload()
+	return doc.as_dict()
+
+
+def validate_app_capabilities(capabilities: dict, agent_doc) -> list:
+	"""
+	Check that ``capabilities`` (the proposed ``HUF App.capabilities`` JSON
+	blob) is a subset of what the linked ``agent_doc`` (Agent doc) actually
+	supports.
+
+	Covers file_upload / ocr / audio_input / audio_output / live_voice /
+	video_output. 'live_voice' is validated for basic Agent config only
+	(voice_enabled + voice_engine present) -- known upstream gaps in the
+	voice engines themselves (send_to_session unimplemented, no user-speech
+	persistence on litellm_realtime, no memory injection on either engine;
+	see huf/ai/voice/README.md's "Known gaps") are informational and
+	surfaced separately via ``collect_app_capability_warnings``, not treated
+	as hard errors here.
+
+	Returns a list of human-readable error strings; an empty list means the
+	capabilities payload is valid.
+	"""
+	errors = []
+	if not capabilities:
+		return errors
+
+	if capabilities.get("file_upload") and not agent_doc.get("allow_file_upload"):
+		errors.append(
+			"App capability 'file_upload' requires the linked Agent to have "
+			"'allow_file_upload' enabled."
+		)
+
+	if capabilities.get("ocr") and not agent_doc.get("enable_ocr"):
+		errors.append(
+			"App capability 'ocr' requires the linked Agent to have "
+			"'enable_ocr' enabled."
+		)
+
+	if capabilities.get("audio_input") and not agent_doc.get("stt_model"):
+		errors.append(
+			"App capability 'audio_input' requires the linked Agent to have "
+			"an 'stt_model' configured."
+		)
+
+	if capabilities.get("audio_output") and not agent_doc.get("tts_model"):
+		errors.append(
+			"App capability 'audio_output' requires the linked Agent to have "
+			"a 'tts_model' configured."
+		)
+
+	if capabilities.get("live_voice"):
+		if not agent_doc.get("voice_enabled"):
+			errors.append(
+				"App capability 'live_voice' requires the linked Agent to have "
+				"'voice_enabled' turned on."
+			)
+		if not agent_doc.get("voice_engine"):
+			errors.append(
+				"App capability 'live_voice' requires the linked Agent to have "
+				"a 'voice_engine' configured."
+			)
+
+	if capabilities.get("video_output"):
+		# GAP (documented, not silently skipped): Agent DocType has no
+		# dedicated video-generation-model field yet (no analogue to
+		# `image_generation_model` / `tts_model` — confirmed by inspecting
+		# huf/huf/doctype/agent/agent.json). Until such a field exists, this
+		# capability can never be meaningfully validated, so we fail closed
+		# rather than pretend it passed. See
+		# docs/hub-orchestrator-unified-builder-plan.md Phase 10 and
+		# docs/hub-orchestrator-app-builder-todo.md.
+		errors.append(
+			"App capability 'video_output' cannot be validated yet: the "
+			"Agent DocType has no video-generation-model field (analogous "
+			"to 'image_generation_model'/'tts_model'). Add that field "
+			"before enabling this capability; until then 'video_output' is "
+			"rejected rather than silently accepted."
+		)
+
+	return errors
+
+
+def collect_app_capability_warnings(capabilities: dict, agent_doc) -> list:
+	"""
+	Return non-blocking, informational warnings about ``capabilities`` that are
+	otherwise valid (see ``validate_app_capabilities``) but have known platform
+	limitations the caller should be told about rather than silently hitting
+	at runtime.
+
+	Currently: 'live_voice' when the Agent's configured voice engine reports
+	``memory: False`` from its ``capabilities()`` (see
+	huf/ai/voice/engines/base.py and huf/ai/voice/README.md's "Known gaps" --
+	no shipped voice engine currently injects Agent memory into a live voice
+	session). This does not block saving; it is surfaced so the caller can
+	set expectations.
+	"""
+	warnings = []
+	if not capabilities:
+		return warnings
+
+	if capabilities.get("live_voice") and agent_doc.get("voice_engine"):
+		try:
+			from huf.ai.voice import get_engine_class
+
+			engine_class = get_engine_class(agent_doc.get("voice_engine"))
+			engine_capabilities = engine_class.capabilities()
+		except Exception:
+			# Engine key not resolvable (e.g. unregistered/misconfigured) --
+			# validate_app_capabilities already covers the "not set at all"
+			# case as a hard error; here we simply skip the informational
+			# warning rather than blocking the save on a lookup failure.
+			engine_capabilities = None
+
+		if engine_capabilities is not None and not engine_capabilities.get("memory", True):
+			warnings.append(
+				"Live voice for this App will not have access to Agent memory "
+				"(known platform limitation, see huf/ai/voice/README.md)."
+			)
+
+	return warnings
+
+
+def update_app(app_id: str, **fields) -> dict:
+	"""
+	Apply a partial update to an existing ``HUF App`` record.
+
+	Only the fields actually passed in ``fields`` (e.g. ``title``,
+	``description``, ``icon``, ``category``, ``agent``) are applied; anything
+	else already on the record is left untouched. The merged data is
+	re-validated via the existing ``validate_manifest()`` grammar before
+	saving, so an update can never leave the record in a shape a manifest
+	sync would reject.
+
+	If ``fields`` includes ``capabilities``, it is validated (subset
+	invariant against the linked Agent's capabilities, see
+	docs/adr/0001-app-runtime-model.md decision #2) before saving.
+	Validation failures (see ``validate_app_capabilities``) are hard errors
+	that abort the save via ``frappe.throw``. Separately, informational,
+	non-blocking issues (currently: requesting 'live_voice' against a voice
+	engine that doesn't inject Agent memory) are collected via
+	``collect_app_capability_warnings`` and returned in the result's
+	``warnings`` key -- these never block the save.
+
+	Permission checks belong in the tool layer (added in a later phase); this
+	function saves with ``ignore_permissions=True``.
+
+	Returns the updated doc as a dict, plus a ``warnings`` key (list of
+	non-blocking informational strings, possibly empty).
+	"""
+	doc = frappe.get_doc("HUF App", app_id)
+
+	warnings = []
+	if "capabilities" in fields:
+		capabilities = fields["capabilities"]
+		if isinstance(capabilities, str):
+			capabilities = json.loads(capabilities) if capabilities else {}
+
+		agent_name = fields.get("agent") or doc.get("agent")
+		if capabilities:
+			# Fail closed: a non-empty capabilities payload with no resolvable
+			# Agent can never satisfy the "subset of Agent capabilities"
+			# invariant (docs/adr/0001-app-runtime-model.md decision #2), so
+			# it must be rejected rather than silently saved unvalidated.
+			if not agent_name:
+				frappe.throw(
+					"Cannot set capabilities without a linked Agent.",
+					frappe.ValidationError,
+				)
+			agent_doc = frappe.get_doc("Agent", agent_name)
+			errors = validate_app_capabilities(capabilities, agent_doc)
+			if errors:
+				frappe.throw("\n".join(errors), frappe.ValidationError)
+
+			warnings = collect_app_capability_warnings(capabilities, agent_doc)
+
+		fields = {**fields, "capabilities": json.dumps(capabilities)}
+
+	for fieldname, value in fields.items():
+		if doc.meta.has_field(fieldname):
+			doc.set(fieldname, value)
+
+	merged = {
+		"manifest_version": SUPPORTED_MANIFEST_VERSION,
+		"app_id": doc.app_id,
+		"title": doc.title,
+		"description": doc.description or "",
+		"route": doc.route,
+		"icon": doc.icon or "",
+		"category": doc.category or "Other",
+		"launch_mode": "route",
+	}
+	_, error = validate_manifest(merged)
+	if error:
+		frappe.throw(error, frappe.ValidationError)
+
+	doc.save(ignore_permissions=True)
+	result = doc.as_dict()
+	# "warnings" is non-blocking/informational, distinct from the hard
+	# "errors" list that `frappe.throw`s above already prevented from
+	# reaching here (e.g. the live_voice/memory gap documented in
+	# huf/ai/voice/README.md's "Known gaps" section).
+	result["warnings"] = warnings
+	return result
+
+
+def install_app(app_id: str) -> dict:
+	"""
+	Mark an ``HUF App`` as installed (``enabled=1``, ``sync_status="Active"``).
+
+	Idempotent: calling this twice for the same ``app_id`` never creates a
+	duplicate record and never errors -- if the record is already enabled,
+	the existing state is returned unchanged with ``already_installed: True``.
+	"""
+	if not frappe.db.exists("HUF App", app_id):
+		frappe.throw(f"HUF App '{app_id}' does not exist", frappe.DoesNotExistError)
+
+	already_enabled = frappe.db.get_value("HUF App", app_id, "enabled")
+	if already_enabled:
+		doc = frappe.get_doc("HUF App", app_id)
+		result = doc.as_dict()
+		result["already_installed"] = True
+		return result
+
+	frappe.db.set_value("HUF App", app_id, "enabled", 1)
+	frappe.db.set_value("HUF App", app_id, "sync_status", "Active")
+
+	doc = frappe.get_doc("HUF App", app_id)
+	result = doc.as_dict()
+	result["already_installed"] = False
+	return result
 
 
 def on_app_uninstalled(app_name):
@@ -528,6 +815,6 @@ def on_app_uninstalled(app_name):
 			frappe.db.commit()
 	except Exception as e:
 		frappe.log_error(
-			f"Error removing HUF App registry entries for uninstalled app '{app_name}': {e}",
-			"HUF App Sync",
+			title="HUF App Sync",
+			message=f"Error removing HUF App registry entries for uninstalled app '{app_name}': {e}",
 		)

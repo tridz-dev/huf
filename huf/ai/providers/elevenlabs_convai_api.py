@@ -167,7 +167,8 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
 
     if not agent_name:
         frappe.log_error(
-            f"No Huf Agent found with voice_config.agent_id {incoming_agent_id}", "Huf Webhook"
+            title="Huf Webhook",
+            message=f"No Huf Agent found with voice_config.agent_id {incoming_agent_id}",
         )
         return {"status": "error", "message": "Internal Agent not found"}
 
@@ -178,8 +179,8 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
         assert_agent_access(agent_doc, user="Guest")
     except frappe.PermissionError:
         frappe.log_error(
-            f"Agent '{agent_name}' does not allow guest access; rejecting ElevenLabs webhook",
-            "Huf Webhook",
+            title="Huf Webhook",
+            message=f"Agent '{agent_name}' does not allow guest access; rejecting ElevenLabs webhook",
         )
         return {"status": "error", "message": "Agent not accessible"}
     model = frappe.db.get_value("Agent", agent_name, "model")
@@ -210,11 +211,8 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
         # value must degrade to a fresh conversation rather than aborting the
         # whole webhook - losing the Agent Run audit record and call recording
         # over a conversation-continuity mismatch would be strictly worse.
-        frappe.log_error(
-            f"huf_conversation_id '{huf_conversation_id}' rejected for agent '{agent_name}'; "
-            "falling back to a fresh conversation",
-            "Huf Webhook",
-        )
+        frappe.log_error(title="Huf Webhook", message=f"huf_conversation_id '{huf_conversation_id}' rejected for agent '{agent_name}'; "
+            "falling back to a fresh conversation")
         conversation = cm.get_or_create_conversation(title=title)
 
     start_time_unix = metadata.get("start_time_unix_secs")
@@ -258,9 +256,9 @@ def handle_elevenlabs_webhook(type=None, data=None, event_timestamp=None):
 
                 run_doc.db_set("call_recording", saved_file.file_url)
             else:
-                frappe.log_error(f"Failed to fetch audio: {audio_res.text}", "ElevenLabs Audio")
+                frappe.log_error(title="ElevenLabs Audio", message=f"Failed to fetch audio: {audio_res.text}")
         except Exception as e:
-            frappe.log_error(f"Audio Download Error: {str(e)}", "ElevenLabs Audio")
+            frappe.log_error(title="ElevenLabs Audio", message=f"Audio Download Error: {str(e)}")
 
     
     transcript.sort(key=lambda x: x.get('time_in_call_secs', 0))

@@ -26,6 +26,7 @@
   "reasoning_budget_tokens",
   "reasoning_summary",
   "prompt_caching_section",
+  "prompt_cache_mode",
   "enable_prompt_caching",
   "cache_control_type",
   "cache_system_message",
@@ -103,6 +104,7 @@
   "agent_behaviors_section",
   "autonaming_of_conversation_title",
   "enable_conversation_data",
+  "enable_lazy_tools",
   "column_break_fl05",
   "conversation_lifecycle_section",
   "conversation_retention_policy",
@@ -682,6 +684,14 @@
    "label": "Prompt Caching"
   },
   {
+   "default": "Auto",
+   "description": "How HUF places prompt-cache breakpoints. Auto lets HUF choose the provider-appropriate plan. Off disables all HUF-injected cache controls. Advanced exposes granular per-segment controls.",
+   "fieldname": "prompt_cache_mode",
+   "fieldtype": "Select",
+   "label": "Prompt Cache Mode",
+   "options": "Auto\nOff\nAdvanced"
+  },
+  {
    "default": "0",
    "description": "Enable prompt caching to cache repeated prompt content and reduce token costs. Only works with supported providers (OpenAI, Anthropic, Bedrock, Deepseek).",
    "fieldname": "enable_prompt_caching",
@@ -767,6 +777,13 @@
    "fieldname": "enable_conversation_data",
    "fieldtype": "Check",
    "label": "Allow Conversation Data Management"
+  },
+  {
+   "default": "0",
+   "description": "Enable lazy discovery of tools to reduce token usage by loading tools on-demand instead of eager loading.",
+   "fieldname": "enable_lazy_tools",
+   "fieldtype": "Check",
+   "label": "Enable Lazy Tool Discovery"
   },
   {
    "default": "1",

@@ -83,8 +83,9 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
 function KnowledgeSourceFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fromAgent = searchParams.get('agent');
+  const autoOpenUpload = searchParams.get('upload') === '1';
   const isNew = id === 'new';
   const skipBlockRef = useRef(false);
 
@@ -245,6 +246,22 @@ function KnowledgeSourceFormPage() {
     }
   }, [id, isNew, loadSource]);
 
+  // After a freshly-created source redirects here with ?upload=1, jump straight
+  // into the inputs modal so uploading files doesn't need an extra click.
+  useEffect(() => {
+    if (!isNew && id && autoOpenUpload) {
+      setInputsModalOpen(true);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('upload');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [isNew, id, autoOpenUpload, setSearchParams]);
+
   const onSubmit = async (values: KnowledgeSourceFormValues) => {
     setSaving(true);
     try {
@@ -297,7 +314,7 @@ function KnowledgeSourceFormPage() {
         toast.success('Knowledge source created');
         setSourceDoc(created);
         allowNavigationRef.current = true;
-        navigate(`/knowledge/${created.name}`);
+        navigate(`/knowledge/${created.name}?upload=1`);
       } else if (id) {
         const updated = await updateKnowledgeSource(id, payload);
         toast.success('Knowledge source updated');

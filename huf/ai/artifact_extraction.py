@@ -50,6 +50,9 @@ VALID_ARTIFACT_TYPES = {
 	"image",
 	"web-preview",
 	"text",
+	"frappe-list",
+	"frappe-form",
+	"frappe-report",
 }
 
 #: Agent Message roles that represent an assistant/agent turn, as opposed to

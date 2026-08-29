@@ -12,11 +12,14 @@
   "capabilities_section",
   "supports_reasoning",
   "reasoning_config_override",
+  "context_window",
+  "max_output_tokens",
   "pricing_section",
   "use_custom_pricing",
   "input_cost_per_1m_tokens",
   "output_cost_per_1m_tokens",
   "cached_input_cost_per_1m_tokens",
+  "cached_input_write_cost_per_1m_tokens",
   "chat_capability_overrides_section",
   "disable_ask_user",
   "disable_rich_elements",
@@ -45,7 +48,7 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Modality",
-   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR\nSpeech-to-Speech"
+   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR\nSpeech-to-Speech\nVideo"
   },
   {
    "description": "Configure internal model reasoning support and overrides.",
@@ -66,6 +69,18 @@
    "fieldtype": "Code",
    "label": "Reasoning Configuration Override (JSON)",
    "options": "JSON"
+  },
+  {
+   "description": "Maximum total tokens this model accepts. Seeded from LiteLLM's model-cost table where available; editable for custom or local models. Leave 0 to fall back to the LiteLLM lookup.",
+   "fieldname": "context_window",
+   "fieldtype": "Int",
+   "label": "Context Window (tokens)"
+  },
+  {
+   "description": "Maximum completion tokens. Leave 0 to fall back to the LiteLLM lookup.",
+   "fieldname": "max_output_tokens",
+   "fieldtype": "Int",
+   "label": "Max Output Tokens"
   },
   {
    "description": "Enable custom prices to override LiteLLM's automatic pricing lookup. When disabled, LiteLLM's built-in price table is used as fallback. Values are in USD per 1 million tokens.",
@@ -103,6 +118,14 @@
    "description": "Optional. Cost for prompt cache reads (cache hits) in USD per 1M tokens. E.g. Anthropic charges $0.30/1M for cache reads vs $3.00/1M for regular input. Leave as 0 if not applicable.",
    "precision": "8",
    "depends_on": "eval:doc.use_custom_pricing"
+  },
+  {
+   "depends_on": "eval:doc.use_custom_pricing",
+   "description": "Price of cache-creation (write) tokens. Several providers bill writes at a premium; without this, caching ROI is overstated.",
+   "fieldname": "cached_input_write_cost_per_1m_tokens",
+   "fieldtype": "Float",
+   "label": "Cached Input Write Cost per 1M Tokens",
+   "precision": "8"
   },
   {
    "fieldname": "chat_capability_overrides_section",

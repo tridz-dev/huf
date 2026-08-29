@@ -21,26 +21,46 @@ export interface FlowDefinitionDoc {
     flow_name: string;
     status: 'Draft' | 'Active' | 'Archived';
     version: number;
-    schema_version: number;
+    /** Graph-IR schema_version, e.g. "1.0.0" -- a string, not an int (huf/ai/graph/graph_ir.schema.json). */
+    schema_version: string;
     definition_json: BackendFlowGraph;
 }
 
-/** The graph JSON stored in definition_json */
+/**
+ * The graph JSON stored in definition_json -- the Flow profile of the shared graph-IR
+ * (huf/ai/graph/graph_ir.schema.json `$defs/FlowGraph`, see Tracks/safwan-erooth.DeterministicAgent/spec/graph-ir.md).
+ *
+ * There is no top-level `edges` array any more: each node carries its own successor
+ * pointer (`next`) and error route (`on_error`); self-routing node types (condition,
+ * router.llm, human.approval) carry their branch targets in their own `config`. There
+ * is also no `id`/`version`/`settings`/`metadata` -- the schema is `additionalProperties:
+ * false`, so none of those keys may appear. `flow_id`/`flow_name`/`version` live on the
+ * Flow Definition doctype record itself, not inside the graph.
+ */
 export interface BackendFlowGraph {
-    schema_version: number;
-    id: string;
-    version: number;
-    entry: string;
+    schema_version: '1.0.0';
+    profile: 'flow';
+    /** sha256 hex digest of the graph's canonical form (graph-ir.md section 7). */
+    fingerprint: string;
+    /** One node id, or (when the graph starts from one or more triggers) an array of trigger node ids. */
+    entry: string | string[];
     nodes: BackendNode[];
-    edges: BackendEdge[];
-    settings: BackendSettings;
-    metadata: BackendMetadata;
+    contract: BackendContract;
 }
+
+export type BackendNodeType =
+    | 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event'
+    | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval'
+    | 'condition' | 'http_request' | 'transform' | 'loop' | 'output';
 
 export interface BackendNode {
     id: string;
-    type: 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'condition' | 'http_request' | 'transform' | 'loop' | 'end';
+    type: BackendNodeType;
     config: Record<string, unknown>;
+    /** Default successor node id. Absent/null means terminal for its chain. */
+    next?: string | null;
+    /** Node to route to if this node raises. Absent/null means an error here fails the run. */
+    on_error?: string | null;
     /** Frontend-only: stored for visual layout, ignored by engine */
     _position?: { x: number; y: number };
     /** Frontend-only: visual label */
@@ -49,6 +69,44 @@ export interface BackendNode {
     _icon?: string;
 }
 
+export interface BackendDocPermission {
+    doctype: string;
+    fields?: string[];
+}
+
+export interface BackendPermissionEnvelope {
+    read: BackendDocPermission[];
+    write: BackendDocPermission[];
+    http: 'none' | string[];
+    code: 'none' | string[];
+}
+
+export interface BackendResourceLimits {
+    max_nodes: number;
+    max_rows: number;
+    max_output_bytes: number;
+    max_parallel_calls: number;
+    max_foreach_iterations: number;
+    max_external_calls: number;
+    max_writes: number;
+    max_wall_time_ms: number;
+    fail_closed: true;
+}
+
+/** graph-ir.md's Contract: everything a graph declares about its own inputs/outputs
+ * and blast radius, required on every graph (Flow and Procedure alike). */
+export interface BackendContract {
+    input_schema: Record<string, unknown>;
+    output_schema: Record<string, unknown>;
+    applies_when: string[];
+    permission_envelope: BackendPermissionEnvelope;
+    limits: BackendResourceLimits;
+}
+
+/** @deprecated Pre-migration edge shape. No longer part of BackendFlowGraph -- kept only
+ * so the frontend's own React Flow edge model (FlowEdgeData) can still describe an
+ * edge's routing intent (always/on_success/on_failure/expression) before it gets
+ * folded into a node's `next`/`on_error`/self-routing config at serialize time. */
 export interface BackendEdge {
     id: string;
     from: string;
@@ -59,18 +117,16 @@ export interface BackendEdge {
     meta?: Record<string, unknown>;
 }
 
+/** @deprecated Flow-level run settings no longer fit in the graph-IR document
+ * (additionalProperties: false leaves no room for a `settings` key). Kept as the type
+ * of `Flow.settings`, a frontend/local-only field the engine now defaults instead
+ * (huf.ai.flow_engine.DEFAULT_MAX_HOPS, etc.) -- see flowSerializer.ts. */
 export interface BackendSettings {
     mode?: 'normal' | 'agentic';
     max_hops?: number;
     orchestrator_agent?: string;
     orchestrator_call_policy?: string;
     conversation_mode?: 'flow_shared' | 'per_node';
-}
-
-export interface BackendMetadata {
-    name: string;
-    description?: string;
-    category?: string;
 }
 
 /** Flow Run summary (from list endpoint) */
@@ -182,6 +238,44 @@ export async function updateFlowDefinitionFields(
 ): Promise<void> {
     try {
         await db.updateDoc(doctype['Flow Definition'], flowId, fields);
+    } catch (error) {
+        handleFrappeError(error, `Error updating flow ${flowId}`);
+    }
+}
+
+/** Outcome of the "create a procedure from this flow on save" checkbox, as recorded on
+ * the Flow Definition doc. `get_flow_definition`/`save_flow_definition` don't expose
+ * these fields, so they're read straight off the doctype via the SDK. */
+export interface FlowConversionStatus {
+    auto_convert_to_procedure: boolean;
+    /** Human-readable outcome of the last conversion attempt (success or refusal reason). */
+    conversion_note: string | null;
+    /** Name of the Draft Agent Procedure created/refreshed from this flow, if any. */
+    converted_procedure: string | null;
+}
+
+/** Fetch the current auto-convert checkbox value and the outcome of the last conversion
+ * attempt (set asynchronously by the backend after save -- see flow_definition.py's
+ * _maybe_convert_to_procedure). */
+export async function getFlowConversionStatus(flowId: string): Promise<FlowConversionStatus> {
+    try {
+        const doc = await db.getDoc(doctype['Flow Definition'], flowId);
+        return {
+            auto_convert_to_procedure: Boolean(doc.auto_convert_to_procedure),
+            conversion_note: (doc.conversion_note as string) || null,
+            converted_procedure: (doc.converted_procedure as string) || null,
+        };
+    } catch (error) {
+        handleFrappeError(error, `Error fetching conversion status for flow ${flowId}`);
+    }
+}
+
+/** Toggle the "create a procedure from this flow on save" checkbox */
+export async function updateFlowAutoConvert(flowId: string, autoConvert: boolean): Promise<void> {
+    try {
+        await db.updateDoc(doctype['Flow Definition'], flowId, {
+            auto_convert_to_procedure: autoConvert ? 1 : 0,
+        });
     } catch (error) {
         handleFrappeError(error, `Error updating flow ${flowId}`);
     }
@@ -302,5 +396,50 @@ export async function getPendingApprovals(): Promise<PendingApproval[]> {
         return result.message as PendingApproval[];
     } catch (error) {
         handleFrappeError(error, 'Error fetching pending approvals');
+    }
+}
+
+// ─── Flow -> Procedure conversion ───────────────────────────────────────
+
+/** Preview of converting a flow into a deterministic procedure */
+export interface FlowConversionAnalysis {
+    convertible: boolean;
+    reason?: string;
+    reads?: string[];
+    writes?: string[];
+    atomic_operations?: number;
+    estimated_round_trip_reduction_pct?: number;
+}
+
+/** Result of actually creating the procedure from a flow */
+export interface FlowConversionResult extends FlowConversionAnalysis {
+    name: string;
+    procedure_id: string;
+    version: number;
+    status: string;
+    tier: string;
+}
+
+/** Read-only preview: is this flow convertible, and what would it look like? Creates nothing. */
+export async function analyzeFlowConversion(flowId: string): Promise<FlowConversionAnalysis> {
+    try {
+        const result = await call.get('huf.ai.flow_api.analyze_flow_conversion', {
+            flow_id: flowId,
+        });
+        return result.message as FlowConversionAnalysis;
+    } catch (error) {
+        handleFrappeError(error, `Error analyzing flow ${flowId} for conversion`);
+    }
+}
+
+/** Convert a deterministic flow into a Draft procedure. Never activates it. */
+export async function convertFlowToProcedure(flowId: string): Promise<FlowConversionResult> {
+    try {
+        const result = await call.post('huf.ai.flow_api.convert_flow_to_procedure', {
+            flow_id: flowId,
+        });
+        return result.message as FlowConversionResult;
+    } catch (error) {
+        handleFrappeError(error, `Error converting flow ${flowId} to a procedure`);
     }
 }

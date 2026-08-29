@@ -1,8 +1,9 @@
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, add_to_date
+from frappe.utils import add_to_date, now_datetime
+
+from .automation_runner import _resolve_instruction, run_automation
 from .automation_runtime_flag import automation_runtime_is_new
-from .automation_runner import run_automation
 
 # Short-lived per-trigger lock so an overlapping scheduler tick (or a manual
 # invocation racing a real tick) can't double-fire the same due trigger.
@@ -42,6 +43,7 @@ def run_due_automations():
 			"interval_count",
 			"next_execution",
 			"last_execution",
+			"execution_mode",
 		],
 	)
 
@@ -95,12 +97,19 @@ def _fire_due_trigger(t, now):
 	if not automation_name:
 		return
 
-	run_automation(
-		automation_name,
-		trigger_name=trigger_name,
-		trigger_context={"type": "schedule", "fired_at": now.isoformat()},
-		now=True,
-	)
+	trigger_context = {"type": "schedule", "fired_at": now.isoformat()}
+
+	if t.get("execution_mode") == "Batch":
+		automation_doc = frappe.get_doc("Automation", automation_name)
+		prompt = _resolve_instruction(automation_doc, trigger_context)
+		_submit_batch_job_for_automation_trigger(t, automation_doc, prompt)
+	else:
+		run_automation(
+			automation_name,
+			trigger_name=trigger_name,
+			trigger_context=trigger_context,
+			now=True,
+		)
 
 	# run_automation()'s own bookkeeping (_update_trigger_bookkeeping) only
 	# touches last_execution/status, not next_execution — set last_execution
@@ -112,3 +121,77 @@ def _fire_due_trigger(t, now):
 		update_modified=False,
 	)
 	frappe.db.commit()
+
+
+def _submit_batch_job_for_automation_trigger(t, automation_doc, prompt):
+	"""Submit a single-request batch job for a due Schedule+Batch Automation Trigger.
+
+	Mirrors ``huf.ai.agent_scheduler._submit_batch_job_for_trigger`` (the legacy
+	Agent Trigger equivalent), but resolves its Agent via ``automation_doc.agent``
+	instead of a trigger-carried agent name, and links the created Batch Job back
+	via ``automation_trigger`` rather than ``agent_trigger``.
+
+	Builds a batch of exactly one request — batching multiple due Automation
+	Trigger fires into one provider batch is a future enhancement, out of scope
+	here. The caller's existing per-trigger try/except in run_due_automations()
+	already guards this call, so only the provider submit_batch() call itself is
+	wrapped, so a submission failure can be recorded on the Batch Job instead of
+	aborting before next_execution is advanced.
+	"""
+	from huf.ai.agent_scheduler import _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER
+
+	agent = frappe.get_doc("Agent", automation_doc.agent)
+	provider_brand = frappe.db.get_value("AI Provider", agent.provider, "provider_brand")
+	batch_job_provider = _PROVIDER_BRAND_TO_BATCH_JOB_PROVIDER.get(provider_brand)
+
+	batch_job = frappe.get_doc(
+		{
+			"doctype": "Batch Job",
+			"agent": agent.name,
+			"automation_trigger": t["name"],
+			"provider": batch_job_provider,
+			"status": "Pending",
+			"request_count": 1,
+		}
+	)
+	batch_job.insert(ignore_permissions=True)
+
+	requests = [
+		{"custom_id": batch_job.name, "messages": [{"role": "user", "content": prompt}], "model": agent.model}
+	]
+
+	if provider_brand == "google":
+		from huf.ai.providers.batch.gemini_batch import _GEMINI_STATE_TO_BATCH_JOB_STATUS, submit_batch
+
+		status_map = _GEMINI_STATE_TO_BATCH_JOB_STATUS
+	elif provider_brand == "openai":
+		from huf.ai.providers.batch.openai_batch import _OPENAI_STATUS_TO_BATCH_JOB_STATUS, submit_batch
+
+		status_map = _OPENAI_STATUS_TO_BATCH_JOB_STATUS
+	elif provider_brand == "anthropic":
+		from huf.ai.providers.batch.anthropic_batch import _ANTHROPIC_STATUS_TO_BATCH_JOB_STATUS, submit_batch
+
+		status_map = _ANTHROPIC_STATUS_TO_BATCH_JOB_STATUS
+	else:
+		unsupported_msg = f"Unsupported provider brand for batch submission: {provider_brand}"
+		frappe.log_error(title="Batch Job Submit", message=unsupported_msg)
+		batch_job.status = "Failed"
+		batch_job.error_message = unsupported_msg
+		batch_job.save(ignore_permissions=True)
+		return
+
+	from .agent_integration import _run_async_safely
+
+	try:
+		result = _run_async_safely(submit_batch(agent, requests))
+	except Exception as e:  # noqa: BLE001 -- boundary catch: record on Batch Job, never abort the scheduler loop
+		frappe.log_error(frappe.get_traceback(), "Batch Job Submit")
+		batch_job.status = "Failed"
+		batch_job.error_message = str(e)
+		batch_job.save(ignore_permissions=True)
+		return
+
+	batch_job.provider_batch_id = result.get("provider_batch_id")
+	batch_job.status = status_map.get(result.get("status"), "Submitted")
+	batch_job.submitted_at = now_datetime()
+	batch_job.save(ignore_permissions=True)

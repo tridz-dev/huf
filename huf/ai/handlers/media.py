@@ -181,7 +181,10 @@ async def handle_generate_image(
                     image_bytes = base64.b64decode(image_b64)
                 elif image_url:
                     # Unexpected image URL format; retain Error Log for investigation.
-                    frappe.log_error(f"Unsupported image URL format: {image_url}", "Image Generation")
+                    frappe.log_error(
+                        title="Image Generation",
+                        message=f"Unsupported image URL format: {image_url}",
+                    )
                     continue
 
                 if not image_bytes:
@@ -309,7 +312,7 @@ async def handle_generate_image(
 
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard provider/tool failure: retain Error Log for admin attention.
-        frappe.log_error(f"Image generation error: {e!s}", "Image Generation Tool")
+        frappe.log_error(title="Image Generation Tool", message=f"Image generation error: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -380,7 +383,7 @@ async def handle_ocr_document(
 
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard OCR failure: retain Error Log for admin attention.
-        frappe.log_error(f"OCR error: {e!s}", "OCR Tool")
+        frappe.log_error(title="OCR Tool", message=f"OCR error: {e!s}")
         return {"success": False, "error": str(e)}
 
 
@@ -920,5 +923,114 @@ async def handle_transcribe_audio(
 
     except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
         # Hard transcription failure: retain Error Log for admin attention.
-        frappe.log_error(f"Audio transcription error: {e!s}", "Audio Transcription Tool")
+        frappe.log_error(title="Audio Transcription Tool", message=f"Audio transcription error: {e!s}")
+        return {"success": False, "error": str(e)}
+
+
+@frappe.whitelist()
+async def handle_generate_video(
+    prompt: str,
+    duration_seconds: int = None,
+    agent_name: str = None,
+    conversation_id: str = None,
+    **kwargs
+):
+    """
+    Generate a video using the agent's configured provider and video generation model.
+
+    STATUS (honest scoping, see docs/hub-orchestrator-unified-builder-plan.md
+    section A.4 and Phase 10): as of litellm==1.95.0 (the version pinned/
+    installed for this app) there is NO generic ``litellm.video_generation``
+    (or equivalent) call, unlike ``litellm.image_generation``. Video
+    generation support across providers (e.g. Google Veo via Vertex AI,
+    Kling, Runway, etc.) is sparse, provider-specific, and typically
+    asynchronous/polling-based (submit job -> poll for completion -> fetch
+    result), which does not map cleanly onto the single-call, single-response
+    shape ``handle_generate_image`` uses.
+
+    This function therefore implements the full validation and Agent
+    Message/attachment scaffolding (mirroring ``handle_generate_image``'s
+    model-resolution and fail-closed-when-unconfigured behavior), but the
+    actual provider call is intentionally left unimplemented — see the
+    ``NotImplementedError`` below. Do not treat this as done; it is
+    deliberately deferred until a specific provider's video-generation API
+    contract is chosen and implemented.
+
+    Args:
+        prompt: Text description of the video to generate
+        duration_seconds: Optional requested video duration in seconds
+            (provider-dependent; unused until a provider path is implemented)
+        agent_name: Automatically passed from context
+        conversation_id: Automatically passed from context
+
+    Returns:
+        dict: {"success": False, "error": str} — always, until a provider
+            call is implemented. Never returns a fabricated success.
+    """
+    try:
+        if not agent_name:
+            return {"success": False, "error": "Agent name not found in context"}
+
+        agent_doc = frappe.get_doc("Agent", agent_name)
+        provider_doc = frappe.get_doc("AI Provider", agent_doc.provider)
+        api_key = provider_doc.get_password("api_key")
+
+        if not api_key:
+            return {"success": False, "error": "API key not configured for provider"}
+
+        # Determine video generation model.
+        #
+        # NOTE: Agent DocType does not (yet) have a dedicated
+        # video-generation-model field analogous to `image_generation_model`
+        # / `tts_model`. Until that field exists, we can only resolve a
+        # video model if the caller explicitly passes `model=` in kwargs and
+        # that AI Model has "Video" in its modalities; there is no
+        # auto-detection fallback the way `handle_generate_image` has for
+        # image models, because no per-provider default video model mapping
+        # has been established here.
+        video_model = None
+        explicit_model = kwargs.get("model")
+
+        if explicit_model:
+            model_doc = frappe.get_doc("AI Model", explicit_model)
+            modalities = (model_doc.get("modalities") or "").split("\n")
+            if "Video" in modalities:
+                video_model = model_doc.model_name
+
+        if not video_model:
+            return {
+                "success": False,
+                "error": (
+                    "Video generation requires a configured AI Model with "
+                    "'Video' in its modalities. Video generation is not "
+                    "currently supported for provider "
+                    f"'{provider_doc.provider_name}' without one explicitly "
+                    "configured; pass model=<AI Model name> or configure a "
+                    "video-generation model for this agent."
+                ),
+            }
+
+        # TODO(video-generation): No provider-specific video generation call
+        # is implemented yet. litellm==1.95.0 has no generic
+        # video_generation()-style function (confirmed by inspecting the
+        # installed package). A real implementation needs to pick a specific
+        # provider (e.g. Google Veo via Vertex AI) and implement its actual
+        # submit/poll/fetch job contract here, then persist the result to
+        # Agent Message.generated_video the same way handle_generate_image
+        # persists to generated_image. Raising NotImplementedError rather
+        # than returning a fabricated success/failure keeps this honest.
+        raise NotImplementedError(
+            "handle_generate_video: video generation call is not yet "
+            "implemented for any provider. An AI Model with 'Video' "
+            f"modality ('{video_model}') was resolved, but no provider "
+            "API integration exists to actually generate the video. "
+            "See docs/hub-orchestrator-unified-builder-plan.md Phase 10."
+        )
+
+    except NotImplementedError as e:
+        frappe.logger("huf").warning(f"Video generation not implemented: {e!s}")
+        return {"success": False, "error": str(e)}
+    except (frappe.DoesNotExistError, frappe.ValidationError, AttributeError, KeyError, ValueError) as e:
+        # Hard provider/tool failure: retain Error Log for admin attention.
+        frappe.log_error(title="Video Generation Tool", message=f"Video generation error: {e!s}")
         return {"success": False, "error": str(e)}
