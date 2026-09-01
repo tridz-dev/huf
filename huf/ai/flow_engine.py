@@ -1330,8 +1330,10 @@ def _load_context(flow_run) -> dict:
 
 def _build_agent_prompt(config: dict, context: dict) -> str:
 	"""Build agent prompt from config template and context."""
-	input_config = config.get("input", {})
-	prompt_template = input_config.get("prompt_template")
+	input_config = config.get("input") or {}
+	# The flow builder writes prompt_template flat on config; older/programmatic
+	# definitions nest it under "input". Accept both, preferring the nested form.
+	prompt_template = input_config.get("prompt_template") or config.get("prompt_template")
 
 	if prompt_template:
 		# Simple template variable substitution
