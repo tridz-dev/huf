@@ -557,8 +557,14 @@ function mergeToolCallGroups(messages: MessageType[]): MessageType[] {
   const groupIndexByRun = new Map<string, number>();
 
   for (const msg of messages) {
-    const isToolOnly = !!msg.tools?.length &&
-      (!msg.versions[0]?.content || msg.versions[0].content.trim() === '');
+    // A persisted "Tool Result" message's `content` field holds a narrative
+    // description of the call ("Requesting Tool: X\n...\n**Tool Result:**\n
+    // {...}"), not an empty string — checking for empty content here always
+    // evaluated false, so this whole grouping branch silently never ran.
+    // `kind` is the reliable signal: only genuine "Tool Result" records
+    // should collapse together, never a real assistant "Message" that
+    // happens to carry temp `tools[]` state.
+    const isToolOnly = !!msg.tools?.length && msg.kind === 'Tool Result';
 
     if (isToolOnly) {
       // Prefer grouping by agent_run_id when the backend provided one, but
@@ -569,7 +575,7 @@ function mergeToolCallGroups(messages: MessageType[]): MessageType[] {
       const previous = grouped[grouped.length - 1];
       const fallbackMergeable = !msg.agentRunId && previous &&
         !!previous.tools?.length &&
-        (!previous.versions[0]?.content || previous.versions[0].content.trim() === '') &&
+        previous.kind === 'Tool Result' &&
         !previous.agentRunId;
 
       const existingIndex = msg.agentRunId
