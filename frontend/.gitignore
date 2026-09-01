@@ -32,4 +32,5 @@ tsconfig.node.tsbuildinfo
 /test-results/
 /e2e-report/
 /e2e-report-deployed/
+/e2e-report-flows/
 /test-evidence/
