@@ -40,6 +40,20 @@ import frappe
 
 logger = frappe.logger("huf")
 
+# knowledge_search on these sources runs against sqlite_fts (keyword search, no embeddings -- see
+# the "knowledge_type" comment below for why). Keyword search only matches terms that actually
+# appear in the text, so a query in the user's own words can miss a chunk that says the same thing
+# differently. Appended to every section's instructions so the agent compensates for that instead
+# of concluding "no docs on this" after one literal query.
+FTS_SEARCH_GUIDANCE = (
+	"\n\nThis knowledge search is keyword-based (FTS), not semantic -- it only matches terms "
+	"that literally appear in the text, so it won't catch a paraphrase on its own. If your first "
+	"query returns nothing useful, don't conclude the docs don't cover it: retry with the exact "
+	"ERPNext DocType or field name (e.g. 'Sales Order' not 'customer order'), try synonyms and "
+	"related terms the user's question implies, and try 2-3 different phrasings of the same "
+	"question before giving up on a topic that's plausibly in scope for this section."
+)
+
 # One Knowledge Source + Skill per scraped section. Keys match the directory
 # names under huf/huf/data/erpnext_docs/.
 SECTIONS = {
@@ -191,7 +205,7 @@ def _ensure_skill(section_key, cfg):
 			# every agent's context, and this function never attaches it to
 			# any Agent. A user opts an agent into it via Agent > Skills.
 			"auto_load": 0,
-			"instructions": cfg["instructions"],
+			"instructions": cfg["instructions"] + FTS_SEARCH_GUIDANCE,
 			"skill_knowledge": [
 				{
 					"knowledge_source": cfg["source_name"],
