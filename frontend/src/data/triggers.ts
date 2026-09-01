@@ -18,14 +18,6 @@ export const triggerOptions: TriggerOption[] = [
     tab: 'explore'
   },
   {
-    id: 'human-input',
-    name: 'Human Input',
-    description: 'Wait for human approval or input',
-    icon: 'UserCheck',
-    category: 'highlight',
-    tab: 'explore'
-  },
-  {
     id: 'doc-event',
     name: 'Data',
     description: 'Trigger on data events',
