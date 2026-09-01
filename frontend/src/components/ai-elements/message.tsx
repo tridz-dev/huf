@@ -317,12 +317,13 @@ export const MessageBranchPage = ({
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
+  ({ className, controls, ...props }: MessageResponseProps) => (
     <Streamdown
       className={cn(
         "size-full min-w-0 max-w-full overflow-x-auto break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
+      controls={controls ?? { table: false, code: true, mermaid: true }}
       {...props}
     />
   ),
