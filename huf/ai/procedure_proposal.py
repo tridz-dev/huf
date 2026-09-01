@@ -112,6 +112,7 @@ class ProposalResult:
 	procedure_graph: dict | None = None
 	input_schema: dict | None = None
 	step_count: int = 0
+	unconfirmed_input_fields: tuple[str, ...] = ()
 
 	def as_dict(self, *, source_run: str) -> dict:
 		return {
@@ -121,6 +122,7 @@ class ProposalResult:
 			"input_schema": self.input_schema,
 			"step_count": self.step_count,
 			"source_run": source_run,
+			"unconfirmed_input_fields": list(self.unconfirmed_input_fields),
 		}
 
 
@@ -244,26 +246,36 @@ def _bind_argument_value(
 	prompt: str | None,
 	earlier_calls: list[dict],
 	earlier_node_ids: list[str],
-) -> tuple[Any, str | None]:
+	allow_unconfirmed_inputs: bool = True,
+) -> tuple[Any, str | None, str | None]:
 	"""Decide where one ``tool_args`` value came from (task point 2), in the task's own
 	priority order: (a) the run's prompt, (b) an earlier tool call's result, (c) a trivial
-	constant, else (d) refuse. Returns ``(bound_value, input_field_name_or_None)`` --
-	``input_field_name`` is set only for an (a) binding, telling the caller which
-	``input_schema`` field to register.
+	constant, else (d) bind as unconfirmed input (if allowed) or refuse.
 
-	Raises :class:`ProcedureNotProposableError` for (d), with the exact wording the task
-	spec asks for so the user sees precisely which step/tool/argument was unexplainable.
+	Returns ``(bound_value, input_field_name_or_None, confidence_or_None)`` where:
+	- ``input_field_name`` is set for (a) and (d) bindings, telling the caller which
+	  ``input_schema`` field to register.
+	- ``confidence`` indicates the binding's reliability: ``"prompt"`` for (a),
+	  ``"unconfirmed"`` for (d), ``None`` for (b) and (c).
+
+	Raises :class:`ProcedureNotProposableError` for (d) when ``allow_unconfirmed_inputs``
+	is False, with the exact wording the task spec asks for so the user sees precisely
+	which step/tool/argument was unexplainable.
 	"""
 	if _appears_in_prompt(value, prompt):
 		field = _snake_case(arg_name)
-		return {"$from": f"input.{field}"}, field
+		return {"$from": f"input.{field}"}, field, "prompt"
 
 	ref = _find_earlier_reference(value, earlier_calls, earlier_node_ids)
 	if ref is not None:
-		return {"$from": ref}, None
+		return {"$from": ref}, None, None
 
 	if _is_trivial_constant(value):
-		return value, None
+		return value, None, None
+
+	if allow_unconfirmed_inputs:
+		field = _snake_case(arg_name)
+		return {"$from": f"input.{field}"}, field, "unconfirmed"
 
 	raise ProcedureNotProposableError(  # noqa: TRY003 -- user-facing refusal reason, not exception boilerplate
 		f"This run made a judgment call at step {step_index} ({tool_id}) when it chose the value "
@@ -331,6 +343,7 @@ def compile_procedure_from_trace(
 	response: str | None,
 	tool_calls: list[dict],
 	classify_tool: ToolClassifier = default_tool_classifier,
+	allow_unconfirmed_inputs: bool = True,
 ) -> ProposalResult:
 	"""Compile ``tool_calls`` (already ordered oldest-first, as recorded for one Agent
 	Run) into a candidate Procedure graph, or refuse with a specific reason. Pure: no
@@ -381,10 +394,40 @@ def compile_procedure_from_trace(
 				step_count=len(tool_calls),
 			)
 
+	def _register_input_field(
+		base_field: str, confidence: str | None, value: Any
+	) -> str:
+		"""Register or reuse an input field, handling collisions between different
+		confidence levels by suffixing (customer_id, customer_id_2, etc). Returns the
+		final (possibly suffixed) field name to use in ``$from`` references and in
+		``input_props``.
+		"""
+		if base_field not in input_props:
+			field = base_field
+		elif input_props[base_field].get("x-confidence") == confidence:
+			return base_field  # same field, same confidence -- reuse as today
+		else:
+			field = base_field
+			n = 2
+			while field in input_props:
+				field = f"{base_field}_{n}"
+				n += 1
+		# Register the field with its type and confidence
+		type_info = {"type": _json_type(value)}
+		if confidence is not None:
+			type_info["x-confidence"] = confidence
+		input_props[field] = type_info
+		input_required.append(field)
+		# Track unconfirmed fields
+		if confidence == "unconfirmed":
+			unconfirmed_fields.append(field)
+		return field
+
 	node_ids: list[str] = []
 	nodes: list[dict] = []
 	input_props: dict[str, dict] = {}
 	input_required: list[str] = []
+	unconfirmed_fields: list[str] = []
 
 	for i, call in enumerate(tool_calls, start=1):
 		tool_id = call["tool"]
@@ -402,7 +445,7 @@ def compile_procedure_from_trace(
 		bound_input: dict[str, Any] = {}
 		try:
 			for arg_name, value in args.items():
-				bound_value, input_field = _bind_argument_value(
+				bound_value, input_field, confidence = _bind_argument_value(
 					step_index=i,
 					tool_id=tool_id,
 					arg_name=arg_name,
@@ -410,11 +453,13 @@ def compile_procedure_from_trace(
 					prompt=prompt,
 					earlier_calls=tool_calls[: i - 1],
 					earlier_node_ids=node_ids,
+					allow_unconfirmed_inputs=allow_unconfirmed_inputs,
 				)
+				# Update bound_value with the final field name if it's an input reference
+				if input_field is not None:
+					final_field = _register_input_field(input_field, confidence, value)
+					bound_value = {"$from": f"input.{final_field}"}
 				bound_input[arg_name] = bound_value
-				if input_field is not None and input_field not in input_props:
-					input_props[input_field] = {"type": _json_type(value)}
-					input_required.append(input_field)
 		except ProcedureNotProposableError as exc:
 			return ProposalResult(proposable=False, reason=exc.reason, step_count=len(tool_calls))
 
@@ -485,6 +530,7 @@ def compile_procedure_from_trace(
 		procedure_graph=procedure_graph,
 		input_schema=input_schema,
 		step_count=len(tool_calls),
+		unconfirmed_input_fields=tuple(unconfirmed_fields),
 	)
 
 
