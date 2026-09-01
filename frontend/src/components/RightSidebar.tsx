@@ -85,7 +85,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   // Load agents when agent-run or router node selected
   useEffect(() => {
     const actionType = selectedNode?.data.actionConfig?.type;
-    if (!selectedNode?.data.actionConfig || !actionType || !['agent-run', 'router'].includes(actionType)) return;
+    if (!selectedNode?.data.actionConfig || !actionType || !['agent-run', 'router', 'tool-call'].includes(actionType)) return;
     setLoadingAgents(true);
     getAgents()
       .then((result) => {
@@ -720,6 +720,22 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         onChange={(e) => handleUpdateActionConfig('output', { ...(config.output || {}), save_result_to_context: e.target.value })}
                         placeholder="e.g., tool_result"
                       />
+                    </div>
+                    <div>
+                      <Label htmlFor="tool-call-agent" className="text-xs">Attributed Agent (optional)</Label>
+                      <Combobox
+                        options={agents}
+                        value={(config as { agent_name?: string }).agent_name || ''}
+                        onValueChange={(v) => handleUpdateActionConfig('agent_name', v)}
+                        placeholder={loadingAgents ? 'Loading...' : 'Select agent (optional)...'}
+                        disabled={loadingAgents}
+                        searchPlaceholder="Search agents..."
+                        emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Used only for audit attribution on the Agent Run record; does not affect tool execution.
+                      </p>
                     </div>
                   </div>
                 );
