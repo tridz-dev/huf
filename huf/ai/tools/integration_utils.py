@@ -98,8 +98,8 @@ def attach_service_tools(service: str, tool_names: list[str], agents: Optional[l
         except Exception as e:
             error_msg = str(e)
             frappe.log_error(
-                f"attach_service_tools failed for agent {agent_name}: {error_msg}",
-                "Attach Service Tools",
+                title="Attach Service Tools",
+                message=f"attach_service_tools failed for agent {agent_name}: {error_msg}",
             )
             errors.append(f"Agent '{agent_name}': {error_msg}")
             continue

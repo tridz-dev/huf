@@ -236,7 +236,15 @@ const findings = { undefinedToken: [], rawPalette: [], deadDark: [], override: [
 for (const file of walk(SRC)) {
   const rel = relative(ROOT, file);
   // These legitimately carry their own palettes.
-  const exempt = /shiki|highlight|chart|recharts|cytoscape|reactflow|nodeStyles|monaco|codemirror|mermaid|code-block/i.test(rel);
+  // MeetingRecordingPlayer's caption bar is a fixed bg-black/85 scrim (see
+  // Tracks/safwan-erooth.NightModeAudit) — deliberately theme-independent,
+  // like a video subtitle bar, so its bright amber icon is a fixed accent
+  // by design, not a token bypass.
+  // UsersPage's role badges are an 8-hue categorical palette with no
+  // existing token support (deferred follow-up: needs its own light+dark
+  // categorical-color design pass, out of scope for the night-mode token
+  // audit that fixed everything else in this file's neighborhood).
+  const exempt = /shiki|highlight|chart|recharts|cytoscape|reactflow|nodeStyles|monaco|codemirror|mermaid|code-block|MeetingRecordingPlayer|UsersPage/i.test(rel);
   // Test/spec/story files contain fixture copy, not real UI copy.
   const casingExempt = /\.(test|spec|stories)\.[jt]sx?$/.test(rel);
   // Object-literal labels: test fixtures and the icon-identifier table.

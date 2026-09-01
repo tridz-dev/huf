@@ -26,6 +26,7 @@
   "reasoning_budget_tokens",
   "reasoning_summary",
   "prompt_caching_section",
+  "prompt_cache_mode",
   "enable_prompt_caching",
   "cache_control_type",
   "cache_system_message",
@@ -681,6 +682,14 @@
    "fieldname": "prompt_caching_section",
    "fieldtype": "Section Break",
    "label": "Prompt Caching"
+  },
+  {
+   "default": "Auto",
+   "description": "How HUF places prompt-cache breakpoints. Auto lets HUF choose the provider-appropriate plan. Off disables all HUF-injected cache controls. Advanced exposes granular per-segment controls.",
+   "fieldname": "prompt_cache_mode",
+   "fieldtype": "Select",
+   "label": "Prompt Cache Mode",
+   "options": "Auto\nOff\nAdvanced"
   },
   {
    "default": "0",

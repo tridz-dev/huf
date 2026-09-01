@@ -214,20 +214,21 @@ def resolve_reasoning(
 def build_reasoning_kwargs(resolution: ReasoningResolution) -> Dict[str, Any]:
     """
     Produce clean completion_kwargs dict from a ReasoningResolution.
+
+    Note: modify_params is a global LiteLLM module setting, not a per-request kwarg.
+    It is kept in resolved for introspection but filtered here to prevent forwarding to the provider.
     """
     if not resolution or not resolution.resolved:
         return {}
-    
+
     kwargs = {}
     resolved = resolution.resolved
-    
+
     if "reasoning_effort" in resolved:
         kwargs["reasoning_effort"] = resolved["reasoning_effort"]
     if "thinking" in resolved:
         kwargs["thinking"] = resolved["thinking"]
-    if "modify_params" in resolved:
-        kwargs["modify_params"] = resolved["modify_params"]
     if "reasoning_summary" in resolved:
         kwargs["reasoning_summary"] = resolved["reasoning_summary"]
-        
+
     return kwargs

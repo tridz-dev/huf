@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { UserPlus, ChevronDown, Users, MoreVertical, Power } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -59,23 +59,44 @@ import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 // Role names are identity, not alarm — every role renders in the same
 // neutral pill (Badge's default/secondary variant). Only the avatar
 // initials get a deterministic colour, derived from the person's name.
+// The design system only defines a handful of semantic colour tokens
+// (signal/good/warning/destructive), not the wide hue set needed for
+// per-person variety, so — like ChatAvatar's per-agent colour — this
+// applies the background as an inline style rather than a Tailwind
+// palette class.
 const AVATAR_COLOURS = [
-  'bg-blue-100 text-blue-700',
-  'bg-purple-100 text-purple-700',
-  'bg-amber-100 text-amber-700',
-  'bg-emerald-100 text-emerald-700',
-  'bg-rose-100 text-rose-700',
-  'bg-cyan-100 text-cyan-700',
-  'bg-indigo-100 text-indigo-700',
-  'bg-orange-100 text-orange-700',
+  '#DBEAFE', // blue-100
+  '#F3E8FF', // purple-100
+  '#FEF3C7', // amber-100
+  '#D1FAE5', // emerald-100
+  '#FFE4E6', // rose-100
+  '#CFFAFE', // cyan-100
+  '#E0E7FF', // indigo-100
+  '#FFEDD5', // orange-100
 ];
 
-function avatarColourClass(seed: string): string {
+const AVATAR_TEXT_COLOURS = [
+  '#1D4ED8', // blue-700
+  '#7E22CE', // purple-700
+  '#B45309', // amber-700
+  '#047857', // emerald-700
+  '#BE123C', // rose-700
+  '#0E7490', // cyan-700
+  '#4338CA', // indigo-700
+  '#C2410C', // orange-700
+];
+
+function avatarColourIndex(seed: string): number {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   }
-  return AVATAR_COLOURS[Math.abs(hash) % AVATAR_COLOURS.length];
+  return Math.abs(hash) % AVATAR_COLOURS.length;
+}
+
+function avatarColourStyle(seed: string): CSSProperties {
+  const i = avatarColourIndex(seed);
+  return { backgroundColor: AVATAR_COLOURS[i], color: AVATAR_TEXT_COLOURS[i] };
 }
 
 function initialsFor(name: string): string {
@@ -382,7 +403,7 @@ export default function UsersPage({ embedded = false }: UsersPageProps) {
                     <div className="flex items-center gap-2 min-w-0">
                       <Avatar className="h-[26px] w-[26px] shrink-0">
                         <AvatarFallback
-                          className={avatarColourClass(u.full_name || u.email || u.user)}
+                          style={avatarColourStyle(u.full_name || u.email || u.user)}
                         >
                           <span className="text-[10px] font-medium">
                             {initialsFor(u.full_name || u.email || u.user)}

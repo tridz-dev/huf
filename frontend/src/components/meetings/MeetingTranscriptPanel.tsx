@@ -79,7 +79,7 @@ export function MeetingTranscriptPanel({ chunks, isLive, className }: MeetingTra
             </span>
             {isGap ? (
               <p className="flex items-start gap-1.5 text-sm leading-7 text-steel italic">
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" aria-hidden />
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden />
                 {chunk.transcript_text || '[this part could not be transcribed]'}
               </p>
             ) : (

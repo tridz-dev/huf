@@ -64,8 +64,8 @@ class IntegrationSettings(Document):
 		# Respect cooldown for non-URL changes to avoid Telegram rate limits
 		if self._is_webhook_setup_cooldown_active():
 			frappe.log_error(
-				f"Skipped Telegram webhook setup for {self.name}: cooldown active",
-				"Telegram Webhook"
+				title="Telegram Webhook",
+				message=f"Skipped Telegram webhook setup for {self.name}: cooldown active",
 			)
 			return False
 
@@ -181,8 +181,8 @@ class IntegrationSettings(Document):
 		"""
 		if getattr(self, "flags", {}).get("in_telegram_webhook_setup"):
 			frappe.log_error(
-				f"Skipped recursive Telegram webhook setup for {self.name}",
-				"Telegram Webhook"
+				title="Telegram Webhook",
+				message=f"Skipped recursive Telegram webhook setup for {self.name}",
 			)
 			return
 
@@ -204,15 +204,15 @@ class IntegrationSettings(Document):
 			)
 			self.flags.in_telegram_webhook_setup = False
 			frappe.log_error(
-				f"Telegram webhook setup aborted for {self.name}: {status}",
-				"Telegram Webhook"
+				title="Telegram Webhook",
+				message=f"Telegram webhook setup aborted for {self.name}: {status}",
 			)
 			return
 
 		try:
 			frappe.log_error(
-				f"Starting Telegram webhook setup ({reason}) for {self.name}",
-				"Telegram Webhook"
+				title="Telegram Webhook",
+				message=f"Starting Telegram webhook setup ({reason}) for {self.name}",
 			)
 
 			# Update timestamp with raw SQL to avoid triggering any document hooks
@@ -259,7 +259,7 @@ class IntegrationSettings(Document):
 				status = result.get("description") or "Webhook configured"
 		except Exception as e:
 			status = f"Failed: {str(e)[:120]}"
-			frappe.log_error(f"Telegram webhook setup failed for {self.name}: {e}", "Telegram Webhook")
+			frappe.log_error(title="Telegram Webhook", message=f"Telegram webhook setup failed for {self.name}: {e}")
 		finally:
 			self.flags.in_telegram_webhook_setup = False
 			if status:
@@ -267,6 +267,6 @@ class IntegrationSettings(Document):
 					"Integration Settings", self.name, "telegram_webhook_status", status, update_modified=False
 				)
 			frappe.log_error(
-				f"Finished Telegram webhook setup ({reason}) for {self.name}: {status}",
-				"Telegram Webhook"
+				title="Telegram Webhook",
+				message=f"Finished Telegram webhook setup ({reason}) for {self.name}: {status}",
 			)

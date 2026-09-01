@@ -90,12 +90,27 @@ export function ChatWindowHeader({
         setCreatingAutomation(true);
         try {
             const draft = await draftAutomationFromConversation(chatId);
-            if (!draft?.agent) return;
+            if (!draft?.agent) {
+                toast.error("Couldn't create an automation from this chat", {
+                    description: "This conversation isn't linked to an agent.",
+                });
+                return;
+            }
             // AutomationFormPage already reads `?agent=` to pre-select the
             // Agent on the create form; the rest (instruction, description)
             // is left for the user to fill in from what they just discussed
             // -- see huf.ai.automation_api.draft_automation_from_conversation.
             navigate(`/automations/new?agent=${encodeURIComponent(draft.agent)}`);
+        } catch (error) {
+            // draftAutomationFromConversation re-throws via handleFrappeError
+            // (it never shows a toast itself) -- without this catch, any
+            // failure here (a permission edge case, a network blip) was
+            // completely silent: the menu just closed with no feedback at
+            // all, only a console.error nobody but a developer would see.
+            console.error('Error creating automation from chat:', error);
+            toast.error("Couldn't create an automation from this chat", {
+                description: "Please try again.",
+            });
         } finally {
             setCreatingAutomation(false);
         }
@@ -308,10 +323,10 @@ export function ChatWindowHeader({
                         <span className="sr-only">Conversation actions</span>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[230px] px-0 py-[5px]">
+                <DropdownMenuContent align="end" className="w-[260px] px-0 py-[5px]">
                     <DropdownMenuItem
                         onSelect={() => navigate(`/agents/${agent.name}`)}
-                        className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                        className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                     >
                         <Settings className="size-[15px]" />
                         Agent settings
@@ -325,7 +340,7 @@ export function ChatWindowHeader({
                                     })
                                 );
                             }}
-                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                         >
                             <Pencil className="size-[15px]" />
                             Rename
@@ -337,7 +352,7 @@ export function ChatWindowHeader({
                                 // Let the menu finish closing before opening the sheet.
                                 setTimeout(() => setDataPanelOpen(true), 0);
                             }}
-                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                         >
                             Conversation data
                         </DropdownMenuItem>
@@ -348,7 +363,7 @@ export function ChatWindowHeader({
                             onSelect={() => {
                                 void handleCreateAutomationFromChat();
                             }}
-                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                         >
                             <Zap className="size-[15px]" />
                             Create automation from this chat
@@ -619,16 +634,16 @@ function AgentSwitcher({
                 align="start"
                 className="w-[300px] rounded-[12px] border-input p-0 shadow-lg"
             >
-                <div className="border-b border-[#f4f4f7] p-2">
+                <div className="border-b border-paper-deep p-2">
                     {/* 8px, not rounded-lg: --r-lg is 14px here, which reads as a pill
                         at 28px tall. Spec 28.4 draws a rounded rectangle. */}
-                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-[#f4f4f7] px-[9px]">
+                    <div className="flex h-7 items-center gap-[7px] rounded-[8px] bg-paper-deep px-[9px]">
                         <Search className="size-[14px] shrink-0 text-steel-soft" />
                         <input
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                             placeholder="Search agents"
-                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-[#98989d]"
+                            className="w-full min-w-0 bg-transparent text-[13px] text-ink outline-none placeholder:text-steel-soft"
                         />
                     </div>
                 </div>
@@ -658,7 +673,7 @@ function AgentSwitcher({
                                             type="button"
                                             onClick={() => handleSelect(agentItem.name)}
                                             className={
-                                                (isCurrent ? "bg-paper-deep " : "hover:bg-[#f9f9fb] ") +
+                                                (isCurrent ? "bg-paper-deep " : "hover:bg-paper-deep ") +
                                                 (hasModel ? "" : "opacity-55 ") +
                                                 "flex h-[34px] items-center gap-[9px] px-3 text-left"
                                             }

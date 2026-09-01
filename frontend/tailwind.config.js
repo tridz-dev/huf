@@ -28,7 +28,10 @@ export default {
         good:           'var(--good)',
         'good-tint':    'var(--good-tint)',
         'destructive-tint': 'var(--destructive-tint)',
-        warning:        'var(--warning)',
+        warning: {
+          DEFAULT:    'var(--warning)',
+          foreground: 'var(--warning-foreground)',
+        },
         'warning-tint': 'var(--warning-tint)',
         'chat-row-hover':    'var(--chat-row-hover)',
         'chat-row-selected': 'var(--chat-row-selected)',

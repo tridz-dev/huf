@@ -17,8 +17,15 @@ setup('authenticate', async ({ page, baseURL }) => {
   await page.waitForLoadState('networkidle');
 
   // Land explicitly on the React app to confirm the session is usable there.
+  // Don't rely on the "Dashboard" nav label being VISIBLE -- the sidebar can
+  // load in collapsed/icon-only mode (its label span has a
+  // `group-data-[collapsible=icon]:hidden` class), so the same text exists
+  // in the DOM but isn't visible, even for a successfully authenticated
+  // session. Waiting on the URL settling into the app is a more robust
+  // signal that the session is usable here (confirmed against a real bench).
   await page.goto('');
-  await page.waitForSelector('text=Dashboard', { timeout: 15000 });
+  await page.waitForURL(/\/huf\/?($|[?#])/, { timeout: 15000 });
+  await page.waitForLoadState('networkidle');
 
   await page.context().storageState({ path: authFile });
 });

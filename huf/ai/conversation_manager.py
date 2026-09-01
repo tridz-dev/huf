@@ -168,8 +168,8 @@ def update_tool_call_message(
         msg_doc = frappe.get_doc("Agent Message", message_name)
     except (frappe.DoesNotExistError, frappe.DataError) as e:
         frappe.log_error(
-            f"Could not load Agent Message '{message_name}' for tool result update: {e}",
-            "Tool Call Message Update"
+            title="Tool Call Message Update",
+            message=f"Could not load Agent Message '{message_name}' for tool result update: {e}",
         )
         return False
 
@@ -222,8 +222,8 @@ def update_tool_call_message(
         return True
     except (frappe.ValidationError, frappe.PermissionError, frappe.TimestampMismatchError) as e:
         frappe.log_error(
-            f"Error updating tool call message '{message_name}': {e}",
-            "Tool Call Message Update"
+            title="Tool Call Message Update",
+            message=f"Error updating tool call message '{message_name}': {e}",
         )
         return False
 
@@ -321,13 +321,10 @@ def repair_message_sequence(messages: list, conversation_name: str | None = None
             final.append(msg)
 
     if dropped_tool or dropped_assistant or inserted:
-        frappe.log_error(
-            f"repair_message_sequence conversation={conversation_name}: "
+        frappe.log_error(title="LiteLLM Message Repair", message=f"repair_message_sequence conversation={conversation_name}: "
             f"dropped_orphaned_tools={dropped_tool}, "
             f"dropped_unfulfilled_assistants={dropped_assistant}, "
-            f"repaired_assistants_inserted={inserted}",
-            "LiteLLM Message Repair",
-        )
+            f"repaired_assistants_inserted={inserted}")
 
     return final
 
@@ -534,7 +531,7 @@ class ConversationManager:
 
             return message
         except Exception as e:
-            frappe.log_error(f"Error adding message: {str(e)}", "Conversation Manager")
+            frappe.log_error(title="Conversation Manager", message=f"Error adding message: {str(e)}")
             raise
 
     def get_conversation_history(self, conversation_name, limit=20):

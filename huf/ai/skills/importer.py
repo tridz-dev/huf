@@ -251,8 +251,8 @@ def _ensure_category(category_name: str | None) -> str | None:
 		frappe.db.commit()
 	except Exception as e:
 		frappe.log_error(
-			_("Failed to create Skill Category '{0}': {1}").format(category_name, str(e)),
-			"Skill Import",
+			title="Skill Import",
+			message=_("Failed to create Skill Category '{0}': {1}").format(category_name, str(e)),
 		)
 		return None
 
@@ -421,11 +421,12 @@ def _write_import_log(
 
 		if warnings:
 			for warning in warnings[:20]:
-				frappe.log_error(warning, "Skill Import Warning")
+				frappe.log_error(title="Skill Import Warning", message=warning)
 	except Exception:
 		# Import logging is best-effort
 		frappe.log_error(
-			_("Failed to write skill import log for {0}").format(source_url), "Skill Import"
+			title="Skill Import",
+			message=_("Failed to write skill import log for {0}").format(source_url),
 		)
 
 
@@ -609,9 +610,7 @@ def import_skill_from_git(
 					status="Error",
 					error_message=error_msg,
 				)
-				frappe.log_error(
-					f"Failed to import skill from {skills_root}: {error_msg}", "Skill Import"
-				)
+				frappe.log_error(title="Skill Import", message=f"Failed to import skill from {skills_root}: {error_msg}")
 
 			return {
 				"imported": imported,
@@ -652,9 +651,7 @@ def import_skill_from_git(
 					status="Error",
 					error_message=error_msg,
 				)
-				frappe.log_error(
-					f"Failed to import skill from {entry}: {error_msg}", "Skill Import"
-				)
+				frappe.log_error(title="Skill Import", message=f"Failed to import skill from {entry}: {error_msg}")
 
 		return {
 			"imported": imported,

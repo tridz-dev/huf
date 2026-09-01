@@ -546,7 +546,7 @@ class Agent(Document):
             return planning_run_id, steps
 
         except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
-            frappe.log_error(f"Plan Generation Failed: {str(e)}", "Agent Plan Error")
+            frappe.log_error(title="Agent Plan Error", message=f"Plan Generation Failed: {str(e)}")
             return None
 
     def set_default_color(self):
@@ -587,7 +587,7 @@ class Agent(Document):
                     )
 
             except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
-                frappe.log_error(f"Multi-Run Setup Failed: {str(e)}", "Agent Creation Error")
+                frappe.log_error(title="Agent Creation Error", message=f"Multi-Run Setup Failed: {str(e)}")
 
     
     def has_permission(self, permission_type=None, verbose=False):

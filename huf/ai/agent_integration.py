@@ -31,6 +31,7 @@ from huf.ai.agent_access import assert_agent_access, check_agent_access as _chec
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
+from huf.ai.tool_serializer import serialize_tools
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -451,8 +452,8 @@ class AgentManager:
                 instructions += "\n\n" + "\n\n".join(system_prompts)
         except Exception as e:
             frappe.log_error(
-                f"Error injecting skill instructions: {str(e)}",
-                "Skill Instruction Error",
+                title="Skill Instruction Error",
+                message=f"Error injecting skill instructions: {str(e)}",
             )
 
         # Enhance instructions with tool descriptions
@@ -587,8 +588,8 @@ class AgentManager:
                         instructions += "\n\n" + project_instructions
             except Exception as e:
                 frappe.log_error(
-                    f"Error injecting project instructions: {str(e)}",
-                    "Project Instruction Error",
+                    title="Project Instruction Error",
+                    message=f"Error injecting project instructions: {str(e)}",
                 )
 
         model_settings = ModelSettings(
@@ -744,6 +745,29 @@ def _resolve_prompt_cache_options(channel_id: str, prompt_cache_options=None) ->
 
     return resolved
 
+def _normalize_tool_args_json(args):
+    """Return ``args`` as a JSON-encoded string suitable for storage in the
+    ``Agent Tool Call.tool_args`` field, without double-encoding it.
+
+    Per the OpenAI/litellm tool-call convention (see providers/litellm.py,
+    where ``args`` originates from ``tool_call.function.arguments``), ``args``
+    normally arrives already JSON-encoded as a string (e.g. '{"city": "X"}').
+    Calling json.dumps() on that string again would wrap it in an extra layer
+    of quoting/escaping ("double encoding"), so a plain string that is
+    already valid JSON is stored as-is. Any other caller that legitimately
+    passes structured data (a dict/list) - or a string that is NOT valid
+    JSON - still gets json.dumps()'d exactly as before.
+    """
+    if isinstance(args, str):
+        try:
+            json.loads(args)
+        except (ValueError, TypeError):
+            return json.dumps(args)
+        else:
+            return args
+    return json.dumps(args)
+
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -843,7 +867,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 if mcp_server and not doc.mcp_server:
                     update_data["mcp_server"] = mcp_server
                 if args and not doc.tool_args:
-                    update_data["tool_args"] = json.dumps(args)
+                    update_data["tool_args"] = _normalize_tool_args_json(args)
                 if result_val is not None and not doc.tool_result:
                     update_data["tool_result"] = result_val
                 if error and not doc.error_message:
@@ -868,7 +892,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
                 "tool": name,
                 "is_mcp_tool": is_mcp_tool,
                 "mcp_server": mcp_server,
-                "tool_args": json.dumps(args) if args else None,
+                "tool_args": _normalize_tool_args_json(args) if args else None,
                 "tool_result": result_val,
                 "error_message": error,
                 "status": "Queued",
@@ -1479,7 +1503,10 @@ def _notify_sub_agent_failure(agent_name, error_msg, parent_conversation_id, inv
             external_id=external_id,
         )
     except Exception as hook_err:
-        frappe.log_error(f"Error in Sub-Agent Failure Hook: {str(hook_err)}", "Agent Integration Error")
+        frappe.log_error(
+            title="Agent Integration Error",
+            message=f"Error in Sub-Agent Failure Hook: {str(hook_err)}",
+        )
 
     # 2. Real-Time UI Notification
     frappe.publish_realtime(
@@ -1694,8 +1721,8 @@ def _execute_agent_run(
                 prompt = "\n\n".join(user_prompts) + "\n\n" + (prompt or "")
         except Exception as e:
             frappe.log_error(
-                f"Error injecting user skill prompts: {str(e)}",
-                "Skill Prompt Error",
+                title="Skill Prompt Error",
+                message=f"Error injecting user skill prompts: {str(e)}",
             )
 
         base_prompt = f"""
@@ -1734,8 +1761,23 @@ def _execute_agent_run(
             run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
         )
 
+        # Serialize tools for prefix fingerprinting
+        try:
+            tools_schema = serialize_tools(getattr(agent, "tools", None) or [])
+        except Exception as e:
+            tools_schema = None
+            frappe.logger("huf").warning(
+                f"Failed to serialize tools for prefix fingerprinting (sync, agent={agent_name}): {e!s}"
+            )
+
+        # Get static prefix and latest user message for prefix fingerprinting
+        static_prefix = (resolved_prompt_cache.get("static_prefix") or "").strip() if resolved_prompt_cache else None
+
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model_name, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history,
+            tools=tools_schema,
+            static_prefix=static_prefix if static_prefix else None,
+            latest_user=prompt
         )
         tools_breakdown = compute_tools_breakdown(
             _normalize_model_name(resolved_model_name, resolved_provider),
@@ -1925,6 +1967,7 @@ def _execute_agent_run(
         cached_tokens = 0
         cache_creation_tokens = 0
         cache_skipped_unsupported_model = False
+        cache_skipped_below_min_tokens = False
 
         if usage:
 
@@ -1937,8 +1980,10 @@ def _execute_agent_run(
             usage_dict = normalise_usage_payload(usage)
             if usage_dict is not None:
                 cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
+                cache_skipped_below_min_tokens = bool(usage_dict.get("cache_skipped_below_min_tokens", False))
             else:
                 cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
+                cache_skipped_below_min_tokens = bool(getattr(usage, "cache_skipped_below_min_tokens", False))
 
             try:
                 # Prefer cost directly from the result
@@ -2032,6 +2077,24 @@ def _execute_agent_run(
             model_context_window = resolve_model_context_window(
                 resolved_model, resolved_provider, provider_brand
             )
+            # `Agent Run.{peak_context_tokens,round_count,model_context_window}`
+            # are DB-level `NOT NULL DEFAULT 0` Int columns (confirmed via
+            # `describe`), even though the values feeding them above are
+            # legitimately `None` for "truly unmeasured" (e.g.
+            # resolve_model_context_window()'s own documented contract, or a
+            # usage payload that never set peak_context_tokens/round_count).
+            # 0 is the doctype's own stated sentinel for "not set" (see
+            # resolve_model_context_window()'s docstring: "0 and NULL both
+            # mean 'not set'"), so coalescing here — same pattern already
+            # used for billed_input_tokens above — avoids failing the whole
+            # Agent Run write with `(1048, "Column '<name>' cannot be
+            # null")` for any model/usage shape that leaves these unset.
+            if peak_context_tokens is None:
+                peak_context_tokens = 0
+            if round_count is None:
+                round_count = 0
+            if model_context_window is None:
+                model_context_window = 0
 
             frappe.db.set_value("Agent Run", run_doc.name, {
                 "input_tokens": input_tokens,
@@ -2054,6 +2117,7 @@ def _execute_agent_run(
                     "cache_read_tokens": cached_tokens,
                     "cache_creation_tokens": cache_creation_tokens,
                     "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                    "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
                     "total_tokens": total_tokens,
                     "completeness": "provider_reported" if usage else "estimated",
                     "segment_tokens": segment_tokens,
@@ -2207,7 +2271,10 @@ def _execute_agent_run(
         log_error_msg = getattr(e, "log_message", error_msg)
         run_doc.db_set("status", "Failed", update_modified=True)
         run_doc.db_set("error_message", error_msg)
-        frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
+        frappe.log_error(
+            title="Huf Provider",
+            message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}",
+        )
         _emit_run_lifecycle_event(run_doc, conversation, "failed", {"error": error_msg})
 
         # Handle Sub-Agent Failure Lifecycle Hook
@@ -2956,8 +3023,23 @@ async def run_agent_stream(
             run_doc.name, agent_name, conversation.name, getattr(agent, "instructions", None)
         )
 
+        # Serialize tools for prefix fingerprinting
+        try:
+            tools_schema = serialize_tools(getattr(agent, "tools", None) or [])
+        except Exception as e:
+            tools_schema = None
+            frappe.logger("huf").warning(
+                f"Failed to serialize tools for prefix fingerprinting (stream, agent={agent_name}): {e!s}"
+            )
+
+        # Get static prefix and latest user message for prefix fingerprinting
+        static_prefix = (resolved_prompt_cache.get("static_prefix") or "").strip() if resolved_prompt_cache else None
+
         prefix_breakpoints = compute_prefix_breakpoints(
-            agent_doc, agent, resolved_model_name, resolved_provider, history
+            agent_doc, agent, resolved_model_name, resolved_provider, history,
+            tools=tools_schema,
+            static_prefix=static_prefix if static_prefix else None,
+            latest_user=prompt
         )
         tools_breakdown = compute_tools_breakdown(
             _normalize_model_name(resolved_model_name, resolved_provider),
@@ -3034,7 +3116,10 @@ async def run_agent_stream(
                         error_msg = _(
                             "The provider returned an empty response. For reasoning models on Ollama, use the 'ollama_chat/' model prefix."
                         )
-                        frappe.log_error(f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')", "Huf Provider")
+                        frappe.log_error(
+                            title="Huf Provider",
+                            message=f"Empty provider response for agent '{agent_name}' (model '{resolved_model_name}')",
+                        )
                         frappe.db.set_value("Agent Run", run_doc.name, {
                             "status": "Failed",
                             "error_message": error_msg,
@@ -3059,6 +3144,7 @@ async def run_agent_stream(
                     cached_tokens = 0
                     cache_creation_tokens = 0
                     cache_skipped_unsupported_model = False
+                    cache_skipped_below_min_tokens = False
                     total_tokens = 0
                     usage_dict = None
 
@@ -3073,8 +3159,10 @@ async def run_agent_stream(
                         usage_dict = normalise_usage_payload(usage)
                         if usage_dict is not None:
                             cache_skipped_unsupported_model = bool(usage_dict.get("cache_skipped_unsupported_model", False))
+                            cache_skipped_below_min_tokens = bool(usage_dict.get("cache_skipped_below_min_tokens", False))
                         else:
                             cache_skipped_unsupported_model = bool(getattr(usage, "cache_skipped_unsupported_model", False))
+                            cache_skipped_below_min_tokens = bool(getattr(usage, "cache_skipped_below_min_tokens", False))
 
                         # usage is normally a plain dict here, so getattr() would always miss;
                         # read the normalised payload and fall back to the parts.
@@ -3186,6 +3274,14 @@ async def run_agent_stream(
                     model_context_window = resolve_model_context_window(
                         resolved_model, resolved_provider, provider_brand
                     )
+                    # Same NOT NULL DEFAULT 0 coalescing as the sync write path
+                    # above — see that site's comment for the full rationale.
+                    if peak_context_tokens is None:
+                        peak_context_tokens = 0
+                    if round_count is None:
+                        round_count = 0
+                    if model_context_window is None:
+                        model_context_window = 0
 
                     stream_run_update = {
                         "status": "Success",
@@ -3213,6 +3309,7 @@ async def run_agent_stream(
                             "cache_read_tokens": cached_tokens,
                             "cache_creation_tokens": cache_creation_tokens,
                             "cache_skipped_unsupported_model": cache_skipped_unsupported_model,
+                            "cache_skipped_below_min_tokens": cache_skipped_below_min_tokens,
                             "total_tokens": total_tokens,
                             "completeness": "provider_reported" if usage else "estimated",
                             "segment_tokens": segment_tokens,
@@ -3425,7 +3522,10 @@ async def run_agent_stream(
                 # pulled, bad model prefix) — message is self-explanatory, no
                 # traceback needed. The run is still marked Failed below.
                 log_error_msg = getattr(e, "log_message", error_msg)
-                frappe.log_error(f"Provider unavailable for agent '{agent_name}': {log_error_msg}", "Huf Provider")
+                frappe.log_error(
+                    title="Huf Provider",
+                    message=f"Provider unavailable for agent '{agent_name}': {log_error_msg}",
+                )
             else:
                 frappe.log_error(f"Agent Stream Error: {frappe.get_traceback()}", "Huf Streaming")
             if "ContextWindowExceededError" in error_msg:

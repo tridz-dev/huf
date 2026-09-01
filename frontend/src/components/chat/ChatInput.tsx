@@ -1034,7 +1034,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                         <Button
                             type="button"
                             onClick={handleStartVoiceCall}
-                            className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                            className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-paper"
                             aria-label="Talk to this agent"
                             title="Talk to this agent"
                         >
@@ -1145,7 +1145,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                 <Button
                                     type="button"
                                     onClick={handleStop}
-                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-paper"
                                     aria-label="Stop generating response"
                                 >
                                     <Square className="size-3.5" fill="currentColor" />
@@ -1158,7 +1158,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                         ((!message.trim() && !(pendingFile?.status === 'ready' && pendingFile.fileId)) ||
                                             isSubmitting)
                                     }
-                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-white"
+                                    className="shrink-0 !h-[26px] !w-[26px] !p-0 rounded-chat-send bg-ink hover:bg-ink/90 text-paper"
                                     aria-label="Send message"
                                 >
                                     <ArrowUp className="size-[15px]" />

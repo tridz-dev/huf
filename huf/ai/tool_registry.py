@@ -383,7 +383,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
         tools_by_app = get_tools_by_app(apps_to_scan, use_cache=cache_enabled)
     except Exception as e:
         # Catastrophic sync failure: cannot read hooks at all.
-        frappe.log_error(f"Failed to get tools from apps: {str(e)}", "Tool Sync Error")
+        frappe.log_error(title="Tool Sync Error", message=f"Failed to get tools from apps: {str(e)}")
         return {
             "synced_apps": [],
             "total_tools": 0,

@@ -4,6 +4,7 @@ export const doctype = {
   Agent: "Agent",
   "AI Provider": "AI Provider",
   "AI Model": "AI Model",
+  "DeskAI Settings": "DeskAI Settings",
   "Agent Tool Function": "Agent Tool Function",
   "Agent Tool Type": "Agent Tool Type",
   "Agent Trigger": "Agent Trigger",

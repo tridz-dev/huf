@@ -557,11 +557,33 @@ function mergeToolCallGroups(messages: MessageType[]): MessageType[] {
   const groupIndexByRun = new Map<string, number>();
 
   for (const msg of messages) {
-    const isToolOnly = !!msg.tools?.length &&
-      (!msg.versions[0]?.content || msg.versions[0].content.trim() === '');
+    // A persisted "Tool Result" message's `content` field holds a narrative
+    // description of the call ("Requesting Tool: X\n...\n**Tool Result:**\n
+    // {...}"), not an empty string — checking for empty content here always
+    // evaluated false, so this whole grouping branch silently never ran.
+    // `kind` is the reliable signal: only genuine "Tool Result" records
+    // should collapse together, never a real assistant "Message" that
+    // happens to carry temp `tools[]` state.
+    const isToolOnly = !!msg.tools?.length && msg.kind === 'Tool Result';
 
-    if (isToolOnly && msg.agentRunId) {
-      const existingIndex = groupIndexByRun.get(msg.agentRunId);
+    if (isToolOnly) {
+      // Prefer grouping by agent_run_id when the backend provided one, but
+      // fall back to merging with the immediately preceding tool-only
+      // message when it's absent — otherwise every tool call persisted
+      // without a run id renders as its own bubble (see the "many single
+      // frappe_get_record rows" bug report).
+      const previous = grouped[grouped.length - 1];
+      const fallbackMergeable = !msg.agentRunId && previous &&
+        !!previous.tools?.length &&
+        previous.kind === 'Tool Result' &&
+        !previous.agentRunId;
+
+      const existingIndex = msg.agentRunId
+        ? groupIndexByRun.get(msg.agentRunId)
+        : fallbackMergeable
+          ? grouped.length - 1
+          : undefined;
+
       if (existingIndex !== undefined) {
         const existing = grouped[existingIndex];
         const toolMap = new Map((existing.tools || []).map((t) => [t.tool_call_id, t]));
@@ -569,7 +591,7 @@ function mergeToolCallGroups(messages: MessageType[]): MessageType[] {
         grouped[existingIndex] = { ...existing, tools: Array.from(toolMap.values()) };
         continue;
       }
-      groupIndexByRun.set(msg.agentRunId, grouped.length);
+      if (msg.agentRunId) groupIndexByRun.set(msg.agentRunId, grouped.length);
     }
 
     grouped.push(msg);

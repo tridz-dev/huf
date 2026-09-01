@@ -725,14 +725,14 @@ def execute_scheduled_flow(flow_id: str) -> dict:
 	from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
 	
 	if not frappe.db.exists("Flow Definition", flow_id):
-		frappe.log_error(f"Scheduled flow '{flow_id}' not found", "Flow Scheduler")
+		frappe.log_error(title="Flow Scheduler", message=f"Scheduled flow '{flow_id}' not found")
 		return {"status": "error", "error": f"Flow '{flow_id}' not found"}
 	
 	# Check if flow is active
 	defn_doc = frappe.get_doc("Flow Definition", flow_id)
 	if defn_doc.status != "Active":
 		msg = f"Flow '{flow_id}' is not active (status: {defn_doc.status})"
-		frappe.log_error(msg, "Flow Scheduler")
+		frappe.log_error(title="Flow Scheduler", message=msg)
 		return {"status": "error", "error": msg}
 	
 	# Create flow run with schedule trigger type

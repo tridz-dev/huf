@@ -1,0 +1,41 @@
+{
+  "agent": {
+    "agent_name": "golden-006-failure-agent",
+    "instructions": "You are a deterministic test agent.",
+    "max_turns": 10,
+    "model": "test-model",
+    "provider": "Test_Provider"
+  },
+  "context": {},
+  "cost": null,
+  "error": {
+    "log_message": "OpenAI API server error with model 'test-model'. This may be temporary. Details: Deterministic TEST_PROVIDER_500 simulated internal server error.",
+    "public_message": "The AI provider is temporarily unavailable. Please try again in a moment.",
+    "type": "ProviderUnavailableError"
+  },
+  "final_output": null,
+  "messages": [
+    {
+      "content": "Current user message:\n__TEST_SCENARIO__:TEST_PROVIDER_500 Do something.\n",
+      "id": "<MSG_ID:0>",
+      "kind": "Message",
+      "role": "user"
+    }
+  ],
+  "prompt": "Current user message:\n__TEST_SCENARIO__:TEST_PROVIDER_500 Do something.\n",
+  "run": {
+    "creation": "<TIMESTAMP>",
+    "run_id": "<RUN_ID>",
+    "status": "Failed"
+  },
+  "scenario": "AGENT-GOLDEN-006",
+  "state_transitions": [
+    "queued",
+    "started",
+    "failed"
+  ],
+  "terminal_status": "Failed",
+  "tool_calls": [],
+  "tool_definitions": [],
+  "usage": {}
+}

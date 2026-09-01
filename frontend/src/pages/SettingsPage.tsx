@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentSettingsTab } from '@/components/settings/AgentSettingsTab';
 import { VoiceSettingsTab } from '@/components/settings/VoiceSettingsTab';
+import { AddOnsTab } from '@/components/settings/AddOnsTab';
 import { PageFrame } from '@/layouts/PageFrame';
 
 export { SettingsPage };
 export default SettingsPage;
 
-const VALID_TABS = ['agent', 'voice'];
+const VALID_TABS = ['agent', 'voice', 'addons'];
 
 function SettingsPage() {
   const [activeTab, setActiveTab] = useState<string>(() => {
@@ -33,6 +34,7 @@ function SettingsPage() {
           <TabsList>
             <TabsTrigger value="agent">Agent defaults</TabsTrigger>
             <TabsTrigger value="voice">Voice / STT</TabsTrigger>
+            <TabsTrigger value="addons">Add-ons</TabsTrigger>
           </TabsList>
         }
       >
@@ -43,6 +45,10 @@ function SettingsPage() {
 
           <TabsContent value="voice" className="mt-0">
             <VoiceSettingsTab />
+          </TabsContent>
+
+          <TabsContent value="addons" className="mt-0">
+            <AddOnsTab />
           </TabsContent>
         </div>
       </PageFrame>

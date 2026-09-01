@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:deployed": "playwright test -c playwright.deployed.config.ts",
+    "test:e2e:nightly": "playwright test -c playwright.nightly.config.ts",
     "test:e2e:report": "playwright show-report e2e-report",
     "copy-html-entry": "node scripts/copy-html-entry.mjs"
   },
@@ -88,12 +89,13 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.11.1",
     "@playwright/test": "^1.61.1",
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.0.1",
-    "@testing-library/user-event": "^14.5.2",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.6",
     "@types/acorn": "^6.0.4",
     "@types/node": "^22.7.3",
     "@types/prismjs": "^1.26.6",

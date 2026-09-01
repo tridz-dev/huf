@@ -205,5 +205,5 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         return SimpleResult(text_response, total_usage, all_new_items)
 
     except Exception as e:
-        frappe.log_error(f"Gemini Provider Error: {str(e)}", "Gemini Provider")
+        frappe.log_error(title="Gemini Provider", message=f"Gemini Provider Error: {str(e)}")
         return SimpleResult(f"Gemini API Error: {str(e)}")

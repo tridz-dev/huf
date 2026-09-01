@@ -10,19 +10,31 @@ test.describe('Navigation & shell', () => {
     await goto(page, '/dashboard');
     await waitForContent(page);
 
-    for (const label of ['Dashboard', 'Flows', 'Data', 'Knowledge', 'Chat', 'Executions', 'Users']) {
+    // 'Data'/'Knowledge' were renamed to 'Tables'/'Sources' (see
+    // app-sidebar.tsx libraryNavItems). 'Users' no longer lives in the main
+    // nav at all — 'Members' now only appears inside the Settings rail (see
+    // the 'settings collapsible reveals settings pages' test below).
+    for (const label of ['Dashboard', 'Tables', 'Sources', 'Chat']) {
       await expect(page.getByRole('link', { name: label, exact: true }).first()).toBeVisible();
     }
     // Agents link carries a numeric count badge, so its name is e.g. "Agents 0".
     await expect(page.getByRole('link', { name: /^Agents/ }).first()).toBeVisible();
+    // Flows and Executions carry an "Experimental" badge (decorative icon
+    // with an aria-label), which is folded into the link's accessible name —
+    // match with a prefix regex instead of an exact string.
+    await expect(page.getByRole('link', { name: /^Flows/ }).first()).toBeVisible();
   });
 
   test('settings collapsible reveals settings pages', async ({ page }) => {
     await goto(page, '/dashboard');
     await waitForContent(page);
 
+    // Settings is a second-level rail that replaces the primary nav, not an
+    // accordion (see app-sidebar.tsx settingsNavGroups) — item labels also
+    // changed ('AI Providers' + 'Models' merged into 'AI providers & models',
+    // 'Roles' became part of 'Members').
     await page.getByRole('button', { name: 'Settings' }).click();
-    for (const label of ['AI Providers', 'Models', 'Integrations', 'MCP Servers', 'Roles']) {
+    for (const label of ['AI providers & models', 'MCP servers', 'Integrations', 'Members']) {
       await expect(page.getByRole('link', { name: label, exact: true })).toBeVisible();
     }
   });
@@ -34,7 +46,9 @@ test.describe('Navigation & shell', () => {
     await page.getByRole('link', { name: /^Agents/ }).first().click();
     await expect(page).toHaveURL(/\/huf\/agents$/);
 
-    await page.getByRole('link', { name: 'Executions', exact: true }).first().click();
+    // Executions carries an "Experimental" badge folded into its accessible
+    // name — match with a prefix regex instead of an exact string.
+    await page.getByRole('link', { name: /^Executions/ }).first().click();
     await expect(page).toHaveURL(/\/huf\/executions$/);
 
     await page.getByRole('link', { name: 'Chat', exact: true }).first().click();

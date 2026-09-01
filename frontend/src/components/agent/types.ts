@@ -44,6 +44,7 @@ export const agentFormSchema = z.object({
   cache_control_type: z.string().optional(),
   cache_system_message: z.boolean().optional(),
   cache_conversation_history: z.boolean().optional(),
+  prompt_cache_mode: z.enum(['Auto', 'Off', 'Advanced']).default('Auto').optional(),
   context_strategy: z.string().optional(),
   summary_model: z.string().optional(),
   summary_ratio: z.number().optional(),

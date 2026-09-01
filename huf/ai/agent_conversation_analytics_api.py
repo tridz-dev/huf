@@ -182,7 +182,11 @@ def _compute_current(latest_row: dict | None) -> dict | None:
         return None
 
     peak_context_tokens = latest_row.get("peak_context_tokens")
-    model_context_window = latest_row.get("model_context_window")
+    # The column is NOT NULL DEFAULT 0, so an unknown context window is stored
+    # as 0. The API contract (and the frontend) treat None as "explicitly
+    # unknown -- never render as a confident number"; emitting 0 would render
+    # a real-looking "0 tokens" instead of the em-dash placeholder.
+    model_context_window = latest_row.get("model_context_window") or None
     context_fullness = None
     if peak_context_tokens is not None and model_context_window:
         context_fullness = peak_context_tokens / model_context_window

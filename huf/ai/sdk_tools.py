@@ -299,8 +299,8 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
             tools.extend(skill_tools)
     except Exception as e:
         frappe.log_error(
-            f"Error loading skill tools for agent: {e!s}",
-            "Skill Tool Loading Error"
+            title="Skill Tool Loading Error",
+            message=f"Error loading skill tools for agent: {e!s}",
         )
 
     if hasattr(agent, "enable_conversation_data") and agent.enable_conversation_data:
@@ -674,8 +674,8 @@ def handle_get_result_context(
         if reference_doctype not in ALLOWED_RESULT_CONTEXT_DOCTYPES:
             # Security event: retain Error Log for unauthorized allow-list attempts.
             frappe.log_error(
-                f"get_result_context rejected for {reference_doctype}",
-                "Security: get_result_context allow-list"
+                title="Security: get_result_context allow-list",
+                message=f"get_result_context rejected for {reference_doctype}",
             )
             return {"success": False, "error": f"DocType '{reference_doctype}' is not accessible via get_result_context."}
 

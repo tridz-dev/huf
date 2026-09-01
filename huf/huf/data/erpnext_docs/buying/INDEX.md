@@ -1,0 +1,26 @@
+| Title | Slug | Source URL | One-line summary |
+|---|---|---|---|
+| Introduction to Buying Module | buying | https://docs.frappe.io/erpnext/buying | Overview of the Buying module's core capabilities: RFQs, supplier management, purchase orders/invoices, and stock updates. |
+| Supplier Essentials | supplier-essentials | https://docs.frappe.io/erpnext/supplier-essentials | Introduces the two core supplier doctypes — Supplier Group and Supplier. |
+| Supplier Group | supplier-group | https://docs.frappe.io/erpnext/supplier-group | How to create and organize Supplier Groups, including tree-hierarchy structure and permissions. |
+| Supplier | supplier | https://docs.frappe.io/erpnext/supplier | Full reference for the Supplier master: creation, tax details, currency, payment terms, blocking, addresses, and contacts. |
+| Buying Settings | buying-settings | https://docs.frappe.io/erpnext/buying-settings | Configurable defaults and rules governing the purchasing workflow, including PO/receipt requirements and subcontracting settings. |
+| Purchase Transactions | purchase-transactions | https://docs.frappe.io/erpnext/purchase-transactions | Lists the transaction types that make up ERPNext's procurement workflow. |
+| Material Request | material-request | https://docs.frappe.io/erpnext/material-request | How to create and manage Material Requests, their purposes, statuses, and downstream document creation. |
+| Purchase Return | purchase-return | https://docs.frappe.io/erpnext/purchase-return | How to return purchased items to suppliers and the resulting stock/accounting impact. |
+| Request for Quotation | request-for-quotation | https://docs.frappe.io/erpnext/request-for-quotation | How to create RFQs, fetch items/suppliers, send emails to suppliers, and generate Supplier Quotations from responses. |
+| Supplier Quotation | supplier-quotation | https://docs.frappe.io/erpnext/supplier-quotation | How to record and manage quotations received from suppliers, including taxes and post-submission actions. |
+| Purchase Order | purchase-order | https://docs.frappe.io/erpnext/purchase-order | Full reference for creating and managing Purchase Orders: warehouses, pricing, taxes, UOM conversion, and post-submission actions. |
+| Create Supplier Quotation through Supplier Portal | how-to-create-a-supplier-quotation-through-the-supplier-portal | https://docs.frappe.io/erpnext/how-to-create-a-supplier-quotation-through-the-supplier-portal | Steps for suppliers to submit quotations themselves via the self-service portal against an RFQ. |
+| Supplier Scorecard | supplier-scorecard | https://docs.frappe.io/erpnext/supplier-scorecard | How to configure supplier performance scorecards using criteria, variables, and formulas. |
+| Customer Portal | customer-portal | https://docs.frappe.io/erpnext/customer-portal | Describes the customer-facing portal for signup, login, order/invoice status, and raising issues. |
+| Buying Reports | buying_reports | https://docs.frappe.io/erpnext/buying_reports | Catalog of standard buying-module reports (Purchase Analytics, PO Analysis, Procurement Tracker, etc.). |
+| Procurement Tracker Report | procurement-tracker-report | https://docs.frappe.io/erpnext/procurement-tracker-report | Describes the Procurement Tracker report comparing estimated vs actual procurement cost and status. |
+| Maintaining Supplier's Item Code In the Item master | maintaining-suppliers-part-no-in-item | https://docs.frappe.io/erpnext/maintaining-suppliers-part-no-in-item | How to store and surface supplier-specific item codes on purchase documents. |
+| Purchasing in Different UoM | purchasing-in-different-unit | https://docs.frappe.io/erpnext/purchasing-in-different-unit | How to purchase items in a different unit of measure than the stock UOM, with conversion factors. |
+| Amending Purchase Order after Submit | amending-purchase-order-after-submit | https://docs.frappe.io/erpnext/amending-purchase-order-after-submit | How to use "Update Items" to amend rate/quantity on a submitted Purchase Order, with validation rules. |
+| Calculating Freight in taxes in ERPNext | calculatin-freight-in-taxes-in-erpnext | https://docs.frappe.io/erpnext/calculatin-freight-in-taxes-in-erpnext | How to set up a Freight and Forwarding item/tax account to calculate freight charges on Purchase Invoices. |
+| Fetch shipping charges based item's value or weight | can-we-fetch-shipping-charges-based-items-value-or-weight-in-po | https://docs.frappe.io/erpnext/can-we-fetch-shipping-charges-based-items-value-or-weight-in-po | How to configure a Shipping Rule to auto-calculate PO shipping charges by net total or net weight. |
+| Purchase invoice for Services | item-creation-not-required-in-purchase-invoice | https://docs.frappe.io/erpnext/item-creation-not-required-in-purchase-invoice | Step-by-step guide to creating a Purchase Invoice for a service item without requiring a PO. |
+| Procurement Cycle Overview | procurement-cycle-overview | https://docs.frappe.io/erpnext/procurement-cycle-overview | Summarizes the 7-stage procurement workflow from Material Request through Payment Entry. |
+| Purchase Cycle Ledger Impact | purchase-cycle-ledger-impact | https://docs.frappe.io/erpnext/purchase-cycle-ledger-impact | Explains which purchase-cycle documents create General Ledger entries and their accounting impact. |

@@ -37,7 +37,7 @@ def _call_permission_method(path: str, user: str, app_meta: dict) -> bool:
 	try:
 		fn = frappe.get_attr(path)
 	except Exception as e:
-		frappe.log_error(f"Could not import permission_method '{path}': {e}", "HUF Apps API")
+		frappe.log_error(title="HUF Apps API", message=f"Could not import permission_method '{path}': {e}")
 		return False
 
 	for args, kwargs in (
@@ -50,12 +50,10 @@ def _call_permission_method(path: str, user: str, app_meta: dict) -> bool:
 		except TypeError:
 			continue
 		except Exception as e:
-			frappe.log_error(f"permission_method '{path}' raised: {e}", "HUF Apps API")
+			frappe.log_error(title="HUF Apps API", message=f"permission_method '{path}' raised: {e}")
 			return False
 
-	frappe.log_error(
-		f"permission_method '{path}' has an unsupported signature", "HUF Apps API"
-	)
+	frappe.log_error(title="HUF Apps API", message=f"permission_method '{path}' has an unsupported signature")
 	return False
 
 

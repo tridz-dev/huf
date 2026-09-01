@@ -15,13 +15,15 @@
 
 @layer base {
   :root {
-    /* HUF Design System — "Apple-quiet" v3.0 is now the sole shipped UI
-       direction. These are no longer "themable defaults" overridden by a
-       runtime picker — the [data-theme="winter/midnight/summer/morning"]
-       blocks below are dead code kept only for reference (the theme
-       switcher in src/lib/personalization.ts no longer applies a
-       data-theme attribute, see applyEffectiveTheme()), not a priority to
-       remove. Do not rely on them. */
+    /* HUF Design System — "Apple-quiet" v3.0 is the sole shipped light
+       direction; this :root block is it. [data-theme="midnight"] below is
+       its dark counterpart (re-enabled — see applyEffectiveTheme() in
+       lib/personalization.ts), redesigned to match this palette's
+       monochrome-with-purple-signal identity rather than the old
+       instrument-panel orange-signal one it used to carry.
+       [data-theme="winter/summer/morning"] remain dead code (the multi-
+       named-theme picker was retired along with the old direction) — not a
+       priority to remove, do not rely on them. */
 
     /* Surfaces */
     --paper:      #FBFBFD;
@@ -47,6 +49,7 @@
     --destructive-foreground: var(--paper);
     --warning:      #8A5A00;
     --warning-tint: #FDF3E0;
+    --warning-foreground: #FFFFFF;
 
     /* Shape */
     --r: 8px;
@@ -116,7 +119,7 @@
     --chat-row-r:        7px;
     --chat-header-h:     40px;
     --chat-footer-h:     44px;
-    --chat-turn-gap:     22px;
+    --chat-turn-gap:     32px;
     --chat-measure:      620px;
     --chat-wide:         720px;
     --chat-row-hover:    #F0F0F4;
@@ -233,28 +236,51 @@
   }
 
   [data-theme="midnight"] {
-    --paper:      #14161A;
-    --paper-deep: #0E1013;
-    --panel:      #1E2126;
-    --ink:        #EDEFEA;
-    --ink-soft:   #C5C9CF;
-    --steel:      #7C8794;
-    --steel-soft: #A8B0BA;
-    --line:       #2A2E35;
-    --line-marketing: #3A3F47;
-    --line-dark:  #7C8794;
-    --signal:     #FF7A3D;
-    --signal-ink: #FF9A63;
-    --good:       #5FC97A;
-    --destructive-tint: #2E201B;
-    --destructive: #FF5A47;
-    --destructive-foreground: var(--paper);
-    /* This theme's --paper-deep (#0E1013) is the darkest surface, so a fill
-       derived by darkening it further would be invisible against --paper
-       (#14161A). Lighten instead, landing between --paper and --panel
-       (#1E2126) so the fill still reads against the dark background. */
-    --chat-row-hover: #1A1D22;
-    --chat-bubble:    #1A1D22;
+    /* Apple-quiet v3.0 dark counterpart. Same relationships as :root
+       (paper < paper-deep in perceived depth is inverted here on purpose —
+       see note below), same purple signal hue lightened for dark-background
+       contrast, same structural tokens (--r-*, --shadow-*, --control-h-*,
+       spacing/type scale) inherited unchanged from :root since this block
+       only overrides color. */
+    --paper:      #000000;
+    /* Apple's dark-mode surfaces get LIGHTER as they elevate (true black
+       base -> #1C1C1E elevated), the opposite of the light theme's paper >
+       paper-deep relationship. --paper-deep is used here for "embedded/
+       recessed" surfaces (sidebar, hover) which still read as a step above
+       base black. */
+    --paper-deep: #121214;
+    --panel:      #1C1C1E;
+    --ink:        #F5F5F7;
+    --ink-soft:   #D1D1D6;
+    --steel:      #98989D;
+    --steel-soft: #636366;
+    --line:       #38383A;
+    --line-marketing: #38383A;
+    --line-dark:  #545458;
+    --signal:     #9D7BFF;
+    --signal-ink: #B79CFF;
+    --good:       #3DDC84;
+    --good-tint:  #123822;
+    --destructive-tint: #3A1613;
+    --destructive: #FF453A;
+    /* Fixed white, not var(--paper): this is foreground-on-a-saturated-fill
+       (destructive/good buttons), not foreground-on-page-background — in
+       dark mode var(--paper) resolves to black, which would be invisible on
+       a red/orange fill. */
+    --destructive-foreground: #FFFFFF;
+    --warning:      #FFB020;
+    --warning-tint: #3A2E0A;
+    /* Fixed dark text, not var(--paper): light theme's --warning (#8A5A00)
+       is dark enough for white text on top, but this theme's brighter
+       --warning (#FFB020) is not — needs dark text for contrast instead. */
+    --warning-foreground: #1D1D1F;
+    /* This theme's --paper (#000000) is the darkest surface, so a fill
+       derived by darkening it further would be invisible. Lighten instead,
+       landing between --paper and --panel (#1C1C1E) so the fill still reads
+       against the dark background. */
+    --chat-row-hover: #17171A;
+    --chat-bubble:    #17171A;
+    --input: #48484A;
   }
 
   [data-theme="summer"] {

@@ -58,11 +58,33 @@ class TestReasoningLayer(unittest.TestCase):
         self.assertIn("thinking", res.resolved)
         self.assertEqual(res.resolved["thinking"]["type"], "enabled")
         self.assertEqual(res.resolved["thinking"]["budget_tokens"], 4096)
+        # modify_params is kept in resolved for introspection but not sent in kwargs
         self.assertTrue(res.resolved.get("modify_params"))
 
         kwargs = build_reasoning_kwargs(res)
         self.assertEqual(kwargs.get("thinking"), {"type": "enabled", "budget_tokens": 4096})
-        self.assertTrue(kwargs.get("modify_params"))
+        # modify_params must not appear in per-request kwargs (it is a global LiteLLM setting)
+        self.assertNotIn("modify_params", kwargs)
+
+    def test_modify_params_not_in_kwargs_for_anthropic(self):
+        """Regression test: modify_params must never be sent in per-request kwargs.
+
+        It is a global LiteLLM module setting, not a per-request parameter.
+        LiteLLM 1.83.0 forwards unknown kwargs to the HTTP body, causing Anthropic
+        to reject the request with "Extra inputs are not permitted".
+        """
+        policy = ReasoningPolicy(mode="on", budget_tokens=4096)
+        caps = ReasoningCapabilities(supports_reasoning=True, supports_thinking_blocks=True)
+        res = resolve_reasoning(policy, caps, provider="Anthropic", model_name="claude-3-7-sonnet")
+
+        kwargs = build_reasoning_kwargs(res)
+
+        # modify_params must not appear in kwargs under any circumstances
+        self.assertNotIn("modify_params", kwargs,
+                        "modify_params is a global LiteLLM setting; it must not be sent per-request")
+        # But it should still be in the resolved policy for introspection
+        self.assertIn("modify_params", res.resolved,
+                     "modify_params should be kept in resolved for policy introspection")
 
     def test_fallback_when_unsupported(self):
         policy = ReasoningPolicy(mode="on", effort="high")

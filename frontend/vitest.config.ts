@@ -5,10 +5,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 	plugins: [react()],
 	test: {
-		// Per-suite default; component tests opt into jsdom via a
-		// `// @vitest-environment jsdom` docblock at the top of the file
-		// instead of switching this globally, so plain .test.ts logic
-		// tests (the existing majority) keep the cheaper node environment.
+		// Default environment stays 'node' for the existing *.test.ts suite (pure
+		// logic/mapper tests with no DOM needs). Component tests (*.test.tsx) opt
+		// into jsdom per-file via a `// @vitest-environment jsdom` docblock at the
+		// top of the file, so the two suites can coexist without a global flip.
 		environment: 'node',
 		include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
 		setupFiles: ['./src/setupTests.ts'],

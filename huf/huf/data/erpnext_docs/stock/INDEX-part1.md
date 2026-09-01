@@ -1,0 +1,52 @@
+# Stock Section Scrape Index — Part 1 (items 1-48)
+
+| Title | Slug | Source URL | One-line summary |
+|---|---|---|---|
+| Introduction to Stock Module | stock.md | https://docs.frappe.io/erpnext/stock | Overview of the ERPNext Stock module's core capabilities: inventory tracking, item management, stock transactions, reconciliation, and reporting. |
+| Warehouse | warehouse.md | https://docs.frappe.io/erpnext/warehouse | Explains warehouse hierarchy, creation steps, account/type settings, and perpetual-inventory account linking. |
+| Stock Masters | stock-masters.md | https://docs.frappe.io/erpnext/stock-masters | Index page linking to the core stock master doctypes: Item, Item Group, Brand, Item Variants, Item Attribute, UOM. |
+| Item | item.md | https://docs.frappe.io/erpnext/item | Comprehensive reference for the Item master — properties, barcodes, inventory, reordering, UOMs, serials/batches, variants, defaults, tax, purchase/sales details, manufacturing, and web publishing. |
+| Item Group | item-group.md | https://docs.frappe.io/erpnext/item-group | How to create/delete Item Groups and configure their defaults, tax, and website settings. |
+| Unit of Measure (UoM) | uom.md | https://docs.frappe.io/erpnext/uom | Explains UoMs, the "Must be Whole Number" option, and UoM Conversion Factors. |
+| Serial and Batch | serial-and-batch.md | https://docs.frappe.io/erpnext/serial-and-batch | High-level overview of serial and batch tracking capabilities and links to related docs. |
+| Item Variants | item-variants.md | https://docs.frappe.io/erpnext/item-variants | Explains item templates, variant creation via attributes or manufacturers, and variant settings sync. |
+| Item Attribute | item-attribute.md | https://docs.frappe.io/erpnext/item-attribute | How to create numeric and non-numeric item attributes used to generate item variants. |
+| Brand | brand.md | https://docs.frappe.io/erpnext/brand | Explains Brand master creation and default purchase/sales settings inherited by items of that brand. |
+| Manufacturer | manufacturer.md | https://docs.frappe.io/erpnext/manufacturer | Explains Manufacturer master creation, Item Manufacturer part numbers, and address/contact details. |
+| Party Specific Item | party-specific-item.md | https://docs.frappe.io/erpnext/party-specific-item | Explains restricting items/item groups/brands to specific customers or suppliers via Party Specific Item rules. |
+| Pricing | pricing.md | https://docs.frappe.io/erpnext/pricing | Overview of item pricing capabilities in ERPNext (currency, customer group, pricing rules) linking to Price Lists and Item Price. |
+| Price Lists | price-lists.md | https://docs.frappe.io/erpnext/price-lists | Explains Price List use cases, UOM-dependent pricing, and how price lists are used in transactions. |
+| Item Price | item-price.md | https://docs.frappe.io/erpnext/item-price | Detailed reference for creating Item Price records: UOM, packing unit, min qty, customer/supplier/batch scoping, validity, lead time. |
+| Opening Stock | opening-stock.md | https://docs.frappe.io/erpnext/opening-stock | Explains recording opening inventory for non-serialised items (via Stock Reconciliation) and serialised/batched items (via Stock Entry). |
+| Stock Settings | stock-settings.md | https://docs.frappe.io/erpnext/stock-settings | Full reference of global Stock Settings: defaults, valuation method, negative stock, auto reorder, freeze stock, UOM editing, and more. |
+| Accounting Of Inventory Stock | accounting-of-inventory-stock.md | https://docs.frappe.io/erpnext/accounting-of-inventory-stock | Explains the two inventory accounting methods — Perpetual and Periodic — and their tradeoffs. |
+| Perpetual Inventory | perpetual-inventory.md | https://docs.frappe.io/erpnext/perpetual-inventory | Detailed walkthrough of enabling perpetual inventory and worked GL/stock-ledger examples for purchase receipt, invoice, delivery note, and stock entries. |
+| Periodic Inventory | periodic-inventory.md | https://docs.frappe.io/erpnext/periodic-inventory | Explains manual periodic accounting entries and the v16 "Periodic Accounting Entry" journal entry automation. |
+| FIFO & Moving Average Valuation Methods | fifo-and-moving-average.md | https://docs.frappe.io/erpnext/fifo-and-moving-average | In-depth guide comparing FIFO and Moving Average valuation methods with worked examples, pros/cons, and reposting behavior. |
+| Standard Valuation Rate (Standard Costing) | standard-valuation-rate.md | https://docs.frappe.io/erpnext/standard-valuation-rate | Detailed guide to Standard Cost valuation: Item Standard Cost records, purchase price variance, manufacturing variance, and backdating rules. |
+| Stock Transactions | stock-transactions.md | https://docs.frappe.io/erpnext/stock-transactions | Index page linking to all stock transaction doctypes (Material Request, Stock Entry, Delivery Note, Purchase Receipt, etc.). |
+| Purchase Receipt | purchase-receipt.md | https://docs.frappe.io/erpnext/purchase-receipt | Full reference for creating and processing Purchase Receipts, including warehouses, items table, quality inspection, taxes, and landed cost allocation. |
+| Delivery Note | delivery-note.md | https://docs.frappe.io/erpnext/delivery-note | Full reference for creating and processing Delivery Notes, including partial deliveries, pick lists, transporter info, and packing slips. |
+| Stock Entry | stock-entry.md | https://docs.frappe.io/erpnext/stock-entry | Reference for Stock Entry purposes (issue, receipt, transfer, manufacture, repack, etc.), scrap/process loss, additional costs, and transit transfers. |
+| FETCH FAILED | product-bundle.md | https://docs.frappe.io/erpnext/product-bundle | FETCH FAILED — WebFetch returned "Too many redirects" for this URL on repeated attempts; content could not be retrieved. |
+| Stock Reconciliation | stock-reconciliation.md | https://docs.frappe.io/erpnext/stock-reconciliation | Explains opening stock and periodic reconciliation via Stock Reconciliation, CSV upload, barcode scanning, and serial/batch bundle reconciliation. |
+| Stock Reservation | stock-reservation.md | https://docs.frappe.io/erpnext/stock-reservation | Explains reserving stock against Sales Orders or Pick Lists, auto-reserve on purchase, and unreservation. |
+| Pricing Rule | pricing-rule.md | https://docs.frappe.io/erpnext/pricing-rule | Comprehensive guide to Pricing Rules: creation, conditions, price/product discount outcomes, overlapping rules, troubleshooting, and FAQs. |
+| Stock Inspection | stock-inspection.md | https://docs.frappe.io/erpnext/stock-inspection | Brief overview of quality inspection for incoming/outgoing stock items, linking to Quality Inspection docs. |
+| Batch | batch.md | https://docs.frappe.io/erpnext/batch | Explains batch creation, auto-creation, moving/splitting batches, and expiry tracking. |
+| Serial Number | serial-no.md | https://docs.frappe.io/erpnext/serial-no | Explains serial number creation, manual vs auto-generation, and warranty/delivery/purchase tracking. |
+| Serial and Batch Bundle | serial-and-batch-bundle.md | https://docs.frappe.io/erpnext/serial-and-batch-bundle | Detailed explanation of the v15 Serial and Batch Bundle doctype, auto/manual creation for inward/outward entries, and legacy field compatibility. |
+| Shipping Rule | shipping-rule.md | https://docs.frappe.io/erpnext/shipping-rule | Explains creating Shipping Rules with fixed, quantity-based, or weight-based calculation and country restrictions. |
+| Delivery Trip | delivery-trip.md | https://docs.frappe.io/erpnext/delivery-trip | Explains creating Delivery Trips with multiple stops, Google Maps ETA calculation, and route optimization. |
+| Track Purchases In Accounts | track-purchases-in-accounts.md | https://docs.frappe.io/erpnext/track-purchases-in-accounts | v16 feature explaining Purchase Expense and Expenses Added To Stock account pairs for visualizing COGS components in P&L/Trial Balance. |
+| Landed Cost Voucher | stock-transactions-landed-cost-voucher.md | https://docs.frappe.io/erpnext/stock-transactions-landed-cost-voucher | Explains landed cost concept, creating a Landed Cost Voucher, and its effect on valuation rate and GL entries. |
+| Quality Inspection | quality-inspection.md | https://docs.frappe.io/erpnext/quality-inspection | Detailed reference for creating Quality Inspections with numeric, non-numeric, formula-based, and manual quality checks. |
+| Stock Adjustment / COGS with Negative Stock | stock-adjustment-cogs-with-negative-stock.md | https://docs.frappe.io/erpnext/stock-adjustment-cogs-with-negative-stock | Explains why negative stock transactions create stock adjustment/COGS discrepancies and how backdating purchase entries fixes them. |
+| Stock Closing Entry | stock-closing-entry.md | https://docs.frappe.io/erpnext/stock-closing-entry | v16 feature that generates consolidated period-end stock balances to speed up stock reports. |
+| Disassembly Order | disassembly-order.md | https://docs.frappe.io/erpnext/disassembly-order | Explains creating a Disassembly Order from a completed Work Order to dismantle finished goods back into components. |
+| Inventory Account | inventory-account.md | https://docs.frappe.io/erpnext/inventory-account | Explains warehouse-wise vs v16 item-wise inventory account configuration (mutually exclusive). |
+| Inventory Dimension | inventory_dimension.md | https://docs.frappe.io/erpnext/inventory_dimension | Explains custom Inventory Dimensions for tracking stock beyond warehouse/batch/serial, scope rules, and reporting. |
+| Managing Batch wise Inventory | managing-batch-wise-inventory.md | https://docs.frappe.io/erpnext/managing-batch-wise-inventory | Walkthrough of batch setup and usage in Purchase Receipt and Delivery Note, plus the Batch-wise Balance History report. |
+| Retaining Sample Stock | retain-sample-stock.md | https://docs.frappe.io/erpnext/retain-sample-stock | Explains configuring sample retention warehouses and creating retention stock entries for batch items. |
+| Auto Creation of Material Request | auto-creation-of-material-request.md | https://docs.frappe.io/erpnext/auto-creation-of-material-request | Explains reorder level/qty settings and automatic Material Request creation when stock drops below reorder level. |
+| Item Alternative | item-alternative.md | https://docs.frappe.io/erpnext/item-alternative | Explains configuring substitute items for use in BOMs, Work Orders, and subcontracting when the original item is unavailable. |

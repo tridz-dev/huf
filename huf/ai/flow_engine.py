@@ -1413,10 +1413,7 @@ def _evaluate_edges(
 				if safe_eval_expression(condition, ctx):
 					return edge.get("to")
 			except Exception as e:
-				frappe.log_error(
-					f"Edge expression error ({condition}): {str(e)}",
-					"Flow Engine Edge Eval",
-				)
+				frappe.log_error(title="Flow Engine Edge Eval", message=f"Edge expression error ({condition}): {str(e)}")
 
 	return None
 
@@ -1490,7 +1487,7 @@ def _call_orchestrator(
 		)
 
 		if not result.get("success"):
-			frappe.log_error(f"Orchestrator failed: {result.get('error')}", "Flow Engine Orchestrator")
+			frappe.log_error(title="Flow Engine Orchestrator", message=f"Orchestrator failed: {result.get('error')}")
 			return None
 
 		decision = parse_decision(result.get("response", ""), valid_node_ids)
@@ -1505,7 +1502,7 @@ def _call_orchestrator(
 		return decision["next_node_id"]
 
 	except Exception as e:
-		frappe.log_error(f"Orchestrator error: {str(e)}", "Flow Engine Orchestrator")
+		frappe.log_error(title="Flow Engine Orchestrator", message=f"Orchestrator error: {str(e)}")
 		return None
 
 
@@ -1565,8 +1562,8 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 	
 	if not approvers:
 		frappe.log_error(
-			f"No approvers found for flow run {flow_run.name}",
-			"Flow Approval Notification"
+			title="Flow Approval Notification",
+			message=f"No approvers found for flow run {flow_run.name}",
 		)
 		return
 	
@@ -1629,8 +1626,8 @@ def _send_approval_notifications(flow_run, node: dict, config: dict, waiting_dat
 		except Exception as e:
 			# Log error but don't fail the flow
 			frappe.log_error(
-				f"Failed to send approval notification to {user}: {str(e)}",
-				_("Flow Approval Notification")
+				title=_("Flow Approval Notification"),
+				message=f"Failed to send approval notification to {user}: {str(e)}",
 			)
 
 

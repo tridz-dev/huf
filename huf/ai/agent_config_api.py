@@ -58,6 +58,7 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"prompt_version_locked",
 		"template_version_at_attach",
 		"copied_from_prompt",
+		"prompt_cache_mode",
 		"enable_prompt_caching",
 		"cache_control_type",
 		"cache_system_message",

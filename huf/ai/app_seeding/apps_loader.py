@@ -323,7 +323,7 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 			f"'{existing.source_app}'; manifest from app '{source_app}' "
 			f"({source_file}) was rejected."
 		)
-		frappe.log_error(note, "HUF App Registration Collision")
+		frappe.log_error(title="HUF App Registration Collision", message=note)
 		# Surface the collision on the registry without overwriting the
 		# existing valid registration.
 		frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
@@ -371,8 +371,8 @@ def _record_invalid_manifest(data, error: str, source_app: str, source_file: str
 	registry is keyed by it); otherwise the failure is only logged.
 	"""
 	frappe.log_error(
-		f"Invalid HUF App manifest in {source_file} from app '{source_app}': {error}",
-		"HUF App Sync",
+		title="HUF App Sync",
+		message=f"Invalid HUF App manifest in {source_file} from app '{source_app}': {error}",
 	)
 	if not isinstance(data, dict):
 		return
@@ -407,10 +407,7 @@ def _record_invalid_manifest(data, error: str, source_app: str, source_file: str
 				ignore_permissions=True
 			)
 	except Exception as e:
-		frappe.log_error(
-			f"Failed to record invalid HUF App manifest '{app_id}': {e}",
-			"HUF App Sync",
-		)
+		frappe.log_error(title="HUF App Sync", message=f"Failed to record invalid HUF App manifest '{app_id}': {e}")
 
 
 def cleanup_orphaned_apps(seen: set | None = None) -> list:
@@ -454,10 +451,7 @@ def cleanup_orphaned_apps(seen: set | None = None) -> list:
 			frappe.delete_doc("HUF App", record.name, ignore_permissions=True, force=True)
 			deleted.append(record.app_id or record.name)
 		except Exception as e:
-			frappe.log_error(
-				f"Failed to delete orphaned HUF App '{record.name}': {e}",
-				"HUF App Sync",
-			)
+			frappe.log_error(title="HUF App Sync", message=f"Failed to delete orphaned HUF App '{record.name}': {e}")
 	return deleted
 
 
@@ -490,10 +484,7 @@ def sync_huf_apps() -> dict:
 					summary["errors"].append(
 						{"app": app_name, "file": source_file, "error": f"Error parsing manifest: {e}"}
 					)
-					frappe.log_error(
-						f"Error parsing HUF App manifest {file_path}: {e}",
-						"HUF App Sync",
-					)
+					frappe.log_error(title="HUF App Sync", message=f"Error parsing HUF App manifest {file_path}: {e}")
 					continue
 
 				seen.add((app_name, source_file))
@@ -515,10 +506,7 @@ def sync_huf_apps() -> dict:
 		except Exception as e:
 			frappe.db.rollback()
 			summary["errors"].append({"app": app_name, "file": None, "error": str(e)})
-			frappe.log_error(
-				f"HUF App sync failed for provider app '{app_name}': {e}",
-				"HUF App Sync",
-			)
+			frappe.log_error(title="HUF App Sync", message=f"HUF App sync failed for provider app '{app_name}': {e}")
 
 	deleted = cleanup_orphaned_apps(seen)
 	summary["deleted"] = len(deleted)
@@ -827,6 +815,6 @@ def on_app_uninstalled(app_name):
 			frappe.db.commit()
 	except Exception as e:
 		frappe.log_error(
-			f"Error removing HUF App registry entries for uninstalled app '{app_name}': {e}",
-			"HUF App Sync",
+			title="HUF App Sync",
+			message=f"Error removing HUF App registry entries for uninstalled app '{app_name}': {e}",
 		)

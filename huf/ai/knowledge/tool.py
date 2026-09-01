@@ -194,8 +194,8 @@ def handle_knowledge_search(
 
 	except Exception as e:
 		frappe.log_error(
-			f"Knowledge search tool error for sources {target_sources}: {e}",
-			"Knowledge Search Tool Error",
+			title="Knowledge Search Tool Error",
+			message=f"Knowledge search tool error for sources {target_sources}: {e}",
 		)
 		return f"Error searching knowledge base: {str(e)}"
 
