@@ -459,9 +459,10 @@ class TestUnconfirmedInputBindings(unittest.TestCase):
 			{"$from": "input.customer_id_2"}
 		)
 
-	def test_field_name_collision_with_same_confidence_reuses_field(self):
-		"""When two arguments both snake_case to the same field name AND have the same
-		confidence level, they should reuse the same field (no suffix)."""
+	def test_field_name_collision_with_same_value_reuses_field(self):
+		"""When two arguments both snake_case to the same field name AND were bound
+		from the SAME underlying value, they should reuse the same field (no suffix)
+		-- it's genuinely one input, just referenced from two steps."""
 		tool_calls = [
 			_completed_call(
 				"get_customer",
@@ -487,6 +488,45 @@ class TestUnconfirmedInputBindings(unittest.TestCase):
 		# Count occurrences of customer_id_* fields
 		customer_id_fields = [k for k in result.input_schema["properties"].keys() if k.startswith("customer_id")]
 		self.assertEqual(len(customer_id_fields), 1, "Should have exactly one customer_id field")
+
+	def test_field_name_collision_with_same_confidence_but_different_values_disambiguates(self):
+		"""Regression guard: two DIFFERENT tool-call arguments can share both a
+		snake_case name AND a confidence level (e.g. two ``doctype`` args, both
+		unconfirmed, for two different doctypes) while meaning genuinely different
+		things. Confidence-only matching would silently merge them into one
+		user-supplied field, discarding the second call's own value and feeding
+		both tool calls whatever the user types once at run time -- exactly the
+		"looks deterministic but bakes in a wrong assumption" failure this module
+		exists to avoid. They must get distinct fields instead."""
+		tool_calls = [
+			_completed_call(
+				"frappe_list_records",
+				{"doctype": "User"},  # unconfirmed: not in prompt, no earlier output, not trivial
+				{"rows": []},
+			),
+			_completed_call(
+				"frappe_list_records",
+				{"doctype": "Role"},  # unconfirmed too, but a genuinely different value
+				{"rows": []},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="List some records for me.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable, result.reason)
+
+		self.assertIn("doctype", result.input_schema["properties"])
+		self.assertIn("doctype_2", result.input_schema["properties"])
+		self.assertEqual(result.input_schema["properties"]["doctype"]["x-confidence"], "unconfirmed")
+		self.assertEqual(result.input_schema["properties"]["doctype_2"]["x-confidence"], "unconfirmed")
+		self.assertEqual(set(result.unconfirmed_input_fields), {"doctype", "doctype_2"})
+
+		first_node, second_node = result.procedure_graph["nodes"][0], result.procedure_graph["nodes"][1]
+		self.assertEqual(first_node["config"]["input"]["doctype"], {"$from": "input.doctype"})
+		self.assertEqual(second_node["config"]["input"]["doctype"], {"$from": "input.doctype_2"})
 
 
 class TestSnakeCase(unittest.TestCase):

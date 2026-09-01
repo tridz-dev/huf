@@ -397,15 +397,23 @@ def compile_procedure_from_trace(
 	def _register_input_field(
 		base_field: str, confidence: str | None, value: Any
 	) -> str:
-		"""Register or reuse an input field, handling collisions between different
-		confidence levels by suffixing (customer_id, customer_id_2, etc). Returns the
-		final (possibly suffixed) field name to use in ``$from`` references and in
-		``input_props``.
+		"""Register or reuse an input field. Two occurrences of the same
+		``_snake_case`` name reuse one field ONLY when they were bound from the same
+		underlying value (``_values_equal``) -- confidence matching alone is not
+		enough, because two different tool-call arguments can share a generic name
+		(e.g. two ``doctype`` arguments, both unconfirmed, for two different
+		doctypes) while meaning genuinely different things. Merging those under one
+		user-supplied field would silently discard the second value and feed both
+		tool calls whatever the user types once -- exactly the "looks deterministic
+		but bakes in a wrong assumption" failure this module exists to avoid. When
+		the values differ, disambiguate by suffixing (customer_id, customer_id_2,
+		...). Returns the final (possibly suffixed) field name to use in ``$from``
+		references and in ``input_props``.
 		"""
 		if base_field not in input_props:
 			field = base_field
-		elif input_props[base_field].get("x-confidence") == confidence:
-			return base_field  # same field, same confidence -- reuse as today
+		elif _values_equal(field_values[base_field], value):
+			return base_field  # same field, same underlying value -- reuse as today
 		else:
 			field = base_field
 			n = 2
@@ -418,6 +426,7 @@ def compile_procedure_from_trace(
 			type_info["x-confidence"] = confidence
 		input_props[field] = type_info
 		input_required.append(field)
+		field_values[field] = value
 		# Track unconfirmed fields
 		if confidence == "unconfirmed":
 			unconfirmed_fields.append(field)
@@ -428,6 +437,7 @@ def compile_procedure_from_trace(
 	input_props: dict[str, dict] = {}
 	input_required: list[str] = []
 	unconfirmed_fields: list[str] = []
+	field_values: dict[str, Any] = {}
 
 	for i, call in enumerate(tool_calls, start=1):
 		tool_id = call["tool"]
