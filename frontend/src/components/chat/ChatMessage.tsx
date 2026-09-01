@@ -231,7 +231,7 @@ export function ChatMessage({
                         </Tool>
                     ) : null}
                     {isAssistant && message.runStatus !== 'Started' && message.runStatus !== 'Queued' && runId && (
-                        <div className="flex items-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        <div className="mt-1.5 flex items-center">
                             <ProposeProcedureAction agentRunName={runId} />
                         </div>
                     )}
