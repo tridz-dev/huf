@@ -1689,9 +1689,13 @@ def _build_agent_prompt(config: dict, ctx: GraphContext) -> str:
 	``prompt_template`` resolves through the single structured reference
 	form (F-2); this used to be a fourth, subtly different ``str.replace``
 	loop over context keys.
+
+	The flow builder writes ``prompt_template`` flat on ``config``; older or
+	programmatic definitions nest it under ``config["input"]``. Accept both,
+	preferring the nested form.
 	"""
-	input_config = config.get("input", {})
-	prompt_template = input_config.get("prompt_template")
+	input_config = config.get("input") or {}
+	prompt_template = input_config.get("prompt_template") or config.get("prompt_template")
 
 	if prompt_template:
 		resolved = ctx.resolve(prompt_template)
