@@ -90,12 +90,27 @@ export function ChatWindowHeader({
         setCreatingAutomation(true);
         try {
             const draft = await draftAutomationFromConversation(chatId);
-            if (!draft?.agent) return;
+            if (!draft?.agent) {
+                toast.error("Couldn't create an automation from this chat", {
+                    description: "This conversation isn't linked to an agent.",
+                });
+                return;
+            }
             // AutomationFormPage already reads `?agent=` to pre-select the
             // Agent on the create form; the rest (instruction, description)
             // is left for the user to fill in from what they just discussed
             // -- see huf.ai.automation_api.draft_automation_from_conversation.
             navigate(`/automations/new?agent=${encodeURIComponent(draft.agent)}`);
+        } catch (error) {
+            // draftAutomationFromConversation re-throws via handleFrappeError
+            // (it never shows a toast itself) -- without this catch, any
+            // failure here (a permission edge case, a network blip) was
+            // completely silent: the menu just closed with no feedback at
+            // all, only a console.error nobody but a developer would see.
+            console.error('Error creating automation from chat:', error);
+            toast.error("Couldn't create an automation from this chat", {
+                description: "Please try again.",
+            });
         } finally {
             setCreatingAutomation(false);
         }
