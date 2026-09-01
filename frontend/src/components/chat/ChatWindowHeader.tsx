@@ -308,10 +308,10 @@ export function ChatWindowHeader({
                         <span className="sr-only">Conversation actions</span>
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[230px] px-0 py-[5px]">
+                <DropdownMenuContent align="end" className="w-[260px] px-0 py-[5px]">
                     <DropdownMenuItem
                         onSelect={() => navigate(`/agents/${agent.name}`)}
-                        className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                        className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                     >
                         <Settings className="size-[15px]" />
                         Agent settings
@@ -325,7 +325,7 @@ export function ChatWindowHeader({
                                     })
                                 );
                             }}
-                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                         >
                             <Pencil className="size-[15px]" />
                             Rename
@@ -337,7 +337,7 @@ export function ChatWindowHeader({
                                 // Let the menu finish closing before opening the sheet.
                                 setTimeout(() => setDataPanelOpen(true), 0);
                             }}
-                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                         >
                             Conversation data
                         </DropdownMenuItem>
@@ -348,7 +348,7 @@ export function ChatWindowHeader({
                             onSelect={() => {
                                 void handleCreateAutomationFromChat();
                             }}
-                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px]"
+                            className="h-[30px] gap-[9px] px-3 py-0 text-[13px] whitespace-nowrap"
                         >
                             <Zap className="size-[15px]" />
                             Create automation from this chat
