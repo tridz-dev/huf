@@ -35,12 +35,12 @@ export function CopyButton({ content}: { content: string}) {
     <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="!h-7 !w-7 text-steel-soft hover:text-ink"
+          size="icon-sm"
+          className="text-steel-soft hover:text-ink"
           onClick={handleCopy}
           aria-label={copied ? 'Copied' : 'Copy response'}
         >
-          {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          {copied ? <Check className="size-[15px]" /> : <Copy className="size-[15px]" />}
         </Button>
   )
 }

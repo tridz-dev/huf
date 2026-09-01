@@ -21,13 +21,13 @@ export function ProposeProcedureAction({ agentRunName }: ProposeProcedureActionP
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className="!h-7 !w-7 text-steel-soft hover:text-ink"
+        size="icon-sm"
+        className="text-steel-soft hover:text-ink"
         onClick={() => setOpen(true)}
         aria-label="Save these steps as a procedure"
         title="Save these steps as a procedure"
       >
-        <Workflow className="h-4 w-4" />
+        <Workflow className="size-[15px]" />
       </Button>
       {open && (
         <ProposeProcedureDialog agentRunName={agentRunName} open={open} onOpenChange={setOpen} />

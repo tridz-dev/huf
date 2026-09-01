@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import type { ToolUIPart } from "ai";
-import { ChevronRightIcon, Layers2Icon, ShieldAlertIcon, WrenchIcon } from "lucide-react";
+import { ChevronRightIcon, Layers2Icon, ShieldAlertIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement, useEffect, useState } from "react";
 import { CodeBlock } from "./code-block";
@@ -20,7 +20,7 @@ export type ToolProps = ComponentProps<typeof Collapsible>;
 // A tool call is a footnote to the answer, not a card: no border, no fill,
 // just a slim collapsible line.
 export const Tool = ({ className, ...props }: ToolProps) => (
-  <Collapsible className={cn("not-prose mb-1 w-full", className)} {...props} />
+  <Collapsible className={cn("not-prose w-full", className)} {...props} />
 );
 
 const STATUS_LABELS: Record<ExtendedToolState, string> = {
@@ -119,28 +119,25 @@ export const ToolHeader = ({
     : isApprovalNeeded
       ? "text-warning"
       : "text-muted-foreground";
-  const ToolIcon = isApprovalNeeded ? ShieldAlertIcon : WrenchIcon;
-
   return (
     <div className="flex items-center gap-2">
       <CollapsibleTrigger
         className={cn(
-          "group flex min-w-0 flex-1 items-center gap-1.5 rounded-[7px] px-[7px] py-[3px] -ml-[7px] text-left leading-[24px] transition-colors hover:bg-muted/60",
+          "group flex min-w-0 flex-1 items-center gap-1.5 rounded-[5px] px-[7px] py-0 -ml-[7px] text-left leading-[22px] transition-colors hover:bg-muted/60",
           className
         )}
         {...props}
       >
-        <ToolIcon
-          className={cn(
-            "size-[13px] shrink-0",
-            isFailed ? "text-destructive" : isApprovalNeeded ? "text-warning" : "text-muted-foreground"
-          )}
-        />
-        <span className="truncate font-mono text-[12px] text-foreground">
+        {isApprovalNeeded ? (
+          <ShieldAlertIcon className="size-[11px] shrink-0 text-warning" />
+        ) : (
+          <span className={cn("size-[5px] shrink-0 rounded-full", STATUS_DOT_CLASSES[state])} />
+        )}
+        <span className="truncate font-mono text-[11.5px] text-foreground">
           {title ?? type.split("-").slice(1).join("-")}
         </span>
         <span className="shrink-0 text-muted-foreground/50">&middot;</span>
-        <span className={cn("shrink-0 text-[12px]", toneClass)}>
+        <span className={cn("shrink-0 text-[11px]", toneClass)}>
           {STATUS_LABELS[state]}
         </span>
         {durationMs !== undefined && (
@@ -149,7 +146,7 @@ export const ToolHeader = ({
           </span>
         )}
         {!isApprovalNeeded && (
-          <ChevronRightIcon className="ml-auto size-[13px] shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+          <ChevronRightIcon className="ml-auto size-[12px] shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
         )}
       </CollapsibleTrigger>
       {isFailed && onRetry && (
@@ -189,7 +186,7 @@ export type ToolContentProps = ComponentProps<typeof CollapsibleContent>;
 export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
-      "mt-1 space-y-2 border-line/60 border-l pl-3 text-popover-foreground outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in",
+      "mt-0.5 space-y-1 border-line/50 border-l pl-3 text-popover-foreground outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in",
       className
     )}
     {...props}
@@ -444,7 +441,7 @@ export const ToolGroup = ({ calls, onApprove, onDeny, runStatus, isHistorical, c
 
   return (
     <Collapsible
-      className={cn("not-prose mb-1 w-full", className)}
+      className={cn("not-prose w-full", className)}
       open={open}
       onOpenChange={(next) => {
         setUserToggled(true);
@@ -452,7 +449,7 @@ export const ToolGroup = ({ calls, onApprove, onDeny, runStatus, isHistorical, c
       }}
       {...props}
     >
-      <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 rounded-[7px] px-[7px] py-[3px] -ml-[7px] text-left leading-[24px] transition-colors hover:bg-muted/60">
+      <CollapsibleTrigger className="group flex w-full min-w-0 items-center gap-1.5 rounded-[5px] px-[7px] py-0 -ml-[7px] text-left leading-[22px] transition-colors hover:bg-muted/60">
         <Layers2Icon className="size-[13px] shrink-0 text-muted-foreground" />
         <span className="shrink-0 text-[12.5px] font-medium text-foreground">
           Ran {calls.length} tools
@@ -467,7 +464,7 @@ export const ToolGroup = ({ calls, onApprove, onDeny, runStatus, isHistorical, c
         )}
         <ChevronRightIcon className="ml-1 size-[13px] shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-0.5 space-y-0.5 border-line/60 border-l pl-3 outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in">
+      <CollapsibleContent className="mt-0.5 space-y-0 border-line/50 border-l pl-3 outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in">
         <ToolGroupCallRows calls={calls} onApprove={onApprove} onDeny={onDeny} />
       </CollapsibleContent>
     </Collapsible>
@@ -596,7 +593,7 @@ export const ProcedureRunRow = ({
 
   return (
     <Collapsible
-      className={cn("not-prose mb-1 w-full", className)}
+      className={cn("not-prose w-full", className)}
       open={open}
       onOpenChange={(next) => {
         setUserToggled(true);
@@ -605,7 +602,7 @@ export const ProcedureRunRow = ({
       {...props}
     >
       <div className="flex min-w-0 items-center gap-1.5">
-        <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-[7px] px-[7px] py-[3px] -ml-[7px] text-left leading-[24px] transition-colors hover:bg-muted/60">
+        <CollapsibleTrigger className="group flex min-w-0 flex-1 items-center gap-1.5 rounded-[5px] px-[7px] py-0 -ml-[7px] text-left leading-[22px] transition-colors hover:bg-muted/60">
           <Layers2Icon className="size-[13px] shrink-0 text-muted-foreground" />
           <span className="min-w-0 truncate text-[12.5px] font-medium text-foreground">
             Ran &ldquo;{procedureName}
@@ -638,7 +635,7 @@ export const ProcedureRunRow = ({
           </button>
         )}
       </div>
-      <CollapsibleContent className="mt-0.5 space-y-0.5 border-line/60 border-l pl-3 outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in">
+      <CollapsibleContent className="mt-0.5 space-y-0 border-line/50 border-l pl-3 outline-none data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:animate-out data-[state=open]:animate-in">
         <ToolGroupCallRows calls={calls} onApprove={onApprove} onDeny={onDeny} />
       </CollapsibleContent>
     </Collapsible>

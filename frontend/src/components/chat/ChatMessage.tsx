@@ -1,5 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { BarChart2, BrainIcon, ChevronDownIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { BrainIcon, ChevronDownIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from "@/lib/utils";
 import { Message, MessageContent } from '@/components/ai-elements/message';
@@ -66,7 +66,6 @@ interface ChatMessageProps {
 
 export function ChatMessage({
     message,
-    agentModel,
     showToolExecutionDetails = true,
     status,
     loadingType = 'default',
@@ -185,7 +184,7 @@ export function ChatMessage({
     return (
         <div className="flex flex-col group relative w-full">
             {showToolExecutionDetails && message.tools && message.tools.length > 0 ? (
-                <div className="flex w-full max-w-chat-measure flex-col gap-2">
+                <div className="flex w-full max-w-chat-measure flex-col gap-px">
                     {procedureGroups.map((group) => {
                         const summary = procedureRunSummaries[group.procedureRunId];
                         return (
@@ -232,7 +231,7 @@ export function ChatMessage({
                         </Tool>
                     ) : null}
                     {isAssistant && message.runStatus !== 'Started' && message.runStatus !== 'Queued' && runId && (
-                        <div className="mt-1 flex items-center gap-[14px] text-muted-foreground">
+                        <div className="flex items-center text-muted-foreground">
                             <ProposeProcedureAction agentRunName={runId} />
                         </div>
                     )}
@@ -401,9 +400,11 @@ export function ChatMessage({
                                 </>
                             )}
                         </MessageContent>
-                        {/* Actions for assistant messages */}
+                        {/* Actions for assistant messages — hidden at rest, revealed on hover
+                            (matches the user-message action row below) so a finished answer
+                            reads as plain prose, not a permanent 5-icon toolbar. */}
                         {message.from === 'assistant' && message.versions[0]?.content && (!message.tools || !showToolExecutionDetails) && (
-                            <div className="flex flex-wrap items-center gap-[14px]">
+                            <div className="flex flex-wrap items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                                 <MessageActions
                                     content={message.versions[0].content}
                                     onFeedback={onFeedback}
@@ -414,24 +415,6 @@ export function ChatMessage({
                                 />
                                 {message.injected_memories && message.injected_memories.length > 0 && (
                                     <MemoryContextBadge memoryRecordNames={message.injected_memories} />
-                                )}
-                                {runId && (
-                                    <Link
-                                        to={`/executions/${runId}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-steel-soft hover:text-foreground transition-colors group/analytics"
-                                        title="View context & cache metrics (/executions/:runId)"
-                                        aria-label="View context & cache metrics"
-                                    >
-                                        <BarChart2 className="h-3.5 w-3.5 text-steel-soft group-hover/analytics:text-foreground" />
-                                        <span className="text-[11px] font-medium">Cache metrics</span>
-                                    </Link>
-                                )}
-                                {agentModel && (
-                                    <span className="font-mono text-[11px] text-steel-soft">
-                                        {agentModel}
-                                    </span>
                                 )}
                             </div>
                         )}

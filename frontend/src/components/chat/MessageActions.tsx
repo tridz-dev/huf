@@ -40,48 +40,48 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
 
   return (
     <>
-      <div className="mt-3 flex items-center gap-[14px] text-muted-foreground">
+      <div className="mt-3 flex items-center gap-1 text-muted-foreground">
         <CopyButton content={content} />
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="!h-7 !w-7 text-steel-soft hover:text-ink"
+          size="icon-sm"
+          className="text-steel-soft hover:text-ink"
           onClick={() => onFeedback('Thumbs Up', { agentMessageId })}
           aria-label="Mark response helpful"
         >
-          <ThumbsUp className="h-4 w-4" />
+          <ThumbsUp className="size-[15px]" />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="!h-7 !w-7 text-steel-soft hover:text-ink"
+          size="icon-sm"
+          className="text-steel-soft hover:text-ink"
           onClick={() => setCommentDialogOpen(true)}
           aria-label="Mark response not helpful"
         >
-          <ThumbsDown className="h-4 w-4" />
+          <ThumbsDown className="size-[15px]" />
         </Button>
         {onRegenerate && (
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="!h-7 !w-7 text-steel-soft hover:text-ink"
+            size="icon-sm"
+            className="text-steel-soft hover:text-ink"
             onClick={onRegenerate}
             disabled={regenerateDisabled}
             aria-label="Regenerate response"
             title="Regenerate response"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="size-[15px]" />
           </Button>
         )}
         {agentRunId && (
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="!h-7 !w-7 text-steel-soft hover:text-ink"
+            size="icon-sm"
+            className="text-steel-soft hover:text-ink"
             asChild
             aria-label="View context & cache metrics"
           >
@@ -91,7 +91,7 @@ export function MessageActions({ content, agentMessageId, agentRunId, onFeedback
               rel="noopener noreferrer"
               title="View context & cache metrics"
             >
-              <BarChart2 className="h-4 w-4" />
+              <BarChart2 className="size-[15px]" />
             </Link>
           </Button>
         )}
