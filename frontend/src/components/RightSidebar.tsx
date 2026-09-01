@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
+import { Checkbox } from './ui/checkbox';
 import { linkRoutes } from '@/lib/link-routes';
 import { cn } from '@/lib/utils';
 import {
@@ -758,6 +759,49 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           <SelectItem value="isolated">Isolated (No history)</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Context Injection</Label>
+                      {(() => {
+                        const inject = (config as { inject?: Record<string, boolean> }).inject || {};
+                        const updateInject = (field: string, value: boolean) => {
+                          handleUpdateActionConfig('inject', { ...inject, [field]: value });
+                        };
+                        return (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="inject-include-context"
+                                checked={inject.include_context ?? true}
+                                onCheckedChange={(checked) => updateInject('include_context', checked === true)}
+                              />
+                              <Label htmlFor="inject-include-context" className="text-xs font-normal cursor-pointer">
+                                Include flow context
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="inject-include-last-result"
+                                checked={inject.include_last_node_result ?? true}
+                                onCheckedChange={(checked) => updateInject('include_last_node_result', checked === true)}
+                              />
+                              <Label htmlFor="inject-include-last-result" className="text-xs font-normal cursor-pointer">
+                                Include last node result
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="inject-include-candidates"
+                                checked={inject.include_candidates ?? true}
+                                onCheckedChange={(checked) => updateInject('include_candidates', checked === true)}
+                              />
+                              <Label htmlFor="inject-include-candidates" className="text-xs font-normal cursor-pointer">
+                                Include routing candidates
+                              </Label>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
