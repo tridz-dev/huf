@@ -81,6 +81,13 @@ export const actionOptions: ActionOption[] = [
     category: 'utility'
   },
   {
+    id: 'http-request',
+    name: 'HTTP Request',
+    description: 'Make an HTTP request to any URL',
+    icon: 'Globe',
+    category: 'utility'
+  },
+  {
     id: 'file',
     name: 'File Operations',
     description: 'Read, write, or delete files',

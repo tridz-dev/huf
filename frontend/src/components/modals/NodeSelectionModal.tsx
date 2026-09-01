@@ -32,6 +32,7 @@ import {
   Bot,
   UserCheck,
   Wrench,
+  Globe,
   type LucideIcon
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
@@ -66,7 +67,8 @@ const iconMap: Record<string, LucideIcon> = {
   Code,
   UserCheck,
   Bot,
-  Wrench
+  Wrench,
+  Globe
 };
 
 type MainTab = 'triggers' | 'actions';
