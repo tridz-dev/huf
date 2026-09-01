@@ -624,6 +624,21 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         placeholder="e.g., agent_response"
                       />
                     </div>
+                    <div>
+                      <Label htmlFor="agent-run-conv-mode" className="text-xs">Conversation Mode</Label>
+                      <Select
+                        value={(config as { conversation_mode?: string }).conversation_mode || 'flow_shared'}
+                        onValueChange={(value) => handleUpdateActionConfig('conversation_mode', value)}
+                      >
+                        <SelectTrigger id="agent-run-conv-mode">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flow_shared">Flow Shared (Default)</SelectItem>
+                          <SelectItem value="isolated">Isolated (No history)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 );
               }
