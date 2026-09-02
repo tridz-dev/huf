@@ -377,3 +377,31 @@ export async function fetchToolParametersFromCode(functionPath: string): Promise
     handleFrappeError(error, 'Error fetching parameters from function code');
   }
 }
+
+/**
+ * A tool the flow builder can call — either a persisted Agent Tool Function ("builtin")
+ * or an MCP tool surfaced live from a connected MCP server ("mcp"). Backed by
+ * `huf.ai.flow_api.list_flow_tools`. See huf/ai/mcp_client.py for how MCP tools are
+ * discovered on the backend.
+ */
+export interface FlowTool {
+  name: string;
+  label: string;
+  description?: string;
+  source: 'builtin' | 'mcp';
+  mcp_server: string | null;
+  /** JSON Schema for this tool's arguments. `{}` when the schema is unknown. */
+  params_json_schema: Record<string, unknown>;
+}
+
+/**
+ * Fetch the unified list of tools a flow's "Call Tool" node can invoke: built-in
+ * Agent Tool Functions plus any tools exposed by connected MCP servers.
+ *
+ * This endpoint may not exist on older backends — callers should catch and fall back
+ * to `getToolFunctions()` rather than surfacing an error to the user.
+ */
+export async function getFlowTools(): Promise<FlowTool[]> {
+  const result = await call.get('huf.ai.flow_api.list_flow_tools');
+  return ((result?.message ?? result) || []) as FlowTool[];
+}
