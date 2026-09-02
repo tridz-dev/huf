@@ -648,6 +648,23 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const otherNodes = (activeFlow?.nodes || []).filter((n) => n.id !== selectedNodeId);
                 const currentValue = value || '';
                 const isMissing = currentValue && !otherNodes.some((n) => n.id === currentValue);
+
+                // Disambiguate options that share a display label (e.g. two "Transform
+                // Data" nodes) by appending a short id suffix — only when needed, so
+                // unique labels stay unchanged.
+                const labelCounts = otherNodes.reduce((acc, n) => {
+                  const label = n.data.label || n.id;
+                  acc[label] = (acc[label] || 0) + 1;
+                  return acc;
+                }, {} as Record<string, number>);
+
+                const describeNode = (n: (typeof otherNodes)[number]) => {
+                  const label = n.data.label || n.id;
+                  const isDuplicate = labelCounts[label] > 1;
+                  const shortId = n.id.length > 8 ? `${n.id.slice(0, 8)}…` : n.id;
+                  return isDuplicate ? `${label} · ${shortId}` : label;
+                };
+
                 return (
                   <Select value={currentValue} onValueChange={onChange}>
                     <SelectTrigger id={id}>
@@ -661,7 +678,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       )}
                       {otherNodes.map((n) => (
                         <SelectItem key={n.id} value={n.id}>
-                          {n.data.label || n.id}
+                          {describeNode(n)}
                         </SelectItem>
                       ))}
                     </SelectContent>
