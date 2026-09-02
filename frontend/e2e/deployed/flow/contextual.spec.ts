@@ -83,8 +83,12 @@ test.describe('flow builder modal contextual correctness', () => {
 
     flowId = await list.createFlow(flowName);
 
-    // Before any trigger exists, the "Add Trigger" panel button is present.
-    await expect(page.getByRole('button', { name: /^add trigger$/i })).toBeVisible();
+    // N16: a newly created flow is NOT empty. It is seeded with a placeholder
+    // entry node already typed trigger.webhook and labelled "Select Trigger".
+    // FlowCanvas only renders the "Add Trigger" panel button when NO trigger
+    // node exists, so on a new flow that button is absent from the very start
+    // and the placeholder card is the only affordance.
+    await expect(page.getByRole('button', { name: /^add trigger$/i })).toHaveCount(0);
 
     await canvas.addTrigger();
     await modal.waitForOpen('trigger');
@@ -98,7 +102,7 @@ test.describe('flow builder modal contextual correctness', () => {
     await expect(page.getByRole('button', { name: /^add trigger$/i })).toHaveCount(0);
   });
 
-  test('3. KNOWN DEFECT: in ACTION mode, a user can still navigate to the Triggers tab and create a second, orphaned trigger node', async ({ page }) => {
+  test('3. in ACTION mode the modal offers no Triggers tab, so no orphan trigger can be created', async ({ page }) => {
     const list = new FlowsListPage(page);
     const canvas = new FlowCanvasPage(page);
     const modal = new NodeModal(page);
@@ -117,34 +121,26 @@ test.describe('flow builder modal contextual correctness', () => {
     await canvas.addNodeAfter('Schedule');
     await modal.waitForOpen('action');
 
-    // NodeSelectionModal.tsx ~500-518: the two-tab TabsList (Triggers /
-    // Actions) renders whenever mode !== 'trigger', i.e. it is present even
-    // in 'action' mode. Confirm it is actually reachable and functional,
-    // not merely present-but-disabled.
-    const triggersTab = selectors.nodeModal.triggersTab(page);
-    await expect(triggersTab).toBeVisible();
-    await triggersTab.click();
-    await expect(triggersTab).toHaveAttribute('data-state', 'active');
+    // REGRESSION GUARD. This previously failed in two compounding ways:
+    //  - mainTab was a useState initialiser on a permanently-mounted modal, so
+    //    it kept the previous open's value and action mode rendered the
+    //    Triggers tab as active ("Select Trigger" title, trigger cards);
+    //  - a two-tab TabsList rendered whenever mode !== 'trigger', so even with
+    //    the right default the user could click over to Triggers, pick one,
+    //    and land in handleSaveTriggerConfig with no currentNodeId — creating
+    //    a second, disconnected trigger node and defeating test 2's guarantee.
+    // Both are fixed; assert the Triggers tab is not reachable here at all.
+    await expect(selectors.nodeModal.triggersTab(page)).toHaveCount(0);
 
-    // A trigger card (Webhook) is selectable from inside an action-mode
-    // modal, and "Save Configuration" is offered and enabled.
-    await modal.selectCard('Webhook');
-    const saveConfigBtn = selectors.nodeModal.saveConfigurationButton(page);
-    await expect(saveConfigBtn).toBeVisible();
-    await expect(saveConfigBtn).toBeEnabled();
-    await saveConfigBtn.click();
-    await expect(selectors.nodeModal.dialog(page)).toBeHidden({ timeout: 10000 });
+    // And no trigger card is offered in this modal.
+    const cards = await modal.listCards();
+    for (const triggerName of ['Webhook', 'Schedule', 'Data']) {
+      expect(cards).not.toContain(triggerName);
+    }
 
-    // Consequence: FlowCanvas.handleSaveTriggerConfig has no currentNodeId
-    // in this path (handleAddNode never sets it), so it takes the "create a
-    // new trigger node" branch instead of configuring the node the user
-    // hovered — a second, disconnected trigger node appears on the canvas,
-    // defeating the "only one trigger" guarantee from test 2.
+    // The canvas still holds exactly one trigger node.
     await canvas.settle();
-    await expect(selectors.canvas.nodeByLabel(page, 'Schedule')).toBeVisible();
-    await expect(selectors.canvas.nodeByLabel(page, 'Webhook')).toBeVisible();
-
     const triggerNodeCount = await selectors.canvas.root(page).locator('.react-flow__node-trigger').count();
-    expect(triggerNodeCount).toBe(2);
+    expect(triggerNodeCount).toBe(1);
   });
 });
