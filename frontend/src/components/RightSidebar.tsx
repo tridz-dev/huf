@@ -250,7 +250,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
     const config = selectedNode.data.triggerConfig;
 
     if (config.type === 'webhook') {
-      const webhookUrl = `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook?flow_id=${activeFlow?.id || '{flow_id}'}&webhook_key=${config.auth || '{key}'}`;
+      const webhookUrl = `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook?flow_id=${activeFlow?.id || '{flow_id}'}&webhook_key=${config.auth || config.apiKey || '{key}'}`;
 
       return (
         <div className="space-y-3">
@@ -278,7 +278,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             <Label htmlFor="webhook-auth" className="text-xs">Authentication Key (Optional)</Label>
             <Input
               id="webhook-auth"
-              value={config.auth || ''}
+              // fall back to the legacy `apiKey` name so keys saved before the
+              // modal was canonicalised on `auth` remain visible and editable
+              value={config.auth || config.apiKey || ''}
               onChange={(e) => handleUpdateTriggerConfig('auth', e.target.value)}
               placeholder="e.g. my-secret-key-123"
             />

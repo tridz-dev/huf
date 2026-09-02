@@ -167,7 +167,11 @@ export function NodeSelectionModal({
       setTriggerConfig({
         type: 'webhook',
         url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
-        apiKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
+        // Canonical key name is `auth` - RightSidebar and flow_api.py both read that.
+        // Writing `apiKey` here made the generated key invisible once the node was
+        // reselected on canvas, and left the displayed webhook URL showing a {key}
+        // placeholder instead of the real key.
+        auth: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
         method: 'POST'
       });
     } else if (triggerId === 'schedule') {
@@ -284,8 +288,8 @@ export function NodeSelectionModal({
             <Label htmlFor="api-key">Security — API Key (Optional)</Label>
             <Input
               id="api-key"
-              value={config.apiKey || ''}
-              onChange={(e) => setTriggerConfig({ ...config, apiKey: e.target.value })}
+              value={config.auth || ''}
+              onChange={(e) => setTriggerConfig({ ...config, auth: e.target.value })}
               placeholder="Enter API key to require X-API-Key header"
             />
           </div>

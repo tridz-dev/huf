@@ -125,7 +125,7 @@ test.describe('per-field trigger config round-trip (UI)', () => {
   // reads `config.get("auth") or config.get("apiKey")` (both, as an alias)
   // so the backend tolerates this, but the frontend itself is inconsistent.
   // Asserted honestly below rather than hidden.
-  test('KNOWN DEFECT: webhook auth key written by the modal (apiKey) is not read back by RightSidebar (auth)', async ({ page, baseURL }) => {
+  test('webhook auth key entered in the creation modal is read back by RightSidebar', async ({ page, baseURL }) => {
     const api = await newApiContext(new URL(baseURL!).origin);
     let flowId: string | undefined;
     try {
@@ -140,16 +140,17 @@ test.describe('per-field trigger config round-trip (UI)', () => {
       await canvas.reload();
       await canvas.settle();
       await page.locator('.react-flow__node').nth(0).click();
-      // RightSidebar's "Authentication Key (Optional)" reads config.auth,
-      // which was never written -- it comes back empty, not the value just
-      // entered through the creation modal.
-      expect(await sidebar.readField('Authentication Key (Optional)')).toBe('');
+      // REGRESSION GUARD. The creation modal used to write config.apiKey while
+      // RightSidebar read config.auth, so a key entered (or auto-generated) at
+      // creation vanished the moment the node was reselected, and the webhook
+      // URL rendered a {key} placeholder instead of the real key. Both sides
+      // are now canonical on `auth`.
+      expect(await sidebar.readField('Authentication Key (Optional)')).toBe('wh-secret-abc123');
 
       const def = await getFlowDefinition(api, flowId);
       const entry = def.definition_json.nodes.find((n) => n.id === def.definition_json.entry);
       const config = (entry?.config ?? {}) as Record<string, unknown>;
-      expect(config.apiKey).toBe('wh-secret-abc123'); // what was actually persisted
-      expect(config.auth).toBeUndefined(); // what RightSidebar / the "auth" key actually looks for
+      expect(config.auth).toBe('wh-secret-abc123');
     } finally {
       if (flowId) await api.delete(`/api/resource/Flow Definition/${flowId}`).catch(() => {});
       await api.dispose();
@@ -202,7 +203,7 @@ test.describe('per-field trigger config round-trip (UI)', () => {
 });
 
 test.describe('trigger config: engine-facing persisted shape (API)', () => {
-  test('webhook: method persists verbatim (engine never reads it); auth is written under a DIFFERENT key (apiKey) than RightSidebar reads (auth) — KNOWN DEFECT', async ({ page, baseURL }) => {
+  test('webhook: auth persists under the canonical `auth` key; method persists but the engine never reads it', async ({ page, baseURL }) => {
     const api = await newApiContext(new URL(baseURL!).origin);
     let flowId: string | undefined;
     try {
@@ -233,19 +234,12 @@ test.describe('trigger config: engine-facing persisted shape (API)', () => {
       // is not consumed anywhere for this node type; it exists purely as UI
       // documentation of the expected HTTP verb.
       //
-      // KNOWN DEFECT: the value entered through NodeSelectionModal's "Security
-      // — API Key (Optional)" field is persisted as config.apiKey, NOT
-      // config.auth (TriggerConfig — flow.types.ts lines 56-57 — carries both
-      // `apiKey?` and `auth?` as separate fields for what is conceptually one
-      // value). RightSidebar's own "Authentication Key (Optional)" field
-      // reads/writes config.auth exclusively, so it never sees a key entered
-      // at creation time. `_webhook_key_is_valid` in huf/ai/flow_api.py reads
-      // `config.get("auth") or config.get("apiKey")` (both, as an alias), so
-      // the backend auth check itself still works either way — this is a
-      // frontend-only inconsistency between the two components, not an
-      // engine-facing one.
-      expect(config.apiKey).toBe('engine-check-key-1');
-      expect(config.auth).toBeUndefined();
+      // REGRESSION GUARD: the modal used to persist this as config.apiKey while
+      // RightSidebar read config.auth, so a key set at creation was invisible on
+      // reselect and the webhook URL showed a {key} placeholder. Both sides are
+      // now canonical on `auth`; _webhook_key_is_valid in flow_api.py still
+      // accepts `apiKey` as an alias so flows saved under the old name keep working.
+      expect(config.auth).toBe('engine-check-key-1');
     } finally {
       if (flowId) await api.delete(`/api/resource/Flow Definition/${flowId}`).catch(() => {});
       await api.dispose();
