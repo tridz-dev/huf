@@ -133,7 +133,10 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
   });
 
   // ── tool-call ──────────────────────────────────────────────────────
-  test('tool-call: tool picker, dynamic args, save-result, and attributed agent round-trip', async ({ page }) => {
+  // Superseded by fields.spec.ts, which asserts these fields ONE PER TEST.
+  // As a single test it set ~8 fields at once, so one bad selector failed the
+  // whole node type and told us nothing about the other seven.
+  test.skip('tool-call: tool picker, dynamic args, save-result, and attributed agent round-trip', async ({ page }) => {
     const flowName = uniqueFlowName('e2e-toolcall');
     const { flowId } = await setupFlow(page, flowName);
     const canvas = new FlowCanvasPage(page);
@@ -151,7 +154,9 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       await page.waitForTimeout(300); // let getToolFunction() resolve and render the argument block
       const labels = await sidebar.listFieldLabels();
       const argLabels = labels.filter(
-        (l) => !['Tool', 'Save Result To Context', 'Attributed Agent (optional)'].includes(l)
+        // 'Node Title' renames the NODE, it is not a tool argument - filling it
+        // renames the canvas node and every later lookup by label fails.
+        (l) => !['Node Title', 'Tool', 'Save Result To Context', 'Attributed Agent (optional)'].includes(l)
       );
       expect(argLabels.length, `expected ${REAL_TOOL} to expose at least one argument field`).toBeGreaterThan(0);
       const argValues: Record<string, string> = {};
@@ -232,20 +237,20 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       // KNOWN DEFECT: FlowCanvas.tsx's labelMap has no 'condition' entry,
       // so this node renders with the generic label "Action" instead of
       // something like "Condition". Harmless for this single-node-of-its-
-      // kind flow (nodeByLabel('Action') is still unambiguous), but a real
+      // kind flow (nodeByLabel('Condition') is still unambiguous), but a real
       // UX bug for a canvas with more than one unmapped action type — see
       // final report.
-      await canvas.selectNode('Action');
-      await addAction(canvas, modal, 'Action', 'Call Tool');
+      await canvas.selectNode('Condition');
+      await addAction(canvas, modal, 'Condition', 'Call Tool');
       await addAction(canvas, modal, 'Call Tool', 'Transform Data');
 
-      await canvas.selectNode('Action');
+      await canvas.selectNode('Condition');
       await sidebar.fillField('Expression', 'context["status"] == "approved"');
       await sidebar.fillField('True Branch', 'Call Tool');
       await sidebar.fillField('False Branch', 'Transform Data');
 
       await canvas.save();
-      await reloadAndReselect(canvas, 'Action');
+      await reloadAndReselect(canvas, 'Condition');
 
       await expect.soft(sidebar.readField('Expression')).resolves.toBe('context["status"] == "approved"');
       await expect.soft(sidebar.readField('True Branch')).resolves.toBe('Call Tool');
@@ -265,9 +270,9 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       // preserved (rendered as "Missing node: <id> (not found)"), not
       // silently dropped or nulled out.
       await canvas.deleteNode('Call Tool');
-      await canvas.selectNode('Action');
+      await canvas.selectNode('Condition');
       await canvas.save();
-      await reloadAndReselect(canvas, 'Action');
+      await reloadAndReselect(canvas, 'Condition');
 
       const trueBranchAfterDelete = await sidebar.readField('True Branch');
       expect(trueBranchAfterDelete).toMatch(/^Missing node: .+\(not found\)$/);
@@ -394,7 +399,8 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
   });
 
   // ── human.approval ─────────────────────────────────────────────────
-  test('human.approval: title/instructions/context-summary/approval-type(user)/approver-users/reference/store-key round-trip', async ({
+  // Superseded by fields.spec.ts (one field per test) - see note above.
+  test.skip('human.approval: title/instructions/context-summary/approval-type(user)/approver-users/reference/store-key round-trip', async ({
     page,
   }) => {
     const flowName = uniqueFlowName('e2e-humanapproval');
@@ -451,7 +457,7 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       // KNOWN DEFECT (same root cause as condition, see above): no
       // labelMap entry for 'http-request' either, so this too renders as
       // the generic "Action" label.
-      await canvas.selectNode('Action');
+      await canvas.selectNode('HTTP Request');
 
       await sidebar.fillField('URL', 'https://api.example.com/endpoint');
       await sidebar.fillField('Method', 'POST');
@@ -461,7 +467,7 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       await sidebar.fillField('Save Result To Context', 'api_response');
 
       await canvas.save();
-      await reloadAndReselect(canvas, 'Action');
+      await reloadAndReselect(canvas, 'HTTP Request');
 
       await expect.soft(sidebar.readField('URL')).resolves.toBe('https://api.example.com/endpoint');
       await expect.soft(sidebar.readField('Method')).resolves.toBe('POST');

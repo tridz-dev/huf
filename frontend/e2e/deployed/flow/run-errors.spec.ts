@@ -44,7 +44,11 @@ test.describe.serial('run failure legibility (run-errors)', () => {
     await api.dispose();
   });
 
-  test('a run that fails with a real engine error is NOT surfaced anywhere in the UI (KNOWN DEFECT)', async ({ page }) => {
+  // This test used to document the defect that a failed run's error was
+  // invisible in the UI. That is now FIXED (FlowRunViewer renders last_error);
+  // err.spec.ts asserts the fixed behaviour end to end, so this stale
+  // negative assertion is retired rather than left asserting old behaviour.
+  test.skip('a run that fails with a real engine error is NOT surfaced anywhere in the UI (KNOWN DEFECT)', async ({ page }) => {
     const flowName = uniqueFlowName('run-err');
     const list = new FlowsListPage(page);
     const canvas = new FlowCanvasPage(page);
@@ -146,7 +150,11 @@ test.describe.serial('run failure legibility (run-errors)', () => {
     // finding.
   });
 
-  test('KNOWN DEFECT: the "Run" button reports success even when the flow run itself failed', async ({ page }) => {
+  // FIXED: FlowsHeaderActions now inspects result.status and raises an error
+  // toast ('Flow run failed') instead of always reporting 'Flow run started'.
+  // run_flow executes synchronously, so a resolved promise never meant success.
+  // Retired rather than left asserting the old behaviour.
+  test.skip('KNOWN DEFECT: the "Run" button reports success even when the flow run itself failed', async ({ page }) => {
     const flowName = uniqueFlowName('run-err-toast');
     const list = new FlowsListPage(page);
     const canvas = new FlowCanvasPage(page);

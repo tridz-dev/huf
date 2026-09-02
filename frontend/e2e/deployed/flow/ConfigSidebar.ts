@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 
 /**
  * Page object for RightSidebar.tsx (node/edge/flow config panel).
@@ -116,7 +116,13 @@ export class ConfigSidebar {
   }
 
   async readCombobox(labelText: string): Promise<string> {
-    return (await this.comboboxTriggerFor(labelText).innerText()).trim();
+    const trigger = this.comboboxTriggerFor(labelText);
+    // Agent/tool lists are fetched after mount, so straight after a reload the
+    // trigger can still read "Loading...". Wait that out rather than asserting
+    // on a transient placeholder - otherwise the test reports a config-loss
+    // defect that isn't real.
+    await expect(trigger).not.toHaveText(/^Loading\.\.\.$/, { timeout: 15000 }).catch(() => {});
+    return (await trigger.innerText()).trim();
   }
 }
 

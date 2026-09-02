@@ -384,6 +384,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
           <div>
             <Label htmlFor="doctype">Document type</Label>
             <Combobox
+                        id="doctype"
               options={docTypes}
               value={config.doctype || ''}
               onValueChange={(v) => handleUpdateTriggerConfig('doctype', v)}
@@ -662,14 +663,23 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
 
             {selectedNode.data.nodeType === 'action' && selectedNode.data.actionConfig && (() => {
               const config = selectedNode.data.actionConfig;
+              // NOTE: this spreads actionConfig from the current render's closure,
+              // so two calls fired back-to-back both build on the SAME stale base
+              // and the second silently discards the first's field. Use
+              // handleUpdateActionConfigMany when setting more than one key.
               const handleUpdateActionConfig = (field: string, value: unknown) => {
+                handleUpdateActionConfigMany({ [field]: value });
+              };
+
+              /** Apply several config fields in ONE update. */
+              const handleUpdateActionConfigMany = (patch: Record<string, unknown>) => {
                 if (selectedNodeId) {
                   updateNode(selectedNodeId, {
                     data: {
                       ...selectedNode.data,
                       actionConfig: {
                         ...selectedNode.data.actionConfig!,
-                        [field]: value
+                        ...patch
                       }
                     }
                   });
@@ -713,6 +723,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <div>
                       <Label htmlFor="agent-name" size="sm">Agent</Label>
                       <Combobox
+                        id="agent-name"
                         options={agents}
                         value={config.agent_name || ''}
                         onValueChange={(v) => handleUpdateActionConfig('agent_name', v)}
@@ -779,12 +790,18 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <div>
                       <Label htmlFor="tool-name" size="sm">Tool</Label>
                       <Combobox
+                        id="tool-name"
                         options={tools}
                         value={config.tool_name || ''}
                         onValueChange={(v) => {
                           const flowTool = flowToolsByName[v];
-                          handleUpdateActionConfig('tool_name', v);
-                          handleUpdateActionConfig('mcp_server', flowTool?.mcp_server ?? null);
+                          // Must be ONE update: two sequential calls both spread the
+                          // same stale actionConfig, so the second would drop tool_name
+                          // and the picker would silently reset to "Select tool...".
+                          handleUpdateActionConfigMany({
+                            tool_name: v,
+                            mcp_server: flowTool?.mcp_server ?? null,
+                          });
                         }}
                         placeholder={loadingTools ? 'Loading...' : 'Select tool...'}
                         disabled={loadingTools}
@@ -865,6 +882,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <div>
                       <Label htmlFor="tool-call-agent" className="text-xs">Attributed Agent (optional)</Label>
                       <Combobox
+                        id="tool-call-agent"
                         options={agents}
                         value={(config as { agent_name?: string }).agent_name || ''}
                         onValueChange={(v) => handleUpdateActionConfig('agent_name', v)}
@@ -892,6 +910,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <div>
                       <Label htmlFor="router-agent" size="sm">Routing agent</Label>
                       <Combobox
+                        id="router-agent"
                         options={agents}
                         value={config.router_agent_name || ''}
                         onValueChange={(v) => handleUpdateActionConfig('router_agent_name', v)}
@@ -1024,6 +1043,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                       <div>
                         <Label htmlFor="approver-role" size="sm">Approver role</Label>
                         <Combobox
+                        id="approver-role"
                           options={roles}
                           value={(config as { approver_role?: string }).approver_role || ''}
                           onValueChange={(v) => handleUpdateActionConfig('approver_role', v)}
@@ -1052,6 +1072,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     <div>
                       <Label htmlFor="ref-doctype" size="sm">Reference DocType (Optional)</Label>
                       <Combobox
+                        id="ref-doctype"
                         options={docTypes}
                         value={config.reference_doctype || ''}
                         onValueChange={(v) => handleUpdateActionConfig('reference_doctype', v)}
