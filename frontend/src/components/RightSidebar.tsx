@@ -24,8 +24,9 @@ import { useFlowContext } from '../contexts/FlowContext';
 import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ScheduleIntervalType, DocEventType, ScheduleTriggerConfig } from '../types/flow.types';
 import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
-import { getToolFunctions, getToolFunction } from '../services/toolApi';
+import { getToolFunctions, getToolFunction, getFlowTools, type FlowTool } from '../services/toolApi';
 import { VariablePicker } from './ui/VariablePicker';
+import { JsonSchemaForm } from './JsonSchemaForm';
 
 /**
  * Computes a human-readable summary of a schedule trigger's cadence, e.g.
@@ -74,6 +75,8 @@ interface ToolParameter {
 
 interface ToolDetails {
   parameters?: ToolParameter[];
+  /** Present only when the tool came from list_flow_tools() (built-in or MCP). */
+  params_json_schema?: Record<string, unknown>;
 }
 
 interface RightSidebarProps {
@@ -88,7 +91,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const [isChangingTrigger, setIsChangingTrigger] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [agents, setAgents] = useState<Array<{ value: string; label: string }>>([]);
-  const [tools, setTools] = useState<Array<{ value: string; label: string }>>([]);
+  const [tools, setTools] = useState<Array<{ value: string; label: string; subtitle?: string }>>([]);
+  const [flowToolsByName, setFlowToolsByName] = useState<Record<string, FlowTool>>({});
+  const [flowToolsDegraded, setFlowToolsDegraded] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingTools, setLoadingTools] = useState(false);
@@ -119,20 +124,51 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       .finally(() => setLoadingAgents(false));
   }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
-  // Load tools when tool-call node selected
+  // Load tools when tool-call node selected. Prefer the unified list_flow_tools()
+  // (built-in + MCP), grouped by source; fall back to the legacy Agent Tool Function
+  // list if that endpoint isn't available yet (contract not deployed, older backend, etc).
   useEffect(() => {
     if (!selectedNode?.data.actionConfig || selectedNode.data.actionConfig.type !== 'tool-call') return;
     setLoadingTools(true);
-    getToolFunctions()
+    setFlowToolsDegraded(false);
+
+    getFlowTools()
       .then((list) => {
+        const byName: Record<string, FlowTool> = {};
+        (list || []).forEach((t) => { byName[t.name] = t; });
+        setFlowToolsByName(byName);
+
+        // Group by source so built-in and each MCP server cluster together; the group
+        // is surfaced as a subtitle since Combobox renders a single flat list.
+        const sorted = [...(list || [])].sort((a, b) => {
+          const groupA = a.source === 'mcp' ? `mcp:${a.mcp_server || ''}` : 'builtin';
+          const groupB = b.source === 'mcp' ? `mcp:${b.mcp_server || ''}` : 'builtin';
+          if (groupA !== groupB) return groupA.localeCompare(groupB);
+          return (a.label || a.name).localeCompare(b.label || b.name);
+        });
         setTools(
-          (list || []).map((t: { name: string; tool_name?: string }) => ({
-            value: t.tool_name || t.name,
-            label: t.tool_name || t.name,
+          sorted.map((t) => ({
+            value: t.name,
+            label: t.label || t.name,
+            subtitle: t.source === 'mcp' ? `MCP: ${t.mcp_server || 'unknown server'}` : 'Built-in',
           }))
         );
       })
-      .catch(() => setTools([]))
+      .catch(() => {
+        // Graceful degradation: list_flow_tools() may not exist yet on this backend.
+        setFlowToolsDegraded(true);
+        setFlowToolsByName({});
+        return getToolFunctions()
+          .then((list) => {
+            setTools(
+              (list || []).map((t: { name: string; tool_name?: string }) => ({
+                value: t.tool_name || t.name,
+                label: t.tool_name || t.name,
+              }))
+            );
+          })
+          .catch(() => setTools([]));
+      })
       .finally(() => setLoadingTools(false));
   }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
@@ -149,6 +185,16 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       return;
     }
 
+    // If list_flow_tools() succeeded, we already have this tool's JSON Schema in memory —
+    // no need for a second round-trip, and this also covers MCP tools which have no
+    // Agent Tool Function doc for getToolFunction() to fetch.
+    if (!flowToolsDegraded && flowToolsByName[toolName]) {
+      const flowTool = flowToolsByName[toolName];
+      setSelectedToolDetails({ params_json_schema: flowTool.params_json_schema || {} });
+      setLoadingToolDetails(false);
+      return;
+    }
+
     setLoadingToolDetails(true);
     getToolFunction(toolName)
       .then((details) => {
@@ -156,7 +202,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       })
       .catch(() => setSelectedToolDetails(null))
       .finally(() => setLoadingToolDetails(false));
-  }, [selectedNode?.id, selectedNode?.data.actionConfig?.type === 'tool-call' ? selectedNode.data.actionConfig.tool_name : undefined]);
+  }, [selectedNode?.id, selectedNode?.data.actionConfig?.type === 'tool-call' ? selectedNode.data.actionConfig.tool_name : undefined, flowToolsDegraded, flowToolsByName]);
 
   // Load DocTypes when doc-event trigger or human-in-loop node selected
   useEffect(() => {
@@ -725,12 +771,21 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 return (
                   <div className="space-y-3">
                     <Label weight="semibold" className="mb-2 block">Tool configuration</Label>
+                    {flowToolsDegraded && (
+                      <div className="text-[10px] text-muted-foreground p-2 bg-muted/30 rounded-md border border-dashed">
+                        MCP tools aren't available right now — showing built-in tools only.
+                      </div>
+                    )}
                     <div>
                       <Label htmlFor="tool-name" size="sm">Tool</Label>
                       <Combobox
                         options={tools}
                         value={config.tool_name || ''}
-                        onValueChange={(v) => handleUpdateActionConfig('tool_name', v)}
+                        onValueChange={(v) => {
+                          const flowTool = flowToolsByName[v];
+                          handleUpdateActionConfig('tool_name', v);
+                          handleUpdateActionConfig('mcp_server', flowTool?.mcp_server ?? null);
+                        }}
                         placeholder={loadingTools ? 'Loading...' : 'Select tool...'}
                         disabled={loadingTools}
                         searchPlaceholder="Search tools..."
@@ -743,6 +798,14 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">Loading parameters...</div>
                       ) : !selectedToolDetails ? (
                         <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md">Select a tool to view parameters</div>
+                      ) : selectedToolDetails.params_json_schema ? (
+                        <div className="p-3 bg-muted/20 border rounded-md">
+                          <JsonSchemaForm
+                            schema={selectedToolDetails.params_json_schema}
+                            value={config.args || {}}
+                            onChange={(next) => handleUpdateActionConfig('args', next)}
+                          />
+                        </div>
                       ) : selectedToolDetails.parameters && selectedToolDetails.parameters.length > 0 ? (
                         <div className="space-y-3 p-3 bg-muted/20 border rounded-md">
                           {selectedToolDetails.parameters.map((param: ToolParameter) => {
