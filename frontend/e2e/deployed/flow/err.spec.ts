@@ -14,10 +14,20 @@ test('a failed run shows its error text in the run viewer', async ({ page, baseU
 
   // Build a flow that fails deterministically: a condition pointing at a node
   // that does not exist. No credentials or providers needed.
+  // Must FAIL AT RUNTIME while still PASSING save-time validation - those are
+  // now different things. A dangling condition target (the obvious choice) is
+  // rejected on activation by Flow Definition.validate(), so the flow could
+  // never be activated to run at all. A tool.call naming a tool that does not
+  // exist satisfies validation (the required `tool_name` key IS present) and
+  // fails in _exec_tool_call when the registry lookup misses.
   const definition = {
-    schema_version: 1, id: flowId, version: 1, entry: 'n1',
-    nodes: [{ id: 'n1', type: 'condition', config: { expression: 'True', true_node: 'ghost-node', false_node: 'ghost-node' } }],
-    edges: [], settings: { mode: 'normal', max_hops: 10 }, metadata: { name: flowId },
+    schema_version: 1, id: flowId, version: 1, entry: 'trig',
+    nodes: [
+      { id: 'trig', type: 'trigger.webhook', config: {} },
+      { id: 'n1', type: 'tool.call', config: { tool_name: 'ghost_tool_does_not_exist', args: {} } },
+    ],
+    edges: [{ from: 'trig', to: 'n1', type: 'always' }],
+    settings: { mode: 'normal', max_hops: 10 }, metadata: { name: flowId },
   };
   let created = await api.post('/api/resource/Flow Definition', {
     data: { flow_id: flowId, flow_name: flowId, status: 'Active', definition_json: JSON.stringify(definition) },
@@ -32,7 +42,7 @@ test('a failed run shows its error text in the run viewer', async ({ page, baseU
   const detail = await api.get(`/api/resource/Flow Run/${runId}`);
   const doc = (await detail.json()).data;
   expect(doc.status).toBe('Failed');
-  expect(doc.last_error).toContain('ghost-node');
+  expect(doc.last_error).toContain('ghost_tool_does_not_exist');
 
   // The UI must show that same error, not just a red badge.
   await page.goto(`flows/${flowId}`);
@@ -43,7 +53,7 @@ test('a failed run shows its error text in the run viewer', async ({ page, baseU
   await page.getByText(runId, { exact: false }).first().click();
   const errorBlock = page.getByTestId('flow-run-error');
   await expect(errorBlock).toBeVisible({ timeout: 15000 });
-  await expect(errorBlock).toContainText('ghost-node');
+  await expect(errorBlock).toContainText('ghost_tool_does_not_exist');
 
   await api.delete(`/api/resource/Flow Definition/${flowId}`).catch(() => {});
   await api.dispose();
