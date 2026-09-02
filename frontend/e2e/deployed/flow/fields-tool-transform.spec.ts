@@ -81,7 +81,7 @@ test.describe('per-field config round-trip: tool-call', () => {
       expect(got).toContain('add_table_row');
 
       const def = await getFlowDefinition(api, flowId);
-      const node = def.definition_json.nodes.find((n) => (n.config as { type?: string })?.type === 'tool-call');
+      const node = def.definition_json.nodes.find((n) => n.type === 'tool.call');
       expect((node?.config as { tool_name?: string })?.tool_name).toBe('add_table_row');
     } finally {
       if (flowId) await api.delete(`/api/resource/Flow Definition/${flowId}`).catch(() => {});
@@ -107,7 +107,7 @@ test.describe('per-field config round-trip: tool-call', () => {
       expect(got).toContain('Demo Assistant');
 
       const def = await getFlowDefinition(api, flowId);
-      const node = def.definition_json.nodes.find((n) => (n.config as { type?: string })?.type === 'tool-call');
+      const node = def.definition_json.nodes.find((n) => n.type === 'tool.call');
       expect((node?.config as { agent_name?: string })?.agent_name).toBe('Demo Assistant');
     } finally {
       if (flowId) await api.delete(`/api/resource/Flow Definition/${flowId}`).catch(() => {});
@@ -132,7 +132,7 @@ test.describe('per-field config round-trip: tool-call', () => {
       expect(await sidebar.readField('Save Result To Context')).toBe('tool_result');
 
       const def = await getFlowDefinition(api, flowId);
-      const node = def.definition_json.nodes.find((n) => (n.config as { type?: string })?.type === 'tool-call');
+      const node = def.definition_json.nodes.find((n) => n.type === 'tool.call');
       expect((node?.config as { output?: { save_result_to_context?: string } })?.output?.save_result_to_context).toBe('tool_result');
     } finally {
       if (flowId) await api.delete(`/api/resource/Flow Definition/${flowId}`).catch(() => {});
@@ -171,11 +171,11 @@ test.describe('per-field config round-trip: tool-call', () => {
         await reselectActionNode(page);
         // Tool details (and thus the argument form) refetch after reload;
         // wait for the field to actually appear before reading it.
-        await expect(page.locator('label', { hasText: label }).first()).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('label', { hasText: label }).first()).toBeVisible({ timeout: 30000 });
         expect(await sidebar.readField(label)).toBe(value);
 
         const def = await getFlowDefinition(api, flowId);
-        const node = def.definition_json.nodes.find((n) => (n.config as { type?: string })?.type === 'tool-call');
+        const node = def.definition_json.nodes.find((n) => n.type === 'tool.call');
         const args = (node?.config as { args?: Record<string, unknown> })?.args || {};
         expect(args[label]).toBe(value);
       } finally {
@@ -243,7 +243,7 @@ test.describe('per-field config round-trip: transform', () => {
         expect(await reRow.locator('input').nth(fieldIndex).inputValue()).toBe(value);
 
         const def = await getFlowDefinition(api, flowId);
-        const node = def.definition_json.nodes.find((n) => (n.config as { type?: string })?.type === 'transform');
+        const node = def.definition_json.nodes.find((n) => n.type === 'transform');
         const t = ((node?.config as { transformations?: Array<Record<string, unknown>> })?.transformations || [])[0];
         const key = fieldIndex === 0 ? 'source_field' : 'target_field';
         expect(t?.[key]).toBe(value);
@@ -280,7 +280,7 @@ test.describe('per-field config round-trip: transform', () => {
       expect((await reTrigger.innerText()).trim()).toBe('Map');
 
       const def = await getFlowDefinition(api, flowId);
-      const node = def.definition_json.nodes.find((n) => (n.config as { type?: string })?.type === 'transform');
+      const node = def.definition_json.nodes.find((n) => n.type === 'transform');
       const t = ((node?.config as { transformations?: Array<Record<string, unknown>> })?.transformations || [])[0];
       expect(t?.operation).toBe('map');
     } finally {

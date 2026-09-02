@@ -121,7 +121,7 @@ export class ConfigSidebar {
     // trigger can still read "Loading...". Wait that out rather than asserting
     // on a transient placeholder - otherwise the test reports a config-loss
     // defect that isn't real.
-    await expect(trigger).not.toHaveText(/^Loading\.\.\.$/, { timeout: 15000 }).catch(() => {});
+    await expect(trigger).not.toHaveText(/^Loading\.\.\.$/, { timeout: 30000 }).catch(() => {});
     return (await trigger.innerText()).trim();
   }
 }

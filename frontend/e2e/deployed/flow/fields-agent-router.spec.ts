@@ -129,7 +129,7 @@ function roundTripInjectCheckbox(label: string, injectKey: string) {
       const built = await buildNodeFlow(page, 'LLM Router', 'rt-router-inject');
       flowId = built.flowId;
       const { canvas, sidebar } = built;
-      await canvas.selectNode('LLM Router');
+      await canvas.selectNode('Router');
 
       // Default is checked (true) per flow_orchestrator.py's default.
       expect(await sidebar.isChecked(label)).toBe(true);
@@ -147,7 +147,7 @@ function roundTripInjectCheckbox(label: string, injectKey: string) {
       // `inject`, not a flat top-level key — this is the exact class of
       // bug (flat vs nested `prompt_template`) this track exists for.
       const def = await getFlowDefinition(api, flowId);
-      const routerNode = def.definition_json.nodes.find((n) => n.type === 'router');
+      const routerNode = def.definition_json.nodes.find((n) => n.type === 'router.llm');
       expect(routerNode).toBeTruthy();
       const config = (routerNode!.config ?? {}) as Record<string, unknown>;
       expect(config[injectKey]).toBeUndefined(); // never flattened onto the node config
@@ -169,8 +169,8 @@ test.describe('per-field config round-trip: agent-run and router', () => {
   roundTripField('Run Agent', 'Run Agent', 'rt-agentrun', 'Conversation Mode', 'Isolated (No history)');
 
   // --- router ---
-  roundTripCombobox('LLM Router', 'LLM Router', 'rt-router', 'Routing Agent', 'Demo Assistant');
-  roundTripField('LLM Router', 'LLM Router', 'rt-router', 'Conversation Mode', 'Isolated (No history)');
+  roundTripCombobox('LLM Router', 'Router', 'rt-router', 'Routing Agent', 'Demo Assistant');
+  roundTripField('LLM Router', 'Router', 'rt-router', 'Conversation Mode', 'Isolated (No history)');
 
   // --- router context-injection checkboxes (nested `inject: {...}` shape) ---
   roundTripInjectCheckbox('Include flow context', 'include_context');
