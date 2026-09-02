@@ -181,7 +181,7 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-[960px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Workflow className="w-4 h-4 text-primary" />
@@ -192,6 +192,8 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
             the agent deciding anything again -- so it runs faster and the same way every time.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
 
         {loading && <div className="py-6 text-sm text-muted-foreground">Checking what this answer did...</div>}
 
@@ -240,7 +242,7 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
           <div className="space-y-4 py-2 text-sm">
             {sourceLine}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-w-md">
               <label htmlFor="procedure-name" className="font-medium">
                 Name it
               </label>
@@ -290,7 +292,7 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
             {steps.length > 0 && (
               <div>
                 <div className="font-medium mb-1">What it will do, every time</div>
-                <ol className="space-y-2">
+                <ol className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {steps.map((step) => (
                     <li key={step.id} className="rounded-md border border-line p-2">
                       <div className="font-medium">
@@ -329,6 +331,8 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
             </p>
           </div>
         )}
+
+        </div>
 
         <DialogFooter>
           {accepted ? (
