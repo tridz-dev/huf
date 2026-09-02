@@ -639,6 +639,18 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 }
               };
 
+              // True when `val` is a non-empty string that failed JSON.parse — used to
+              // surface a non-blocking inline warning without discarding the raw text.
+              const isInvalidJsonString = (val: unknown): boolean => {
+                if (typeof val !== 'string' || val.trim() === '') return false;
+                try {
+                  JSON.parse(val);
+                  return false;
+                } catch {
+                  return true;
+                }
+              };
+
               // Ancestor ids (nodes that can reach `targetId` via edges) — selecting one of
               // these as a branch target routes execution back upstream, i.e. a cycle.
               const computeAncestorIds = (targetId: string | null | undefined): Set<string> => {
@@ -1190,6 +1202,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         }}
                         placeholder='{"Authorization": "Bearer {{token}}"}'
                       />
+                      {isInvalidJsonString(config.headers) && (
+                        <p className="text-[10px] text-destructive mt-1">
+                          Not valid JSON — saved as plain text.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="http-body" className="text-xs">Body</Label>
@@ -1208,6 +1225,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         }}
                         placeholder='{"key": "{{context.value}}"}'
                       />
+                      {isInvalidJsonString(config.body) && (
+                        <p className="text-[10px] text-destructive mt-1">
+                          Not valid JSON — saved as plain text.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="http-timeout" className="text-xs">Timeout (seconds)</Label>
