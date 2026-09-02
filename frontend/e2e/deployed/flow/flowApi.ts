@@ -118,11 +118,25 @@ export async function saveFlowDefinition(
   if (!res.ok()) throw new Error(`saveFlowDefinition(${flowId}) failed: ${res.status()} ${await res.text()}`);
 }
 
+/**
+ * Set a flow's status to Active. `run_flow` hard-refuses a Draft flow with
+ * "Flow '<id>' is not active (status: Draft)", so any test that actually
+ * executes a flow must activate it first.
+ */
+export async function activateFlowApi(api: APIRequestContext, flowId: string): Promise<void> {
+  const res = await api.put(`/api/resource/Flow Definition/${encodeURIComponent(flowId)}`, {
+    data: { status: 'Active' },
+  });
+  if (!res.ok()) throw new Error(`activateFlowApi(${flowId}) failed: ${res.status()} ${await res.text()}`);
+}
+
 /** Run a flow synchronously via the REST API and return the immediate result. */
 export async function runFlowApi(
   api: APIRequestContext,
   flowId: string,
 ): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
+  // A Draft flow cannot run at all, so make sure it is Active first.
+  await activateFlowApi(api, flowId);
   const res = await api.post('/api/method/huf.ai.flow_api.run_flow', {
     data: { flow_id: flowId },
   });

@@ -355,7 +355,14 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       // Transformation rows have no field-linking htmlFor/id (their
       // <Label> elements carry no `htmlFor` at all — see report), so we
       // drive them positionally rather than through ConfigSidebar.
-      const row = page.locator('div', { has: page.getByText('Transformation #1', { exact: true }) }).last();
+      // Take the innermost div that contains BOTH the row heading and inputs.
+      // Filtering only on the heading and taking .last() yields the tightest
+      // wrapper around the heading itself, which holds no inputs at all.
+      const row = page
+        .locator('div')
+        .filter({ has: page.getByText('Transformation #1', { exact: true }) })
+        .filter({ has: page.locator('input') })
+        .last();
       await row.locator('input').nth(0).fill('api_response.data');
       await row.locator('input').nth(1).fill('processed_data');
       await row.getByRole('combobox').click();
@@ -364,7 +371,11 @@ test.describe('flow node config round-trips (save + hard reload)', () => {
       await canvas.save();
       await reloadAndReselect(canvas, 'Transform Data');
 
-      const rowAfter = page.locator('div', { has: page.getByText('Transformation #1', { exact: true }) }).last();
+      const rowAfter = page
+        .locator('div')
+        .filter({ has: page.getByText('Transformation #1', { exact: true }) })
+        .filter({ has: page.locator('input') })
+        .last();
       await expect.soft(rowAfter.locator('input').nth(0)).toHaveValue('api_response.data');
       await expect.soft(rowAfter.locator('input').nth(1)).toHaveValue('processed_data');
       await expect.soft(rowAfter.getByRole('combobox')).toHaveText(/Map/);

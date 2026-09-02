@@ -84,7 +84,14 @@ export class FlowCanvasPage {
    */
   async deleteNode(label: string): Promise<void> {
     await this.selectNode(label);
-    await this.page.getByRole('button', { name: /^delete node$/i }).click();
+    // Two controls share this accessible name once a node is selected: the
+    // Trash2 icon on the node card itself, and a "Delete Node" button in the
+    // right sidebar. Scope to the canvas so the locator is unambiguous.
+    await selectors.canvas
+      .root(this.page)
+      .getByRole('button', { name: /^delete node$/i })
+      .first()
+      .click();
   }
 
   async save(): Promise<void> {
