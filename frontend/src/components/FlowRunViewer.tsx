@@ -122,6 +122,20 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                             </div>
                         </div>
 
+                        {run.status === 'Failed' && run.last_error && (
+                            <div data-testid="flow-run-error">
+                                <h3 className="text-sm font-semibold mb-3">Error</h3>
+                                <div className="bg-destructive/10 border border-destructive/30 text-destructive p-4 rounded-md text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                                    {run.last_error}
+                                </div>
+                                {run.current_node_id && (
+                                    <div className="text-xs text-muted-foreground mt-2">
+                                        Failed at node <span className="font-medium">{run.current_node_id}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div>
                             <h3 className="text-sm font-semibold mb-3">Context Variables</h3>
                             <div className="bg-muted p-4 rounded-md border text-xs font-mono overflow-x-auto whitespace-pre-wrap">

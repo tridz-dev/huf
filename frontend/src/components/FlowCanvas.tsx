@@ -272,9 +272,16 @@ export function FlowCanvas({
             'human.approval': 'Human in Loop',
             code: 'Execute Code',
             email: 'Send Email',
-            webhook: 'Call Webhook',
             file: 'File Operations',
-            date: 'Date Utility'
+            // Previously missing, so these nodes fell through to the generic
+            // 'Action' fallback below and the canvas showed no indication of
+            // what the step actually did — a Condition node simply read
+            // "Action". 'webhook' and 'date' are gone: those cards were
+            // removed (HTTP Request supersedes webhook; no date tool exists).
+            condition: 'Condition',
+            'http-request': 'HTTP Request',
+            slack: 'Slack',
+            sheets: 'Google Sheets'
           };
 
           const newNode: Node<FlowNodeData> = {
