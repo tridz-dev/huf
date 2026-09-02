@@ -12,6 +12,7 @@ export interface FlowRunDetail {
   flow_id: string;
   status: string;
   current_node_id: string;
+  context_json?: Record<string, unknown>;
   last_error: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -79,4 +80,53 @@ export async function flowExists(api: APIRequestContext, docName: string): Promi
 /** Generate a unique, greppable flow name for a test run. */
 export function uniqueFlowName(prefix = 'e2e-flow'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export interface FlowDefinitionDoc {
+  flow_id: string;
+  flow_name: string;
+  definition_json: {
+    entry: string;
+    nodes: Array<{ id: string; type: string; config?: Record<string, unknown> }>;
+    edges: Array<{ from: string; to: string; type?: string }>;
+  };
+  version: number;
+  status: string;
+}
+
+/** Fetch the saved Flow Definition (parsed definition_json) via the same whitelisted method the app uses. */
+export async function getFlowDefinition(api: APIRequestContext, flowId: string): Promise<FlowDefinitionDoc> {
+  const res = await api.get('/api/method/huf.ai.flow_api.get_flow_definition', {
+    params: { flow_id: flowId },
+  });
+  if (!res.ok()) throw new Error(`getFlowDefinition(${flowId}) failed: ${res.status()} ${await res.text()}`);
+  const json = await res.json();
+  return json.message as FlowDefinitionDoc;
+}
+
+/** Save a full flow definition graph directly (bypassing the UI) — used only where the UI itself cannot
+ * express the state under test (e.g. typing an arbitrary/nonexistent node id, which the node-id <Select>
+ * does not allow). */
+export async function saveFlowDefinition(
+  api: APIRequestContext,
+  flowId: string,
+  definitionJson: Record<string, unknown>,
+): Promise<void> {
+  const res = await api.post('/api/method/huf.ai.flow_api.save_flow_definition', {
+    data: { flow_id: flowId, definition_json: JSON.stringify(definitionJson) },
+  });
+  if (!res.ok()) throw new Error(`saveFlowDefinition(${flowId}) failed: ${res.status()} ${await res.text()}`);
+}
+
+/** Run a flow synchronously via the REST API and return the immediate result. */
+export async function runFlowApi(
+  api: APIRequestContext,
+  flowId: string,
+): Promise<{ flow_run_id: string; status: string; current_node_id: string }> {
+  const res = await api.post('/api/method/huf.ai.flow_api.run_flow', {
+    data: { flow_id: flowId },
+  });
+  if (!res.ok()) throw new Error(`runFlowApi(${flowId}) failed: ${res.status()} ${await res.text()}`);
+  const json = await res.json();
+  return json.message;
 }

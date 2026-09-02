@@ -91,6 +91,23 @@ export function NodeSelectionModal({
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(
     initialTriggerConfig || { type: undefined }
   );
+  // NodeSelectionModal is always mounted (FlowCanvas renders it with `open=`,
+  // not conditionally), so the useState initialisers above run exactly once —
+  // on first mount — and never again. Without this effect, `mainTab` keeps
+  // whatever value the FIRST open set: configure the entry node's trigger, then
+  // click "+" on a later node, and the modal opens in action mode while still
+  // showing the Triggers tab and trigger cards. Selecting one there routes to
+  // the trigger-save handler with no target node, creating an orphan trigger.
+  // Re-sync every time the modal opens or its mode changes.
+  useEffect(() => {
+    if (!open) return;
+    setMainTab(mode === 'trigger' ? 'triggers' : 'actions');
+    setTriggerSubTab('explore');
+    setSearchQuery('');
+    setSelectedItem(initialTriggerConfig?.type || null);
+    setTriggerConfig(initialTriggerConfig || { type: undefined });
+  }, [open, mode, initialTriggerConfig]);
+
   const [agents, setAgents] = useState<AgentDoc[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
