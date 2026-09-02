@@ -4,7 +4,7 @@ import {
   deserializeFlow,
   mapBackendStatusToFrontend,
 } from '@/services/flowSerializer';
-import type { Flow, FlowNode, FlowEdge } from '@/types/flow.types';
+import type { Flow, FlowNode } from '@/types/flow.types';
 import type { BackendFlowGraph } from '@/services/flowApi';
 
 describe('flowSerializer', () => {
@@ -653,7 +653,8 @@ describe('flowSerializer', () => {
         nodes: [
           {
             id: 'node1',
-            type: 'unknown.custom.type',
+            // deliberately invalid: documents how deserialize handles an unknown type
+            type: 'unknown.custom.type' as BackendFlowGraph['nodes'][number]['type'],
             config: {},
             _label: 'Unknown Node',
           },
@@ -701,7 +702,8 @@ describe('flowSerializer', () => {
             id: 'edge2',
             from: 'node2',
             to: 'node1',
-            type: 'conditional',
+            // deliberately invalid: documents how deserialize handles an unknown edge type
+            type: 'conditional' as BackendFlowGraph['edges'][number]['type'],
             priority: 1,
             condition: 'x > 5',
             meta: { label: 'Success', custom: 'value' },
