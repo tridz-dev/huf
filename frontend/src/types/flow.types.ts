@@ -99,6 +99,8 @@ export interface AgentRunActionConfig {
 export interface ToolCallActionConfig {
   type: 'tool-call';
   tool_name?: string;
+  /** Set when the selected tool comes from an MCP server (list_flow_tools() source: 'mcp'); null/undefined for built-in tools. */
+  mcp_server?: string | null;
   args?: Record<string, unknown>;
   save_result_to_context?: string;
   output?: {
