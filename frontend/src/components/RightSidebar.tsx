@@ -639,6 +639,25 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 }
               };
 
+              // Ancestor ids (nodes that can reach `targetId` via edges) — selecting one of
+              // these as a branch target routes execution back upstream, i.e. a cycle.
+              const computeAncestorIds = (targetId: string | null | undefined): Set<string> => {
+                const edges = activeFlow?.edges || [];
+                const visited = new Set<string>();
+                if (!targetId) return visited;
+                const queue = [targetId];
+                while (queue.length) {
+                  const cur = queue.shift()!;
+                  for (const e of edges) {
+                    if (e.target === cur && e.source && !visited.has(e.source)) {
+                      visited.add(e.source);
+                      queue.push(e.source);
+                    }
+                  }
+                }
+                return visited;
+              };
+
               const renderNodeIdSelect = (
                 id: string,
                 value: string | undefined,
@@ -648,6 +667,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 const otherNodes = (activeFlow?.nodes || []).filter((n) => n.id !== selectedNodeId);
                 const currentValue = value || '';
                 const isMissing = currentValue && !otherNodes.some((n) => n.id === currentValue);
+                const ancestorIds = computeAncestorIds(selectedNodeId);
 
                 // Disambiguate options that share a display label (e.g. two "Transform
                 // Data" nodes) by appending a short id suffix — only when needed, so
@@ -662,7 +682,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                   const label = n.data.label || n.id;
                   const isDuplicate = labelCounts[label] > 1;
                   const shortId = n.id.length > 8 ? `${n.id.slice(0, 8)}…` : n.id;
-                  return isDuplicate ? `${label} · ${shortId}` : label;
+                  const base = isDuplicate ? `${label} · ${shortId}` : label;
+                  return ancestorIds.has(n.id) ? `${base}  ↑ upstream — creates a loop` : base;
                 };
 
                 return (
