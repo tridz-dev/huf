@@ -577,23 +577,10 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	args = dict(config.get("args") or config.get("parameters") or {})
 	ctx = _load_context(flow_run)
 
-	# Recursive context variable substitution
-	import re
-	
-	def _substitute(data):
-		if isinstance(data, dict):
-			return {k: _substitute(v) for k, v in data.items()}
-		elif isinstance(data, list):
-			return [_substitute(v) for v in data]
-		elif isinstance(data, str):
-			# Handle inline templates like "Hello {{name}}"
-			def replace_var(match):
-				var_name = match.group(1).strip()
-				return str(ctx.get(var_name, match.group(0)))
-			return re.sub(r'\{\{(.*?)\}\}', replace_var, data)
-		return data
-
-	args = _substitute(args)
+	# Recursive context variable substitution. Reuses the same dotted-path-aware
+	# helper used by webhook URL substitution and condition-node evaluation, so
+	# "{{TodoID.result.name}}" resolves here too, not just a flat "{{TodoID}}".
+	args = _substitute_dict(args, ctx)
 
 	# Create an Agent Run for auditing
 	run_doc = _create_flow_agent_run(
@@ -604,13 +591,14 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		agent_name=config.get("agent_name") or config.get("agent"),
 	)
 
-	# Check MCP tool info
-	is_mcp_tool = 0
-	mcp_server = None
-	mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
-	if mcp_tool_entry:
-		is_mcp_tool = 1
-		mcp_server = mcp_tool_entry
+	# Check MCP tool info: prefer the explicit config, fall back to lookup
+	# by tool name for backward compatibility with existing flow definitions.
+	mcp_server = config.get("mcp_server")
+	if not mcp_server:
+		mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
+		if mcp_tool_entry:
+			mcp_server = mcp_tool_entry
+	is_mcp_tool = 1 if mcp_server else 0
 
 	from uuid import uuid4
 	tool_call_id = f"call_{uuid4().hex[:12]}"
@@ -630,7 +618,25 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	tool_call_doc.insert(ignore_permissions=True)
 
 	try:
-		result = execute_tool(tool_name, args)
+		if mcp_server:
+			from huf.ai.mcp_client import execute_mcp_tool
+
+			# execute_mcp_tool is async; run it to completion the same way
+			# huf/ai/flow_tool_executor.py already does for coroutine results
+			# from sync flow-engine code.
+			import asyncio
+
+			coro = execute_mcp_tool(server_name=mcp_server, tool_name=tool_name, arguments=args)
+			loop = asyncio.new_event_loop()
+			asyncio.set_event_loop(loop)
+			try:
+				result = loop.run_until_complete(coro)
+			finally:
+				loop.close()
+			if not isinstance(result, dict):
+				result = {"success": True, "result": result}
+		else:
+			result = execute_tool(tool_name, args)
 		is_success = result.get("success", False) if isinstance(result, dict) else bool(result)
 		tool_result = result.get("result", result) if isinstance(result, dict) else result
 		error_msg = result.get("error", "") if isinstance(result, dict) else ""
