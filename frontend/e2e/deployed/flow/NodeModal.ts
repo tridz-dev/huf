@@ -18,8 +18,11 @@ export class NodeModal {
       await expect(dialog.getByText('Select Trigger')).toBeVisible();
     } else {
       await expect(dialog.getByText('Add Action')).toBeVisible();
-      // Action mode defaults to the Actions tab; confirm it's selected.
-      await expect(selectors.nodeModal.actionsTab(this.page)).toHaveAttribute('data-state', 'active');
+      // Action mode deliberately renders NO tab bar: `mode` alone determines
+      // the content, and offering a Triggers tab here used to let users create
+      // orphan trigger nodes. So assert the absence of the tabs rather than
+      // which one is active.
+      await expect(selectors.nodeModal.triggersTab(this.page)).toHaveCount(0);
     }
   }
 

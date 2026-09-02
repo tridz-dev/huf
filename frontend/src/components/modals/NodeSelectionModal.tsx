@@ -526,12 +526,12 @@ export function NodeSelectionModal({
         </div>
 
         <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v as MainTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-          {mode !== 'trigger' ? (
-            <TabsList layout="grid" cols={2} className="flex-shrink-0">
-              <TabsTrigger value="triggers">Triggers</TabsTrigger>
-              <TabsTrigger value="actions">Actions</TabsTrigger>
-            </TabsList>
-          ) : (
+          {/* In action mode the modal must not offer a Triggers tab at all: a
+              trigger belongs only to the entry node, and selecting one here
+              routes to the trigger-save handler with no target node, silently
+              creating a disconnected orphan trigger. `mode` already determines
+              the content, so the tab bar is redundant as well as harmful. */}
+          {mode !== 'trigger' ? null : (
             <TabsList layout="grid" cols={1} className="flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
             </TabsList>
