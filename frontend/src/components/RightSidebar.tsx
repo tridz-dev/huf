@@ -1281,8 +1281,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           </Button>
                         </div>
                         <div>
-                          <Label className="text-[10px]">Source Field</Label>
+                          <Label htmlFor={`transform-${i}-source`} className="text-[10px]">Source Field</Label>
                           <Input
+                            id={`transform-${i}-source`}
                             value={t.source_field || ''}
                             onChange={(e) => {
                               const updated = [...transformations];
@@ -1294,8 +1295,9 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           />
                         </div>
                         <div>
-                          <Label className="text-[10px]">Target Field</Label>
+                          <Label htmlFor={`transform-${i}-target`} className="text-[10px]">Target Field</Label>
                           <Input
+                            id={`transform-${i}-target`}
                             value={t.target_field || ''}
                             onChange={(e) => {
                               const updated = [...transformations];
@@ -1307,7 +1309,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           />
                         </div>
                         <div>
-                          <Label className="text-[10px]">Operation</Label>
+                          <Label htmlFor={`transform-${i}-operation`} className="text-[10px]">Operation</Label>
                           <Select
                             value={t.operation || 'copy'}
                             onValueChange={(v) => {
@@ -1316,7 +1318,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                               handleUpdateActionConfig('transformations', updated);
                             }}
                           >
-                            <SelectTrigger className="h-7 text-xs">
+                            <SelectTrigger id={`transform-${i}-operation`} className="h-7 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
