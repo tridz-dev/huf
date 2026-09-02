@@ -196,6 +196,14 @@ export function NodeSelectionModal({
       config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {
       config = { type: 'transform', transformations: [] };
+    } else if (actionId === 'email') {
+      config = { type: 'tool-call', tool_name: 'gmail_send_email', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'slack') {
+      config = { type: 'tool-call', tool_name: 'slack_send_message', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'sheets') {
+      config = { type: 'tool-call', tool_name: 'gsheets_read', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'file') {
+      config = { type: 'tool-call', tool_name: 'gdrive_list_files', args: {}, output: { save_result_to_context: '' } };
     }
 
     onSaveAction?.(actionId, config);
