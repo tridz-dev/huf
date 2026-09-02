@@ -34,7 +34,10 @@ export class NodeModal {
     const buttons = dialog.locator('button');
     const count = await buttons.count();
     const names: string[] = [];
-    const exclude = new Set(['Cancel', 'Save Configuration', 'Copy']);
+    // Chrome-of-the-dialog buttons that are not palette cards. 'Close' is the
+    // Radix dialog's built-in dismiss button, which has an accessible name but
+    // no visible label, so it is easy to miss when eyeballing the modal.
+    const exclude = new Set(['Cancel', 'Save Configuration', 'Copy', 'Close']);
     for (let i = 0; i < count; i++) {
       const btn = buttons.nth(i);
       const role = await btn.getAttribute('role');

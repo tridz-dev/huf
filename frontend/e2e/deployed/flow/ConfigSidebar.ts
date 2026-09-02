@@ -69,6 +69,55 @@ export class ConfigSidebar {
     }
     return (await control.innerText()).trim();
   }
+
+  /**
+   * Locate a radix `<Checkbox>`'s trigger button by its paired label text.
+   * Unlike Selects, Checkbox usages in RightSidebar.tsx DO pass a real
+   * `id` matching the Label's `htmlFor`, so this reuses controlFor — but
+   * fillField()/readField() don't know how to drive a checkbox's
+   * `data-state` (they'd misfire fillField's combobox branch, which opens
+   * the control and looks for a role="option" that never appears). These
+   * two methods are the dedicated checkbox path.
+   */
+  async isChecked(labelText: string): Promise<boolean> {
+    const control = await this.controlFor(labelText);
+    return (await control.getAttribute('data-state')) === 'checked';
+  }
+
+  async setChecked(labelText: string, checked: boolean): Promise<void> {
+    if ((await this.isChecked(labelText)) !== checked) {
+      const control = await this.controlFor(labelText);
+      await control.click();
+    }
+  }
+
+  /**
+   * Locate a `Combobox` (ui/combobox.tsx) trigger button by its paired
+   * label text. Unlike Input/Select fields, every Combobox usage in
+   * RightSidebar.tsx (Agent, Tool, Routing Agent, Approver Role,
+   * Reference DocType, Attributed Agent pickers) omits the `id` prop
+   * entirely — the component doesn't even accept one — so the Label's
+   * `htmlFor` points at an id that exists nowhere in the DOM and
+   * controlFor()/fillField() cannot find these fields at all. This walks
+   * forward in document order from the label to the next
+   * `button[role="combobox"]` instead of relying on the (broken) for/id
+   * link.
+   */
+  private comboboxTriggerFor(labelText: string) {
+    const label = this.page.locator('label', { hasText: labelText }).first();
+    return label.locator('xpath=following::button[@role="combobox"][1]');
+  }
+
+  async fillCombobox(labelText: string, optionText: string | RegExp): Promise<void> {
+    const trigger = this.comboboxTriggerFor(labelText);
+    await trigger.click();
+    const option = this.page.getByRole('option', { name: optionText }).first();
+    await option.click();
+  }
+
+  async readCombobox(labelText: string): Promise<string> {
+    return (await this.comboboxTriggerFor(labelText).innerText()).trim();
+  }
 }
 
 function cssEscape(id: string): string {

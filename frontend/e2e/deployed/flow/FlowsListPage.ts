@@ -22,6 +22,10 @@ export class FlowsListPage {
    * via the API even if the UI assertions fail.
    */
   async createFlow(name: string): Promise<string> {
+    // Self-sufficient: callers must not have to remember goto() first. Without
+    // this, a spec calling createFlow() on a blank page hangs for the whole test
+    // timeout waiting for a "New Flow" button that was never rendered.
+    await this.goto();
     await selectors.flowsList.newFlowButton(this.page).click();
     await this.page.waitForURL(/\/flows\/[^/]+/, { timeout: 15000 });
     const url = this.page.url();

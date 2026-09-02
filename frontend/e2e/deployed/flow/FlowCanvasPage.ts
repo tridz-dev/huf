@@ -42,6 +42,21 @@ export class FlowCanvasPage {
   }
 
   async addTrigger(): Promise<void> {
+    // A newly created flow is NOT empty: FlowsListHeaderActions seeds a
+    // placeholder entry node {id:"empty-trigger", type:"trigger.webhook",
+    // _label:"Select Trigger"}. FlowCanvas only renders the "Add Trigger"
+    // panel button when no trigger node exists, so on a new flow that button
+    // is absent by design and the real affordance is the placeholder card.
+    // Click the card first, and fall back to the panel button for flows whose
+    // trigger was deleted.
+    const placeholder = this.page
+      .locator('.react-flow')
+      .getByText('Select Trigger', { exact: false })
+      .first();
+    if (await placeholder.count().then((n) => n > 0).catch(() => false)) {
+      await placeholder.click();
+      return;
+    }
     await this.page.getByRole('button', { name: /add trigger/i }).click();
   }
 
@@ -58,6 +73,18 @@ export class FlowCanvasPage {
 
   async selectNode(label: string): Promise<void> {
     await selectors.canvas.nodeByLabel(this.page, label).click();
+  }
+
+  /**
+   * Select the node by label then delete it via its Trash2 icon button
+   * (ActionNode.tsx/TriggerNode.tsx render it only while `selected`,
+   * accessible name "Delete node"). Used by roundtrip.spec.ts to prove a
+   * saved reference to a since-deleted node survives as a "Missing node"
+   * option rather than being silently dropped.
+   */
+  async deleteNode(label: string): Promise<void> {
+    await this.selectNode(label);
+    await this.page.getByRole('button', { name: /^delete node$/i }).click();
   }
 
   async save(): Promise<void> {
