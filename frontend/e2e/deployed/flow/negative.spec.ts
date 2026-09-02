@@ -3,6 +3,7 @@ import { FlowsListPage } from './FlowsListPage';
 import { FlowCanvasPage } from './FlowCanvasPage';
 import { NodeModal } from './NodeModal';
 import { ConfigSidebar } from './ConfigSidebar';
+import { selectors } from './selectors';
 import {
   newApiContext,
   deleteFlowByName,
@@ -20,7 +21,9 @@ import {
  * user, the assertion says so explicitly and the test is left red (or uses
  * test.fail()) rather than weakened to pass.
  */
-test.describe.serial('flow builder negative cases (does the UI stop broken flows?)', () => {
+// Not serial: each test creates and cleans up its own flow, and in serial mode
+// a single failure SKIPS every later test - which silently hid three results.
+test.describe('flow builder negative cases (does the UI stop broken flows?)', () => {
   let api: Awaited<ReturnType<typeof newApiContext>>;
   let origin: string;
   const flowIdsToClean: string[] = [];
@@ -251,7 +254,11 @@ test.describe.serial('flow builder negative cases (does the UI stop broken flows
 
     // Now delete the referenced node.
     await canvas.selectNode('Call Tool');
-    await page.getByRole('button', { name: /delete node/i }).click();
+    await selectors.canvas
+      .nodeWrapperByLabel(page, 'Call Tool')
+      .getByRole('button', { name: /delete node/i })
+      .click();  // scoped to THIS node: every node renders its own delete button, and
+  // the sidebar renders another one
     await canvas.settle();
 
     // No confirmation dialog appears before this destructive action —
@@ -364,7 +371,11 @@ test.describe.serial('flow builder negative cases (does the UI stop broken flows
     // Clicking delete removes the node IMMEDIATELY — no
     // window.confirm/AlertDialog appears in between (ActionNode.tsx calls
     // deleteNode(id) directly from the button's onClick).
-    await page.getByRole('button', { name: /delete node/i }).click();
+    await selectors.canvas
+      .nodeWrapperByLabel(page, 'Call Tool')
+      .getByRole('button', { name: /delete node/i })
+      .click();  // scoped to THIS node: every node renders its own delete button, and
+  // the sidebar renders another one
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await canvas.settle();
     await expect(selectorsCanvasNode(page, 'Call Tool')).toHaveCount(0);
