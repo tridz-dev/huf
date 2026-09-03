@@ -111,6 +111,7 @@ def after_install():
     create_ocr_document_tool()
     create_flow_tools()
     create_memory_tools()
+    create_code_execution_tools()
     create_default_memory_policies()
     create_default_execution_profiles()
     register_integration_services()
@@ -170,6 +171,7 @@ def after_migrate():
 		create_ocr_document_tool()
 		create_flow_tools()
 		create_memory_tools()
+		create_code_execution_tools()
 		create_default_memory_policies()
 		create_default_execution_profiles()
 		register_integration_services()
@@ -1312,6 +1314,76 @@ def create_memory_tools():
 			tool_doc.save(ignore_permissions=True)
 		else:
 			tool_doc.insert(ignore_permissions=True)
+
+	frappe.db.commit()
+
+
+def create_code_execution_tools():
+	"""Create or update the sandboxed Python execution Agent Tool Function.
+
+	Seeds a single ``run_python`` record with ``types == "Code Execution"``.
+	This type is gated hard at offer-time by
+	``PermissionAwareToolRegistry._allows_code_execution`` (requires the user's
+	``code_execution.run`` capability AND the agent's ``allow_code_execution`` AND
+	a non-disabled ``Execution Profile``) and at dispatch-time by
+	``huf.ai.tools.code_execution.run_python`` itself. The trusted ``agent_doc``
+	argument is injected by ``sdk_tools.create_agent_tools`` via ``extra_args``
+	from its own closure, never from the model's tool-call arguments -- this
+	seed only describes the tool's shape, not who may call it.
+
+	Idempotent: safe to re-run on every install/migrate.
+	"""
+	if not frappe.db.exists("Agent Tool Type", "Code Execution"):
+		doc = frappe.new_doc("Agent Tool Type")
+		doc.name1 = "Code Execution"
+		doc.insert(ignore_permissions=True)
+
+	parameter_rows = [
+		{
+			"label": "Code",
+			"fieldname": "code",
+			"type": "string",
+			"required": 1,
+			"description": (
+				"The Python source to execute. Never persisted verbatim; only its "
+				"SHA-256 digest is stored on the audit record."
+			),
+		},
+		{
+			"label": "Conversation",
+			"fieldname": "conversation",
+			"type": "string",
+			"required": 0,
+			"description": "Agent Conversation name, for audit linkage.",
+		},
+		{
+			"label": "Agent Run",
+			"fieldname": "agent_run",
+			"type": "string",
+			"required": 0,
+			"description": "Agent Run name, for audit linkage.",
+		},
+	]
+
+	tool_name = "run_python"
+	docname = frappe.db.exists("Agent Tool Function", {"tool_name": tool_name})
+	tool_doc = frappe.get_doc("Agent Tool Function", docname) if docname else frappe.new_doc("Agent Tool Function")
+	tool_doc.tool_name = tool_name
+	tool_doc.description = (
+		"Execute Python code in a sandboxed, resource-limited environment. "
+		"Availability and approval flow are entirely controlled by the calling "
+		"agent's Execution Profile -- this tool may be disabled, auto-approved, "
+		"or parked behind a human approval step depending on that configuration."
+	)
+	tool_doc.function_path = "huf.ai.tools.code_execution.run_python"
+	tool_doc.types = "Code Execution"
+	tool_doc.tool_type = "Code Execution"
+	tool_doc.pass_parameters_as_json = 1
+	tool_doc.set("parameters", parameter_rows)
+	if docname:
+		tool_doc.save(ignore_permissions=True)
+	else:
+		tool_doc.insert(ignore_permissions=True)
 
 	frappe.db.commit()
 

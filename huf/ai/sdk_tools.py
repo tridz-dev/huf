@@ -159,6 +159,8 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                     function_path = "huf.ai.memory_tools.handle_archive_memory_record"
                 elif function_doc.types == "Promote Memory to Knowledge":
                     function_path = "huf.ai.memory_tools.handle_promote_memory_to_knowledge"
+                elif function_doc.types == "Code Execution":
+                    function_path = "huf.ai.tools.code_execution.run_python"
 
                 else:
                     continue
@@ -201,6 +203,15 @@ def create_agent_tools(agent) -> list[FunctionTool]:
                 elif function_doc.types == "Run Agent":
                     if function_doc.agent:
                         extra_args["target_agent_name"] = function_doc.agent
+
+                elif function_doc.types == "Code Execution":
+                    # Trusted-injection channel: `agent` is the closure variable
+                    # create_agent_tools(agent) was called with -- the agent whose
+                    # own tool list is being built -- never anything derived from
+                    # function_doc, args_dict, or ctx (which the model can influence).
+                    # _extra_args is applied via dict.update() AFTER _merge_run_context's
+                    # setdefault, so this always overrides a model-supplied agent_doc.
+                    extra_args["agent_doc"] = agent
 
                 tool = create_function_tool(
                     function_doc.tool_name,
