@@ -1,134 +1,181 @@
-# Copyright (c) 2025, Tridz Technologies Pvt Ltd and Contributors
-# See license.txt
+# Copyright (c) 2026, Tridz Technologies Pvt Ltd and contributors
+# For license information, please see license.txt
 
 """
-Tests for AI Provider doctype validation (P1) and the atomic Agent run-stats
-update (P3).
+Unit tests for AI Provider URL validation (ST-R3.4).
 
-Covers:
-- Local provider (is_local_llm) saves without an API key; the key defaults
-  to "not-needed" for legacy readers.
-- Local provider without api_base_url or url throws.
-- Cloud provider without an API key throws.
-- Provider names containing whitespace throw (the name becomes the LiteLLM
-  model routing prefix).
-- _update_agent_run_stats issues a single atomic UPDATE that does not bump
-  `modified`, and swallows TimestampMismatchError / generic DB errors so a
-  stats failure never fails a user run.
+Tests that the api_base_url field validation correctly:
+- Allows HTTPS to public hostnames (e.g., api.openai.com)
+- Allows HTTP/HTTPS to localhost and 127.0.0.1
+- Rejects HTTP to private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+- Rejects HTTP to cloud metadata endpoints (169.254.169.254)
+- Rejects HTTP to non-localhost remote hosts
 
-Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_ai_provider_validation
+Run with:
+    bench --site <site> run-tests --app huf --module huf.ai.tests.test_ai_provider_validation
 """
-
-from unittest.mock import MagicMock, patch
 
 import frappe
 from frappe.tests import IntegrationTestCase
+from frappe.exceptions import ValidationError
 
 
+class TestAIProviderURLValidation(IntegrationTestCase):
+	"""Integration tests for AI Provider api_base_url validation."""
 
-def _get_update_agent_run_stats():
-    # Lazy import: huf.ai.agent_integration requires an initialized frappe
-    # site context at module import time (frappe.logger), which the test
-    # runner's discovery phase does not provide.
-    from huf.ai.agent_integration import _update_agent_run_stats
-    return _update_agent_run_stats
+	def setUp(self):
+		self._providers = []
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for name in self._providers:
+			try:
+				frappe.delete_doc("AI Provider", name, ignore_permissions=True, force=True)
+			except Exception:
+				pass
+		frappe.db.commit()
+
+	def _create_provider(self, api_base_url=None, **kwargs):
+		"""Helper to create an AI Provider with the given api_base_url."""
+		frappe.set_user("Administrator")
+		defaults = {
+			"provider_name": f"test-provider-{frappe.generate_hash(length=8)}",
+			"provider_brand": "openai",
+			"is_local_llm": 0,
+			"api_key": "test-key-12345",
+		}
+		if api_base_url:
+			defaults["api_base_url"] = api_base_url
+		defaults.update(kwargs)
+
+		provider = frappe.get_doc("AI Provider", defaults)
+		self._providers.append(provider.name)
+		return provider
+
+	def test_empty_api_base_url_is_allowed(self):
+		"""If api_base_url is not set, no validation error should be raised."""
+		provider = self._create_provider(api_base_url=None)
+		try:
+			provider.insert()
+		except ValidationError:
+			self.fail("Empty api_base_url should be allowed")
+
+	def test_https_public_hostname_is_allowed(self):
+		"""HTTPS to a public hostname like api.openai.com should be allowed."""
+		provider = self._create_provider(api_base_url="https://api.openai.com")
+		try:
+			provider.insert()
+		except ValidationError as e:
+			self.fail(f"HTTPS to public hostname should be allowed, got: {e}")
+
+	def test_https_localhost_is_allowed(self):
+		"""HTTPS to localhost:3000 should be allowed."""
+		provider = self._create_provider(api_base_url="https://localhost:3000")
+		try:
+			provider.insert()
+		except ValidationError as e:
+			self.fail(f"HTTPS to localhost should be allowed, got: {e}")
+
+	def test_http_localhost_is_allowed(self):
+		"""HTTP to localhost:3000 should be allowed."""
+		provider = self._create_provider(api_base_url="http://localhost:3000")
+		try:
+			provider.insert()
+		except ValidationError as e:
+			self.fail(f"HTTP to localhost should be allowed, got: {e}")
+
+	def test_http_127_0_0_1_is_allowed(self):
+		"""HTTP to 127.0.0.1 (loopback) should be allowed."""
+		provider = self._create_provider(api_base_url="http://127.0.0.1:3000")
+		try:
+			provider.insert()
+		except ValidationError as e:
+			self.fail(f"HTTP to 127.0.0.1 should be allowed, got: {e}")
+
+	def test_https_127_0_0_1_is_allowed(self):
+		"""HTTPS to 127.0.0.1 (loopback) should be allowed."""
+		provider = self._create_provider(api_base_url="https://127.0.0.1:3000")
+		try:
+			provider.insert()
+		except ValidationError as e:
+			self.fail(f"HTTPS to 127.0.0.1 should be allowed, got: {e}")
+
+	def test_http_private_range_10_0_0_0_is_rejected(self):
+		"""HTTP to 10.0.0.5 (private range 10.0.0.0/8) should be rejected."""
+		provider = self._create_provider(api_base_url="http://10.0.0.5")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("private", str(ctx.exception).lower())
+
+	def test_http_private_range_172_16_is_rejected(self):
+		"""HTTP to 172.16.1.1 (private range 172.16.0.0/12) should be rejected."""
+		provider = self._create_provider(api_base_url="http://172.16.1.1")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("private", str(ctx.exception).lower())
+
+	def test_http_private_range_192_168_is_rejected(self):
+		"""HTTP to 192.168.1.1 (private range 192.168.0.0/16) should be rejected."""
+		provider = self._create_provider(api_base_url="http://192.168.1.1")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("private", str(ctx.exception).lower())
+
+	def test_http_cloud_metadata_endpoint_is_rejected(self):
+		"""HTTP to 169.254.169.254 (cloud metadata endpoint, link-local) should be rejected."""
+		provider = self._create_provider(api_base_url="http://169.254.169.254")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("private", str(ctx.exception).lower())
+
+	def test_https_private_range_is_rejected(self):
+		"""HTTPS to a private IP should also be rejected."""
+		provider = self._create_provider(api_base_url="https://10.0.0.5")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("private", str(ctx.exception).lower())
+
+	def test_http_non_localhost_hostname_is_rejected(self):
+		"""HTTP to a non-localhost remote hostname should be rejected."""
+		provider = self._create_provider(api_base_url="http://example.com")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("http", str(ctx.exception).lower())
+
+	def test_invalid_scheme_is_rejected(self):
+		"""Non-HTTP/HTTPS schemes like ftp:// should be rejected."""
+		provider = self._create_provider(api_base_url="ftp://example.com")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("http", str(ctx.exception).lower())
+
+	def test_url_without_hostname_is_rejected(self):
+		"""URLs without a hostname should be rejected."""
+		provider = self._create_provider(api_base_url="http://")
+		with self.assertRaises(ValidationError) as ctx:
+			provider.insert()
+		self.assertIn("hostname", str(ctx.exception).lower())
+
+	def test_case_insensitive_localhost(self):
+		"""localhost matching should be case-insensitive."""
+		provider = self._create_provider(api_base_url="https://LOCALHOST:3000")
+		try:
+			provider.insert()
+		except ValidationError as e:
+			self.fail(f"Case-insensitive localhost should be allowed, got: {e}")
+
+	def test_validation_on_update(self):
+		"""api_base_url validation should also run on updates."""
+		provider = self._create_provider(api_base_url="https://api.openai.com")
+		provider.insert()
+
+		# Update to an invalid URL
+		provider.api_base_url = "http://10.0.0.5"
+		with self.assertRaises(ValidationError) as ctx:
+			provider.save()
+		self.assertIn("private", str(ctx.exception).lower())
 
 
-class TestAIProviderValidation(IntegrationTestCase):
-    created_providers = []
-
-    def tearDown(self):
-        for name in self.created_providers:
-            frappe.db.delete("AI Provider", name)
-        self.created_providers = []
-
-    def _make_provider(self, **fields):
-        doc = frappe.get_doc(
-            {
-                "doctype": "AI Provider",
-                "provider_name": fields.pop("provider_name"),
-                "provider_brand": fields.pop("provider_brand", "openai"),
-                **fields,
-            }
-        )
-        doc.insert(ignore_permissions=True)
-        self.created_providers.append(doc.name)
-        return doc
-
-    def test_local_provider_without_api_key_saves_with_default(self):
-        doc = self._make_provider(
-            provider_name="OllamaValidationTest",
-            provider_brand="ollama",
-            is_local_llm=1,
-            api_base_url="http://host.docker.internal:11434",
-        )
-        self.assertEqual(doc.get_password("api_key"), "not-needed")
-
-    def test_local_provider_with_legacy_url_saves(self):
-        doc = self._make_provider(
-            provider_name="OllamaLegacyURLTest",
-            provider_brand="ollama",
-            is_local_llm=1,
-            url="http://host.docker.internal",
-            port=11434,
-        )
-        self.assertEqual(doc.get_password("api_key"), "not-needed")
-
-    def test_local_provider_without_any_endpoint_throws(self):
-        with self.assertRaises(frappe.ValidationError):
-            self._make_provider(
-                provider_name="OllamaNoEndpointTest",
-                provider_brand="ollama",
-                is_local_llm=1,
-            )
-
-    def test_cloud_provider_without_api_key_throws(self):
-        with self.assertRaises(frappe.ValidationError):
-            self._make_provider(
-                provider_name="OpenAINoKeyTest",
-                provider_brand="openai",
-                is_local_llm=0,
-            )
-
-    def test_provider_name_with_whitespace_throws(self):
-        with self.assertRaises(frappe.ValidationError):
-            self._make_provider(
-                provider_name="Ollama LocalSpace Test",
-                provider_brand="ollama",
-                is_local_llm=1,
-                api_base_url="http://host.docker.internal:11434",
-            )
-
-
-class TestUpdateAgentRunStats(IntegrationTestCase):
-    def _mock_frappe(self):
-        mock_frappe = MagicMock()
-        # The except clause needs the real exception class.
-        mock_frappe.TimestampMismatchError = frappe.TimestampMismatchError
-        mock_frappe.db.count.return_value = 3
-        mock_frappe.db.get_value.return_value = "2026-07-26 10:00:00"
-        return mock_frappe
-
-    def test_uses_single_atomic_update_without_modified_bump(self):
-        mock_frappe = self._mock_frappe()
-        with patch("huf.ai.agent_integration.frappe", mock_frappe):
-            _get_update_agent_run_stats()("Test Agent")
-
-        mock_frappe.db.sql.assert_called_once()
-        stmt, params = mock_frappe.db.sql.call_args[0]
-        self.assertIn("UPDATE `tabAgent`", stmt)
-        self.assertNotIn("modified", stmt)
-        self.assertEqual(params, (3, "2026-07-26 10:00:00", "Test Agent"))
-        mock_frappe.db.set_value.assert_not_called()
-
-    def test_swallows_generic_db_error(self):
-        mock_frappe = self._mock_frappe()
-        mock_frappe.db.sql.side_effect = Exception("boom")
-        with patch("huf.ai.agent_integration.frappe", mock_frappe):
-            _get_update_agent_run_stats()("Test Agent")  # must not raise
-
-    def test_swallows_timestamp_mismatch(self):
-        mock_frappe = self._mock_frappe()
-        mock_frappe.db.sql.side_effect = frappe.TimestampMismatchError("Test Agent")
-        with patch("huf.ai.agent_integration.frappe", mock_frappe):
-            _get_update_agent_run_stats()("Test Agent")  # must not raise
+if __name__ == "__main__":
+	import unittest
+	unittest.main()

@@ -4,12 +4,15 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from urllib.parse import urlparse
+import ipaddress
 
 
 class AIProvider(Document):
 	def validate(self):
 		self.validate_provider_name()
 		self.validate_api_key()
+		self.validate_api_base_url()
 
 	def validate_provider_name(self):
 		# The provider name becomes the LiteLLM model routing prefix
@@ -35,6 +38,74 @@ class AIProvider(Document):
 				self.api_key = "not-needed"
 		elif not self.api_key:
 			frappe.throw(_("API Key is required for cloud providers."))
+
+	def validate_api_base_url(self):
+		"""
+		Validate api_base_url to prevent SSRF attacks.
+
+		Rejects URLs with:
+		- Non-HTTP/HTTPS schemes
+		- HTTP scheme to private/internal IP ranges or non-localhost hostnames
+		- Private IP ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
+		  169.254.0.0/16 (link-local), 127.0.0.0/8 (loopback, except localhost)
+		"""
+		if not self.api_base_url:
+			return
+
+		parsed = urlparse(self.api_base_url)
+
+		# Allow only HTTP and HTTPS schemes
+		if parsed.scheme not in ("http", "https"):
+			frappe.throw(
+				_("Only HTTP and HTTPS schemes are allowed for API Base URL. Got: {0}").format(
+					parsed.scheme
+				)
+			)
+
+		if not parsed.hostname:
+			frappe.throw(_("Invalid API Base URL: no hostname found"))
+
+		hostname = parsed.hostname.lower()
+
+		# Allow localhost and 127.0.0.1 for both http and https
+		if hostname in ("localhost", "127.0.0.1", "::1"):
+			return
+
+		# For non-localhost hostnames, HTTP is only allowed for localhost
+		if parsed.scheme == "http":
+			frappe.throw(
+				_("HTTP scheme is only allowed for localhost (127.0.0.1 or ::1). "
+				  "For remote hosts, use HTTPS. Got: {0}").format(self.api_base_url)
+			)
+
+		# Check if hostname is an IP address (IPv4 or IPv6)
+		try:
+			ip_addr = ipaddress.ip_address(hostname)
+
+			# Check against private/internal IP ranges
+			private_ranges = [
+				ipaddress.ip_network("10.0.0.0/8"),
+				ipaddress.ip_network("172.16.0.0/12"),
+				ipaddress.ip_network("192.168.0.0/16"),
+				ipaddress.ip_network("169.254.0.0/16"),
+				ipaddress.ip_network("127.0.0.0/8"),
+				ipaddress.ip_network("::1/128"),
+				ipaddress.ip_network("fc00::/7"),  # IPv6 private
+				ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+			]
+
+			for network in private_ranges:
+				if ip_addr in network:
+					frappe.throw(
+						_("API Base URL cannot point to private or internal IP addresses. "
+						  "Got: {0}").format(self.api_base_url)
+					)
+
+		except ValueError:
+			# hostname is not a valid IP address; it's a hostname
+			# For non-IP hostnames that are not localhost, HTTPS is allowed (e.g., api.openai.com)
+			# No DNS resolution; just allow HTTPS public hostnames
+			pass
 
 @frappe.whitelist()
 def get_provider_settings(provider_name):
