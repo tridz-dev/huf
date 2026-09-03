@@ -162,6 +162,16 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
     dimension_values = {
         field: (None if value == "__none__" else value) for field, value in zip(DIMENSION_FIELDS, dimensions)
     }
+    new_composition_totals = json.dumps(composition_totals) if composition_totals else None
+
+    # ST-10.3: Check if this is an existing doc with unchanged metrics before updating
+    metrics_unchanged = False
+    composition_unchanged = False
+    if existing:
+        # Compare new computed metrics with existing doc's values
+        metrics_unchanged = all(doc.get(key) == metrics[key] for key in metrics.keys())
+        composition_unchanged = new_composition_totals == doc.composition_totals
+
     doc.update({
         "granularity": granularity,
         "bucket_start": bucket_start,
@@ -171,10 +181,16 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
         # Serialised explicitly, matching how this codebase writes every other JSON
         # field. An empty dict is stored as NULL rather than "{}": no segment was
         # measured at all, which is "not measured", not "measured as zero".
-        "composition_totals": json.dumps(composition_totals) if composition_totals else None,
+        "composition_totals": new_composition_totals,
         "last_recomputed_at": now_datetime(),
     })
     doc.flags.ignore_permissions = True
+
+    # Skip write if metrics are unchanged (optimization to reduce write volume)
+    if existing and metrics_unchanged and composition_unchanged:
+        frappe.logger().debug(f"Skipped unchanged bucket {granularity}:{bucket_start}:{dimension_key}")
+        return
+
     doc.save() if existing else doc.insert()
 
 
