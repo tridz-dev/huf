@@ -76,16 +76,16 @@ function describeArg(name: string, raw: unknown, stepsById: Map<string, DisplayS
   return `${name}: always ${JSON.stringify(raw)}`;
 }
 
-function inputFieldList(inputSchema: ProcedureProposal['input_schema']): { name: string; type?: string; required?: boolean }[] {
+function inputFieldList(inputSchema: ProcedureProposal['input_schema']): { name: string; type?: string; required?: boolean; confidence?: 'prompt' | 'unconfirmed' }[] {
   if (!inputSchema) return [];
   if (Array.isArray(inputSchema)) {
-    return inputSchema.map((field) => ({ name: field.name, type: field.type, required: field.required }));
+    return inputSchema.map((field) => ({ name: field.name, type: field.type, required: field.required, confidence: field['x-confidence'] }));
   }
   // JSON-schema object with a `properties` map -- what the backend actually returns.
-  const props = (inputSchema as Record<string, unknown>).properties as Record<string, { type?: string }> | undefined;
+  const props = (inputSchema as Record<string, unknown>).properties as Record<string, { type?: string; 'x-confidence'?: 'prompt' | 'unconfirmed' }> | undefined;
   if (props && typeof props === 'object') {
     const required = new Set(((inputSchema as Record<string, unknown>).required as string[] | undefined) ?? []);
-    return Object.entries(props).map(([name, def]) => ({ name, type: def?.type, required: required.has(name) }));
+    return Object.entries(props).map(([name, def]) => ({ name, type: def?.type, required: required.has(name), confidence: def?.['x-confidence'] }));
   }
   return [];
 }
@@ -181,7 +181,7 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-[960px] max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Workflow className="w-4 h-4 text-primary" />
@@ -192,6 +192,8 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
             the agent deciding anything again -- so it runs faster and the same way every time.
           </DialogDescription>
         </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
 
         {loading && <div className="py-6 text-sm text-muted-foreground">Checking what this answer did...</div>}
 
@@ -240,7 +242,7 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
           <div className="space-y-4 py-2 text-sm">
             {sourceLine}
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-w-md">
               <label htmlFor="procedure-name" className="font-medium">
                 Name it
               </label>
@@ -257,6 +259,9 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
 
             <div className="text-muted-foreground">
               {stepCount} step{stepCount === 1 ? '' : 's'} will be saved
+              {(proposal?.unconfirmed_input_fields?.length ?? 0) > 0 && (
+                <span> -- {proposal!.unconfirmed_input_fields!.length} input{proposal!.unconfirmed_input_fields!.length === 1 ? '' : 's'} need{proposal!.unconfirmed_input_fields!.length === 1 ? 's' : ''} confirming</span>
+              )}
             </div>
 
             {inputFields.length > 0 && (
@@ -264,7 +269,7 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
                 <div className="font-medium mb-1">You&apos;ll be asked for</div>
                 <div className="flex flex-wrap gap-1.5">
                   {inputFields.map((field) => (
-                    <Badge key={field.name} variant="secondary" className="font-normal">
+                    <Badge key={field.name} variant={field.confidence === 'unconfirmed' ? 'pill-warning' : 'secondary'} className="font-normal">
                       {field.name}
                       {field.type ? `: ${field.type}` : ''}
                       {field.required ? ' *' : ''}
@@ -274,13 +279,20 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
                 <p className="mt-1 text-xs text-muted-foreground">
                   These change each time you run it -- everything else stays fixed.
                 </p>
+                {(proposal?.unconfirmed_input_fields?.length ?? 0) > 0 && (
+                  <p className="mt-1 text-xs text-warning">
+                    We couldn&apos;t confirm where {(proposal?.unconfirmed_input_fields?.length ?? 0) === 1 ? 'this value came' : 'these values came'} from, so
+                    you&apos;ll need to provide {(proposal?.unconfirmed_input_fields?.length ?? 0) === 1 ? 'it' : 'them'} each time -- same as the fields above, but
+                    we can&apos;t tell you {(proposal?.unconfirmed_input_fields?.length ?? 0) === 1 ? 'it matches' : 'they match'} your request.
+                  </p>
+                )}
               </div>
             )}
 
             {steps.length > 0 && (
               <div>
                 <div className="font-medium mb-1">What it will do, every time</div>
-                <ol className="space-y-2">
+                <ol className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {steps.map((step) => (
                     <li key={step.id} className="rounded-md border border-line p-2">
                       <div className="font-medium">
@@ -319,6 +331,8 @@ export function ProposeProcedureDialog({ agentRunName, open, onOpenChange }: Pro
             </p>
           </div>
         )}
+
+        </div>
 
         <DialogFooter>
           {accepted ? (
