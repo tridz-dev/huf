@@ -7,6 +7,7 @@ import requests
 from frappe import _, client
 from frappe.utils.file_manager import save_file
 
+from huf.ai.tool_doctype_guard import _check_doctype_allowed
 from huf.ai.transaction import commit_if_background
 
 

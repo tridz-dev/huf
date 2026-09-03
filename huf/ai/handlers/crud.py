@@ -20,6 +20,7 @@ from huf.ai.tool_functions import (
     send_email,
 )
 from huf.ai.transaction import commit_if_background
+from huf.ai.tool_doctype_guard import _check_doctype_allowed
 
 logger = frappe.logger("huf")
 
