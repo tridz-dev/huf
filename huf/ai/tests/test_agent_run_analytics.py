@@ -1,5 +1,4 @@
 from datetime import datetime
-from unittest import mock
 
 from frappe.tests import UnitTestCase
 
@@ -8,7 +7,6 @@ from huf.ai.agent_run_analytics import (
     CORRECTION_WINDOW_HOURS,
     _bucket_start,
     _dimension_key,
-    refresh_rollups,
 )
 
 
