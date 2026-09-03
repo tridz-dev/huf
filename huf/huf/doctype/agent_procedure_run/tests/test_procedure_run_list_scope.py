@@ -24,19 +24,23 @@ class TestProcedureRunListScope:
 		assert result is not None
 		assert "Agent Procedure Run" in result
 		assert "owner" in result
-		assert "alice@example.com" in result or "alice@example.com" in result
+		assert "alice@example.com" in result
 
 	def test_huf_user_list_sees_only_own_procedure_runs(self):
 		"""Huf User listing procedure runs should only see those they own."""
 		# Setup: Create procedure runs for two users
 		alice_run = frappe.new_doc("Agent Procedure Run")
 		alice_run.procedure = "test_procedure"
+		alice_run.pinned_fingerprint = "test-fingerprint"
+		alice_run.pinned_definition_json = "{}"
 		alice_run.status = "success"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
 
 		bob_run = frappe.new_doc("Agent Procedure Run")
 		bob_run.procedure = "test_procedure"
+		bob_run.pinned_fingerprint = "test-fingerprint"
+		bob_run.pinned_definition_json = "{}"
 		bob_run.status = "success"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
@@ -62,6 +66,8 @@ class TestProcedureRunListScope:
 		# Setup: Create a run owned by bob
 		bob_run = frappe.new_doc("Agent Procedure Run")
 		bob_run.procedure = "test_procedure"
+		bob_run.pinned_fingerprint = "test-fingerprint"
+		bob_run.pinned_definition_json = "{}"
 		bob_run.status = "success"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
@@ -85,12 +91,16 @@ class TestProcedureRunListScope:
 		# Setup: Create runs for two users
 		alice_run = frappe.new_doc("Agent Procedure Run")
 		alice_run.procedure = "test_procedure"
+		alice_run.pinned_fingerprint = "test-fingerprint"
+		alice_run.pinned_definition_json = "{}"
 		alice_run.status = "success"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
 
 		bob_run = frappe.new_doc("Agent Procedure Run")
 		bob_run.procedure = "test_procedure"
+		bob_run.pinned_fingerprint = "test-fingerprint"
+		bob_run.pinned_definition_json = "{}"
 		bob_run.status = "success"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()

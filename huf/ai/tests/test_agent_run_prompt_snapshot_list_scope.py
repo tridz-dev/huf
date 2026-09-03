@@ -24,7 +24,7 @@ class TestAgentRunPromptSnapshotListScope:
 		assert result is not None
 		assert "Agent Run" in result
 		assert "owner" in result
-		assert "alice@example.com" in result or "alice@example.com" in result
+		assert "alice@example.com" in result
 
 	def test_huf_manager_list_sees_only_own_snapshots(self):
 		"""Huf Manager listing snapshots should only see those from own runs."""
@@ -44,12 +44,14 @@ class TestAgentRunPromptSnapshotListScope:
 		# Create snapshots for each run
 		alice_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
 		alice_snapshot.agent_run = alice_run.name
-		alice_snapshot.prompt_text = "test prompt"
+		alice_snapshot.system_prompt = "test prompt"
+		alice_snapshot.captured_at = frappe.utils.now_datetime()
 		alice_snapshot.insert()
 
 		bob_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
 		bob_snapshot.agent_run = bob_run.name
-		bob_snapshot.prompt_text = "test prompt"
+		bob_snapshot.system_prompt = "test prompt"
+		bob_snapshot.captured_at = frappe.utils.now_datetime()
 		bob_snapshot.insert()
 
 		try:
@@ -82,7 +84,8 @@ class TestAgentRunPromptSnapshotListScope:
 		# Create a snapshot for bob's run
 		bob_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
 		bob_snapshot.agent_run = bob_run.name
-		bob_snapshot.prompt_text = "test prompt"
+		bob_snapshot.system_prompt = "test prompt"
+		bob_snapshot.captured_at = frappe.utils.now_datetime()
 		bob_snapshot.insert()
 
 		try:
@@ -118,12 +121,14 @@ class TestAgentRunPromptSnapshotListScope:
 		# Create snapshots for each run
 		alice_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
 		alice_snapshot.agent_run = alice_run.name
-		alice_snapshot.prompt_text = "test prompt"
+		alice_snapshot.system_prompt = "test prompt"
+		alice_snapshot.captured_at = frappe.utils.now_datetime()
 		alice_snapshot.insert()
 
 		bob_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
 		bob_snapshot.agent_run = bob_run.name
-		bob_snapshot.prompt_text = "test prompt"
+		bob_snapshot.system_prompt = "test prompt"
+		bob_snapshot.captured_at = frappe.utils.now_datetime()
 		bob_snapshot.insert()
 
 		try:

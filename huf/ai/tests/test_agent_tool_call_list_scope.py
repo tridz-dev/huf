@@ -14,13 +14,9 @@ class TestAgentToolCallListScope:
 
 	def test_system_manager_gets_no_filter(self):
 		"""System Manager should see no filter (returns None)."""
-		with frappe.mock.patch_request(
-			method="GET",
-			path="/api/resource/Agent Tool Call",
-		):
-			frappe.set_user("Administrator")
-			result = get_tool_call_permission_conditions("Administrator")
-			assert result is None
+		frappe.set_user("Administrator")
+		result = get_tool_call_permission_conditions("Administrator")
+		assert result is None
 
 	def test_huf_user_gets_where_clause(self):
 		"""Regular Huf User should get a WHERE clause filtering by agent_run owner."""
