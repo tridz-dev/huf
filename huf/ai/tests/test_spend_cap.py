@@ -3,7 +3,7 @@
 ST-09.6: Tests for spend-cap checks before enqueuing child runs.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
@@ -11,7 +11,7 @@ import frappe
 from huf.ai.run_budget import RunBudget, RunBudgetExceeded
 
 
-class TestSpendCapBasics:
+class TestSpendCapBasics(IntegrationTestCase):
     """Basic spend cap initialization and tracking."""
 
     def test_spend_cap_initialized(self):
@@ -45,7 +45,7 @@ class TestSpendCapBasics:
         assert budget.spend_so_far_usd == 35.75
 
 
-class TestSpendCapEnforcement:
+class TestSpendCapEnforcement(IntegrationTestCase):
     """Test check_spend behavior with various amounts."""
 
     def test_spend_well_below_cap(self):
@@ -87,7 +87,7 @@ class TestSpendCapEnforcement:
         )
         budget.spend_so_far_usd = 90.0
 
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(15.0)  # Total = 105.0 > 100.0
         assert "spend" in str(exc_info.value).lower() or "budget" in str(exc_info.value).lower()
 
@@ -102,11 +102,11 @@ class TestSpendCapEnforcement:
         )
         budget.spend_so_far_usd = 99.99
 
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_spend(0.02)  # Total = 100.01 > 100.0
 
 
-class TestUnlimitedSpendCap:
+class TestUnlimitedSpendCap(IntegrationTestCase):
     """Test unlimited spend cap (0 = unlimited)."""
 
     def test_unlimited_cap_never_raises(self):
@@ -139,7 +139,7 @@ class TestUnlimitedSpendCap:
         budget.check_spend(10**10)
 
 
-class TestSpendCapErrorMessages:
+class TestSpendCapErrorMessages(IntegrationTestCase):
     """Test error messages for spend cap violations."""
 
     def test_spend_error_includes_amounts(self):
@@ -153,14 +153,14 @@ class TestSpendCapErrorMessages:
         )
         budget.spend_so_far_usd = 40.0
 
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(15.0)
         error_msg = str(exc_info.value).lower()
         # Should mention spend/cost/budget
         assert any(word in error_msg for word in ["spend", "budget", "cost", "exceed"])
 
 
-class TestSpendCapIntegration:
+class TestSpendCapIntegration(IntegrationTestCase):
     """Test spend cap in combination with other constraints."""
 
     def test_spend_cap_independent_of_deadline(self):
@@ -179,7 +179,7 @@ class TestSpendCapIntegration:
         budget.check_deadline()
 
         # Spend check fails
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_spend(2.0)
 
     def test_spend_cap_independent_of_depth(self):
@@ -197,11 +197,11 @@ class TestSpendCapIntegration:
         budget.check_depth(max_depth=3)
 
         # Spend check fails
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_spend(2.0)
 
 
-class TestMultipleSpendChecks:
+class TestMultipleSpendChecks(IntegrationTestCase):
     """Test multiple spend checks in sequence."""
 
     def test_sequential_spend_checks(self):
@@ -227,5 +227,5 @@ class TestMultipleSpendChecks:
         budget.spend_so_far_usd += 20.0
 
         # Now at cap, fourth child blocked
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_spend(5.0)  # Would exceed

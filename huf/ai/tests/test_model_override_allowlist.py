@@ -3,14 +3,14 @@
 ST-09.10: Tests for restricting model/provider overrides per agent.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from unittest.mock import Mock, patch, MagicMock
 
 import frappe
 from huf.permissions import has_capability
 
 
-class TestModelOverrideAllowlist:
+class TestModelOverrideAllowlist(IntegrationTestCase):
     """Test model override restrictions via Agent Allowed Model list."""
 
     @patch("frappe.db.get_all")
@@ -87,7 +87,7 @@ class TestModelOverrideAllowlist:
             pass
 
 
-class TestModelOverrideCapability:
+class TestModelOverrideCapability(IntegrationTestCase):
     """Test agent.model.override capability escape hatch."""
 
     @patch("huf.permissions.has_capability")
@@ -143,7 +143,7 @@ class TestModelOverrideCapability:
         # Override blocked
 
 
-class TestAgentConfiguredModelOverride:
+class TestAgentConfiguredModelOverride(IntegrationTestCase):
     """Test override behavior when model/provider match agent's config."""
 
     @patch("frappe.db.get_all")
@@ -191,7 +191,7 @@ class TestAgentConfiguredModelOverride:
         # Non-override always allowed, regardless of allowlist
 
 
-class TestAllowlistEdgeCases:
+class TestAllowlistEdgeCases(IntegrationTestCase):
     """Test edge cases and boundary conditions."""
 
     @patch("frappe.db.get_all")
@@ -233,7 +233,7 @@ class TestAllowlistEdgeCases:
         assert ("anthropic", "claude-3-sonnet") in allowed_set
 
 
-class TestOverrideDetection:
+class TestOverrideDetection(IntegrationTestCase):
     """Test logic for detecting when an override is requested."""
 
     def test_override_detection_both_fields_same(self):

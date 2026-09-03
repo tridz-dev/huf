@@ -3,7 +3,7 @@
 ST-09.4: Tests for Agent Settings fields and server-side max_turns ceiling.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 
@@ -11,7 +11,7 @@ import frappe
 from huf.ai.run_budget import RunBudget
 
 
-class TestAgentSettingsBudgetFields:
+class TestAgentSettingsBudgetFields(IntegrationTestCase):
     """Test Agent Settings budget configuration fields."""
 
     @patch("frappe.get_value")
@@ -90,7 +90,7 @@ class TestAgentSettingsBudgetFields:
         assert budget.max_turns_ceiling == 5
 
 
-class TestAgentSettingsSpendCap:
+class TestAgentSettingsSpendCap(IntegrationTestCase):
     """Test spend cap field behavior."""
 
     @patch("frappe.get_value")
@@ -145,7 +145,7 @@ class TestAgentSettingsSpendCap:
         assert budget.spend_cap_usd == 0
 
 
-class TestAgentSettingsDeadline:
+class TestAgentSettingsDeadline(IntegrationTestCase):
     """Test deadline field configuration."""
 
     @patch("frappe.get_value")
@@ -176,7 +176,7 @@ class TestAgentSettingsDeadline:
         assert 590 <= time_until_deadline <= 610
 
 
-class TestAgentSettingsMaxDepth:
+class TestAgentSettingsMaxDepth(IntegrationTestCase):
     """Test max_depth configuration."""
 
     @patch("frappe.get_value")
@@ -204,5 +204,5 @@ class TestAgentSettingsMaxDepth:
         )
 
         # Should use default from Agent Settings
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_depth()  # Uses default from settings

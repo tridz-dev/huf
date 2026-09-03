@@ -4,7 +4,7 @@ ST-09.9: Tests for A→B→A cycle depth limit, deadline enforcement, and spend 
 Uses pure-mock style for isolation and speed.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 
@@ -12,7 +12,7 @@ import frappe
 from huf.ai.run_budget import RunBudget, RunBudgetExceeded, estimate_run_cost
 
 
-class TestRecursionDepthEnforcement:
+class TestRecursionDepthEnforcement(IntegrationTestCase):
     """Test A→B→A cycle at max_depth ceiling (ST-09.9 scenario 1)."""
 
     def test_depth_limit_prevents_third_hop(self):
@@ -71,7 +71,7 @@ class TestRecursionDepthEnforcement:
             spend_cap_usd=0
         )
         # Should raise at depth 3 with ceiling=2
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget_depth_3.check_depth(max_depth=2)
         assert "Recursion depth" in str(exc_info.value)
 
@@ -122,7 +122,7 @@ class TestRecursionDepthEnforcement:
         assert budget_a2.ancestry == [run_id_a1, run_id_b]
 
 
-class TestDeadlineEnforcement:
+class TestDeadlineEnforcement(IntegrationTestCase):
     """Test wall-clock deadline enforcement (ST-09.9 scenario 2)."""
 
     def test_deadline_exceeded_blocks_execution(self):
@@ -138,7 +138,7 @@ class TestDeadlineEnforcement:
         )
 
         # Should raise when checking deadline
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_deadline()
         assert "deadline exceeded" in str(exc_info.value).lower()
 
@@ -180,7 +180,7 @@ class TestDeadlineEnforcement:
         assert budget_future.is_deadline_exceeded() is False
 
 
-class TestSpendCapEnforcement:
+class TestSpendCapEnforcement(IntegrationTestCase):
     """Test cumulative spend cap enforcement (ST-09.9 scenario 3)."""
 
     def test_spend_cap_blocks_expensive_child(self):
@@ -195,7 +195,7 @@ class TestSpendCapEnforcement:
         budget.spend_so_far_usd = 9.0
 
         # Should raise when trying to add 2.0 (total would be 11.0 > 10.0)
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(2.0)
         assert "spend" in str(exc_info.value).lower() or "budget" in str(exc_info.value).lower()
 
@@ -242,7 +242,7 @@ class TestSpendCapEnforcement:
         budget.check_spend(1.0)
 
 
-class TestEstimateCost:
+class TestEstimateCost(IntegrationTestCase):
     """Test estimate_run_cost helper (used in ST-09.6 spend checks)."""
 
     @patch("huf.ai.run_budget.get_model_pricing")
@@ -290,7 +290,7 @@ class TestEstimateCost:
         assert cost == 0.0
 
 
-class TestCombinedBudgetConstraints:
+class TestCombinedBudgetConstraints(IntegrationTestCase):
     """Test interactions between multiple constraints."""
 
     def test_all_constraints_checked(self):
@@ -311,7 +311,7 @@ class TestCombinedBudgetConstraints:
         budget.check_spend(0.4)  # 9.5 + 0.4 = 9.9 < 10.0
 
         # But a large spend would fail
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_spend(1.0)  # 9.5 + 1.0 = 10.5 > 10.0
 
     def test_spend_and_depth_failure_modes_distinct(self):
@@ -325,7 +325,7 @@ class TestCombinedBudgetConstraints:
             spend_cap_usd=100.0
         )
 
-        with pytest.raises(frappe.ValidationError) as exc_depth:
+        with self.assertRaises(frappe.ValidationError) as exc_depth:
             budget_depth.check_depth(max_depth=2)
         depth_msg = str(exc_depth.value)
         assert "depth" in depth_msg.lower() or "recursion" in depth_msg.lower()
@@ -340,7 +340,7 @@ class TestCombinedBudgetConstraints:
         )
         budget_spend.spend_so_far_usd = 4.0
 
-        with pytest.raises(frappe.ValidationError) as exc_spend:
+        with self.assertRaises(frappe.ValidationError) as exc_spend:
             budget_spend.check_spend(2.0)
         spend_msg = str(exc_spend.value)
         assert "spend" in spend_msg.lower() or "budget" in spend_msg.lower()

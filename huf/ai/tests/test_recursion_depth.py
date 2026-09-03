@@ -4,7 +4,7 @@ ST-09.5: Tests for depth enforcement across orchestration, sub-agent,
 and automation vectors.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 
@@ -12,7 +12,7 @@ import frappe
 from huf.ai.run_budget import RunBudget, RunBudgetExceeded
 
 
-class TestRecursionDepthChain:
+class TestRecursionDepthChain(IntegrationTestCase):
     """Test building and enforcing recursion depth chains."""
 
     def test_depth_increments_with_ancestry(self):
@@ -67,7 +67,7 @@ class TestRecursionDepthChain:
         assert len(set(ancestors)) == 5  # All unique
 
 
-class TestDepthCheckBehavior:
+class TestDepthCheckBehavior(IntegrationTestCase):
     """Test check_depth() behavior at various depths."""
 
     def test_depth_at_zero(self):
@@ -98,7 +98,7 @@ class TestDepthCheckBehavior:
         )
 
         # At equality, should raise
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_depth(max_depth=3)
 
     def test_depth_below_ceiling(self):
@@ -125,11 +125,11 @@ class TestDepthCheckBehavior:
         )
 
         # Above ceiling, should raise
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_depth(max_depth=3)
 
 
-class TestDepthCheckUsesDefaults:
+class TestDepthCheckUsesDefaults(IntegrationTestCase):
     """Test that check_depth uses Agent Settings defaults when no arg provided."""
 
     @patch("frappe.get_value")
@@ -150,7 +150,7 @@ class TestDepthCheckUsesDefaults:
 
         # Should raise at equality
         budget.current_depth = 4
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_depth()
 
     @patch("frappe.get_value")
@@ -171,11 +171,11 @@ class TestDepthCheckUsesDefaults:
 
         # Should raise at equality
         budget.current_depth = 5
-        with pytest.raises(frappe.ValidationError):
+        with self.assertRaises(frappe.ValidationError):
             budget.check_depth()
 
 
-class TestAncestryEdgeCases:
+class TestAncestryEdgeCases(IntegrationTestCase):
     """Test edge cases in ancestry handling."""
 
     def test_empty_ancestry_at_root(self):

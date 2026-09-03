@@ -4,7 +4,7 @@ ST-09.3: Tests for deadline enforcement in the direct path, streaming path,
 and both litellm round loops.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
 import asyncio
@@ -13,7 +13,7 @@ import frappe
 from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
 
 
-class TestLiteLLMDeadlineCheck:
+class TestLiteLLMDeadlineCheck(IntegrationTestCase):
     """Test deadline checks within litellm round loops."""
 
     def test_round_loop_deadline_check(self):
@@ -40,12 +40,12 @@ class TestLiteLLMDeadlineCheck:
                     pass
             except frappe.ValidationError:
                 # Once deadline expires, every check should fail
-                with pytest.raises(frappe.ValidationError):
+                with self.assertRaises(frappe.ValidationError):
                     budget.check_deadline()
                 break
 
 
-class TestStreamingPathDeadlineCheck:
+class TestStreamingPathDeadlineCheck(IntegrationTestCase):
     """Test deadline checks in streaming/async path."""
 
     def test_streaming_chunk_deadline_check(self):
@@ -71,7 +71,7 @@ class TestStreamingPathDeadlineCheck:
         budget.check_deadline()
 
 
-class TestDirectPathDeadlineCheck:
+class TestDirectPathDeadlineCheck(IntegrationTestCase):
     """Test deadline checks in direct execution path."""
 
     @patch("huf.ai.run_budget.get_current_budget")
@@ -93,7 +93,7 @@ class TestDirectPathDeadlineCheck:
         assert not budget.is_deadline_exceeded()
 
 
-class TestDeadlineWithRounds:
+class TestDeadlineWithRounds(IntegrationTestCase):
     """Test deadline behavior with multiple rounds."""
 
     def test_multiple_rounds_respect_deadline(self):

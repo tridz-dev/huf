@@ -3,7 +3,7 @@
 ST-09.1: Tests for RunBudget class initialization and methods.
 """
 
-import pytest
+from frappe.tests import IntegrationTestCase
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
@@ -11,7 +11,7 @@ import frappe
 from huf.ai.run_budget import RunBudget, RunBudgetExceeded
 
 
-class TestRunBudgetBasics:
+class TestRunBudgetBasics(IntegrationTestCase):
     """Basic RunBudget initialization and field access."""
 
     def test_runbudget_init(self):
@@ -48,7 +48,7 @@ class TestRunBudgetBasics:
         assert len(budget.ancestry) == 2
 
 
-class TestRunBudgetDeadlineCheck:
+class TestRunBudgetDeadlineCheck(IntegrationTestCase):
     """Test deadline checking methods."""
 
     def test_check_deadline_valid(self):
@@ -76,12 +76,12 @@ class TestRunBudgetDeadlineCheck:
             spend_cap_usd=0
         )
 
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_deadline()
         assert RunBudgetExceeded in type(exc_info.value).__mro__
 
 
-class TestRunBudgetDepthCheck:
+class TestRunBudgetDepthCheck(IntegrationTestCase):
     """Test depth checking methods."""
 
     def test_check_depth_valid(self):
@@ -120,12 +120,12 @@ class TestRunBudgetDepthCheck:
             spend_cap_usd=0
         )
 
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_depth(max_depth=3)
         assert "depth" in str(exc_info.value).lower()
 
 
-class TestRunBudgetSpendCheck:
+class TestRunBudgetSpendCheck(IntegrationTestCase):
     """Test spend checking methods."""
 
     def test_check_spend_valid(self):
@@ -153,7 +153,7 @@ class TestRunBudgetSpendCheck:
         )
         budget.spend_so_far_usd = 90.0
 
-        with pytest.raises(frappe.ValidationError) as exc_info:
+        with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(20.0)  # Total would be 110.0 > 100.0
         assert "spend" in str(exc_info.value).lower() or "budget" in str(exc_info.value).lower()
 
