@@ -448,7 +448,7 @@ def _build_mcp_headers(mcp_server) -> dict:
     # Add custom headers
     if mcp_server.custom_headers:
         for header in mcp_server.custom_headers:
-            headers[header.header_name] = header.header_value
+            headers[header.header_name] = header.get_password("header_value")
     
     return headers
 

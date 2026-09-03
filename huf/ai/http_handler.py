@@ -115,8 +115,9 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				tool_headers = {}
 				if hasattr(tool_doc, "http_headers") and tool_doc.http_headers:
 					for header in tool_doc.http_headers:
-						if header.key and header.value:
-							tool_headers[header.key] = header.value
+						header_value = header.get_password("value")
+						if header.key and header_value:
+							tool_headers[header.key] = header_value
 
 				tool_info = {
 					"base_url": tool_doc.base_url,

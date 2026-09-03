@@ -100,7 +100,7 @@
   {
    "depends_on": "eval: doc.trigger_type == \"Webhook\"",
    "fieldname": "webhook_key",
-   "fieldtype": "Data",
+   "fieldtype": "Password",
    "label": "Webhook Key"
   },
   {

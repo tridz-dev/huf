@@ -18,7 +18,7 @@
   },
   {
    "fieldname": "value",
-   "fieldtype": "Data",
+   "fieldtype": "Password",
    "in_list_view": 1,
    "label": "Value"
   }

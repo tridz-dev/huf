@@ -17,7 +17,7 @@
         },
         {
             "fieldname": "header_value",
-            "fieldtype": "Data",
+            "fieldtype": "Password",
             "label": "Header Value",
             "reqd": 1,
             "in_list_view": 1
