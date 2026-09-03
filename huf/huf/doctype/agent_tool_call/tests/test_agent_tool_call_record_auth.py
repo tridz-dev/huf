@@ -5,6 +5,8 @@ users who own the tool call's run, System Manager, or users with
 agent.view_all can access a tool call.
 """
 
+from unittest.mock import patch
+
 import frappe
 import pytest
 
@@ -79,6 +81,30 @@ def test_agent_tool_call_system_manager_can_read():
 		# Verify System Manager can read it
 		from huf.ai.record_access import user_can_read_tool_call
 		assert user_can_read_tool_call(tool_doc, user="Administrator") is True
+	finally:
+		tool_doc.delete()
+		run_doc.delete()
+
+
+def test_agent_tool_call_view_all_capability_can_read():
+	"""A non-owner with the agent.view_all capability can read any tool call."""
+	run_doc = frappe.new_doc("Agent Run")
+	run_doc.agent = "Test Agent"
+	run_doc.status = "Started"
+	run_doc.owner = "alice@example.com"
+	run_doc.insert()
+
+	tool_doc = frappe.new_doc("Agent Tool Call")
+	tool_doc.agent_run = run_doc.name
+	tool_doc.tool_name = "test_tool"
+	tool_doc.status = "success"
+	tool_doc.insert()
+
+	try:
+		from huf.ai.record_access import user_can_read_tool_call
+
+		with patch("huf.permissions.has_capability", return_value=True):
+			assert user_can_read_tool_call(tool_doc, user="carol@example.com") is True
 	finally:
 		tool_doc.delete()
 		run_doc.delete()

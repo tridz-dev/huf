@@ -5,6 +5,8 @@ the run owner, System Manager, or users with agent.view_all can
 access a run.
 """
 
+from unittest.mock import patch
+
 import frappe
 import pytest
 
@@ -56,5 +58,22 @@ def test_agent_run_system_manager_can_read():
 		# Verify System Manager can read it
 		from huf.ai.record_access import user_can_read_run
 		assert user_can_read_run(run_doc, user="Administrator") is True
+	finally:
+		run_doc.delete()
+
+
+def test_agent_run_view_all_capability_can_read():
+	"""A non-owner with the agent.view_all capability can read any run."""
+	run_doc = frappe.new_doc("Agent Run")
+	run_doc.agent = "Test Agent"
+	run_doc.status = "Success"
+	run_doc.owner = "alice@example.com"
+	run_doc.insert()
+
+	try:
+		from huf.ai.record_access import user_can_read_run
+
+		with patch("huf.permissions.has_capability", return_value=True):
+			assert user_can_read_run(run_doc, user="carol@example.com") is True
 	finally:
 		run_doc.delete()

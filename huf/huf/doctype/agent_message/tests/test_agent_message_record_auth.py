@@ -5,6 +5,8 @@ users who own the message's conversation, System Manager, or users with
 chat.view_all can access a message.
 """
 
+from unittest.mock import patch
+
 import frappe
 import pytest
 
@@ -76,6 +78,29 @@ def test_agent_message_system_manager_can_read():
 		# Verify System Manager can read it
 		from huf.ai.record_access import user_can_read_message
 		assert user_can_read_message(msg_doc, user="Administrator") is True
+	finally:
+		msg_doc.delete()
+		conv_doc.delete()
+
+
+def test_agent_message_chat_view_all_capability_can_read():
+	"""A non-owner with the chat.view_all capability can read any message."""
+	conv_doc = frappe.new_doc("Agent Conversation")
+	conv_doc.agent = "Test Agent"
+	conv_doc.owner = "alice@example.com"
+	conv_doc.insert()
+
+	msg_doc = frappe.new_doc("Agent Message")
+	msg_doc.conversation = conv_doc.name
+	msg_doc.role = "user"
+	msg_doc.content = "Test message"
+	msg_doc.insert()
+
+	try:
+		from huf.ai.record_access import user_can_read_message
+
+		with patch("huf.permissions.has_capability", return_value=True):
+			assert user_can_read_message(msg_doc, user="carol@example.com") is True
 	finally:
 		msg_doc.delete()
 		conv_doc.delete()
