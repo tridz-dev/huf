@@ -43,7 +43,7 @@ test.describe('flow builder negative cases (does the UI stop broken flows?)', ()
   // ---------------------------------------------------------------------
   // 1. Save/publish a flow with no configured trigger.
   // ---------------------------------------------------------------------
-  test('KNOWN DEFECT: saves and publishes a flow whose trigger was never configured', async ({ page }) => {
+  test('a flow whose trigger was never configured saves as Draft but cannot be published', async ({ page }) => {
     const flowName = uniqueFlowName('neg-no-trigger');
     const list = new FlowsListPage(page);
     const canvas = new FlowCanvasPage(page);
@@ -52,55 +52,32 @@ test.describe('flow builder negative cases (does the UI stop broken flows?)', ()
     const flowId = await list.createFlow(flowName);
     flowIdsToClean.push(flowId);
 
-    // A brand-new flow's entry node is a placeholder trigger.webhook with an
-    // EMPTY config (see frontend/src/services/flowService.ts createFlow()).
-    // It is visually flagged as unconfigured ("Click to configure" +
-    // warning icon) but we deliberately do NOT click through the node
-    // modal to configure it — this is exactly what an inattentive user
-    // would leave behind.
+    // A new flow's entry node is an explicitly UNCONFIGURED trigger. It used
+    // to be seeded as `trigger.webhook` with empty config, so an untouched
+    // flow was indistinguishable from a deliberately-chosen, badly-configured
+    // webhook. It is now `trigger.unset`.
     await expect(page.getByText('Click to configure')).toBeVisible();
 
-    // Save with the trigger still unconfigured.
     await canvas.save();
-
-    // Reload and confirm the unconfigured trigger really was persisted,
-    // not silently rejected. NOTE: after reload, the warning itself is
-    // gone -- flowSerializer.ts buildNodeData() hardcodes
-    // `configured: true` for every node deserialized from the backend
-    // (frontend/src/services/flowSerializer.ts:181), regardless of
-    // whether its config is actually populated. The 'Click to configure'
-    // hint only ever existed in the just-created in-memory state; once
-    // persisted and reloaded, the empty trigger looks fully configured.
     await canvas.reload();
-    await expect(page.getByText('Click to configure')).toHaveCount(0);
 
     const defn = await getFlowDefinition(api, flowId);
     const entryNode = defn.definition_json.nodes.find((n) => n.id === defn.definition_json.entry);
-    expect(entryNode?.type).toBe('trigger.webhook');
-    expect(entryNode?.config ?? {}).toEqual({}); // still empty — never configured
+    // REGRESSION GUARD: the persisted type must not claim to be a webhook.
+    expect(entryNode?.type).toBe('trigger.unset');
 
-    // Publish ("Activate") the flow. huf/huf/doctype/flow_definition/flow_definition.py
-    // validate() only checks node/edge shape (ids, types, dangling edges) —
-    // it never checks whether the entry trigger has real config. There is
-    // no separate "activate" validation either (FlowsHeaderActions.handlePublish
-    // just PUTs status: 'Active').
-    // KNOWN DEFECT (compounding the one above): the warning icon is gone
-    // after reload even though config is still {} -- there is no
-    // remaining visual signal at all by the time a user gets to Publish.
+    // The unconfigured state must survive a reload. buildNodeData used to
+    // hardcode `configured: true` for every deserialized node, so the warning
+    // vanished on reload and nothing signalled the problem before Publish.
+    await expect(page.getByText('Click to configure')).toBeVisible();
+
+    // Publishing must now be refused: Flow Definition.validate() rejects
+    // activation when the only trigger is unconfigured.
     await page.getByRole('button', { name: /^publish$/i }).click();
-    await expect(page.getByText(/flow published successfully/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/flow published successfully/i)).toHaveCount(0);
 
-    const publishedDefn = await getFlowDefinition(api, flowId);
-    expect(publishedDefn.status).toBe('Active');
-
-    // FAIL-CHECK PERFORMED: with the assertion above changed to
-    // `expect(publishedDefn.status).toBe('Draft')`, this test failed as
-    // expected (status really is 'Active'), confirming the assertion is
-    // load-bearing and not vacuous. Reverted to the correct value below.
-
-    // KNOWN DEFECT: the UI lets a flow with an unconfigured (non-functional)
-    // trigger go all the way to Active with only a passive visual hint —
-    // no blocking dialog, no confirmation, no validation error.
+    const afterPublish = await getFlowDefinition(api, flowId);
+    expect(afterPublish.status).toBe('Draft');
   });
 
   // ---------------------------------------------------------------------
