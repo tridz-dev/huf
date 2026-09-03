@@ -30,6 +30,7 @@ def run_automation(
 	initiating_user=None,
 	now=False,
 	commit=True,
+	parent_run_id=None,
 ):
 	"""Execute an Automation by name.
 
@@ -67,6 +68,10 @@ def run_automation(
 			hook chain fails afterward. Frappe's own request/job-dispatch
 			machinery commits at the end of the request/job regardless, so
 			skipping the commit here is safe, not merely deferred.
+		parent_run_id: when this automation was triggered from a doc event
+			fired by an Agent Run, the name of that run (threaded from
+			frappe.flags.huf_current_agent_run_id). Used to track run ancestry
+			and enforce recursion depth budgets (ST-09.5).
 
 	Returns:
 		The dict returned by ``run_agent_sync`` (``success``, ``status``,
@@ -195,6 +200,7 @@ def _execute(automation, trigger_name, trigger_context, now, commit=True):
 			run_kind="agent",
 			now=now,
 			project=automation.project or None,
+			parent_run_id=parent_run_id,
 		)
 		if not result or not result.get("success", True):
 			error_message = (result or {}).get("error") or _("Agent run did not complete successfully.")

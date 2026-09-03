@@ -1,5 +1,6 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
+from huf.ai.run_budget import get_current_budget
 
 logger = frappe.logger("huf")
 
@@ -30,6 +31,10 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
                 "success": False,
                 "error": f"Circular Dependency Error: An agent cannot invoke itself as a sub-agent."
             }
+
+        # Check recursion depth (ST-09.5)
+        budget = get_current_budget()
+        budget.check_depth()
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",

@@ -5,6 +5,7 @@ from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.transaction import commit_if_background
+from huf.ai.run_budget import get_current_budget
 
 
 def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
@@ -136,13 +137,17 @@ def stop_orchestration(orch_name):
 def execute_next_step(orch=None, orch_name=None):
     if orch_name and not orch:
         orch = frappe.get_doc("Agent Orchestration", orch_name)
-    
+
     if not orch:
         frappe.log_error("No orchestration provided to execute_next_step", "Orchestrator Error")
         return "failed"
-        
+
     if orch.status == "Cancelled":
         return "cancelled"
+
+    # Check recursion depth (ST-09.5)
+    budget = get_current_budget()
+    budget.check_depth()
     
     next_step = None
 
