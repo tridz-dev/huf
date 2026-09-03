@@ -39,7 +39,7 @@ export interface BackendFlowGraph {
 
 export interface BackendNode {
     id: string;
-    type: 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'condition' | 'http_request' | 'transform' | 'loop' | 'end';
+    type: 'trigger.webhook' | 'trigger.schedule' | 'trigger.doc-event' | 'trigger.unset' | 'agent.run' | 'tool.call' | 'router.llm' | 'human.approval' | 'condition' | 'http_request' | 'transform' | 'loop' | 'end';
     config: Record<string, unknown>;
     /** Frontend-only: stored for visual layout, ignored by engine */
     _position?: { x: number; y: number };
