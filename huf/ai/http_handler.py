@@ -189,12 +189,14 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			if base_url_origin != final_url_origin:
 				# Cross-origin: do not attach tool headers and strip Authorization-class headers
 				tool_headers = {}
-				auth_headers = [
-					"Authorization", "Proxy-Authorization", "X-API-Key",
-					"X-Auth-Token", "Authorization-Signature"
-				]
-				for auth_header in auth_headers:
-					request_headers.pop(auth_header, None)
+				auth_headers = {
+					"authorization", "proxy-authorization", "x-api-key",
+					"x-auth-token", "authorization-signature"
+				}
+				request_headers = {
+					k: v for k, v in request_headers.items()
+					if k.lower() not in auth_headers
+				}
 
 		final_headers = {**tool_headers, **request_headers}
 
@@ -218,10 +220,10 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		current_url = final_url
 		max_redirects = 5
 		base_url_origin = extract_origin(base_url) if base_url else None
-		auth_headers = [
-			"Authorization", "Proxy-Authorization", "X-API-Key",
-			"X-Auth-Token", "Authorization-Signature"
-		]
+		auth_headers = {
+			"authorization", "proxy-authorization", "x-api-key",
+			"x-auth-token", "authorization-signature"
+		}
 		for _hop in range(max_redirects + 1):
 			response = requests.request(method, current_url, **request_kwargs)
 			if response.status_code not in (301, 302, 303, 307, 308):
@@ -243,8 +245,10 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				next_url_origin = extract_origin(next_url)
 				if next_url_origin != base_url_origin:
 					# Cross-origin redirect: strip Authorization-class headers
-					for auth_header in auth_headers:
-						request_kwargs["headers"].pop(auth_header, None)
+					request_kwargs["headers"] = {
+						k: v for k, v in request_kwargs["headers"].items()
+						if k.lower() not in auth_headers
+					}
 			current_url = next_url
 		else:
 			# Loop exhausted without breaking — too many redirects.
