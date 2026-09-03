@@ -75,16 +75,25 @@ Notes for whoever wires this in:
 
 import asyncio
 import json
+import time
 from typing import Generator
 
 import frappe
 from werkzeug.wrappers import Response
 
 from huf.ai.agent_access import assert_agent_access
-from huf.ai.agent_integration import _has_queued_runs, run_agent_stream
+from huf.ai.agent_integration import (
+	_conversation_lock_key,
+	_DIRECT_LOCK_ATTEMPTS,
+	_DIRECT_LOCK_RETRY_DELAY,
+	_has_queued_runs,
+	_QUEUE_LOCK_TTL,
+	_RunHeartbeat,
+	run_agent_stream,
+)
 from huf.api.v1.context import RequestContext
 from huf.api.v1.endpoints.conversations import _get_owned_conversation
-from huf.api.v1.errors import NotFoundError, ValidationError
+from huf.api.v1.errors import ConflictError, NotFoundError, ValidationError
 from huf.api.v1.scopes import require_agent_allowed, require_scope
 
 # Internal chunk "type" (as yielded by run_agent_stream / used by
@@ -192,6 +201,27 @@ def handle_stream_response(
 			"before using the direct-execution (stream) override."
 		)
 
+	# Acquire the conversation-scoped execution lock before any byte of the
+	# SSE response is committed, so a lock miss surfaces as a synchronous
+	# 409 rather than as a mid-stream `response.failed` frame. Mirrors the
+	# direct-path locking in huf.ai.agent_integration (_conversation_lock_key
+	# / _DIRECT_LOCK_ATTEMPTS / _QUEUE_LOCK_TTL).
+	lock_key = None
+	heartbeat = None
+	if stream_conversation_id:
+		lock_key = _conversation_lock_key(stream_conversation_id)
+		acquired = False
+		for attempt in range(_DIRECT_LOCK_ATTEMPTS):
+			if frappe.cache().set(lock_key, 1, ex=_QUEUE_LOCK_TTL, nx=True):
+				acquired = True
+				break
+			if attempt < _DIRECT_LOCK_ATTEMPTS - 1:
+				time.sleep(_DIRECT_LOCK_RETRY_DELAY * (2**attempt))
+		if not acquired:
+			raise ConflictError("Conversation is currently executing another run.")
+		heartbeat = _RunHeartbeat(lock_key)
+		heartbeat.start()
+
 	channel_id = "api_v1_stream"
 	external_id = context.user
 
@@ -263,4 +293,20 @@ def handle_stream_response(
 				finally:
 					asyncio.set_event_loop(None)
 
-	return Response(stream_generator(), mimetype="text/event-stream", headers=dict(_SSE_HEADERS))
+	resp = Response(stream_generator(), mimetype="text/event-stream", headers=dict(_SSE_HEADERS))
+	if lock_key:
+		released = {"done": False}
+
+		def _release_stream_lock():
+			if released["done"]:
+				return
+			released["done"] = True
+			if heartbeat:
+				heartbeat.stop()
+			try:
+				frappe.cache().delete(lock_key)
+			except Exception as exc:
+				frappe.logger("huf").debug(f"Stream lock delete failed: {exc!s}")
+
+		resp.call_on_close(_release_stream_lock)
+	return resp
