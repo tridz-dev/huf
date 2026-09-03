@@ -146,10 +146,13 @@ def run_scheduled_agents():
 					"new_next": new_next_execution,
 				},
 			)
-			frappe.db.commit()
 
-			# Check if this tick won the claim (rowcount == 1)
+			# Check if this tick won the claim (rowcount == 1). This MUST be
+			# read before COMMIT: MySQL resets ROW_COUNT() to 0 once COMMIT
+			# itself is executed as a statement on the session, so committing
+			# first would make every tick observe rowcount == 0 and skip.
 			rowcount = frappe.db.sql("SELECT ROW_COUNT()")[0][0]
+			frappe.db.commit()
 			if rowcount == 0:
 				# Another tick already claimed this trigger, skip it
 				continue
