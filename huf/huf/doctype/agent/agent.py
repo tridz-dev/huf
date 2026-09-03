@@ -472,7 +472,12 @@ class Agent(Document):
         if self.enable_multi_run and (
             prompt_changed or self.has_value_changed("enable_multi_run")
         ):
-            self.generate_default_plan()
+            frappe.enqueue(
+                "huf.huf.doctype.agent.agent.generate_default_plan_job",
+                agent=self.name,
+                enqueue_after_commit=True,
+                queue="long"
+            )
         
     def on_trash(self):
         if self.is_system and not (
@@ -545,7 +550,7 @@ class Agent(Document):
             
             return planning_run_id, steps
 
-        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
+        except Exception as e:
             frappe.log_error(title="Agent Plan Error", message=f"Plan Generation Failed: {str(e)}")
             return None
 
@@ -586,7 +591,7 @@ class Agent(Document):
                         override_plan=steps
                     )
 
-            except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
+            except Exception as e:
                 frappe.log_error(title="Agent Creation Error", message=f"Multi-Run Setup Failed: {str(e)}")
 
     
@@ -616,3 +621,22 @@ class Agent(Document):
         # Access/Read Permissions — delegated to the shared helper so this
         # stays in sync with huf.ai.agent_integration's access checks.
         return check_agent_access(self, user)
+
+
+def generate_default_plan_job(agent: str) -> None:
+    """
+    Module-level job function to generate default plan for an agent.
+    Enqueued from Agent.on_update() to defer planning from request to queue.
+
+    Args:
+        agent: Agent name (string)
+    """
+    try:
+        agent_doc = frappe.get_doc("Agent", agent)
+        agent_doc.generate_default_plan()
+        frappe.logger().info(f"Planning enqueued for agent {agent}")
+    except Exception as e:
+        frappe.log_error(
+            title="Agent Planning Job Failed",
+            message=f"Failed to generate default plan for agent {agent}: {str(e)}"
+        )
