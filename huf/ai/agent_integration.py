@@ -3082,6 +3082,20 @@ async def run_agent_stream(
             stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
             async for chunk in stream:
+                # Check deadline per chunk (ST-09.3)
+                try:
+                    budget = get_current_budget()
+                    budget.check_deadline()
+                except RunBudgetExceeded:
+                    yield {
+                        "type": "error",
+                        "error": "Run budget deadline exceeded",
+                        "success": False,
+                        "agent_run_id": run_doc.name,
+                        "conversation_id": conversation.name
+                    }
+                    return
+
                 chunk_type = chunk.get("type")
 
                 if chunk_type == "delta":

@@ -41,6 +41,7 @@ from huf.ai.reasoning import (
     resolve_reasoning,
     build_reasoning_kwargs,
 )
+from huf.ai.run_budget import get_current_budget, RunBudgetExceeded
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -1253,6 +1254,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
         MAX_TOOL_LOOP_REPEATS = 1
 
         for round_num in range(MAX_ROUNDS):
+            # Check deadline at the top of each round (ST-09.3)
+            try:
+                budget = get_current_budget()
+                budget.check_deadline()
+                logger.info(f"Round {round_num}, deadline at {budget.deadline_at}")
+            except RunBudgetExceeded:
+                raise
 
             # Round gate for the dynamic (latest-user-message) cache marker:
             # attach it only once a second provider round is actually
@@ -2281,6 +2289,14 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         stream_total_cost = 0.0
 
         for round_num in range(MAX_ROUNDS):
+            # Check deadline at the top of each round (ST-09.3)
+            try:
+                budget = get_current_budget()
+                budget.check_deadline()
+                logger.info(f"Round {round_num}, deadline at {budget.deadline_at}")
+            except RunBudgetExceeded:
+                raise
+
             # Round gate for the dynamic (latest-user-message) cache marker:
             # attach it only once a second provider round is actually
             # happening (round_num >= 1), never at round 0. Applied at most
