@@ -198,6 +198,7 @@ def handle_stream_response(
 	def stream_generator() -> Generator[str, None, None]:
 		loop = None
 		created_loop = False
+		async_gen = None
 		try:
 			try:
 				loop = asyncio.get_event_loop()
@@ -243,6 +244,12 @@ def handle_stream_response(
 			frappe.log_error(frappe.get_traceback(), "Huf API v1 Stream Setup Error")
 			yield _sse_line("response.failed", {"error": f"Stream setup error: {str(e)}"})
 		finally:
+			if async_gen is not None:
+				try:
+					loop.run_until_complete(async_gen.aclose())
+				except (RuntimeError, ValueError, TypeError, AttributeError, KeyError):
+					pass
+
 			if created_loop and loop:
 				try:
 					pending = asyncio.all_tasks(loop)
