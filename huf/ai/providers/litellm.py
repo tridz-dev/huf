@@ -2194,7 +2194,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             completion_kwargs["cached_content"] = gemini_cached_content
 
         provider_name = normalized_model.split("/")[0]
-        _setup_api_key(provider_name, api_key, completion_kwargs)
+        env_var_set_by_request = _setup_api_key(provider_name, api_key, completion_kwargs)
 
         # Resolve provider-aware reasoning parameters
         reasoning_policy_data = None
@@ -2747,6 +2747,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
                 yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
+            finally:
+                # Restore the environment variable to its pre-request state, preventing
+                # cross-request key leakage. Each round's completion call(s) set the env var
+                # via _setup_api_key (called once before all rounds), so we restore it after
+                # each round to ensure it doesn't leak to the next concurrent request.
+                if env_var_set_by_request:
+                    boot_value = _BOOT_ENV.get(env_var_set_by_request)
+                    if boot_value is not None:
+                        os.environ[env_var_set_by_request] = boot_value
+                    elif env_var_set_by_request in os.environ:
+                        del os.environ[env_var_set_by_request]
 
         # Max rounds reached (or the loop broke via is_stop). Finalize the
         # accumulated per-round totals — never the last round's usage alone.
