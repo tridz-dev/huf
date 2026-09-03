@@ -36,23 +36,27 @@ def execute():
         frappe.logger().info("No Agent Run Analytics Rollup rows with conversation dimension to archive")
         return
 
-    # Prepare rows for bulk insert: copy all fields plus archived_at timestamp
-    archived_rows = []
+    # Prepare rows for bulk insert: copy all fields plus archived_at timestamp.
+    # frappe.db.bulk_insert(doctype, fields, values) takes a column list and a
+    # list of value-rows aligned to it -- it does NOT accept a list of dicts and
+    # does NOT auto-generate `name`, so we keep the original row name (reused as
+    # the archive doc's own name; the archive table is separate so this cannot
+    # collide with a live Agent Run Analytics Rollup row) and build the two
+    # parallel lists bulk_insert actually expects.
     archived_at = now_datetime()
     for row in rows_to_archive:
-        archived_row = dict(row)
-        archived_row["archived_at"] = archived_at
-        # Remove the 'name' field to let bulk_insert auto-generate new document IDs
-        archived_row.pop("name", None)
-        archived_rows.append(archived_row)
+        row["archived_at"] = archived_at
+
+    fields = list(rows_to_archive[0].keys())
 
     # Insert in batches of 1000 to avoid locking the table for too long
     batch_size = 1000
-    for i in range(0, len(archived_rows), batch_size):
-        batch = archived_rows[i : i + batch_size]
-        frappe.db.bulk_insert("Agent Run Analytics Rollup Archive", batch)
+    for i in range(0, len(rows_to_archive), batch_size):
+        batch = rows_to_archive[i : i + batch_size]
+        values = [[row.get(field) for field in fields] for row in batch]
+        frappe.db.bulk_insert("Agent Run Analytics Rollup Archive", fields, values)
 
     frappe.logger().info(
-        f"Archived {len(archived_rows)} Agent Run Analytics Rollup rows "
+        f"Archived {len(rows_to_archive)} Agent Run Analytics Rollup rows "
         f"with a conversation dimension"
     )
