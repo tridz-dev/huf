@@ -38,7 +38,7 @@ export function FlowCanvas({
   onToggleLeftSidebar,
   onToggleRightSidebar
 }: FlowCanvasProps) {
-  const { activeFlow, updateNodesAndEdges, updateNode, setSelectedNode, setSelectedEdge } = useFlowContext();
+  const { activeFlow, updateNodesAndEdges, updateNode, setSelectedNode, setSelectedEdge, undo } = useFlowContext();
   const [nodes, setNodes] = useState<Node<FlowNodeData>[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -109,6 +109,29 @@ export function FlowCanvas({
       }
     };
   }, []);
+
+  // Keyboard undo (Cmd/Ctrl+Z). Scoped to node deletion for now (see
+  // FlowContext.undo) — a visible "Undo" action on the delete toast (raised
+  // from FlowContext.deleteNode) is the primary, discoverable path; this is
+  // the power-user shortcut on top of it. Skipped while focus is in a text
+  // field so it doesn't fight the browser/input's own native undo.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isUndoCombo = (e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z';
+      if (!isUndoCombo) return;
+
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable;
+      if (isEditable) return;
+
+      e.preventDefault();
+      undo();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
