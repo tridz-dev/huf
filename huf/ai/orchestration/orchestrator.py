@@ -1,6 +1,7 @@
 # huf/ai/orchestration/orchestrator.py
 
 import frappe
+from frappe import _
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
