@@ -125,6 +125,8 @@ def _inspect_function_parameters(function_path):
 @frappe.whitelist()
 def fetch_tool_parameters_from_code(function_path):
 	"""Return tool parameters inferred from a Python function signature (for React UI)."""
+	frappe.only_for("Huf Manager")
+
 	if not function_path:
 		frappe.throw(_("Please provide a Function Path first."))
 
