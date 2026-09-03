@@ -4,9 +4,11 @@ import json
 import hmac
 import hashlib
 import time
+from frappe.rate_limiter import rate_limit
 from huf.ai.gateway_service import ingest_gateway_event
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=100, seconds=60)
 def handle_slack_event():
     gateway_name = frappe.request.args.get("gateway_name") if frappe.request is not None else None
     body = frappe.request.get_data(as_text=False)  # Get raw bytes for signature verification

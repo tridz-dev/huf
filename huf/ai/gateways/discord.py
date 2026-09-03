@@ -16,6 +16,7 @@ import json
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 from huf.ai.gateway_service import ingest_gateway_event
 
@@ -79,6 +80,7 @@ def _interaction_context(payload: dict) -> dict:
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=100, seconds=60)
 def handle_interaction(gateway_name: str | None = None) -> dict:
 	"""Verify and queue one Discord Interaction for a configured Gateway.
 
