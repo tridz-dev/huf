@@ -432,6 +432,9 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 		"end": _exec_end,
 	}
 
+	if node_type == "trigger.unset":
+		frappe.throw(_("Node {0} is a trigger that has not been configured yet. Choose a trigger type before running this flow.").format(node_id))
+
 	executor = executors.get(node_type)
 	if not executor:
 		frappe.throw(_("Unknown node type: {0}").format(node_type))

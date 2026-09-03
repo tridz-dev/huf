@@ -10,6 +10,7 @@ ALLOWED_NODE_TYPES = {
 	"trigger.webhook",
 	"trigger.schedule",
 	"trigger.doc-event",
+	"trigger.unset",
 	"agent.run",
 	"tool.call",
 	"router.llm",
@@ -144,10 +145,15 @@ class FlowDefinition(Document):
 		errors = []
 		nodes_by_id = {node.get("id"): node for node in nodes}
 
-		# Rule 1: at least one trigger node.
+		# Rule 1: at least one *configured* trigger node. trigger.unset satisfies
+		# the 'trigger.' prefix but is a placeholder meaning no trigger has been
+		# chosen yet (see N16) - it must not be accepted as a real trigger.
 		trigger_nodes = [n for n in nodes if str(n.get("type") or "").startswith("trigger.")]
+		configured_trigger_nodes = [n for n in trigger_nodes if n.get("type") != "trigger.unset"]
 		if not trigger_nodes:
 			errors.append(_("No trigger node found: at least one node with a type starting with 'trigger.' is required to activate this flow"))
+		elif not configured_trigger_nodes:
+			errors.append(_("The trigger has not been configured: choose a trigger type before activating this flow"))
 
 		# Rule 2: true_node / false_node / loop_node / done_node must resolve.
 		# These route by config, not by edges, so they're checked separately from edges.
