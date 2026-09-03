@@ -173,7 +173,8 @@ class ApiV1Router(BaseRenderer):
 			return self._render_error(exc, fallback_request_id)
 		except Exception as exc:
 			frappe.log_error(frappe.get_traceback(), "Huf API v1 Router Error")
-			return self._render_error(ApiError(f"Internal error: {exc}"), fallback_request_id)
+			generic_error = ApiError(f"Internal error. Request ID: {fallback_request_id}")
+			return self._render_error(generic_error, fallback_request_id)
 
 	def _build_context(self, requires_auth: bool) -> RequestContext:
 		"""Resolve the request's principal, or fall back to an anonymous
