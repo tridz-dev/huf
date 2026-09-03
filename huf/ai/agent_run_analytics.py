@@ -22,12 +22,13 @@ CORRECTION_WINDOW_HOURS = 26
 # Single source of truth for the rollup's grouping dimensions. `_dimension_key()`,
 # `_affected_dimensions()`, and `_recompute_rollup()` all derive from this tuple so
 # they can never drift out of agreement with each other or with the doc fields they
-# populate. `conversation` is appended at the END, not inserted alongside the other
-# fields: `dimension_key` values are persisted in existing rollup rows, and appending
-# keeps every previously-stored key string decodable positionally (old rows simply
-# decode with `conversation == "__none__"`). Inserting it earlier in the tuple would
-# silently reinterpret every stored key's remaining fields.
-DIMENSION_FIELDS = ("agent", "provider", "model", "run_kind", "conversation")
+# populate. `conversation` was removed in 2026-09-04 (WP-10) to eliminate O(conversations)
+# scaling from the refresh_rollups job; existing conversation-dimensioned rows are
+# archived to Agent Run Analytics Rollup Archive and must never be decoded against this
+# 4-field tuple. Raw Agent Runs (unconditional source of truth) retain conversation, so
+# conversation-level analytics are queryable directly from Agent Message/Agent Run grouped
+# by conversation, now fast via the (conversation, conversation_index) index added in ST-10.1.
+DIMENSION_FIELDS = ("agent", "provider", "model", "run_kind")
 
 
 def _bucket_start(value, granularity: str):
