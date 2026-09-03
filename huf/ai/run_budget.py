@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 import frappe
 from frappe.utils import get_datetime
+from huf.ai.cost_calculator import get_model_pricing, _calculate_from_custom_pricing
 
 
 class RunBudgetExceeded(frappe.ValidationError):
@@ -165,3 +166,90 @@ def set_current_budget(budget: RunBudget):
         get_current_budget._context_var = contextvars.ContextVar('huf_current_budget', default=None)
 
     get_current_budget._context_var.set(budget)
+
+
+def estimate_run_cost(agent_doc, model: str = None, provider: str = None) -> float:
+    """Estimate the cost of running an agent.
+
+    Sums: input_tokens * input_price + output_tokens * output_price.
+    Uses cached token counts from the agent's prompt and prior runs in the
+    chain if available; falls back to a reasonable default estimate.
+
+    Args:
+        agent_doc: The Agent document
+        model: Model name (defaults to agent_doc.model)
+        provider: Provider name (defaults to agent_doc.provider)
+
+    Returns:
+        Estimated cost in USD
+    """
+    if model is None:
+        model = agent_doc.model
+    if provider is None:
+        provider = agent_doc.provider
+
+    if not model:
+        # No model configured, cannot estimate
+        return 0.0
+
+    try:
+        # Get pricing information for the model
+        pricing = get_model_pricing(model)
+        if not pricing:
+            # No pricing available, fall back to conservative default estimate
+            # Assume ~1000 input tokens and ~500 output tokens for a typical run
+            # Use LiteLLM's auto-lookup if available, otherwise return 0
+            try:
+                from litellm import get_pricing
+                litellm_pricing = get_pricing(model)
+                if litellm_pricing and "input" in litellm_pricing and "output" in litellm_pricing:
+                    input_price = litellm_pricing["input"]
+                    output_price = litellm_pricing["output"]
+                    # Default estimate: 1000 input, 500 output tokens
+                    estimated_cost = (1000 / 1_000_000) * input_price + (500 / 1_000_000) * output_price
+                    return max(0.0, estimated_cost)
+            except Exception:
+                pass
+            # No pricing found, return 0
+            return 0.0
+
+        # Calculate using known pricing
+        # Default estimate: 1000 input tokens, 500 output tokens
+        input_tokens = 1000
+        output_tokens = 500
+
+        # Try to get more accurate estimates from prior runs if available
+        # Look for recent Agent Run records with this agent and model
+        try:
+            prior_runs = frappe.db.get_list(
+                "Agent Run",
+                filters={
+                    "agent": agent_doc.name,
+                    "model": model,
+                },
+                fields=["input_tokens", "output_tokens"],
+                order_by="creation desc",
+                limit_page_length=5,
+            )
+            if prior_runs:
+                # Average the last 5 runs
+                avg_input = sum(r.get("input_tokens") or 0 for r in prior_runs) / len(prior_runs)
+                avg_output = sum(r.get("output_tokens") or 0 for r in prior_runs) / len(prior_runs)
+                if avg_input > 0:
+                    input_tokens = int(avg_input)
+                if avg_output > 0:
+                    output_tokens = int(avg_output)
+        except Exception:
+            # If we can't get prior runs, just use defaults
+            pass
+
+        # Use the custom pricing to calculate cost
+        estimated_cost = _calculate_from_custom_pricing(
+            pricing,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        return max(0.0, estimated_cost)
+    except Exception as e:
+        frappe.logger("huf").warning(f"Failed to estimate run cost for {model}: {str(e)}")
+        return 0.0

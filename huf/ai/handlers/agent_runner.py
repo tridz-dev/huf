@@ -1,6 +1,6 @@
 import frappe
 from frappe.utils.background_jobs import enqueue
-from huf.ai.run_budget import get_current_budget
+from huf.ai.run_budget import get_current_budget, estimate_run_cost
 
 logger = frappe.logger("huf")
 
@@ -35,6 +35,10 @@ def handle_run_agent(target_agent_name: str, prompt: str, **kwargs):
         # Check recursion depth (ST-09.5)
         budget = get_current_budget()
         budget.check_depth()
+
+        # Check spend cap before enqueuing child run (ST-09.6)
+        estimated_cost = estimate_run_cost(target_agent, model=target_agent.model, provider=target_agent.provider)
+        budget.check_spend(estimated_cost)
 
         job = enqueue(
             "huf.ai.agent_integration.run_agent_sync",

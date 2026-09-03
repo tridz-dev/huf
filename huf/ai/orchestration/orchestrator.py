@@ -5,7 +5,7 @@ from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.transaction import commit_if_background
-from huf.ai.run_budget import get_current_budget
+from huf.ai.run_budget import get_current_budget, estimate_run_cost
 
 
 def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
@@ -185,6 +185,11 @@ def execute_next_step(orch=None, orch_name=None):
         Previous context (scratchpad):
         {orch.scratchpad or 'No previous context.'}
         Complete this step and provide a clear response."""
+
+        # Check spend cap before enqueuing child run (ST-09.6)
+        budget = get_current_budget()
+        estimated_cost = estimate_run_cost(agent_doc, model=agent_doc.model, provider=agent_doc.provider)
+        budget.check_spend(estimated_cost)
 
         result = run_agent_sync(
             agent_name=orch.agent,
