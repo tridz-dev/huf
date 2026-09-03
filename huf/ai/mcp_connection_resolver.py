@@ -19,6 +19,7 @@ import ipaddress
 import json
 import re
 import secrets
+import socket
 import urllib.parse
 from typing import Optional
 
@@ -59,6 +60,7 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
           scopes_supported, client_registration_method, client_id,
           discovery_status, discovery_error, metadata_json
     """
+    frappe.only_for("System Manager")
     try:
         server_url = _normalize_url(server_url)
         callback_url = _normalize_url(callback_url)
@@ -464,10 +466,40 @@ def _normalize_url(url: str) -> str:
     return urllib.parse.urlunparse(parsed)
 
 
+def _is_public_ip(ip_str: str) -> bool:
+    """Return True only if ip_str is a routable public address.
+
+    Unwraps IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1) before classifying,
+    and rejects loopback/private/link-local/reserved/multicast/unspecified
+    for both IPv4 and IPv6.
+    """
+    try:
+        addr = ipaddress.ip_address(ip_str)
+    except ValueError:
+        # Not a parseable IP — fail closed.
+        return False
+
+    # Unwrap IPv4-mapped IPv6 so ::ffff:127.0.0.1 is judged as 127.0.0.1.
+    mapped = getattr(addr, "ipv4_mapped", None)
+    if mapped is not None:
+        addr = mapped
+
+    if (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_multicast
+        or addr.is_unspecified
+    ):
+        return False
+    return True
+
+
 def _is_safe_url(url: str) -> bool:
     """
     Reject non-HTTP(S) URLs and private/internal addresses.
-    Allow localhost only for development.
+    Requires DNS resolution for hostnames (no implicit localhost).
     """
     if not url:
         return False
@@ -479,18 +511,17 @@ def _is_safe_url(url: str) -> bool:
     if not hostname:
         return False
 
-    # Allow localhost for development
-    if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
-        return True
-
+    # Resolve hostname to IP(s) and reject if any resolved IP is private/internal.
     try:
-        ip = ipaddress.ip_address(hostname)
-        # Reject private, loopback, link-local, multicast, reserved
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        addr_info = socket.getaddrinfo(hostname, None)
+        ips = {info[4][0] for info in addr_info}
+    except socket.gaierror:
+        # Cannot resolve hostname
+        return False
+
+    for ip in ips:
+        if not _is_public_ip(ip):
             return False
-    except ValueError:
-        # hostname is not an IP, that's fine
-        pass
 
     return True
 

@@ -74,6 +74,8 @@ def recreate_orchestration_plan(orch_name):
     Requirement 3 (Button): Recreates the plan based on current Agent instructions.
     """
     orch = frappe.get_doc("Agent Orchestration", orch_name)
+    if not frappe.has_permission("Agent Orchestration", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
     agent_doc = frappe.get_doc("Agent", orch.agent)
     
     from huf.ai.prompt_resolver import resolve_prompt

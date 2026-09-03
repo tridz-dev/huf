@@ -118,6 +118,9 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "message": "Client-side tools are not available in guest conversations.",
         }
 
+    # Check permission to write to the conversation
+    frappe.has_permission("Agent Conversation", "write", conversation_id) or frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     call = _get_or_create_call(conversation_id, agent_run_id, function_name, call_id, kwargs)
     correlation_id = call_id or call.name
 
@@ -138,6 +141,8 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "message": "Could not dispatch the tool call to the frontend (cache unavailable).",
         }
 
+    # Get the conversation owner to scope realtime delivery
+    conversation_owner = frappe.db.get_value("Agent Conversation", conversation_id, "owner")
     frappe.publish_realtime(
         event=f'conversation:{conversation_id}',
         message={
@@ -149,6 +154,7 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "tool_params": kwargs,
             "call_id": correlation_id,
         },
+        user=conversation_owner,
     )
 
     try:
