@@ -64,6 +64,18 @@ def _is_public_ip(ip_str: str) -> bool:
 	return True
 
 
+def extract_origin(url_str):
+	"""
+	Extract (scheme, host, port) from a URL for origin matching.
+
+	Returns a tuple (scheme, hostname, port) where port is derived from
+	the URL's port attribute or defaults to 443 for https, 80 for http.
+	"""
+	parsed = urlparse(url_str)
+	port = parsed.port or (443 if parsed.scheme == "https" else 80)
+	return (parsed.scheme, parsed.hostname, port)
+
+
 def validate_url(url):
 	"""
 	Validate URL to prevent SSRF and other attacks.
@@ -163,10 +175,25 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				"suggestion": "Ensure the URL points to a public, external service.",
 			}
 
-		# Merge tool headers with request headers
-		# Tool headers come first, then request headers can override them
+		# Merge tool headers with request headers, checking origin binding
 		tool_headers = tool_info.get("headers", {}) or {}
 		request_headers = headers or {}
+
+		# Only attach tool headers if the final URL's origin matches the tool's base_url origin
+		base_url = tool_info.get("base_url", "")
+		if base_url:
+			base_url_origin = extract_origin(base_url)
+			final_url_origin = extract_origin(final_url)
+			if base_url_origin != final_url_origin:
+				# Cross-origin: do not attach tool headers and strip Authorization-class headers
+				tool_headers = {}
+				auth_headers = [
+					"Authorization", "Proxy-Authorization", "X-API-Key",
+					"X-Auth-Token", "Authorization-Signature"
+				]
+				for auth_header in auth_headers:
+					request_headers.pop(auth_header, None)
+
 		final_headers = {**tool_headers, **request_headers}
 
 		# Prepare request parameters
@@ -187,6 +214,11 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		request_kwargs["allow_redirects"] = False
 		current_url = final_url
 		max_redirects = 5
+		base_url_origin = extract_origin(base_url) if base_url else None
+		auth_headers = [
+			"Authorization", "Proxy-Authorization", "X-API-Key",
+			"X-Auth-Token", "Authorization-Signature"
+		]
 		for _hop in range(max_redirects + 1):
 			response = requests.request(method, current_url, **request_kwargs)
 			if response.status_code not in (301, 302, 303, 307, 308):
@@ -203,6 +235,13 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 					"error": f"Redirect blocked: {error_msg}",
 					"suggestion": "The server attempted to redirect to a private/internal address.",
 				}
+			# Check if redirect changes origin; strip auth headers if so
+			if base_url_origin:
+				next_url_origin = extract_origin(next_url)
+				if next_url_origin != base_url_origin:
+					# Cross-origin redirect: strip Authorization-class headers
+					for auth_header in auth_headers:
+						request_kwargs["headers"].pop(auth_header, None)
 			current_url = next_url
 		else:
 			# Loop exhausted without breaking — too many redirects.
