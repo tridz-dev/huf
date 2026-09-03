@@ -201,6 +201,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			"headers": final_headers,
 			"params": params or {},
 			"timeout": 30,
+			"stream": True,  # Stream response body to enforce size cap during read
 		}
 
 		# Add data or json based on what's provided
@@ -251,7 +252,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				"suggestion": "The URL redirects in a loop or exceeds the redirect limit.",
 			}
 
-		# Check response size — pre-check via Content-Length header, then verify actual content
+		# Check response size — pre-check via Content-Length header (fast-path)
 		content_length = response.headers.get("Content-Length")
 		if content_length and content_length.isdigit() and int(content_length) > MAX_RESPONSE_SIZE:
 			return {
@@ -261,19 +262,32 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				"suggestion": "The API indicates a response larger than 10MB. Try requesting less data.",
 			}
 
-		if len(response.content) > MAX_RESPONSE_SIZE:
-			return {
-				"success": False,
-				"error": "Response too large",
-				"status_code": response.status_code,
-				"suggestion": "The API response exceeds the 10MB size limit. Try requesting less data.",
-			}
+		# Stream response body and enforce size cap during read
+		total_read = 0
+		chunks = []
+		for chunk in response.iter_content(chunk_size=8192):
+			if not chunk:
+				continue
+			total_read += len(chunk)
+			if total_read > MAX_RESPONSE_SIZE:
+				return {
+					"success": False,
+					"error": "Response too large",
+					"status_code": response.status_code,
+					"suggestion": "The API response exceeds the 10MB size limit. Try requesting less data.",
+				}
+			chunks.append(chunk)
 
-		# Try to parse JSON response, fall back to text
+		response_body = b"".join(chunks)
+
+		# Parse JSON response from accumulated body, fall back to text
 		try:
-			response_data = response.json()
-		except ValueError:
-			response_data = response.text
+			response_data = json.loads(response_body)
+		except (json.JSONDecodeError, ValueError):
+			try:
+				response_data = response_body.decode(errors="replace")
+			except Exception:
+				response_data = str(response_body)
 
 		# Return standardized response
 		result = {
