@@ -26,6 +26,30 @@ from frappe.utils import now_datetime
 PINNED_FIELDS = ("procedure", "pinned_fingerprint", "pinned_definition_json")
 
 
+def get_permission_query_conditions(user=None):
+	"""Restrict Agent Procedure Run list/read to runs the user owns,
+	unless the user has agent.view_all capability.
+
+	Fix for the same defect pattern as F-02 (see huf.ai.agent_integration
+	.get_run_permission_conditions, the reference implementation this mirrors):
+	Huf User / Huf Manager hold create+write on this DocType but there was no
+	if_owner restriction and no permission_query_conditions hook, so any
+	authenticated user could read or list another user's procedure runs.
+	Registered in hooks.py.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	return f"`tabAgent Procedure Run`.owner = {frappe.db.escape(user)}"
+
+
 class AgentProcedureRun(Document):
 	def validate(self):
 		if self.is_new():
