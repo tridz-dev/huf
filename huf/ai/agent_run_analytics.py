@@ -43,19 +43,28 @@ def _dimension_key(row: dict) -> str:
 
 
 def _affected_dimensions(since):
+    """Return dict mapping (granularity, bucket_start, dimension_key) -> max_start_time.
+
+    ST-10.4: Tracks max start_time per bucket so refresh_rollups can identify buckets
+    that have aged out of the CORRECTION_WINDOW_HOURS and skip recomputation.
+    """
     rows = frappe.db.get_all(
         "Agent Run",
         filters={"status": ["in", TERMINAL_STATUSES], "start_time": [">=", since]},
         fields=["start_time", *DIMENSION_FIELDS],
         limit_page_length=0,
     )
-    affected = set()
+    affected = {}
     for row in rows:
         if not row.start_time:
             continue
         row = dict(row)
+        start_time = get_datetime(row["start_time"])
         for granularity in ("hour", "day"):
-            affected.add((granularity, _bucket_start(row["start_time"], granularity), _dimension_key(row)))
+            key = (granularity, _bucket_start(row["start_time"], granularity), _dimension_key(row))
+            # Store the maximum start_time for this bucket
+            if key not in affected or start_time > get_datetime(affected[key]):
+                affected[key] = row["start_time"]
     return affected
 
 
@@ -201,7 +210,20 @@ def refresh_rollups(full_backfill: bool = False):
     has_rollups = bool(frappe.db.count(ROLLUP_DOCTYPE))
     window_days = 90 if (full_backfill or not has_rollups) else 7
     since = add_to_date(now_datetime(), days=-window_days)
-    for granularity, bucket_start, dimension_key in _affected_dimensions(since):
+    affected_with_times = _affected_dimensions(since)
+
+    # ST-10.4: Compute correction window cutoff for skipping stable buckets
+    correction_cutoff = add_to_date(now_datetime(), hours=-CORRECTION_WINDOW_HOURS) if not full_backfill else None
+
+    for (granularity, bucket_start, dimension_key), max_start_time in affected_with_times.items():
+        # Skip recompute for buckets outside correction window (unless full_backfill)
+        if correction_cutoff and max_start_time < correction_cutoff:
+            frappe.logger().debug(
+                f"Skipping recompute for stable bucket {dimension_key}@{bucket_start}: "
+                f"outside {CORRECTION_WINDOW_HOURS}h correction window"
+            )
+            continue
+
         try:
             _recompute_rollup(granularity, bucket_start, dimension_key)
         except Exception:
