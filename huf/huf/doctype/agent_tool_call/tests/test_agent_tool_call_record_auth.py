@@ -8,103 +8,101 @@ agent.view_all can access a tool call.
 from unittest.mock import patch
 
 import frappe
-import pytest
+from frappe.tests import IntegrationTestCase
 
 
-def test_agent_tool_call_run_owner_can_read():
-	"""Owner of the tool call's run can read it."""
-	# Create a test run owned by alice
-	run_doc = frappe.new_doc("Agent Run")
-	run_doc.agent = "Test Agent"
-	run_doc.status = "Started"
-	run_doc.owner = "alice@example.com"
-	run_doc.insert()
+class TestAgentToolCallRecordAuth(IntegrationTestCase):
+	def test_agent_tool_call_run_owner_can_read(self):
+		"""Owner of the tool call's run can read it."""
+		# Create a test run owned by alice
+		run_doc = frappe.new_doc("Agent Run")
+		run_doc.agent = "Test Agent"
+		run_doc.status = "Started"
+		run_doc.owner = "alice@example.com"
+		run_doc.insert()
 
-	# Create a test tool call in that run
-	tool_doc = frappe.new_doc("Agent Tool Call")
-	tool_doc.agent_run = run_doc.name
-	tool_doc.tool_name = "test_tool"
-	tool_doc.status = "success"
-	tool_doc.insert()
+		# Create a test tool call in that run
+		tool_doc = frappe.new_doc("Agent Tool Call")
+		tool_doc.agent_run = run_doc.name
+		tool_doc.tool_name = "test_tool"
+		tool_doc.status = "success"
+		tool_doc.insert()
 
-	try:
-		# Verify alice can read it
-		from huf.ai.record_access import user_can_read_tool_call
-		assert user_can_read_tool_call(tool_doc, user="alice@example.com") is True
-	finally:
-		tool_doc.delete()
-		run_doc.delete()
+		try:
+			# Verify alice can read it
+			from huf.ai.record_access import user_can_read_tool_call
+			assert user_can_read_tool_call(tool_doc, user="alice@example.com") is True
+		finally:
+			tool_doc.delete()
+			run_doc.delete()
 
+	def test_agent_tool_call_non_run_owner_cannot_read(self):
+		"""Non-owner of the run cannot read its tool calls."""
+		# Create a test run owned by alice
+		run_doc = frappe.new_doc("Agent Run")
+		run_doc.agent = "Test Agent"
+		run_doc.status = "Started"
+		run_doc.owner = "alice@example.com"
+		run_doc.insert()
 
-def test_agent_tool_call_non_run_owner_cannot_read():
-	"""Non-owner of the run cannot read its tool calls."""
-	# Create a test run owned by alice
-	run_doc = frappe.new_doc("Agent Run")
-	run_doc.agent = "Test Agent"
-	run_doc.status = "Started"
-	run_doc.owner = "alice@example.com"
-	run_doc.insert()
+		# Create a test tool call in that run
+		tool_doc = frappe.new_doc("Agent Tool Call")
+		tool_doc.agent_run = run_doc.name
+		tool_doc.tool_name = "test_tool"
+		tool_doc.status = "success"
+		tool_doc.insert()
 
-	# Create a test tool call in that run
-	tool_doc = frappe.new_doc("Agent Tool Call")
-	tool_doc.agent_run = run_doc.name
-	tool_doc.tool_name = "test_tool"
-	tool_doc.status = "success"
-	tool_doc.insert()
+		try:
+			# Verify bob cannot read it
+			from huf.ai.record_access import user_can_read_tool_call
+			assert user_can_read_tool_call(tool_doc, user="bob@example.com") is False
+		finally:
+			tool_doc.delete()
+			run_doc.delete()
 
-	try:
-		# Verify bob cannot read it
-		from huf.ai.record_access import user_can_read_tool_call
-		assert user_can_read_tool_call(tool_doc, user="bob@example.com") is False
-	finally:
-		tool_doc.delete()
-		run_doc.delete()
+	def test_agent_tool_call_system_manager_can_read(self):
+		"""System Manager can read any tool call."""
+		# Create a test run owned by alice
+		run_doc = frappe.new_doc("Agent Run")
+		run_doc.agent = "Test Agent"
+		run_doc.status = "Started"
+		run_doc.owner = "alice@example.com"
+		run_doc.insert()
 
+		# Create a test tool call in that run
+		tool_doc = frappe.new_doc("Agent Tool Call")
+		tool_doc.agent_run = run_doc.name
+		tool_doc.tool_name = "test_tool"
+		tool_doc.status = "success"
+		tool_doc.insert()
 
-def test_agent_tool_call_system_manager_can_read():
-	"""System Manager can read any tool call."""
-	# Create a test run owned by alice
-	run_doc = frappe.new_doc("Agent Run")
-	run_doc.agent = "Test Agent"
-	run_doc.status = "Started"
-	run_doc.owner = "alice@example.com"
-	run_doc.insert()
+		try:
+			# Verify System Manager can read it
+			from huf.ai.record_access import user_can_read_tool_call
+			assert user_can_read_tool_call(tool_doc, user="Administrator") is True
+		finally:
+			tool_doc.delete()
+			run_doc.delete()
 
-	# Create a test tool call in that run
-	tool_doc = frappe.new_doc("Agent Tool Call")
-	tool_doc.agent_run = run_doc.name
-	tool_doc.tool_name = "test_tool"
-	tool_doc.status = "success"
-	tool_doc.insert()
+	def test_agent_tool_call_view_all_capability_can_read(self):
+		"""A non-owner with the agent.view_all capability can read any tool call."""
+		run_doc = frappe.new_doc("Agent Run")
+		run_doc.agent = "Test Agent"
+		run_doc.status = "Started"
+		run_doc.owner = "alice@example.com"
+		run_doc.insert()
 
-	try:
-		# Verify System Manager can read it
-		from huf.ai.record_access import user_can_read_tool_call
-		assert user_can_read_tool_call(tool_doc, user="Administrator") is True
-	finally:
-		tool_doc.delete()
-		run_doc.delete()
+		tool_doc = frappe.new_doc("Agent Tool Call")
+		tool_doc.agent_run = run_doc.name
+		tool_doc.tool_name = "test_tool"
+		tool_doc.status = "success"
+		tool_doc.insert()
 
+		try:
+			from huf.ai.record_access import user_can_read_tool_call
 
-def test_agent_tool_call_view_all_capability_can_read():
-	"""A non-owner with the agent.view_all capability can read any tool call."""
-	run_doc = frappe.new_doc("Agent Run")
-	run_doc.agent = "Test Agent"
-	run_doc.status = "Started"
-	run_doc.owner = "alice@example.com"
-	run_doc.insert()
-
-	tool_doc = frappe.new_doc("Agent Tool Call")
-	tool_doc.agent_run = run_doc.name
-	tool_doc.tool_name = "test_tool"
-	tool_doc.status = "success"
-	tool_doc.insert()
-
-	try:
-		from huf.ai.record_access import user_can_read_tool_call
-
-		with patch("huf.permissions.has_capability", return_value=True):
-			assert user_can_read_tool_call(tool_doc, user="carol@example.com") is True
-	finally:
-		tool_doc.delete()
-		run_doc.delete()
+			with patch("huf.permissions.has_capability", return_value=True):
+				assert user_can_read_tool_call(tool_doc, user="carol@example.com") is True
+		finally:
+			tool_doc.delete()
+			run_doc.delete()
