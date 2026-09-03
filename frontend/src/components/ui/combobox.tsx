@@ -24,6 +24,13 @@ export interface ComboboxOption {
 }
 
 export interface ComboboxProps {
+  /**
+   * Rendered on the trigger so a sibling `<Label htmlFor>` actually resolves.
+   * Without it, `<Label htmlFor="x"><Combobox/></Label>` is a dangling
+   * association: clicking the label does nothing and assistive tech cannot
+   * pair the two.
+   */
+  id?: string;
   options: ComboboxOption[];
   value?: string;
   onValueChange?: (value: string) => void;
@@ -38,6 +45,7 @@ export interface ComboboxProps {
 }
 
 export function Combobox({
+  id,
   options,
   value,
   onValueChange,
@@ -60,6 +68,7 @@ export function Combobox({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
           aria-expanded={open}
