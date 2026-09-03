@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import frappe
 import requests
 from requests.exceptions import RequestException
+from frappe.rate_limiter import rate_limit
 
 from frappe import _
 from huf.permissions import has_capability
@@ -107,6 +108,7 @@ def validate_url(url):
 	return True, None
 
 
+@rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
 def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None):
 	"""
@@ -316,6 +318,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		}
 
 
+@rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
 def handle_get_request(url, headers=None, params=None, tool_name=None):
 	"""
@@ -331,6 +334,7 @@ def handle_get_request(url, headers=None, params=None, tool_name=None):
 	return handle_http_request("GET", url, headers=headers, params=params, tool_name=tool_name)
 
 
+@rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
 def handle_post_request(url, headers=None, data=None, json_data=None, tool_name=None):
 	"""
