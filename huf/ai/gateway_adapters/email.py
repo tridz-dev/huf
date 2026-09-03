@@ -25,7 +25,7 @@ class EmailGatewayAdapter(GatewayAdapter):
 	provider_id = "email"
 	credential_schema = GatewayCredentialSchema(
 		(
-			GatewayCredentialField("webhook_secret", "Webhook Verification Secret (Optional)", required=False),
+			GatewayCredentialField("webhook_secret", "Webhook Verification Secret", required=True),
 			GatewayCredentialField("sender_email", "Default Outbound Sender Email (Optional)", required=False),
 		)
 	)
@@ -48,11 +48,30 @@ class EmailGatewayAdapter(GatewayAdapter):
 		return self._sender_email
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify optional secret token if configured."""
+		"""Verify webhook secret using constant-time comparison.
+
+		Requires webhook_secret to be configured at Gateway creation.
+		Fails closed (returns False) if:
+		- webhook_secret is not configured
+		- X-Webhook-Secret header or 'secret' query parameter is missing
+		- provided secret does not match configured secret
+
+		Uses hmac.compare_digest for constant-time comparison to prevent timing attacks.
+		"""
+		# Fail closed if secret is not configured
 		if not self._secret:
-			return True
+			return False
+
+		# Look for secret in header or query parameter
 		token = request.headers.get("X-Webhook-Secret") or request.query.get("secret", "")
-		return token == self._secret
+
+		# Fail closed if token is not provided
+		if not token:
+			return False
+
+		# Use constant-time comparison to prevent timing attacks
+		import hmac
+		return hmac.compare_digest(token, self._secret)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
 		if not self.verify_inbound(request):

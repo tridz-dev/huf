@@ -30,7 +30,7 @@ class GoogleChatGatewayAdapter(GatewayAdapter):
 	credential_schema = GatewayCredentialSchema(
 		(
 			GatewayCredentialField("webhook_url", "Google Chat Incoming Webhook URL (Optional)", required=False),
-			GatewayCredentialField("verification_token", "Verification Token (Optional)", required=False),
+			GatewayCredentialField("verification_token", "Verification Token", required=True),
 		)
 	)
 	capabilities = GatewayCapabilities(
@@ -50,14 +50,33 @@ class GoogleChatGatewayAdapter(GatewayAdapter):
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify verification_token if configured."""
+		"""Verify verification_token from payload using constant-time comparison.
+
+		Requires verification_token to be configured at Gateway creation (no fallback).
+		Fails closed (returns False) if:
+		- verification_token is not configured
+		- payload is invalid JSON
+		- token field is missing from payload
+		- provided token does not match configured token
+
+		Uses hmac.compare_digest for constant-time comparison to prevent timing attacks.
+		"""
+		# Fail closed: verification_token is mandatory (schema marks it required=True)
 		if not self._verification_token:
-			return True
+			return False
+
 		try:
 			payload = json.loads(request.body.decode("utf-8")) if request.body else {}
-			return payload.get("token") == self._verification_token
 		except Exception:
 			return False
+
+		provided_token = payload.get("token", "")
+		if not provided_token:
+			return False
+
+		# Use constant-time comparison to prevent timing attacks
+		import hmac
+		return hmac.compare_digest(provided_token, self._verification_token)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
 		if not self.verify_inbound(request):
