@@ -16,4 +16,10 @@ _GUEST_DOCTYPE_PINNED_TYPES = {
     "Attach File to Document",
 }
 
+# Guest-allowed tools of these types MUST pin a reference_report; otherwise the
+# LLM could supply an arbitrary report and read data outside the tool's intended scope.
+_GUEST_REPORT_PINNED_TYPES = {
+    "Get Report Result",
+}
+
 MUTATING_TOOL_TYPES = PermissionAwareToolRegistry.MUTATING_TOOL_TYPES

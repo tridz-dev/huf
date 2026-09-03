@@ -31,7 +31,7 @@ from huf.ai.tool_invocation import (
     check_tool_permission as _check_tool_permission,
 )
 from huf.ai.tool_registry import PermissionAwareToolRegistry
-from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES
+from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 
 logger = frappe.logger("huf")
@@ -523,7 +523,19 @@ def create_function_tool(
                             ),
                             "denied": True,
                         })
+                    if tool_type in _GUEST_REPORT_PINNED_TYPES and not _extra_args.get("reference_report"):
+                        return json.dumps({
+                            "error": (
+                                "This tool is not available for guest access: it has no "
+                                "fixed target report configured."
+                            ),
+                            "denied": True,
+                        })
                     args_dict["ignore_permissions"] = True
+
+                # Override report_name with reference_report if pinned for guest
+                if _extra_args.get("reference_report"):
+                    args_dict["report_name"] = _extra_args["reference_report"]
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
                     args_dict["tool_name"] = name
