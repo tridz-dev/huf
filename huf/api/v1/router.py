@@ -108,6 +108,20 @@ def _wants_stream(payload) -> bool:
 	return str(payload.get("stream", "")).strip().lower() in ("1", "true", "yes")
 
 
+def _resolve_switch_user(context: RequestContext, current_user: str):
+	"""Return the user `frappe.set_user` should switch to for this request,
+	or None if no switch is needed.
+
+	Only API-key-authenticated requests are switched: session-authenticated
+	requests already carry the correct `frappe.session.user` from the
+	cookie lookup, and unauthenticated (Guest) requests to allow_guest
+	endpoints must keep `frappe.session.user == "Guest"`.
+	"""
+	if context.auth_mode == AuthMode.API_KEY and context.user and context.user != current_user:
+		return context.user
+	return None
+
+
 def _match_route(endpoint: str):
 	"""Resolve `endpoint` (the path after ROUTE_PREFIX) to a (handler, requires_auth) pair.
 
@@ -153,8 +167,9 @@ class ApiV1Router(BaseRenderer):
 			context = self._build_context(requires_auth)
 			previous_user = frappe.session.user
 			try:
-				if context.auth_mode == AuthMode.API_KEY and context.user and context.user != previous_user:
-					frappe.set_user(context.user)
+				switch_user = _resolve_switch_user(context, previous_user)
+				if switch_user:
+					frappe.set_user(switch_user)
 
 				if endpoint == "responses" and _wants_stream(frappe.local.form_dict):
 					payload = frappe.local.form_dict
