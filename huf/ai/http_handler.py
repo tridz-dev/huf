@@ -7,6 +7,9 @@ import frappe
 import requests
 from requests.exceptions import RequestException
 
+from frappe import _
+from huf.permissions import has_capability
+
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024  # 10MB
 DEFAULT_TIMEOUT = 30
@@ -97,6 +100,13 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 	"""
 	Generic HTTP request handler with support for tool-defined headers
 	"""
+	# Check agent.use capability (guest sessions are exempt)
+	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+		frappe.throw(
+			_("You are not authorized to use HTTP tools."),
+			frappe.PermissionError
+		)
+
 	# Validate HTTP method
 	if method.upper() not in ALLOWED_METHODS:
 		return {
@@ -258,6 +268,13 @@ def handle_get_request(url, headers=None, params=None, tool_name=None):
 	"""
 	Handle GET requests with tool-defined headers
 	"""
+	# Check agent.use capability (guest sessions are exempt)
+	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+		frappe.throw(
+			_("You are not authorized to use HTTP tools."),
+			frappe.PermissionError
+		)
+
 	return handle_http_request("GET", url, headers=headers, params=params, tool_name=tool_name)
 
 
@@ -266,6 +283,13 @@ def handle_post_request(url, headers=None, data=None, json_data=None, tool_name=
 	"""
 	Handle POST requests with JSON data support
 	"""
+	# Check agent.use capability (guest sessions are exempt)
+	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+		frappe.throw(
+			_("You are not authorized to use HTTP tools."),
+			frappe.PermissionError
+		)
+
 	# Convert string JSON to dict if needed
 	if isinstance(json_data, str):
 		try:
