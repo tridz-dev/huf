@@ -225,6 +225,12 @@ export function NodeSelectionModal({
       config = { type: 'tool-call', tool_name: 'gsheets_read', args: {}, output: { save_result_to_context: '' } };
     } else if (actionId === 'file') {
       config = { type: 'tool-call', tool_name: 'gdrive_list_files', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'code') {
+      // run_python is offered only when the target agent's Execution Profile
+      // allows code execution (see PermissionAwareToolRegistry._allows_code_execution);
+      // agent_doc is injected server-side from a trusted closure and cannot be
+      // set here.
+      config = { type: 'tool-call', tool_name: 'run_python', args: {}, output: { save_result_to_context: '' } };
     }
 
     onSaveAction?.(actionId, config);
