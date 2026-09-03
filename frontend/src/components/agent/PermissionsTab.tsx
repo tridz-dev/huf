@@ -172,6 +172,25 @@ export function PermissionsTab({
         <CardContent className="grid gap-6">
           <FormField
             control={form.control}
+            name="allow_all_users"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Allow all authenticated users</FormLabel>
+                  <FormDescription>
+                    Allow all authenticated users. When unchecked, only the listed users and roles may use
+                    this agent.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch checked={field.value ?? false} onCheckedChange={field.onChange} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
             name="allow_guest"
             render={({ field }) => (
               <FormItem className="flex flex-row items-center justify-between rounded-md border p-4">

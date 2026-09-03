@@ -36,6 +36,7 @@ export const agentFormSchema = z.object({
   agent_prompt: z.string().optional(),
   prompt_version_locked: z.boolean().optional(),
   template_version_at_attach: z.number().optional(),
+  allow_all_users: z.boolean().default(false),
   allow_guest: z.boolean().default(false),
   allowed_users: z.array(z.string()).default([]),
   allowed_roles: z.array(z.string()).default([]),
