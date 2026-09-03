@@ -395,8 +395,8 @@
    "label": "Async"
   },
   {
-   "default": "1",
-   "description": "When disabled, runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require a direct response.",
+   "default": "0",
+   "description": "If checked, planning and runs execute immediately in the request. Default is to queue (recommended for stability). Existing agents retain their setting.",
    "fieldname": "run_immediately",
    "fieldtype": "Check",
    "label": "Run immediately (advanced)"
