@@ -24,6 +24,16 @@ import { NodeSelectionModal } from './modals/NodeSelectionModal';
 import { ScheduleIntervalType, DocEventType } from '../types/flow.types';
 import { getAgents, getDocTypes, getRoles } from '../services/agentApi';
 import { getToolFunctions, getToolFunction, getFlowTools, type FlowTool } from '../services/toolApi';
+import {
+  getFlowTrigger,
+  setFlowSchedule,
+  setFlowDocEventTrigger,
+  clearFlowTrigger,
+  type FlowScheduledInterval,
+  type FlowDocEvent,
+  type FlowScheduleTrigger,
+  type FlowDocEventTrigger as FlowDocEventTriggerRow,
+} from '../services/flowApi';
 import { VariablePicker } from './ui/VariablePicker';
 import { JsonSchemaForm } from './JsonSchemaForm';
 
@@ -66,6 +76,108 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const [loadingToolDetails, setLoadingToolDetails] = useState(false);
   const [roles, setRoles] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
+
+  // Engine-backed Schedule / Doc Event trigger state. These reflect the real
+  // Agent Trigger record the flow engine reads (see huf/ai/flow_api.py "Flow
+  // Trigger APIs"); they are independent of the node's own triggerConfig,
+  // which is display-only (see the comment above renderTriggerForm's
+  // schedule/doc-event branches for why).
+  const [scheduleTrigger, setScheduleTrigger] = useState<FlowScheduleTrigger | null>(null);
+  const [scheduleTriggerLoading, setScheduleTriggerLoading] = useState(false);
+  const [scheduleTriggerSaving, setScheduleTriggerSaving] = useState(false);
+  const [scheduleTriggerError, setScheduleTriggerError] = useState<string | null>(null);
+  // Local draft for the interval-count input. Writing on every keystroke fires
+  // one API call per character ("12" -> a write for 1, then for 12), and those
+  // can land out of order, so the persisted value is whichever request finishes
+  // last rather than what the user typed. Persist on blur (or Enter) instead.
+  const [intervalCountDraft, setIntervalCountDraft] = useState<string>('');
+
+  const [docEventTrigger, setDocEventTrigger] = useState<FlowDocEventTriggerRow | null>(null);
+  const [docEventTriggerLoading, setDocEventTriggerLoading] = useState(false);
+  const [docEventTriggerSaving, setDocEventTriggerSaving] = useState(false);
+  const [docEventTriggerError, setDocEventTriggerError] = useState<string | null>(null);
+
+  const flowId = activeFlow?.id;
+  const isScheduleTriggerSelected = selectedNode?.data.triggerConfig?.type === 'schedule';
+  const isDocEventTriggerSelected = selectedNode?.data.triggerConfig?.type === 'doc-event';
+
+  // Hydrate the real Schedule trigger from the backend when a Schedule
+  // trigger node is selected on a saved flow.
+  useEffect(() => {
+    if (!isScheduleTriggerSelected || !flowId) {
+      setScheduleTrigger(null);
+      setScheduleTriggerError(null);
+      return;
+    }
+    setScheduleTriggerLoading(true);
+    setScheduleTriggerError(null);
+    getFlowTrigger(flowId)
+      .then((rows) => {
+        const found = rows.find((r): r is FlowScheduleTrigger => r.trigger_type === 'Schedule');
+        setScheduleTrigger(found || null);
+      })
+      .catch((err) => setScheduleTriggerError(err?.message || 'Failed to load schedule'))
+      .finally(() => setScheduleTriggerLoading(false));
+  }, [isScheduleTriggerSelected, flowId, selectedNode?.id]);
+
+  // Hydrate the real Doc Event trigger from the backend when a Doc Event
+  // trigger node is selected on a saved flow.
+  useEffect(() => {
+    if (!isDocEventTriggerSelected || !flowId) {
+      setDocEventTrigger(null);
+      setDocEventTriggerError(null);
+      return;
+    }
+    setDocEventTriggerLoading(true);
+    setDocEventTriggerError(null);
+    getFlowTrigger(flowId)
+      .then((rows) => {
+        const found = rows.find((r): r is FlowDocEventTriggerRow => r.trigger_type === 'Doc Event');
+        setDocEventTrigger(found || null);
+      })
+      .catch((err) => setDocEventTriggerError(err?.message || 'Failed to load doc event trigger'))
+      .finally(() => setDocEventTriggerLoading(false));
+  }, [isDocEventTriggerSelected, flowId, selectedNode?.id]);
+
+  const handleSetSchedule = (scheduledInterval: FlowScheduledInterval, intervalCount: number) => {
+    if (!flowId) return;
+    setScheduleTriggerSaving(true);
+    setScheduleTriggerError(null);
+    setFlowSchedule(flowId, scheduledInterval, intervalCount, scheduleTrigger?.trigger_name)
+      .then((row) => setScheduleTrigger(row))
+      .catch((err) => setScheduleTriggerError(err?.message || 'Failed to save schedule'))
+      .finally(() => setScheduleTriggerSaving(false));
+  };
+
+  const handleClearSchedule = () => {
+    if (!scheduleTrigger) return;
+    setScheduleTriggerSaving(true);
+    setScheduleTriggerError(null);
+    clearFlowTrigger(scheduleTrigger.trigger_name)
+      .then(() => setScheduleTrigger(null))
+      .catch((err) => setScheduleTriggerError(err?.message || 'Failed to remove schedule'))
+      .finally(() => setScheduleTriggerSaving(false));
+  };
+
+  const handleSetDocEventTrigger = (referenceDoctype: string, docEvent: FlowDocEvent) => {
+    if (!flowId || !referenceDoctype || !docEvent) return;
+    setDocEventTriggerSaving(true);
+    setDocEventTriggerError(null);
+    setFlowDocEventTrigger(flowId, referenceDoctype, docEvent, undefined, docEventTrigger?.trigger_name)
+      .then((row) => setDocEventTrigger(row))
+      .catch((err) => setDocEventTriggerError(err?.message || 'Failed to save doc event trigger'))
+      .finally(() => setDocEventTriggerSaving(false));
+  };
+
+  const handleClearDocEventTrigger = () => {
+    if (!docEventTrigger) return;
+    setDocEventTriggerSaving(true);
+    setDocEventTriggerError(null);
+    clearFlowTrigger(docEventTrigger.trigger_name)
+      .then(() => setDocEventTrigger(null))
+      .catch((err) => setDocEventTriggerError(err?.message || 'Failed to remove doc event trigger'))
+      .finally(() => setDocEventTriggerSaving(false));
+  };
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -307,10 +419,19 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
     }
 
     if (config.type === 'schedule') {
+      // NOTE: intervalType/interval/cronExpression below are node-config-only
+      // fields. The flow engine does NOT read them - it reads `cron`/
+      // `scheduled_interval` off a real Agent Trigger record. They are kept
+      // here purely so a flow authored before the engine wiring existed keeps
+      // showing its old values (back-compat display), and because the
+      // engine has no concept of "minutes" intervals or arbitrary cron
+      // expressions (see valid_intervals in set_flow_schedule) so they can't
+      // be losslessly promoted into the real control below. The "Runs..."
+      // section below is the one that actually configures the engine.
       return (
         <>
-          <div>
-            <Label htmlFor="interval-type">Schedule Type</Label>
+          <div className="opacity-70">
+            <Label htmlFor="interval-type" className="text-xs">Schedule Type (legacy display only)</Label>
             <Select
               value={config.intervalType}
               onValueChange={(value) => handleUpdateTriggerConfig('intervalType', value as ScheduleIntervalType)}
@@ -327,8 +448,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </Select>
           </div>
           {config.intervalType !== 'custom' && (
-            <div>
-              <Label htmlFor="interval">Interval</Label>
+            <div className="opacity-70">
+              <Label htmlFor="interval" className="text-xs">Interval (legacy display only)</Label>
               <Input
                 id="interval"
                 type="number"
@@ -339,8 +460,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
             </div>
           )}
           {config.intervalType === 'custom' && (
-            <div>
-              <Label htmlFor="cron">Cron Expression</Label>
+            <div className="opacity-70">
+              <Label htmlFor="cron" className="text-xs">Cron Expression (legacy display only)</Label>
               <Input
                 id="cron"
                 value={config.cronExpression || ''}
@@ -349,15 +470,100 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               />
             </div>
           )}
+
+          <div className="border-t border-border pt-3 space-y-3">
+            <Label className="text-xs font-medium">Runs on a schedule (engine)</Label>
+            {!flowId ? (
+              <p className="text-xs text-muted-foreground">Save the flow first to enable scheduling.</p>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="engine-scheduled-interval" className="text-xs">Frequency</Label>
+                  <Select
+                    value={scheduleTrigger?.scheduled_interval || ''}
+                    disabled={scheduleTriggerLoading || scheduleTriggerSaving}
+                    onValueChange={(value) =>
+                      handleSetSchedule(value as FlowScheduledInterval, scheduleTrigger?.interval_count || 1)
+                    }
+                  >
+                    <SelectTrigger id="engine-scheduled-interval">
+                      <SelectValue placeholder={scheduleTriggerLoading ? 'Loading...' : 'Select frequency...'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Hourly">Hourly</SelectItem>
+                      <SelectItem value="Daily">Daily</SelectItem>
+                      <SelectItem value="Weekly">Weekly</SelectItem>
+                      <SelectItem value="Monthly">Monthly</SelectItem>
+                      <SelectItem value="Yearly">Yearly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {scheduleTrigger && (
+                  <div>
+                    <Label htmlFor="engine-interval-count" className="text-xs">Every N intervals</Label>
+                    <Input
+                      id="engine-interval-count"
+                      type="number"
+                      min="1"
+                      disabled={scheduleTriggerLoading || scheduleTriggerSaving}
+                      value={intervalCountDraft !== '' ? intervalCountDraft : String(scheduleTrigger.interval_count || 1)}
+                      onChange={(e) => setIntervalCountDraft(e.target.value)}
+                      onBlur={() => {
+                        if (intervalCountDraft === '') return;
+                        const n = parseInt(intervalCountDraft) || 1;
+                        setIntervalCountDraft('');
+                        if (n !== (scheduleTrigger.interval_count || 1)) {
+                          handleSetSchedule(scheduleTrigger.scheduled_interval, n);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                      }}
+                    />
+                  </div>
+                )}
+                {scheduleTrigger && (
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>
+                      Runs {scheduleTrigger.scheduled_interval.toLowerCase()}
+                      {scheduleTrigger.interval_count > 1 ? ` (every ${scheduleTrigger.interval_count})` : ''}
+                      {scheduleTrigger.next_execution ? ` · next run ${scheduleTrigger.next_execution}` : ''}
+                    </p>
+                    {scheduleTrigger.last_execution && (
+                      <p>Last run {scheduleTrigger.last_execution}</p>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={scheduleTriggerSaving}
+                      onClick={handleClearSchedule}
+                    >
+                      Remove schedule
+                    </Button>
+                  </div>
+                )}
+                {scheduleTriggerError && (
+                  <p className="text-xs text-destructive">{scheduleTriggerError}</p>
+                )}
+              </>
+            )}
+          </div>
         </>
       );
     }
 
     if (config.type === 'doc-event') {
+      // NOTE: doctype/event below are node-config-only fields, kept for
+      // back-compat display; the engine does not read them. The engine
+      // reads reference_doctype/doc_event off a real Agent Trigger record,
+      // configured by the "Fires on a document event (engine)" section
+      // below, which uses the actual doc_event values the Agent Trigger
+      // doctype supports (see agent_trigger.json) rather than the
+      // friendlier-but-lossy save/update/delete categories used here.
       return (
         <>
-          <div>
-            <Label htmlFor="doctype">Document Type</Label>
+          <div className="opacity-70">
+            <Label htmlFor="doctype" className="text-xs">Document Type (legacy display only)</Label>
             <Combobox
                         id="doctype"
               options={docTypes}
@@ -369,8 +575,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
               emptyText="No DocType found."
             />
           </div>
-          <div>
-            <Label htmlFor="event">Event Type</Label>
+          <div className="opacity-70">
+            <Label htmlFor="event" className="text-xs">Event Type (legacy display only)</Label>
             <Select
               value={config.event}
               onValueChange={(value) => handleUpdateTriggerConfig('event', value as DocEventType)}
@@ -387,6 +593,79 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 <SelectItem value="before-delete">Before Delete</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="border-t border-border pt-3 space-y-3">
+            <Label className="text-xs font-medium">Fires on a document event (engine)</Label>
+            {!flowId ? (
+              <p className="text-xs text-muted-foreground">Save the flow first to enable this trigger.</p>
+            ) : (
+              <>
+                <div>
+                  <Label htmlFor="engine-doctype" className="text-xs">Document Type (Engine)</Label>
+                  <Combobox
+                    id="engine-doctype"
+                    options={docTypes}
+                    value={docEventTrigger?.reference_doctype || ''}
+                    onValueChange={(v) =>
+                      handleSetDocEventTrigger(v, docEventTrigger?.doc_event || 'after_save')
+                    }
+                    placeholder={loadingDocTypes ? 'Loading...' : 'Select DocType...'}
+                    disabled={loadingDocTypes || docEventTriggerLoading || docEventTriggerSaving}
+                    searchPlaceholder="Search DocType..."
+                    emptyText="No DocType found."
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="engine-doc-event" className="text-xs">Event (Engine)</Label>
+                  <Select
+                    value={docEventTrigger?.doc_event || ''}
+                    disabled={docEventTriggerLoading || docEventTriggerSaving || !docEventTrigger?.reference_doctype}
+                    onValueChange={(value) =>
+                      handleSetDocEventTrigger(docEventTrigger?.reference_doctype || '', value as FlowDocEvent)
+                    }
+                  >
+                    <SelectTrigger id="engine-doc-event">
+                      <SelectValue placeholder={docEventTriggerLoading ? 'Loading...' : 'Select event...'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="before_insert">Before Insert</SelectItem>
+                      <SelectItem value="after_insert">After Insert</SelectItem>
+                      <SelectItem value="validate">Validate</SelectItem>
+                      <SelectItem value="before_save">Before Save</SelectItem>
+                      <SelectItem value="after_save">After Save</SelectItem>
+                      <SelectItem value="before_submit">Before Submit</SelectItem>
+                      <SelectItem value="on_submit">On Submit</SelectItem>
+                      <SelectItem value="on_update">On Update</SelectItem>
+                      <SelectItem value="after_submit">After Submit</SelectItem>
+                      <SelectItem value="on_cancel">On Cancel</SelectItem>
+                      <SelectItem value="before_rename">Before Rename</SelectItem>
+                      <SelectItem value="after_rename">After Rename</SelectItem>
+                      <SelectItem value="on_trash">On Trash</SelectItem>
+                      <SelectItem value="after_delete">After Delete</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {docEventTrigger && (
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>
+                      Fires on {docEventTrigger.doc_event} of {docEventTrigger.reference_doctype}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={docEventTriggerSaving}
+                      onClick={handleClearDocEventTrigger}
+                    >
+                      Remove trigger
+                    </Button>
+                  </div>
+                )}
+                {docEventTriggerError && (
+                  <p className="text-xs text-destructive">{docEventTriggerError}</p>
+                )}
+              </>
+            )}
           </div>
         </>
       );

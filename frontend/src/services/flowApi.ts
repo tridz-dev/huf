@@ -304,3 +304,111 @@ export async function getPendingApprovals(): Promise<PendingApproval[]> {
         handleFrappeError(error, 'Error fetching pending approvals');
     }
 }
+
+// ─── Flow Trigger APIs ───────────────────────────────────────────────
+// Backed by Agent Trigger records (target_type = "Flow"). These are the
+// records the flow engine actually reads at execution time - a flow's own
+// node config (`trigger.schedule` / `trigger.doc-event` config) has no
+// engine effect on its own; see huf/ai/flow_api.py "Flow Trigger APIs".
+
+/** Allowed values of Agent Trigger.scheduled_interval (Select field) */
+export type FlowScheduledInterval = 'Hourly' | 'Daily' | 'Weekly' | 'Monthly' | 'Yearly';
+
+/** Allowed values of Agent Trigger.doc_event (Select field) */
+export type FlowDocEvent =
+    | 'before_insert' | 'after_insert' | 'validate' | 'before_save' | 'after_save'
+    | 'before_submit' | 'on_submit' | 'on_update' | 'after_submit' | 'on_cancel'
+    | 'before_rename' | 'after_rename' | 'on_trash' | 'after_delete';
+
+interface FlowTriggerRowBase {
+    trigger_name: string;
+    flow_id: string;
+    trigger_type: string;
+    disabled: 0 | 1;
+    disabled_reason: string | null;
+}
+
+/** Row shape returned for a Schedule-type Agent Trigger */
+export interface FlowScheduleTrigger extends FlowTriggerRowBase {
+    trigger_type: 'Schedule';
+    scheduled_interval: FlowScheduledInterval;
+    interval_count: number;
+    next_execution: string | null;
+    last_execution: string | null;
+}
+
+/** Row shape returned for a Doc Event-type Agent Trigger */
+export interface FlowDocEventTrigger extends FlowTriggerRowBase {
+    trigger_type: 'Doc Event';
+    reference_doctype: string;
+    doc_event: FlowDocEvent;
+    condition: string | null;
+}
+
+export type FlowTrigger = FlowScheduleTrigger | FlowDocEventTrigger | FlowTriggerRowBase;
+
+/** Create or update the Schedule-type Agent Trigger that runs `flowId`. Idempotent when `triggerName` is passed back. */
+export async function setFlowSchedule(
+    flowId: string,
+    scheduledInterval: FlowScheduledInterval,
+    intervalCount?: number,
+    triggerName?: string
+): Promise<FlowScheduleTrigger> {
+    try {
+        const result = await call.post('huf.ai.flow_api.set_flow_schedule', {
+            flow_id: flowId,
+            scheduled_interval: scheduledInterval,
+            interval_count: intervalCount ?? 1,
+            trigger_name: triggerName,
+        });
+        return result.message as FlowScheduleTrigger;
+    } catch (error) {
+        handleFrappeError(error, `Error setting schedule for flow ${flowId}`);
+    }
+}
+
+/** Create or update the Doc Event-type Agent Trigger that runs `flowId`. Idempotent when `triggerName` is passed back. */
+export async function setFlowDocEventTrigger(
+    flowId: string,
+    referenceDoctype: string,
+    docEvent: FlowDocEvent,
+    condition?: string,
+    triggerName?: string
+): Promise<FlowDocEventTrigger> {
+    try {
+        const result = await call.post('huf.ai.flow_api.set_flow_doc_event_trigger', {
+            flow_id: flowId,
+            reference_doctype: referenceDoctype,
+            doc_event: docEvent,
+            condition,
+            trigger_name: triggerName,
+        });
+        return result.message as FlowDocEventTrigger;
+    } catch (error) {
+        handleFrappeError(error, `Error setting doc event trigger for flow ${flowId}`);
+    }
+}
+
+/** List every Agent Trigger targeting `flowId` (zero, one, or more). */
+export async function getFlowTrigger(flowId: string): Promise<FlowTrigger[]> {
+    try {
+        const result = await call.get('huf.ai.flow_api.get_flow_trigger', {
+            flow_id: flowId,
+        });
+        return (result.message as FlowTrigger[]) || [];
+    } catch (error) {
+        handleFrappeError(error, `Error fetching triggers for flow ${flowId}`);
+    }
+}
+
+/** Delete a Flow-targeted Agent Trigger. */
+export async function clearFlowTrigger(triggerName: string): Promise<{ status: string; trigger_name: string }> {
+    try {
+        const result = await call.post('huf.ai.flow_api.clear_flow_trigger', {
+            trigger_name: triggerName,
+        });
+        return result.message as { status: string; trigger_name: string };
+    } catch (error) {
+        handleFrappeError(error, `Error clearing trigger ${triggerName}`);
+    }
+}
