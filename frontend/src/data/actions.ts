@@ -74,24 +74,17 @@ export const actionOptions: ActionOption[] = [
     category: 'utility'
   },
   {
-    id: 'webhook',
-    name: 'Call webhook',
-    description: 'Make an HTTP request',
-    icon: 'Webhook',
+    id: 'http-request',
+    name: 'HTTP Request',
+    description: 'Make an HTTP request to any URL',
+    icon: 'Globe',
     category: 'utility'
   },
   {
     id: 'file',
     name: 'File operations',
-    description: 'Read, write, or delete files',
+    description: 'List, search, or read files in Google Drive',
     icon: 'FileText',
-    category: 'utility'
-  },
-  {
-    id: 'date',
-    name: 'Date utility',
-    description: 'Format and manipulate dates',
-    icon: 'Calendar',
     category: 'utility'
   },
 
@@ -108,13 +101,6 @@ export const actionOptions: ActionOption[] = [
     name: 'Google Sheets',
     description: 'Read or write spreadsheet data',
     icon: 'Sheet',
-    category: 'integration'
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    description: 'Create or update Notion pages',
-    icon: 'FileText',
     category: 'integration'
   },
 ];

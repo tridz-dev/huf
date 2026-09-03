@@ -347,7 +347,13 @@ def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
 	if entry_node is None:
 		return False
 
-	expected_auth = entry_node.get("config", {}).get("auth")
+	# The webhook auth key is written as "auth" by RightSidebar.tsx but as
+	# "apiKey" by NodeSelectionModal.tsx (frontend inconsistency, not a
+	# backend redundancy) - accept either so a webhook configured through
+	# either UI path can authenticate. "auth" takes precedence when both
+	# are somehow present.
+	node_config = entry_node.get("config", {})
+	expected_auth = node_config.get("auth") or node_config.get("apiKey")
 	if not expected_auth:
 		return False
 
@@ -358,7 +364,9 @@ def _webhook_entry_auth(defn: dict) -> str | None:
 	entry_id = defn.get("entry")
 	for node in defn.get("nodes", []):
 		if node.get("id") == entry_id and node.get("type") == "trigger.webhook":
-			return node.get("config", {}).get("auth")
+			node_config = node.get("config", {})
+			# See _webhook_key_is_valid for why both keys are checked.
+			return node_config.get("auth") or node_config.get("apiKey")
 	return None
 
 
@@ -941,6 +949,96 @@ def get_node_schemas() -> dict:
 			"config_schema": [],
 		},
 	}
+
+
+@frappe.whitelist()
+def list_flow_tools() -> list:
+	"""
+	List all tools available to flow tool-call nodes: built-in Agent Tool
+	Function records plus tools exposed by enabled MCP Server documents.
+
+	Each dict:
+	    {
+	        "name": str,
+	        "label": str,
+	        "description": str,
+	        "source": "builtin" | "mcp",
+	        "mcp_server": str | None,
+	        "params_json_schema": dict,
+	    }
+
+	Returns:
+	    list[dict]
+	"""
+	if not frappe.has_permission("Agent Tool Function", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	tools = []
+
+	# Built-in tools: Agent Tool Function.params is the authoritative JSON
+	# Schema source (see huf/ai/sdk_tools.py:create_agent_tools, which is the
+	# only code path that actually builds runtime tools from this doctype).
+	# The "parameters" child table (Agent Function Params) is not read by
+	# any conversion code in the app and is treated as stale/unused here.
+	for row in frappe.get_all(
+		"Agent Tool Function",
+		 fields=["name", "tool_name", "description", "params"],
+	):
+		params_json_schema = {}
+		if row.params:
+			try:
+				params_json_schema = json.loads(row.params)
+			except (json.JSONDecodeError, TypeError):
+				params_json_schema = {}
+
+		tools.append({
+			"name": row.tool_name,
+			"label": row.tool_name,
+			"description": row.description or "",
+			"source": "builtin",
+			"mcp_server": None,
+			"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
+		})
+
+	# MCP tools: each enabled "MCP Server" document caches its tools in the
+	# "tools" child table (MCP Server Tool: tool_name, description,
+	# parameters JSON, enabled). "mcp_server" below is the MCP Server
+	# document name (server_name, since autoname is field:server_name),
+	# matching the identifier huf.ai.mcp_client.execute_mcp_tool expects
+	# for its server_name argument.
+	mcp_servers = frappe.get_all(
+		"MCP Server",
+		filters={"enabled": 1},
+		fields=["name", "tool_namespace"],
+	)
+	for server in mcp_servers:
+		tool_rows = frappe.get_all(
+			"MCP Server Tool",
+			filters={"parent": server.name, "parenttype": "MCP Server", "enabled": 1},
+			fields=["tool_name", "description", "parameters"],
+		)
+		for tool_row in tool_rows:
+			params_json_schema = {}
+			if tool_row.parameters:
+				try:
+					params_json_schema = json.loads(tool_row.parameters)
+				except (json.JSONDecodeError, TypeError):
+					params_json_schema = {}
+
+			label = tool_row.tool_name
+			if server.tool_namespace:
+				label = f"{server.tool_namespace}.{tool_row.tool_name}"
+
+			tools.append({
+				"name": tool_row.tool_name,
+				"label": label,
+				"description": tool_row.description or "",
+				"source": "mcp",
+				"mcp_server": server.name,
+				"params_json_schema": params_json_schema if isinstance(params_json_schema, dict) else {},
+			})
+
+	return tools
 
 
 # ---------------------------------------------------------------------------
