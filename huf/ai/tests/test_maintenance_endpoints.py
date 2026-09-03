@@ -85,11 +85,16 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         from huf.ai.orchestration import orchestrator
 
         mock_has_permission.return_value = False
+        mock_throw.side_effect = frappe.PermissionError
         mock_orch = Mock()
         mock_orch.agent = "Test Agent"
         mock_get_doc.return_value = mock_orch
 
-        orchestrator.recreate_orchestration_plan("test_orch")
+        # frappe.throw must actually stop execution (as it does for real);
+        # without side_effect, the mock would silently fall through into
+        # the unmocked planning code below the permission check.
+        with self.assertRaises(frappe.PermissionError):
+            orchestrator.recreate_orchestration_plan("test_orch")
 
         # Verify permission check was performed
         mock_has_permission.assert_called_with("Agent Orchestration", "write")
@@ -186,12 +191,17 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
 
         mock_session.user = "test_user"
         mock_has_permission.return_value = False
+        mock_throw.side_effect = frappe.PermissionError
 
-        result = client_side_tool.client_side_function(
-            conversation_id="test_conv",
-            agent_run_id="test_run",
-            function_name="test_func",
-        )
+        # frappe.throw must actually stop execution (as it does for real);
+        # without side_effect, the mock would silently fall through into
+        # the unmocked _get_or_create_call below the permission check.
+        with self.assertRaises(frappe.PermissionError):
+            client_side_tool.client_side_function(
+                conversation_id="test_conv",
+                agent_run_id="test_run",
+                function_name="test_func",
+            )
 
         # Should throw permission error
         mock_throw.assert_called_once()
