@@ -4,7 +4,11 @@ import frappe
 from frappe.utils import now_datetime, time_diff_in_seconds
 from huf.ai.orchestration.orchestrator import execute_next_step
 
-JOB_TIMEOUT_SECONDS = 900 # 15 minutes
+JOB_TIMEOUT_SECONDS = 1500 # 25 minutes (must stay above the RQ timeout=1200 used when enqueuing)
+
+
+def _orch_enqueue_lock_key(orch_name: str) -> str:
+    return f"orch_enqueue_lock:{orch_name}"
 
 def process_orchestrations():
     """
@@ -54,11 +58,17 @@ def process_orchestrations():
             if is_running or timed_out:
                 continue
 
+            # Claim this orchestration for this tick so a slow queue backlog
+            # (previous tick's job not yet picked up / not yet flipped to
+            # in_progress) does not cause a second, fully concurrent
+            # execute_next_step job to be enqueued for the same orchestration.
+            if not frappe.cache().set(_orch_enqueue_lock_key(o.name), 1, ex=90, nx=True):
+                continue
+
             frappe.enqueue(
                 "huf.ai.orchestration.orchestrator.execute_next_step",
                 queue="default",
                 timeout=1200,
-                orch=orch,
                 orch_name=orch.name
             )
 
