@@ -18,6 +18,7 @@ class TestAgentToolCallRecordAuth(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": "Test Agent",
 				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
 			}).insert(ignore_permissions=True)
 
 	def test_agent_tool_call_run_owner_can_read(self):

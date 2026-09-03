@@ -16,6 +16,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": "Test Agent",
 				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
 			}).insert(ignore_permissions=True)
 
 	def test_get_run_context_metrics_fetches_own_previous_run(self):

@@ -18,6 +18,7 @@ class TestAgentMessageRecordAuth(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": "Test Agent",
 				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
 			}).insert(ignore_permissions=True)
 
 	def test_agent_message_conversation_owner_can_read(self):

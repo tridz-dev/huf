@@ -15,6 +15,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 				"doctype": "Agent",
 				"agent_name": "Test Agent",
 				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
 			}).insert(ignore_permissions=True)
 
 	def test_get_agent_run_status_owner_can_access(self):
