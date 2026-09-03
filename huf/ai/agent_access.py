@@ -15,8 +15,13 @@ def check_agent_access(agent_doc, user, *, for_execution=True) -> bool:
 	- System Manager and the document owner always have access.
 	- Guest access depends solely on allow_guest; allowed_users/allowed_roles
 	  are never consulted for Guest.
-	- If both allowed_users and allowed_roles are empty, every authenticated
-	  user is allowed.
+	- A holder of the agent.view_all or agent.edit capability always has access
+	  (mirrors the Agent PQC's capability short-circuit).
+	- If both allowed_users and allowed_roles are empty, access is governed by
+	  allow_all_users: True grants every authenticated user access (legacy/
+	  migrated agents), False closes the agent to everyone but the owner,
+	  System Manager, and capability holders above (new agents, closed by
+	  default).
 	- Otherwise, allowed if the user is listed in allowed_users or holds any
 	  role in allowed_roles.
 	"""
@@ -30,11 +35,16 @@ def check_agent_access(agent_doc, user, *, for_execution=True) -> bool:
 	if agent_doc.owner == user or "System Manager" in frappe.get_roles(user):
 		return True
 
+	from huf.permissions import has_capability
+
+	if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
+		return True
+
 	allowed_users = agent_doc.allowed_users or []
 	allowed_roles = agent_doc.allowed_roles or []
 
 	if not allowed_users and not allowed_roles:
-		return True
+		return bool(agent_doc.allow_all_users)
 
 	allowed_user_names = [u.user for u in allowed_users]
 	if user in allowed_user_names:
