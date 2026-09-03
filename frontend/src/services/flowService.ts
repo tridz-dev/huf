@@ -96,7 +96,7 @@ class FlowService {
       nodes: [
         {
           id: 'empty-trigger',
-          type: 'trigger.webhook',
+          type: 'trigger.unset',
           config: {},
           _position: { x: 250, y: 100 },
           _label: 'Select Trigger',
