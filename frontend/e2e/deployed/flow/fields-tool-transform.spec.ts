@@ -171,8 +171,17 @@ test.describe('per-field config round-trip: tool-call', () => {
         await reselectActionNode(page);
         // Tool details (and thus the argument form) refetch after reload;
         // wait for the field to actually appear before reading it.
+        // The JsonSchemaForm renders from the tool's schema first and the saved
+        // value lands a tick later, so the label can be visible while the input
+        // is still empty. Waiting only on the label therefore reads '' and looks
+        // like config loss. Poll the value itself.
         await expect(page.locator('label', { hasText: label }).first()).toBeVisible({ timeout: 30000 });
-        expect(await sidebar.readField(label)).toBe(value);
+        await expect
+          .poll(async () => sidebar.readField(label), {
+            timeout: 30000,
+            intervals: [200, 300, 500, 1000],
+          })
+          .toBe(value);
 
         const def = await getFlowDefinition(api, flowId);
         const node = def.definition_json.nodes.find((n) => n.type === 'tool.call');

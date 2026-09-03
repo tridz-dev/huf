@@ -117,13 +117,27 @@ export class ConfigSidebar {
 
   async readCombobox(labelText: string): Promise<string> {
     const trigger = this.comboboxTriggerFor(labelText);
-    // Agent/tool lists are fetched after mount, so straight after a reload the
-    // trigger can still read "Loading...". Wait that out rather than asserting
-    // on a transient placeholder - otherwise the test reports a config-loss
-    // defect that isn't real.
-    await expect(trigger).not.toHaveText(/^Loading\.\.\.$/, { timeout: 30000 }).catch(() => {});
-    return (await trigger.innerText()).trim();
+    // A combobox in this sidebar can flip Loading... -> placeholder -> Loading...
+    // as two independent fetches resolve (the flow tool list and the agent
+    // list). So a single "is it no longer Loading" check can pass in the gap
+    // between them and the very next read still returns "Loading...", which
+    // then surfaces as a bogus "the saved value was lost" failure.
+    // Poll until the text is BOTH non-loading AND stable across two reads.
+    let last = '';
+    await expect
+      .poll(
+        async () => {
+          const now = (await trigger.innerText()).trim();
+          const stable = now === last && !/^Loading\.\.\.$/.test(now);
+          last = now;
+          return stable ? now : `__unstable__:${now}`;
+        },
+        { timeout: 45000, intervals: [200, 300, 500, 1000, 2000] },
+      )
+      .not.toMatch(/^__unstable__:/);
+    return last;
   }
+
 }
 
 function cssEscape(id: string): string {
