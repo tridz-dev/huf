@@ -197,7 +197,7 @@ class TestCompileProcedureFromTraceRefusals(unittest.TestCase):
 		self.assertEqual(result.step_count, 0)
 		self.assertIn("no tool calls", result.reason.lower())
 
-	def test_unexplained_argument_value_refuses_with_specific_reason(self):
+	def test_unexplained_argument_value_refuses_when_unconfirmed_inputs_disabled(self):
 		tool_calls = [
 			_completed_call(
 				"get_customer",
@@ -210,6 +210,7 @@ class TestCompileProcedureFromTraceRefusals(unittest.TestCase):
 			response="",
 			tool_calls=tool_calls,
 			classify_tool=_fake_classify_tool,
+			allow_unconfirmed_inputs=False,
 		)
 		self.assertFalse(result.proposable)
 		self.assertIsNone(result.procedure_graph)
@@ -275,6 +276,257 @@ class TestCompileProcedureFromTraceRefusals(unittest.TestCase):
 			classify_tool=_fake_classify_tool,
 		)
 		self.assertFalse(result.proposable)
+
+
+class TestUnconfirmedInputBindings(unittest.TestCase):
+	"""Tests for the new unconfirmed input binding feature (default allow_unconfirmed_inputs=True)."""
+
+	def test_untraceable_argument_compiles_successfully_by_default(self):
+		"""An opaque value not in prompt, not from earlier output, not a trivial constant
+		should compile successfully by default as an unconfirmed input."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "some-opaque-id-not-explained-anywhere"},
+				{"name": "Customer Inc"},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up a customer.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable, result.reason)
+		self.assertIsNotNone(result.procedure_graph)
+		self.assertIsNotNone(result.input_schema)
+
+		# The binding should reference an input field
+		first_node = result.procedure_graph["nodes"][0]
+		binding = first_node["config"]["input"]["customer_id"]
+		self.assertEqual(binding, {"$from": "input.customer_id"})
+
+		# The field should be registered with x-confidence: unconfirmed
+		self.assertIn("customer_id", result.input_schema["properties"])
+		self.assertEqual(result.input_schema["properties"]["customer_id"]["x-confidence"], "unconfirmed")
+
+	def test_unconfirmed_input_fields_tracked_in_result(self):
+		"""result.unconfirmed_input_fields should contain the names of all unconfirmed fields."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "opaque-id-1"},
+				{"name": "Customer Inc"},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up a customer.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable)
+		self.assertIn("customer_id", result.unconfirmed_input_fields)
+
+	def test_clean_trace_has_empty_unconfirmed_input_fields(self):
+		"""A trace with all bindings explained (prompt/earlier-output/trivial) should have
+		empty unconfirmed_input_fields."""
+		prompt = "Look up customer ACME-001 and list their invoices."
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "ACME-001"},
+				{"name": "ACME-001", "customer_name": "Acme Corp"},
+			),
+			_completed_call(
+				"get_sales_invoices",
+				{"customer": "ACME-001", "limit": 0},
+				{"rows": []},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt=prompt,
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable)
+		self.assertEqual(result.unconfirmed_input_fields, ())
+
+	def test_multiple_unconfirmed_inputs_tracked(self):
+		"""Multiple unconfirmed inputs should all appear in unconfirmed_input_fields."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "opaque-id-1"},
+				{"name": "Customer Inc"},
+			),
+			_completed_call(
+				"get_sales_invoices",
+				{"customer": "ACME-001", "limit": 50},
+				{"rows": []},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up some info.",  # doesn't mention the opaque IDs or limit value
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable)
+		# customer_id should be unconfirmed (opaque)
+		# customer should be unconfirmed (not in prompt, not from earlier output)
+		# limit should NOT be unconfirmed (it's a trivial constant: 0 is in trivial list? no, 50 is not trivial)
+		# Actually, 50 is not a trivial constant, and not in prompt, and not from earlier output
+		# So both customer_id, customer, and limit should be unconfirmed
+		self.assertIn("customer_id", result.unconfirmed_input_fields)
+		# customer appears in result prompt so it might not be unconfirmed -- let me check
+		# The prompt is "Look up some info" which doesn't contain "ACME-001" or "50"
+		# So customer (ACME-001) should be unconfirmed
+		# And limit (50) should be unconfirmed since 50 is not trivial
+		self.assertIn("customer", result.unconfirmed_input_fields)
+		self.assertIn("limit", result.unconfirmed_input_fields)
+
+	def test_x_confidence_always_present_in_input_schema(self):
+		"""Even prompt-derived fields should always have 'x-confidence' key present in properties."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "ACME-001"},
+				{"name": "ACME-001"},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up customer ACME-001.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable)
+
+		# customer_id is prompt-derived
+		customer_id_prop = result.input_schema["properties"]["customer_id"]
+		self.assertIn("x-confidence", customer_id_prop)
+		self.assertEqual(customer_id_prop["x-confidence"], "prompt")
+
+	def test_field_name_collision_with_different_confidence_levels(self):
+		"""When two arguments both snake_case to the same field name but have different
+		confidence levels, they should get distinct suffixed names."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "ACME-001"},  # from prompt
+				{"name": "ACME-001", "internal_id": "INT-123"},
+			),
+			_completed_call(
+				"get_sales_invoices",
+				{"customer_id": "some-opaque-id"},  # unconfirmed (not in prompt, not from earlier output)
+				{"rows": []},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up customer ACME-001 and their invoices.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable)
+
+		# Should have two distinct fields: customer_id (prompt) and customer_id_2 (unconfirmed)
+		self.assertIn("customer_id", result.input_schema["properties"])
+		self.assertIn("customer_id_2", result.input_schema["properties"])
+
+		# Check confidence levels
+		self.assertEqual(
+			result.input_schema["properties"]["customer_id"]["x-confidence"],
+			"prompt"
+		)
+		self.assertEqual(
+			result.input_schema["properties"]["customer_id_2"]["x-confidence"],
+			"unconfirmed"
+		)
+
+		# Check that the nodes reference the correct fields
+		first_node = result.procedure_graph["nodes"][0]
+		second_node = result.procedure_graph["nodes"][1]
+
+		self.assertEqual(
+			first_node["config"]["input"]["customer_id"],
+			{"$from": "input.customer_id"}
+		)
+		self.assertEqual(
+			second_node["config"]["input"]["customer_id"],
+			{"$from": "input.customer_id_2"}
+		)
+
+	def test_field_name_collision_with_same_value_reuses_field(self):
+		"""When two arguments both snake_case to the same field name AND were bound
+		from the SAME underlying value, they should reuse the same field (no suffix)
+		-- it's genuinely one input, just referenced from two steps."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "ACME-001"},  # from prompt
+				{"name": "ACME-001"},
+			),
+			_completed_call(
+				"create_todo",
+				{"customer_id": "ACME-001"},  # also from earlier output (first node's name)
+				{"name": "TODO-001"},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up customer ACME-001 and create a todo.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable)
+
+		# Should have only one customer_id field (both bindings reuse it)
+		self.assertIn("customer_id", result.input_schema["properties"])
+		# Count occurrences of customer_id_* fields
+		customer_id_fields = [k for k in result.input_schema["properties"].keys() if k.startswith("customer_id")]
+		self.assertEqual(len(customer_id_fields), 1, "Should have exactly one customer_id field")
+
+	def test_field_name_collision_with_same_confidence_but_different_values_disambiguates(self):
+		"""Regression guard: two DIFFERENT tool-call arguments can share both a
+		snake_case name AND a confidence level (e.g. two ``doctype`` args, both
+		unconfirmed, for two different doctypes) while meaning genuinely different
+		things. Confidence-only matching would silently merge them into one
+		user-supplied field, discarding the second call's own value and feeding
+		both tool calls whatever the user types once at run time -- exactly the
+		"looks deterministic but bakes in a wrong assumption" failure this module
+		exists to avoid. They must get distinct fields instead."""
+		tool_calls = [
+			_completed_call(
+				"frappe_list_records",
+				{"doctype": "User"},  # unconfirmed: not in prompt, no earlier output, not trivial
+				{"rows": []},
+			),
+			_completed_call(
+				"frappe_list_records",
+				{"doctype": "Role"},  # unconfirmed too, but a genuinely different value
+				{"rows": []},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="List some records for me.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable, result.reason)
+
+		self.assertIn("doctype", result.input_schema["properties"])
+		self.assertIn("doctype_2", result.input_schema["properties"])
+		self.assertEqual(result.input_schema["properties"]["doctype"]["x-confidence"], "unconfirmed")
+		self.assertEqual(result.input_schema["properties"]["doctype_2"]["x-confidence"], "unconfirmed")
+		self.assertEqual(set(result.unconfirmed_input_fields), {"doctype", "doctype_2"})
+
+		first_node, second_node = result.procedure_graph["nodes"][0], result.procedure_graph["nodes"][1]
+		self.assertEqual(first_node["config"]["input"]["doctype"], {"$from": "input.doctype"})
+		self.assertEqual(second_node["config"]["input"]["doctype"], {"$from": "input.doctype_2"})
 
 
 class TestSnakeCase(unittest.TestCase):
@@ -353,6 +605,43 @@ class TestBuildProcedureDocumentPayload(unittest.TestCase):
 				procedure_name="Look up a customer",
 				classify_tool=_fake_classify_tool,
 			)
+
+	def test_graph_with_unconfirmed_inputs_builds_payload(self):
+		"""Verify that a graph with unconfirmed input fields (containing x-confidence key)
+		successfully passes re-validation and builds a payload."""
+		tool_calls = [
+			_completed_call(
+				"get_customer",
+				{"customer_id": "some-opaque-id"},
+				{"name": "Customer Inc"},
+			),
+		]
+		result = compile_procedure_from_trace(
+			prompt="Look up a customer.",
+			response="",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable, result.reason)
+		self.assertIn("customer_id", result.unconfirmed_input_fields)
+
+		# The graph should have x-confidence in the input_schema properties
+		self.assertEqual(
+			result.procedure_graph["contract"]["input_schema"]["properties"]["customer_id"]["x-confidence"],
+			"unconfirmed"
+		)
+
+		# _build_procedure_document_payload should accept the graph without error
+		payload = _build_procedure_document_payload(
+			agent_run_name="AR-0001",
+			procedure_graph=result.procedure_graph,
+			procedure_name="Look up customer",
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertEqual(payload["doctype"], "Agent Procedure")
+		self.assertEqual(payload["procedure_id"], "AR-0001-procedure")
+		self.assertEqual(payload["tier"], "Draft")
+		self.assertEqual(payload["status"], "Draft")
 
 
 if __name__ == "__main__":
