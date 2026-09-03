@@ -25,3 +25,4 @@ huf.patches.v1.preserve_gateway_agent_access
 huf.patches.v1.backfill_agent_run_usage_columns
 huf.patches.v1.migrate_prompt_caching_fields
 huf.patches.v1.log_run_immediately_agents
+huf.patches.v1.add_run_budget_fields
