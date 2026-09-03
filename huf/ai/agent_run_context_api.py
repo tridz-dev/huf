@@ -60,6 +60,7 @@ def get_run_context_metrics(run_name: str):
         {
             "agent": run_doc.agent,
             "start_time": ["<", run_doc.start_time],
+            "owner": frappe.session.user,
         },
         "name",
         order_by="start_time desc",
