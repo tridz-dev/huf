@@ -44,6 +44,7 @@ export interface ProcedureProposalInputField {
   type?: string;
   description?: string;
   required?: boolean;
+  'x-confidence'?: 'prompt' | 'unconfirmed';
   [key: string]: unknown;
 }
 
@@ -65,6 +66,10 @@ export interface ProcedureProposal {
   input_schema?: ProcedureProposalInputField[] | Record<string, unknown>;
   step_count?: number;
   source_run?: string;
+  /** Names of input_schema fields whose value could not be traced to the run's prompt or an
+   * earlier step's output -- the user still supplies these each run, but their origin is
+   * unconfirmed (see each field's `x-confidence` in input_schema). */
+  unconfirmed_input_fields?: string[];
 }
 
 /** Result of actually creating the procedure from an accepted proposal. */
