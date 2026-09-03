@@ -1,0 +1,84 @@
+"""Test record-level authorization for Agent Tool Call doctype.
+
+Tests the has_permission hook for Agent Tool Call, verifying that only
+users who own the tool call's run, System Manager, or users with
+agent.view_all can access a tool call.
+"""
+
+import frappe
+import pytest
+
+
+def test_agent_tool_call_run_owner_can_read():
+	"""Owner of the tool call's run can read it."""
+	# Create a test run owned by alice
+	run_doc = frappe.new_doc("Agent Run")
+	run_doc.agent = "Test Agent"
+	run_doc.status = "Started"
+	run_doc.owner = "alice@example.com"
+	run_doc.insert()
+
+	# Create a test tool call in that run
+	tool_doc = frappe.new_doc("Agent Tool Call")
+	tool_doc.agent_run = run_doc.name
+	tool_doc.tool_name = "test_tool"
+	tool_doc.status = "success"
+	tool_doc.insert()
+
+	try:
+		# Verify alice can read it
+		from huf.ai.record_access import user_can_read_tool_call
+		assert user_can_read_tool_call(tool_doc, user="alice@example.com") is True
+	finally:
+		tool_doc.delete()
+		run_doc.delete()
+
+
+def test_agent_tool_call_non_run_owner_cannot_read():
+	"""Non-owner of the run cannot read its tool calls."""
+	# Create a test run owned by alice
+	run_doc = frappe.new_doc("Agent Run")
+	run_doc.agent = "Test Agent"
+	run_doc.status = "Started"
+	run_doc.owner = "alice@example.com"
+	run_doc.insert()
+
+	# Create a test tool call in that run
+	tool_doc = frappe.new_doc("Agent Tool Call")
+	tool_doc.agent_run = run_doc.name
+	tool_doc.tool_name = "test_tool"
+	tool_doc.status = "success"
+	tool_doc.insert()
+
+	try:
+		# Verify bob cannot read it
+		from huf.ai.record_access import user_can_read_tool_call
+		assert user_can_read_tool_call(tool_doc, user="bob@example.com") is False
+	finally:
+		tool_doc.delete()
+		run_doc.delete()
+
+
+def test_agent_tool_call_system_manager_can_read():
+	"""System Manager can read any tool call."""
+	# Create a test run owned by alice
+	run_doc = frappe.new_doc("Agent Run")
+	run_doc.agent = "Test Agent"
+	run_doc.status = "Started"
+	run_doc.owner = "alice@example.com"
+	run_doc.insert()
+
+	# Create a test tool call in that run
+	tool_doc = frappe.new_doc("Agent Tool Call")
+	tool_doc.agent_run = run_doc.name
+	tool_doc.tool_name = "test_tool"
+	tool_doc.status = "success"
+	tool_doc.insert()
+
+	try:
+		# Verify System Manager can read it
+		from huf.ai.record_access import user_can_read_tool_call
+		assert user_can_read_tool_call(tool_doc, user="Administrator") is True
+	finally:
+		tool_doc.delete()
+		run_doc.delete()
