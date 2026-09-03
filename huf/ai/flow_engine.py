@@ -377,6 +377,20 @@ def _execute_loop(flow_run, nodes_map: dict, edges_list: list, settings: dict):
 			next_node_id = _evaluate_edges(flow_run, node_id, node_result, edges_list)
 
 		if not next_node_id:
+			# A node that FAILED and has nowhere to route to must fail the run.
+			# _evaluate_edges already honours on_failure edges, so reaching here
+			# with a failed node means the flow author provided no failure path.
+			# Previously the run fell through to _complete_flow_run and was
+			# recorded as Success even though a node had errored - e.g. a
+			# tool.call naming a tool that does not exist reported Success with
+			# an empty last_error.
+			if result_status == "failed":
+				node_error = (
+					node_result.get("error") if isinstance(node_result, dict) else None
+				) or _("Node '{0}' ({1}) failed").format(node_id, node.get("type"))
+				_fail_flow_run(flow_run, str(node_error))
+				return
+
 			# No outgoing edges matched - flow is done
 			_complete_flow_run(flow_run)
 			_publish_flow_event(flow_run, "flow_completed", {"status": "Success"})
@@ -417,6 +431,9 @@ def _execute_node(flow_run, node: dict, settings: dict) -> dict:
 		"loop": _exec_loop_node,
 		"end": _exec_end,
 	}
+
+	if node_type == "trigger.unset":
+		frappe.throw(_("Node {0} is a trigger that has not been configured yet. Choose a trigger type before running this flow.").format(node_id))
 
 	executor = executors.get(node_type)
 	if not executor:

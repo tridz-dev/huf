@@ -137,7 +137,7 @@ describe('flowSerializer', () => {
       expect(serialized.nodes[0].type).toBe('trigger.doc-event');
     });
 
-    it('maps trigger with webhook type (or default) to trigger.webhook', () => {
+    it('maps trigger with explicit webhook type to trigger.webhook', () => {
       const flow = createTestFlow([
         {
           id: 'trigger1',
@@ -158,6 +158,31 @@ describe('flowSerializer', () => {
       ]);
       const serialized = serializeFlow(flow);
       expect(serialized.nodes[0].type).toBe('trigger.webhook');
+    });
+
+    it('maps a trigger with no triggerConfig.type to trigger.unset, not trigger.webhook (N16)', () => {
+      const flow = createTestFlow([
+        {
+          id: 'trigger1',
+          type: 'trigger',
+          position: { x: 0, y: 0 },
+          data: {
+            nodeType: 'trigger',
+            label: 'Select Trigger',
+            icon: 'Webhook',
+            configured: false,
+            triggerConfig: { type: undefined },
+          },
+        },
+      ]);
+      const serialized = serializeFlow(flow);
+      // An unconfigured trigger must NOT be silently persisted as a webhook.
+      expect(serialized.nodes[0].type).toBe('trigger.unset');
+
+      const deserialized = deserializeFlow('flow1', 'Test Flow', 'Draft', serialized);
+      expect(deserialized.nodes[0].data?.triggerConfig?.type).toBeUndefined();
+      // Round-tripping an unconfigured trigger must not claim it is configured.
+      expect(deserialized.nodes[0].data?.configured).toBe(false);
     });
   });
 
@@ -277,7 +302,7 @@ describe('flowSerializer', () => {
       expect(deserialized.nodes[0].data?.actionConfig?.type).toBe('tool-call');
     });
 
-    it('LOSES IDENTITY for human-input trigger: comes back as webhook', () => {
+    it('unmapped/legacy human-input trigger degrades to trigger.unset, not trigger.webhook (N16)', () => {
       const flow = createTestFlow([
         {
           id: 'trigger1',
@@ -296,12 +321,17 @@ describe('flowSerializer', () => {
       ]);
 
       const serialized = serializeFlow(flow);
-      // Unmapped trigger type should default to trigger.webhook
-      expect(serialized.nodes[0].type).toBe('trigger.webhook');
+      // An unmapped/removed trigger type must NOT be silently manufactured
+      // into a configured webhook trigger (the original N16 defect). It
+      // degrades to the explicit "nothing configured" state instead.
+      expect(serialized.nodes[0].type).toBe('trigger.unset');
 
       const deserialized = deserializeFlow('flow1', 'Test Flow', 'Draft', serialized);
-      // It comes back as webhook trigger, not human-input
-      expect(deserialized.nodes[0].data?.triggerConfig?.type).toBe('webhook');
+      // It comes back with no trigger type chosen, not as a webhook trigger.
+      expect(deserialized.nodes[0].data?.triggerConfig?.type).toBeUndefined();
+      // And it must not claim to be configured (regression guard: buildNodeData
+      // used to hardcode configured: true for every deserialized node).
+      expect(deserialized.nodes[0].data?.configured).toBe(false);
     });
 
     it('preserves trigger types through round trip', () => {

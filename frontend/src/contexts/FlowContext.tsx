@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from 'react';
 import { Flow, FlowMetadata, FlowNode, FlowEdge } from '../types/flow.types';
 import { flowService } from '../services/flowService';
+import { toast } from 'sonner';
 
 export type SaveState = 'saved' | 'saving' | 'unsaved' | 'error';
 
@@ -28,6 +29,8 @@ interface FlowContextType {
   updateNode: (nodeId: string, updates: Partial<FlowNode>) => void;
   deleteNode: (nodeId: string) => void;
   addEdge: (edge: FlowEdge) => void;
+  undo: () => void;
+  canUndo: boolean;
   saveFlow: () => Promise<void>;
   refreshFlows: () => Promise<void>;
 }
@@ -66,6 +69,17 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   // Ref to track last synced flow to prevent circular updates
   const lastSyncedFlowRef = useRef<Flow | null>(null);
   const activeFlowRef = useRef<Flow | null>(activeFlow);
+
+  // ─── Undo history for destructive canvas mutations (node deletion) ──
+  // We snapshot the FULL nodes+edges pair before each destructive mutation,
+  // rather than computing a per-action inverse. A whole-graph snapshot is
+  // trivially correct (it can never leave a node's edges dangling, unlike a
+  // hand-rolled inverse) at the cost of a bit more memory, which is fine at
+  // a shallow depth. History is in-memory only: it does NOT survive a flow
+  // save (undo can still revert past a save, back to an earlier unsaved
+  // shape) and is discarded on reload or when switching to a different flow.
+  const UNDO_STACK_LIMIT = 20;
+  const [undoStack, setUndoStack] = useState<{ nodes: FlowNode[]; edges: FlowEdge[] }[]>([]);
 
   // Sync ref with state
   useEffect(() => {
@@ -235,6 +249,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
   const setActiveFlow = useCallback((flowId: string) => {
     setActiveFlowId(flowId);
     setSelectedNodeId(null);
+    // Undo history is scoped to a single flow session; switching flows starts fresh.
+    setUndoStack([]);
   }, []);
 
 
@@ -361,10 +377,49 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     markUnsaved();
   }, [activeFlowId, markUnsaved]);
 
-  const deleteNode = useCallback((nodeId: string) => {
+  // Restore a prior nodes+edges snapshot (used by undo). This goes through the
+  // same context-level state update as any other structural mutation, which is
+  // what makes it safe against FlowCanvas's 50ms debounce: FlowCanvas re-syncs
+  // its local nodes/edges from activeFlow whenever nodes.length or edges.length
+  // changes (see the useEffect keyed on activeFlow?.nodes.length /
+  // activeFlow?.edges.length in FlowCanvas.tsx), and that same effect cancels
+  // any in-flight debounced push (updateTimeoutRef / pendingUpdateRef) before
+  // re-syncing. Undoing a delete always changes node count, so it always hits
+  // that path — a debounced write that was mid-flight when undo fires is
+  // discarded rather than allowed to clobber the restored state with stale data.
+  const restoreSnapshot = useCallback((snapshot: { nodes: FlowNode[]; edges: FlowEdge[] }) => {
     if (!activeFlowId) return;
     setActiveFlowState(prev => {
       if (!prev) return prev;
+      const updated = { ...prev, nodes: snapshot.nodes, edges: snapshot.edges };
+      lastSyncedFlowRef.current = updated;
+      return updated;
+    });
+    flowService.updateNodesAndEdges(activeFlowId, snapshot.nodes, snapshot.edges);
+    markUnsaved();
+  }, [activeFlowId, markUnsaved]);
+
+  const undo = useCallback(() => {
+    setUndoStack(prev => {
+      if (prev.length === 0) return prev;
+      const next = prev.slice(0, -1);
+      const snapshot = prev[prev.length - 1];
+      restoreSnapshot(snapshot);
+      return next;
+    });
+  }, [restoreSnapshot]);
+
+  const deleteNode = useCallback((nodeId: string) => {
+    if (!activeFlowId) return;
+    let deletedNode: FlowNode | undefined;
+    setActiveFlowState(prev => {
+      if (!prev) return prev;
+      deletedNode = prev.nodes.find(n => n.id === nodeId);
+      // Snapshot the pre-delete graph so undo can restore it verbatim —
+      // this is what guarantees a restored node never comes back with its
+      // edges dangling: we're not reconstructing edges, we're replaying the
+      // exact prior edges array.
+      setUndoStack(stack => [...stack, { nodes: prev.nodes, edges: prev.edges }].slice(-UNDO_STACK_LIMIT));
       const updatedNodes = prev.nodes.filter(n => n.id !== nodeId);
       const updatedEdges = prev.edges.filter(
         e => e.source !== nodeId && e.target !== nodeId
@@ -378,7 +433,15 @@ export function FlowProvider({ children }: { children: ReactNode }) {
       setSelectedNodeId(null);
     }
     markUnsaved();
-  }, [activeFlowId, selectedNodeId, markUnsaved]);
+    const label = (deletedNode?.data as { label?: string } | undefined)?.label;
+    toast('Node deleted', {
+      description: label ? `"${label}" was removed from the flow.` : undefined,
+      action: {
+        label: 'Undo',
+        onClick: () => undo(),
+      },
+    });
+  }, [activeFlowId, selectedNodeId, markUnsaved, undo]);
 
   const handleSetSelectedNode = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId);
@@ -426,6 +489,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode,
     deleteNode,
     addEdge,
+    undo,
+    canUndo: undoStack.length > 0,
     saveFlow,
     refreshFlows,
   }), [
@@ -452,6 +517,8 @@ export function FlowProvider({ children }: { children: ReactNode }) {
     updateNode,
     deleteNode,
     addEdge,
+    undo,
+    undoStack.length,
     saveFlow,
     refreshFlows,
   ]);

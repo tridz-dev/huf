@@ -60,7 +60,7 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'code',
     name: 'Execute Code',
-    description: 'Run custom code snippet',
+    description: 'Run a sandboxed Python snippet, if the agent\'s Execution Profile allows it',
     icon: 'Code',
     category: 'transform'
   },

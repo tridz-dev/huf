@@ -63,7 +63,13 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNode['type'] {
         const triggerType = node.data?.triggerConfig?.type;
         if (triggerType === 'schedule') return 'trigger.schedule';
         if (triggerType === 'doc-event') return 'trigger.doc-event';
-        return 'trigger.webhook';
+        if (triggerType === 'webhook') return 'trigger.webhook';
+        // No trigger type chosen yet (or an unmapped/legacy type like the removed
+        // human-input trigger) — do NOT default to trigger.webhook. Persisting an
+        // unconfigured trigger as trigger.webhook would silently manufacture a
+        // webhook that was never configured (see N16). trigger.unset is the
+        // explicit "nothing chosen" state.
+        return 'trigger.unset';
     }
 
     // Action nodes — map by actionConfig.type
@@ -174,24 +180,33 @@ function mapBackendNodeTypeToFrontend(
 function buildNodeData(node: BackendNode): FlowNodeData {
     const frontendType = mapBackendNodeTypeToFrontend(node.type);
 
+    // trigger.unset means no trigger has been configured yet — the node must
+    // not claim to be configured, unlike every other node type coming back
+    // from a saved definition (see N16).
+    const isUnsetTrigger = node.type === 'trigger.unset';
+
     const base: FlowNodeData = {
         label: node._label || getDefaultLabel(node.type),
         nodeType: frontendType as FlowNodeData['nodeType'],
         icon: node._icon || getDefaultIcon(node.type),
-        configured: true,
+        configured: !isUnsetTrigger,
     };
 
     if (frontendType === 'trigger') {
-        const triggerType =
-            node.type === 'trigger.schedule'
-                ? ('schedule' as const)
-                : node.type === 'trigger.doc-event'
-                    ? ('doc-event' as const)
-                    : ('webhook' as const);
-        base.triggerConfig = {
-            type: triggerType,
-            ...node.config,
-        } as FlowNodeData['triggerConfig'];
+        if (isUnsetTrigger) {
+            base.triggerConfig = { type: undefined } as FlowNodeData['triggerConfig'];
+        } else {
+            const triggerType =
+                node.type === 'trigger.schedule'
+                    ? ('schedule' as const)
+                    : node.type === 'trigger.doc-event'
+                        ? ('doc-event' as const)
+                        : ('webhook' as const);
+            base.triggerConfig = {
+                type: triggerType,
+                ...node.config,
+            } as FlowNodeData['triggerConfig'];
+        }
     } else if (frontendType === 'action') {
         base.actionConfig = {
             type: mapBackendActionType(node.type),
@@ -204,6 +219,7 @@ function buildNodeData(node: BackendNode): FlowNodeData {
 
 function getDefaultLabel(backendType: string): string {
     const labels: Record<string, string> = {
+        'trigger.unset': 'Select Trigger',
         'trigger.webhook': 'Webhook Trigger',
         'trigger.schedule': 'Schedule Trigger',
         'trigger.doc-event': 'Document Event Trigger',
@@ -222,6 +238,7 @@ function getDefaultLabel(backendType: string): string {
 
 function getDefaultIcon(backendType: string): string {
     const icons: Record<string, string> = {
+        'trigger.unset': 'Webhook',
         'trigger.webhook': 'Webhook',
         'trigger.schedule': 'Clock',
         'trigger.doc-event': 'Database',

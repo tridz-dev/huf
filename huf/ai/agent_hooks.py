@@ -12,8 +12,9 @@ CACHE_KEY = "huf:doc_event_agents"
 def get_doc_event_agents(event: str):
     """Fetch & cache Doc Event triggers (Agent Trigger doctype).
 
-    Permission checks are enforced so agents only fire for triggers the current
-    user is allowed to read.
+    Returns triggers targeting either an Agent or a Flow. Permission checks
+    are enforced so triggers only fire for rows the current user is allowed
+    to read.
     """
     if not frappe.db.exists("DocType", "Agent Trigger"):
         return []
@@ -32,12 +33,29 @@ def get_doc_event_agents(event: str):
             "disabled": 0,
             "doc_event": event
         },
-        fields=["name", "agent", "reference_doctype", "doc_event", "condition", "prompt_field"]
+        fields=["name", "target_type", "agent", "flow", "reference_doctype", "doc_event", "condition", "prompt_field"]
     )
 
     result = []
 
     for t in triggers:
+        target_type = t.get("target_type") or "Agent"
+
+        if target_type == "Flow":
+            if not t.get("flow"):
+                frappe.logger("huf").error(f"Agent Trigger load failed: {t.get('name')} targets Flow but has no flow set")
+                continue
+
+            result.append({
+                "name": t["name"],
+                "target_type": "Flow",
+                "flow": t.get("flow"),
+                "reference_doctype": t.get("reference_doctype"),
+                "doc_event": t.get("doc_event"),
+                "condition": t.get("condition"),
+            })
+            continue
+
         try:
             trigger_doc = frappe.get_doc("Agent Trigger", t["name"])
             agent_doc = frappe.get_doc("Agent", t["agent"])
@@ -46,6 +64,7 @@ def get_doc_event_agents(event: str):
 
             result.append({
                 "name": t["name"],
+                "target_type": "Agent",
                 "agent": t["agent"],
                 "reference_doctype": t.get("reference_doctype"),
                 "doc_event": t.get("doc_event"),
@@ -102,41 +121,141 @@ def run_hooked_agents(doc, method=None, *args, **kwargs):
                 if not safe_eval(condition, get_safe_globals(), {"doc": doc}):
                     continue
             except Exception as e:
-                frappe.log_error(f"Condition error in Agent {agent.get('agent')}: {e}")
+                frappe.log_error(f"Condition error in Agent Trigger {agent.get('name')}: {e}")
                 continue
 
-        # Create a deferred execution handler to queue the agent AFTER the transaction commits
-        def _queue_agent_after_commit(a=agent, d=doc, m=method, u=frappe.session.user):
-            # doc.name will now be final and populated
-            safe_name = d.name or str(id(d))
-            
-            # 1. Acquire execution lock using the final assigned name
-            lock_key = f"huf:lock:{a['agent']}:{d.doctype}:{safe_name}:{m}"
-            cache = frappe.cache()
-            if cache.get_value(lock_key):
-                return
-            cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
-            
-            # 2. Enqueue the background agent worker
-            enqueue(
-                run_agent_for_doc,
-                queue="long",
-                job_id=f"run-agent-{a['agent']}-{d.doctype}-{safe_name}-{m}-{uuid4()}",
-                doc=d.as_dict(),
-                agent_name=a["agent"],
-                instructions=a.get("instructions"),
-                event_name=m,
-                provider=a.get("provider"),
-                model=a.get("model"),
-                include_doc=False,
-                initiating_user=u,
-                channel_id="doc_event",
-                prompt_field=a.get("prompt_field"),
-                file_attachments=a.get("file_attachments")
-            )
+        if agent.get("target_type") == "Flow":
+            _queue_flow_after_commit(agent, doc, method, frappe.session.user)
+        else:
+            _queue_agent_after_commit(agent, doc, method, frappe.session.user)
 
-        # Register to run ONLY if the document successfully commits to the database
-        frappe.db.after_commit.add(_queue_agent_after_commit)
+
+def _queue_agent_after_commit(a, d, m, u):
+    # Create a deferred execution handler to queue the agent AFTER the transaction commits
+    def _cb(a=a, d=d, m=m, u=u):
+        # doc.name will now be final and populated
+        safe_name = d.name or str(id(d))
+
+        # 1. Acquire execution lock using the final assigned name
+        lock_key = f"huf:lock:{a['agent']}:{d.doctype}:{safe_name}:{m}"
+        cache = frappe.cache()
+        if cache.get_value(lock_key):
+            return
+        cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
+
+        # 2. Enqueue the background agent worker
+        enqueue(
+            run_agent_for_doc,
+            queue="long",
+            job_id=f"run-agent-{a['agent']}-{d.doctype}-{safe_name}-{m}-{uuid4()}",
+            doc=d.as_dict(),
+            agent_name=a["agent"],
+            instructions=a.get("instructions"),
+            event_name=m,
+            provider=a.get("provider"),
+            model=a.get("model"),
+            include_doc=False,
+            initiating_user=u,
+            channel_id="doc_event",
+            prompt_field=a.get("prompt_field"),
+            file_attachments=a.get("file_attachments")
+        )
+
+    # Register to run ONLY if the document successfully commits to the database
+    frappe.db.after_commit.add(_cb)
+
+
+def _queue_flow_after_commit(a, d, m, u):
+    """Deferred execution handler that starts a Flow Run AFTER the
+    triggering document's transaction commits, mirroring the Agent path.
+    """
+    def _cb(a=a, d=d, m=m, u=u):
+        safe_name = d.name or str(id(d))
+
+        lock_key = f"huf:lock:flow:{a['flow']}:{d.doctype}:{safe_name}:{m}"
+        cache = frappe.cache()
+        if cache.get_value(lock_key):
+            return
+        cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
+
+        enqueue(
+            run_flow_for_doc,
+            queue="long",
+            job_id=f"run-flow-{a['flow']}-{d.doctype}-{safe_name}-{m}-{uuid4()}",
+            doc=d.as_dict(),
+            flow_id=a["flow"],
+            event_name=m,
+            agent_trigger_name=a.get("name"),
+            initiating_user=u,
+        )
+
+    frappe.db.after_commit.add(_cb)
+
+
+def run_flow_for_doc(doc, flow_id, event_name, agent_trigger_name=None, initiating_user=None):
+    """Background worker: start a Flow Run when a Doc Event trigger fires.
+
+    `doc` is a plain dict (the triggering document's as_dict()). The
+    document reference is passed to the flow run's payload so a flow can
+    act on the document via reference_doctype/reference_name.
+    """
+    original_user = frappe.session.user
+    try:
+        if initiating_user and frappe.session.user != initiating_user:
+            try:
+                frappe.set_user(initiating_user)
+            except frappe.DoesNotExistError:
+                pass
+
+        if not frappe.db.exists("Flow Definition", flow_id):
+            frappe.log_error(f"Doc Event flow '{flow_id}' not found (trigger {agent_trigger_name})", "Doc Event Flow Trigger Error")
+            return
+
+        defn_doc = frappe.get_doc("Flow Definition", flow_id)
+        if defn_doc.status != "Active":
+            frappe.log_error(
+                f"Flow '{flow_id}' is not active (status: {defn_doc.status}); skipping trigger {agent_trigger_name}",
+                "Doc Event Flow Trigger Error",
+            )
+            return
+
+        clean_doc = doc.copy() if isinstance(doc, dict) else doc.as_dict()
+        for key in ["_user_tags", "_comments", "_assign", "_liked_by", "password"]:
+            clean_doc.pop(key, None)
+
+        MAX_FIELD_LENGTH = 10000
+        for k, v in list(clean_doc.items()):
+            if isinstance(v, str) and len(v) > MAX_FIELD_LENGTH:
+                clean_doc[k] = v[:MAX_FIELD_LENGTH] + f"\n... [Content truncated. Full length: {len(v)} chars.]"
+
+        payload = {
+            "_triggered_by": "doc_event",
+            "_timestamp": str(now_datetime()),
+            "_agent_trigger": agent_trigger_name,
+            "_doc_event": event_name,
+            "reference_doctype": clean_doc.get("doctype"),
+            "reference_name": clean_doc.get("name"),
+            "doc": clean_doc,
+        }
+
+        from huf.ai.flow_engine import create_flow_run, run_flow as engine_run_flow
+
+        flow_run = create_flow_run(
+            flow_id=flow_id,
+            payload=payload,
+            trigger_type="Doc Event",
+        )
+        engine_run_flow(flow_run.name)
+
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Doc Event Flow Trigger Error")
+    finally:
+        if frappe.session.user != original_user:
+            try:
+                frappe.set_user(original_user)
+            except Exception:
+                pass
+
 
 def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model, include_doc=False, initiating_user=None, channel_id=None, prompt_field=None, file_attachments=None):
     """Background worker to run an agent when a Doc Event triggers"""
@@ -170,16 +289,16 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
             # Logic: If the mapped field has text, use it as the PRIMARY instruction.
             if custom_instruction:
                 prompt += f"""
-                
+
                 USER REQUEST:
                 The user has provided the following specific request for this document:
                 "{custom_instruction}"
-                
+
                 Please prioritize this request over your general instructions.
                 """
             else:
                 prompt += f"""
-                
+
                 Instructions:
                 {instructions or "Perform the required action for this event."}
             """
@@ -194,10 +313,10 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                 for k, v in list(clean_doc.items()):
                     if isinstance(v, str) and len(v) > MAX_FIELD_LENGTH:
                         clean_doc[k] = v[:MAX_FIELD_LENGTH] + f"\n... [Content truncated. Full length: {len(v)} chars. Use get_document tool to retrieve full content if needed.]"
-                
+
                 json_string = json.dumps(clean_doc, indent=2, default=str)
                 prompt += f"""
-                
+
                 Document Data (Context):
                 ```json
                 {json_string}
@@ -271,7 +390,7 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
                 import asyncio
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                
+
                 try:
                     for file in files:
                         if not file.get("is_image") and not file.get("is_audio"):
@@ -324,19 +443,19 @@ def run_agent_for_doc(doc, agent_name, instructions, event_name, provider, model
 
             if extracted_content:
                 prompt += f"""
-                
+
                 Attached File Content (OCR Extracted):
                 The following text was extracted from attached files. Use this as context:
-                
+
                 {''.join(extracted_content)}
                 """
 
             if transcribed_content:
                 prompt += f"""
-                
+
                 Attached Audio Transcript(s):
                 The following transcripts were generated from attached audio files. Use this as context:
-                
+
                 {''.join(transcribed_content)}
                 """
 

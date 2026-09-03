@@ -13,6 +13,10 @@ def get_context(doc):
 
 class AgentTrigger(Document):
 	def validate(self):
+		# Default target_type for triggers created before this field existed.
+		if not self.target_type:
+			self.target_type = "Agent"
+
 		if self.trigger_type == "Doc Event":
 			self.validate_condition()
 
@@ -21,7 +25,21 @@ class AgentTrigger(Document):
 		if self.trigger_type == "Schedule" and not self.scheduled_interval:
 			frappe.throw(_("Scheduled Interval is required for Schedule triggers."))
 
-	
+		if self.target_type == "Agent" and not self.agent:
+			frappe.throw(_("Agent is required when Target Type is Agent."))
+		if self.target_type == "Flow" and not self.flow:
+			frappe.throw(_("Flow is required when Target Type is Flow."))
+
+		if self.target_type == "Flow" and self.flow:
+			flow_status = frappe.db.get_value("Flow Definition", self.flow, "status")
+			if flow_status and flow_status != "Active" and not self.disabled:
+				frappe.msgprint(
+					_("Flow '{0}' is not Active (status: {1}). This trigger will not run until the flow is activated.").format(
+						self.flow, flow_status
+					),
+					indicator="orange",
+					alert=True,
+				)
 
 	def validate_condition(self):
 		if not self.condition:
@@ -32,8 +50,8 @@ class AgentTrigger(Document):
 			frappe.safe_eval(self.condition, None, get_context(temp_doc.as_dict()))
 		except (SyntaxError, NameError, TypeError, ValueError):
 			frappe.throw(_("The Condition '{0}' is invalid").format(self.condition))
-		
-	
+
+
 @frappe.whitelist()
 def get_trigger_type():
     options = frappe.get_meta("Agent Trigger").get_field("trigger_type").options

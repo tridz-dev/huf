@@ -475,7 +475,7 @@ def sync_discovered_tools(apps_to_scan=None, use_cache=True):
                     {
                         "label": p.get("label") or p.get("name", "").replace("_", " ").title(),
                         "fieldname": p.get("fieldname") or p.get("name", ""),
-                        "param_type": p.get("type", "Data"),
+                        "type": p.get("type", "string"),
                         "required": int(p.get("required", False)),
                         "description": p.get("description", ""),
                     }

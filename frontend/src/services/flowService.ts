@@ -96,7 +96,7 @@ class FlowService {
       nodes: [
         {
           id: 'empty-trigger',
-          type: 'trigger.webhook',
+          type: 'trigger.unset',
           config: {},
           _position: { x: 250, y: 100 },
           _label: 'Select Trigger',
@@ -124,7 +124,11 @@ class FlowService {
           data: {
             label: 'Select Trigger',
             nodeType: 'trigger',
-            description: 'Empty Trigger',
+            // No description is seeded here: the placeholder trigger has nothing
+            // configured yet, and FlowCanvas/RightSidebar only update label/icon/
+            // triggerConfig when a real trigger is picked (never description).
+            // Seeding text here would go stale the moment the label changes
+            // (e.g. card reading "Webhook / Empty Trigger"). See N19.
             configured: false,
           },
         },

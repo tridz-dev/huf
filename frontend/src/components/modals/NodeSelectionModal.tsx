@@ -167,7 +167,11 @@ export function NodeSelectionModal({
       setTriggerConfig({
         type: 'webhook',
         url: `${window.location.origin}/api/method/huf.ai.flow_api.flow_webhook`,
-        apiKey: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
+        // Canonical key name is `auth` - RightSidebar and flow_api.py both read that.
+        // Writing `apiKey` here made the generated key invisible once the node was
+        // reselected on canvas, and left the displayed webhook URL showing a {key}
+        // placeholder instead of the real key.
+        auth: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''),
         method: 'POST'
       });
     } else if (triggerId === 'schedule') {
@@ -221,6 +225,12 @@ export function NodeSelectionModal({
       config = { type: 'tool-call', tool_name: 'gsheets_read', args: {}, output: { save_result_to_context: '' } };
     } else if (actionId === 'file') {
       config = { type: 'tool-call', tool_name: 'gdrive_list_files', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'code') {
+      // run_python is offered only when the target agent's Execution Profile
+      // allows code execution (see PermissionAwareToolRegistry._allows_code_execution);
+      // agent_doc is injected server-side from a trusted closure and cannot be
+      // set here.
+      config = { type: 'tool-call', tool_name: 'run_python', args: {}, output: { save_result_to_context: '' } };
     }
 
     onSaveAction?.(actionId, config);
@@ -284,8 +294,8 @@ export function NodeSelectionModal({
             <Label htmlFor="api-key">Security — API Key (Optional)</Label>
             <Input
               id="api-key"
-              value={config.apiKey || ''}
-              onChange={(e) => setTriggerConfig({ ...config, apiKey: e.target.value })}
+              value={config.auth || ''}
+              onChange={(e) => setTriggerConfig({ ...config, auth: e.target.value })}
               placeholder="Enter API key to require X-API-Key header"
             />
           </div>
