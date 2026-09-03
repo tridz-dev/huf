@@ -5,7 +5,42 @@ import {
   mapBackendStatusToFrontend,
 } from '@/services/flowSerializer';
 import type { Flow, FlowNode } from '@/types/flow.types';
-import type { BackendFlowGraph } from '@/services/flowApi';
+import type { BackendFlowGraph, BackendNode } from '@/services/flowApi';
+
+/**
+ * Builds a minimal-but-valid BackendFlowGraph for deserializeFlow tests.
+ *
+ * The graph-IR profile (huf/ai/graph/graph_ir.schema.json) requires
+ * `profile`/`fingerprint`/`contract` on every graph, but deserializeFlow
+ * itself only reads `nodes` -- these fields exist purely to satisfy the
+ * type, their values are inert for what these tests assert.
+ */
+function makeBackendGraph(nodes: BackendNode[], entry: string | string[] = nodes[0]?.id ?? ''): BackendFlowGraph {
+  return {
+    schema_version: '1.0.0',
+    profile: 'flow',
+    fingerprint: 'test-fingerprint',
+    entry,
+    nodes,
+    contract: {
+      input_schema: {},
+      output_schema: {},
+      applies_when: [],
+      permission_envelope: { read: [], write: [], http: 'none', code: 'none' },
+      limits: {
+        max_nodes: 100,
+        max_rows: 1000,
+        max_output_bytes: 1_000_000,
+        max_parallel_calls: 10,
+        max_foreach_iterations: 100,
+        max_external_calls: 10,
+        max_writes: 100,
+        max_wall_time_ms: 60_000,
+        fail_closed: true,
+      },
+    },
+  };
+}
 
 describe('flowSerializer', () => {
   describe('mapFrontendNodeTypeToBackend', () => {
@@ -73,7 +108,11 @@ describe('flowSerializer', () => {
       expect(serialized.nodes[0].type).toBe('loop');
     });
 
-    it('maps end node type to end', () => {
+    it('maps end node type to output', () => {
+      // The graph-IR's BackendNodeType has no 'end' variant -- the shared
+      // Flow/Procedure vocabulary calls a terminal node 'output' (matching
+      // OutputNode in huf/ai/graph/graph_ir.schema.json). huf/ai/flow_engine.py's
+      // dispatch table treats 'output' as an alias of its existing 'end' handler.
       const flow = createTestFlow([
         {
           id: 'node1',
@@ -88,7 +127,7 @@ describe('flowSerializer', () => {
         },
       ]);
       const serialized = serializeFlow(flow);
-      expect(serialized.nodes[0].type).toBe('end');
+      expect(serialized.nodes[0].type).toBe('output');
     });
 
     it('maps trigger with schedule type to trigger.schedule', () => {
@@ -468,38 +507,29 @@ describe('flowSerializer', () => {
     });
 
     it('auto-layouts nodes vertically when _position is absent', () => {
-      const backend: BackendFlowGraph = {
-        schema_version: 1,
-        id: 'flow1',
-        version: 1,
-        entry: 'node1',
-        nodes: [
-          {
-            id: 'node1',
-            type: 'tool.call',
-            config: {},
-            // _position is absent
-            _label: 'Node 1',
-          },
-          {
-            id: 'node2',
-            type: 'tool.call',
-            config: {},
-            // _position is absent
-            _label: 'Node 2',
-          },
-          {
-            id: 'node3',
-            type: 'tool.call',
-            config: {},
-            // _position is absent
-            _label: 'Node 3',
-          },
-        ],
-        edges: [],
-        settings: { mode: 'normal', max_hops: 100 },
-        metadata: { name: 'Test', description: '', category: '' },
-      };
+      const backend = makeBackendGraph([
+        {
+          id: 'node1',
+          type: 'tool.call',
+          config: {},
+          // _position is absent
+          _label: 'Node 1',
+        },
+        {
+          id: 'node2',
+          type: 'tool.call',
+          config: {},
+          // _position is absent
+          _label: 'Node 2',
+        },
+        {
+          id: 'node3',
+          type: 'tool.call',
+          config: {},
+          // _position is absent
+          _label: 'Node 3',
+        },
+      ], 'node1');
 
       const deserialized = deserializeFlow('flow1', 'Test', 'Draft', backend);
 
@@ -532,47 +562,29 @@ describe('flowSerializer', () => {
     });
 
     it('uses default label when _label is absent on deserialize', () => {
-      const backend: BackendFlowGraph = {
-        schema_version: 1,
-        id: 'flow1',
-        version: 1,
-        entry: 'node1',
-        nodes: [
-          {
-            id: 'node1',
-            type: 'tool.call',
-            config: {},
-            // _label is absent
-          },
-        ],
-        edges: [],
-        settings: { mode: 'normal', max_hops: 100 },
-        metadata: { name: 'Test', description: '', category: '' },
-      };
+      const backend = makeBackendGraph([
+        {
+          id: 'node1',
+          type: 'tool.call',
+          config: {},
+          // _label is absent
+        },
+      ]);
 
       const deserialized = deserializeFlow('flow1', 'Test', 'Draft', backend);
 
-      expect(deserialized.nodes[0].data?.label).toBe('Call Tool');
+      expect(deserialized.nodes[0].data?.label).toBe('Call tool');
     });
 
     it('uses default icon when _icon is absent on deserialize', () => {
-      const backend: BackendFlowGraph = {
-        schema_version: 1,
-        id: 'flow1',
-        version: 1,
-        entry: 'node1',
-        nodes: [
-          {
-            id: 'node1',
-            type: 'agent.run',
-            config: {},
-            // _icon is absent
-          },
-        ],
-        edges: [],
-        settings: { mode: 'normal', max_hops: 100 },
-        metadata: { name: 'Test', description: '', category: '' },
-      };
+      const backend = makeBackendGraph([
+        {
+          id: 'node1',
+          type: 'agent.run',
+          config: {},
+          // _icon is absent
+        },
+      ]);
 
       const deserialized = deserializeFlow('flow1', 'Test', 'Draft', backend);
 
@@ -597,7 +609,6 @@ describe('flowSerializer', () => {
 
       const serialized = serializeFlow(flow);
       expect(serialized.nodes).toEqual([]);
-      expect(serialized.edges).toEqual([]);
     });
 
     it('handles flow with no trigger (entry is empty string)', () => {
@@ -645,24 +656,15 @@ describe('flowSerializer', () => {
     });
 
     it('handles unknown backend node type on deserialize', () => {
-      const backend: BackendFlowGraph = {
-        schema_version: 1,
-        id: 'flow1',
-        version: 1,
-        entry: 'node1',
-        nodes: [
-          {
-            id: 'node1',
-            // deliberately invalid: documents how deserialize handles an unknown type
-            type: 'unknown.custom.type' as BackendFlowGraph['nodes'][number]['type'],
-            config: {},
-            _label: 'Unknown Node',
-          },
-        ],
-        edges: [],
-        settings: { mode: 'normal', max_hops: 100 },
-        metadata: { name: 'Test', description: '', category: '' },
-      };
+      const backend = makeBackendGraph([
+        {
+          id: 'node1',
+          // deliberately invalid: documents how deserialize handles an unknown type
+          type: 'unknown.custom.type' as BackendNode['type'],
+          config: {},
+          _label: 'Unknown Node',
+        },
+      ]);
 
       const deserialized = deserializeFlow('flow1', 'Test', 'Draft', backend);
 
@@ -672,46 +674,29 @@ describe('flowSerializer', () => {
       expect(deserialized.nodes[0].data?.actionConfig?.type).toBe('tool-call');
     });
 
-    it('handles edges with and without metadata', () => {
-      const backend: BackendFlowGraph = {
-        schema_version: 1,
-        id: 'flow1',
-        version: 1,
-        entry: 'node1',
-        nodes: [
-          {
-            id: 'node1',
-            type: 'tool.call',
-            config: {},
+    it('derives labeled and unlabeled edges from node next/on_error/self-routing config', () => {
+      // The graph-IR carries no top-level edges array any more (BackendFlowGraph
+      // has no `edges` field): each node folds its own outgoing edge(s) into
+      // `next`/`on_error`, or -- for self-routing types like router.llm -- into
+      // its own `config`. deserializeEdgesForNode reconstructs the frontend's
+      // React Flow edges from those per-node fields.
+      const backend = makeBackendGraph([
+        {
+          // A plain node's `next` produces one unlabeled edge.
+          id: 'node1',
+          type: 'tool.call',
+          config: {},
+          next: 'node2',
+        },
+        {
+          // A router.llm node's `options` each produce their own labeled edge.
+          id: 'node2',
+          type: 'router.llm',
+          config: {
+            options: [{ label: 'Success', node_id: 'node1' }],
           },
-          {
-            id: 'node2',
-            type: 'tool.call',
-            config: {},
-          },
-        ],
-        edges: [
-          {
-            id: 'edge1',
-            from: 'node1',
-            to: 'node2',
-            type: 'always',
-            priority: 0,
-          },
-          {
-            id: 'edge2',
-            from: 'node2',
-            to: 'node1',
-            // deliberately invalid: documents how deserialize handles an unknown edge type
-            type: 'conditional' as BackendFlowGraph['edges'][number]['type'],
-            priority: 1,
-            condition: 'x > 5',
-            meta: { label: 'Success', custom: 'value' },
-          },
-        ],
-        settings: { mode: 'normal', max_hops: 100 },
-        metadata: { name: 'Test', description: '', category: '' },
-      };
+        },
+      ]);
 
       const deserialized = deserializeFlow('flow1', 'Test', 'Draft', backend);
 
