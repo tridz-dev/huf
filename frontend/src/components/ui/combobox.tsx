@@ -26,9 +26,9 @@ export interface ComboboxOption {
 export interface ComboboxProps {
   /**
    * Rendered on the trigger so a sibling `<Label htmlFor>` actually resolves.
-   * Without it, `<Label htmlFor="x"><Combobox/></Label>` is a dangling
-   * association: clicking the label does nothing and assistive tech cannot
-   * pair the two.
+   * Without it every `<Label htmlFor="x"><Combobox/></Label>` pairing in the
+   * app is a dangling association: clicking the label does nothing and
+   * assistive tech cannot pair the two.
    */
   id?: string;
   options: ComboboxOption[];

@@ -142,7 +142,21 @@ export function FlowsHeaderActions() {
     setIsRunning(true);
     try {
       const result = await runFlow(activeFlow.id);
-      toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
+      // run_flow executes the flow SYNCHRONOUSLY and returns its final status,
+      // so a resolved promise does not mean the run succeeded. Reporting
+      // "Flow run started" unconditionally told users a run was fine when it
+      // had already failed; surface the real outcome instead.
+      if (result.status === 'Failed') {
+        toast.error('Flow run failed', {
+          description: `Run ID: ${result.flow_run_id} — open Runs for the error`,
+        });
+      } else if (result.status && result.status.startsWith('Waiting')) {
+        toast.info('Flow run is waiting', {
+          description: `${result.status} — Run ID: ${result.flow_run_id}`,
+        });
+      } else {
+        toast.success('Flow run started', { description: `Run ID: ${result.flow_run_id}` });
+      }
     } catch (err) {
       toast.error('Failed to run flow', { description: err instanceof Error ? err.message : 'Unknown error' });
     } finally {

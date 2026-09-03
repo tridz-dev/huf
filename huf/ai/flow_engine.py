@@ -884,9 +884,16 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 
 	Argument substitution resolves ``{"$from": ...}`` references through the
 	executor's single structured reference form (F-2), not a local flat-key
-	variant, and the ``Agent Tool Call`` telemetry record is emitted by the
-	invocation service rather than assembled here -- exactly one record per
-	call (I5, GT-05).
+	variant -- ``GraphContext.resolve`` explicitly replaces the four divergent
+	``{{...}}`` string-interpolation implementations this used to have (GT-04),
+	so no separate dotted-path template substitution runs here any more.
+
+	For a built-in tool, the ``Agent Tool Call`` telemetry record is emitted
+	by the invocation service rather than assembled here -- exactly one
+	record per call (I5, GT-05). An MCP tool bypasses that service entirely
+	(``execute_mcp_tool`` has no telemetry of its own), so this function owns
+	its ``Agent Tool Call`` record directly, the same way the pre-T-22
+	implementation did for every tool call.
 	"""
 	tool_name = config.get("tool_name")
 	if not tool_name:
@@ -906,17 +913,75 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		agent_name=config.get("agent_name") or config.get("agent"),
 	)
 
+	# Check MCP tool info: prefer the explicit config, fall back to lookup
+	# by tool name for backward compatibility with existing flow definitions.
+	mcp_server = config.get("mcp_server")
+	if not mcp_server:
+		mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
+		if mcp_tool_entry:
+			mcp_server = mcp_tool_entry
+
 	invocation_ctx = RunContext(
 		conversation_id=_conversation_of(flow_run, run_ctx),
 		agent_run_id=getattr(run_doc, "name", None),
 	)
 
+	tool_call_doc = None
+	if mcp_server:
+		from uuid import uuid4
+
+		# Create Agent Tool Call audit record ourselves -- see the docstring
+		# above on why the MCP path can't rely on the invocation service.
+		tool_call_doc = frappe.get_doc({
+			"doctype": "Agent Tool Call",
+			"agent_run": run_doc.name,
+			"conversation": getattr(flow_run, "conversation", None),
+			"tool": tool_name,
+			"is_mcp_tool": 1,
+			"mcp_server": mcp_server,
+			"tool_args": json.dumps(args, default=str) if args else None,
+			"status": "Started",
+			"call_id": f"call_{uuid4().hex[:12]}",
+		})
+		tool_call_doc.insert(ignore_permissions=True)
+
 	try:
-		with tool_run_context(invocation_ctx):
-			result = execute_tool(tool_name, args)
+		if mcp_server:
+			from huf.ai.mcp_client import execute_mcp_tool
+
+			# execute_mcp_tool is async; run it to completion the same way
+			# huf/ai/flow_tool_executor.py already does for coroutine results
+			# from sync flow-engine code.
+			import asyncio
+
+			coro = execute_mcp_tool(server_name=mcp_server, tool_name=tool_name, arguments=args)
+			loop = asyncio.new_event_loop()
+			asyncio.set_event_loop(loop)
+			try:
+				result = loop.run_until_complete(coro)
+			finally:
+				loop.close()
+			if not isinstance(result, dict):
+				result = {"success": True, "result": result}
+		else:
+			with tool_run_context(invocation_ctx):
+				result = execute_tool(tool_name, args)
 
 		is_success = result.get("success", False) if isinstance(result, dict) else bool(result)
 		error_msg = result.get("error", "") if isinstance(result, dict) else ""
+
+		if tool_call_doc is not None:
+			tool_result = result.get("result", result) if isinstance(result, dict) else result
+			if isinstance(tool_result, (dict, list)):
+				formatted_result = tool_result
+			else:
+				formatted_result = {"output": str(tool_result)} if tool_result is not None else None
+			tool_call_doc.update({
+				"status": "Completed" if is_success else "Failed",
+				"tool_result": formatted_result,
+				"error_message": error_msg or None,
+			})
+			tool_call_doc.save(ignore_permissions=True)
 
 		run_doc.db_set(
 			{
@@ -942,6 +1007,9 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			"error": result.get("error"),
 		}
 	except Exception as e:
+		if tool_call_doc is not None:
+			tool_call_doc.update({"status": "Failed", "error_message": str(e)})
+			tool_call_doc.save(ignore_permissions=True)
 		run_doc.db_set({"status": "Failed", "error_message": str(e), "end_time": now_datetime()})
 		commit_if_background()
 		return {"status": "failed", "error": str(e)}
@@ -1689,9 +1757,13 @@ def _build_agent_prompt(config: dict, ctx: GraphContext) -> str:
 	``prompt_template`` resolves through the single structured reference
 	form (F-2); this used to be a fourth, subtly different ``str.replace``
 	loop over context keys.
+
+	The flow builder writes ``prompt_template`` flat on ``config``; older or
+	programmatic definitions nest it under ``config["input"]``. Accept both,
+	preferring the nested form.
 	"""
-	input_config = config.get("input", {})
-	prompt_template = input_config.get("prompt_template")
+	input_config = config.get("input") or {}
+	prompt_template = input_config.get("prompt_template") or config.get("prompt_template")
 
 	if prompt_template:
 		resolved = ctx.resolve(prompt_template)
