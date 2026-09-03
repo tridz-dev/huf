@@ -9,6 +9,14 @@ from frappe.tests import IntegrationTestCase
 
 
 class TestGetAgentRunStatusPerms(IntegrationTestCase):
+	def setUp(self):
+		if not frappe.db.exists("Agent", "Test Agent"):
+			frappe.get_doc({
+				"doctype": "Agent",
+				"agent_name": "Test Agent",
+				"agent_modality": "Both",
+			}).insert(ignore_permissions=True)
+
 	def test_get_agent_run_status_owner_can_access(self):
 		"""Run owner can access the run status."""
 		# Create test data

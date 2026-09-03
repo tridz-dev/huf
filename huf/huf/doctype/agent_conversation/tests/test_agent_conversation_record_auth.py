@@ -12,6 +12,14 @@ from frappe.tests import IntegrationTestCase
 
 
 class TestAgentConversationRecordAuth(IntegrationTestCase):
+	def setUp(self):
+		if not frappe.db.exists("Agent", "Test Agent"):
+			frappe.get_doc({
+				"doctype": "Agent",
+				"agent_name": "Test Agent",
+				"agent_modality": "Both",
+			}).insert(ignore_permissions=True)
+
 	def test_agent_conversation_owner_can_read(self):
 		"""Owner of a conversation can read it."""
 		# Create a test conversation owned by alice

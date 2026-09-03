@@ -10,6 +10,14 @@ from datetime import datetime, timedelta
 
 
 class TestGetRunContextMetricsPerms(IntegrationTestCase):
+	def setUp(self):
+		if not frappe.db.exists("Agent", "Test Agent"):
+			frappe.get_doc({
+				"doctype": "Agent",
+				"agent_name": "Test Agent",
+				"agent_modality": "Both",
+			}).insert(ignore_permissions=True)
+
 	def test_get_run_context_metrics_fetches_own_previous_run(self):
 		"""get_run_context_metrics fetches the caller's own previous run."""
 		# Create previous run owned by alice
