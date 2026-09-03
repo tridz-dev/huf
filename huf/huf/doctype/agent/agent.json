@@ -143,6 +143,7 @@
   "allowed_users",
   "column_break_3mhl",
   "allowed_roles",
+  "allowed_models",
   "metadata_tab",
   "last_run",
   "total_run",
@@ -770,6 +771,13 @@
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Roles",
    "options": "Agent Role"
+  },
+  {
+   "description": "Allowed provider/model overrides. An empty list means only the agent's configured model is accepted; any override attempt requires the agent.model.override capability. A non-empty list restricts overrides to the models in it (subject to the same capability check for access control).",
+   "fieldname": "allowed_models",
+   "fieldtype": "Table",
+   "label": "Allowed Model Overrides",
+   "options": "Agent Allowed Model"
   },
   {
    "default": "0",

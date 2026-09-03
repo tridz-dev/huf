@@ -1181,6 +1181,32 @@ def run_agent_sync(
         provider = None
         model = None
 
+    # Check model override permissions (ST-09.10)
+    if model or provider:
+        allowed_set = {
+            (row.provider, row.model)
+            for row in frappe.get_all(
+                "Agent Allowed Model",
+                filters={"parent": agent_doc.name},
+                fields=["provider", "model"],
+            )
+        }
+        # Semantics are explicit, not inferred from emptiness: an empty
+        # allow-list means "only the agent's configured model is accepted" —
+        # ANY override, including one that would otherwise be a no-op
+        # (matching the agent's own model), is rejected unless the caller
+        # holds agent.model.override. Reviewer item 13: the original
+        # `if agent.allowed_models and not allowed` skipped the check
+        # entirely whenever the list was empty — the default state of every
+        # agent — which is the exact unguarded behavior F-21 reports.
+        override_requested = (provider, model) != (agent_doc.provider, agent_doc.model)
+        if override_requested and (provider, model) not in allowed_set:
+            if not has_capability(frappe.session.user, "agent.model.override"):
+                frappe.throw(
+                    _("Model override not allowed for this agent"),
+                    frappe.PermissionError,
+                )
+
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
