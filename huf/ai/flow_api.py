@@ -590,7 +590,14 @@ def flow_webhook_clean(flow_id: str | None = None, webhook_key: str | None = Non
 def schedule_flow(flow_id: str, cron: str, schedule_name: str | None = None, timezone: str = "UTC") -> dict:
 	"""
 	Schedule a flow to run periodically via Frappe Scheduler.
-	
+
+	DEPRECATED (Track-Item: G-TRIGGERS): scheduling now goes through Agent Trigger
+	(see set_flow_schedule / get_flow_trigger / clear_flow_trigger below), which is
+	dispatched by huf.ai.agent_scheduler.run_scheduled_agents and shares one
+	mechanism with Agent scheduling. This Scheduled-Job-Type-based path is kept
+	working, unmodified, for any pre-existing schedules created through it, but
+	new callers should use set_flow_schedule instead.
+
 	Creates a Scheduled Job Type that will trigger the flow execution
 	at the specified cron interval.
 	
@@ -714,6 +721,183 @@ def get_flow_schedule(flow_id: str) -> dict | None:
 		"disabled": existing.disabled,
 		"status": "disabled" if existing.disabled else "active",
 	}
+
+
+
+# ---------------------------------------------------------------------------
+# Flow Trigger APIs (Agent Trigger-backed; Track-Item: G-TRIGGERS)
+# ---------------------------------------------------------------------------
+#
+# Contract for the flow builder UI:
+#
+#   set_flow_schedule(flow_id, scheduled_interval, interval_count=1, trigger_name=None)
+#       Create or update a Schedule-type Agent Trigger targeting this flow
+#       (target_type="Flow"). scheduled_interval is one of
+#       Hourly/Daily/Weekly/Monthly/Yearly (matches Agent Trigger's own
+#       `scheduled_interval` Select options). Idempotent: pass the
+#       `trigger_name` returned by a prior call (or by get_flow_trigger) to
+#       update that same trigger in place instead of creating a new one.
+#       Returns {"trigger_name", "flow_id", "trigger_type": "Schedule",
+#       "scheduled_interval", "interval_count", "next_execution", "disabled"}.
+#
+#   set_flow_doc_event_trigger(flow_id, reference_doctype, doc_event,
+#                               condition=None, trigger_name=None)
+#       Create or update a Doc Event-type Agent Trigger targeting this flow.
+#       doc_event must be one of Agent Trigger's own `doc_event` Select
+#       options (before_insert, after_insert, validate, before_save,
+#       after_save, before_submit, on_submit, on_update, after_submit,
+#       on_cancel, before_rename, after_rename, on_trash, after_delete).
+#       condition is an optional Python expression evaluated against `doc`
+#       (same semantics as Agent Trigger's existing condition field).
+#       Returns {"trigger_name", "flow_id", "trigger_type": "Doc Event",
+#       "reference_doctype", "doc_event", "condition", "disabled"}.
+#
+#   get_flow_trigger(flow_id)
+#       Returns a list of every Agent Trigger row targeting this flow
+#       (target_type="Flow"), each as a dict with the fields relevant to its
+#       trigger_type (Schedule or Doc Event), plus trigger_name, disabled,
+#       last_execution. Empty list if the flow has no triggers.
+#
+#   clear_flow_trigger(trigger_name)
+#       Delete the named Agent Trigger, but ONLY if it targets a Flow
+#       (target_type="Flow") — refuses (frappe.throw) to delete an
+#       Agent-targeted trigger through this endpoint, to keep this surface
+#       scoped to flows. Returns {"status": "deleted", "trigger_name"} or
+#       {"status": "not_found", "trigger_name"}.
+
+
+def _flow_trigger_row_to_dict(doc) -> dict:
+	base = {
+		"trigger_name": doc.name,
+		"flow_id": doc.flow,
+		"trigger_type": doc.trigger_type,
+		"disabled": doc.disabled,
+		"disabled_reason": doc.disabled_reason,
+	}
+	if doc.trigger_type == "Schedule":
+		base.update({
+			"scheduled_interval": doc.scheduled_interval,
+			"interval_count": doc.interval_count,
+			"next_execution": str(doc.next_execution) if doc.next_execution else None,
+			"last_execution": str(doc.last_execution) if doc.last_execution else None,
+		})
+	elif doc.trigger_type == "Doc Event":
+		base.update({
+			"reference_doctype": doc.reference_doctype,
+			"doc_event": doc.doc_event,
+			"condition": doc.condition,
+		})
+	return base
+
+
+@frappe.whitelist()
+def set_flow_schedule(flow_id: str, scheduled_interval: str, interval_count: int = 1, trigger_name: str | None = None) -> dict:
+	"""
+	Create or update a Schedule-type Agent Trigger that starts Flow Runs for
+	`flow_id`. See the "Flow Trigger APIs" contract above.
+	"""
+	if not frappe.has_permission("Flow Definition", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if not frappe.db.exists("Flow Definition", flow_id):
+		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
+
+	valid_intervals = {"Hourly", "Daily", "Weekly", "Monthly", "Yearly"}
+	if scheduled_interval not in valid_intervals:
+		frappe.throw(_("scheduled_interval must be one of {0}").format(", ".join(sorted(valid_intervals))))
+
+	if trigger_name and frappe.db.exists("Agent Trigger", trigger_name):
+		doc = frappe.get_doc("Agent Trigger", trigger_name)
+		if doc.target_type != "Flow" or doc.flow != flow_id:
+			frappe.throw(_("Trigger '{0}' does not target flow '{1}'").format(trigger_name, flow_id))
+	else:
+		doc = frappe.new_doc("Agent Trigger")
+		doc.trigger_name = trigger_name or f"Flow Schedule: {flow_id} ({frappe.generate_hash(length=6)})"
+		doc.target_type = "Flow"
+		doc.flow = flow_id
+		doc.trigger_type = "Schedule"
+
+	doc.scheduled_interval = scheduled_interval
+	doc.interval_count = interval_count or 1
+	if not doc.next_execution:
+		doc.next_execution = now_datetime()
+	doc.save()
+
+	return _flow_trigger_row_to_dict(doc)
+
+
+@frappe.whitelist()
+def set_flow_doc_event_trigger(
+	flow_id: str,
+	reference_doctype: str,
+	doc_event: str,
+	condition: str | None = None,
+	trigger_name: str | None = None,
+) -> dict:
+	"""
+	Create or update a Doc Event-type Agent Trigger that starts Flow Runs for
+	`flow_id`. See the "Flow Trigger APIs" contract above.
+	"""
+	if not frappe.has_permission("Flow Definition", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if not frappe.db.exists("Flow Definition", flow_id):
+		frappe.throw(_("Flow '{0}' not found").format(flow_id), frappe.DoesNotExistError)
+
+	if trigger_name and frappe.db.exists("Agent Trigger", trigger_name):
+		doc = frappe.get_doc("Agent Trigger", trigger_name)
+		if doc.target_type != "Flow" or doc.flow != flow_id:
+			frappe.throw(_("Trigger '{0}' does not target flow '{1}'").format(trigger_name, flow_id))
+	else:
+		doc = frappe.new_doc("Agent Trigger")
+		doc.trigger_name = trigger_name or f"Flow Doc Event: {flow_id} ({frappe.generate_hash(length=6)})"
+		doc.target_type = "Flow"
+		doc.flow = flow_id
+		doc.trigger_type = "Doc Event"
+
+	doc.reference_doctype = reference_doctype
+	doc.doc_event = doc_event
+	doc.condition = condition
+	doc.save()
+
+	return _flow_trigger_row_to_dict(doc)
+
+
+@frappe.whitelist()
+def get_flow_trigger(flow_id: str) -> list:
+	"""
+	List every Agent Trigger targeting `flow_id`. See the "Flow Trigger APIs"
+	contract above.
+	"""
+	if not frappe.has_permission("Flow Definition", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	names = frappe.get_all(
+		"Agent Trigger",
+		filters={"target_type": "Flow", "flow": flow_id},
+		pluck="name",
+	)
+	return [_flow_trigger_row_to_dict(frappe.get_doc("Agent Trigger", n)) for n in names]
+
+
+@frappe.whitelist()
+def clear_flow_trigger(trigger_name: str) -> dict:
+	"""
+	Delete a Flow-targeted Agent Trigger. See the "Flow Trigger APIs"
+	contract above. Refuses to delete an Agent-targeted trigger.
+	"""
+	if not frappe.has_permission("Agent Trigger", "delete"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if not frappe.db.exists("Agent Trigger", trigger_name):
+		return {"status": "not_found", "trigger_name": trigger_name}
+
+	target_type = frappe.db.get_value("Agent Trigger", trigger_name, "target_type")
+	if target_type != "Flow":
+		frappe.throw(_("Trigger '{0}' does not target a Flow; refusing to delete via clear_flow_trigger").format(trigger_name))
+
+	frappe.delete_doc("Agent Trigger", trigger_name, ignore_missing=True)
+	return {"status": "deleted", "trigger_name": trigger_name}
 
 
 @frappe.whitelist()
