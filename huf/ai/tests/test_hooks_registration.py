@@ -6,19 +6,21 @@ a hook registration will be caught immediately.
 """
 
 import frappe
+from frappe.tests import IntegrationTestCase
 
 
-def test_has_permission_hooks_registered():
-	"""Verify that all five runtime doctype has_permission hooks are registered."""
-	hooks = frappe.get_hooks("has_permission")
+class TestHooksRegistration(IntegrationTestCase):
+	def test_has_permission_hooks_registered(self):
+		"""Verify that all five runtime doctype has_permission hooks are registered."""
+		hooks = frappe.get_hooks("has_permission")
 
-	expected_doctypes = [
-		"Agent Run",
-		"Agent Message",
-		"Agent Conversation",
-		"Agent Tool Call",
-		"Agent Context Artifact",
-	]
+		expected_doctypes = [
+			"Agent Run",
+			"Agent Message",
+			"Agent Conversation",
+			"Agent Tool Call",
+			"Agent Context Artifact",
+		]
 
-	for doctype in expected_doctypes:
-		assert hooks.get(doctype), f"no has_permission hook registered for {doctype}"
+		for doctype in expected_doctypes:
+			assert hooks.get(doctype), f"no has_permission hook registered for {doctype}"
