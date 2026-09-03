@@ -21,6 +21,7 @@ huf.patches.v1.backfill_tool_service_links
 huf.patches.v1.backfill_conversation_lifecycle_defaults
 
 huf.patches.v1.add_conversation_pin_indexes
+huf.patches.v1.archive_agent_run_analytics_rollup_conversation_rows
 huf.patches.v1.migrate_agent_triggers_to_automations
 huf.patches.v1.preserve_gateway_agent_access
 huf.patches.v1.backfill_agent_run_usage_columns
