@@ -5,11 +5,11 @@ preventing users from enumerating tool calls from other users' runs.
 """
 
 import frappe
-import pytest
+from frappe.tests import IntegrationTestCase
 from huf.ai.agent_integration import get_tool_call_permission_conditions
 
 
-class TestAgentToolCallListScope:
+class TestAgentToolCallListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Agent Tool Call."""
 
 	def test_system_manager_gets_no_filter(self):

@@ -5,11 +5,11 @@ preventing users from enumerating procedure runs created by other users.
 """
 
 import frappe
-import pytest
+from frappe.tests import IntegrationTestCase
 from huf.ai.agent_integration import get_procedure_run_permission_conditions
 
 
-class TestProcedureRunListScope:
+class TestProcedureRunListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Agent Procedure Run."""
 
 	def test_system_manager_gets_no_filter(self):

@@ -5,11 +5,11 @@ preventing managers from enumerating snapshots from other users' runs.
 """
 
 import frappe
-import pytest
+from frappe.tests import IntegrationTestCase
 from huf.ai.agent_integration import get_prompt_snapshot_permission_conditions
 
 
-class TestAgentRunPromptSnapshotListScope:
+class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Agent Run Prompt Snapshot."""
 
 	def test_system_manager_gets_no_filter(self):

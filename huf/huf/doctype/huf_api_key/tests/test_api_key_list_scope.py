@@ -5,11 +5,11 @@ from enumerating API keys created by other users.
 """
 
 import frappe
-import pytest
+from frappe.tests import IntegrationTestCase
 from huf.huf.doctype.huf_api_key.huf_api_key import get_api_key_permission_conditions
 
 
-class TestApiKeyListScope:
+class TestApiKeyListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Huf API Key."""
 
 	def test_system_manager_gets_no_filter(self):
