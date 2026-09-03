@@ -25,7 +25,7 @@ def get_permission_query_conditions(user):
 
     from huf.permissions import has_capability
     if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
-        return "`tabAgent`.is_system = 0"
+        return "`tabAgent`.is_system = 0 AND `tabAgent`.disabled = 0"
 
     user_roles = frappe.get_roles(user)
     user_roles_str = "', '".join([r.replace("'", "''") for r in user_roles])
@@ -58,8 +58,61 @@ def get_permission_query_conditions(user):
             )
         )
         AND `tabAgent`.is_system = 0
+        AND `tabAgent`.disabled = 0
     """
     return conditions
+
+
+@frappe.whitelist()
+def archive_agent(agent_name: str):
+    """Soft-delete an Agent by disabling it via a plain field update.
+
+    Never called from on_trash: on_trash runs inside Frappe's delete
+    transaction and any write it makes is rolled back if the subsequent
+    link check throws, so this must always be invoked as its own,
+    separate whitelisted action (see WP-R4 ST-R4.4).
+    """
+    from huf.permissions import has_capability
+
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    user = frappe.session.user
+    if not (has_capability(user, "agent.edit") or agent_doc.owner == user):
+        frappe.throw(
+            _("You do not have permission to archive this agent."), frappe.PermissionError
+        )
+
+    frappe.db.set_value("Agent", agent_name, "disabled", 1)
+    clear_doc_event_agents_cache()
+
+
+@frappe.whitelist()
+def delete_agent_cascade(agent_name: str):
+    """Hard-delete an Agent and its children, System-Manager-only.
+
+    Deletes children before the parent so that Frappe's own
+    check_if_doc_is_linked finds nothing linked and the normal delete
+    path (including on_trash's system-agent guard) succeeds without
+    ignore_links=1. This is destructive and irreversible.
+    """
+    if "System Manager" not in frappe.get_roles(frappe.session.user):
+        frappe.throw(
+            _("Only System Manager may hard-delete an agent."), frappe.PermissionError
+        )
+
+    frappe.logger().info(
+        f"delete_agent_cascade: user={frappe.session.user} agent={agent_name}"
+    )
+
+    conversation_names = frappe.get_all(
+        "Agent Conversation", filters={"agent": agent_name}, pluck="name"
+    )
+    if conversation_names:
+        frappe.db.delete("Agent Message", {"conversation": ("in", conversation_names)})
+        frappe.db.delete("Agent Conversation", {"name": ("in", conversation_names)})
+
+    frappe.db.delete("Agent Run", {"agent": agent_name})
+
+    frappe.delete_doc("Agent", agent_name)
 
 
 def _check_model_supports_caching(model_name: str, provider_name: str) -> bool:
