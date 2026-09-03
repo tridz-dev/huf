@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
+import { Checkbox } from './ui/checkbox';
 import { linkRoutes } from '@/lib/link-routes';
 import { cn } from '@/lib/utils';
 import {
@@ -100,7 +101,7 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   // Load agents when agent-run or router node selected
   useEffect(() => {
     const actionType = selectedNode?.data.actionConfig?.type;
-    if (!selectedNode?.data.actionConfig || !actionType || !['agent-run', 'router'].includes(actionType)) return;
+    if (!selectedNode?.data.actionConfig || !actionType || !['agent-run', 'router', 'tool-call'].includes(actionType)) return;
     setLoadingAgents(true);
     getAgents()
       .then((result) => {
@@ -629,6 +630,36 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                 }
               };
 
+              const renderNodeIdSelect = (
+                id: string,
+                value: string | undefined,
+                onChange: (value: string) => void,
+                placeholder: string
+              ) => {
+                const otherNodes = (activeFlow?.nodes || []).filter((n) => n.id !== selectedNodeId);
+                const currentValue = value || '';
+                const isMissing = currentValue && !otherNodes.some((n) => n.id === currentValue);
+                return (
+                  <Select value={currentValue} onValueChange={onChange}>
+                    <SelectTrigger id={id}>
+                      <SelectValue placeholder={placeholder} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isMissing && (
+                        <SelectItem value={currentValue}>
+                          {`Missing node: ${currentValue} (not found)`}
+                        </SelectItem>
+                      )}
+                      {otherNodes.map((n) => (
+                        <SelectItem key={n.id} value={n.id}>
+                          {n.data.label || n.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                );
+              };
+
               if (config.type === 'agent-run') {
                 return (
                   <div className="space-y-3">
@@ -670,6 +701,21 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         onChange={(e) => handleUpdateActionConfig('save_response_to_context', e.target.value)}
                         placeholder="e.g., agent_response"
                       />
+                    </div>
+                    <div>
+                      <Label htmlFor="agent-run-conv-mode" className="text-xs">Conversation Mode</Label>
+                      <Select
+                        value={(config as { conversation_mode?: string }).conversation_mode || 'flow_shared'}
+                        onValueChange={(value) => handleUpdateActionConfig('conversation_mode', value)}
+                      >
+                        <SelectTrigger id="agent-run-conv-mode">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flow_shared">Flow Shared (Default)</SelectItem>
+                          <SelectItem value="isolated">Isolated (No history)</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 );
@@ -753,6 +799,22 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                         placeholder="e.g., tool_result"
                       />
                     </div>
+                    <div>
+                      <Label htmlFor="tool-call-agent" className="text-xs">Attributed Agent (optional)</Label>
+                      <Combobox
+                        options={agents}
+                        value={(config as { agent_name?: string }).agent_name || ''}
+                        onValueChange={(v) => handleUpdateActionConfig('agent_name', v)}
+                        placeholder={loadingAgents ? 'Loading...' : 'Select agent (optional)...'}
+                        disabled={loadingAgents}
+                        searchPlaceholder="Search agents..."
+                        emptyText="No agent found."
+                        linkTo={linkRoutes.agent}
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Used only for audit attribution on the Agent Run record; does not affect tool execution.
+                      </p>
+                    </div>
                   </div>
                 );
               }
@@ -791,6 +853,49 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           <SelectItem value="isolated">Isolated (no history)</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">Context Injection</Label>
+                      {(() => {
+                        const inject = (config as { inject?: Record<string, boolean> }).inject || {};
+                        const updateInject = (field: string, value: boolean) => {
+                          handleUpdateActionConfig('inject', { ...inject, [field]: value });
+                        };
+                        return (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="inject-include-context"
+                                checked={inject.include_context ?? true}
+                                onCheckedChange={(checked) => updateInject('include_context', checked === true)}
+                              />
+                              <Label htmlFor="inject-include-context" className="text-xs font-normal cursor-pointer">
+                                Include flow context
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="inject-include-last-result"
+                                checked={inject.include_last_node_result ?? true}
+                                onCheckedChange={(checked) => updateInject('include_last_node_result', checked === true)}
+                              />
+                              <Label htmlFor="inject-include-last-result" className="text-xs font-normal cursor-pointer">
+                                Include last node result
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id="inject-include-candidates"
+                                checked={inject.include_candidates ?? true}
+                                onCheckedChange={(checked) => updateInject('include_candidates', checked === true)}
+                              />
+                              <Label htmlFor="inject-include-candidates" className="text-xs font-normal cursor-pointer">
+                                Include routing candidates
+                              </Label>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -946,21 +1051,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <Label htmlFor="true-node" size="sm">True branch (node ID)</Label>
-                      <Input
-                        id="true-node"
-                        value={config.true_node || ''}
-                        onChange={(e) => handleUpdateActionConfig('true_node', e.target.value)}
-                        placeholder="Node ID when True"
-                      />
+                      {renderNodeIdSelect('true-node', config.true_node, (v) => handleUpdateActionConfig('true_node', v), 'Select node for True branch...')}
                     </div>
                     <div>
                       <Label htmlFor="false-node" size="sm">False branch (node ID)</Label>
-                      <Input
-                        id="false-node"
-                        value={config.false_node || ''}
-                        onChange={(e) => handleUpdateActionConfig('false_node', e.target.value)}
-                        placeholder="Node ID when False"
-                      />
+                      {renderNodeIdSelect('false-node', config.false_node, (v) => handleUpdateActionConfig('false_node', v), 'Select node for False branch...')}
                     </div>
                   </div>
                 );
@@ -1193,21 +1288,11 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                     </div>
                     <div>
                       <Label htmlFor="loop-body" size="sm">Loop body node (node ID)</Label>
-                      <Input
-                        id="loop-body"
-                        value={config.loop_node || ''}
-                        onChange={(e) => handleUpdateActionConfig('loop_node', e.target.value)}
-                        placeholder="Node to execute per iteration"
-                      />
+                      {renderNodeIdSelect('loop-body', config.loop_node, (v) => handleUpdateActionConfig('loop_node', v), 'Select node to execute per iteration...')}
                     </div>
                     <div>
                       <Label htmlFor="loop-done" size="sm">Done node (node ID)</Label>
-                      <Input
-                        id="loop-done"
-                        value={config.done_node || ''}
-                        onChange={(e) => handleUpdateActionConfig('done_node', e.target.value)}
-                        placeholder="Node to go to when done"
-                      />
+                      {renderNodeIdSelect('loop-done', config.done_node, (v) => handleUpdateActionConfig('done_node', v), 'Select node to go to when done...')}
                     </div>
                     <div>
                       <Label htmlFor="loop-max" size="sm">Max iterations</Label>

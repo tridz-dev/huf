@@ -33,6 +33,7 @@ import {
   Bot,
   UserCheck,
   Wrench,
+  Globe,
   type LucideIcon
 } from 'lucide-react';
 import { triggerOptions } from '../../data/triggers';
@@ -73,7 +74,8 @@ const iconMap: Record<string, LucideIcon> = {
   Code,
   UserCheck,
   Bot,
-  Wrench
+  Wrench,
+  Globe
 };
 
 type MainTab = 'triggers' | 'actions';
@@ -97,6 +99,23 @@ export function NodeSelectionModal({
   const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(
     initialTriggerConfig || { type: undefined }
   );
+  // NodeSelectionModal is always mounted (FlowCanvas renders it with `open=`,
+  // not conditionally), so the useState initialisers above run exactly once —
+  // on first mount — and never again. Without this effect, `mainTab` keeps
+  // whatever value the FIRST open set: configure the entry node's trigger, then
+  // click "+" on a later node, and the modal opens in action mode while still
+  // showing the Triggers tab and trigger cards. Selecting one there routes to
+  // the trigger-save handler with no target node, creating an orphan trigger.
+  // Re-sync every time the modal opens or its mode changes.
+  useEffect(() => {
+    if (!open) return;
+    setMainTab(mode === 'trigger' ? 'triggers' : 'actions');
+    setTriggerSubTab('explore');
+    setSearchQuery('');
+    setSelectedItem(initialTriggerConfig?.type || null);
+    setTriggerConfig(initialTriggerConfig || { type: undefined });
+  }, [open, mode, initialTriggerConfig]);
+
   const [agents, setAgents] = useState<AgentDoc[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
@@ -214,6 +233,14 @@ export function NodeSelectionModal({
       config = { type: 'http-request', url: '', method: 'GET', timeout: 30 };
     } else if (actionId === 'transform') {
       config = { type: 'transform', transformations: [] };
+    } else if (actionId === 'email') {
+      config = { type: 'tool-call', tool_name: 'gmail_send_email', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'slack') {
+      config = { type: 'tool-call', tool_name: 'slack_send_message', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'sheets') {
+      config = { type: 'tool-call', tool_name: 'gsheets_read', args: {}, output: { save_result_to_context: '' } };
+    } else if (actionId === 'file') {
+      config = { type: 'tool-call', tool_name: 'gdrive_list_files', args: {}, output: { save_result_to_context: '' } };
     }
 
     onSaveAction?.(actionId, config);
@@ -499,12 +526,12 @@ export function NodeSelectionModal({
         </div>
 
         <Tabs value={mainTab} onValueChange={(v) => { setMainTab(v as MainTab); setSelectedItem(null); setTriggerConfig({ type: undefined }); }} className="flex-1 flex flex-col min-h-0">
-          {mode !== 'trigger' ? (
-            <TabsList layout="grid" cols={2} className="flex-shrink-0">
-              <TabsTrigger value="triggers">Triggers</TabsTrigger>
-              <TabsTrigger value="actions">Actions</TabsTrigger>
-            </TabsList>
-          ) : (
+          {/* In action mode the modal must not offer a Triggers tab at all: a
+              trigger belongs only to the entry node, and selecting one here
+              routes to the trigger-save handler with no target node, silently
+              creating a disconnected orphan trigger. `mode` already determines
+              the content, so the tab bar is redundant as well as harmful. */}
+          {mode !== 'trigger' ? null : (
             <TabsList layout="grid" cols={1} className="flex-shrink-0">
               <TabsTrigger value="triggers">Triggers</TabsTrigger>
             </TabsList>

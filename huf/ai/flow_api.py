@@ -347,7 +347,13 @@ def _webhook_key_is_valid(defn: dict, webhook_key: str | None) -> bool:
 	if entry_node is None:
 		return False
 
-	expected_auth = entry_node.get("config", {}).get("auth")
+	# The webhook auth key is written as "auth" by RightSidebar.tsx but as
+	# "apiKey" by NodeSelectionModal.tsx (frontend inconsistency, not a
+	# backend redundancy) - accept either so a webhook configured through
+	# either UI path can authenticate. "auth" takes precedence when both
+	# are somehow present.
+	node_config = entry_node.get("config", {})
+	expected_auth = node_config.get("auth") or node_config.get("apiKey")
 	if not expected_auth:
 		return False
 
@@ -358,7 +364,9 @@ def _webhook_entry_auth(defn: dict) -> str | None:
 	entry_id = defn.get("entry")
 	for node in defn.get("nodes", []):
 		if node.get("id") == entry_id and node.get("type") == "trigger.webhook":
-			return node.get("config", {}).get("auth")
+			node_config = node.get("config", {})
+			# See _webhook_key_is_valid for why both keys are checked.
+			return node_config.get("auth") or node_config.get("apiKey")
 	return None
 
 
