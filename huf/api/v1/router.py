@@ -151,24 +151,31 @@ class ApiV1Router(BaseRenderer):
 
 		try:
 			context = self._build_context(requires_auth)
+			previous_user = frappe.session.user
+			try:
+				if context.auth_mode == AuthMode.API_KEY and context.user and context.user != previous_user:
+					frappe.set_user(context.user)
 
-			if endpoint == "responses" and _wants_stream(frappe.local.form_dict):
-				payload = frappe.local.form_dict
-				agent_id = payload.get("agent_id") or payload.get("agent")
-				input_text = payload.get("input") or payload.get("input_text") or payload.get("prompt")
-				if not agent_id:
-					raise ValidationError("agent_id is required.")
-				if not input_text:
-					raise ValidationError("input is required.")
-				return handle_stream_response(
-					context,
-					agent_id=agent_id,
-					input_text=input_text,
-					conversation_id=payload.get("conversation_id"),
-				)
+				if endpoint == "responses" and _wants_stream(frappe.local.form_dict):
+					payload = frappe.local.form_dict
+					agent_id = payload.get("agent_id") or payload.get("agent")
+					input_text = payload.get("input") or payload.get("input_text") or payload.get("prompt")
+					if not agent_id:
+						raise ValidationError("agent_id is required.")
+					if not input_text:
+						raise ValidationError("input is required.")
+					return handle_stream_response(
+						context,
+						agent_id=agent_id,
+						input_text=input_text,
+						conversation_id=payload.get("conversation_id"),
+					)
 
-			data = handler(context)
-			return self._render_success(data, context.request_id)
+				data = handler(context)
+				return self._render_success(data, context.request_id)
+			finally:
+				if frappe.session.user != previous_user:
+					frappe.set_user(previous_user)
 		except ApiError as exc:
 			return self._render_error(exc, fallback_request_id)
 		except Exception as exc:
