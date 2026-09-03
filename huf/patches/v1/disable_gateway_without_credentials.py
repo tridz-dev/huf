@@ -62,8 +62,9 @@ def _check_required_credentials(gateway) -> list[str]:
     credentials = _load_integration_credentials(gateway.integration_settings)
 
     # Per credential-discovery mapping (WP-04 before ST-04.4)
+    # SMS is handled separately below (its requirement is conditional on
+    # account_sid != "frappe_sms"), so it is intentionally not listed here.
     required_by_provider = {
-        "sms": [("auth_token", "Twilio Auth Token (required when using Twilio mode)", lambda v: v and gateway.name)],
         "email": [("webhook_secret", "Email Webhook Secret")],
         "telegram": [("webhook_secret", "Telegram Webhook Secret")],
         "whatsapp": [("app_secret", "WhatsApp App Secret")],
@@ -79,7 +80,7 @@ def _check_required_credentials(gateway) -> list[str]:
         if account_sid != "frappe_sms":
             # Twilio mode: auth_token is required
             if not credentials.get("auth_token"):
-                missing.append("auth_token")
+                missing.append("auth_token (Twilio Auth Token, required when using Twilio mode)")
 
     # Check other providers
     provider_lower = gateway.provider.lower().replace(" ", "_")
