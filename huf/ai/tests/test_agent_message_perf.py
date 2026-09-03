@@ -77,6 +77,7 @@ class TestAgentMessagePerf(UnitTestCase):
             "Agent Message",
             filters={"conversation": conversations[0].name},
             fields=["name", "conversation_index"],
+            order_by="conversation_index asc",
             limit_page_length=0,
         )
         elapsed = time.time() - start
@@ -84,7 +85,11 @@ class TestAgentMessagePerf(UnitTestCase):
         # Verify we got the right messages
         self.assertEqual(len(results), 10, f"Expected 10 messages, got {len(results)}")
 
-        # Verify ordering by conversation_index
+        # Verify ordering by conversation_index. Agent Message's doctype default
+        # sort is "modified desc" (see agent_message.json), not insertion/index
+        # order, so this query must pass an explicit order_by -- matching the
+        # conversation_manager hot path the composite index is built for --
+        # rather than relying on frappe.get_list's default.
         indices = [r.conversation_index for r in results]
         self.assertEqual(indices, list(range(10)), "Messages should be ordered by conversation_index")
 
