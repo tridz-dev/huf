@@ -16,6 +16,10 @@ def get_document(doctype: str, document_id: str):
 	"""
 	Get a document from the database
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	# Use the frappe.client.get method to get the document with permissions (both read and field level read)
 	return client.get(doctype, name=document_id)
 
@@ -25,6 +29,10 @@ def get_documents(doctype: str, document_ids: list):
 	"""
 	Get documents from the database
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	docs = []
 	for document_id in document_ids:
 		# Use the frappe.client.get method to get the document with permissions applied
@@ -36,6 +44,10 @@ def create_document(doctype: str, data: dict, function=None):
 	"""
 	Create a document in the database
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	if function:
 		# Get any default values
 		for param in function.parameters:
@@ -66,6 +78,10 @@ def create_documents(doctype: str, data: list, function=None):
     Create multiple documents.
     Returns created document_ids and a summary.
     """
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     created_ids = []
     errors = []
 
@@ -101,6 +117,10 @@ def update_document(doctype: str, document_id: str, data: dict, tool=None):
     try:
         if not doctype or not document_id:
             return {"success": False, "error": "Doctype and document_id are required"}
+
+        _meta, _guard_err = _check_doctype_allowed(doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
 
         if not frappe.db.exists(doctype, document_id):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
@@ -142,6 +162,10 @@ def update_documents(doctype: str, data: list, function=None):
     Update multiple documents.
     Each item must contain 'document_id' (or 'name') and the fields to update.
     """
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     updated_ids = []
     errors = []
 
@@ -181,6 +205,10 @@ def delete_document(doctype: str, document_id: str):
         if not doctype or not document_id:
             return {"success": False, "error": "Doctype and document_id are required"}
 
+        _meta, _guard_err = _check_doctype_allowed(doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
+
         if not frappe.db.exists(doctype, document_id):
             return {"success": False, "error": f"{doctype} {document_id} not found"}
 
@@ -205,6 +233,10 @@ def delete_documents(doctype: str, document_ids: list):
 	Each document is checked individually for delete permission. Unauthorized
 	or failed deletions are reported without stopping the batch.
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	deleted = []
 	failed = []
 
@@ -241,6 +273,10 @@ def submit_document(doctype: str, document_id: str):
 	"""
 	Submit a document in the database
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	doc = frappe.get_doc(doctype, document_id)
 
 	if not frappe.has_permission(doctype, "submit", doc=document_id):
@@ -262,6 +298,10 @@ def cancel_document(doctype: str, document_id: str):
 	"""
 	Cancel a document in the database
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	doc = frappe.get_doc(doctype, document_id)
 
 	if not frappe.has_permission(doctype, "cancel", doc=document_id):
@@ -294,6 +334,10 @@ def get_amended_document(doctype: str, document_id: str):
     """
     Return the amended document (first match) for a given document, if any.
     """
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     amended_name = frappe.db.exists(doctype, {"amended_from": document_id})
     if amended_name:
         return client.get(doctype, name=amended_name)
@@ -303,6 +347,10 @@ def get_list(doctype: str, filters: dict = None, fields: list = None, limit: int
 	"""
 	Get a list of documents from the database
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	if filters is None:
 		filters = {}
 
@@ -331,6 +379,10 @@ def get_value(doctype: str, filters: dict = None, fieldname: str | list = "name"
 	        :param fieldname: Field to be returned (default `name`) - can be a list of fields(str) or a single field(str)
 	        :param filters: dict or string for identifying the record
 	"""
+	_meta_guard, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	meta = frappe.get_meta(doctype)
 
 	if isinstance(fieldname, list):
@@ -359,6 +411,10 @@ def set_value(doctype: str, document_id: str, fieldname: str | dict, value: str 
 	                client.set_value("Customer", "CUST-00001", {"customer_name": "John Doe", "customer_email": "john.doe@example.com"}) OR
 	                client.set_value("Customer", "CUST-00001", "customer_name", "John Doe")
 	"""
+	_meta, _guard_err = _check_doctype_allowed(doctype)
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	if isinstance(fieldname, dict):
 		return client.set_value(doctype, document_id, fieldname)
 	else:
@@ -376,6 +432,10 @@ def get_report_result(
 	"""
 	Run a report and return the columns and result
 	"""
+	_meta, _guard_err = _check_doctype_allowed("Report")
+	if _guard_err:
+		return json.loads(_guard_err)
+
 	# fetch the particular report
 	report = frappe.get_doc("Report", report_name)
 	if not report:
@@ -398,6 +458,10 @@ def attach_file_to_document(doctype: str, document_id: str, file_path: str):
     """
     Attach a file to a document in the database
     """
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     if not frappe.db.exists(doctype, document_id):
         return {
             "document_id": document_id,
@@ -589,9 +653,13 @@ def send_email(
 
 def attach_file_to_document(doctype: str, document_id: str, **kwargs):
     """
-    Attach multiple files to a document. 
+    Attach multiple files to a document.
     kwargs keys are field names, values are file URLs.
     """
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     if not frappe.db.exists(doctype, document_id):
         return {"success": False, "error": f"{doctype} {document_id} not found", "document_id": document_id}
 
