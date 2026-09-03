@@ -68,7 +68,7 @@
   },
   {
    "read": 1,
-   "report": 1,
+   "report": 0,
    "role": "Huf Manager"
   }
  ],
