@@ -405,19 +405,19 @@
   },
   {
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
-   "report": 1,
+   "report": 0,
    "role": "Huf User",
    "share": 1
   },
   {
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
-   "report": 1,
+   "report": 0,
    "role": "Huf Viewer",
    "share": 1
   }
