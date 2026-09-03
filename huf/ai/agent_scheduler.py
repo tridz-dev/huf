@@ -118,24 +118,10 @@ def run_scheduled_agents():
 			if not t.get("next_execution") or t.get("next_execution") > now:
 				continue
 
-			agent_name = t.get("agent")
-			agent = frappe.get_doc("Agent", agent_name)
-
-			from huf.ai.prompt_resolver import resolve_prompt
-
-			prompt = resolve_prompt(agent) or f"Run scheduled agent: {agent_name}"
-
-			if t.get("execution_mode") == "Batch":
-				_submit_batch_job_for_trigger(t, agent, prompt)
-			else:
-				run_agent_sync(agent_name, prompt, agent.provider, agent.model)
-
-			doc = frappe.get_doc("Agent Trigger", t["name"])
-			doc.last_execution = now
-
-			interval = doc.interval_count or 1
-			si = (doc.scheduled_interval or "").lower()
-			doc.next_execution = add_to_date(
+			# Compute the next execution time based on interval
+			interval = t.get("interval_count") or 1
+			si = (t.get("scheduled_interval") or "").lower()
+			new_next_execution = add_to_date(
 				now,
 				hours=interval if si == "hourly" else 0,
 				days=interval if si == "daily" else 0,
@@ -144,8 +130,72 @@ def run_scheduled_agents():
 				years=interval if si == "yearly" else 0,
 			)
 
-			doc.save()
+			# Pre-claim this trigger with a conditional UPDATE:
+			# Only advance if we observe the same next_execution value.
+			# This atomically claims the trigger and prevents duplicate runs.
+			observed_next = t.get("next_execution")
+			frappe.db.sql(
+				"""
+				UPDATE `tabAgent Trigger`
+				SET next_execution = %(new_next)s
+				WHERE name = %(name)s AND next_execution = %(observed_next)s
+				""",
+				{
+					"name": t["name"],
+					"observed_next": observed_next,
+					"new_next": new_next_execution,
+				},
+			)
 			frappe.db.commit()
+
+			# Check if this tick won the claim (rowcount == 1)
+			rowcount = frappe.db.sql("SELECT ROW_COUNT()")[0][0]
+			if rowcount == 0:
+				# Another tick already claimed this trigger, skip it
+				continue
+
+			# This tick owns the claim: enqueue the scheduled run
+			frappe.enqueue(
+				"huf.ai.agent_scheduler.execute_scheduled_agent",
+				agent_trigger=t["name"],
+				agent=t.get("agent"),
+				enqueue_after_commit=True,
+				queue="long",
+			)
 
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "Scheduled Agent Trigger Error")
+
+
+def execute_scheduled_agent(agent_trigger: str, agent: str) -> None:
+	"""
+	Module-level job function to execute a scheduled agent run.
+	Enqueued from run_scheduled_agents() to defer execution from scheduler to queue.
+
+	Args:
+		agent_trigger: Agent Trigger name
+		agent: Agent name
+	"""
+	try:
+		trigger_doc = frappe.get_doc("Agent Trigger", agent_trigger)
+		agent_doc = frappe.get_doc("Agent", agent)
+		now = now_datetime().replace(microsecond=0)
+
+		from huf.ai.prompt_resolver import resolve_prompt
+
+		prompt = resolve_prompt(agent_doc) or f"Run scheduled agent: {agent}"
+
+		if trigger_doc.execution_mode == "Batch":
+			_submit_batch_job_for_trigger(trigger_doc, agent_doc, prompt)
+		else:
+			run_agent_sync(agent, prompt, agent_doc.provider, agent_doc.model)
+
+		# Update last_execution after the run completes
+		trigger_doc.last_execution = now
+		trigger_doc.save(ignore_permissions=True)
+		frappe.logger().info(f"Scheduled run enqueued for trigger {agent_trigger}")
+	except Exception as e:
+		frappe.log_error(
+			title="Scheduled Agent Execution Failed",
+			message=f"Failed to execute scheduled agent {agent} (trigger {agent_trigger}): {str(e)}"
+		)
