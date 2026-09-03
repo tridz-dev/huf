@@ -9,6 +9,7 @@ import typing
 import frappe
 from frappe import _, is_whitelisted
 from frappe.model.document import Document
+from huf.ai.tool_registry import get_hook_declared_function_paths
 
 
 def _json_schema_type(param_type):
@@ -812,6 +813,15 @@ class AgentToolFunction(Document):
 				frappe.throw(_("Function not found"))
 
 			is_whitelisted(f)
+
+		elif self.types == "App Provided":
+			allowed_paths = get_hook_declared_function_paths()
+			if self.function_path not in allowed_paths:
+				frappe.throw(
+					_("Function path {0} is not declared by any installed app's huf_tools hook.").format(
+						self.function_path
+					)
+				)
 
 	def before_save(self):
 

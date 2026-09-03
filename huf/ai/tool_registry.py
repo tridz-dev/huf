@@ -352,12 +352,35 @@ def get_tools_by_app(apps_to_scan=None, use_cache=True):
 
         if app_tools:
             tools_by_app[app] = app_tools
-    
+
     # Update cache with scanned apps
     if use_cache and apps_to_scan:
         _update_cached_scans(apps_to_scan)
-    
+
     return tools_by_app
+
+
+_hook_function_paths_cache = None
+
+
+def get_hook_declared_function_paths(use_cache=True):
+    """Set of function_path values declared by any installed app's huf_tools
+    hook (the same source sync_discovered_tools reads). Used to validate
+    App Provided Agent Tool Function rows: a path outside this set was not
+    registered by the hook mechanism and must not be trusted (F-07)."""
+    global _hook_function_paths_cache
+    if use_cache and _hook_function_paths_cache is not None:
+        return _hook_function_paths_cache
+    tools_by_app = get_tools_by_app(apps_to_scan=None, use_cache=False)
+    paths = {
+        d.get("function_path")
+        for tools in tools_by_app.values()
+        for d in tools
+        if d.get("function_path")
+    }
+    if use_cache:
+        _hook_function_paths_cache = paths
+    return paths
 
 @frappe.whitelist()
 def sync_discovered_tools(apps_to_scan=None, use_cache=True):
