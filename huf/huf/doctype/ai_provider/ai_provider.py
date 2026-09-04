@@ -71,18 +71,14 @@ class AIProvider(Document):
 		if hostname in ("localhost", "127.0.0.1", "::1"):
 			return
 
-		# For non-localhost hostnames, HTTP is only allowed for localhost
-		if parsed.scheme == "http":
-			frappe.throw(
-				_("HTTP scheme is only allowed for localhost (127.0.0.1 or ::1). "
-				  "For remote hosts, use HTTPS. Got: {0}").format(self.api_base_url)
-			)
-
-		# Check if hostname is an IP address (IPv4 or IPv6)
+		# Check if hostname is an IP address (IPv4 or IPv6). Private/internal IP
+		# ranges are rejected regardless of scheme (an attacker can reach
+		# internal services over plain HTTP just as well as HTTPS), and this
+		# check runs BEFORE the generic "HTTP not allowed for remote hosts"
+		# check below so private-IP targets get the more specific message.
 		try:
 			ip_addr = ipaddress.ip_address(hostname)
 
-			# Check against private/internal IP ranges
 			private_ranges = [
 				ipaddress.ip_network("10.0.0.0/8"),
 				ipaddress.ip_network("172.16.0.0/12"),
@@ -102,10 +98,19 @@ class AIProvider(Document):
 					)
 
 		except ValueError:
-			# hostname is not a valid IP address; it's a hostname
-			# For non-IP hostnames that are not localhost, HTTPS is allowed (e.g., api.openai.com)
-			# No DNS resolution; just allow HTTPS public hostnames
+			# hostname is not a valid IP address; it's a hostname.
+			# No DNS resolution is performed here, so a hostname that resolves
+			# to a private IP at request time isn't caught by this check.
 			pass
+
+		# For non-localhost, non-private-IP targets, HTTP is only allowed for
+		# localhost — remote hosts (public IPs or hostnames like
+		# api.openai.com) must use HTTPS.
+		if parsed.scheme == "http":
+			frappe.throw(
+				_("HTTP scheme is only allowed for localhost (127.0.0.1 or ::1). "
+				  "For remote hosts, use HTTPS. Got: {0}").format(self.api_base_url)
+			)
 
 @frappe.whitelist()
 def get_provider_settings(provider_name):

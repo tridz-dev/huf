@@ -48,7 +48,7 @@ class TestAIProviderURLValidation(IntegrationTestCase):
 			defaults["api_base_url"] = api_base_url
 		defaults.update(kwargs)
 
-		provider = frappe.get_doc("AI Provider", defaults)
+		provider = frappe.get_doc({"doctype": "AI Provider", **defaults})
 		self._providers.append(provider.name)
 		return provider
 
