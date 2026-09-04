@@ -42,7 +42,7 @@ class TestAgentStreamRendererErrorUniformity(unittest.TestCase):
     def _render(self, agent_name):
         renderer = _make_renderer(agent_name)
         with patch("huf.ai.agent_stream_renderer.frappe.form_dict", {"agent_name": agent_name, "prompt": "hi"}), \
-                patch("huf.ai.agent_stream_renderer.frappe.request") as mock_request:
+                patch("huf.ai.agent_stream_renderer.frappe.request", new=MagicMock()) as mock_request:
             mock_request.method = "GET"
             return renderer._render_agent_stream(agent_name)
 
@@ -99,7 +99,7 @@ class TestAgentStreamRendererErrorUniformity(unittest.TestCase):
             renderer = _make_renderer("missing-agent")
             with patch(
                 "huf.ai.agent_stream_renderer.frappe.form_dict", {"agent_name": "missing-agent"}
-            ), patch("huf.ai.agent_stream_renderer.frappe.request") as mock_request:
+            ), patch("huf.ai.agent_stream_renderer.frappe.request", new=MagicMock()) as mock_request:
                 mock_request.method = "GET"
                 response = renderer._render_agent_stream("missing-agent")
 
