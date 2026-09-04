@@ -20,9 +20,30 @@ class TestFetchToolParametersAuthorization(unittest.TestCase):
 		"""Save current user to restore after test."""
 		self.current_user = frappe.session.user
 
+		# frappe.only_for() unconditionally no-ops when frappe.flags.in_test
+		# is set (frappe/__init__.py:954), which bench run-tests sets for the
+		# whole run -- so this gate can never actually be exercised without
+		# temporarily clearing that flag around the calls under test.
+		self.original_in_test = frappe.flags.in_test
+		frappe.flags.in_test = False
+
+		for email, roles in (
+			("test_huf_user@example.com", ["Huf User"]),
+			("test_huf_manager@example.com", ["Huf Manager"]),
+		):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": r} for r in roles],
+				}).insert(ignore_permissions=True)
+
 	def tearDown(self):
-		"""Restore user after test."""
+		"""Restore user and in_test flag after test."""
 		frappe.set_user(self.current_user)
+		frappe.flags.in_test = self.original_in_test
 
 	def test_fetch_tool_parameters_requires_huf_manager(self):
 		"""
@@ -35,12 +56,12 @@ class TestFetchToolParametersAuthorization(unittest.TestCase):
 			fetch_tool_parameters_from_code,
 		)
 
-		# Create or use a test user with only Huf User role
+		# User with only Huf User role must be rejected
 		frappe.set_user("test_huf_user@example.com")
 		with self.assertRaises(frappe.PermissionError):
 			fetch_tool_parameters_from_code("frappe.throw")
 
-		# Create or use a test user with Huf Manager role
+		# User with Huf Manager role must be allowed
 		frappe.set_user("test_huf_manager@example.com")
 		result = fetch_tool_parameters_from_code("frappe.throw")
 		self.assertIsNotNone(result)
