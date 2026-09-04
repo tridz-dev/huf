@@ -46,7 +46,15 @@ class AIModel(Document):
 		if not modalities:
 			return
 
-		items = [m.strip() for m in modalities.split(",") if m and m.strip()]
+		seen = set()
+		items = []
+		for m in modalities.split(","):
+			item = m.strip()
+			if not item or item in seen:
+				continue
+			seen.add(item)
+			items.append(item)
+
 		invalid = [m for m in items if m not in MODEL_MODALITY_OPTIONS]
 		if invalid:
 			frappe.throw(
@@ -99,7 +107,8 @@ def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
 	}
 
 	# Modalities are stored as a comma-separated list; use FIND_IN_SET for multi-select matching.
-	conditions.append("FIND_IN_SET(%(modality)s, IFNULL(modalities, '')) > 0")
+	# Strip spaces from the stored value so legacy or spaced modalities still match cleanly.
+	conditions.append("FIND_IN_SET(%(modality)s, REPLACE(IFNULL(modalities, ''), ' ', '')) > 0")
 
 	if provider:
 		conditions.append("provider = %(provider)s")
