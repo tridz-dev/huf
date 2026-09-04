@@ -1,10 +1,12 @@
 # huf/ai/orchestration/orchestrator.py
 
 import frappe
+from frappe import _
 from frappe.utils import now_datetime
 from huf.ai.orchestration.planning import run_planning
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.transaction import commit_if_background
+from huf.ai.run_budget import get_current_budget, estimate_run_cost
 
 
 def create_orchestration(agent_name, user_prompt, parent_run_id=None, conversation_id=None, override_plan=None):
@@ -74,6 +76,8 @@ def recreate_orchestration_plan(orch_name):
     Requirement 3 (Button): Recreates the plan based on current Agent instructions.
     """
     orch = frappe.get_doc("Agent Orchestration", orch_name)
+    if not frappe.has_permission("Agent Orchestration", "write"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
     agent_doc = frappe.get_doc("Agent", orch.agent)
     
     from huf.ai.prompt_resolver import resolve_prompt
@@ -136,13 +140,17 @@ def stop_orchestration(orch_name):
 def execute_next_step(orch=None, orch_name=None):
     if orch_name and not orch:
         orch = frappe.get_doc("Agent Orchestration", orch_name)
-    
+
     if not orch:
         frappe.log_error("No orchestration provided to execute_next_step", "Orchestrator Error")
         return "failed"
-        
+
     if orch.status == "Cancelled":
         return "cancelled"
+
+    # Check recursion depth (ST-09.5)
+    budget = get_current_budget()
+    budget.check_depth()
     
     next_step = None
 
@@ -180,6 +188,11 @@ def execute_next_step(orch=None, orch_name=None):
         Previous context (scratchpad):
         {orch.scratchpad or 'No previous context.'}
         Complete this step and provide a clear response."""
+
+        # Check spend cap before enqueuing child run (ST-09.6)
+        budget = get_current_budget()
+        estimated_cost = estimate_run_cost(agent_doc, model=agent_doc.model, provider=agent_doc.provider)
+        budget.check_spend(estimated_cost)
 
         result = run_agent_sync(
             agent_name=orch.agent,

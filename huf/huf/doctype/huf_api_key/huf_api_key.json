@@ -125,20 +125,20 @@
   },
   {
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
-   "report": 1,
+   "report": 0,
    "role": "Huf Manager",
    "select": 1,
    "share": 1
   },
   {
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
-   "report": 1,
+   "report": 0,
    "role": "Huf User",
    "select": 1,
    "share": 1

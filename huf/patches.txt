@@ -6,6 +6,7 @@ huf.patches.v1.migrate_provider_brand
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 
+huf.patches.v1.add_agent_message_conversation_index
 huf.patches.v1.add_agent_run_sequence_index
 huf.patches.v1.add_agent_run_analytics_indexes
 huf.patches.add_tool_types
@@ -20,7 +21,12 @@ huf.patches.v1.backfill_tool_service_links
 huf.patches.v1.backfill_conversation_lifecycle_defaults
 
 huf.patches.v1.add_conversation_pin_indexes
+huf.patches.v1.archive_agent_run_analytics_rollup_conversation_rows
 huf.patches.v1.migrate_agent_triggers_to_automations
 huf.patches.v1.preserve_gateway_agent_access
 huf.patches.v1.backfill_agent_run_usage_columns
 huf.patches.v1.migrate_prompt_caching_fields
+huf.patches.v1.migrate_secrets_to_password_fields
+huf.patches.v1.disable_gateway_without_credentials
+huf.patches.v1.log_run_immediately_agents
+huf.patches.v1.add_run_budget_fields

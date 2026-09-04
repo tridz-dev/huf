@@ -290,7 +290,7 @@ class ToolResult:
 		return out
 
 
-def get_function_from_name(tool_name: str) -> Callable | None:
+def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Callable | None:
 	"""Re-exported for callers that only need resolution, not invocation.
 	The real implementation stays single-sourced in sdk_tools.py (seam
 	audit §"Recommended target shape": "already single-sourced ... just
@@ -299,7 +299,7 @@ def get_function_from_name(tool_name: str) -> Callable | None:
 	import cycle (sdk_tools imports resolution helpers from this module).
 	"""
 	from huf.ai.sdk_tools import get_function_from_name as _impl
-	return _impl(tool_name)
+	return _impl(tool_name, tool_type=tool_type)
 
 
 async def invoke_tool(
@@ -338,7 +338,7 @@ async def invoke_tool(
 	if not function_path:
 		return ToolResult(success=False, error=f"Cannot resolve handler for tool type '{tool_type}'")
 
-	handler = get_function_from_name(function_path)
+	handler = get_function_from_name(function_path, tool_type=tool_type)
 	if not handler:
 		return ToolResult(success=False, error=f"Handler function not found: {function_path}")
 

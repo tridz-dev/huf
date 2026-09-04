@@ -196,6 +196,21 @@ def handle_stream_response(
 	external_id = context.user
 
 	def stream_generator() -> Generator[str, None, None]:
+		# The router (huf/api/v1/router.py ApiV1Router.render) sets
+		# frappe.session.user for API-key requests only around the
+		# synchronous handler call, then restores it in a `finally` as
+		# soon as this generator function *object* is returned - not
+		# once it has actually been iterated. Because this is a lazy
+		# generator, its body (including run_agent_stream, which does
+		# owner-scoped DB reads/writes) runs later, after the router has
+		# already restored frappe.session.user. Re-apply the resolved
+		# user here for the lifetime of the generator so streamed work
+		# is attributed to and authorized as the correct principal.
+		stream_user = context.user
+		previous_stream_user = frappe.session.user
+		switched_user = bool(stream_user) and stream_user != previous_stream_user
+		if switched_user:
+			frappe.set_user(stream_user)
 		loop = None
 		created_loop = False
 		try:
@@ -255,5 +270,7 @@ def handle_stream_response(
 					pass
 				finally:
 					asyncio.set_event_loop(None)
+			if switched_user and frappe.session.user != previous_stream_user:
+				frappe.set_user(previous_stream_user)
 
 	return Response(stream_generator(), mimetype="text/event-stream", headers=dict(_SSE_HEADERS))

@@ -482,7 +482,7 @@ def create_function_tool(
         FunctionTool: Function tool
     """
 
-    function = get_function_from_name(tool_name)
+    function = get_function_from_name(tool_name, tool_type=tool_type)
 
     if not function:
         return None
@@ -592,16 +592,26 @@ def create_function_tool(
         return None
 
 
-def get_function_from_name(tool_name: str) -> Callable:
+def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Callable:
     """
     Get a function from its name
 
     Args:
-        function_name: Fully qualified function name (module.function)
+        tool_name: Fully qualified function name (module.function)
+        tool_type: Optional tool type ("App Provided", "Custom Function", etc.)
+                   When "App Provided", validates against the hook allow-set.
 
     Returns:
-        Callable: Function
+        Callable: Function, or None if not found or validation fails
     """
+
+    if tool_type == "App Provided":
+        from huf.ai.tool_registry import get_hook_declared_function_paths
+        if tool_name not in get_hook_declared_function_paths():
+            frappe.logger("huf").debug(
+                f"App Provided function path not in hook allow-set: {tool_name}"
+            )
+            return None
 
     try:
         try:
