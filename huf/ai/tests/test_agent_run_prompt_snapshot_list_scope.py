@@ -21,10 +21,27 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 				"instructions": "Test agent fixture for automated tests.",
 			}).insert(ignore_permissions=True)
 
-		# frappe.get_list's read check goes through the full role-based
-		# permission stack; alice/bob need a real User with a role that has
-		# base read access on Agent Run Prompt Snapshot (Huf User) before
-		# the permission_query_conditions scoping is ever reached.
+		# The only two roles with base DocPerm read on Agent Run Prompt
+		# Snapshot are System Manager and Huf Manager, and Huf Manager
+		# carries the agent.view_all capability (huf/permissions.py), so it
+		# always bypasses the permission_query_conditions scoping. Huf User
+		# has no read DocPerm at all on this doctype by default. Grant it one
+		# via a Custom DocPerm (without agent.view_all) so alice/bob can
+		# reach frappe.get_list's base permission check and the scoping
+		# below is actually exercised.
+		if not frappe.db.exists(
+			"Custom DocPerm", {"parent": "Agent Run Prompt Snapshot", "role": "Huf User"}
+		):
+			frappe.get_doc({
+				"doctype": "Custom DocPerm",
+				"parent": "Agent Run Prompt Snapshot",
+				"parenttype": "DocType",
+				"parentfield": "permissions",
+				"role": "Huf User",
+				"read": 1,
+			}).insert(ignore_permissions=True)
+			frappe.clear_cache(doctype="Agent Run Prompt Snapshot")
+
 		for email in ("alice@example.com", "bob@example.com"):
 			if not frappe.db.exists("User", email):
 				frappe.get_doc({
