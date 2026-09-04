@@ -52,30 +52,34 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		*,
 		http_post: Callable[..., Any] = _requests_post,
 	) -> None:
-		self._app_id = credentials.get("app_id", "")
-		self._app_password = credentials.get("app_password", "")
+		# Every other gateway adapter (WhatsApp, Telegram, Messenger,
+		# Instagram, Slack) raises here when required credentials are
+		# missing, so an unconfigured gateway can never be constructed at
+		# all. This adapter used to special-case "no app_id configured" as
+		# "don't require a Bearer token (backwards compatibility)" in
+		# verify_inbound below, which made it the one gateway that failed
+		# OPEN instead of closed -- exactly what WP-04 exists to close.
+		missing = self.credential_schema.missing_required(credentials)
+		if missing:
+			raise ValueError(f"Microsoft Teams adapter is missing required credentials: {', '.join(missing)}")
+		self._app_id = credentials["app_id"]
+		self._app_password = credentials["app_password"]
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
 		"""Verify Authorization header with Bearer token.
 
-		When app_id is configured, require Authorization header with Bearer token.
 		Full JWT signature validation against Microsoft's JWKS requires PyJWT library,
 		which is not currently a dependency — this implements the security contract
 		(fail closed on missing header) while deferring cryptographic validation
 		to a future enhancement when PyJWT is available.
 
-		Returns False (fail closed) if:
-		- app_id is configured and Authorization header is missing or malformed
-		- token cannot be decoded (will be enhanced to validate signature when PyJWT available)
+		Returns False (fail closed) if the Authorization header is missing or malformed.
+		app_id/app_password are guaranteed present by __init__ (ValueError otherwise), so
+		there is no "unconfigured, skip the check" branch here anymore.
 		"""
 		auth_header = request.headers.get("Authorization", "").strip()
 
-		# If no app_id configured, don't require Bearer token (backwards compatibility)
-		if not self._app_id:
-			return True
-
-		# app_id is configured: require Authorization header with Bearer token
 		if not auth_header or not auth_header.startswith("Bearer "):
 			return False
 
