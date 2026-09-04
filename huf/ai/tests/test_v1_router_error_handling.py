@@ -27,18 +27,23 @@ class TestV1RouterExceptionHandling(unittest.TestCase):
 
 	def setUp(self):
 		"""Set up test fixtures."""
-		self.router = ApiV1Router()
-		self.router.path = "huf/api/v1/ping"
+		# BaseRenderer.__init__ falls back to frappe.local.request.path when no
+		# `path` is given, and there's no request bound in a unit test context
+		# (frappe.local.request raises AttributeError). Pass path explicitly so
+		# construction doesn't require a real/faked request object.
+		self.router = ApiV1Router(path="huf/api/v1/ping")
 
+	@patch("huf.api.v1.router.resolve_principal")
 	@patch("frappe.session")
 	@patch("frappe.form_dict", {"endpoint": "ping"})
 	@patch("huf.api.v1.router._match_route")
 	@patch("frappe.log_error")
 	def test_non_api_error_exception_returns_generic_message(
-		self, mock_log_error, mock_match_route, mock_form_dict, mock_session
+		self, mock_log_error, mock_match_route, mock_session, mock_resolve_principal
 	):
 		"""Non-ApiError exceptions return generic message without exception details."""
 		mock_session.user = "test_user"
+		mock_resolve_principal.return_value = RequestContext(user="test_user", auth_mode=AuthMode.SESSION)
 
 		# Handler that raises a generic exception (KeyError)
 		def failing_handler(context):
@@ -92,15 +97,17 @@ class TestV1RouterExceptionHandling(unittest.TestCase):
 		# Second arg should be the title
 		self.assertEqual(call_args[0][1], "Huf API v1 Router Error")
 
+	@patch("huf.api.v1.router.resolve_principal")
 	@patch("frappe.session")
 	@patch("frappe.form_dict", {"endpoint": "ping"})
 	@patch("huf.api.v1.router._match_route")
 	@patch("frappe.log_error")
 	def test_sql_error_does_not_leak_to_client(
-		self, mock_log_error, mock_match_route, mock_form_dict, mock_session
+		self, mock_log_error, mock_match_route, mock_session, mock_resolve_principal
 	):
 		"""SQL errors do not leak to the client."""
 		mock_session.user = "test_user"
+		mock_resolve_principal.return_value = RequestContext(user="test_user", auth_mode=AuthMode.SESSION)
 
 		# Handler that raises a SQL-like exception
 		def failing_handler(context):
@@ -132,14 +139,16 @@ class TestV1RouterExceptionHandling(unittest.TestCase):
 		# Assert: only generic message
 		self.assertIn("Internal error. Request ID:", error_message)
 
+	@patch("huf.api.v1.router.resolve_principal")
 	@patch("frappe.session")
 	@patch("frappe.form_dict", {"endpoint": "ping"})
 	@patch("huf.api.v1.router._match_route")
 	def test_api_error_subclass_returns_specific_message(
-		self, mock_match_route, mock_form_dict, mock_session
+		self, mock_match_route, mock_session, mock_resolve_principal
 	):
 		"""ApiError subclasses return their specific messages (not generic)."""
 		mock_session.user = "test_user"
+		mock_resolve_principal.return_value = RequestContext(user="test_user", auth_mode=AuthMode.SESSION)
 
 		# Handler that raises a ValidationError (an ApiError subclass)
 		def failing_handler(context):
@@ -175,14 +184,16 @@ class TestV1RouterExceptionHandling(unittest.TestCase):
 		# Assert: error code matches
 		self.assertEqual(error["code"], "validation_error")
 
+	@patch("huf.api.v1.router.resolve_principal")
 	@patch("frappe.session")
 	@patch("frappe.form_dict", {"endpoint": "ping"})
 	@patch("huf.api.v1.router._match_route")
 	def test_error_response_always_includes_request_id(
-		self, mock_match_route, mock_form_dict, mock_session
+		self, mock_match_route, mock_session, mock_resolve_principal
 	):
 		"""All error responses include a request_id."""
 		mock_session.user = "test_user"
+		mock_resolve_principal.return_value = RequestContext(user="test_user", auth_mode=AuthMode.SESSION)
 
 		# Handler that raises an exception
 		def failing_handler(context):
@@ -210,15 +221,17 @@ class TestV1RouterExceptionHandling(unittest.TestCase):
 		# UUID format check (rough)
 		self.assertRegex(request_id, r"^[a-f0-9\-]{36}$")
 
+	@patch("huf.api.v1.router.resolve_principal")
 	@patch("frappe.session")
 	@patch("frappe.form_dict", {"endpoint": "agents"})
 	@patch("huf.api.v1.router._match_route")
 	@patch("frappe.log_error")
 	def test_exception_logged_with_full_traceback(
-		self, mock_log_error, mock_match_route, mock_form_dict, mock_session
+		self, mock_log_error, mock_match_route, mock_session, mock_resolve_principal
 	):
 		"""Full exception + traceback is logged server-side."""
 		mock_session.user = "test_user"
+		mock_resolve_principal.return_value = RequestContext(user="test_user", auth_mode=AuthMode.SESSION)
 
 		def failing_handler(context):
 			# Create a multi-level traceback
@@ -252,14 +265,16 @@ class TestV1RouterExceptionHandling(unittest.TestCase):
 		# The log title should be the standard message
 		self.assertEqual(call_args[0][1], "Huf API v1 Router Error")
 
+	@patch("huf.api.v1.router.resolve_principal")
 	@patch("frappe.session")
 	@patch("frappe.form_dict", {"endpoint": "ping"})
 	@patch("huf.api.v1.router._match_route")
 	def test_file_path_not_leaked_in_error_response(
-		self, mock_match_route, mock_form_dict, mock_session
+		self, mock_match_route, mock_session, mock_resolve_principal
 	):
 		"""File paths are not leaked in error responses."""
 		mock_session.user = "test_user"
+		mock_resolve_principal.return_value = RequestContext(user="test_user", auth_mode=AuthMode.SESSION)
 
 		def failing_handler(context):
 			# Simulate a file not found error
