@@ -84,7 +84,7 @@ def handle_automation_webhook():
 	trigger = frappe.get_doc("Automation Trigger", trigger_name)
 
 	supplied_key = frappe.get_request_header("X-Webhook-Key") or ""
-	expected_key = trigger.webhook_key or ""
+	expected_key = trigger.get_password("webhook_key") or ""
 	if not expected_key or not hmac.compare_digest(supplied_key, expected_key):
 		frappe.local.response["http_status_code"] = 401
 		return dict(_INVALID_KEY)

@@ -24,3 +24,4 @@ huf.patches.v1.migrate_agent_triggers_to_automations
 huf.patches.v1.preserve_gateway_agent_access
 huf.patches.v1.backfill_agent_run_usage_columns
 huf.patches.v1.migrate_prompt_caching_fields
+huf.patches.v1.migrate_secrets_to_password_fields
