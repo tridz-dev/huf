@@ -133,17 +133,34 @@ def stop_orchestration(orch_name):
     orch.add_comment("Comment", "Orchestration manually stopped by user.")
     return True
 
-def execute_next_step(orch=None, orch_name=None):
-    if orch_name and not orch:
-        orch = frappe.get_doc("Agent Orchestration", orch_name)
-    
-    if not orch:
+def execute_next_step(orch_name=None):
+    from huf.ai.orchestration.scheduler import _orch_enqueue_lock_key
+
+    if not orch_name:
         frappe.log_error("No orchestration provided to execute_next_step", "Orchestrator Error")
         return "failed"
-        
+
+    # Always reload fresh — never trust a pickled Document carried across the
+    # RQ job boundary, which can go stale relative to what the scheduler
+    # writes concurrently (see ST-R1.3 / F-26).
+    orch = frappe.get_doc("Agent Orchestration", orch_name)
+
+    try:
+        return _execute_next_step(orch)
+    finally:
+        # Release the per-tick enqueue claim now that this step has reached
+        # a terminal per-tick state (in_progress set+saved, or an early
+        # return below before that point).
+        try:
+            frappe.cache().delete(_orch_enqueue_lock_key(orch_name))
+        except Exception:
+            pass
+
+
+def _execute_next_step(orch):
     if orch.status == "Cancelled":
         return "cancelled"
-    
+
     next_step = None
 
     for step in orch.agent_orchestration_plan:
@@ -215,6 +232,23 @@ def execute_next_step(orch=None, orch_name=None):
         orch.error_log = (orch.error_log or "") + f"\nStep {next_step.step_index} exception: {str(e)}"
         orch.status = "Failed"
         frappe.log_error(frappe.get_traceback(), "Orchestration Step Error")
+
+    # The scheduler may have marked this orchestration Failed (stuck-step
+    # timeout) while this job was still running. If so, and this step
+    # nonetheless finished successfully, don't resurrect it by overwriting
+    # the scheduler's Failed status with a stale-in-progress save — abandon
+    # silently with logging instead (see ST-R1.3 / F-26).
+    current_status = frappe.db.get_value("Agent Orchestration", orch.name, "status")
+    if current_status == "Failed" and next_step.status == "done":
+        frappe.log_error(
+            title="Orchestration Scheduler",
+            message=(
+                f"Orchestration {orch.name} step {next_step.step_index} completed "
+                f"after the scheduler already marked it Failed (stuck-step timeout). "
+                f"Abandoning write-back without save(). Step output:\n{next_step.output_ref}"
+            ),
+        )
+        return "abandoned"
 
     orch.save()
     frappe.db.commit()
