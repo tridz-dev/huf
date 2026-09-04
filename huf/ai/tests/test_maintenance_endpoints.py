@@ -209,6 +209,7 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         self.assertEqual(args[1], frappe.PermissionError)
 
     @patch('frappe.session')
+    @patch('frappe.get_doc')
     @patch('frappe.db.get_value')
     @patch('frappe.has_permission')
     @patch('frappe.cache')
@@ -219,6 +220,7 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         mock_cache,
         mock_has_permission,
         mock_get_value,
+        mock_get_doc,
         mock_session,
     ):
         """ST-06.5: publish_realtime should be scoped to conversation owner."""
@@ -231,6 +233,12 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         mock_cache_obj.blpop = Mock(return_value=None)  # Timeout
         mock_cache.return_value = mock_cache_obj
         mock_get_value.return_value = "conversation_owner@example.com"
+        # call_id is None in this test, so _get_or_create_call always takes
+        # the "create" branch: frappe.get_doc({...}); call.insert(...). This
+        # must stay pure-mock (per the file's own docstring) rather than
+        # hitting a real, uncreated Agent Tool Call row.
+        mock_call_doc = Mock()
+        mock_get_doc.return_value = mock_call_doc
 
         result = client_side_tool.client_side_function(
             conversation_id="test_conv",
@@ -385,6 +393,13 @@ class TestMaintenanceEndpointAuthorization(unittest.TestCase):
         mock_automation.run_as_user = "admin@example.com"
         mock_get_doc.return_value = mock_automation
         mock_get_roles.return_value = ["Huf User"]  # No System Manager
+        # Without side_effect, the mocked frappe.throw silently returns None
+        # instead of raising, so execution would fall through past the
+        # permission check into instruction rendering (and crash there on
+        # unconfigured Mock attributes) instead of actually verifying the
+        # guard fires. See the sibling fix already applied above in this
+        # same file for test_st06_5_client_side_function_permission_check.
+        mock_throw.side_effect = frappe.PermissionError
 
         # Call with no initiating_user (webhook path)
         # Should trigger _check_run_as_user_permission guard

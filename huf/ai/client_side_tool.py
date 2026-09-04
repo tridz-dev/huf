@@ -195,7 +195,13 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
     except Exception:
         pass
 
-    _, raw_payload = popped
+    # NOT `_, raw_payload = popped`: `_` is `frappe`'s translation function
+    # (imported at module level, `from frappe import _`, used earlier in this
+    # very function for frappe.throw(_("Not permitted"), ...)). Assigning to
+    # `_` anywhere in a function body makes Python treat it as local for the
+    # *whole* function -- shadowing the module-level import from the first
+    # line, and raising UnboundLocalError on the earlier reference.
+    _key, raw_payload = popped
     try:
         payload = json.loads(raw_payload)
     except (TypeError, ValueError):
