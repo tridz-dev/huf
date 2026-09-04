@@ -44,7 +44,9 @@ class TestFrontendToolCallInitiatedRealtimeScoping(unittest.TestCase):
 			mock.patch.object(client_side_tool.frappe, "session") as mock_session, \
 			mock.patch.object(client_side_tool.frappe, "cache", return_value=fake_cache), \
 			mock.patch.object(client_side_tool.frappe, "publish_realtime") as mock_publish, \
-			mock.patch.object(client_side_tool.frappe, "db") as mock_db:
+			mock.patch.object(
+				client_side_tool.frappe, "db", new_callable=mock.MagicMock
+			) as mock_db:
 			mock_session.user = "worker@service.local"
 			mock_db.get_value.return_value = owner
 
