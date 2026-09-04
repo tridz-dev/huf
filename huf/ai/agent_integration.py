@@ -1161,6 +1161,7 @@ def run_agent_sync(
     skip_user_message: bool = False,
     now=None,
     project: str = None,
+    client_idempotency_key: str = None,
 ):
 
     if not agent_name:
@@ -1288,6 +1289,31 @@ def run_agent_sync(
         flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
         if flow_id:
             run_doc_data["flow_id"] = flow_id
+
+    if client_idempotency_key:
+        # A client that retries a request (network timeout, double-click)
+        # must not fan out into a second Agent Run for the same logical
+        # request. Scoped by conversation since idempotency_key alone is
+        # not globally unique across conversations/clients.
+        existing_run_name = frappe.db.get_value(
+            "Agent Run",
+            {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+            "name",
+        )
+        if existing_run_name:
+            existing_run = frappe.get_doc("Agent Run", existing_run_name)
+            return {
+                "success": True,
+                "queued": existing_run.status in ("Queued", "Started"),
+                "status": existing_run.status,
+                "response": existing_run.response if existing_run.status == "Success" else None,
+                "provider": existing_run.provider,
+                "agent_run_id": existing_run.name,
+                "conversation_id": existing_run.conversation,
+                "session_id": conv_manager.session_id,
+                "sequence": existing_run.sequence,
+            }
+        run_doc_data["idempotency_key"] = client_idempotency_key
 
     if not frappe.has_permission("Agent Run", "create"):
         frappe.throw(
@@ -2741,6 +2767,7 @@ async def run_agent_stream(
     skip_user_message: bool = False,
     files=None,
     project: str = None,
+    client_idempotency_key: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2888,6 +2915,27 @@ async def run_agent_stream(
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         history = _history_without_pending_user_turn(history, skip_user_message)
 
+        if client_idempotency_key:
+            # Mirror run_agent_sync's dedupe: a retried streaming request for
+            # the same conversation must reuse the prior run rather than
+            # starting a second one.
+            existing_run_name = frappe.db.get_value(
+                "Agent Run",
+                {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+                "name",
+            )
+            if existing_run_name:
+                existing_run = frappe.get_doc("Agent Run", existing_run_name)
+                yield {
+                    "type": "duplicate_request",
+                    "success": True,
+                    "status": existing_run.status,
+                    "response": existing_run.response if existing_run.status == "Success" else None,
+                    "agent_run_id": existing_run.name,
+                    "conversation_id": existing_run.conversation,
+                }
+                return
+
         # Create Agent Run document
         if not frappe.has_permission("Agent Run", "create"):
             yield {
@@ -2896,7 +2944,7 @@ async def run_agent_stream(
             }
             return
 
-        run_doc = frappe.get_doc({
+        run_doc_data = {
             "doctype": "Agent Run",
             "agent": agent_name,
             "status": "Started",
@@ -2905,7 +2953,11 @@ async def run_agent_stream(
             "prompt_template": resolved_prompt_template,
             "model": resolved_model,
             "provider": resolved_provider
-        })
+        }
+        if client_idempotency_key:
+            run_doc_data["idempotency_key"] = client_idempotency_key
+
+        run_doc = frappe.get_doc(run_doc_data)
         run_doc.insert()
         if not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
