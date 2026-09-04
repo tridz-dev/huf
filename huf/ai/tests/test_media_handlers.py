@@ -323,12 +323,18 @@ class TestPrivatizeGeneratedMediaFilesPatch(IntegrationTestCase):
 		"""The patch should flip is_private=1 on Files and rewrite /files/ to /private/files/ in Agent Messages."""
 		from huf.patches.v1.privatize_generated_media_files import execute as run_patch
 
-		# Create a mock File and Agent Message representing the old state
-		mock_file = MagicMock()
-		mock_file["name"] = "test-file"
-		mock_file["file_name"] = "generated_image_1.png"
-		mock_file["attached_to_name"] = "test-msg"
-		mock_file["attached_to_field"] = "generated_image"
+		# Create a mock File and Agent Message representing the old state.
+		# frappe.db.get_list(fields=[...]) returns plain dict-like rows, not
+		# objects with attribute access — a MagicMock here doesn't behave like
+		# a dict (mock_file["x"] = "y" only records a __setitem__ call; reading
+		# mock_file["x"] back returns a fresh MagicMock, not "y"), so use a
+		# real dict to match what the patch actually receives in production.
+		mock_file = {
+			"name": "test-file",
+			"file_name": "generated_image_1.png",
+			"attached_to_name": "test-msg",
+			"attached_to_field": "generated_image",
+		}
 
 		mock_message = MagicMock()
 		mock_message.generated_image = "/files/generated_image_1.png"
@@ -357,11 +363,12 @@ class TestPrivatizeGeneratedMediaFilesPatch(IntegrationTestCase):
 		"""The patch should also handle generated_audio field URLs."""
 		from huf.patches.v1.privatize_generated_media_files import execute as run_patch
 
-		mock_file = MagicMock()
-		mock_file["name"] = "test-audio-file"
-		mock_file["file_name"] = "generated_audio_1.mp3"
-		mock_file["attached_to_name"] = "test-msg-audio"
-		mock_file["attached_to_field"] = "generated_audio"
+		mock_file = {
+			"name": "test-audio-file",
+			"file_name": "generated_audio_1.mp3",
+			"attached_to_name": "test-msg-audio",
+			"attached_to_field": "generated_audio",
+		}
 
 		mock_message = MagicMock()
 		mock_message.generated_audio = "/files/generated_audio_1.mp3"
