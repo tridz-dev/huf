@@ -6,6 +6,10 @@ from urllib.parse import urlparse
 import frappe
 import requests
 from requests.exceptions import RequestException
+from frappe.rate_limiter import rate_limit
+
+from frappe import _
+from huf.permissions import has_capability
 
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}
 MAX_RESPONSE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -61,6 +65,18 @@ def _is_public_ip(ip_str: str) -> bool:
 	return True
 
 
+def extract_origin(url_str):
+	"""
+	Extract (scheme, host, port) from a URL for origin matching.
+
+	Returns a tuple (scheme, hostname, port) where port is derived from
+	the URL's port attribute or defaults to 443 for https, 80 for http.
+	"""
+	parsed = urlparse(url_str)
+	port = parsed.port or (443 if parsed.scheme == "https" else 80)
+	return (parsed.scheme, parsed.hostname, port)
+
+
 def validate_url(url):
 	"""
 	Validate URL to prevent SSRF and other attacks.
@@ -92,11 +108,19 @@ def validate_url(url):
 	return True, None
 
 
+@rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
 def handle_http_request(method, url, headers=None, params=None, data=None, json_data=None, tool_name=None):
 	"""
 	Generic HTTP request handler with support for tool-defined headers
 	"""
+	# Check agent.use capability (guest sessions are exempt)
+	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+		frappe.throw(
+			_("You are not authorized to use HTTP tools."),
+			frappe.PermissionError
+		)
+
 	# Validate HTTP method
 	if method.upper() not in ALLOWED_METHODS:
 		return {
@@ -154,10 +178,27 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				"suggestion": "Ensure the URL points to a public, external service.",
 			}
 
-		# Merge tool headers with request headers
-		# Tool headers come first, then request headers can override them
+		# Merge tool headers with request headers, checking origin binding
 		tool_headers = tool_info.get("headers", {}) or {}
 		request_headers = headers or {}
+
+		# Only attach tool headers if the final URL's origin matches the tool's base_url origin
+		base_url = tool_info.get("base_url", "")
+		if base_url:
+			base_url_origin = extract_origin(base_url)
+			final_url_origin = extract_origin(final_url)
+			if base_url_origin != final_url_origin:
+				# Cross-origin: do not attach tool headers and strip Authorization-class headers
+				tool_headers = {}
+				auth_headers = {
+					"authorization", "proxy-authorization", "x-api-key",
+					"x-auth-token", "authorization-signature"
+				}
+				request_headers = {
+					k: v for k, v in request_headers.items()
+					if k.lower() not in auth_headers
+				}
+
 		final_headers = {**tool_headers, **request_headers}
 
 		# Prepare request parameters
@@ -165,6 +206,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 			"headers": final_headers,
 			"params": params or {},
 			"timeout": 30,
+			"stream": True,  # Stream response body to enforce size cap during read
 		}
 
 		# Add data or json based on what's provided
@@ -178,6 +220,11 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		request_kwargs["allow_redirects"] = False
 		current_url = final_url
 		max_redirects = 5
+		base_url_origin = extract_origin(base_url) if base_url else None
+		auth_headers = {
+			"authorization", "proxy-authorization", "x-api-key",
+			"x-auth-token", "authorization-signature"
+		}
 		for _hop in range(max_redirects + 1):
 			response = requests.request(method, current_url, **request_kwargs)
 			if response.status_code not in (301, 302, 303, 307, 308):
@@ -194,6 +241,15 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 					"error": f"Redirect blocked: {error_msg}",
 					"suggestion": "The server attempted to redirect to a private/internal address.",
 				}
+			# Check if redirect changes origin; strip auth headers if so
+			if base_url_origin:
+				next_url_origin = extract_origin(next_url)
+				if next_url_origin != base_url_origin:
+					# Cross-origin redirect: strip Authorization-class headers
+					request_kwargs["headers"] = {
+						k: v for k, v in request_kwargs["headers"].items()
+						if k.lower() not in auth_headers
+					}
 			current_url = next_url
 		else:
 			# Loop exhausted without breaking — too many redirects.
@@ -203,7 +259,7 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				"suggestion": "The URL redirects in a loop or exceeds the redirect limit.",
 			}
 
-		# Check response size — pre-check via Content-Length header, then verify actual content
+		# Check response size — pre-check via Content-Length header (fast-path)
 		content_length = response.headers.get("Content-Length")
 		if content_length and content_length.isdigit() and int(content_length) > MAX_RESPONSE_SIZE:
 			return {
@@ -213,19 +269,32 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 				"suggestion": "The API indicates a response larger than 10MB. Try requesting less data.",
 			}
 
-		if len(response.content) > MAX_RESPONSE_SIZE:
-			return {
-				"success": False,
-				"error": "Response too large",
-				"status_code": response.status_code,
-				"suggestion": "The API response exceeds the 10MB size limit. Try requesting less data.",
-			}
+		# Stream response body and enforce size cap during read
+		total_read = 0
+		chunks = []
+		for chunk in response.iter_content(chunk_size=8192):
+			if not chunk:
+				continue
+			total_read += len(chunk)
+			if total_read > MAX_RESPONSE_SIZE:
+				return {
+					"success": False,
+					"error": "Response too large",
+					"status_code": response.status_code,
+					"suggestion": "The API response exceeds the 10MB size limit. Try requesting less data.",
+				}
+			chunks.append(chunk)
 
-		# Try to parse JSON response, fall back to text
+		response_body = b"".join(chunks)
+
+		# Parse JSON response from accumulated body, fall back to text
 		try:
-			response_data = response.json()
-		except ValueError:
-			response_data = response.text
+			response_data = json.loads(response_body)
+		except (json.JSONDecodeError, ValueError):
+			try:
+				response_data = response_body.decode(errors="replace")
+			except Exception:
+				response_data = str(response_body)
 
 		# Return standardized response
 		result = {
@@ -254,19 +323,35 @@ def handle_http_request(method, url, headers=None, params=None, data=None, json_
 		}
 
 
+@rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
 def handle_get_request(url, headers=None, params=None, tool_name=None):
 	"""
 	Handle GET requests with tool-defined headers
 	"""
+	# Check agent.use capability (guest sessions are exempt)
+	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+		frappe.throw(
+			_("You are not authorized to use HTTP tools."),
+			frappe.PermissionError
+		)
+
 	return handle_http_request("GET", url, headers=headers, params=params, tool_name=tool_name)
 
 
+@rate_limit(key="tool_name", limit=100, seconds=60)
 @frappe.whitelist(allow_guest=True)
 def handle_post_request(url, headers=None, data=None, json_data=None, tool_name=None):
 	"""
 	Handle POST requests with JSON data support
 	"""
+	# Check agent.use capability (guest sessions are exempt)
+	if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
+		frappe.throw(
+			_("You are not authorized to use HTTP tools."),
+			frappe.PermissionError
+		)
+
 	# Convert string JSON to dict if needed
 	if isinstance(json_data, str):
 		try:
