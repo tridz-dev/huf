@@ -226,6 +226,10 @@ class TestMultipleSpendChecks(IntegrationTestCase):
         budget.check_spend(20.0)  # OK
         budget.spend_so_far_usd += 20.0
 
-        # Now at cap, fourth child blocked
+        # 30 + 40 + 20 = 90 spent so far, cap is 100; a further 5.0 would
+        # only reach 95 and must NOT raise -- confirm that first, then push
+        # over the cap with a larger amount.
+        budget.check_spend(5.0)  # OK: 90 + 5 = 95 <= 100
+
         with self.assertRaises(frappe.ValidationError):
-            budget.check_spend(5.0)  # Would exceed
+            budget.check_spend(15.0)  # Would exceed: 90 + 15 = 105 > 100
