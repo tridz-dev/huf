@@ -10,12 +10,15 @@
   "agent",
   "prompt",
   "sequence",
+  "idempotency_key",
   "runtime_context",
   "response_tab",
   "response",
   "status",
   "error_code",
   "error_message",
+  "tool_setup_warnings",
+  "audit_incomplete",
   "metadata",
   "provider",
   "start_time",
@@ -105,6 +108,18 @@
    "read_only": 1
   },
   {
+   "fieldname": "tool_setup_warnings",
+   "fieldtype": "Long Text",
+   "label": "Tool Setup Warnings",
+   "read_only": 1
+  },
+  {
+   "fieldname": "audit_incomplete",
+   "fieldtype": "Long Text",
+   "label": "Audit Incomplete",
+   "read_only": 1
+  },
+  {
    "fieldname": "response",
    "fieldtype": "Code",
    "label": "Response",
@@ -126,6 +141,15 @@
    "fieldtype": "Int",
    "hidden": 1,
    "label": "Sequence",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Idempotency Key",
+   "length": 64,
    "read_only": 1,
    "search_index": 1
   },

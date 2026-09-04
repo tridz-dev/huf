@@ -118,6 +118,10 @@ class AgentManager:
         # mcp). Populated by _setup_tools() and read by compute_tools_breakdown()
         # at the two agent_integration call sites — see context_segments.py.
         self.tool_sources = {}
+        # Populated by _setup_tools() when a tool-setup step raises; flushed
+        # onto the Agent Run doc's `tool_setup_warnings` field by the callers
+        # that create AgentManager after the run doc already exists.
+        self.tool_setup_warnings = []
         self._setup_client()
         self._setup_tools()
 
@@ -201,6 +205,7 @@ class AgentManager:
                 )
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
+            self.tool_setup_warnings.append(f"agent tools: {e!s}")
 
         # Merge skill MCP servers with agent-level MCP servers so attached
         # skills can contribute runtime tools without replacing direct tools.
@@ -286,6 +291,7 @@ class AgentManager:
 
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
+            self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -914,6 +920,17 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
             f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
             "Agent Tool Call Error"
         )
+        if agent_run:
+            try:
+                existing = frappe.db.get_value("Agent Run", agent_run, "audit_incomplete")
+                note = f"tool call persistence ({name or tool_call_id}): {e!s}"
+                combined = f"{existing}; {note}" if existing else note
+                frappe.db.set_value(
+                    "Agent Run", agent_run, "audit_incomplete", combined, update_modified=False
+                )
+            except Exception:
+                # Never let audit-flagging failures mask the original error.
+                pass
         return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
@@ -1429,7 +1446,16 @@ def get_agent_run_status(agent_run_id: str):
     run = frappe.db.get_value(
         "Agent Run",
         agent_run_id,
-        ["name", "agent", "status", "response", "error_message", "conversation"],
+        [
+            "name",
+            "agent",
+            "status",
+            "response",
+            "error_message",
+            "conversation",
+            "tool_setup_warnings",
+            "audit_incomplete",
+        ],
         as_dict=True,
     )
     if not run:
@@ -1457,6 +1483,8 @@ def get_agent_run_status(agent_run_id: str):
         "conversation_id": run.conversation,
         "agent": run.agent,
         "agent_message_id": agent_message_id,
+        "tool_setup_warnings": run.tool_setup_warnings,
+        "audit_incomplete": run.audit_incomplete,
     }
 
 
@@ -1618,6 +1646,11 @@ def _execute_agent_run(
             model_override=resolved_model,
             conversation_id=conversation_id,
         )
+
+        if manager.tool_setup_warnings:
+            run_doc.db_set(
+                "tool_setup_warnings", "; ".join(manager.tool_setup_warnings), update_modified=False
+            )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.prompt_mode = "Template"
@@ -2897,6 +2930,11 @@ async def run_agent_stream(
             model_override=resolved_model,
             conversation_id=conversation.name,
         )
+
+        if manager.tool_setup_warnings:
+            run_doc.db_set(
+                "tool_setup_warnings", "; ".join(manager.tool_setup_warnings), update_modified=False
+            )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.update({
