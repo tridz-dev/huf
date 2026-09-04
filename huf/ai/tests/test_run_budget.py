@@ -78,7 +78,7 @@ class TestRunBudgetDeadlineCheck(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_deadline()
-        assert RunBudgetExceeded in type(exc_info.value).__mro__
+        assert RunBudgetExceeded in type(exc_info.exception).__mro__
 
 
 class TestRunBudgetDepthCheck(IntegrationTestCase):
@@ -98,7 +98,8 @@ class TestRunBudgetDepthCheck(IntegrationTestCase):
         budget.check_depth(max_depth=3)
 
     def test_check_depth_at_ceiling(self):
-        """check_depth() with depth equal to ceiling succeeds."""
+        """check_depth() with depth equal to ceiling raises (fail closed: reaching
+        the ceiling is treated the same as exceeding it, per check_depth's `>=`)."""
         budget = RunBudget(
             deadline_at=datetime.now() + timedelta(seconds=900),
             max_turns_ceiling=10,
@@ -107,8 +108,9 @@ class TestRunBudgetDepthCheck(IntegrationTestCase):
             spend_cap_usd=0
         )
 
-        # Should not raise (depth < max_depth uses >=)
-        budget.check_depth(max_depth=3)
+        with self.assertRaises(frappe.ValidationError) as exc_info:
+            budget.check_depth(max_depth=3)
+        assert "depth" in str(exc_info.exception).lower()
 
     def test_check_depth_exceeds(self):
         """check_depth() with depth >= ceiling raises."""
@@ -122,7 +124,7 @@ class TestRunBudgetDepthCheck(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_depth(max_depth=3)
-        assert "depth" in str(exc_info.value).lower()
+        assert "depth" in str(exc_info.exception).lower()
 
 
 class TestRunBudgetSpendCheck(IntegrationTestCase):
@@ -155,7 +157,7 @@ class TestRunBudgetSpendCheck(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(20.0)  # Total would be 110.0 > 100.0
-        assert "spend" in str(exc_info.value).lower() or "budget" in str(exc_info.value).lower()
+        assert "spend" in str(exc_info.exception).lower() or "budget" in str(exc_info.exception).lower()
 
     def test_check_spend_unlimited(self):
         """check_spend() with spend_cap=0 (unlimited) never raises."""
