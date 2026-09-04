@@ -23,7 +23,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 
 		# frappe.get_list's read check goes through the full role-based
 		# permission stack; alice/bob need a real User with a role that has
-		# base read access on Agent Run Prompt Snapshot (Huf Manager) before
+		# base read access on Agent Run Prompt Snapshot (Huf User) before
 		# the permission_query_conditions scoping is ever reached.
 		for email in ("alice@example.com", "bob@example.com"):
 			if not frappe.db.exists("User", email):
@@ -32,7 +32,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 					"email": email,
 					"first_name": email.split("@")[0],
 					"send_welcome_email": 0,
-					"roles": [{"role": "Huf Manager"}],
+					"roles": [{"role": "Huf User"}],
 				}).insert(ignore_permissions=True)
 
 	def test_system_manager_gets_no_filter(self):
@@ -42,7 +42,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 		assert result is None
 
 	def test_huf_manager_gets_where_clause(self):
-		"""Huf Manager should get a WHERE clause filtering by agent_run owner."""
+		"""Huf User should get a WHERE clause filtering by agent_run owner."""
 		result = get_prompt_snapshot_permission_conditions("alice@example.com")
 		assert result is not None
 		assert "Agent Run" in result
@@ -50,7 +50,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 		assert "alice@example.com" in result
 
 	def test_huf_manager_list_sees_only_own_snapshots(self):
-		"""Huf Manager listing snapshots should only see those from own runs."""
+		"""Huf User listing snapshots should only see those from own runs."""
 		# Setup: Create two users' runs with snapshots
 		alice_run = frappe.new_doc("Agent Run")
 		alice_run.agent = "Test Agent"
@@ -99,7 +99,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 			bob_run.delete()
 
 	def test_huf_manager_list_excludes_foreign_snapshots(self):
-		"""Huf Manager should not see snapshots from other users' runs."""
+		"""Huf User should not see snapshots from other users' runs."""
 		# Setup: Create a run owned by bob
 		bob_run = frappe.new_doc("Agent Run")
 		bob_run.agent = "Test Agent"
