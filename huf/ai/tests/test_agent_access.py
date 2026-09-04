@@ -178,7 +178,12 @@ class TestCheckAgentAccess(unittest.TestCase):
             from huf.huf.doctype.agent.agent import get_permission_query_conditions
 
             conditions = get_permission_query_conditions("capable-user@example.com")
-            self.assertEqual(conditions, "`tabAgent`.is_system = 0")
+            # Assert membership, not exact equality: WP-R4's archive/disabled
+            # feature (ST-R4.4) appends an additional `AND \`tabAgent\`.disabled = 0`
+            # clause to this same branch when merged alongside this WP — the
+            # capability-holder short-circuit must still exclude system agents
+            # regardless of what else later work appends to the same condition string.
+            self.assertIn("`tabAgent`.is_system = 0", conditions)
 
 
 class TestSetAllowAllUsersForExistingAgentsPatch(unittest.TestCase):
