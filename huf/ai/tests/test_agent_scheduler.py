@@ -41,7 +41,7 @@ class TestAgentSchedulerIdempotency(unittest.TestCase):
 	@patch("huf.ai.agent_scheduler.frappe")
 	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
 	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
-	@patch("huf.ai.agent_scheduler.resolve_prompt")
+	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_idempotency_prevents_duplicate_submissions(
 		self,
 		mock_resolve_prompt,
@@ -92,7 +92,7 @@ class TestAgentSchedulerIdempotency(unittest.TestCase):
 	@patch("huf.ai.agent_scheduler.frappe")
 	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
 	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
-	@patch("huf.ai.agent_scheduler.resolve_prompt")
+	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_submitted_when_no_existing_job(
 		self,
 		mock_resolve_prompt,
@@ -127,7 +127,7 @@ class TestAgentSchedulerIdempotency(unittest.TestCase):
 	@patch("huf.ai.agent_scheduler.frappe")
 	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
 	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
-	@patch("huf.ai.agent_scheduler.resolve_prompt")
+	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_skipped_when_pending_job_exists(
 		self,
 		mock_resolve_prompt,
