@@ -42,10 +42,10 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         # Create a trigger (webhook_key starts empty)
         trigger = frappe.get_doc({
             "doctype": "Automation Trigger",
-            "trigger_name": "test_webhook_key_" + frappe.utils.get_random_string(),
+            "trigger_name": "test_webhook_key_" + frappe.utils.random_string(8),
             "automation": self._create_automation_if_missing(),
             "trigger_type": "Webhook",
-            "webhook_slug": "test_slug_" + frappe.utils.get_random_string(),
+            "webhook_slug": "test_slug_" + frappe.utils.random_string(8),
         })
         trigger.insert(ignore_permissions=True)
         self.created_triggers.append(trigger.name)
@@ -68,10 +68,10 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         """Verify Automation Trigger.secret can be retrieved via get_password()."""
         trigger = frappe.get_doc({
             "doctype": "Automation Trigger",
-            "trigger_name": "test_secret_" + frappe.utils.get_random_string(),
+            "trigger_name": "test_secret_" + frappe.utils.random_string(8),
             "automation": self._create_automation_if_missing(),
             "trigger_type": "Webhook",
-            "webhook_slug": "test_slug_" + frappe.utils.get_random_string(),
+            "webhook_slug": "test_slug_" + frappe.utils.random_string(8),
         })
         trigger.insert(ignore_permissions=True)
         self.created_triggers.append(trigger.name)
@@ -92,7 +92,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         """Verify Agent Tool Function http_headers[].value can be retrieved via get_password()."""
         tool = frappe.get_doc({
             "doctype": "Agent Tool Function",
-            "tool_name": "test_http_header_" + frappe.utils.get_random_string(),
+            "tool_name": "test_http_header_" + frappe.utils.random_string(8),
             "tool_type": self._create_tool_type_if_missing(),
             "types": "GET",
             "http_headers": [
@@ -125,7 +125,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         """Verify MCP Server Header.header_value can be retrieved via get_password()."""
         server = frappe.get_doc({
             "doctype": "MCP Server",
-            "server_name": "test_mcp_" + frappe.utils.get_random_string(),
+            "server_name": "test_mcp_" + frappe.utils.random_string(8),
             "server_type": "Local",
             "custom_headers": [
                 {
@@ -157,10 +157,10 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         """Verify that reading password fields via direct attribute access returns None or masked value."""
         trigger = frappe.get_doc({
             "doctype": "Automation Trigger",
-            "trigger_name": "test_masked_" + frappe.utils.get_random_string(),
+            "trigger_name": "test_masked_" + frappe.utils.random_string(8),
             "automation": self._create_automation_if_missing(),
             "trigger_type": "Webhook",
-            "webhook_slug": "test_slug_" + frappe.utils.get_random_string(),
+            "webhook_slug": "test_slug_" + frappe.utils.random_string(8),
         })
         trigger.insert(ignore_permissions=True)
         self.created_triggers.append(trigger.name)
@@ -196,10 +196,10 @@ class TestSecretsPasswordFields(IntegrationTestCase):
             # Create a trigger with a real secret
             trigger = frappe.get_doc({
                 "doctype": "Automation Trigger",
-                "trigger_name": "test_export_" + frappe.utils.get_random_string(),
+                "trigger_name": "test_export_" + frappe.utils.random_string(8),
                 "automation": self._create_automation_if_missing(),
                 "trigger_type": "Webhook",
-                "webhook_slug": "test_slug_" + frappe.utils.get_random_string(),
+                "webhook_slug": "test_slug_" + frappe.utils.random_string(8),
             })
             trigger.insert(ignore_permissions=True)
             self.created_triggers.append(trigger.name)
@@ -222,7 +222,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
 
     def _create_automation_if_missing(self):
         """Helper: create a minimal Automation for testing."""
-        automation_name = "test_automation_" + frappe.utils.get_random_string()
+        automation_name = "test_automation_" + frappe.utils.random_string(8)
         automation = frappe.get_doc({
             "doctype": "Automation",
             "automation_name": automation_name,
@@ -233,7 +233,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
 
     def _create_tool_type_if_missing(self):
         """Helper: create a minimal Agent Tool Type for testing."""
-        tool_type_name = "test_tool_type_" + frappe.utils.get_random_string()
+        tool_type_name = "test_tool_type_" + frappe.utils.random_string(8)
         tool_type = frappe.get_doc({
             "doctype": "Agent Tool Type",
             "name": tool_type_name,
