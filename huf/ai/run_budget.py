@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 import frappe
-from frappe.utils import get_datetime
+from frappe.utils import get_datetime, cint, flt
 from huf.ai.cost_calculator import get_model_pricing, _calculate_from_custom_pricing
 
 
@@ -37,7 +37,7 @@ class RunBudget:
     def check_depth(self, max_depth: int = None):
         """Raise if recursion depth ceiling exceeded."""
         if max_depth is None:
-            max_depth = frappe.get_value("Agent Settings", None, "max_depth") or 5
+            max_depth = cint(frappe.db.get_single_value("Agent Settings", "max_depth")) or 5
         if self.current_depth >= max_depth:
             frappe.throw(f"Recursion depth {self.current_depth} exceeds ceiling {max_depth}",
                        RunBudgetExceeded)
@@ -63,17 +63,16 @@ class RunBudget:
         has neither today).
         """
         if deadline_secs is None:
-            deadline_secs = frappe.get_value("Agent Settings", None,
-                                            "deadline_seconds") or 900
-        settings_max_turns_ceiling = frappe.get_value("Agent Settings", None,
-                                            "max_turns_ceiling") or 20
-        max_turns = min(agent_doc.max_turns or 10, settings_max_turns_ceiling)
+            deadline_secs = cint(frappe.db.get_single_value("Agent Settings",
+                                            "deadline_seconds")) or 900
+        settings_max_turns_ceiling = cint(frappe.db.get_single_value("Agent Settings",
+                                            "max_turns_ceiling")) or 20
+        max_turns = min(cint(agent_doc.max_turns) or 10, settings_max_turns_ceiling)
         # spend_cap_usd == 0 means unlimited (see ST-09.4); do not coalesce
         # a falsy site-wide value into a non-zero default — that inverts
         # "unlimited" into a hard cap (reviewer item 12).
-        spend_cap = frappe.get_value("Agent Settings", None, "spend_cap_usd")
-        if spend_cap is None:
-            spend_cap = 0
+        spend_cap = frappe.db.get_single_value("Agent Settings", "spend_cap_usd")
+        spend_cap = flt(spend_cap) if spend_cap is not None else 0
 
         ancestry = []
         current_depth = 0
@@ -113,9 +112,8 @@ class RunBudget:
             ancestry = []
 
         # Fetch settings for spend cap
-        spend_cap = frappe.get_value("Agent Settings", None, "spend_cap_usd")
-        if spend_cap is None:
-            spend_cap = 0
+        spend_cap = frappe.db.get_single_value("Agent Settings", "spend_cap_usd")
+        spend_cap = flt(spend_cap) if spend_cap is not None else 0
 
         budget = RunBudget(
             deadline_at=deadline_at,

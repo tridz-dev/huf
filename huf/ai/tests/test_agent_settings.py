@@ -14,11 +14,11 @@ from huf.ai.run_budget import RunBudget
 class TestAgentSettingsBudgetFields(IntegrationTestCase):
     """Test Agent Settings budget configuration fields."""
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_runbudget_from_agent_reads_settings(self, mock_get_value):
         """RunBudget.from_agent reads budget fields from Agent Settings."""
         # Mock Agent Settings values
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             settings_defaults = {
                 "deadline_seconds": 900,
                 "max_turns_ceiling": 20,
@@ -41,10 +41,10 @@ class TestAgentSettingsBudgetFields(IntegrationTestCase):
         assert budget.max_turns_ceiling == 15  # min(15, 20)
         assert budget.spend_cap_usd == 50.0
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_runbudget_clamps_max_turns_to_ceiling(self, mock_get_value):
         """RunBudget clamps agent.max_turns to Agent Settings ceiling."""
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             if field == "max_turns_ceiling":
                 return 10
             elif field == "deadline_seconds":
@@ -65,10 +65,10 @@ class TestAgentSettingsBudgetFields(IntegrationTestCase):
         # Should clamp to ceiling
         assert budget.max_turns_ceiling == 10
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_agent_below_ceiling_unclamped(self, mock_get_value):
         """Agent with max_turns below ceiling is not clamped."""
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             if field == "max_turns_ceiling":
                 return 20
             elif field == "deadline_seconds":
@@ -93,10 +93,10 @@ class TestAgentSettingsBudgetFields(IntegrationTestCase):
 class TestAgentSettingsSpendCap(IntegrationTestCase):
     """Test spend cap field behavior."""
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_spend_cap_zero_means_unlimited(self, mock_get_value):
         """spend_cap_usd=0 is treated as unlimited."""
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             if field == "spend_cap_usd":
                 return 0  # Explicitly unlimited
             elif field == "deadline_seconds":
@@ -120,10 +120,10 @@ class TestAgentSettingsSpendCap(IntegrationTestCase):
         budget.spend_so_far_usd = 10000.0
         budget.check_spend(5000.0)  # Should not raise
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_spend_cap_none_defaults_to_zero(self, mock_get_value):
         """Unset spend_cap defaults to 0 (unlimited), not a hard cap."""
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             if field == "spend_cap_usd":
                 return None  # Unset
             elif field == "deadline_seconds":
@@ -148,10 +148,10 @@ class TestAgentSettingsSpendCap(IntegrationTestCase):
 class TestAgentSettingsDeadline(IntegrationTestCase):
     """Test deadline field configuration."""
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_deadline_seconds_respected(self, mock_get_value):
         """deadline_seconds from Agent Settings is used."""
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             if field == "deadline_seconds":
                 return 600  # 10 minutes
             elif field == "max_turns_ceiling":
@@ -179,10 +179,10 @@ class TestAgentSettingsDeadline(IntegrationTestCase):
 class TestAgentSettingsMaxDepth(IntegrationTestCase):
     """Test max_depth configuration."""
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_max_depth_used_for_checks(self, mock_get_value):
         """max_depth from Agent Settings is used in check_depth."""
-        def get_value_side_effect(doctype, name, field):
+        def get_value_side_effect(doctype, field):
             if field == "max_depth":
                 return 3
             elif field == "deadline_seconds":
