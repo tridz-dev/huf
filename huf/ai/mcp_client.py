@@ -337,37 +337,94 @@ def _format_mcp_error(exc) -> str:
         return msg
     return str(exc)
 
+# Bounded exponential backoff parameters for 429 / 5xx retries.
+_MCP_RETRY_MAX_ATTEMPTS = 5
+_MCP_RETRY_BASE_DELAY_SECONDS = 1
+_MCP_RETRY_MAX_DELAY_SECONDS = 60
+
+
+def _is_retryable_status(exc) -> bool:
+    """True if `exc` (or any of its sub-exceptions, e.g. an ExceptionGroup)
+    carries an HTTP 429 or 5xx status code."""
+    if _has_status_code(exc, "429"):
+        return True
+    return any(_has_status_code(exc, str(code)) for code in range(500, 600))
+
+
+def _extract_retry_after_seconds(exc) -> float | None:
+    """Best-effort extraction of a `Retry-After` header (seconds) from `exc`.
+
+    Looks at `exc.response.headers` (the shape `httpx.HTTPStatusError` and
+    similar exceptions carry) and recurses into `exc.exceptions` for
+    exception groups. Returns None if no usable header is found.
+    """
+    response = getattr(exc, "response", None)
+    if response is not None:
+        headers = getattr(response, "headers", None) or {}
+        retry_after = headers.get("Retry-After") or headers.get("retry-after")
+        if retry_after:
+            try:
+                return max(0.0, float(retry_after))
+            except (TypeError, ValueError):
+                pass
+
+    if hasattr(exc, "exceptions"):
+        for sub_exc in exc.exceptions:
+            value = _extract_retry_after_seconds(sub_exc)
+            if value is not None:
+                return value
+
+    return None
+
+
 async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
     """
     Executes an async operation with an initialized MCP ClientSession.
-    Automatically handles transport selection (SSE vs HTTP) and OAuth 401 retries.
+    Automatically handles transport selection (SSE vs HTTP), OAuth 401
+    retries, and bounded exponential backoff for 429/5xx errors (honoring
+    a `Retry-After` header when present, capped at `_MCP_RETRY_MAX_ATTEMPTS`
+    attempts).
     """
     headers = _build_mcp_headers(mcp_server)
+    delay_seconds = _MCP_RETRY_BASE_DELAY_SECONDS
 
-    try:
-        return await _do_execute_mcp_session(mcp_server, headers, operation)
-    except Exception as e:
-        # If it's a 401 and we use OAuth, retry once
-        if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
-            from huf.ai.mcp_oauth import refresh_oauth_token
-            try:
-                refresh_oauth_token(mcp_server.name)
-                # Rebuild headers with fresh token and drop any pooled session
-                # created with the stale token so the retry opens a fresh one.
-                headers = _build_mcp_headers(mcp_server)
+    for attempt in range(1, _MCP_RETRY_MAX_ATTEMPTS + 1):
+        try:
+            return await _do_execute_mcp_session(mcp_server, headers, operation)
+        except Exception as e:
+            # If it's a 401 and we use OAuth, refresh the token and retry once.
+            if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
+                from huf.ai.mcp_oauth import refresh_oauth_token
+                try:
+                    refresh_oauth_token(mcp_server.name)
+                    # Rebuild headers with fresh token and drop any pooled session
+                    # created with the stale token so the retry opens a fresh one.
+                    headers = _build_mcp_headers(mcp_server)
+                    _evict_pooled_session(mcp_server.name)
+                    return await _do_execute_mcp_session(mcp_server, headers, operation)
+                except Exception as refresh_exc:
+                    frappe.log_error(
+                        message=f"OAuth retry failed: {refresh_exc}\n\n{frappe.get_traceback()}",
+                        title="MCP OAuth Retry"
+                    )
+                    raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
+
+            # Rate-limited (429) or upstream server error (5xx): back off and retry,
+            # up to _MCP_RETRY_MAX_ATTEMPTS total attempts.
+            if _is_retryable_status(e) and attempt < _MCP_RETRY_MAX_ATTEMPTS:
+                wait_seconds = _extract_retry_after_seconds(e)
+                if wait_seconds is None:
+                    wait_seconds = delay_seconds
+                delay_seconds = min(delay_seconds * 2, _MCP_RETRY_MAX_DELAY_SECONDS)
                 _evict_pooled_session(mcp_server.name)
-                return await _do_execute_mcp_session(mcp_server, headers, operation)
-            except Exception as refresh_exc:
-                frappe.log_error(
-                    message=f"OAuth retry failed: {refresh_exc}\n\n{frappe.get_traceback()}",
-                    title="MCP OAuth Retry"
-                )
-                raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
-        frappe.log_error(
-            message=f"MCP session error: {str(e)}\n\n{frappe.get_traceback()}",
-            title="MCP Session Error"
-        )
-        raise Exception(_format_mcp_error(e))
+                await asyncio.sleep(wait_seconds)
+                continue
+
+            frappe.log_error(
+                message=f"MCP session error: {str(e)}\n\n{frappe.get_traceback()}",
+                title="MCP Session Error"
+            )
+            raise Exception(_format_mcp_error(e))
 
 def _evict_pooled_session(server_name: str) -> None:
     pool_ctx = _mcp_session_pool.get()
