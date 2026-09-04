@@ -12,6 +12,32 @@ from huf.ai.agent_integration import get_procedure_run_permission_conditions
 class TestProcedureRunListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Agent Procedure Run."""
 
+	def setUp(self):
+		if not frappe.db.exists("Agent Procedure", {"procedure_id": "test_procedure"}):
+			frappe.get_doc({
+				"doctype": "Agent Procedure",
+				"procedure_id": "test_procedure",
+				"procedure_name": "Test Procedure",
+				"definition_json": "{}",
+			}).insert(ignore_permissions=True)
+		self.procedure_name = frappe.db.get_value(
+			"Agent Procedure", {"procedure_id": "test_procedure"}, "name"
+		)
+
+		# frappe.get_list's read check goes through the full role-based
+		# permission stack; alice/bob need a real User with a role that has
+		# base read access on Agent Procedure Run (Huf User) before the
+		# permission_query_conditions scoping is ever reached.
+		for email in ("alice@example.com", "bob@example.com"):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": "Huf User"}],
+				}).insert(ignore_permissions=True)
+
 	def test_system_manager_gets_no_filter(self):
 		"""System Manager should see no filter (returns None)."""
 		frappe.set_user("Administrator")
@@ -30,20 +56,22 @@ class TestProcedureRunListScope(IntegrationTestCase):
 		"""Huf User listing procedure runs should only see those they own."""
 		# Setup: Create procedure runs for two users
 		alice_run = frappe.new_doc("Agent Procedure Run")
-		alice_run.procedure = "test_procedure"
+		alice_run.procedure = self.procedure_name
 		alice_run.pinned_fingerprint = "test-fingerprint"
 		alice_run.pinned_definition_json = "{}"
-		alice_run.status = "success"
+		alice_run.status = "Completed"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
+		alice_run.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_run = frappe.new_doc("Agent Procedure Run")
-		bob_run.procedure = "test_procedure"
+		bob_run.procedure = self.procedure_name
 		bob_run.pinned_fingerprint = "test-fingerprint"
 		bob_run.pinned_definition_json = "{}"
-		bob_run.status = "success"
+		bob_run.status = "Completed"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		try:
 			# Alice lists procedure runs as alice
@@ -58,6 +86,7 @@ class TestProcedureRunListScope(IntegrationTestCase):
 			assert alice_run.name in alice_list
 			assert bob_run.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			alice_run.delete()
 			bob_run.delete()
 
@@ -65,12 +94,13 @@ class TestProcedureRunListScope(IntegrationTestCase):
 		"""Huf User should not see procedure runs owned by others."""
 		# Setup: Create a run owned by bob
 		bob_run = frappe.new_doc("Agent Procedure Run")
-		bob_run.procedure = "test_procedure"
+		bob_run.procedure = self.procedure_name
 		bob_run.pinned_fingerprint = "test-fingerprint"
 		bob_run.pinned_definition_json = "{}"
-		bob_run.status = "success"
+		bob_run.status = "Completed"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		try:
 			# Alice lists procedure runs as alice
@@ -84,26 +114,29 @@ class TestProcedureRunListScope(IntegrationTestCase):
 			# Alice should NOT see bob's run
 			assert bob_run.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			bob_run.delete()
 
 	def test_system_manager_list_sees_all_procedure_runs(self):
 		"""System Manager should see all procedure runs from all users."""
 		# Setup: Create runs for two users
 		alice_run = frappe.new_doc("Agent Procedure Run")
-		alice_run.procedure = "test_procedure"
+		alice_run.procedure = self.procedure_name
 		alice_run.pinned_fingerprint = "test-fingerprint"
 		alice_run.pinned_definition_json = "{}"
-		alice_run.status = "success"
+		alice_run.status = "Completed"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
+		alice_run.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_run = frappe.new_doc("Agent Procedure Run")
-		bob_run.procedure = "test_procedure"
+		bob_run.procedure = self.procedure_name
 		bob_run.pinned_fingerprint = "test-fingerprint"
 		bob_run.pinned_definition_json = "{}"
-		bob_run.status = "success"
+		bob_run.status = "Completed"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		try:
 			# System Manager lists procedure runs
