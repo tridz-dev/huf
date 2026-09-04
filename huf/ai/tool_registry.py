@@ -386,15 +386,16 @@ def get_hook_declared_function_paths(use_cache=True):
 def sync_discovered_tools(apps_to_scan=None, use_cache=True):
     """
     Sync discovered tools from hooks.
-    
+
     Args:
         apps_to_scan: List of app names to scan, or None for all installed apps
                      (None = full scan, used for manual sync and after_migrate)
         use_cache: If True, use cache to skip unchanged apps (only when apps_to_scan is None)
-    
+
     Returns:
         dict: Summary of sync results
     """
+    frappe.only_for("System Manager")
     # For manual sync, don't use cache (force full scan)
     # For incremental sync (apps_to_scan specified), always scan those apps
     cache_enabled = use_cache and apps_to_scan is None

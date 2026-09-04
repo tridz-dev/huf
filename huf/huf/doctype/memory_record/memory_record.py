@@ -138,10 +138,12 @@ def project_memory_to_knowledge(memory_record: str):
 @frappe.whitelist()
 def queue_memory_knowledge_projection(memory_record: str):
     doc = frappe.get_doc("Memory Record", memory_record)
+    doc.check_permission("write")
     return doc.queue_knowledge_projection()
 
 
 @frappe.whitelist()
 def remove_memory_knowledge_projection(memory_record: str):
     doc = frappe.get_doc("Memory Record", memory_record)
+    doc.check_permission("write")
     return doc.remove_knowledge_projection()
