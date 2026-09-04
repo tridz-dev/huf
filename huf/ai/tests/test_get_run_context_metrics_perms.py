@@ -19,6 +19,22 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 				"instructions": "Test agent fixture for automated tests.",
 			}).insert(ignore_permissions=True)
 
+		# get_run_context_metrics calls Document.check_permission("read"), which
+		# goes through Frappe's full role-based permission stack (has_permission
+		# hooks can only narrow an already-granted role permission, never grant
+		# access on their own). alice/bob need a real User with a role that has
+		# base read access on Agent Run (Huf User) for the record-level owner
+		# check to ever be reached.
+		for email in ("alice@example.com", "bob@example.com"):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": "Huf User"}],
+				}).insert(ignore_permissions=True)
+
 	def test_get_run_context_metrics_fetches_own_previous_run(self):
 		"""get_run_context_metrics fetches the caller's own previous run."""
 		# Create previous run owned by alice
