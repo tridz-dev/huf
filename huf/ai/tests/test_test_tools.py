@@ -79,6 +79,9 @@ def _spec_to_namespace(spec: dict) -> SimpleNamespace:
 
 
 class TestEchoHandler(unittest.TestCase):
+    def setUp(self):
+        frappe.conf.developer_mode = 1
+
     def test_returns_input_unchanged(self):
         result = test_tools.echo(a=1, b="two", c=[3, 4])
         self.assertEqual(result, {"echoed": {"a": 1, "b": "two", "c": [3, 4]}})
@@ -89,6 +92,12 @@ class TestEchoHandler(unittest.TestCase):
     def test_result_is_json_serializable(self):
         result = test_tools.echo(x={"nested": True}, y=[1, 2, 3])
         json.dumps(result)  # must not raise
+
+    def test_blocked_when_developer_mode_off(self):
+        frappe.conf.developer_mode = 0
+        result = test_tools.echo(a=1)
+        self.assertEqual(result["echoed"], {})
+        self.assertTrue(result.get("blocked"))
 
 
 class TestDeterministicAddHandler(unittest.TestCase):
@@ -143,6 +152,9 @@ class TestDeterministicFailHandler(unittest.TestCase):
 
 
 class TestSlowOrTimeoutHandler(unittest.TestCase):
+    def setUp(self):
+        frappe.conf.developer_mode = 1
+
     def test_sleeps_requested_duration(self):
         start = time.monotonic()
         result = test_tools.slow_or_timeout(duration=0.05)
@@ -164,6 +176,12 @@ class TestSlowOrTimeoutHandler(unittest.TestCase):
     def test_invalid_duration_falls_back_to_default(self):
         result = test_tools.slow_or_timeout(duration="not-a-number")
         self.assertEqual(result["requested_duration"], 0.1)
+
+    def test_blocked_when_developer_mode_off(self):
+        frappe.conf.developer_mode = 0
+        result = test_tools.slow_or_timeout(duration=0.05)
+        self.assertFalse(result["success"])
+        self.assertTrue(result.get("blocked"))
 
 
 class TestPermissionProtectedMutationHandler(unittest.TestCase):
