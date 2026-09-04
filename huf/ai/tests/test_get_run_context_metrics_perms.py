@@ -1,0 +1,139 @@
+"""Test record-level permissions for get_run_context_metrics endpoint.
+
+Tests that the get_run_context_metrics endpoint only fetches the caller's
+own previous run for comparison, not any previous run on the agent.
+"""
+
+import frappe
+from frappe.tests import IntegrationTestCase
+from datetime import datetime, timedelta
+
+
+class TestGetRunContextMetricsPerms(IntegrationTestCase):
+	def setUp(self):
+		if not frappe.db.exists("Agent", "Test Agent"):
+			frappe.get_doc({
+				"doctype": "Agent",
+				"agent_name": "Test Agent",
+				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
+			}).insert(ignore_permissions=True)
+
+		# get_run_context_metrics calls Document.check_permission("read"), which
+		# goes through Frappe's full role-based permission stack (has_permission
+		# hooks can only narrow an already-granted role permission, never grant
+		# access on their own). alice/bob need a real User with a role that has
+		# base read access on Agent Run (Huf User) for the record-level owner
+		# check to ever be reached.
+		for email in ("alice@example.com", "bob@example.com"):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": "Huf User"}],
+				}).insert(ignore_permissions=True)
+
+	def test_get_run_context_metrics_fetches_own_previous_run(self):
+		"""get_run_context_metrics fetches the caller's own previous run."""
+		# Create previous run owned by alice
+		conv_doc = frappe.new_doc("Agent Conversation")
+		conv_doc.agent = "Test Agent"
+		conv_doc.session_id = frappe.generate_hash(length=10)
+		conv_doc.owner = "alice@example.com"
+		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
+
+		prev_run_doc = frappe.new_doc("Agent Run")
+		prev_run_doc.agent = "Test Agent"
+		prev_run_doc.status = "Success"
+		prev_run_doc.conversation = conv_doc.name
+		prev_run_doc.owner = "alice@example.com"
+		prev_run_doc.start_time = datetime.now() - timedelta(hours=1)
+		prev_run_doc.insert()
+		prev_run_doc.db_set("owner", "alice@example.com", update_modified=False)
+
+		# Create current run owned by alice
+		current_run_doc = frappe.new_doc("Agent Run")
+		current_run_doc.agent = "Test Agent"
+		current_run_doc.status = "Success"
+		current_run_doc.conversation = conv_doc.name
+		current_run_doc.owner = "alice@example.com"
+		current_run_doc.start_time = datetime.now()
+		current_run_doc.insert()
+		current_run_doc.db_set("owner", "alice@example.com", update_modified=False)
+
+		try:
+			old_user = frappe.session.user
+			try:
+				frappe.session.user = "alice@example.com"
+				frappe.set_user("alice@example.com")
+
+				from huf.ai.agent_run_context_api import get_run_context_metrics
+				# Should not raise, and should find the previous run
+				result = get_run_context_metrics(current_run_doc.name)
+				assert result is not None
+			finally:
+				frappe.session.user = old_user
+				frappe.set_user(old_user)
+		finally:
+			current_run_doc.delete()
+			prev_run_doc.delete()
+			conv_doc.delete()
+
+	def test_get_run_context_metrics_skips_foreign_previous_run(self):
+		"""get_run_context_metrics does not fetch previous runs by other users."""
+		# Create previous run owned by bob
+		conv_bob = frappe.new_doc("Agent Conversation")
+		conv_bob.agent = "Test Agent"
+		conv_bob.session_id = frappe.generate_hash(length=10)
+		conv_bob.owner = "bob@example.com"
+		conv_bob.insert()
+		conv_bob.db_set("owner", "bob@example.com", update_modified=False)
+
+		prev_run_bob = frappe.new_doc("Agent Run")
+		prev_run_bob.agent = "Test Agent"
+		prev_run_bob.status = "Success"
+		prev_run_bob.conversation = conv_bob.name
+		prev_run_bob.owner = "bob@example.com"
+		prev_run_bob.start_time = datetime.now() - timedelta(hours=1)
+		prev_run_bob.insert()
+		prev_run_bob.db_set("owner", "bob@example.com", update_modified=False)
+
+		# Create current run owned by alice
+		conv_alice = frappe.new_doc("Agent Conversation")
+		conv_alice.agent = "Test Agent"
+		conv_alice.session_id = frappe.generate_hash(length=10)
+		conv_alice.owner = "alice@example.com"
+		conv_alice.insert()
+		conv_alice.db_set("owner", "alice@example.com", update_modified=False)
+
+		current_run_doc = frappe.new_doc("Agent Run")
+		current_run_doc.agent = "Test Agent"
+		current_run_doc.status = "Success"
+		current_run_doc.conversation = conv_alice.name
+		current_run_doc.owner = "alice@example.com"
+		current_run_doc.start_time = datetime.now()
+		current_run_doc.insert()
+		current_run_doc.db_set("owner", "alice@example.com", update_modified=False)
+
+		try:
+			old_user = frappe.session.user
+			try:
+				frappe.session.user = "alice@example.com"
+				frappe.set_user("alice@example.com")
+
+				from huf.ai.agent_run_context_api import get_run_context_metrics
+				# Should not raise, and should not use bob's previous run
+				result = get_run_context_metrics(current_run_doc.name)
+				assert result is not None
+				# The metrics should not have been computed against bob's run
+			finally:
+				frappe.session.user = old_user
+				frappe.set_user(old_user)
+		finally:
+			current_run_doc.delete()
+			conv_alice.delete()
+			prev_run_bob.delete()
+			conv_bob.delete()

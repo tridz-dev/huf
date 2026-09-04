@@ -1429,7 +1429,7 @@ def get_agent_run_status(agent_run_id: str):
     run = frappe.db.get_value(
         "Agent Run",
         agent_run_id,
-        ["name", "agent", "status", "response", "error_message", "conversation"],
+        ["name", "agent", "status", "response", "error_message", "conversation", "owner"],
         as_dict=True,
     )
     if not run:
@@ -1437,6 +1437,16 @@ def get_agent_run_status(agent_run_id: str):
 
     agent_doc = frappe.get_doc("Agent", run.agent)
     assert_agent_access(agent_doc, user=frappe.session.user)
+
+    # Record-level gate: check run ownership for the caller
+    conversation_owner = frappe.db.get_value("Agent Conversation", run.conversation, "owner") if run.conversation else run.owner
+    caller = frappe.session.user
+    if caller == "Guest":
+        if not agent_doc.allow_guest or conversation_owner != "Guest":
+            frappe.throw(_("Not permitted to view this run"), frappe.PermissionError)
+    elif "System Manager" not in frappe.get_roles(caller):
+        if conversation_owner != caller and not has_capability(caller, "agent.view_all"):
+            frappe.throw(_("Not permitted to view this run"), frappe.PermissionError)
 
     agent_message_id = None
     if run.status in ("Success", "Failed"):

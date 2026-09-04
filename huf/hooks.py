@@ -179,10 +179,14 @@ permission_query_conditions = {
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
 }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+
+has_permission = {
+	"Agent Run": "huf.ai.hooks.has_permission_agent_run",
+	"Agent Message": "huf.ai.hooks.has_permission_agent_message",
+	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
+	"Agent Tool Call": "huf.ai.hooks.has_permission_agent_tool_call",
+	"Agent Context Artifact": "huf.ai.hooks.has_permission_agent_context_artifact",
+}
 
 # DocType Class
 # ---------------
