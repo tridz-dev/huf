@@ -30,6 +30,7 @@ class TestGetListLimitClamp(unittest.TestCase):
         mock_get_meta = self._get_meta_patcher.start()
         meta = MagicMock()
         meta.fields = []
+        meta.issingle = False
         mock_get_meta.return_value = meta
 
         self._exists_patcher = patch(
