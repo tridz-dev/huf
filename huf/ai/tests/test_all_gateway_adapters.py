@@ -1,7 +1,7 @@
 """Unit tests for Discord, Email, SMS, Google Chat, and Teams Gateway Adapters."""
 
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from huf.ai.gateway_adapters.email import EmailGatewayAdapter
 from huf.ai.gateway_adapters.google_chat import GoogleChatGatewayAdapter
@@ -43,6 +43,47 @@ class TestAllGatewayAdapters(unittest.TestCase):
 		finally:
 			if original_sendmail:
 				frappe.sendmail = original_sendmail
+
+
+	def test_email_adapter_wrong_secret_rejected(self):
+		adapter = EmailGatewayAdapter({"webhook_secret": "mysecret"})
+
+		req = GatewayInboundRequest(
+			body=b"{}",
+			headers={"X-Webhook-Secret": "wrong-secret"},
+			query={},
+			method="POST",
+		)
+
+		self.assertFalse(adapter.verify_inbound(req))
+
+	def test_email_adapter_missing_token_rejected(self):
+		adapter = EmailGatewayAdapter({"webhook_secret": "mysecret"})
+
+		req = GatewayInboundRequest(
+			body=b"{}",
+			headers={},
+			query={},
+			method="POST",
+		)
+
+		self.assertFalse(adapter.verify_inbound(req))
+
+	def test_email_adapter_uses_hmac_compare_digest(self):
+		adapter = EmailGatewayAdapter({"webhook_secret": "mysecret"})
+
+		req = GatewayInboundRequest(
+			body=b"{}",
+			headers={"X-Webhook-Secret": "mysecret"},
+			query={},
+			method="POST",
+		)
+
+		with patch(
+			"huf.ai.gateway_adapters.email.hmac.compare_digest", return_value=True
+		) as mock_compare:
+			self.assertTrue(adapter.verify_inbound(req))
+			mock_compare.assert_called_once_with("mysecret", "mysecret")
 
 
 	def test_google_chat_adapter(self):
