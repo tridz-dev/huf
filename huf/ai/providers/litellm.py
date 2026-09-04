@@ -868,25 +868,37 @@ def _env_var_name_for_provider(provider_brand: str) -> str:
     return f"{provider_brand.upper().replace('-', '_')}_API_KEY"
 
 
-def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
+def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict) -> str | None:
     """
     Setup API key for LiteLLM based on provider requirements.
 
     Some providers need environment variables, others accept api_key parameter.
+    completion_kwargs["api_key"] is always set (unconditionally) so that a
+    concurrent request with a different key never has to rely on os.environ
+    alone. Returns the env var name that was written, if any, so the caller
+    can restore it (from _BOOT_ENV) in a finally block once the call
+    completes — env vars are process-global and must not leak between
+    concurrent requests.
     """
-    if provider_name in _ENV_VAR_PROVIDERS:
-        # Set environment variable for this request
-        os.environ[_ENV_VAR_PROVIDERS[provider_name]] = api_key
-        return
-
-    # For known providers that accept an api_key parameter directly, prefer that.
+    # Always set the api_key kwarg so callers/providers that read from
+    # completion_kwargs get the correct, request-specific key regardless of
+    # whatever another concurrent request may have written to os.environ.
     completion_kwargs["api_key"] = api_key
+
+    if provider_name in _ENV_VAR_PROVIDERS:
+        # Some providers additionally need the key in an environment
+        # variable (LiteLLM/provider SDK requirement).
+        env_var_name = _ENV_VAR_PROVIDERS[provider_name]
+        os.environ[env_var_name] = api_key
+        return env_var_name
 
     # Unknown/new providers often expect a PROVIDER_API_KEY environment variable.
     # Set a heuristic env var as well so users don't have to wait for a code
     # change to try a new LiteLLM provider; the api_key param remains the primary
     # mechanism for providers that support it.
-    os.environ[_env_var_name_for_provider(provider_name)] = api_key
+    env_var_name = _env_var_name_for_provider(provider_name)
+    os.environ[env_var_name] = api_key
+    return env_var_name
 
 
 # _setup_api_key() writes resolved DB keys into os.environ as a side effect
@@ -2194,7 +2206,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             completion_kwargs["cached_content"] = gemini_cached_content
 
         provider_name = normalized_model.split("/")[0]
-        _setup_api_key(provider_name, api_key, completion_kwargs)
+        env_var_set_by_request = _setup_api_key(provider_name, api_key, completion_kwargs)
 
         # Resolve provider-aware reasoning parameters
         reasoning_policy_data = None
@@ -2747,6 +2759,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
                 yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
+            finally:
+                # Restore the environment variable to its pre-request state, preventing
+                # cross-request key leakage. Each round's completion call(s) set the env var
+                # via _setup_api_key (called once before all rounds), so we restore it after
+                # each round to ensure it doesn't leak to the next concurrent request.
+                if env_var_set_by_request:
+                    boot_value = _BOOT_ENV.get(env_var_set_by_request)
+                    if boot_value is not None:
+                        os.environ[env_var_set_by_request] = boot_value
+                    elif env_var_set_by_request in os.environ:
+                        del os.environ[env_var_set_by_request]
 
         # Max rounds reached (or the loop broke via is_stop). Finalize the
         # accumulated per-round totals — never the last round's usage alone.

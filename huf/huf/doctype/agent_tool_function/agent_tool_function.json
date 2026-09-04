@@ -12,6 +12,7 @@
   "column_break_lrkj",
   "types",
   "reference_doctype",
+  "reference_report",
   "agent",
   "base_url",
   "provider_app",
@@ -65,6 +66,13 @@
    "fieldtype": "Link",
    "label": "Reference DocType",
    "options": "DocType"
+  },
+  {
+   "depends_on": "eval: doc.types == \"Get Report Result\"",
+   "fieldname": "reference_report",
+   "fieldtype": "Link",
+   "label": "Reference Report",
+   "options": "Report"
   },
   {
    "description": "Permission level required to use this tool",
