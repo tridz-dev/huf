@@ -30,7 +30,7 @@ class TestRuntimeAllowSetGuard(unittest.TestCase):
 		from huf.ai.sdk_tools import get_function_from_name
 
 		with mock.patch(
-			"huf.ai.sdk_tools.get_hook_declared_function_paths",
+			"huf.ai.tool_registry.get_hook_declared_function_paths",
 			return_value=set(),  # Empty allow-set
 		):
 			result = get_function_from_name(
@@ -47,7 +47,7 @@ class TestRuntimeAllowSetGuard(unittest.TestCase):
 		from huf.ai.sdk_tools import get_function_from_name
 
 		with mock.patch(
-			"huf.ai.sdk_tools.get_hook_declared_function_paths",
+			"huf.ai.tool_registry.get_hook_declared_function_paths",
 			return_value={"frappe.throw"},
 		):
 			result = get_function_from_name(
