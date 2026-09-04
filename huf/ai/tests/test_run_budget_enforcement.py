@@ -51,7 +51,10 @@ class TestRecursionDepthEnforcement(IntegrationTestCase):
         # Should not raise at depth 1
         budget_depth_1.check_depth(max_depth=2)
 
-        # Second child at depth 2 (at the ceiling)
+        # Second child (third hop) at depth 2 -- the ceiling itself.
+        # check_depth is fail-closed (`current_depth >= max_depth` raises), so
+        # reaching the ceiling is blocked here, matching this test's own
+        # docstring ("Third hop (A at depth 2) -> blocked with RunBudgetExceeded").
         budget_depth_2 = RunBudget(
             deadline_at=datetime.now() + timedelta(seconds=900),
             max_turns_ceiling=10,
@@ -59,20 +62,8 @@ class TestRecursionDepthEnforcement(IntegrationTestCase):
             ancestry=["run_id_0", "run_id_1"],
             spend_cap_usd=0
         )
-        # Should not raise at depth 2 with ceiling=2 (equality is still ok)
-        budget_depth_2.check_depth(max_depth=2)
-
-        # Third child at depth 3 (exceeds ceiling)
-        budget_depth_3 = RunBudget(
-            deadline_at=datetime.now() + timedelta(seconds=900),
-            max_turns_ceiling=10,
-            depth=3,
-            ancestry=["run_id_0", "run_id_1", "run_id_2"],
-            spend_cap_usd=0
-        )
-        # Should raise at depth 3 with ceiling=2
         with self.assertRaises(frappe.ValidationError) as exc_info:
-            budget_depth_3.check_depth(max_depth=2)
+            budget_depth_2.check_depth(max_depth=2)
         assert "Recursion depth" in str(exc_info.exception)
 
     def test_ancestry_chain_preserved(self):
@@ -327,7 +318,7 @@ class TestCombinedBudgetConstraints(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_depth:
             budget_depth.check_depth(max_depth=2)
-        depth_msg = str(exc_depth.value)
+        depth_msg = str(exc_depth.exception)
         assert "depth" in depth_msg.lower() or "recursion" in depth_msg.lower()
 
         # Spend failure
@@ -342,7 +333,7 @@ class TestCombinedBudgetConstraints(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_spend:
             budget_spend.check_spend(2.0)
-        spend_msg = str(exc_spend.value)
+        spend_msg = str(exc_spend.exception)
         assert "spend" in spend_msg.lower() or "budget" in spend_msg.lower()
 
         # Messages should be different
