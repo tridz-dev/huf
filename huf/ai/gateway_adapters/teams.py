@@ -52,15 +52,53 @@ class TeamsGatewayAdapter(GatewayAdapter):
 		*,
 		http_post: Callable[..., Any] = _requests_post,
 	) -> None:
-		self._app_id = credentials.get("app_id", "")
-		self._app_password = credentials.get("app_password", "")
+		# Every other gateway adapter (WhatsApp, Telegram, Messenger,
+		# Instagram, Slack) raises here when required credentials are
+		# missing, so an unconfigured gateway can never be constructed at
+		# all. This adapter used to special-case "no app_id configured" as
+		# "don't require a Bearer token (backwards compatibility)" in
+		# verify_inbound below, which made it the one gateway that failed
+		# OPEN instead of closed -- exactly what WP-04 exists to close.
+		missing = self.credential_schema.missing_required(credentials)
+		if missing:
+			raise ValueError(f"Microsoft Teams adapter is missing required credentials: {', '.join(missing)}")
+		self._app_id = credentials["app_id"]
+		self._app_password = credentials["app_password"]
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify Authorization header or accept if payload is valid Bot Framework activity."""
-		auth_header = request.headers.get("Authorization", "")
-		if self._app_id and auth_header:
-			return auth_header.startswith("Bearer ")
+		"""Verify Authorization header with Bearer token.
+
+		Full JWT signature validation against Microsoft's JWKS requires PyJWT library,
+		which is not currently a dependency — this implements the security contract
+		(fail closed on missing header) while deferring cryptographic validation
+		to a future enhancement when PyJWT is available.
+
+		Returns False (fail closed) if the Authorization header is missing or malformed.
+		app_id/app_password are guaranteed present by __init__ (ValueError otherwise), so
+		there is no "unconfigured, skip the check" branch here anymore.
+		"""
+		auth_header = request.headers.get("Authorization", "").strip()
+
+		if not auth_header or not auth_header.startswith("Bearer "):
+			return False
+
+		# Extract the token
+		token = auth_header[7:].strip()  # Remove "Bearer " prefix
+
+		# At this point, we have a Bearer token. Full JWT signature validation
+		# would require PyJWT to:
+		#   1. Decode the JWT without verification (to get the payload)
+		#   2. Fetch Microsoft's Bot Framework OpenID JWKS
+		#   3. Verify signature using the public key from JWKS
+		#   4. Verify 'aud' claim matches self._app_id
+		#   5. Verify 'iss' claim is 'https://api.botframework.com'
+		#
+		# For now, we only verify that a Bearer token was provided (fail closed on missing header).
+		# TODO: Add PyJWT to dependencies and implement full JWT validation.
+		if not token:
+			return False
+
 		return True
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
