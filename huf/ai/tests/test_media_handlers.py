@@ -317,71 +317,104 @@ class TestHandleGenerateAudioPrivatization(IntegrationTestCase):
 
 
 class TestPrivatizeGeneratedMediaFilesPatch(IntegrationTestCase):
-	"""Test ST-R3.1b: privatize_generated_media_files patch flips is_private and rewrites URLs."""
+	"""Test ST-R3.1b: privatize_generated_media_files patch flips is_private and rewrites URLs.
+
+	Regression test for a real bug found during live verification: the
+	original patch flipped ``is_private`` via a raw ``frappe.db.set_value``
+	write, which only changes the DB column -- it bypasses
+	``File.validate()`` -> ``File.handle_is_private_changed()``, the
+	controller method that actually MOVES the file's bytes from
+	``public/files`` to ``private/files`` on disk. Live-tested: the old
+	public URL kept serving the file with a 200 even after the "fix" ran.
+	The patch now flips the flag via ``File.save()`` so the real move runs.
+	These tests assert the mocked File Document's ``is_private`` attribute
+	and ``.save()`` are used, not a bypassing ``frappe.db.set_value`` call for
+	the File doc's own flag.
+	"""
 
 	def test_patch_flips_is_private_and_rewrites_urls(self):
-		"""The patch should flip is_private=1 on Files and rewrite /files/ to /private/files/ in Agent Messages."""
+		"""The patch should flip is_private=1 via File.save() (not db.set_value) and rewrite the Agent Message URL to the File doc's own post-save file_url."""
 		from huf.patches.v1.privatize_generated_media_files import execute as run_patch
 
-		# Create a mock File and Agent Message representing the old state.
 		# frappe.db.get_list(fields=[...]) returns plain dict-like rows, not
-		# objects with attribute access — a MagicMock here doesn't behave like
-		# a dict (mock_file["x"] = "y" only records a __setitem__ call; reading
-		# mock_file["x"] back returns a fresh MagicMock, not "y"), so use a
-		# real dict to match what the patch actually receives in production.
-		mock_file = {
+		# objects with attribute access — use a real dict to match production.
+		mock_file_row = {
 			"name": "test-file",
-			"file_name": "generated_image_1.png",
 			"attached_to_name": "test-msg",
 			"attached_to_field": "generated_image",
 		}
 
-		mock_message = MagicMock()
-		mock_message.generated_image = "/files/generated_image_1.png"
+		# frappe.get_doc("File", name) must return an object whose .save()
+		# call is what the patch relies on to trigger the real move; simulate
+		# that save() flips file_url the way File.handle_is_private_changed does.
+		mock_file_doc = MagicMock()
+		mock_file_doc.is_private = 0
 
-		with patch("frappe.db.get_list", return_value=[mock_file]):
+		def _fake_save(**kwargs):
+			mock_file_doc.file_url = "/private/files/generated_image_1.png"
+
+		mock_file_doc.save.side_effect = _fake_save
+
+		with patch("frappe.db.get_list", return_value=[mock_file_row]):
 			with patch("frappe.db.set_value") as mock_set_value:
-				with patch("frappe.get_doc", return_value=mock_message):
+				with patch("frappe.get_doc", return_value=mock_file_doc):
 					run_patch()
 
-		# Verify set_value was called to flip is_private
-		calls = mock_set_value.call_args_list
-		is_private_set = any(
-			call[0] == ("File", "test-file", "is_private", 1)
-			for call in calls
-		)
-		self.assertTrue(is_private_set, "Patch should set is_private=1 on File")
+		# The File doc's is_private must be set via attribute + save(), which
+		# is what triggers the real move -- not a raw db.set_value bypass.
+		self.assertEqual(mock_file_doc.is_private, 1, "Patch should set File.is_private=1 via the Document, not db.set_value")
+		mock_file_doc.save.assert_called_once()
 
-		# Verify set_value was called to rewrite the URL
+		# The Agent Message URL must be rewritten to the File doc's OWN
+		# post-save file_url (not a blind string substitution), since that's
+		# what handle_is_private_changed actually produced.
+		calls = mock_set_value.call_args_list
 		url_set = any(
 			call[0] == ("Agent Message", "test-msg", "generated_image", "/private/files/generated_image_1.png")
 			for call in calls
 		)
-		self.assertTrue(url_set, "Patch should rewrite /files/ to /private/files/ in Agent Message")
+		self.assertTrue(url_set, "Patch should rewrite the Agent Message field to the File doc's post-save file_url")
+
+		# The File doc's own is_private flag must NOT be set via db.set_value
+		# (that's the exact bug this test guards against).
+		file_is_private_via_set_value = any(
+			call[0][:3] == ("File", "test-file", "is_private")
+			for call in calls
+		)
+		self.assertFalse(
+			file_is_private_via_set_value,
+			"Patch must not flip File.is_private via db.set_value -- it bypasses the physical file move",
+		)
 
 	def test_patch_handles_generated_audio_urls(self):
-		"""The patch should also handle generated_audio field URLs."""
+		"""The patch should also handle generated_audio field URLs, via the same save()-based flip."""
 		from huf.patches.v1.privatize_generated_media_files import execute as run_patch
 
-		mock_file = {
+		mock_file_row = {
 			"name": "test-audio-file",
-			"file_name": "generated_audio_1.mp3",
 			"attached_to_name": "test-msg-audio",
 			"attached_to_field": "generated_audio",
 		}
 
-		mock_message = MagicMock()
-		mock_message.generated_audio = "/files/generated_audio_1.mp3"
+		mock_file_doc = MagicMock()
+		mock_file_doc.is_private = 0
 
-		with patch("frappe.db.get_list", return_value=[mock_file]):
+		def _fake_save(**kwargs):
+			mock_file_doc.file_url = "/private/files/generated_audio_1.mp3"
+
+		mock_file_doc.save.side_effect = _fake_save
+
+		with patch("frappe.db.get_list", return_value=[mock_file_row]):
 			with patch("frappe.db.set_value") as mock_set_value:
-				with patch("frappe.get_doc", return_value=mock_message):
+				with patch("frappe.get_doc", return_value=mock_file_doc):
 					run_patch()
 
-		# Verify set_value was called to rewrite the audio URL
+		self.assertEqual(mock_file_doc.is_private, 1)
+		mock_file_doc.save.assert_called_once()
+
 		calls = mock_set_value.call_args_list
 		url_set = any(
 			call[0] == ("Agent Message", "test-msg-audio", "generated_audio", "/private/files/generated_audio_1.mp3")
 			for call in calls
 		)
-		self.assertTrue(url_set, "Patch should rewrite generated_audio URLs from /files/ to /private/files/")
+		self.assertTrue(url_set, "Patch should rewrite generated_audio URLs to the File doc's post-save file_url")

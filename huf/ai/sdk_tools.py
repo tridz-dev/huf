@@ -533,9 +533,11 @@ def create_function_tool(
                         })
                     args_dict["ignore_permissions"] = True
 
-                # Override report_name with reference_report if pinned for guest
-                if _extra_args.get("reference_report"):
-                    args_dict["report_name"] = _extra_args["reference_report"]
+                    # Override report_name with reference_report if pinned for guest.
+                    # Scoped to this branch only -- a non-guest caller's LLM-supplied
+                    # report_name must not be silently overwritten by a guest pin.
+                    if _extra_args.get("reference_report"):
+                        args_dict["report_name"] = _extra_args["reference_report"]
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
                     args_dict["tool_name"] = name

@@ -384,9 +384,11 @@ async def invoke_tool(
 			)
 		args_dict["ignore_permissions"] = True
 
-	# Override report_name with reference_report if pinned for guest
-	if extra_args.get("reference_report"):
-		args_dict["report_name"] = extra_args["reference_report"]
+		# Override report_name with reference_report if pinned for guest.
+		# Scoped to this branch only -- a non-guest caller's LLM-supplied
+		# report_name must not be silently overwritten by a guest pin.
+		if extra_args.get("reference_report"):
+			args_dict["report_name"] = extra_args["reference_report"]
 
 	telemetry_doc = None
 	if telemetry:
