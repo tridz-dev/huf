@@ -103,12 +103,18 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
         fake_fallback_module = MagicMock()
         fake_fallback_module.run = fallback_run
 
+        real_get_module = run_module.frappe.get_module
+
         def fake_get_module(module_path):
             if module_path == "huf.ai.providers.litellm":
                 return fake_litellm_module
             if module_path == "huf.ai.providers.myprovider":
                 return fake_fallback_module
-            raise ImportError(module_path)
+            # Delegate anything else (e.g. frappe's own translation machinery
+            # resolving app paths) to the real implementation instead of
+            # blindly raising -- an unconditional ImportError here leaks into
+            # unrelated frappe internals that also call frappe.get_module.
+            return real_get_module(module_path)
 
         with patch.dict(
             sys.modules,
@@ -134,10 +140,17 @@ class TestRunProviderCatchesRealLLMFailures(unittest.IsolatedAsyncioTestCase):
         fake_litellm_module = MagicMock()
         fake_litellm_module.run = raising_litellm_run
 
+        real_get_module = run_module.frappe.get_module
+
         def fake_get_module(module_path):
             if module_path == "huf.ai.providers.litellm":
                 return fake_litellm_module
-            raise ImportError(module_path)
+            if module_path == "huf.ai.providers.nosuchprovider":
+                raise ImportError(module_path)
+            # Delegate anything else to the real implementation so frappe's
+            # own translation machinery (invoked by `_()` inside the
+            # not-found branch) keeps working instead of raising here.
+            return real_get_module(module_path)
 
         with patch.dict(
             sys.modules,
