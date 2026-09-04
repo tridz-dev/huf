@@ -23,6 +23,14 @@ from huf.ai.transaction import commit_if_background
 
 logger = frappe.logger("huf")
 
+# Get List tool limit resolution: an agent (or a compromised/careless
+# upstream) requesting an unbounded or huge limit must not be able to make
+# a single tool call pull the whole table. default_limit applies when no
+# limit (or a non-positive one) is given; hard_cap bounds any requested
+# limit regardless of how large the caller asks for.
+default_limit = 20
+hard_cap = 500
+
 
 def wrap_frappe_function(func: Callable) -> Callable:
     """
@@ -244,8 +252,10 @@ def create_list_function(doctype: str) -> Callable:
         if not fields:
             fields = ["name", "modified"]
 
+        limit_page_length = min(limit or default_limit, hard_cap)
+
         result = frappe.get_list(
-            doctype, filters=filters, fields=fields, limit_page_length=limit, order_by=order_by
+            doctype, filters=filters, fields=fields, limit_page_length=limit_page_length, order_by=order_by
         )
 
         return result
@@ -417,14 +427,14 @@ def handle_get_list(
                 filter_warning = f"Filter fields {', '.join(invalid_filter_fields)} do not exist in DocType '{reference_doctype}' and were ignored."
                 warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
-        page_length = limit if limit and int(limit) > 0 else None
+        limit_page_length = min(int(limit) if limit and int(limit) > 0 else default_limit, hard_cap)
         ignore_permissions = kwargs.get("ignore_permissions", False)
 
         result = frappe.get_list(
             reference_doctype,
             filters=filters,
             fields=filtered_fields,
-            limit_page_length=page_length,
+            limit_page_length=limit_page_length,
             order_by=order_by,
             ignore_permissions=ignore_permissions,
         )
