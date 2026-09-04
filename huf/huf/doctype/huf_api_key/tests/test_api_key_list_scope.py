@@ -12,6 +12,21 @@ from huf.huf.doctype.huf_api_key.huf_api_key import generate_key, get_api_key_pe
 class TestApiKeyListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Huf API Key."""
 
+	def setUp(self):
+		# frappe.get_list's read check goes through the full role-based
+		# permission stack; alice/bob need a real User with a role that has
+		# base read access on Huf API Key (Huf User) before the
+		# permission_query_conditions scoping is ever reached.
+		for email in ("alice@example.com", "bob@example.com"):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": "Huf User"}],
+				}).insert(ignore_permissions=True)
+
 	def test_system_manager_gets_no_filter(self):
 		"""System Manager should see no filter (returns None)."""
 		frappe.set_user("Administrator")
@@ -62,6 +77,7 @@ class TestApiKeyListScope(IntegrationTestCase):
 			assert alice_key.name in alice_list
 			assert bob_key.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			alice_key.delete()
 			bob_key.delete()
 
@@ -90,6 +106,7 @@ class TestApiKeyListScope(IntegrationTestCase):
 			# Alice should NOT see bob's key
 			assert bob_key.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			bob_key.delete()
 
 	def test_system_manager_list_sees_all_api_keys(self):
