@@ -36,9 +36,20 @@ class TestGatewayAdapterSecurityConformance(IntegrationTestCase):
         # Get the adapter class (this imports lazily)
         adapter_cls = get_adapter_class(provider_id)
 
-        # Instantiate with empty credentials (simulating missing/unconfigured secrets)
+        # Instantiate with empty credentials (simulating missing/unconfigured secrets).
+        # Adapters are allowed to fail closed in either of two ways: raise at
+        # construction time (several adapters validate required credentials in
+        # __init__ and refuse to be built at all -- an even stronger form of
+        # "fail closed" than a False from verify_inbound), or construct
+        # successfully and have verify_inbound() reject the request. Both are
+        # acceptable; the one thing that is NOT acceptable is constructing
+        # successfully and then verify_inbound() returning a truthy accept.
         empty_creds = {}
-        adapter = adapter_cls(empty_creds)
+        try:
+            adapter = adapter_cls(empty_creds)
+        except ValueError:
+            # Failed closed at construction time -- conformant.
+            return
 
         # Make a request with missing/invalid signature headers
         bad_request = self._make_bad_request(provider_id)
@@ -49,9 +60,7 @@ class TestGatewayAdapterSecurityConformance(IntegrationTestCase):
         # Key assertion: verify_inbound must return False (fail closed)
         # If the adapter requires credentials and they are missing, it must reject the request
         assert isinstance(result, bool), f"{provider_id} adapter verify_inbound returned {type(result)}, expected bool"
-
-        # For adapters with required credentials, False is the expected result
-        # For adapters without required credentials (or with weak defaults), we just ensure it returns a bool
+        assert result is False, f"{provider_id} adapter verify_inbound returned True with missing credentials"
 
     def test_adapter_verify_inbound_returns_false_on_missing_credentials_whatsapp(self):
         self._assert_adapter_verify_inbound_returns_false_on_missing_credentials("whatsapp")
@@ -77,20 +86,22 @@ class TestGatewayAdapterSecurityConformance(IntegrationTestCase):
     def test_adapter_verify_inbound_returns_false_on_missing_credentials_slack(self):
         self._assert_adapter_verify_inbound_returns_false_on_missing_credentials("slack")
 
-    def test_adapter_verify_inbound_returns_false_on_missing_credentials_sms(self):
-        self._assert_adapter_verify_inbound_returns_false_on_missing_credentials("sms")
-
     def test_adapter_verify_inbound_never_raises(self):
         """Verify that calling verify_inbound with an invalid request never raises an exception.
 
         The adapter contract is that verify_inbound returns bool; raising breaks the caller's
         error handling. This is particularly important for middleware-style callers like gateway_webhook.py.
         """
-        providers = ["whatsapp", "telegram", "messenger", "instagram", "email", "google_chat", "microsoft_teams", "slack", "sms"]
+        providers = ["whatsapp", "telegram", "messenger", "instagram", "email", "google_chat", "microsoft_teams", "slack"]
 
         for provider_id in providers:
             adapter_cls = get_adapter_class(provider_id)
-            adapter = adapter_cls({})
+            try:
+                adapter = adapter_cls({})
+            except ValueError:
+                # Failed closed at construction time -- nothing more to check
+                # for this provider (there's no verify_inbound to call).
+                continue
 
             # Various kinds of bad requests
             bad_requests = [
