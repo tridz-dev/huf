@@ -82,7 +82,12 @@ def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[Func
         list[FunctionTool]: List of FunctionTool objects for MCP tools
     """
     tools = []
-    
+    # Scoped to this call: tracks sanitized/truncated tool names already
+    # assigned so collisions (e.g. two source names that sanitize/truncate
+    # to the same 64-char string) get numeric suffixes instead of silently
+    # shadowing one another.
+    seen_tool_names: set[str] = set()
+
     if mcp_server_names is not None:
         # Use the explicitly provided server names.
         server_links = [
@@ -121,7 +126,7 @@ def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[Func
                     "parameters": parameters
                 }
                 
-                tool = _create_mcp_function_tool(mcp_server, tool_def)
+                tool = _create_mcp_function_tool(mcp_server, tool_def, seen_tool_names)
                 if tool:
                     tools.append(tool)
                     
@@ -154,16 +159,45 @@ def _get_cached_mcp_tools(mcp_server) -> list[dict]:
         return []
 
 
-def _create_mcp_function_tool(mcp_server, tool_def: dict) -> FunctionTool:
+def _dedupe_tool_name(safe_name: str, seen_names: set[str] | None, max_len: int = 64) -> str:
+    """Return a version of `safe_name` that is not already in `seen_names`.
+
+    Appends `_1`, `_2`, ... until unique, truncating the base name as
+    needed so the result never exceeds `max_len` characters. Adds the
+    final name to `seen_names`. If `seen_names` is None, dedup is a
+    no-op (returns `safe_name` unchanged) - callers that don't care about
+    collisions across a batch can omit tracking.
+    """
+    if seen_names is None:
+        return safe_name
+
+    if safe_name not in seen_names:
+        seen_names.add(safe_name)
+        return safe_name
+
+    suffix_index = 1
+    while True:
+        suffix = f"_{suffix_index}"
+        base = safe_name[: max_len - len(suffix)]
+        candidate = f"{base}{suffix}"
+        if candidate not in seen_names:
+            seen_names.add(candidate)
+            return candidate
+        suffix_index += 1
+
+
+def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] | None = None) -> FunctionTool:
     """
     Create a FunctionTool wrapper for an MCP tool.
-    
+
     The tool's on_invoke_tool will call the MCP server to execute the tool.
-    
+
     Args:
         mcp_server: MCP Server document
         tool_def: Tool definition from MCP server (OpenAI format)
-    
+        seen_names: Optional set of already-assigned tool names (scoped to
+            the caller's batch) used to de-duplicate `safe_name` collisions.
+
     Returns:
         FunctionTool: Wrapped tool that calls MCP server on invocation
     """
@@ -222,7 +256,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict) -> FunctionTool:
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', display_name)
         if len(safe_name) > 64:
             safe_name = safe_name[:64]
-        
+        safe_name = _dedupe_tool_name(safe_name, seen_names)
+
         tool = FunctionTool(
             name=safe_name,
             description=f"[MCP:{mcp_server.server_name}] {description}",
