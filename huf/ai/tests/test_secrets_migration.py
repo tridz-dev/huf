@@ -126,11 +126,15 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         server = frappe.get_doc({
             "doctype": "MCP Server",
             "server_name": "test_mcp_" + frappe.utils.random_string(8),
-            "server_type": "Local",
+            "transport_type": "http",
+            "server_url": "https://example.com/mcp",
             "custom_headers": [
                 {
                     "header_name": "X-API-Key",
-                    "header_value": ""  # Will be set via set_encrypted_password
+                    # header_value is a mandatory Password field on this child
+                    # table; a placeholder here, immediately overwritten via
+                    # set_encrypted_password below.
+                    "header_value": "placeholder"
                 }
             ]
         })
@@ -227,9 +231,24 @@ class TestSecretsPasswordFields(IntegrationTestCase):
             "doctype": "Automation",
             "automation_name": automation_name,
             "automation_type": "Quick",
+            "agent": self._create_agent_if_missing(),
+            "instruction": "Test automation instruction.",
         })
         automation.insert(ignore_permissions=True)
         return automation_name
+
+    def _create_agent_if_missing(self):
+        """Helper: create a minimal Agent for testing (Link target of Automation.agent)."""
+        if not frappe.db.exists("Agent", "Test Agent"):
+            frappe.get_doc({
+                "doctype": "Agent",
+                "agent_name": "Test Agent",
+                "agent_modality": "Both",
+                "provider": "OpenAI",
+                "model": "gpt-4",
+                "instructions": "Test agent fixture for automated tests.",
+            }).insert(ignore_permissions=True)
+        return "Test Agent"
 
     def _create_tool_type_if_missing(self):
         """Helper: create a minimal Agent Tool Type for testing."""
