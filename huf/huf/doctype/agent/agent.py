@@ -88,6 +88,10 @@ def _get_cacheable_models_for_provider(
 
 @frappe.whitelist()
 def get_cacheable_models(provider: str, model: str = None) -> dict:
+    from huf.permissions import has_capability
+    if not has_capability(frappe.session.user, "agent.edit"):
+        return []
+
     if not provider:
         return {"supported": False, "alternatives": []}
 
