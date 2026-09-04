@@ -916,10 +916,15 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
         raise
     except Exception as e:
         # Tool-call persistence boundary: any failure here corrupts run audit state.
-        frappe.log_error(
-            f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
-            "Agent Tool Call Error"
-        )
+        try:
+            frappe.log_error(
+                f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
+                "Agent Tool Call Error"
+            )
+        except Exception:
+            # A failure while logging must never prevent the audit_incomplete
+            # flag below from being set (or mask the original error).
+            pass
         if agent_run:
             try:
                 existing = frappe.db.get_value("Agent Run", agent_run, "audit_incomplete")
