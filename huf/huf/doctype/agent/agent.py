@@ -55,6 +55,8 @@ def get_permission_query_conditions(user):
                 NOT EXISTS (SELECT 1 FROM `tabAgent User` WHERE parent = `tabAgent`.name)
                 AND
                 NOT EXISTS (SELECT 1 FROM `tabAgent Role` WHERE parent = `tabAgent`.name)
+                AND
+                `tabAgent`.allow_all_users = 1
             )
         )
         AND `tabAgent`.is_system = 0

@@ -143,6 +143,8 @@
   "allowed_users",
   "column_break_3mhl",
   "allowed_roles",
+  "access_control_section",
+  "allow_all_users",
   "metadata_tab",
   "last_run",
   "total_run",
@@ -770,6 +772,18 @@
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Roles",
    "options": "Agent Role"
+  },
+  {
+   "fieldname": "access_control_section",
+   "fieldtype": "Section Break",
+   "label": "Access control"
+  },
+  {
+   "default": "0",
+   "description": "If checked (and both Allowed Users and Allowed Roles are empty), every logged-in user may run this agent. If unchecked, an agent with empty Allowed Users and Allowed Roles is closed to everyone except its owner, System Manager, and holders of the agent.view_all or agent.edit capability. New agents default to closed (unchecked); existing agents are migrated to preserve their current open behaviour.",
+   "fieldname": "allow_all_users",
+   "fieldtype": "Check",
+   "label": "Allow All Users"
   },
   {
    "default": "0",
