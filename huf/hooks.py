@@ -278,6 +278,7 @@ scheduler_events = {
         "huf.ai.memory_tools.expire_stale_memory_records",
         "huf.ai.agent_chat.purge_trashed_conversations",
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
+        "huf.ai.gateway_service.purge_old_rejected_gateway_events",
     ],
     "cron": {
         "*/1 * * * *": [

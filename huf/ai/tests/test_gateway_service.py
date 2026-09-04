@@ -300,6 +300,54 @@ def access_entry(**overrides):
     return entry
 
 
+class TestPurgeOldRejectedGatewayEvents(unittest.TestCase):
+    """ST-R5.17: rejected Gateway Event rows are retained for forensic audit
+    (the insert-before-admission ordering in ingest_gateway_event is
+    deliberate and must not be removed), but bounded by a retention job that
+    purges Rejected rows past a TTL."""
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_deletes_only_rejected_rows_older_than_default_ttl(self, mock_frappe):
+        fixed_now = datetime(2026, 8, 1, 0, 0, 0)
+        mock_frappe.utils.now_datetime = MagicMock(return_value=fixed_now)
+        with patch("huf.ai.gateway_service.now_datetime", return_value=fixed_now):
+            gateway_service.purge_old_rejected_gateway_events()
+
+        expected_cutoff = add_to_date(fixed_now, days=-30)
+        mock_frappe.db.delete.assert_called_once_with(
+            "Gateway Event",
+            {"status": "Rejected", "received_at": ["<", expected_cutoff]},
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_custom_retention_window_is_honored(self, mock_frappe):
+        fixed_now = datetime(2026, 8, 1, 0, 0, 0)
+        with patch("huf.ai.gateway_service.now_datetime", return_value=fixed_now):
+            gateway_service.purge_old_rejected_gateway_events(retention_days=7)
+
+        expected_cutoff = add_to_date(fixed_now, days=-7)
+        mock_frappe.db.delete.assert_called_once_with(
+            "Gateway Event",
+            {"status": "Rejected", "received_at": ["<", expected_cutoff]},
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_only_rejected_status_is_targeted_never_other_statuses(self, mock_frappe):
+        fixed_now = datetime(2026, 8, 1, 0, 0, 0)
+        with patch("huf.ai.gateway_service.now_datetime", return_value=fixed_now):
+            gateway_service.purge_old_rejected_gateway_events()
+
+        filters = mock_frappe.db.delete.call_args.args[1]
+        assert filters["status"] == "Rejected"
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_returns_delete_result(self, mock_frappe):
+        mock_frappe.db.delete.return_value = 5
+        with patch("huf.ai.gateway_service.now_datetime", return_value=datetime(2026, 8, 1)):
+            result = gateway_service.purge_old_rejected_gateway_events()
+        assert result == 5
+
+
 class TestPairingReplyEnabled(unittest.TestCase):
     """`pairing_reply_enabled` (default on) gates the outbound "here's your
     code" reply without affecting whether the pending entry itself is

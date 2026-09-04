@@ -559,3 +559,26 @@ def preview_gateway_route(gateway_name: str, context: str | dict) -> dict:
     if isinstance(context, str):
         context = json.loads(context)
     return resolve_gateway_route(gateway_name, context or {})
+
+
+GATEWAY_EVENT_REJECTED_RETENTION_DAYS = 30
+
+
+def purge_old_rejected_gateway_events(retention_days: int | None = None) -> int:
+    """Scheduler entry point (``daily``, F-35): hard-delete stale Rejected Gateway Events.
+
+    ``ingest_gateway_event`` deliberately keeps its ``event.insert()`` call
+    ahead of the admission checks (see the docstring there) so that the
+    idempotency-key uniqueness constraint stays race-safe and every
+    rejection has a forensic audit row. That means a flood of spoofed or
+    unverified webhooks still creates one ``Gateway Event`` row per request
+    -- a storage DoS vector (F-35) if left unbounded. This job bounds growth
+    by purging ``Rejected`` rows once they are older than the retention
+    window, without touching the insert-before-admission ordering that the
+    idempotency/audit-trail guarantees depend on.
+
+    Registered in ``huf/hooks.py``'s ``scheduler_events["daily"]``.
+    """
+    days = retention_days if retention_days is not None else GATEWAY_EVENT_REJECTED_RETENTION_DAYS
+    cutoff = add_to_date(now_datetime(), days=-days)
+    return frappe.db.delete("Gateway Event", {"status": "Rejected", "received_at": ["<", cutoff]})
