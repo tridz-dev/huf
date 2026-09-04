@@ -23,6 +23,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 		# Create test data
 		conv_doc = frappe.new_doc("Agent Conversation")
 		conv_doc.agent = "Test Agent"
+		conv_doc.session_id = frappe.generate_hash(length=10)
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
 		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
@@ -61,6 +62,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 		# Create test data
 		conv_doc = frappe.new_doc("Agent Conversation")
 		conv_doc.agent = "Test Agent"
+		conv_doc.session_id = frappe.generate_hash(length=10)
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
 		conv_doc.db_set("owner", "alice@example.com", update_modified=False)

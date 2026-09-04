@@ -24,6 +24,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		# Create previous run owned by alice
 		conv_doc = frappe.new_doc("Agent Conversation")
 		conv_doc.agent = "Test Agent"
+		conv_doc.session_id = frappe.generate_hash(length=10)
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
 		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
@@ -70,6 +71,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		# Create previous run owned by bob
 		conv_bob = frappe.new_doc("Agent Conversation")
 		conv_bob.agent = "Test Agent"
+		conv_bob.session_id = frappe.generate_hash(length=10)
 		conv_bob.owner = "bob@example.com"
 		conv_bob.insert()
 		conv_bob.db_set("owner", "bob@example.com", update_modified=False)
@@ -86,6 +88,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		# Create current run owned by alice
 		conv_alice = frappe.new_doc("Agent Conversation")
 		conv_alice.agent = "Test Agent"
+		conv_alice.session_id = frappe.generate_hash(length=10)
 		conv_alice.owner = "alice@example.com"
 		conv_alice.insert()
 		conv_alice.db_set("owner", "alice@example.com", update_modified=False)
