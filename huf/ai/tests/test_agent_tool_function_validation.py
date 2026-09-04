@@ -60,11 +60,19 @@ class TestAppProvidedToolValidation(unittest.TestCase):
 		Pre-existing behaviour, confirm unchanged: Custom Function still
 		goes through is_whitelisted(), which raises frappe.PermissionError
 		(frappe/__init__.py:878-892), not frappe.ValidationError.
+
+		function_path must be something frappe.get_attr() can actually
+		resolve -- it requires "<installed_app>.<module>...<attr>" and
+		raises AppNotInstalledError (a ValidationError subclass) before
+		is_whitelisted() is ever reached for a path like "subprocess.getoutput"
+		whose first segment isn't an installed app. Use a real, resolvable,
+		but never-whitelisted frappe function instead so this test actually
+		exercises is_whitelisted()'s PermissionError.
 		"""
 		tool = frappe.new_doc("Agent Tool Function")
 		tool.tool_name = "test_custom_rce"
 		tool.types = "Custom Function"
-		tool.function_path = "subprocess.getoutput"
+		tool.function_path = "frappe.utils.random_string"
 
 		with self.assertRaises(frappe.PermissionError):
 			tool.save()
