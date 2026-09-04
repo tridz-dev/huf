@@ -138,6 +138,17 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "message": "Could not dispatch the tool call to the frontend (cache unavailable).",
         }
 
+    # Scope this to the conversation's owner. Without ``user=``, Frappe's
+    # realtime layer fans this out to every socket subscribed to the
+    # ``conversation:<id>`` room -- i.e. anyone who can guess/obtain this
+    # conversation_id and subscribe, not just the conversation owner (see
+    # ST-R6.6c). The owner is looked up from the DB rather than taken from
+    # ``frappe.session.user`` because this can run from a queue-first
+    # background worker, where the session user would be the worker's
+    # service account, not the human whose browser should receive the
+    # dialog.
+    conversation_owner = frappe.db.get_value("Agent Conversation", conversation_id, "owner")
+
     frappe.publish_realtime(
         event=f'conversation:{conversation_id}',
         message={
@@ -149,6 +160,7 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "tool_params": kwargs,
             "call_id": correlation_id,
         },
+        user=conversation_owner or frappe.session.user,
     )
 
     try:

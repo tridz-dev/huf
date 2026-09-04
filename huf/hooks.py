@@ -178,6 +178,8 @@ permission_query_conditions = {
     "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
+    "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
+    "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
 }
 #
 # has_permission = {
