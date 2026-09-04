@@ -91,12 +91,15 @@ class TestAllGatewayAdapters(unittest.TestCase):
 		mock_post.return_value.json.return_value = {"name": "spaces/1/messages/100"}
 
 		adapter = GoogleChatGatewayAdapter(
-			{"webhook_url": "https://chat.googleapis.com/v1/spaces/1/messages?key=abc"},
+			{
+				"webhook_url": "https://chat.googleapis.com/v1/spaces/1/messages?key=abc",
+				"verification_token": "mytoken",
+			},
 			http_post=mock_post,
 		)
 
 		req = GatewayInboundRequest(
-			body=b'{"space": {"name": "spaces/1"}, "user": {"displayName": "Alice"}, "message": {"text": "Hi Chat", "name": "msg1"}}',
+			body=b'{"token": "mytoken", "space": {"name": "spaces/1"}, "user": {"displayName": "Alice"}, "message": {"text": "Hi Chat", "name": "msg1"}}',
 			headers={},
 			query={},
 			method="POST",

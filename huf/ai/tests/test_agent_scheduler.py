@@ -2,26 +2,33 @@
 Tests for agent scheduler, specifically idempotency of Batch Job submissions.
 
 Covers:
-- ST-R4.5: Idempotency guard prevents duplicate Batch Job submissions
-  when a trigger is due and the scheduler runs multiple times in sequence.
+- ST-R4.5: Idempotency guard prevents duplicate Batch Job submissions.
+
+Note: run_scheduled_agents() was refactored (alongside this track's own
+changes, merged from a sibling security-hardening track) to pre-claim each
+due trigger via a conditional UPDATE (atomic dequeue -- only the tick that
+observes the expected next_execution value wins the claim) and then
+`frappe.enqueue` the actual execution as `execute_scheduled_agent`, rather
+than running the agent inline. The scheduler-tick-level duplicate-enqueue
+race is now closed by the pre-claim itself; ST-R4.5's Batch Job idempotency
+check moved into `execute_scheduled_agent` (where `_submit_batch_job_for_trigger`
+is now actually called) as defense-in-depth against an RQ worker retrying
+the same job after a crash mid-execution.
 
 Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_agent_scheduler
 """
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 from frappe.utils import now_datetime
 
-from huf.ai.agent_scheduler import run_scheduled_agents
+from huf.ai.agent_scheduler import execute_scheduled_agent, run_scheduled_agents
 
 
-class TestAgentSchedulerIdempotency(unittest.TestCase):
-	"""Test idempotency guards in the scheduled agent scheduler."""
+class TestAgentSchedulerPreClaim(unittest.TestCase):
+	"""Test the pre-claim dequeue mechanism in run_scheduled_agents()."""
 
 	def setUp(self):
-		"""Set up mock objects for testing."""
 		self.now = now_datetime().replace(microsecond=0)
-
-		# Create a mock trigger with Batch execution mode
 		self.trigger = {
 			"name": "trigger-batch-001",
 			"agent": "test-agent",
@@ -32,127 +39,94 @@ class TestAgentSchedulerIdempotency(unittest.TestCase):
 			"execution_mode": "Batch",
 		}
 
-		# Create a mock agent document
+	@patch("huf.ai.agent_scheduler.frappe")
+	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
+	def test_enqueues_when_pre_claim_wins(self, mock_automation_runtime_is_new, mock_frappe):
+		"""A tick that wins the conditional-UPDATE claim (rowcount == 1) enqueues execute_scheduled_agent."""
+		mock_automation_runtime_is_new.return_value = False
+		mock_frappe.session.user = "Administrator"
+		mock_frappe.has_permission.return_value = True
+		mock_frappe.db.exists.return_value = True
+		mock_frappe.get_all.return_value = [self.trigger]
+		# UPDATE call, then SELECT ROW_COUNT() -> [[1]] (claim won)
+		mock_frappe.db.sql.side_effect = [None, [[1]]]
+
+		run_scheduled_agents()
+
+		mock_frappe.enqueue.assert_called_once()
+		call_kwargs = mock_frappe.enqueue.call_args
+		self.assertEqual(call_kwargs[0][0], "huf.ai.agent_scheduler.execute_scheduled_agent")
+		self.assertEqual(call_kwargs[1]["agent_trigger"], "trigger-batch-001")
+
+	@patch("huf.ai.agent_scheduler.frappe")
+	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
+	def test_skips_enqueue_when_pre_claim_lost(self, mock_automation_runtime_is_new, mock_frappe):
+		"""A tick that loses the conditional-UPDATE claim (rowcount == 0, another tick already
+		claimed this trigger) must not enqueue a second execute_scheduled_agent job -- this is
+		the actual duplicate-enqueue race fix now that submission is deferred to the queue."""
+		mock_automation_runtime_is_new.return_value = False
+		mock_frappe.session.user = "Administrator"
+		mock_frappe.has_permission.return_value = True
+		mock_frappe.db.exists.return_value = True
+		mock_frappe.get_all.return_value = [self.trigger]
+		# UPDATE call, then SELECT ROW_COUNT() -> [[0]] (claim lost)
+		mock_frappe.db.sql.side_effect = [None, [[0]]]
+
+		run_scheduled_agents()
+
+		mock_frappe.enqueue.assert_not_called()
+
+
+class TestExecuteScheduledAgentIdempotency(unittest.TestCase):
+	"""Test the Batch Job idempotency guard inside execute_scheduled_agent()."""
+
+	def setUp(self):
+		self.trigger_doc = MagicMock()
+		self.trigger_doc.name = "trigger-batch-001"
+		self.trigger_doc.execution_mode = "Batch"
+		self.trigger_doc.get = lambda key, default=None: {"agent": "test-agent", "name": "trigger-batch-001"}.get(
+			key, default
+		)
+		self.trigger_doc.__getitem__ = lambda self_, key: {"agent": "test-agent", "name": "trigger-batch-001"}[key]
+
 		self.agent_doc = MagicMock()
 		self.agent_doc.agent_name = "test-agent"
 		self.agent_doc.provider = "test-provider"
 		self.agent_doc.model = "test-model"
 
 	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
-	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
-	@patch("huf.ai.prompt_resolver.resolve_prompt")
-	def test_batch_job_idempotency_prevents_duplicate_submissions(
-		self,
-		mock_resolve_prompt,
-		mock_submit_batch,
-		mock_automation_runtime_is_new,
-		mock_frappe,
-	):
-		"""
-		Test that calling run_scheduled_agents() twice with the same due
-		Batch trigger results in exactly one _submit_batch_job_for_trigger call.
-
-		This verifies ST-R4.5: the idempotency guard queries for an existing
-		Batch Job with the trigger name and status Pending/Submitted, and
-		skips submission if one is found.
-		"""
-		# Mock automation_runtime_is_new to return False (legacy path is active)
-		mock_automation_runtime_is_new.return_value = False
-
-		# Set up frappe mock
-		mock_frappe.session.user = "Administrator"
-		mock_frappe.has_permission.return_value = True
-		mock_frappe.db.exists.return_value = True  # Agent Trigger DocType exists
-		mock_frappe.get_doc.return_value = self.agent_doc
-		mock_frappe.logger.return_value = MagicMock()
-
-		# Mock resolve_prompt to return a test prompt
-		mock_resolve_prompt.return_value = "Test scheduled prompt"
-
-		# First call: no existing Batch Job, should submit
-		mock_frappe.get_all.return_value = [self.trigger]
-		mock_frappe.db.get_value.return_value = None  # No existing job
-
-		run_scheduled_agents()
-
-		# Assert _submit_batch_job_for_trigger was called once
-		self.assertEqual(mock_submit_batch.call_count, 1)
-
-		# Second call: simulating an existing Batch Job with Pending status
-		# Reset the mock to track the second call
-		mock_frappe.db.get_value.return_value = "BJ-00001"  # Existing job name
-
-		run_scheduled_agents()
-
-		# Assert _submit_batch_job_for_trigger was NOT called a second time
-		# (still 1, not 2)
-		self.assertEqual(mock_submit_batch.call_count, 1)
-
-	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
 	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
 	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_submitted_when_no_existing_job(
-		self,
-		mock_resolve_prompt,
-		mock_submit_batch,
-		mock_automation_runtime_is_new,
-		mock_frappe,
+		self, mock_resolve_prompt, mock_submit_batch, mock_frappe
 	):
-		"""
-		Test that _submit_batch_job_for_trigger is called when there is
-		no existing Batch Job for the trigger.
-		"""
-		mock_automation_runtime_is_new.return_value = False
-		mock_frappe.session.user = "Administrator"
-		mock_frappe.has_permission.return_value = True
-		mock_frappe.db.exists.return_value = True
-		mock_frappe.get_doc.return_value = self.agent_doc
-		mock_frappe.logger.return_value = MagicMock()
+		"""execute_scheduled_agent submits a Batch Job when none is Pending/Submitted for this trigger."""
+		mock_frappe.get_doc.side_effect = [self.trigger_doc, self.agent_doc]
+		mock_frappe.db.get_value.return_value = None  # No existing job
 		mock_resolve_prompt.return_value = "Test prompt"
 
-		mock_frappe.get_all.return_value = [self.trigger]
-		mock_frappe.db.get_value.return_value = None  # No existing job
+		execute_scheduled_agent(agent_trigger="trigger-batch-001", agent="test-agent")
 
-		run_scheduled_agents()
-
-		# Verify _submit_batch_job_for_trigger was called with correct arguments
 		mock_submit_batch.assert_called_once()
 		call_args = mock_submit_batch.call_args
-		self.assertEqual(call_args[0][0], self.trigger)  # trigger
-		self.assertEqual(call_args[0][1], self.agent_doc)  # agent
-		self.assertEqual(call_args[0][2], "Test prompt")  # prompt
+		self.assertEqual(call_args[0][0], self.trigger_doc)
+		self.assertEqual(call_args[0][1], self.agent_doc)
+		self.assertEqual(call_args[0][2], "Test prompt")
 
 	@patch("huf.ai.agent_scheduler.frappe")
-	@patch("huf.ai.agent_scheduler.automation_runtime_is_new")
 	@patch("huf.ai.agent_scheduler._submit_batch_job_for_trigger")
 	@patch("huf.ai.prompt_resolver.resolve_prompt")
 	def test_batch_job_skipped_when_pending_job_exists(
-		self,
-		mock_resolve_prompt,
-		mock_submit_batch,
-		mock_automation_runtime_is_new,
-		mock_frappe,
+		self, mock_resolve_prompt, mock_submit_batch, mock_frappe
 	):
-		"""
-		Test that _submit_batch_job_for_trigger is skipped when a Batch Job
-		already exists with status "Pending".
-		"""
-		mock_automation_runtime_is_new.return_value = False
-		mock_frappe.session.user = "Administrator"
-		mock_frappe.has_permission.return_value = True
-		mock_frappe.db.exists.return_value = True
-		mock_frappe.get_doc.return_value = self.agent_doc
-		mock_frappe.logger.return_value = MagicMock()
+		"""execute_scheduled_agent skips submission when a Batch Job already exists Pending/Submitted
+		for this trigger -- the defense-in-depth guard against an RQ retry re-running this job."""
+		mock_frappe.get_doc.side_effect = [self.trigger_doc, self.agent_doc]
+		mock_frappe.db.get_value.return_value = "BJ-existing-pending"
 		mock_resolve_prompt.return_value = "Test prompt"
 
-		mock_frappe.get_all.return_value = [self.trigger]
-		mock_frappe.db.get_value.return_value = "BJ-existing-pending"
+		execute_scheduled_agent(agent_trigger="trigger-batch-001", agent="test-agent")
 
-		run_scheduled_agents()
-
-		# Verify _submit_batch_job_for_trigger was NOT called
 		mock_submit_batch.assert_not_called()
 
 	@patch("huf.ai.agent_scheduler.frappe")

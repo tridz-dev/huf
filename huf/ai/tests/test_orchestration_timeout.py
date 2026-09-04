@@ -132,11 +132,17 @@ class ExecuteNextStepReloadsFreshTestCase(unittest.TestCase):
 
 	def setUp(self):
 		self.fake_cache = MagicMock()
+		# Recursion-depth check (ST-09.5, merged from a sibling hardening
+		# track) runs at the top of `_execute_next_step` -- give it a
+		# no-op budget so it doesn't interfere with these ST-R1.3 tests.
+		fake_budget = MagicMock()
+		fake_budget.check_depth.return_value = None
 		self.patchers = [
 			patch.object(orchestrator.frappe, "cache", return_value=self.fake_cache),
 			patch.object(orchestrator.frappe.db, "commit"),
 			patch.object(orchestrator.frappe.db, "set_value"),
 			patch.object(orchestrator, "now_datetime", return_value="2026-01-01 12:00:00"),
+			patch.object(orchestrator, "get_current_budget", return_value=fake_budget),
 		]
 		for p in self.patchers:
 			p.start()
