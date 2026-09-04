@@ -268,3 +268,19 @@ def list_api_keys() -> list[dict]:
 		order_by="creation desc",
 	)
 	return [_serialize_key(frappe.get_doc("Huf API Key", name)) for name in names]
+
+
+def get_api_key_permission_conditions(user):
+	"""
+	Restrict Huf API Key list to keys owned by the user.
+
+	API keys are inherently per-user; no capability carve-out is needed.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	# Only own keys
+	return f"`tabHuf API Key`.owner = {frappe.db.escape(user)}"

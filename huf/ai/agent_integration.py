@@ -3771,3 +3771,63 @@ def get_run_permission_conditions(user):
 		return None
 
 	return f"`tabAgent Run`.owner = {frappe.db.escape(user)}"
+
+
+def get_tool_call_permission_conditions(user):
+	"""
+	Restrict Agent Tool Call list to calls from runs the user owns,
+	unless the user has agent.view_all capability.
+
+	Agent Tool Call has a direct `agent_run` link field; join to Agent Run's owner.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	# Agent Tool Call links directly to Agent Run; join on agent_run field.
+	return f"`tabAgent Tool Call`.agent_run IN (SELECT name FROM `tabAgent Run` WHERE owner = {frappe.db.escape(user)})"
+
+
+def get_prompt_snapshot_permission_conditions(user):
+	"""
+	Restrict Agent Run Prompt Snapshot list to snapshots from runs the user owns,
+	unless the user has agent.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	# Only own runs' snapshots
+	return f"`tabAgent Run Prompt Snapshot`.agent_run IN (SELECT name FROM `tabAgent Run` WHERE owner = {frappe.db.escape(user)})"
+
+
+def get_procedure_run_permission_conditions(user):
+	"""
+	Restrict Agent Procedure Run list to runs the user owns.
+
+	Agent Procedure Run carries its own standard Frappe owner field.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	# Only own runs
+	return f"`tabAgent Procedure Run`.owner = {frappe.db.escape(user)}"
