@@ -71,7 +71,19 @@ def _can_decide(doc: Document, user: str) -> bool:
 	  (b) the approval's ``approver_role`` is set and the user has that role;
 	  (c) the approval's ``approver_users`` child table (``Agent User`` rows)
 	      contains the user.
+
+	Fail-closed self-approval guard: if ``requested_by`` is set and the acting
+	user IS the requester, the only way to decide is the explicit
+	``Agent Settings.allow_self_approval`` escape hatch (default off). This
+	check runs before any of the (a)/(b)/(c) checks so a requester who also
+	happens to hold the approval capability, role, or is a named approver
+	still cannot decide their own request unless the escape hatch is set.
+	Pre-migration rows with an empty ``requested_by`` are unaffected — the
+	guard is skipped entirely and (a)/(b)/(c) apply as before.
 	"""
+	if doc.requested_by and user == doc.requested_by:
+		return _self_approval_permitted()
+
 	# (a) capability-based approver (System Manager / Administrator included).
 	if _has_approval_capability(doc, user):
 		return True
@@ -86,6 +98,16 @@ def _can_decide(doc: Document, user: str) -> bool:
 		return True
 
 	return False
+
+
+def _self_approval_permitted() -> bool:
+	"""Escape hatch for single-operator sites: reads ``Agent Settings.allow_self_approval``.
+
+	Defaults to 0 (fail-closed) when the field is unset. An operator who is
+	the only admin on a site can flip this to keep code execution usable,
+	while every other site keeps the self-approval prohibition by default.
+	"""
+	return bool(frappe.db.get_single_value("Agent Settings", "allow_self_approval"))
 
 
 def _finalize_tool_call(doc: Document, error_message: str) -> None:
