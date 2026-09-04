@@ -169,14 +169,14 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         trigger.insert(ignore_permissions=True)
         self.created_triggers.append(trigger.name)
 
-        # Set via set_encrypted_password
+        # set_encrypted_password() alone only writes to the __Auth table; the
+        # main-table column only gets the "*" * len dummy mask written into
+        # it by Document._save_passwords(), which runs on doc.save() when a
+        # real (non-dummy) value is assigned to the field. Go through the
+        # real path so the masking behaviour under test actually happens.
         test_key = "secret_key_to_mask"
-        set_encrypted_password(
-            "Automation Trigger",
-            trigger.name,
-            test_key,
-            "webhook_key"
-        )
+        trigger.webhook_key = test_key
+        trigger.save(ignore_permissions=True)
 
         # Reload and check plaintext attribute
         trigger = frappe.get_doc("Automation Trigger", trigger.name)
@@ -188,41 +188,36 @@ class TestSecretsPasswordFields(IntegrationTestCase):
 
     def test_automation_trigger_field_list_no_plaintext_export(self):
         """Test that automation_api.py does not return plaintext webhook_key to low-privilege users."""
-        # This test mocks the automation_api behavior to ensure that when
-        # the field-listing endpoint returns webhook_key and secret fields,
-        # they are redacted (masked) for Huf Viewer/Huf User.
+        # This test verifies the masking guarantee any field-listing endpoint
+        # relies on: once a real secret has been assigned and saved, the
+        # in-memory/DB plaintext column is the dummy mask, never the secret,
+        # regardless of who reads it next. (frappe.session isn't consulted by
+        # this masking path at all -- mocking it here was a no-op that only
+        # broke fixture creation, since it replaced the real Administrator
+        # session those inserts need permission from.)
+        trigger = frappe.get_doc({
+            "doctype": "Automation Trigger",
+            "trigger_name": "test_export_" + frappe.utils.random_string(8),
+            "automation": self._create_automation_if_missing(),
+            "trigger_type": "Webhook",
+            "webhook_slug": "test_slug_" + frappe.utils.random_string(8),
+        })
+        trigger.insert(ignore_permissions=True)
+        self.created_triggers.append(trigger.name)
 
-        # Mock the frappe session to simulate a Huf User
-        with patch("frappe.session") as mock_session:
-            mock_session.user = "test_huf_user"
-            mock_session.user_roles = ["Huf User"]
+        # Set the webhook_key through the real save path (see
+        # test_plaintext_read_returns_masked_value for why set_encrypted_password
+        # alone would not mask the main-table column).
+        test_key = "export_secret_key"
+        trigger.webhook_key = test_key
+        trigger.save(ignore_permissions=True)
 
-            # Create a trigger with a real secret
-            trigger = frappe.get_doc({
-                "doctype": "Automation Trigger",
-                "trigger_name": "test_export_" + frappe.utils.random_string(8),
-                "automation": self._create_automation_if_missing(),
-                "trigger_type": "Webhook",
-                "webhook_slug": "test_slug_" + frappe.utils.random_string(8),
-            })
-            trigger.insert(ignore_permissions=True)
-            self.created_triggers.append(trigger.name)
+        # Fetch the document
+        fetched_trigger = frappe.get_doc("Automation Trigger", trigger.name)
 
-            # Set the webhook_key
-            test_key = "export_secret_key"
-            set_encrypted_password(
-                "Automation Trigger",
-                trigger.name,
-                test_key,
-                "webhook_key"
-            )
-
-            # Fetch the document
-            fetched_trigger = frappe.get_doc("Automation Trigger", trigger.name)
-
-            # When fetched via Frappe's normal get_doc/get_value, the
-            # webhook_key should be masked (the dummy * value), not plaintext
-            self.assertEqual(fetched_trigger.webhook_key, "*" * len(test_key))
+        # When fetched via Frappe's normal get_doc/get_value, the
+        # webhook_key should be masked (the dummy * value), not plaintext
+        self.assertEqual(fetched_trigger.webhook_key, "*" * len(test_key))
 
     def _create_automation_if_missing(self):
         """Helper: create a minimal Automation for testing."""
@@ -251,11 +246,14 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         return "Test Agent"
 
     def _create_tool_type_if_missing(self):
-        """Helper: create a minimal Agent Tool Type for testing."""
+        """Helper: create a minimal Agent Tool Type for testing.
+
+        Agent Tool Type autonames off `name1`, not the reserved `name` key.
+        """
         tool_type_name = "test_tool_type_" + frappe.utils.random_string(8)
         tool_type = frappe.get_doc({
             "doctype": "Agent Tool Type",
-            "name": tool_type_name,
+            "name1": tool_type_name,
         })
         tool_type.insert(ignore_permissions=True)
-        return tool_type_name
+        return tool_type.name
