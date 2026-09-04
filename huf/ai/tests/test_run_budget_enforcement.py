@@ -73,7 +73,7 @@ class TestRecursionDepthEnforcement(IntegrationTestCase):
         # Should raise at depth 3 with ceiling=2
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget_depth_3.check_depth(max_depth=2)
-        assert "Recursion depth" in str(exc_info.value)
+        assert "Recursion depth" in str(exc_info.exception)
 
     def test_ancestry_chain_preserved(self):
         """Ancestry chain grows correctly through multiple hops."""
@@ -140,7 +140,7 @@ class TestDeadlineEnforcement(IntegrationTestCase):
         # Should raise when checking deadline
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_deadline()
-        assert "deadline exceeded" in str(exc_info.value).lower()
+        assert "deadline exceeded" in str(exc_info.exception).lower()
 
     def test_deadline_not_exceeded_permits_execution(self):
         """Budget with future deadline does not raise."""
@@ -197,7 +197,7 @@ class TestSpendCapEnforcement(IntegrationTestCase):
         # Should raise when trying to add 2.0 (total would be 11.0 > 10.0)
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(2.0)
-        assert "spend" in str(exc_info.value).lower() or "budget" in str(exc_info.value).lower()
+        assert "spend" in str(exc_info.exception).lower() or "budget" in str(exc_info.exception).lower()
 
     def test_spend_cap_allows_affordable_child(self):
         """Budget with spend_cap=10 and spend_so_far=9 allows a 0.5 child."""

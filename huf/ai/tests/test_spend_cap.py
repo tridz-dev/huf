@@ -89,7 +89,7 @@ class TestSpendCapEnforcement(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(15.0)  # Total = 105.0 > 100.0
-        assert "spend" in str(exc_info.value).lower() or "budget" in str(exc_info.value).lower()
+        assert "spend" in str(exc_info.exception).lower() or "budget" in str(exc_info.exception).lower()
 
     def test_spend_fractionally_over_cap(self):
         """Even small overspend raises."""
@@ -155,7 +155,7 @@ class TestSpendCapErrorMessages(IntegrationTestCase):
 
         with self.assertRaises(frappe.ValidationError) as exc_info:
             budget.check_spend(15.0)
-        error_msg = str(exc_info.value).lower()
+        error_msg = str(exc_info.exception).lower()
         # Should mention spend/cost/budget
         assert any(word in error_msg for word in ["spend", "budget", "cost", "exceed"])
 
