@@ -51,8 +51,24 @@ class _LazyLogger:
 
 logger = _LazyLogger()
 
-# Default request timeout for LiteLLM completion calls (seconds)
+# Default request timeout for LiteLLM completion calls (seconds), used as the
+# ultimate fallback when a per-provider timeout_seconds is unavailable.
 _DEFAULT_LITELLM_TIMEOUT = 180
+
+
+def _provider_timeout(provider_doc) -> int:
+    """Resolve the request timeout (seconds) for a given AI Provider doc.
+
+    Prefers the provider's own `timeout_seconds` field; falls back to
+    `_DEFAULT_LITELLM_TIMEOUT` when the doc is missing, has no value, or the
+    field is falsy (0/None) so a misconfigured provider never ends up with a
+    zero/no timeout.
+    """
+    if provider_doc is not None:
+        value = provider_doc.get("timeout_seconds")
+        if value:
+            return value
+    return _DEFAULT_LITELLM_TIMEOUT
 
 
 class SimpleResult:
@@ -1304,7 +1320,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # Build completion params
             completion_kwargs = {
                 "model": normalized_model,
-                "timeout": _DEFAULT_LITELLM_TIMEOUT,
+                "timeout": _provider_timeout(provider_doc),
             }
 
             # Only add temperature if explicitly configured and not already known
@@ -1795,7 +1811,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
             "model": normalized_model,
             "messages": messages,
             "temperature": 0.3,
-            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+            "timeout": _provider_timeout(provider_doc),
         }
 
         api_base = _resolve_api_base(provider_doc)
@@ -1847,7 +1863,7 @@ async def get_simple_completion_with_usage(
             "model": normalized_model,
             "messages": messages,
             "temperature": 0.3 if temperature is None else temperature,
-            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+            "timeout": _provider_timeout(provider_doc),
         }
         if max_tokens:
             completion_kwargs["max_tokens"] = max_tokens
@@ -2137,7 +2153,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "messages": messages,
             "stream": True,  # Enable streaming
             "stream_options": {"include_usage": True}, # Request usage stats in stream
-            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+            "timeout": _provider_timeout(provider_doc),
         }
 
         # Only add temperature if explicitly configured and not already known

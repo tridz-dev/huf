@@ -12,7 +12,8 @@
   "api_base_url",
   "provider_name",
   "api_key",
-  "provider_brand"
+  "provider_brand",
+  "timeout_seconds"
  ],
  "fields": [
   {
@@ -60,6 +61,14 @@
    "fieldname": "api_base_url",
    "fieldtype": "Data",
    "label": "API Base URL"
+  },
+  {
+   "default": "180",
+   "description": "Request timeout (seconds) for LLM calls to this provider. Falls back to 180 if unset.",
+   "fieldname": "timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Timeout (seconds)",
+   "non_negative": 1
   }
  ],
  "grid_page_length": 50,
