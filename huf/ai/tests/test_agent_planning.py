@@ -11,9 +11,21 @@ Run with: bench --site <site> run-tests --app huf --module huf.ai.tests.test_age
 """
 import unittest
 from datetime import datetime, timedelta
+from contextlib import nullcontext
 from unittest.mock import MagicMock, patch, call
 import frappe
 from frappe.utils import now_datetime, add_to_date
+
+
+def _ensure_gpt4_model():
+    """AI Model is a real doctype (Link target of Agent.model); Agent Provider
+    and Agent Model records are separate fixtures, not free-text strings."""
+    if not frappe.db.exists("AI Model", "gpt-4"):
+        frappe.get_doc({
+            "doctype": "AI Model",
+            "model_name": "gpt-4",
+            "provider": "OpenAI",
+        }).insert(ignore_permissions=True)
 
 
 class TestAgentRunImmediatelyDefault(unittest.TestCase):
@@ -21,30 +33,31 @@ class TestAgentRunImmediatelyDefault(unittest.TestCase):
 
     def test_new_agent_has_run_immediately_zero_by_default(self):
         """Verify that a freshly created Agent has run_immediately=0."""
-        # Create a minimal Agent doc without saving
-        agent = frappe.get_doc({
-            "doctype": "Agent",
-            "agent_name": "test_agent_default_" + frappe.utils.generate_hash(length=8),
-            "provider": "OpenAI",
-            "model": "gpt-4",
-        })
+        # frappe.get_doc(dict) does not apply doctype-level field defaults --
+        # only frappe.new_doc() (or an actual insert()) does. Use new_doc so
+        # this test verifies the real default, not just "unset".
+        agent = frappe.new_doc("Agent")
+        agent.agent_name = "test_agent_default_" + frappe.utils.generate_hash(length=8)
+        agent.provider = "OpenAI"
+        agent.model = "gpt-4"
         # Check the default value from the doctype schema
         self.assertEqual(agent.run_immediately, 0)
 
     def test_explicit_run_immediately_one_is_respected(self):
         """Verify that explicit run_immediately=1 is still respected."""
-        agent = frappe.get_doc({
-            "doctype": "Agent",
-            "agent_name": "test_agent_explicit_" + frappe.utils.generate_hash(length=8),
-            "provider": "OpenAI",
-            "model": "gpt-4",
-            "run_immediately": 1,
-        })
+        agent = frappe.new_doc("Agent")
+        agent.agent_name = "test_agent_explicit_" + frappe.utils.generate_hash(length=8)
+        agent.provider = "OpenAI"
+        agent.model = "gpt-4"
+        agent.run_immediately = 1
         self.assertEqual(agent.run_immediately, 1)
 
 
 class TestAgentPlanningEnqueue(unittest.TestCase):
     """ST-08.2: on_update enqueues planning instead of calling directly."""
+
+    def setUp(self):
+        _ensure_gpt4_model()
 
     @patch("huf.huf.doctype.agent.agent.frappe.enqueue")
     @patch("huf.huf.doctype.agent.agent.clear_doc_event_agents_cache")
@@ -127,6 +140,17 @@ class TestAgentPlanningEnqueue(unittest.TestCase):
 class TestSchedulerPreClaim(unittest.TestCase):
     """ST-08.6: scheduler pre-claims next_execution with conditional UPDATE."""
 
+    def setUp(self):
+        # frappe.session is a LocalProxy without a real __dict__ outside a
+        # request context, so `patch("...frappe.session.user", ...)` fails
+        # with a TypeError inside mock's own introspection (target.__dict__
+        # is None). Set/restore it directly instead.
+        self._old_user = frappe.session.user
+        frappe.session.user = "Administrator"
+
+    def tearDown(self):
+        frappe.session.user = self._old_user
+
     @patch("huf.ai.agent_scheduler.frappe.db.sql")
     @patch("huf.ai.agent_scheduler.frappe.db.commit")
     @patch("huf.ai.agent_scheduler.frappe.enqueue")
@@ -159,7 +183,7 @@ class TestSchedulerPreClaim(unittest.TestCase):
         ]
 
         # Mock frappe permissions/db checks
-        with patch("huf.ai.agent_scheduler.frappe.session.user", "Administrator"):
+        with nullcontext():  # session.user is set/restored in setUp/tearDown
             with patch("huf.ai.agent_scheduler.frappe.db.exists", return_value=True):
                 with patch("huf.ai.agent_scheduler.frappe.has_permission", return_value=True):
                     with patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False):
@@ -207,7 +231,7 @@ class TestSchedulerPreClaim(unittest.TestCase):
             [[0]],  # ROW_COUNT() returns 0 (another tick got there first)
         ]
 
-        with patch("huf.ai.agent_scheduler.frappe.session.user", "Administrator"):
+        with nullcontext():  # session.user is set/restored in setUp/tearDown
             with patch("huf.ai.agent_scheduler.frappe.db.exists", return_value=True):
                 with patch("huf.ai.agent_scheduler.frappe.has_permission", return_value=True):
                     with patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False):
@@ -247,7 +271,7 @@ class TestSchedulerPreClaim(unittest.TestCase):
             [[1]],  # ROW_COUNT()
         ]
 
-        with patch("huf.ai.agent_scheduler.frappe.session.user", "Administrator"):
+        with nullcontext():  # session.user is set/restored in setUp/tearDown
             with patch("huf.ai.agent_scheduler.frappe.db.exists", return_value=True):
                 with patch("huf.ai.agent_scheduler.frappe.has_permission", return_value=True):
                     with patch("huf.ai.agent_scheduler.automation_runtime_is_new", return_value=False):
