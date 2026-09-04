@@ -6,7 +6,7 @@ from enumerating API keys created by other users.
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from huf.huf.doctype.huf_api_key.huf_api_key import get_api_key_permission_conditions
+from huf.huf.doctype.huf_api_key.huf_api_key import generate_key, get_api_key_permission_conditions
 
 
 class TestApiKeyListScope(IntegrationTestCase):
@@ -34,16 +34,20 @@ class TestApiKeyListScope(IntegrationTestCase):
 		alice_key.label = "Alice's Key"
 		alice_key.hashed_secret = "dummy_hash_alice"
 		alice_key.scopes = '["agents:read"]'
+		alice_key._raw_secret = generate_key()[1]
 		alice_key.owner = "alice@example.com"
 		alice_key.insert()
+		alice_key.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_key = frappe.new_doc("Huf API Key")
 		bob_key.key_id = "huf_sk_test_bob"
 		bob_key.label = "Bob's Key"
 		bob_key.hashed_secret = "dummy_hash_bob"
 		bob_key.scopes = '["agents:read"]'
+		bob_key._raw_secret = generate_key()[1]
 		bob_key.owner = "bob@example.com"
 		bob_key.insert()
+		bob_key.db_set("owner", "bob@example.com", update_modified=False)
 
 		try:
 			# Alice lists API keys as alice
@@ -69,8 +73,10 @@ class TestApiKeyListScope(IntegrationTestCase):
 		bob_key.label = "Bob's Key"
 		bob_key.hashed_secret = "dummy_hash_bob"
 		bob_key.scopes = '["agents:read"]'
+		bob_key._raw_secret = generate_key()[1]
 		bob_key.owner = "bob@example.com"
 		bob_key.insert()
+		bob_key.db_set("owner", "bob@example.com", update_modified=False)
 
 		try:
 			# Alice lists API keys as alice
@@ -94,16 +100,20 @@ class TestApiKeyListScope(IntegrationTestCase):
 		alice_key.label = "Alice's Key"
 		alice_key.hashed_secret = "dummy_hash_alice"
 		alice_key.scopes = '["agents:read"]'
+		alice_key._raw_secret = generate_key()[1]
 		alice_key.owner = "alice@example.com"
 		alice_key.insert()
+		alice_key.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_key = frappe.new_doc("Huf API Key")
 		bob_key.key_id = "huf_sk_test_bob"
 		bob_key.label = "Bob's Key"
 		bob_key.hashed_secret = "dummy_hash_bob"
 		bob_key.scopes = '["agents:read"]'
+		bob_key._raw_secret = generate_key()[1]
 		bob_key.owner = "bob@example.com"
 		bob_key.insert()
+		bob_key.db_set("owner", "bob@example.com", update_modified=False)
 
 		try:
 			# System Manager lists API keys
