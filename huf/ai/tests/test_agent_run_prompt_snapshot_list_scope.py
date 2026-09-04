@@ -12,6 +12,29 @@ from huf.ai.agent_integration import get_prompt_snapshot_permission_conditions
 class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Agent Run Prompt Snapshot."""
 
+	def setUp(self):
+		if not frappe.db.exists("Agent", "Test Agent"):
+			frappe.get_doc({
+				"doctype": "Agent",
+				"agent_name": "Test Agent",
+				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
+			}).insert(ignore_permissions=True)
+
+		# frappe.get_list's read check goes through the full role-based
+		# permission stack; alice/bob need a real User with a role that has
+		# base read access on Agent Run Prompt Snapshot (Huf Manager) before
+		# the permission_query_conditions scoping is ever reached.
+		for email in ("alice@example.com", "bob@example.com"):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": "Huf Manager"}],
+				}).insert(ignore_permissions=True)
+
 	def test_system_manager_gets_no_filter(self):
 		"""System Manager should see no filter (returns None)."""
 		frappe.set_user("Administrator")
@@ -34,12 +57,14 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 		alice_run.status = "Started"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
+		alice_run.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_run = frappe.new_doc("Agent Run")
 		bob_run.agent = "Test Agent"
 		bob_run.status = "Started"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create snapshots for each run
 		alice_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
@@ -67,6 +92,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 			assert alice_snapshot.name in alice_list
 			assert bob_snapshot.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			alice_snapshot.delete()
 			bob_snapshot.delete()
 			alice_run.delete()
@@ -80,6 +106,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 		bob_run.status = "Started"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create a snapshot for bob's run
 		bob_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
@@ -100,6 +127,7 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 			# Alice should NOT see bob's snapshot
 			assert bob_snapshot.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			bob_snapshot.delete()
 			bob_run.delete()
 
@@ -111,12 +139,14 @@ class TestAgentRunPromptSnapshotListScope(IntegrationTestCase):
 		alice_run.status = "Started"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
+		alice_run.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_run = frappe.new_doc("Agent Run")
 		bob_run.agent = "Test Agent"
 		bob_run.status = "Started"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create snapshots for each run
 		alice_snapshot = frappe.new_doc("Agent Run Prompt Snapshot")
