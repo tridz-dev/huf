@@ -26,3 +26,4 @@ huf.patches.v1.backfill_agent_run_usage_columns
 huf.patches.v1.migrate_prompt_caching_fields
 huf.patches.v1.migrate_secrets_to_password_fields
 huf.patches.v1.disable_gateway_without_credentials
+huf.patches.v1.log_run_immediately_agents
