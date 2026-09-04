@@ -330,6 +330,7 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 
 - [**Full Documentation**](https://docs.huf.ai/) — Guides, tutorials, and API reference
 - [**Bruno API Collection**](./docs/bruno/) — Ready-to-use API collection for testing and exploration
+- [**Remote Agent Federation RFC**](./docs/rfcs/huf-remote-agent-federation.md) — Protocol, schema, API & runtime specification for HUF remote agent federation.
 - [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.
 - [**CLAUDE.md**](./CLAUDE.md) — Defines coding standards, review criteria, and project-specific rules.
 
