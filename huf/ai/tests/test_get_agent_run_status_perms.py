@@ -39,7 +39,6 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 
 		try:
 			# Mock the call as alice
-			import frappe.auth
 			old_user = frappe.session.user
 			try:
 				frappe.session.user = "alice@example.com"
