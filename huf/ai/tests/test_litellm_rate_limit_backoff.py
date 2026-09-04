@@ -39,8 +39,12 @@ RateLimitError = litellm_module.RateLimitError
 InternalServerError = litellm_module.InternalServerError
 
 
+def _make_exc(exc_cls, message="rate limited"):
+    return exc_cls(message, llm_provider="openai", model="gpt-4o-mini")
+
+
 def _exc_with_retry_after(exc_cls, seconds, header_name="Retry-After"):
-    exc = exc_cls("rate limited")
+    exc = _make_exc(exc_cls)
     response = MagicMock()
     response.headers = {header_name: str(seconds)}
     exc.response = response
@@ -49,14 +53,14 @@ def _exc_with_retry_after(exc_cls, seconds, header_name="Retry-After"):
 
 class TestComputeBackoffDelay(unittest.TestCase):
     def test_doubles_from_one_second(self):
-        exc = RateLimitError("rate limited")
+        exc = _make_exc(RateLimitError)
         self.assertEqual(litellm_module._compute_rate_limit_backoff_delay(0, exc), 1)
         self.assertEqual(litellm_module._compute_rate_limit_backoff_delay(1, exc), 2)
         self.assertEqual(litellm_module._compute_rate_limit_backoff_delay(2, exc), 4)
         self.assertEqual(litellm_module._compute_rate_limit_backoff_delay(3, exc), 8)
 
     def test_caps_at_sixty_seconds(self):
-        exc = RateLimitError("rate limited")
+        exc = _make_exc(RateLimitError)
         # attempt index high enough that 2**attempt would blow well past 60
         self.assertEqual(litellm_module._compute_rate_limit_backoff_delay(10, exc), 60)
 
@@ -81,7 +85,7 @@ class TestExtractRetryAfterSeconds(unittest.TestCase):
         self.assertEqual(litellm_module._extract_retry_after_seconds(exc), 12.0)
 
     def test_returns_none_when_absent(self):
-        exc = RateLimitError("rate limited")
+        exc = _make_exc(RateLimitError)
         self.assertIsNone(litellm_module._extract_retry_after_seconds(exc))
 
     def test_returns_none_when_header_value_is_garbage(self):
@@ -102,12 +106,12 @@ class TestRetryAfterRateLimitOr5xx(unittest.IsolatedAsyncioTestCase):
         async def flaky_completion(**kwargs):
             calls["n"] += 1
             if calls["n"] < 3:
-                raise RateLimitError("rate limited")
+                raise _make_exc(RateLimitError)
             return "final-response"
 
         with patch.object(litellm_module, "_litellm_completion_with_retry", side_effect=flaky_completion):
             result = await litellm_module._retry_after_rate_limit_or_5xx(
-                {"model": "gpt-4o-mini"}, RateLimitError("rate limited")
+                {"model": "gpt-4o-mini"}, _make_exc(RateLimitError)
             )
 
         self.assertEqual(result, "final-response")
@@ -120,12 +124,12 @@ class TestRetryAfterRateLimitOr5xx(unittest.IsolatedAsyncioTestCase):
         async def flaky_completion(**kwargs):
             calls["n"] += 1
             if calls["n"] < 2:
-                raise InternalServerError("server error")
+                raise _make_exc(InternalServerError, "server error")
             return "final-response"
 
         with patch.object(litellm_module, "_litellm_completion_with_retry", side_effect=flaky_completion):
             result = await litellm_module._retry_after_rate_limit_or_5xx(
-                {"model": "gpt-4o-mini"}, InternalServerError("server error")
+                {"model": "gpt-4o-mini"}, _make_exc(InternalServerError, "server error")
             )
 
         self.assertEqual(result, "final-response")
@@ -156,9 +160,9 @@ class TestRetryAfterRateLimitOr5xx(unittest.IsolatedAsyncioTestCase):
 
         async def always_fails(**kwargs):
             calls["n"] += 1
-            raise RateLimitError(f"rate limited attempt {calls['n']}")
+            raise _make_exc(RateLimitError, f"rate limited attempt {calls['n']}")
 
-        first_exc = RateLimitError("rate limited attempt 0")
+        first_exc = _make_exc(RateLimitError, "rate limited attempt 0")
         with patch.object(litellm_module, "_litellm_completion_with_retry", side_effect=always_fails):
             with self.assertRaises(RateLimitError):
                 await litellm_module._retry_after_rate_limit_or_5xx({"model": "gpt-4o-mini"}, first_exc)
