@@ -868,25 +868,37 @@ def _env_var_name_for_provider(provider_brand: str) -> str:
     return f"{provider_brand.upper().replace('-', '_')}_API_KEY"
 
 
-def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
+def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict) -> str | None:
     """
     Setup API key for LiteLLM based on provider requirements.
 
     Some providers need environment variables, others accept api_key parameter.
+    completion_kwargs["api_key"] is always set (unconditionally) so that a
+    concurrent request with a different key never has to rely on os.environ
+    alone. Returns the env var name that was written, if any, so the caller
+    can restore it (from _BOOT_ENV) in a finally block once the call
+    completes — env vars are process-global and must not leak between
+    concurrent requests.
     """
-    if provider_name in _ENV_VAR_PROVIDERS:
-        # Set environment variable for this request
-        os.environ[_ENV_VAR_PROVIDERS[provider_name]] = api_key
-        return
-
-    # For known providers that accept an api_key parameter directly, prefer that.
+    # Always set the api_key kwarg so callers/providers that read from
+    # completion_kwargs get the correct, request-specific key regardless of
+    # whatever another concurrent request may have written to os.environ.
     completion_kwargs["api_key"] = api_key
+
+    if provider_name in _ENV_VAR_PROVIDERS:
+        # Some providers additionally need the key in an environment
+        # variable (LiteLLM/provider SDK requirement).
+        env_var_name = _ENV_VAR_PROVIDERS[provider_name]
+        os.environ[env_var_name] = api_key
+        return env_var_name
 
     # Unknown/new providers often expect a PROVIDER_API_KEY environment variable.
     # Set a heuristic env var as well so users don't have to wait for a code
     # change to try a new LiteLLM provider; the api_key param remains the primary
     # mechanism for providers that support it.
-    os.environ[_env_var_name_for_provider(provider_name)] = api_key
+    env_var_name = _env_var_name_for_provider(provider_name)
+    os.environ[env_var_name] = api_key
+    return env_var_name
 
 
 # _setup_api_key() writes resolved DB keys into os.environ as a side effect
