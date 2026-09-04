@@ -83,7 +83,17 @@ def _submit_batch_job_for_trigger(t, agent, prompt):
 
 @frappe.whitelist()
 def run_scheduled_agents():
+	"""Execute due scheduled agent triggers.
+
+	DEPRECATED: This is the legacy scheduler path. Use the new
+	automation_scheduler.run_automation_triggers instead once
+	automation_runtime_is_new() is the sole mode on your site.
+	Will be removed in a future version after Remediation WP-08
+	ships and automation_runtime_is_new() is the default on all
+	internal benches. See doc/DEPRECATIONS.md for removal timeline.
+	"""
 	if automation_runtime_is_new():
+		frappe.logger().info("run_scheduled_agents: legacy scheduler is disabled; new automation_runtime is active")
 		return
 	now = now_datetime().replace(microsecond=0)
 
@@ -126,7 +136,15 @@ def run_scheduled_agents():
 			prompt = resolve_prompt(agent) or f"Run scheduled agent: {agent_name}"
 
 			if t.get("execution_mode") == "Batch":
-				_submit_batch_job_for_trigger(t, agent, prompt)
+				# Idempotency guard: check if a Batch Job already exists for this trigger
+				# with status Pending or Submitted to avoid duplicate submissions.
+				existing_job = frappe.db.get_value(
+					"Batch Job",
+					{"agent_trigger": t["name"], "status": ("in", ["Pending", "Submitted"])},
+					"name"
+				)
+				if not existing_job:
+					_submit_batch_job_for_trigger(t, agent, prompt)
 			else:
 				run_agent_sync(agent_name, prompt, agent.provider, agent.model)
 

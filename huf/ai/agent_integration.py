@@ -28,6 +28,7 @@ from huf.ai.knowledge.context_builder import build_knowledge_context, inject_kno
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
 from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from frappe.rate_limiter import rate_limit
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
@@ -1121,6 +1122,7 @@ def _link_preexisting_user_message(conversation_name: str, run_name: str):
 
 
 @frappe.whitelist(allow_guest=True)
+@rate_limit(key="agent_name", limit=20, seconds=60, ip_based=True)
 def run_agent_sync(
     agent_name: str,
     prompt: str = None,
@@ -1145,6 +1147,27 @@ def run_agent_sync(
     now=None,
     project: str = None,
 ):
+    """Run an agent synchronously (queue-first by default; see ``now``).
+
+    ``allow_guest=True`` is intentional (Track-Item: ST-R4.3) — Agent has a
+    per-agent ``allow_guest`` flag that is a deliberate, supported product
+    feature, not dead weight. Do not remove this decorator to "clean up"
+    guest access; that deletes a supported feature.
+
+    Oracle-avoidance invariant this relies on: a nonexistent ``agent_name``
+    and an existing agent with ``allow_guest=0`` must throw an identical
+    ``frappe.PermissionError`` with the same message to a Guest caller — see
+    the check a few lines below (``agent_doc is None or (frappe.session.user
+    == "Guest" and not agent_doc.allow_guest)``). If you change either branch
+    of that condition, keep the exception type and message identical for
+    both cases, otherwise the exception shape becomes an oracle for
+    enumerating agent names.
+
+    The ``@rate_limit`` decorator above is IP-scoped and applies to every
+    caller, not only Guests, but its limit (20 calls/60s per IP) is sized to
+    be a no-op for a normal authenticated browser session while throttling a
+    flooding script against an ``allow_guest=1`` agent.
+    """
 
     if not agent_name:
         frappe.throw(_("Agent Name is required"))

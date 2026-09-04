@@ -180,6 +180,7 @@ permission_query_conditions = {
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
     "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
+    "Agent Run Feedback": "huf.ai.record_access.get_feedback_permission_conditions",
 }
 #
 # has_permission = {
