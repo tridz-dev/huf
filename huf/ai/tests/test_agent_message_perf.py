@@ -20,8 +20,17 @@ class TestAgentMessagePerf(UnitTestCase):
         """Create test conversations and messages."""
         super().setUp()
         self.agent_doc = frappe.new_doc("Agent")
-        self.agent_doc.name = f"perf-test-agent-{time.time()}"
-        self.agent_doc.agent_type = "Custom Tool"
+        # Agent autonames off `agent_name` (field:agent_name), not the
+        # reserved `name` key -- setting `.name` directly leaves agent_name
+        # itself unset and naming fails with "Agent Name is required".
+        # There is no `agent_type` field on this doctype either (the real
+        # field is `agent_modality`); provider/model are mandatory unless
+        # agent_modality == "Voice".
+        self.agent_doc.agent_name = f"perf-test-agent-{time.time()}"
+        self.agent_doc.agent_modality = "Both"
+        self.agent_doc.provider = "OpenAI"
+        self.agent_doc.model = "gpt-4"
+        self.agent_doc.instructions = "Test agent fixture for message perf tests."
         self.agent_doc.flags.ignore_permissions = True
         self.agent_doc.insert()
 
@@ -39,6 +48,7 @@ class TestAgentMessagePerf(UnitTestCase):
         conv = frappe.new_doc("Agent Conversation")
         conv.name = name
         conv.agent = self.agent_doc.name
+        conv.session_id = frappe.generate_hash(length=10)
         conv.flags.ignore_permissions = True
         conv.insert()
         return conv
