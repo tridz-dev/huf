@@ -198,35 +198,46 @@ class TestGuestDenialWithoutPin(unittest.TestCase):
 
 
 class TestNonGuestUnaffected(unittest.TestCase):
-	"""Test that non-guest sessions are not affected by report pinning."""
+	"""Test that non-guest sessions are not affected by report pinning.
 
+	Regression test for a real bug found during live verification: the
+	``args_dict["report_name"] = extra_args["reference_report"]`` override in
+	``invoke_tool`` originally sat OUTSIDE the
+	``if allowed_for_guest and frappe.session.user == "Guest":`` block, so it
+	silently overwrote a non-guest caller's LLM-supplied ``report_name`` too --
+	the exact opposite of the "non-guest session is unaffected" acceptance
+	criterion. This test drives the REAL ``invoke_tool`` (not a hand-copied
+	simulation of its logic) with a non-guest session and a pinned
+	``reference_report``, and asserts the handler actually receives the
+	LLM-supplied ``report_name``, unmodified.
+	"""
+
+	@patch("huf.ai.tool_invocation.get_function_from_name")
 	@patch("huf.ai.tool_invocation.frappe")
-	async def test_non_guest_uses_llm_supplied_report_name(self, mock_frappe):
+	def test_non_guest_uses_llm_supplied_report_name(self, mock_frappe, mock_get_fn):
 		"""Non-guest: report_name from args_dict is honored, not overridden."""
 		mock_frappe.session.user = "user@example.com"
 
-		# Simulate: tool has reference_report, but guest check is skipped for non-guest
 		spec = _make_get_report_result_tool_spec(
 			reference_report="Pinned Report",
-			allowed_for_guest=0,
+			allowed_for_guest=1,
+		)
+		mock_frappe.db.get_value.return_value = spec
+
+		received_kwargs = {}
+
+		async def fake_handler(**kwargs):
+			received_kwargs.update(kwargs)
+			return {"success": True}
+
+		mock_get_fn.return_value = fake_handler
+
+		result = asyncio.run(
+			invoke_tool("get_my_report", {"report_name": "LLM-Supplied Report"})
 		)
 
-		# The guest-specific override only happens inside:
-		#   if allowed_for_guest and frappe.session.user == "Guest":
-		# For non-guests, extra_args are injected but report_name is NOT overridden
-
-		extra_args = {"reference_report": "Pinned Report"}
-		args_dict = {"report_name": "LLM-Supplied Report"}
-
-		# For non-guest, the override should NOT happen
-		# (it only happens in the guest branch of the code)
-		# So args_dict should retain its original value
-		if not mock_frappe.session.user == "Guest":
-			# The override is skipped, so report_name stays as supplied
-			pass
-
-		# After the guest check is skipped, the handler gets called with original args
-		self.assertEqual(args_dict["report_name"], "LLM-Supplied Report")
+		self.assertTrue(result.success)
+		self.assertEqual(received_kwargs.get("report_name"), "LLM-Supplied Report")
 
 
 class TestSdkToolsGuestCheck(unittest.TestCase):
