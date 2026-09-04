@@ -182,6 +182,9 @@ permission_query_conditions = {
     "Agent Procedure Run": "huf.ai.agent_integration.get_procedure_run_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
+    "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
+    "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
+    "Agent Run Feedback": "huf.ai.record_access.get_feedback_permission_conditions",
 }
 
 has_permission = {
@@ -286,6 +289,7 @@ scheduler_events = {
         "huf.ai.memory_tools.expire_stale_memory_records",
         "huf.ai.agent_chat.purge_trashed_conversations",
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
+        "huf.ai.gateway_service.purge_old_rejected_gateway_events",
     ],
     "cron": {
         "*/1 * * * *": [

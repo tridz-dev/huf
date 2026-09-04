@@ -33,6 +33,32 @@ def _require(capability: str) -> None:
 		)
 
 
+def _require_all_capabilities(huf_role: str) -> None:
+	"""Ensure the caller holds every capability in the target role."""
+	target_caps = DEFAULT_ROLE_CAPABILITIES.get(huf_role, [])
+	caller_user = frappe.session.user
+	missing = [cap for cap in target_caps if not has_capability(caller_user, cap)]
+	if missing:
+		frappe.throw(
+			_("You lack capabilities to assign this role: {0}").format(", ".join(missing)),
+			frappe.PermissionError,
+		)
+
+
+def _is_bootstrap_caller() -> bool:
+	"""Administrator/System Manager is the stated escape hatch for self-targeting
+	lockouts (review item 11) — it sits above the Huf capability model."""
+	return frappe.session.user == "Administrator" or "System Manager" in frappe.get_roles(frappe.session.user)
+
+
+def _guard_self_targeting(user: str) -> None:
+	if user == frappe.session.user and not _is_bootstrap_caller():
+		frappe.throw(
+			_("You cannot change your own role. Ask a System Manager to make this change."),
+			frappe.PermissionError,
+		)
+
+
 # ---------------------------------------------------------------------------
 # User listing & management
 # ---------------------------------------------------------------------------
@@ -79,8 +105,12 @@ def invite_user(email: str, full_name: str, huf_role: str) -> dict:
 
 	email = email.strip().lower()
 
+	_guard_self_targeting(email)
+
 	if not frappe.db.exists("Huf Role", huf_role):
 		frappe.throw(_("Huf Role '{0}' does not exist.").format(huf_role))
+
+	_require_all_capabilities(huf_role)
 
 	# Create Frappe user if they don't exist yet.
 	if not frappe.db.exists("User", email):
@@ -123,11 +153,15 @@ def update_user_role(user: str, huf_role: str) -> dict:
 	"""
 	_require("users.manage")
 
+	_guard_self_targeting(user)
+
 	if not frappe.db.exists("Huf Role", huf_role):
 		frappe.throw(_("Huf Role '{0}' does not exist.").format(huf_role))
 
 	if not frappe.db.exists("Huf User Role", {"user": user}):
 		frappe.throw(_("User '{0}' has no Huf User Role record.").format(user))
+
+	_require_all_capabilities(huf_role)
 
 	name = frappe.db.get_value("Huf User Role", {"user": user}, "name")
 	doc = frappe.get_doc("Huf User Role", name)

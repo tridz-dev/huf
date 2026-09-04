@@ -9,6 +9,7 @@ huf.patches.v1.migrate_provider_brand
 huf.patches.v1.add_agent_message_conversation_index
 huf.patches.v1.add_agent_run_sequence_index
 huf.patches.v1.add_agent_run_analytics_indexes
+huf.patches.v1.add_agent_run_idempotency_index
 huf.patches.add_tool_types
 huf.patches.setup_desktop_icon_as_workspace
 huf.patches.v1.update_image_tool
@@ -26,6 +27,8 @@ huf.patches.v1.migrate_agent_triggers_to_automations
 huf.patches.v1.preserve_gateway_agent_access
 huf.patches.v1.backfill_agent_run_usage_columns
 huf.patches.v1.migrate_prompt_caching_fields
+huf.patches.v1.privatize_generated_media_files
+huf.patches.v1.set_allow_all_users_for_existing_agents
 huf.patches.v1.migrate_secrets_to_password_fields
 huf.patches.v1.disable_gateway_without_credentials
 huf.patches.v1.log_run_immediately_agents

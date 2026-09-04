@@ -3,9 +3,29 @@
 Helper functions used by both permission_query_conditions hooks (for list
 scoping) and has_permission hooks (for single-doc reads), ensuring
 consistent logic across both paths.
+
+Also home to get_feedback_permission_conditions (Agent Run Feedback list
+scoping, added alongside these by a sibling security-hardening track — see
+the module's own history for the coordination note that anticipated this).
 """
 
 import frappe
+
+from huf.permissions import SYSTEM_MANAGER, has_capability
+
+
+def get_feedback_permission_conditions(user):
+	"""Return a condition scoping feedback reads to the user who created them."""
+	if not user:
+		user = frappe.session.user
+
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	return f"`tabAgent Run Feedback`.owner = {frappe.db.escape(user)}"
 
 
 def user_can_read_run(run_doc, user=None):
@@ -21,7 +41,6 @@ def user_can_read_run(run_doc, user=None):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return True
 	if has_capability(user, "agent.view_all"):
@@ -42,7 +61,6 @@ def user_can_read_message(message_doc, user=None):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return True
 	if has_capability(user, "chat.view_all"):
@@ -66,7 +84,6 @@ def user_can_read_conversation(conversation_doc, user=None):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return True
 	if has_capability(user, "chat.view_all"):
@@ -87,7 +104,6 @@ def user_can_read_tool_call(tool_call_doc, user=None):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return True
 	if has_capability(user, "agent.view_all"):
@@ -111,7 +127,6 @@ def user_can_read_context_artifact(artifact_doc, user=None):
 	if not user:
 		user = frappe.session.user
 
-	from huf.permissions import has_capability, SYSTEM_MANAGER
 	if SYSTEM_MANAGER in frappe.get_roles(user):
 		return True
 	if has_capability(user, "chat.view_all"):

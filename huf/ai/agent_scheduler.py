@@ -83,7 +83,17 @@ def _submit_batch_job_for_trigger(t, agent, prompt):
 
 @frappe.whitelist()
 def run_scheduled_agents():
+	"""Execute due scheduled agent triggers.
+
+	DEPRECATED: This is the legacy scheduler path. Use the new
+	automation_scheduler.run_automation_triggers instead once
+	automation_runtime_is_new() is the sole mode on your site.
+	Will be removed in a future version after Remediation WP-08
+	ships and automation_runtime_is_new() is the default on all
+	internal benches. See doc/DEPRECATIONS.md for removal timeline.
+	"""
 	if automation_runtime_is_new():
+		frappe.logger().info("run_scheduled_agents: legacy scheduler is disabled; new automation_runtime is active")
 		return
 	now = now_datetime().replace(microsecond=0)
 
@@ -189,7 +199,19 @@ def execute_scheduled_agent(agent_trigger: str, agent: str) -> None:
 		prompt = resolve_prompt(agent_doc) or f"Run scheduled agent: {agent}"
 
 		if trigger_doc.execution_mode == "Batch":
-			_submit_batch_job_for_trigger(trigger_doc, agent_doc, prompt)
+			# Idempotency guard: the pre-claim conditional UPDATE in
+			# run_scheduled_agents() already prevents two scheduler ticks
+			# from enqueueing this job twice, but this check remains
+			# defense-in-depth against an RQ worker retrying the same job
+			# after a crash mid-execution (a retry that already reached
+			# this point once).
+			existing_job = frappe.db.get_value(
+				"Batch Job",
+				{"agent_trigger": agent_trigger, "status": ("in", ["Pending", "Submitted"])},
+				"name"
+			)
+			if not existing_job:
+				_submit_batch_job_for_trigger(trigger_doc, agent_doc, prompt)
 		else:
 			run_agent_sync(agent, prompt, agent_doc.provider, agent_doc.model)
 

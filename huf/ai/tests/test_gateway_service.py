@@ -110,6 +110,36 @@ class TestGatewayIngress(unittest.TestCase):
             {"token": "top-secret", "body": {"signature": "sig", "message": "hello"}}
         ) == {"token": "[redacted]", "body": {"signature": "[redacted]", "message": "hello"}}
 
+    def test_payload_redaction_covers_additional_credential_keys(self):
+        """ST-R5.13: SENSITIVE_PAYLOAD_KEYS was extended with additional
+        credential-related field names cross-referenced against adapter
+        credential_schema definitions (huf/ai/gateway_adapters/*.py)."""
+        payload = {
+            "bearer_token": "a",
+            "x_api_key": "b",
+            "auth_token": "c",
+            "webhook_secret": "d",
+            "access_token": "e",
+            "client_secret": "f",
+            "signing_secret": "g",
+            "corp_secret": "h",
+            "callback_token": "i",
+            "app_secret": "j",
+            "app_password": "k",
+            "bot_token": "l",
+            "public_key": "m",
+            "community_token": "n",
+            "callback_secret": "o",
+            "verification_token": "p",
+            "message": "kept",
+        }
+        redacted = gateway_service._redact_payload(payload)
+        for key in payload:
+            if key == "message":
+                continue
+            assert redacted[key] == "[redacted]", f"{key} was not redacted"
+        assert redacted["message"] == "kept"
+
     @patch("huf.ai.gateway_service.frappe")
     def test_duplicate_provider_event_is_a_noop(self, mock_frappe):
         mock_frappe.db.get_value.return_value = "GATEWAY-EVENT-0001"
@@ -268,6 +298,54 @@ def access_entry(**overrides):
     entry.expires_at = values["expires_at"]
     entry.integration_settings = None
     return entry
+
+
+class TestPurgeOldRejectedGatewayEvents(unittest.TestCase):
+    """ST-R5.17: rejected Gateway Event rows are retained for forensic audit
+    (the insert-before-admission ordering in ingest_gateway_event is
+    deliberate and must not be removed), but bounded by a retention job that
+    purges Rejected rows past a TTL."""
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_deletes_only_rejected_rows_older_than_default_ttl(self, mock_frappe):
+        fixed_now = datetime(2026, 8, 1, 0, 0, 0)
+        mock_frappe.utils.now_datetime = MagicMock(return_value=fixed_now)
+        with patch("huf.ai.gateway_service.now_datetime", return_value=fixed_now):
+            gateway_service.purge_old_rejected_gateway_events()
+
+        expected_cutoff = add_to_date(fixed_now, days=-30)
+        mock_frappe.db.delete.assert_called_once_with(
+            "Gateway Event",
+            {"status": "Rejected", "received_at": ["<", expected_cutoff]},
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_custom_retention_window_is_honored(self, mock_frappe):
+        fixed_now = datetime(2026, 8, 1, 0, 0, 0)
+        with patch("huf.ai.gateway_service.now_datetime", return_value=fixed_now):
+            gateway_service.purge_old_rejected_gateway_events(retention_days=7)
+
+        expected_cutoff = add_to_date(fixed_now, days=-7)
+        mock_frappe.db.delete.assert_called_once_with(
+            "Gateway Event",
+            {"status": "Rejected", "received_at": ["<", expected_cutoff]},
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_only_rejected_status_is_targeted_never_other_statuses(self, mock_frappe):
+        fixed_now = datetime(2026, 8, 1, 0, 0, 0)
+        with patch("huf.ai.gateway_service.now_datetime", return_value=fixed_now):
+            gateway_service.purge_old_rejected_gateway_events()
+
+        filters = mock_frappe.db.delete.call_args.args[1]
+        assert filters["status"] == "Rejected"
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_returns_delete_result(self, mock_frappe):
+        mock_frappe.db.delete.return_value = 5
+        with patch("huf.ai.gateway_service.now_datetime", return_value=datetime(2026, 8, 1)):
+            result = gateway_service.purge_old_rejected_gateway_events()
+        assert result == 5
 
 
 class TestPairingReplyEnabled(unittest.TestCase):

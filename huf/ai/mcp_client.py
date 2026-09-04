@@ -82,7 +82,12 @@ def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[Func
         list[FunctionTool]: List of FunctionTool objects for MCP tools
     """
     tools = []
-    
+    # Scoped to this call: tracks sanitized/truncated tool names already
+    # assigned so collisions (e.g. two source names that sanitize/truncate
+    # to the same 64-char string) get numeric suffixes instead of silently
+    # shadowing one another.
+    seen_tool_names: set[str] = set()
+
     if mcp_server_names is not None:
         # Use the explicitly provided server names.
         server_links = [
@@ -121,7 +126,7 @@ def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[Func
                     "parameters": parameters
                 }
                 
-                tool = _create_mcp_function_tool(mcp_server, tool_def)
+                tool = _create_mcp_function_tool(mcp_server, tool_def, seen_tool_names)
                 if tool:
                     tools.append(tool)
                     
@@ -154,16 +159,45 @@ def _get_cached_mcp_tools(mcp_server) -> list[dict]:
         return []
 
 
-def _create_mcp_function_tool(mcp_server, tool_def: dict) -> FunctionTool:
+def _dedupe_tool_name(safe_name: str, seen_names: set[str] | None, max_len: int = 64) -> str:
+    """Return a version of `safe_name` that is not already in `seen_names`.
+
+    Appends `_1`, `_2`, ... until unique, truncating the base name as
+    needed so the result never exceeds `max_len` characters. Adds the
+    final name to `seen_names`. If `seen_names` is None, dedup is a
+    no-op (returns `safe_name` unchanged) - callers that don't care about
+    collisions across a batch can omit tracking.
+    """
+    if seen_names is None:
+        return safe_name
+
+    if safe_name not in seen_names:
+        seen_names.add(safe_name)
+        return safe_name
+
+    suffix_index = 1
+    while True:
+        suffix = f"_{suffix_index}"
+        base = safe_name[: max_len - len(suffix)]
+        candidate = f"{base}{suffix}"
+        if candidate not in seen_names:
+            seen_names.add(candidate)
+            return candidate
+        suffix_index += 1
+
+
+def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] | None = None) -> FunctionTool:
     """
     Create a FunctionTool wrapper for an MCP tool.
-    
+
     The tool's on_invoke_tool will call the MCP server to execute the tool.
-    
+
     Args:
         mcp_server: MCP Server document
         tool_def: Tool definition from MCP server (OpenAI format)
-    
+        seen_names: Optional set of already-assigned tool names (scoped to
+            the caller's batch) used to de-duplicate `safe_name` collisions.
+
     Returns:
         FunctionTool: Wrapped tool that calls MCP server on invocation
     """
@@ -222,7 +256,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict) -> FunctionTool:
         safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', display_name)
         if len(safe_name) > 64:
             safe_name = safe_name[:64]
-        
+        safe_name = _dedupe_tool_name(safe_name, seen_names)
+
         tool = FunctionTool(
             name=safe_name,
             description=f"[MCP:{mcp_server.server_name}] {description}",
@@ -302,37 +337,94 @@ def _format_mcp_error(exc) -> str:
         return msg
     return str(exc)
 
+# Bounded exponential backoff parameters for 429 / 5xx retries.
+_MCP_RETRY_MAX_ATTEMPTS = 5
+_MCP_RETRY_BASE_DELAY_SECONDS = 1
+_MCP_RETRY_MAX_DELAY_SECONDS = 60
+
+
+def _is_retryable_status(exc) -> bool:
+    """True if `exc` (or any of its sub-exceptions, e.g. an ExceptionGroup)
+    carries an HTTP 429 or 5xx status code."""
+    if _has_status_code(exc, "429"):
+        return True
+    return any(_has_status_code(exc, str(code)) for code in range(500, 600))
+
+
+def _extract_retry_after_seconds(exc) -> float | None:
+    """Best-effort extraction of a `Retry-After` header (seconds) from `exc`.
+
+    Looks at `exc.response.headers` (the shape `httpx.HTTPStatusError` and
+    similar exceptions carry) and recurses into `exc.exceptions` for
+    exception groups. Returns None if no usable header is found.
+    """
+    response = getattr(exc, "response", None)
+    if response is not None:
+        headers = getattr(response, "headers", None) or {}
+        retry_after = headers.get("Retry-After") or headers.get("retry-after")
+        if retry_after:
+            try:
+                return max(0.0, float(retry_after))
+            except (TypeError, ValueError):
+                pass
+
+    if hasattr(exc, "exceptions"):
+        for sub_exc in exc.exceptions:
+            value = _extract_retry_after_seconds(sub_exc)
+            if value is not None:
+                return value
+
+    return None
+
+
 async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
     """
     Executes an async operation with an initialized MCP ClientSession.
-    Automatically handles transport selection (SSE vs HTTP) and OAuth 401 retries.
+    Automatically handles transport selection (SSE vs HTTP), OAuth 401
+    retries, and bounded exponential backoff for 429/5xx errors (honoring
+    a `Retry-After` header when present, capped at `_MCP_RETRY_MAX_ATTEMPTS`
+    attempts).
     """
     headers = _build_mcp_headers(mcp_server)
+    delay_seconds = _MCP_RETRY_BASE_DELAY_SECONDS
 
-    try:
-        return await _do_execute_mcp_session(mcp_server, headers, operation)
-    except Exception as e:
-        # If it's a 401 and we use OAuth, retry once
-        if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
-            from huf.ai.mcp_oauth import refresh_oauth_token
-            try:
-                refresh_oauth_token(mcp_server.name)
-                # Rebuild headers with fresh token and drop any pooled session
-                # created with the stale token so the retry opens a fresh one.
-                headers = _build_mcp_headers(mcp_server)
+    for attempt in range(1, _MCP_RETRY_MAX_ATTEMPTS + 1):
+        try:
+            return await _do_execute_mcp_session(mcp_server, headers, operation)
+        except Exception as e:
+            # If it's a 401 and we use OAuth, refresh the token and retry once.
+            if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
+                from huf.ai.mcp_oauth import refresh_oauth_token
+                try:
+                    refresh_oauth_token(mcp_server.name)
+                    # Rebuild headers with fresh token and drop any pooled session
+                    # created with the stale token so the retry opens a fresh one.
+                    headers = _build_mcp_headers(mcp_server)
+                    _evict_pooled_session(mcp_server.name)
+                    return await _do_execute_mcp_session(mcp_server, headers, operation)
+                except Exception as refresh_exc:
+                    frappe.log_error(
+                        message=f"OAuth retry failed: {refresh_exc}\n\n{frappe.get_traceback()}",
+                        title="MCP OAuth Retry"
+                    )
+                    raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
+
+            # Rate-limited (429) or upstream server error (5xx): back off and retry,
+            # up to _MCP_RETRY_MAX_ATTEMPTS total attempts.
+            if _is_retryable_status(e) and attempt < _MCP_RETRY_MAX_ATTEMPTS:
+                wait_seconds = _extract_retry_after_seconds(e)
+                if wait_seconds is None:
+                    wait_seconds = delay_seconds
+                delay_seconds = min(delay_seconds * 2, _MCP_RETRY_MAX_DELAY_SECONDS)
                 _evict_pooled_session(mcp_server.name)
-                return await _do_execute_mcp_session(mcp_server, headers, operation)
-            except Exception as refresh_exc:
-                frappe.log_error(
-                    message=f"OAuth retry failed: {refresh_exc}\n\n{frappe.get_traceback()}",
-                    title="MCP OAuth Retry"
-                )
-                raise Exception("OAuth token invalid or expired. Reconnect via the MCP Server form.")
-        frappe.log_error(
-            message=f"MCP session error: {str(e)}\n\n{frappe.get_traceback()}",
-            title="MCP Session Error"
-        )
-        raise Exception(_format_mcp_error(e))
+                await asyncio.sleep(wait_seconds)
+                continue
+
+            frappe.log_error(
+                message=f"MCP session error: {str(e)}\n\n{frappe.get_traceback()}",
+                title="MCP Session Error"
+            )
+            raise Exception(_format_mcp_error(e))
 
 def _evict_pooled_session(server_name: str) -> None:
     pool_ctx = _mcp_session_pool.get()

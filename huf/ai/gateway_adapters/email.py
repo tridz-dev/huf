@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 from typing import Any, Callable, Mapping
 
@@ -64,13 +65,11 @@ class EmailGatewayAdapter(GatewayAdapter):
 
 		# Look for secret in header or query parameter
 		token = request.headers.get("X-Webhook-Secret") or request.query.get("secret", "")
-
 		# Fail closed if token is not provided
 		if not token:
 			return False
 
 		# Use constant-time comparison to prevent timing attacks
-		import hmac
 		return hmac.compare_digest(token, self._secret)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:

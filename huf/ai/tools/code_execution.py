@@ -621,6 +621,7 @@ def run_python(
 				"code_ref": code_ref,
 				"status": "Pending",
 				"expires_on": add_to_date(now_datetime(), hours=_APPROVAL_TTL_HOURS),
+				"requested_by": acting_user,
 			}
 		)
 		original_user = frappe.session.user

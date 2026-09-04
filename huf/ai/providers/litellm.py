@@ -52,8 +52,24 @@ class _LazyLogger:
 
 logger = _LazyLogger()
 
-# Default request timeout for LiteLLM completion calls (seconds)
+# Default request timeout for LiteLLM completion calls (seconds), used as the
+# ultimate fallback when a per-provider timeout_seconds is unavailable.
 _DEFAULT_LITELLM_TIMEOUT = 180
+
+
+def _provider_timeout(provider_doc) -> int:
+    """Resolve the request timeout (seconds) for a given AI Provider doc.
+
+    Prefers the provider's own `timeout_seconds` field; falls back to
+    `_DEFAULT_LITELLM_TIMEOUT` when the doc is missing, has no value, or the
+    field is falsy (0/None) so a misconfigured provider never ends up with a
+    zero/no timeout.
+    """
+    if provider_doc is not None:
+        value = provider_doc.get("timeout_seconds")
+        if value:
+            return value
+    return _DEFAULT_LITELLM_TIMEOUT
 
 
 class SimpleResult:
@@ -229,6 +245,82 @@ async def _litellm_completion_with_retry(**completion_kwargs):
                 await asyncio.sleep(delay)
                 continue
             raise
+    raise last_exc
+
+
+# --- Rate-limit / 5xx exponential backoff --------------------------------------
+#
+# RateLimitError (429) and 5xx server errors are not "transient network blips"
+# in the sense `_litellm_completion_with_retry` retries (broken pipe, connection
+# reset, etc.) -- they are the provider explicitly telling us to slow down or
+# that it is temporarily overloaded. Both warrant their own backoff schedule,
+# separate from the transient-network retry above, capped at a small number of
+# attempts so a persistently rate-limited/unavailable provider still fails
+# within a bounded time instead of hanging a run indefinitely.
+
+_RATE_LIMIT_MAX_ATTEMPTS = 5
+_RATE_LIMIT_BASE_DELAY_SECONDS = 1
+_RATE_LIMIT_MAX_DELAY_SECONDS = 60
+
+
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Best-effort extraction of a Retry-After header from a litellm exception.
+
+    litellm's RateLimitError (and other provider exceptions) may carry the
+    underlying HTTP response as `.response` (httpx.Response-like, with a
+    `.headers` mapping), or occasionally expose `.headers` directly. Header
+    names are matched case-insensitively since `Retry-After` casing is not
+    guaranteed to survive whatever wrapper litellm/the SDK used.
+    """
+    for holder in (getattr(exc, "response", None), exc):
+        headers = getattr(holder, "headers", None) if holder is not None else None
+        if not headers:
+            continue
+        try:
+            for key in ("Retry-After", "retry-after"):
+                value = headers.get(key)
+                if value is not None:
+                    return float(value)
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _compute_rate_limit_backoff_delay(attempt: int, exc: Exception) -> float:
+    """Delay (seconds) before retry `attempt` (0-indexed) after `exc`.
+
+    Honors a `Retry-After` header when present; otherwise doubles from
+    `_RATE_LIMIT_BASE_DELAY_SECONDS`, capped at `_RATE_LIMIT_MAX_DELAY_SECONDS`.
+    """
+    retry_after = _extract_retry_after_seconds(exc)
+    if retry_after is not None and retry_after >= 0:
+        return min(retry_after, _RATE_LIMIT_MAX_DELAY_SECONDS)
+    return min(_RATE_LIMIT_BASE_DELAY_SECONDS * (2 ** attempt), _RATE_LIMIT_MAX_DELAY_SECONDS)
+
+
+async def _retry_after_rate_limit_or_5xx(completion_kwargs: dict, first_exc: Exception):
+    """Retry a completion call with exponential backoff after a RateLimitError
+    or 5xx server error.
+
+    `first_exc` is the exception that triggered the retry (attempt 1 of
+    `_RATE_LIMIT_MAX_ATTEMPTS`); this function performs up to
+    `_RATE_LIMIT_MAX_ATTEMPTS - 1` further attempts, sleeping before each per
+    `_compute_rate_limit_backoff_delay`. If every attempt is exhausted, the
+    most recent exception is re-raised.
+    """
+    last_exc = first_exc
+    for attempt in range(1, _RATE_LIMIT_MAX_ATTEMPTS):
+        delay = _compute_rate_limit_backoff_delay(attempt - 1, last_exc)
+        logger.warning(
+            f"LiteLLM rate-limit/5xx error (attempt {attempt + 1}/{_RATE_LIMIT_MAX_ATTEMPTS}): "
+            f"{last_exc}. Retrying in {delay}s"
+        )
+        await asyncio.sleep(delay)
+        try:
+            return await _litellm_completion_with_retry(**completion_kwargs)
+        except (RateLimitError, InternalServerError) as retry_exc:
+            last_exc = retry_exc
+            continue
     raise last_exc
 
 
@@ -869,25 +961,37 @@ def _env_var_name_for_provider(provider_brand: str) -> str:
     return f"{provider_brand.upper().replace('-', '_')}_API_KEY"
 
 
-def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict):
+def _setup_api_key(provider_name: str, api_key: str, completion_kwargs: dict) -> str | None:
     """
     Setup API key for LiteLLM based on provider requirements.
 
     Some providers need environment variables, others accept api_key parameter.
+    completion_kwargs["api_key"] is always set (unconditionally) so that a
+    concurrent request with a different key never has to rely on os.environ
+    alone. Returns the env var name that was written, if any, so the caller
+    can restore it (from _BOOT_ENV) in a finally block once the call
+    completes — env vars are process-global and must not leak between
+    concurrent requests.
     """
-    if provider_name in _ENV_VAR_PROVIDERS:
-        # Set environment variable for this request
-        os.environ[_ENV_VAR_PROVIDERS[provider_name]] = api_key
-        return
-
-    # For known providers that accept an api_key parameter directly, prefer that.
+    # Always set the api_key kwarg so callers/providers that read from
+    # completion_kwargs get the correct, request-specific key regardless of
+    # whatever another concurrent request may have written to os.environ.
     completion_kwargs["api_key"] = api_key
+
+    if provider_name in _ENV_VAR_PROVIDERS:
+        # Some providers additionally need the key in an environment
+        # variable (LiteLLM/provider SDK requirement).
+        env_var_name = _ENV_VAR_PROVIDERS[provider_name]
+        os.environ[env_var_name] = api_key
+        return env_var_name
 
     # Unknown/new providers often expect a PROVIDER_API_KEY environment variable.
     # Set a heuristic env var as well so users don't have to wait for a code
     # change to try a new LiteLLM provider; the api_key param remains the primary
     # mechanism for providers that support it.
-    os.environ[_env_var_name_for_provider(provider_name)] = api_key
+    env_var_name = _env_var_name_for_provider(provider_name)
+    os.environ[env_var_name] = api_key
+    return env_var_name
 
 
 # _setup_api_key() writes resolved DB keys into os.environ as a side effect
@@ -1312,7 +1416,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
             # Build completion params
             completion_kwargs = {
                 "model": normalized_model,
-                "timeout": _DEFAULT_LITELLM_TIMEOUT,
+                "timeout": _provider_timeout(provider_doc),
             }
 
             # Only add temperature if explicitly configured and not already known
@@ -1551,7 +1655,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     f"This may be temporary. Details: {str(e)}"
                 )
                 frappe.log_error(message=raw_msg, title="LiteLLM Provider")
-                _raise_provider_unavailable(raw_msg, normalized_model)
+                try:
+                    response = await _retry_after_rate_limit_or_5xx(completion_kwargs, e)
+                except (RateLimitError, InternalServerError) as backoff_exc:
+                    _raise_provider_unavailable(
+                        f"{raw_msg} (exhausted {_RATE_LIMIT_MAX_ATTEMPTS} attempts with backoff: {backoff_exc})",
+                        normalized_model,
+                    )
 
             except RateLimitError as e:
                 title = f"LiteLLM RateLimit: {normalized_model}"[:140]
@@ -1562,7 +1672,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     full_trace = str(e)
 
                 frappe.log_error(message=full_trace, title=title)
-                raise e
+                # Exponential backoff (1s, doubling, cap 60s, honors Retry-After),
+                # up to _RATE_LIMIT_MAX_ATTEMPTS total attempts, before giving up.
+                response = await _retry_after_rate_limit_or_5xx(completion_kwargs, e)
 
             except ContextWindowExceededError as e:
                 frappe.log_error(message=f"LiteLLM ContextWindowExceededError for model '{normalized_model}': {str(e)}", title="LiteLLM Provider")
@@ -1803,7 +1915,7 @@ async def get_simple_completion(model: str, messages: list, provider: str) -> st
             "model": normalized_model,
             "messages": messages,
             "temperature": 0.3,
-            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+            "timeout": _provider_timeout(provider_doc),
         }
 
         api_base = _resolve_api_base(provider_doc)
@@ -1855,7 +1967,7 @@ async def get_simple_completion_with_usage(
             "model": normalized_model,
             "messages": messages,
             "temperature": 0.3 if temperature is None else temperature,
-            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+            "timeout": _provider_timeout(provider_doc),
         }
         if max_tokens:
             completion_kwargs["max_tokens"] = max_tokens
@@ -2145,7 +2257,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             "messages": messages,
             "stream": True,  # Enable streaming
             "stream_options": {"include_usage": True}, # Request usage stats in stream
-            "timeout": _DEFAULT_LITELLM_TIMEOUT,
+            "timeout": _provider_timeout(provider_doc),
         }
 
         # Only add temperature if explicitly configured and not already known
@@ -2202,7 +2314,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
             completion_kwargs["cached_content"] = gemini_cached_content
 
         provider_name = normalized_model.split("/")[0]
-        _setup_api_key(provider_name, api_key, completion_kwargs)
+        env_var_set_by_request = _setup_api_key(provider_name, api_key, completion_kwargs)
 
         # Resolve provider-aware reasoning parameters
         reasoning_policy_data = None
@@ -2763,6 +2875,17 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
                 yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
                 return
+            finally:
+                # Restore the environment variable to its pre-request state, preventing
+                # cross-request key leakage. Each round's completion call(s) set the env var
+                # via _setup_api_key (called once before all rounds), so we restore it after
+                # each round to ensure it doesn't leak to the next concurrent request.
+                if env_var_set_by_request:
+                    boot_value = _BOOT_ENV.get(env_var_set_by_request)
+                    if boot_value is not None:
+                        os.environ[env_var_set_by_request] = boot_value
+                    elif env_var_set_by_request in os.environ:
+                        del os.environ[env_var_set_by_request]
 
         # Max rounds reached (or the loop broke via is_stop). Finalize the
         # accumulated per-round totals — never the last round's usage alone.

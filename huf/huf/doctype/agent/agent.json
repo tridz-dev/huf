@@ -143,6 +143,8 @@
   "allowed_users",
   "column_break_3mhl",
   "allowed_roles",
+  "access_control_section",
+  "allow_all_users",
   "allowed_models",
   "metadata_tab",
   "last_run",
@@ -767,10 +769,22 @@
   },
   {
    "fieldname": "allowed_roles",
-   "description": "Roles that may run this agent. If both Allowed Users and Allowed Roles are empty, every logged-in user may run this agent.",
+   "description": "Roles that may run this agent. If both Allowed Users and Allowed Roles are empty, whether every logged-in user may run this agent depends on the Allow All Users setting below.",
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Roles",
    "options": "Agent Role"
+  },
+  {
+   "fieldname": "access_control_section",
+   "fieldtype": "Section Break",
+   "label": "Access control"
+  },
+  {
+   "default": "0",
+   "description": "If checked (and both Allowed Users and Allowed Roles are empty), every logged-in user may run this agent. If unchecked, an agent with empty Allowed Users and Allowed Roles is closed to everyone except its owner, System Manager, and holders of the agent.view_all or agent.edit capability. New agents default to closed (unchecked); existing agents are migrated to preserve their current open behaviour.",
+   "fieldname": "allow_all_users",
+   "fieldtype": "Check",
+   "label": "Allow All Users"
   },
   {
    "description": "Allowed provider/model overrides. An empty list means only the agent's configured model is accepted; any override attempt requires the agent.model.override capability. A non-empty list restricts overrides to the models in it (subject to the same capability check for access control).",
