@@ -33,17 +33,32 @@ from huf.ai import agent_integration
 
 class _FakeProviderStream:
 	"""Stand-in for `RunProvider.run_stream(...)`: yields 5 delta chunks
-	with a monotonically growing `full_response`."""
+	with a monotonically growing `full_response`.
 
-	def __init__(self, chunk_texts):
+	`gate`, if given, is awaited before producing the *first* chunk. This
+	gives a test a genuine suspension point inside `run_agent_stream`'s
+	`async for chunk in stream:` loop -- needed to simulate "client
+	disconnected before any chunk arrived, but after the Agent Run was
+	already created". An async generator's `aclose()` is a complete no-op
+	if the generator was never started (no `__anext__()` call ever made):
+	none of its code -- including `finally` -- runs. So a driver that
+	wants to close *after* setup but *before* the first delta must first
+	start the generator and let it suspend somewhere, then close it from
+	there; it cannot simply skip calling `__anext__()` altogether.
+	"""
+
+	def __init__(self, chunk_texts, gate: asyncio.Event = None):
 		self._texts = list(chunk_texts)
 		self._i = 0
 		self._acc = ""
+		self._gate = gate
 
 	def __aiter__(self):
 		return self
 
 	async def __anext__(self):
+		if self._gate is not None and self._i == 0:
+			await self._gate.wait()
 		if self._i >= len(self._texts):
 			raise StopAsyncIteration
 		text = self._texts[self._i]
@@ -91,9 +106,25 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 		# real database.
 		self.set_value_calls = []
 
-		def _fake_set_value(doctype, name, values, **kwargs):
+		def _fake_set_value(doctype, name, fieldname, value=None, **kwargs):
+			# Real `frappe.db.set_value` supports two calling conventions:
+			# `set_value(doctype, name, {field: value, ...})` (dict form,
+			# `value` unused) and `set_value(doctype, name, fieldname,
+			# value)` (single-field shorthand, used e.g. for "Agent
+			# Conversation" model persistence in `run_agent_stream`). Only
+			# the dict form was previously handled here, so any shorthand
+			# call -- even one against an unrelated doctype -- raised a
+			# TypeError that `run_agent_stream`'s broad exception handling
+			# swallowed into a single error chunk, ending the stream after
+			# one item and starving these tests of ever reaching the
+			# provider streaming loop. Accept both forms, exactly like the
+			# real API.
+			if isinstance(fieldname, dict):
+				values = fieldname
+			else:
+				values = {fieldname: value}
 			if doctype == "Agent Run":
-				self.set_value_calls.append((name, dict(values) if isinstance(values, dict) else values))
+				self.set_value_calls.append((name, dict(values)))
 			return None
 
 		self._agent_run_status = "Started"
@@ -105,12 +136,28 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 				return 0
 			return None
 
+		# `frappe.get_doc` is patched globally (it's the same module object
+		# `frappe` that Frappe's own internals import), so any *other* real
+		# Frappe code that runs incidentally during the test -- e.g.
+		# `now_datetime()` -> `get_system_timezone()` ->
+		# `frappe.get_system_settings()` -> `frappe.get_cached_doc("System
+		# Settings")` -- goes through this fake too. Returning a bare
+		# `MagicMock()` for such doctypes is unsafe: `get_cached_doc()`
+		# then tries to cache that MagicMock via the real Redis-backed
+		# cache, which pickles it -- and a dynamically-created MagicMock
+		# class/instance is not reliably picklable, so this blew up
+		# non-deterministically (depending on whether "System Settings"
+		# happened to already be cached from an earlier test). Delegate to
+		# the real `frappe.get_doc` for anything that isn't one of this
+		# test's own mocked doctypes, so real framework docs stay real.
+		_real_get_doc = agent_integration.frappe.get_doc
+
 		def _fake_get_doc(*args, **kwargs):
 			if args and args[0] == "Agent":
 				return self.agent_doc
 			if args and isinstance(args[0], dict) and args[0].get("doctype") == "Agent Run":
 				return self.run_doc
-			return MagicMock()
+			return _real_get_doc(*args, **kwargs)
 
 		self.patchers = [
 			patch.object(agent_integration.frappe, "get_doc", _fake_get_doc, create=True),
@@ -165,8 +212,20 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 	def _drive_partial_stream(self, chunk_texts, take):
 		"""Start `run_agent_stream`, pull `take` chunks, then `aclose()` it
 		-- exactly the sequence ST-R1.1's `stream_generator()` finally
-		block performs on disconnect."""
-		fake_stream = _FakeProviderStream(chunk_texts)
+		block performs on disconnect.
+
+		`take == 0` needs special handling: an async generator's
+		`aclose()` is a no-op if `__anext__()` was never called on it
+		first (the function body -- including the Agent Run insert --
+		never runs). To exercise "disconnected before any chunk, but
+		after the Agent Run was created", the fake provider stream is
+		given a `gate` that it awaits before producing its first chunk, so
+		the generator has a genuine suspension point to hang at: start
+		`__anext__()` as a task, pump the loop once to let it run up to
+		(and suspend at) the gate, cancel that task, then `aclose()`.
+		"""
+		gate = asyncio.Event() if take == 0 else None
+		fake_stream = _FakeProviderStream(chunk_texts, gate=gate)
 		with patch.object(agent_integration.RunProvider, "run_stream", lambda *a, **k: fake_stream):
 			gen = agent_integration.run_agent_stream(
 				agent_name="test-agent",
@@ -179,8 +238,22 @@ class TestStreamSalvageOnDisconnect(unittest.TestCase):
 
 			loop = asyncio.new_event_loop()
 			try:
-				for _ in range(take):
-					loop.run_until_complete(gen.__anext__())
+				if take == 0:
+					task = loop.create_task(gen.__anext__())
+					# Never set `gate` -- just pump the loop long enough for
+					# all the synchronous setup (Agent Run insert, etc.) to
+					# run and for the task to reach and suspend on
+					# `gate.wait()`.
+					loop.run_until_complete(asyncio.sleep(0.05))
+					self.assertFalse(task.done(), "fake provider stream should still be gated open")
+					task.cancel()
+					try:
+						loop.run_until_complete(task)
+					except (asyncio.CancelledError, StopAsyncIteration):
+						pass
+				else:
+					for _ in range(take):
+						loop.run_until_complete(gen.__anext__())
 				loop.run_until_complete(gen.aclose())
 			finally:
 				loop.close()
