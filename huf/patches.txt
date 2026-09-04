@@ -27,3 +27,4 @@ huf.patches.v1.migrate_prompt_caching_fields
 huf.patches.v1.migrate_secrets_to_password_fields
 huf.patches.v1.disable_gateway_without_credentials
 huf.patches.v1.log_run_immediately_agents
+huf.patches.v1.add_run_budget_fields

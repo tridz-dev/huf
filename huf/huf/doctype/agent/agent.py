@@ -127,6 +127,7 @@ class Agent(Document):
         self._validate_skills()
         self._validate_starter_prompts()
         self._validate_allowed_users_and_roles()
+        self._validate_max_turns_ceiling()
         self._update_mcp_tool_counts()
         self._ensure_publishable_key()
         self._sync_modality_voice_flag()
@@ -222,6 +223,23 @@ class Agent(Document):
         for row in prompts:
             if not row.prompt_text:
                 frappe.throw(_("Prompt Text is required for all starter prompts."))
+
+    def _validate_max_turns_ceiling(self):
+        """Warn (non-blocking) when max_turns exceeds Agent Settings ceiling.
+
+        The ceiling is enforced at run time by clamping, not by rejecting saves.
+        This allows pre-existing agents to remain editable even if their
+        max_turns exceed a newly-configured ceiling.
+        """
+        if not self.max_turns:
+            return
+        ceiling = frappe.get_cached_value("Agent Settings", None, "max_turns_ceiling") or 20
+        if self.max_turns > ceiling:
+            frappe.msgprint(
+                _("max_turns exceeds the site ceiling; it will be clamped to {0} at run time.").format(ceiling),
+                indicator="orange",
+                alert=True
+            )
 
     def _validate_system_field_tamper(self):
         """Prevent non-admins from flipping is_system via API/UI."""

@@ -1,5 +1,6 @@
 import frappe
 from frappe import _
+from huf.ai.run_budget import get_current_budget, RunBudgetExceeded
 
 
 async def _await_tagged(coro, provider_path):
@@ -35,6 +36,13 @@ class RunProvider:
     def run(agent, enhanced_prompt, provider, model, context=None):
         provider_lower = provider.lower()
         original_exception = None
+
+        # Check deadline before dispatching (ST-09.3)
+        try:
+            budget = get_current_budget()
+            budget.check_deadline()
+        except RunBudgetExceeded:
+            raise
 
         # 1. Default: Try to run via Unified LiteLLM Provider
         # This supports OpenAI, Anthropic, Google, and 100+ others automatically.

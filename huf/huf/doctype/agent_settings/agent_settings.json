@@ -8,6 +8,11 @@
   "default_provider",
   "column_break_ar10",
   "default_model",
+  "run_budget_section",
+  "max_turns_ceiling",
+  "max_depth",
+  "deadline_seconds",
+  "spend_cap_usd",
   "skills_section",
   "skill_destinations",
   "last_skill_scans"
@@ -28,6 +33,39 @@
   {
    "fieldname": "column_break_ar10",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "run_budget_section",
+   "fieldtype": "Section Break",
+   "label": "Run Budget"
+  },
+  {
+   "default": "20",
+   "description": "Server-side maximum turns for any agent run. Individual agents with higher max_turns will be clamped to this ceiling at run time.",
+   "fieldname": "max_turns_ceiling",
+   "fieldtype": "Int",
+   "label": "Max Turns Ceiling"
+  },
+  {
+   "default": "3",
+   "description": "Maximum recursion depth for agent-to-agent calls.",
+   "fieldname": "max_depth",
+   "fieldtype": "Int",
+   "label": "Max Depth"
+  },
+  {
+   "default": "900",
+   "description": "Wall-clock deadline per run in seconds.",
+   "fieldname": "deadline_seconds",
+   "fieldtype": "Int",
+   "label": "Deadline Seconds"
+  },
+  {
+   "default": "0",
+   "description": "Per-chain cumulative spend cap in USD. 0 means unlimited.",
+   "fieldname": "spend_cap_usd",
+   "fieldtype": "Currency",
+   "label": "Spend Cap USD"
   },
   {
    "fieldname": "skills_section",

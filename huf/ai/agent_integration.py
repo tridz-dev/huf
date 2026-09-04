@@ -32,6 +32,7 @@ from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
 from huf.ai.tool_serializer import serialize_tools
+from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -1180,6 +1181,32 @@ def run_agent_sync(
         provider = None
         model = None
 
+    # Check model override permissions (ST-09.10)
+    if model or provider:
+        allowed_set = {
+            (row.provider, row.model)
+            for row in frappe.get_all(
+                "Agent Allowed Model",
+                filters={"parent": agent_doc.name},
+                fields=["provider", "model"],
+            )
+        }
+        # Semantics are explicit, not inferred from emptiness: an empty
+        # allow-list means "only the agent's configured model is accepted" —
+        # ANY override, including one that would otherwise be a no-op
+        # (matching the agent's own model), is rejected unless the caller
+        # holds agent.model.override. Reviewer item 13: the original
+        # `if agent.allowed_models and not allowed` skipped the check
+        # entirely whenever the list was empty — the default state of every
+        # agent — which is the exact unguarded behavior F-21 reports.
+        override_requested = (provider, model) != (agent_doc.provider, agent_doc.model)
+        if override_requested and (provider, model) not in allowed_set:
+            if not has_capability(frappe.session.user, "agent.model.override"):
+                frappe.throw(
+                    _("Model override not allowed for this agent"),
+                    frappe.PermissionError,
+                )
+
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
@@ -1260,6 +1287,14 @@ def run_agent_sync(
         "sequence": sequence,
         "runtime_context": frappe.as_json(runtime_context),
     }
+
+    # Compute and persist budget fields (ST-09.2)
+    budget = RunBudget.from_agent(agent_doc, parent_run_id=parent_run_id)
+    run_doc_data["budget_deadline_at"] = budget.deadline_at
+    run_doc_data["budget_depth"] = budget.current_depth
+    run_doc_data["budget_ancestry"] = frappe.as_json(budget.ancestry)
+    run_doc_data["budget_spend_usd"] = budget.spend_so_far_usd
+
     # Add flow linkage fields if provided
     if flow_run_id:
         run_doc_data["flow_run"] = flow_run_id
@@ -1572,48 +1607,53 @@ def _execute_agent_run(
     )
     conversation = frappe.get_doc("Agent Conversation", conversation_id)
     run_doc = frappe.get_doc("Agent Run", run_id)
-    run_doc.db_set("start_time", now_datetime())
 
-    # Optimized history fetching with dynamic limit + buffer.
-    # This turn's user message was persisted just before execution: inline
-    # (direct path) or by the queued worker under the conversation lock.
-    # The lock serializes queued runs per conversation, so the trailing
-    # user message is always this run's own turn — drop it from history
-    # because ``prompt`` carries the full turn.
-    user_message_persisted = skip_user_message or bool(
-        prompt and not str(prompt).startswith("[SILENT_TRIGGER]")
-    )
-    fetch_limit = (agent_doc.history_limit or 20) + 10
-    history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
-    history = _history_without_pending_user_turn(history, user_message_persisted)
-
-    # Check for multi-run orchestration mode
-    # Skip if already called from orchestration to prevent infinite loop
-    if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
-        from huf.ai.orchestration.orchestrator import create_orchestration
-        orch_name = create_orchestration(
-            agent_name,
-            prompt,
-            parent_run_id=run_doc.name,
-            conversation_id=run_doc.conversation
-        )
-
-        run_doc.db_set({
-            "agent_orchestration": orch_name,
-            "status": "Started", # Mark as started, but not "Success" yet
-            "response": f"Orchestration started. Job ID: {orch_name}"
-        })
-        transaction_checkpoint(reason="agent_streaming_progress")
-        return {
-            "success": True,
-            "response": f"Orchestration started: {orch_name}",
-            "orchestration_id": orch_name,
-            "mode": "multi_run",
-            "agent_run_id": run_doc.name
-        }
-
+    # Reconstruct and cache the budget (ST-09.2)
+    budget = RunBudget.from_run_doc(run_doc)
+    set_current_budget(budget)
+    # Mark the run for its duration (ST-09.5 point a)
+    frappe.flags.huf_current_agent_run_id = run_doc.name
 
     try:
+        run_doc.db_set("start_time", now_datetime())
+
+        # Optimized history fetching with dynamic limit + buffer.
+        # This turn's user message was persisted just before execution: inline
+        # (direct path) or by the queued worker under the conversation lock.
+        # The lock serializes queued runs per conversation, so the trailing
+        # user message is always this run's own turn — drop it from history
+        # because ``prompt`` carries the full turn.
+        user_message_persisted = skip_user_message or bool(
+            prompt and not str(prompt).startswith("[SILENT_TRIGGER]")
+        )
+        fetch_limit = (agent_doc.history_limit or 20) + 10
+        history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+        history = _history_without_pending_user_turn(history, user_message_persisted)
+
+        # Check for multi-run orchestration mode
+        # Skip if already called from orchestration to prevent infinite loop
+        if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
+            from huf.ai.orchestration.orchestrator import create_orchestration
+            orch_name = create_orchestration(
+                agent_name,
+                prompt,
+                parent_run_id=run_doc.name,
+                conversation_id=run_doc.conversation
+            )
+
+            run_doc.db_set({
+                "agent_orchestration": orch_name,
+                "status": "Started", # Mark as started, but not "Success" yet
+                "response": f"Orchestration started. Job ID: {orch_name}"
+            })
+            transaction_checkpoint(reason="agent_streaming_progress")
+            return {
+                "success": True,
+                "response": f"Orchestration started: {orch_name}",
+                "orchestration_id": orch_name,
+                "mode": "multi_run",
+                "agent_run_id": run_doc.name
+            }
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         _emit_run_lifecycle_event(run_doc, conversation, "started")
         safe_commit()
@@ -2401,6 +2441,9 @@ def _execute_agent_run(
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id
         }
+    finally:
+        # Clear the run context flag (ST-09.5 point a)
+        frappe.flags.huf_current_agent_run_id = None
 
 
 # Conversation-scoped execution lock for queued runs. Serializes workers of
@@ -3065,6 +3108,20 @@ async def run_agent_stream(
             stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
             async for chunk in stream:
+                # Check deadline per chunk (ST-09.3)
+                try:
+                    budget = get_current_budget()
+                    budget.check_deadline()
+                except RunBudgetExceeded:
+                    yield {
+                        "type": "error",
+                        "error": "Run budget deadline exceeded",
+                        "success": False,
+                        "agent_run_id": run_doc.name,
+                        "conversation_id": conversation.name
+                    }
+                    return
+
                 chunk_type = chunk.get("type")
 
                 if chunk_type == "delta":
