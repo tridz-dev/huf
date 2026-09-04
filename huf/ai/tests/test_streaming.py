@@ -91,10 +91,20 @@ class TestStreamGeneratorAclose(unittest.TestCase):
 		self.context = _make_context()
 
 	def _build_response(self, fake_gen):
-		with patch.object(responses_stream, "run_agent_stream", lambda **kwargs: fake_gen):
-			return responses_stream.handle_stream_response(
-				self.context, agent_id="agent-1", input_text="hi", conversation_id=None
-			)
+		# `stream_generator()` is lazy: `run_agent_stream()` isn't actually
+		# called until the caller starts pulling `next()` on the response's
+		# underlying generator. The patch therefore must stay active for as
+		# long as the test keeps driving that generator -- NOT just around
+		# the (synchronous, non-generator-running) call to
+		# `handle_stream_response()` itself. Using `start()`/`addCleanup`
+		# instead of a `with` block scoped to this helper keeps the patch
+		# alive for the rest of the test method.
+		patcher = patch.object(responses_stream, "run_agent_stream", lambda **kwargs: fake_gen)
+		patcher.start()
+		self.addCleanup(patcher.stop)
+		return responses_stream.handle_stream_response(
+			self.context, agent_id="agent-1", input_text="hi", conversation_id=None
+		)
 
 	def test_aclose_called_on_disconnect_mid_stream(self):
 		"""Simulate a client disconnect (GeneratorExit) after the first
@@ -128,15 +138,19 @@ class TestStreamGeneratorAclose(unittest.TestCase):
 		def _raise_setup_error(**kwargs):
 			raise RuntimeError("boom")
 
+		# As in `_build_response` above: the patch must still be active
+		# when the generator is actually driven (`list(gen)` below), not
+		# just while `handle_stream_response()` builds the (not-yet-run)
+		# generator object.
 		with patch.object(responses_stream, "run_agent_stream", _raise_setup_error):
 			resp = responses_stream.handle_stream_response(
 				self.context, agent_id="agent-1", input_text="hi", conversation_id=None
 			)
-		gen = resp.response
-		# Fully drain -- the setup error path yields a single
-		# response.failed frame and returns; the finally block must not
-		# blow up despite async_gen being None throughout.
-		lines = list(gen)
+			gen = resp.response
+			# Fully drain -- the setup error path yields a single
+			# response.failed frame and returns; the finally block must not
+			# blow up despite async_gen being None throughout.
+			lines = list(gen)
 		self.assertTrue(any("response.failed" in line for line in lines))
 
 
