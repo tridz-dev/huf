@@ -93,6 +93,7 @@ class TestSecretsPasswordFields(IntegrationTestCase):
         tool = frappe.get_doc({
             "doctype": "Agent Tool Function",
             "tool_name": "test_http_header_" + frappe.utils.random_string(8),
+            "description": "Test tool for HTTP header password field.",
             "tool_type": self._create_tool_type_if_missing(),
             "types": "GET",
             "http_headers": [
