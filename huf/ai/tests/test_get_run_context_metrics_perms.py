@@ -26,6 +26,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		prev_run_doc = frappe.new_doc("Agent Run")
 		prev_run_doc.agent = "Test Agent"
@@ -34,6 +35,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		prev_run_doc.owner = "alice@example.com"
 		prev_run_doc.start_time = datetime.now() - timedelta(hours=1)
 		prev_run_doc.insert()
+		prev_run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create current run owned by alice
 		current_run_doc = frappe.new_doc("Agent Run")
@@ -43,6 +45,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		current_run_doc.owner = "alice@example.com"
 		current_run_doc.start_time = datetime.now()
 		current_run_doc.insert()
+		current_run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			old_user = frappe.session.user
@@ -69,6 +72,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		conv_bob.agent = "Test Agent"
 		conv_bob.owner = "bob@example.com"
 		conv_bob.insert()
+		conv_bob.db_set("owner", "bob@example.com", update_modified=False)
 
 		prev_run_bob = frappe.new_doc("Agent Run")
 		prev_run_bob.agent = "Test Agent"
@@ -77,12 +81,14 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		prev_run_bob.owner = "bob@example.com"
 		prev_run_bob.start_time = datetime.now() - timedelta(hours=1)
 		prev_run_bob.insert()
+		prev_run_bob.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create current run owned by alice
 		conv_alice = frappe.new_doc("Agent Conversation")
 		conv_alice.agent = "Test Agent"
 		conv_alice.owner = "alice@example.com"
 		conv_alice.insert()
+		conv_alice.db_set("owner", "alice@example.com", update_modified=False)
 
 		current_run_doc = frappe.new_doc("Agent Run")
 		current_run_doc.agent = "Test Agent"
@@ -91,6 +97,7 @@ class TestGetRunContextMetricsPerms(IntegrationTestCase):
 		current_run_doc.owner = "alice@example.com"
 		current_run_doc.start_time = datetime.now()
 		current_run_doc.insert()
+		current_run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			old_user = frappe.session.user

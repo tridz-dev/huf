@@ -29,6 +29,7 @@ class TestAgentRunRecordAuth(IntegrationTestCase):
 		run_doc.status = "Success"
 		run_doc.owner = "alice@example.com"
 		run_doc.insert()
+		run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Verify alice can read it
@@ -45,6 +46,7 @@ class TestAgentRunRecordAuth(IntegrationTestCase):
 		run_doc.status = "Success"
 		run_doc.owner = "alice@example.com"
 		run_doc.insert()
+		run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Verify bob cannot read it
@@ -61,6 +63,7 @@ class TestAgentRunRecordAuth(IntegrationTestCase):
 		run_doc.status = "Success"
 		run_doc.owner = "alice@example.com"
 		run_doc.insert()
+		run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Verify System Manager can read it
@@ -76,6 +79,7 @@ class TestAgentRunRecordAuth(IntegrationTestCase):
 		run_doc.status = "Success"
 		run_doc.owner = "alice@example.com"
 		run_doc.insert()
+		run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			from huf.ai.record_access import user_can_read_run

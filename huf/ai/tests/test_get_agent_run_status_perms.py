@@ -25,6 +25,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		run_doc = frappe.new_doc("Agent Run")
 		run_doc.agent = "Test Agent"
@@ -33,6 +34,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 		run_doc.conversation = conv_doc.name
 		run_doc.owner = "alice@example.com"
 		run_doc.insert()
+		run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Mock the call as alice
@@ -61,6 +63,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		run_doc = frappe.new_doc("Agent Run")
 		run_doc.agent = "Test Agent"
@@ -69,6 +72,7 @@ class TestGetAgentRunStatusPerms(IntegrationTestCase):
 		run_doc.conversation = conv_doc.name
 		run_doc.owner = "alice@example.com"
 		run_doc.insert()
+		run_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Mock the call as bob

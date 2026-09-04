@@ -28,6 +28,7 @@ class TestAgentMessageRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create a test message in that conversation
 		msg_doc = frappe.new_doc("Agent Message")
@@ -51,6 +52,7 @@ class TestAgentMessageRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create a test message in that conversation
 		msg_doc = frappe.new_doc("Agent Message")
@@ -74,6 +76,7 @@ class TestAgentMessageRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create a test message in that conversation
 		msg_doc = frappe.new_doc("Agent Message")
@@ -96,6 +99,7 @@ class TestAgentMessageRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		msg_doc = frappe.new_doc("Agent Message")
 		msg_doc.conversation = conv_doc.name

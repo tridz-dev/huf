@@ -28,6 +28,7 @@ class TestAgentContextArtifactRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create a test artifact in that conversation
 		artifact_doc = frappe.new_doc("Agent Context Artifact")
@@ -51,6 +52,7 @@ class TestAgentContextArtifactRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create a test artifact in that conversation
 		artifact_doc = frappe.new_doc("Agent Context Artifact")
@@ -74,6 +76,7 @@ class TestAgentContextArtifactRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		# Create a test artifact in that conversation
 		artifact_doc = frappe.new_doc("Agent Context Artifact")
@@ -96,6 +99,7 @@ class TestAgentContextArtifactRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		artifact_doc = frappe.new_doc("Agent Context Artifact")
 		artifact_doc.conversation = conv_doc.name

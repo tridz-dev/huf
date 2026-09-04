@@ -28,6 +28,7 @@ class TestAgentConversationRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Verify alice can read it
@@ -43,6 +44,7 @@ class TestAgentConversationRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Verify bob cannot read it
@@ -58,6 +60,7 @@ class TestAgentConversationRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			# Verify System Manager can read it
@@ -72,6 +75,7 @@ class TestAgentConversationRecordAuth(IntegrationTestCase):
 		conv_doc.agent = "Test Agent"
 		conv_doc.owner = "alice@example.com"
 		conv_doc.insert()
+		conv_doc.db_set("owner", "alice@example.com", update_modified=False)
 
 		try:
 			from huf.ai.record_access import user_can_read_conversation
