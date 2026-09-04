@@ -12,6 +12,29 @@ from huf.ai.agent_integration import get_tool_call_permission_conditions
 class TestAgentToolCallListScope(IntegrationTestCase):
 	"""Test permission_query_conditions for Agent Tool Call."""
 
+	def setUp(self):
+		if not frappe.db.exists("Agent", "Test Agent"):
+			frappe.get_doc({
+				"doctype": "Agent",
+				"agent_name": "Test Agent",
+				"agent_modality": "Both",
+				"instructions": "Test agent fixture for automated tests.",
+			}).insert(ignore_permissions=True)
+
+		# frappe.get_list's read check goes through the full role-based
+		# permission stack; alice/bob need a real User with a role that has
+		# base read access on Agent Tool Call (Huf User) before the
+		# permission_query_conditions scoping is ever reached.
+		for email in ("alice@example.com", "bob@example.com"):
+			if not frappe.db.exists("User", email):
+				frappe.get_doc({
+					"doctype": "User",
+					"email": email,
+					"first_name": email.split("@")[0],
+					"send_welcome_email": 0,
+					"roles": [{"role": "Huf User"}],
+				}).insert(ignore_permissions=True)
+
 	def test_system_manager_gets_no_filter(self):
 		"""System Manager should see no filter (returns None)."""
 		frappe.set_user("Administrator")
@@ -35,24 +58,26 @@ class TestAgentToolCallListScope(IntegrationTestCase):
 		alice_run.status = "Started"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
+		alice_run.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_run = frappe.new_doc("Agent Run")
 		bob_run.agent = "Test Agent"
 		bob_run.status = "Started"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create tool calls for each run
 		alice_tool = frappe.new_doc("Agent Tool Call")
 		alice_tool.agent_run = alice_run.name
 		alice_tool.tool_name = "test_tool"
-		alice_tool.status = "success"
+		alice_tool.status = "Completed"
 		alice_tool.insert()
 
 		bob_tool = frappe.new_doc("Agent Tool Call")
 		bob_tool.agent_run = bob_run.name
 		bob_tool.tool_name = "test_tool"
-		bob_tool.status = "success"
+		bob_tool.status = "Completed"
 		bob_tool.insert()
 
 		try:
@@ -68,6 +93,7 @@ class TestAgentToolCallListScope(IntegrationTestCase):
 			assert alice_tool.name in alice_list
 			assert bob_tool.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			alice_tool.delete()
 			bob_tool.delete()
 			alice_run.delete()
@@ -81,12 +107,13 @@ class TestAgentToolCallListScope(IntegrationTestCase):
 		bob_run.status = "Started"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create a tool call for bob's run
 		bob_tool = frappe.new_doc("Agent Tool Call")
 		bob_tool.agent_run = bob_run.name
 		bob_tool.tool_name = "test_tool"
-		bob_tool.status = "success"
+		bob_tool.status = "Completed"
 		bob_tool.insert()
 
 		try:
@@ -101,6 +128,7 @@ class TestAgentToolCallListScope(IntegrationTestCase):
 			# Alice should NOT see bob's tool call
 			assert bob_tool.name not in alice_list
 		finally:
+			frappe.set_user("Administrator")
 			bob_tool.delete()
 			bob_run.delete()
 
@@ -112,24 +140,26 @@ class TestAgentToolCallListScope(IntegrationTestCase):
 		alice_run.status = "Started"
 		alice_run.owner = "alice@example.com"
 		alice_run.insert()
+		alice_run.db_set("owner", "alice@example.com", update_modified=False)
 
 		bob_run = frappe.new_doc("Agent Run")
 		bob_run.agent = "Test Agent"
 		bob_run.status = "Started"
 		bob_run.owner = "bob@example.com"
 		bob_run.insert()
+		bob_run.db_set("owner", "bob@example.com", update_modified=False)
 
 		# Create tool calls for each run
 		alice_tool = frappe.new_doc("Agent Tool Call")
 		alice_tool.agent_run = alice_run.name
 		alice_tool.tool_name = "test_tool"
-		alice_tool.status = "success"
+		alice_tool.status = "Completed"
 		alice_tool.insert()
 
 		bob_tool = frappe.new_doc("Agent Tool Call")
 		bob_tool.agent_run = bob_run.name
 		bob_tool.tool_name = "test_tool"
-		bob_tool.status = "success"
+		bob_tool.status = "Completed"
 		bob_tool.insert()
 
 		try:
