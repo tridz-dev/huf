@@ -247,6 +247,82 @@ async def _litellm_completion_with_retry(**completion_kwargs):
     raise last_exc
 
 
+# --- Rate-limit / 5xx exponential backoff --------------------------------------
+#
+# RateLimitError (429) and 5xx server errors are not "transient network blips"
+# in the sense `_litellm_completion_with_retry` retries (broken pipe, connection
+# reset, etc.) -- they are the provider explicitly telling us to slow down or
+# that it is temporarily overloaded. Both warrant their own backoff schedule,
+# separate from the transient-network retry above, capped at a small number of
+# attempts so a persistently rate-limited/unavailable provider still fails
+# within a bounded time instead of hanging a run indefinitely.
+
+_RATE_LIMIT_MAX_ATTEMPTS = 5
+_RATE_LIMIT_BASE_DELAY_SECONDS = 1
+_RATE_LIMIT_MAX_DELAY_SECONDS = 60
+
+
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Best-effort extraction of a Retry-After header from a litellm exception.
+
+    litellm's RateLimitError (and other provider exceptions) may carry the
+    underlying HTTP response as `.response` (httpx.Response-like, with a
+    `.headers` mapping), or occasionally expose `.headers` directly. Header
+    names are matched case-insensitively since `Retry-After` casing is not
+    guaranteed to survive whatever wrapper litellm/the SDK used.
+    """
+    for holder in (getattr(exc, "response", None), exc):
+        headers = getattr(holder, "headers", None) if holder is not None else None
+        if not headers:
+            continue
+        try:
+            for key in ("Retry-After", "retry-after"):
+                value = headers.get(key)
+                if value is not None:
+                    return float(value)
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _compute_rate_limit_backoff_delay(attempt: int, exc: Exception) -> float:
+    """Delay (seconds) before retry `attempt` (0-indexed) after `exc`.
+
+    Honors a `Retry-After` header when present; otherwise doubles from
+    `_RATE_LIMIT_BASE_DELAY_SECONDS`, capped at `_RATE_LIMIT_MAX_DELAY_SECONDS`.
+    """
+    retry_after = _extract_retry_after_seconds(exc)
+    if retry_after is not None and retry_after >= 0:
+        return min(retry_after, _RATE_LIMIT_MAX_DELAY_SECONDS)
+    return min(_RATE_LIMIT_BASE_DELAY_SECONDS * (2 ** attempt), _RATE_LIMIT_MAX_DELAY_SECONDS)
+
+
+async def _retry_after_rate_limit_or_5xx(completion_kwargs: dict, first_exc: Exception):
+    """Retry a completion call with exponential backoff after a RateLimitError
+    or 5xx server error.
+
+    `first_exc` is the exception that triggered the retry (attempt 1 of
+    `_RATE_LIMIT_MAX_ATTEMPTS`); this function performs up to
+    `_RATE_LIMIT_MAX_ATTEMPTS - 1` further attempts, sleeping before each per
+    `_compute_rate_limit_backoff_delay`. If every attempt is exhausted, the
+    most recent exception is re-raised.
+    """
+    last_exc = first_exc
+    for attempt in range(1, _RATE_LIMIT_MAX_ATTEMPTS):
+        delay = _compute_rate_limit_backoff_delay(attempt - 1, last_exc)
+        logger.warning(
+            f"LiteLLM rate-limit/5xx error (attempt {attempt + 1}/{_RATE_LIMIT_MAX_ATTEMPTS}): "
+            f"{last_exc}. Retrying in {delay}s"
+        )
+        await asyncio.sleep(delay)
+        try:
+            return await _litellm_completion_with_retry(**completion_kwargs)
+        except (RateLimitError, InternalServerError) as retry_exc:
+            last_exc = retry_exc
+            continue
+    raise last_exc
+
+
 def _get_prompt_cache_options(context: dict | None) -> dict:
     if not isinstance(context, dict):
         return {}
@@ -1559,7 +1635,13 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     f"This may be temporary. Details: {str(e)}"
                 )
                 frappe.log_error(message=raw_msg, title="LiteLLM Provider")
-                _raise_provider_unavailable(raw_msg, normalized_model)
+                try:
+                    response = await _retry_after_rate_limit_or_5xx(completion_kwargs, e)
+                except (RateLimitError, InternalServerError) as backoff_exc:
+                    _raise_provider_unavailable(
+                        f"{raw_msg} (exhausted {_RATE_LIMIT_MAX_ATTEMPTS} attempts with backoff: {backoff_exc})",
+                        normalized_model,
+                    )
 
             except RateLimitError as e:
                 title = f"LiteLLM RateLimit: {normalized_model}"[:140]
@@ -1570,7 +1652,9 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                     full_trace = str(e)
 
                 frappe.log_error(message=full_trace, title=title)
-                raise e
+                # Exponential backoff (1s, doubling, cap 60s, honors Retry-After),
+                # up to _RATE_LIMIT_MAX_ATTEMPTS total attempts, before giving up.
+                response = await _retry_after_rate_limit_or_5xx(completion_kwargs, e)
 
             except ContextWindowExceededError as e:
                 frappe.log_error(message=f"LiteLLM ContextWindowExceededError for model '{normalized_model}': {str(e)}", title="LiteLLM Provider")
