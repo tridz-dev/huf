@@ -145,6 +145,7 @@
   "allowed_roles",
   "access_control_section",
   "allow_all_users",
+  "allowed_models",
   "metadata_tab",
   "last_run",
   "total_run",
@@ -397,8 +398,8 @@
    "label": "Async"
   },
   {
-   "default": "1",
-   "description": "When disabled, runs are queued to avoid holding web workers during long LLM and tool calls. Enable only for trusted calls that require a direct response.",
+   "default": "0",
+   "description": "If checked, planning and runs execute immediately in the request. Default is to queue (recommended for stability). Existing agents retain their setting.",
    "fieldname": "run_immediately",
    "fieldtype": "Check",
    "label": "Run immediately (advanced)"
@@ -768,7 +769,7 @@
   },
   {
    "fieldname": "allowed_roles",
-   "description": "Roles that may run this agent. If both Allowed Users and Allowed Roles are empty, every logged-in user may run this agent.",
+   "description": "Roles that may run this agent. If both Allowed Users and Allowed Roles are empty, whether every logged-in user may run this agent depends on the Allow All Users setting below.",
    "fieldtype": "Table MultiSelect",
    "label": "Allowed Roles",
    "options": "Agent Role"
@@ -784,6 +785,13 @@
    "fieldname": "allow_all_users",
    "fieldtype": "Check",
    "label": "Allow All Users"
+  },
+  {
+   "description": "Allowed provider/model overrides. An empty list means only the agent's configured model is accepted; any override attempt requires the agent.model.override capability. A non-empty list restricts overrides to the models in it (subject to the same capability check for access control).",
+   "fieldname": "allowed_models",
+   "fieldtype": "Table",
+   "label": "Allowed Model Overrides",
+   "options": "Agent Allowed Model"
   },
   {
    "default": "0",

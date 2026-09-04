@@ -47,6 +47,11 @@
   "parent_run",
   "is_child",
   "agent_orchestration",
+  "budget_section",
+  "budget_deadline_at",
+  "budget_depth",
+  "budget_ancestry",
+  "budget_spend_usd",
   "knowledge_section",
   "knowledge_sources_used",
   "chunks_injected",
@@ -342,6 +347,39 @@
    "fieldtype": "Link",
    "label": "Agent Orchestration",
    "options": "Agent Orchestration",
+   "read_only": 1
+  },
+  {
+   "fieldname": "budget_section",
+   "fieldtype": "Section Break",
+   "label": "Run Budget"
+  },
+  {
+   "description": "The wall-clock deadline when the run started.",
+   "fieldname": "budget_deadline_at",
+   "fieldtype": "Datetime",
+   "label": "Budget Deadline At",
+   "read_only": 1
+  },
+  {
+   "description": "The depth of this run in the recursion chain.",
+   "fieldname": "budget_depth",
+   "fieldtype": "Int",
+   "label": "Budget Depth",
+   "read_only": 1
+  },
+  {
+   "description": "List of parent run IDs in the ancestry chain (stored as JSON).",
+   "fieldname": "budget_ancestry",
+   "fieldtype": "JSON",
+   "label": "Budget Ancestry",
+   "read_only": 1
+  },
+  {
+   "description": "Actual spend for this run in USD.",
+   "fieldname": "budget_spend_usd",
+   "fieldtype": "Float",
+   "label": "Budget Spend USD",
    "read_only": 1
   },
   {

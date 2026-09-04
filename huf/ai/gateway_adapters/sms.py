@@ -56,14 +56,30 @@ class SMSGatewayAdapter(GatewayAdapter):
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify Twilio signature if X-Twilio-Signature is provided."""
-		signature = request.headers.get("X-Twilio-Signature")
-		if not signature or not self._auth_token:
-			return True  # Allow basic webhook if signature header is not supplied or using native Frappe SMS
+		"""Verify Twilio signature using X-Twilio-Signature header and HMAC-SHA1.
 
+		When using Twilio (auth_token is configured), require X-Twilio-Signature header.
+		If using Frappe SMS Settings (account_sid == "frappe_sms"), no signature verification needed.
+
+		Fails closed (returns False) if:
+		- auth_token is configured but X-Twilio-Signature header is missing
+		- HMAC-SHA1 signature validation fails
+		"""
+		# If using Frappe SMS Settings (not Twilio), skip signature check
+		if self._account_sid == "frappe_sms" or not self._auth_token:
+			return True
+
+		# Twilio is configured: require X-Twilio-Signature header
+		signature = request.headers.get("X-Twilio-Signature", "").strip()
+		if not signature:
+			return False  # Fail closed on missing header
+
+		# Compute expected HMAC-SHA1 signature per Twilio webhook docs
 		mac = hmac.new(self._auth_token.encode("utf-8"), request.body, hashlib.sha1)
 		import base64
 		expected = base64.b64encode(mac.digest()).decode("utf-8")
+
+		# Use constant-time comparison to prevent timing attacks
 		return hmac.compare_digest(signature, expected)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:

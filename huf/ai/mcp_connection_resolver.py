@@ -15,7 +15,6 @@ The resolver keeps discovery and compatibility handling server-side so the UI
 only needs the MCP server URL.
 """
 
-import ipaddress
 import json
 import re
 import secrets
@@ -59,6 +58,7 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
           scopes_supported, client_registration_method, client_id,
           discovery_status, discovery_error, metadata_json
     """
+    frappe.only_for("System Manager")
     try:
         server_url = _normalize_url(server_url)
         callback_url = _normalize_url(callback_url)
@@ -467,32 +467,19 @@ def _normalize_url(url: str) -> str:
 def _is_safe_url(url: str) -> bool:
     """
     Reject non-HTTP(S) URLs and private/internal addresses.
-    Allow localhost only for development.
+    Requires DNS resolution for hostnames (no implicit localhost).
+
+    Delegates to huf.ai.http_handler.validate_url so the SSRF-hardening
+    logic (public-IP classification, DNS resolution, IPv4-mapped IPv6
+    unwrapping) lives in one place instead of being duplicated here.
     """
     if not url:
         return False
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return False
 
-    hostname = parsed.hostname
-    if not hostname:
-        return False
+    from huf.ai.http_handler import validate_url
 
-    # Allow localhost for development
-    if hostname.lower() in ("localhost", "127.0.0.1", "::1"):
-        return True
-
-    try:
-        ip = ipaddress.ip_address(hostname)
-        # Reject private, loopback, link-local, multicast, reserved
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
-            return False
-    except ValueError:
-        # hostname is not an IP, that's fine
-        pass
-
-    return True
+    is_valid, _error_msg = validate_url(url)
+    return is_valid
 
 
 def _canonical_resource(url: str) -> str:

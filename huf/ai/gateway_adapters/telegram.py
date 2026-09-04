@@ -46,7 +46,7 @@ class TelegramGatewayAdapter(GatewayAdapter):
 			GatewayCredentialField(
 				"webhook_secret",
 				"Webhook secret token",
-				required=False,
+				required=True,
 				description=(
 					"Value passed to Telegram's setWebhook secret_token; "
 					"verified against the X-Telegram-Bot-Api-Secret-Token header."
@@ -74,13 +74,30 @@ class TelegramGatewayAdapter(GatewayAdapter):
 		self._http_post = http_post
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Fail closed on a configured secret; otherwise accept (matches the
-		codebase's existing precedent for providers without payload signing,
-		e.g. gateway_adapters.teams)."""
+		"""Verify webhook secret token using constant-time comparison.
+
+		Requires webhook_secret to be configured at Gateway creation (no fallback).
+		Fails closed (returns False) if:
+		- webhook_secret is not configured
+		- X-Telegram-Bot-Api-Secret-Token header is missing
+		- provided secret does not match configured secret
+
+		Uses hmac.compare_digest for constant-time comparison to prevent timing attacks.
+		"""
+		# Fail closed: webhook_secret is mandatory (schema marks it required=True)
 		if not self._webhook_secret:
-			return True
-		provided = request.headers.get(WEBHOOK_SECRET_HEADER, "")
-		return bool(provided) and provided == self._webhook_secret
+			return False
+
+		# Look for secret in header
+		provided = request.headers.get(WEBHOOK_SECRET_HEADER, "").strip()
+
+		# Fail closed if header is not provided
+		if not provided:
+			return False
+
+		# Use constant-time comparison to prevent timing attacks
+		import hmac
+		return hmac.compare_digest(provided, self._webhook_secret)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
 		if not self.verify_inbound(request):

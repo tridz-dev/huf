@@ -12,6 +12,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
@@ -84,6 +85,7 @@ def _text_response(value: str) -> None:
 
 
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
+@rate_limit(key="gateway_name", limit=100, seconds=60)
 def handle_gateway_webhook() -> dict | None:
 	"""Verify a native provider callback, then hand only normalized data to Gateway.
 

@@ -17,6 +17,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 from huf.ai.gateway_service import ingest_gateway_event
 
@@ -74,6 +75,7 @@ def _gateway_settings(gateway_name: str):
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=100, seconds=60)
 def handle_teams_outgoing_webhook(gateway_name: str) -> dict[str, str]:
 	"""Receive a verified Teams Outgoing Webhook Activity and acknowledge it.
 
