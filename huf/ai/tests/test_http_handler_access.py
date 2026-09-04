@@ -110,20 +110,32 @@ class TestAuthorizationST071(unittest.TestCase):
 		mock_session.user = "user@example.com"
 		mock_has_capability.return_value = True
 
-		# Mock the rest of the flow to prevent further execution
-		with patch("huf.ai.http_handler.requests.request") as mock_request:
-			mock_response = Mock()
-			mock_response.status_code = 200
-			mock_response.headers = {}
-			mock_response.iter_content = Mock(return_value=[b"{}"])
-			mock_request.return_value = mock_response
+		# Mock the rest of the flow to prevent further execution. frappe.get_doc
+		# and validate_url both need mocking: real DNS resolution of
+		# api.example.com is not guaranteed (and fails in offline/CI
+		# environments), and frappe.get_doc would otherwise hit the real DB
+		# for a tool that doesn't exist.
+		with patch("frappe.get_doc") as mock_get_doc:
+			mock_tool_doc = Mock()
+			mock_tool_doc.base_url = "https://api.example.com/"
+			mock_tool_doc.http_headers = []
+			mock_tool_doc.allowed_for_guest = False
+			mock_get_doc.return_value = mock_tool_doc
 
-			result = handle_http_request(
-				"GET", "https://api.example.com/", tool_name="test_tool"
-			)
+			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
+				with patch("huf.ai.http_handler.requests.request") as mock_request:
+					mock_response = Mock()
+					mock_response.status_code = 200
+					mock_response.headers = {}
+					mock_response.iter_content = Mock(return_value=[b"{}"])
+					mock_request.return_value = mock_response
 
-			# Should not raise PermissionError
-			mock_throw.assert_not_called()
+					result = handle_http_request(
+						"GET", "https://api.example.com/", tool_name="test_tool"
+					)
+
+					# Should not raise PermissionError
+					mock_throw.assert_not_called()
 
 	@patch("frappe.session")
 	@patch("huf.ai.http_handler.has_capability")
@@ -183,6 +195,7 @@ class TestGuestAccessST072(unittest.TestCase):
 
 		with patch("frappe.get_doc") as mock_get_doc:
 			mock_tool_doc = Mock()
+			mock_tool_doc.http_headers = []  # must be iterable, checked before the guest gate
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
@@ -208,19 +221,20 @@ class TestGuestAccessST072(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = True
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
-				mock_response = Mock()
-				mock_response.status_code = 200
-				mock_response.headers = {}
-				mock_response.iter_content = Mock(return_value=[b"{}"])
-				mock_request.return_value = mock_response
+			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
+				with patch("huf.ai.http_handler.requests.request") as mock_request:
+					mock_response = Mock()
+					mock_response.status_code = 200
+					mock_response.headers = {}
+					mock_response.iter_content = Mock(return_value=[b"{}"])
+					mock_request.return_value = mock_response
 
-				result = handle_http_request(
-					"GET", "https://api.example.com/", tool_name="test_tool"
-				)
+					result = handle_http_request(
+						"GET", "https://api.example.com/", tool_name="test_tool"
+					)
 
-				# Should proceed past guest check
-				self.assertTrue(result["success"])
+					# Should proceed past guest check
+					self.assertTrue(result["success"])
 
 
 class TestHeaderOriginBindingST073(unittest.TestCase):
@@ -244,25 +258,26 @@ class TestHeaderOriginBindingST073(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
-				mock_response = Mock()
-				mock_response.status_code = 200
-				mock_response.headers = {}
-				mock_response.iter_content = Mock(return_value=[b"{}"])
-				mock_request.return_value = mock_response
+			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
+				with patch("huf.ai.http_handler.requests.request") as mock_request:
+					mock_response = Mock()
+					mock_response.status_code = 200
+					mock_response.headers = {}
+					mock_response.iter_content = Mock(return_value=[b"{}"])
+					mock_request.return_value = mock_response
 
-				result = handle_http_request(
-					"GET",
-					"https://api.example.com/endpoint",
-					tool_name="test_tool",
-				)
+					result = handle_http_request(
+						"GET",
+						"https://api.example.com/endpoint",
+						tool_name="test_tool",
+					)
 
-				# Verify request was made with tool headers
-				call_args = mock_request.call_args
-				self.assertIn("Authorization", call_args.kwargs["headers"])
-				self.assertEqual(
-					call_args.kwargs["headers"]["Authorization"], "Bearer token123"
-				)
+					# Verify request was made with tool headers
+					call_args = mock_request.call_args
+					self.assertIn("Authorization", call_args.kwargs["headers"])
+					self.assertEqual(
+						call_args.kwargs["headers"]["Authorization"], "Bearer token123"
+					)
 
 	@patch("frappe.session")
 	@patch("huf.ai.http_handler.has_capability")
@@ -368,21 +383,22 @@ class TestResponseSizeCappingST074(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
-				mock_response = Mock()
-				mock_response.status_code = 200
-				mock_response.headers = {"Content-Length": "1000"}
-				# Return a small response via iter_content
-				test_data = b'{"result": "success"}'
-				mock_response.iter_content = Mock(return_value=[test_data])
-				mock_request.return_value = mock_response
+			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
+				with patch("huf.ai.http_handler.requests.request") as mock_request:
+					mock_response = Mock()
+					mock_response.status_code = 200
+					mock_response.headers = {"Content-Length": "1000"}
+					# Return a small response via iter_content
+					test_data = b'{"result": "success"}'
+					mock_response.iter_content = Mock(return_value=[test_data])
+					mock_request.return_value = mock_response
 
-				result = handle_http_request(
-					"GET", "https://api.example.com/", tool_name="test_tool"
-				)
+					result = handle_http_request(
+						"GET", "https://api.example.com/", tool_name="test_tool"
+					)
 
-				self.assertTrue(result["success"])
-				self.assertEqual(result["status_code"], 200)
+					self.assertTrue(result["success"])
+					self.assertEqual(result["status_code"], 200)
 
 	@patch("frappe.session")
 	@patch("huf.ai.http_handler.has_capability")
@@ -398,25 +414,26 @@ class TestResponseSizeCappingST074(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
-				mock_response = Mock()
-				mock_response.status_code = 200
-				# No Content-Length to pass fast-path check
-				mock_response.headers = {}
-				# Return chunks totaling > MAX_RESPONSE_SIZE
-				# MAX_RESPONSE_SIZE is 10MB, so return > 10MB
-				chunk_size = 8192
-				num_chunks = int((10 * 1024 * 1024) / chunk_size) + 2
-				chunks = [b"x" * chunk_size for _ in range(num_chunks)]
-				mock_response.iter_content = Mock(return_value=chunks)
-				mock_request.return_value = mock_response
+			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
+				with patch("huf.ai.http_handler.requests.request") as mock_request:
+					mock_response = Mock()
+					mock_response.status_code = 200
+					# No Content-Length to pass fast-path check
+					mock_response.headers = {}
+					# Return chunks totaling > MAX_RESPONSE_SIZE
+					# MAX_RESPONSE_SIZE is 10MB, so return > 10MB
+					chunk_size = 8192
+					num_chunks = int((10 * 1024 * 1024) / chunk_size) + 2
+					chunks = [b"x" * chunk_size for _ in range(num_chunks)]
+					mock_response.iter_content = Mock(return_value=chunks)
+					mock_request.return_value = mock_response
 
-				result = handle_http_request(
-					"GET", "https://api.example.com/", tool_name="test_tool"
-				)
+					result = handle_http_request(
+						"GET", "https://api.example.com/", tool_name="test_tool"
+					)
 
-				self.assertFalse(result["success"])
-				self.assertIn("Response too large", result["error"])
+					self.assertFalse(result["success"])
+					self.assertIn("Response too large", result["error"])
 
 	@patch("frappe.session")
 	@patch("huf.ai.http_handler.has_capability")
@@ -434,21 +451,22 @@ class TestResponseSizeCappingST074(unittest.TestCase):
 			mock_tool_doc.allowed_for_guest = False
 			mock_get_doc.return_value = mock_tool_doc
 
-			with patch("huf.ai.http_handler.requests.request") as mock_request:
-				mock_response = Mock()
-				mock_response.status_code = 200
-				# Set Content-Length > MAX_RESPONSE_SIZE
-				mock_response.headers = {"Content-Length": str(20 * 1024 * 1024)}
-				mock_request.return_value = mock_response
+			with patch("huf.ai.http_handler.validate_url", return_value=(True, None)):
+				with patch("huf.ai.http_handler.requests.request") as mock_request:
+					mock_response = Mock()
+					mock_response.status_code = 200
+					# Set Content-Length > MAX_RESPONSE_SIZE
+					mock_response.headers = {"Content-Length": str(20 * 1024 * 1024)}
+					mock_request.return_value = mock_response
 
-				result = handle_http_request(
-					"GET", "https://api.example.com/", tool_name="test_tool"
-				)
+					result = handle_http_request(
+						"GET", "https://api.example.com/", tool_name="test_tool"
+					)
 
-				self.assertFalse(result["success"])
-				self.assertIn("Content-Length exceeds 10MB limit", result["error"])
-				# iter_content should not be called (fast-path)
-				mock_response.iter_content.assert_not_called()
+					self.assertFalse(result["success"])
+					self.assertIn("Content-Length exceeds 10MB limit", result["error"])
+					# iter_content should not be called (fast-path)
+					mock_response.iter_content.assert_not_called()
 
 
 class TestRateLimitingDecoratorST075(unittest.TestCase):
