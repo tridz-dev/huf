@@ -5,12 +5,12 @@ from frappe import _
 async def _await_tagged(coro, provider_path):
     """Await a provider coroutine and tag the result with the path that served it.
 
-    RunProvider.run() is a *sync* method that returns the provider's coroutine
-    without awaiting it -- the caller awaits. So the marker cannot be attached to
-    what run() returns directly: a coroutine object has no __dict__ and assigning
-    to it raises AttributeError. Wrapping keeps run()'s existing semantics (still
-    returns an awaitable, still defers execution to the caller) while attaching
-    the marker to the real result once it exists.
+    RunProvider.run() is itself `async def` and awaits the provider directly
+    for the primary LiteLLM path (see below), so this wrapper is only used for
+    the custom-provider fallback branch, where a coroutine object has no
+    __dict__ and assigning `.provider_path` to it directly would raise
+    AttributeError. Wrapping defers that assignment until the real result
+    exists, after the coroutine has been awaited.
     """
     result = await coro
     try:
@@ -32,7 +32,7 @@ class RunProvider:
     """
 
     @staticmethod
-    def run(agent, enhanced_prompt, provider, model, context=None):
+    async def run(agent, enhanced_prompt, provider, model, context=None):
         provider_lower = provider.lower()
         original_exception = None
 
@@ -40,10 +40,13 @@ class RunProvider:
         # This supports OpenAI, Anthropic, Google, and 100+ others automatically.
         try:
             from huf.ai.providers import litellm
-            return _await_tagged(
-                litellm.run(agent, enhanced_prompt, provider, model, context=context),
-                "litellm",
-            )
+            result = await litellm.run(agent, enhanced_prompt, provider, model, context=context)
+            try:
+                result.provider_path = "litellm"
+            except (AttributeError, TypeError):
+                # Marking is observability, never a reason to fail a run.
+                pass
+            return result
 
         except ImportError as e:
             # Handle case where litellm package is missing
@@ -92,7 +95,7 @@ class RunProvider:
             frappe.throw(_(f"Provider {provider} is missing a run() function"))
 
         try:
-            return _await_tagged(
+            return await _await_tagged(
                 module.run(agent, enhanced_prompt, provider, model, context=context),
                 "legacy_fallback",
             )
@@ -108,6 +111,17 @@ class RunProvider:
         Streaming version of run() - yields chunks instead of returning final result.
 
         Routes streaming requests to LiteLLM for supported providers.
+
+        Deliberately left as a plain (non-async) `def`, unlike `run()`: this does
+        NOT share run()'s former unawaited-coroutine bug (see ST-R5.9). `litellm.
+        run_stream()` is an `async def` function whose body contains `yield`,
+        making it an async-generator function. Calling an async-generator
+        function does not execute any of its body and does not need `await` --
+        it synchronously returns an async-generator object, with all real work
+        deferred until the caller does `async for chunk in stream`. The one
+        caller (`huf/ai/agent_integration.py`, `stream = RunProvider.run_stream(...)`
+        followed by `async for` over it) already consumes it that way, so no
+        change is needed here.
         """
         try:
             from huf.ai.providers import litellm

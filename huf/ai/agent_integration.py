@@ -119,6 +119,10 @@ class AgentManager:
         # mcp). Populated by _setup_tools() and read by compute_tools_breakdown()
         # at the two agent_integration call sites — see context_segments.py.
         self.tool_sources = {}
+        # Populated by _setup_tools() when a tool-setup step raises; flushed
+        # onto the Agent Run doc's `tool_setup_warnings` field by the callers
+        # that create AgentManager after the run doc already exists.
+        self.tool_setup_warnings = []
         self._setup_client()
         self._setup_tools()
 
@@ -202,6 +206,7 @@ class AgentManager:
                 )
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
+            self.tool_setup_warnings.append(f"agent tools: {e!s}")
 
         # Merge skill MCP servers with agent-level MCP servers so attached
         # skills can contribute runtime tools without replacing direct tools.
@@ -287,6 +292,7 @@ class AgentManager:
 
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
+            self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -911,10 +917,26 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
         raise
     except Exception as e:
         # Tool-call persistence boundary: any failure here corrupts run audit state.
-        frappe.log_error(
-            f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
-            "Agent Tool Call Error"
-        )
+        try:
+            frappe.log_error(
+                f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
+                "Agent Tool Call Error"
+            )
+        except Exception:
+            # A failure while logging must never prevent the audit_incomplete
+            # flag below from being set (or mask the original error).
+            pass
+        if agent_run:
+            try:
+                existing = frappe.db.get_value("Agent Run", agent_run, "audit_incomplete")
+                note = f"tool call persistence ({name or tool_call_id}): {e!s}"
+                combined = f"{existing}; {note}" if existing else note
+                frappe.db.set_value(
+                    "Agent Run", agent_run, "audit_incomplete", combined, update_modified=False
+                )
+            except Exception:
+                # Never let audit-flagging failures mask the original error.
+                pass
         return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
@@ -1146,6 +1168,7 @@ def run_agent_sync(
     skip_user_message: bool = False,
     now=None,
     project: str = None,
+    client_idempotency_key: str = None,
 ):
     """Run an agent synchronously (queue-first by default; see ``now``).
 
@@ -1294,6 +1317,31 @@ def run_agent_sync(
         flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
         if flow_id:
             run_doc_data["flow_id"] = flow_id
+
+    if client_idempotency_key:
+        # A client that retries a request (network timeout, double-click)
+        # must not fan out into a second Agent Run for the same logical
+        # request. Scoped by conversation since idempotency_key alone is
+        # not globally unique across conversations/clients.
+        existing_run_name = frappe.db.get_value(
+            "Agent Run",
+            {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+            "name",
+        )
+        if existing_run_name:
+            existing_run = frappe.get_doc("Agent Run", existing_run_name)
+            return {
+                "success": True,
+                "queued": existing_run.status in ("Queued", "Started"),
+                "status": existing_run.status,
+                "response": existing_run.response if existing_run.status == "Success" else None,
+                "provider": existing_run.provider,
+                "agent_run_id": existing_run.name,
+                "conversation_id": existing_run.conversation,
+                "session_id": conv_manager.session_id,
+                "sequence": existing_run.sequence,
+            }
+        run_doc_data["idempotency_key"] = client_idempotency_key
 
     if not frappe.has_permission("Agent Run", "create"):
         frappe.throw(
@@ -1452,7 +1500,16 @@ def get_agent_run_status(agent_run_id: str):
     run = frappe.db.get_value(
         "Agent Run",
         agent_run_id,
-        ["name", "agent", "status", "response", "error_message", "conversation"],
+        [
+            "name",
+            "agent",
+            "status",
+            "response",
+            "error_message",
+            "conversation",
+            "tool_setup_warnings",
+            "audit_incomplete",
+        ],
         as_dict=True,
     )
     if not run:
@@ -1480,6 +1537,8 @@ def get_agent_run_status(agent_run_id: str):
         "conversation_id": run.conversation,
         "agent": run.agent,
         "agent_message_id": agent_message_id,
+        "tool_setup_warnings": run.tool_setup_warnings,
+        "audit_incomplete": run.audit_incomplete,
     }
 
 
@@ -1641,6 +1700,11 @@ def _execute_agent_run(
             model_override=resolved_model,
             conversation_id=conversation_id,
         )
+
+        if manager.tool_setup_warnings:
+            run_doc.db_set(
+                "tool_setup_warnings", "; ".join(manager.tool_setup_warnings), update_modified=False
+            )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.prompt_mode = "Template"
@@ -2731,6 +2795,7 @@ async def run_agent_stream(
     skip_user_message: bool = False,
     files=None,
     project: str = None,
+    client_idempotency_key: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2878,6 +2943,27 @@ async def run_agent_stream(
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         history = _history_without_pending_user_turn(history, skip_user_message)
 
+        if client_idempotency_key:
+            # Mirror run_agent_sync's dedupe: a retried streaming request for
+            # the same conversation must reuse the prior run rather than
+            # starting a second one.
+            existing_run_name = frappe.db.get_value(
+                "Agent Run",
+                {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+                "name",
+            )
+            if existing_run_name:
+                existing_run = frappe.get_doc("Agent Run", existing_run_name)
+                yield {
+                    "type": "duplicate_request",
+                    "success": True,
+                    "status": existing_run.status,
+                    "response": existing_run.response if existing_run.status == "Success" else None,
+                    "agent_run_id": existing_run.name,
+                    "conversation_id": existing_run.conversation,
+                }
+                return
+
         # Create Agent Run document
         if not frappe.has_permission("Agent Run", "create"):
             yield {
@@ -2886,7 +2972,7 @@ async def run_agent_stream(
             }
             return
 
-        run_doc = frappe.get_doc({
+        run_doc_data = {
             "doctype": "Agent Run",
             "agent": agent_name,
             "status": "Started",
@@ -2895,7 +2981,11 @@ async def run_agent_stream(
             "prompt_template": resolved_prompt_template,
             "model": resolved_model,
             "provider": resolved_provider
-        })
+        }
+        if client_idempotency_key:
+            run_doc_data["idempotency_key"] = client_idempotency_key
+
+        run_doc = frappe.get_doc(run_doc_data)
         run_doc.insert()
         if not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -2920,6 +3010,11 @@ async def run_agent_stream(
             model_override=resolved_model,
             conversation_id=conversation.name,
         )
+
+        if manager.tool_setup_warnings:
+            run_doc.db_set(
+                "tool_setup_warnings", "; ".join(manager.tool_setup_warnings), update_modified=False
+            )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.update({

@@ -159,6 +159,15 @@ def install():
 
         agents_usage.Usage = Usage
 
+        agents = sys.modules["agents"]
+
+        class FunctionTool:
+            def __init__(self, **kwargs):
+                for key, value in kwargs.items():
+                    setattr(self, key, value)
+
+        agents.FunctionTool = FunctionTool
+
     # --- huf / huf.ai / huf.ai.providers packages ------------------------
     # sys.path already has the repo root on it when tests are run from there;
     # these just need to exist as importable packages pointing at the real

@@ -46,6 +46,8 @@ def echo(**kwargs) -> dict:
     handler has no way to distinguish them from LLM-supplied arguments and
     the point of this tool is to prove "what came in is what goes out."
     """
+    if not frappe.conf.developer_mode:
+        return {"echoed": {}, "blocked": True, "error": "echo is only available in developer mode"}
     return {"echoed": dict(kwargs)}
 
 
@@ -123,6 +125,13 @@ def slow_or_timeout(duration=0.1) -> dict:
     `try/except (TypeError, ValueError)` fallback below. Leaving this
     parameter untyped keeps that fallback in charge of invalid input.
     """
+    if not frappe.conf.developer_mode:
+        return {
+            "success": False,
+            "blocked": True,
+            "error": "slow_or_timeout is only available in developer mode",
+        }
+
     try:
         requested = float(duration)
     except (TypeError, ValueError):

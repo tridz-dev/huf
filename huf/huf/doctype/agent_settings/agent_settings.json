@@ -8,6 +8,8 @@
   "default_provider",
   "column_break_ar10",
   "default_model",
+  "security_section",
+  "allow_self_approval",
   "skills_section",
   "skill_destinations",
   "last_skill_scans"
@@ -28,6 +30,18 @@
   {
    "fieldname": "column_break_ar10",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "security_section",
+   "fieldtype": "Section Break",
+   "label": "Security"
+  },
+  {
+   "default": "0",
+   "description": "Allow a user who requested a code/SSH execution to also approve their own request. Off by default (fail-closed); only enable on single-operator sites where the requester and the only available approver are the same person.",
+   "fieldname": "allow_self_approval",
+   "fieldtype": "Check",
+   "label": "Allow Self-Approval"
   },
   {
    "fieldname": "skills_section",
