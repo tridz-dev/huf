@@ -24,7 +24,33 @@ MATCH_CONTEXT_KEY = {
     "Thread": "thread_id",
     "Sender": "sender_id",
 }
-SENSITIVE_PAYLOAD_KEYS = {"authorization", "token", "secret", "signature", "api_key", "password"}
+SENSITIVE_PAYLOAD_KEYS = {
+    "authorization",
+    "token",
+    "secret",
+    "signature",
+    "api_key",
+    "password",
+    # Additional credential-related keys cross-referenced against adapter
+    # credential_schema field names (huf/ai/gateway_adapters/*.py).
+    "bearer_token",
+    "x_api_key",
+    "auth_token",
+    "webhook_secret",
+    "access_token",
+    "client_secret",
+    "signing_secret",
+    # Adapter-specific credential fields (huf/ai/gateway_adapters/*.py).
+    "corp_secret",
+    "callback_token",
+    "app_secret",
+    "app_password",
+    "bot_token",
+    "public_key",
+    "community_token",
+    "callback_secret",
+    "verification_token",
+}
 
 
 def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:

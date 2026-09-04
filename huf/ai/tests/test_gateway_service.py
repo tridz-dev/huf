@@ -110,6 +110,36 @@ class TestGatewayIngress(unittest.TestCase):
             {"token": "top-secret", "body": {"signature": "sig", "message": "hello"}}
         ) == {"token": "[redacted]", "body": {"signature": "[redacted]", "message": "hello"}}
 
+    def test_payload_redaction_covers_additional_credential_keys(self):
+        """ST-R5.13: SENSITIVE_PAYLOAD_KEYS was extended with additional
+        credential-related field names cross-referenced against adapter
+        credential_schema definitions (huf/ai/gateway_adapters/*.py)."""
+        payload = {
+            "bearer_token": "a",
+            "x_api_key": "b",
+            "auth_token": "c",
+            "webhook_secret": "d",
+            "access_token": "e",
+            "client_secret": "f",
+            "signing_secret": "g",
+            "corp_secret": "h",
+            "callback_token": "i",
+            "app_secret": "j",
+            "app_password": "k",
+            "bot_token": "l",
+            "public_key": "m",
+            "community_token": "n",
+            "callback_secret": "o",
+            "verification_token": "p",
+            "message": "kept",
+        }
+        redacted = gateway_service._redact_payload(payload)
+        for key in payload:
+            if key == "message":
+                continue
+            assert redacted[key] == "[redacted]", f"{key} was not redacted"
+        assert redacted["message"] == "kept"
+
     @patch("huf.ai.gateway_service.frappe")
     def test_duplicate_provider_event_is_a_noop(self, mock_frappe):
         mock_frappe.db.get_value.return_value = "GATEWAY-EVENT-0001"
