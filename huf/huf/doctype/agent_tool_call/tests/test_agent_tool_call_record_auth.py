@@ -35,7 +35,7 @@ class TestAgentToolCallRecordAuth(IntegrationTestCase):
 		tool_doc = frappe.new_doc("Agent Tool Call")
 		tool_doc.agent_run = run_doc.name
 		tool_doc.tool_name = "test_tool"
-		tool_doc.status = "success"
+		tool_doc.status = "Completed"
 		tool_doc.insert()
 
 		try:
@@ -60,7 +60,7 @@ class TestAgentToolCallRecordAuth(IntegrationTestCase):
 		tool_doc = frappe.new_doc("Agent Tool Call")
 		tool_doc.agent_run = run_doc.name
 		tool_doc.tool_name = "test_tool"
-		tool_doc.status = "success"
+		tool_doc.status = "Completed"
 		tool_doc.insert()
 
 		try:
@@ -85,7 +85,7 @@ class TestAgentToolCallRecordAuth(IntegrationTestCase):
 		tool_doc = frappe.new_doc("Agent Tool Call")
 		tool_doc.agent_run = run_doc.name
 		tool_doc.tool_name = "test_tool"
-		tool_doc.status = "success"
+		tool_doc.status = "Completed"
 		tool_doc.insert()
 
 		try:
@@ -108,7 +108,7 @@ class TestAgentToolCallRecordAuth(IntegrationTestCase):
 		tool_doc = frappe.new_doc("Agent Tool Call")
 		tool_doc.agent_run = run_doc.name
 		tool_doc.tool_name = "test_tool"
-		tool_doc.status = "success"
+		tool_doc.status = "Completed"
 		tool_doc.insert()
 
 		try:
