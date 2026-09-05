@@ -1,4 +1,4 @@
-import { db } from '@/lib/frappe-sdk';
+import { db, call } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 
 // TODO(#473-followup): The consolidated gateway DocType uses per-channel admission
@@ -58,6 +58,29 @@ export async function updateGateway(name: string, data: Partial<GatewayDoc>): Pr
 
 export async function deleteGateway(name: string): Promise<void> {
   await db.deleteDoc(doctype.Gateway, name);
+}
+
+export interface GatewayReadinessCheck {
+  id: string;
+  label: string;
+  done: boolean;
+  hint: string | null;
+}
+
+export interface GatewayReadinessPreview {
+  ready: boolean;
+  blocking_count: number;
+  checks: GatewayReadinessCheck[];
+}
+
+// GW-15: server-verified readiness. Mirrors Gateway.validate() by calling the
+// same dry-run backend endpoint (huf.ai.gateway_service.preview_gateway_readiness)
+// so the frontend never has to re-encode (and drift from) those rules.
+export async function getGatewayReadinessPreview(gatewayName: string): Promise<GatewayReadinessPreview> {
+  const response = await call.get('huf.ai.gateway_service.preview_gateway_readiness', {
+    gateway_name: gatewayName,
+  });
+  return (response.message ?? response) as GatewayReadinessPreview;
 }
 
 export async function getAvailableAgents(): Promise<{ name: string; agent_name: string }[]> {
