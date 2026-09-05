@@ -376,9 +376,9 @@ scheduler_events = {
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"huf.auth.validate"
-# ]
+auth_hooks = [
+	"huf.ai.gateway_webhook.exempt_gateway_webhook_auth"
+]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

@@ -18,6 +18,85 @@ from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
 
 
+EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
+	{
+		# Bot Framework (and every other native-adapter) webhook: Teams posts
+		# ``Authorization: Bearer <token>``; verification happens inside
+		# ``TeamsGatewayAdapter.verify_inbound`` after this route is reached.
+		"/api/method/huf.ai.gateway_webhook.handle_gateway_webhook",
+		# Teams *Outgoing Webhook*: posts ``Authorization: HMAC <base64>``,
+		# verified inside ``handle_teams_outgoing_webhook`` itself.
+		"/api/method/huf.ai.tools.teams_webhook.handle_teams_outgoing_webhook",
+	}
+)
+
+
+def exempt_gateway_webhook_auth() -> None:
+	"""``auth_hooks`` entry: let allowlisted webhook routes reach their own auth.
+
+	Frappe's core ``validate_auth`` (``frappe/auth.py``) splits the
+	``Authorization`` header and, whenever it has exactly two parts (a scheme
+	and a token — e.g. ``Bearer <token>`` or ``HMAC <token>``), first tries
+	OAuth/API-key auth and then, if neither matched, raises
+	``AuthenticationError`` unless ``frappe.session.user`` is already a real
+	user. That check runs *before* Frappe ever looks at ``allow_guest=True``
+	on the target whitelisted method, so any Gateway webhook that authenticates
+	itself with a custom two-part ``Authorization`` scheme (rather than
+	Frappe's own token/basic/oauth schemes) is rejected at 401 by core before
+	its own signature/HMAC verification ever runs.
+
+	This hook runs inside ``validate_auth`` (via ``validate_auth_via_hooks``),
+	strictly before that terminal guest check. For routes on the
+	``EXEMPT_AUTH_ROUTES`` allowlist only, it authenticates the request as a
+	deliberately unprivileged, disabled technical user so the terminal check
+	passes and control reaches the whitelisted method's own verification
+	(HMAC/Bearer/signature). The route's handler still fails closed on a bad
+	or missing signature; this hook only gets it past the framework-level
+	guest check, it grants no document permissions of its own.
+	"""
+	request = frappe.request
+	if request is None or request.method != "POST":
+		return
+	if request.path not in EXEMPT_AUTH_ROUTES:
+		return
+
+	authorization = frappe.get_request_header("Authorization") or ""
+	if len(authorization.split(" ")) != 2:
+		return
+
+	if frappe.session.user not in ("", "Guest"):
+		return
+
+	frappe.set_user(_gateway_webhook_auth_user())
+
+
+def _gateway_webhook_auth_user() -> str:
+	"""Return (creating once) the disabled technical user used only to satisfy
+	Frappe's terminal guest check for allowlisted webhook routes.
+
+	It is created ``enabled=0`` and with no roles: it cannot log in, and
+	nothing about it grants any Gateway/Integration document permission —
+	those doctypes are exempt from generic /api/resource access entirely
+	(see the ``has_permission``/``permission_query_conditions`` hooks in
+	``huf/hooks.py``). Its only job is to be a non-"Guest", non-empty
+	``frappe.session.user`` value.
+	"""
+	technical_user = "gateway-webhook@huf.system"
+	if not frappe.db.exists("User", technical_user):
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": technical_user,
+				"first_name": "Gateway Webhook (system)",
+				"user_type": "System User",
+				"enabled": 0,
+				"send_welcome_email": 0,
+				"roles": [],
+			}
+		).insert(ignore_permissions=True, ignore_if_duplicate=True)
+	return technical_user
+
+
 def _adapter_class_for_provider(provider: str):
 	"""Resolve a ``Gateway.provider`` display value to its adapter class.
 
