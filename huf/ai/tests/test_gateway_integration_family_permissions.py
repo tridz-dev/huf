@@ -92,13 +92,20 @@ class TestGatewayIntegrationFamilyPermissions(IntegrationTestCase):
 		without a doc, which only consults role permissions (we deliberately
 		granted a generic read Custom DocPerm, so that gate alone passes);
 		row visibility is then filtered by get_permission_query_conditions_gateway_family
-		("1=0" for a non-System-Manager), so the list comes back empty rather
-		than raising -- still "cannot list" as the acceptance criteria requires.
+		("1=0" for a non-System-Manager), so the list comes back empty for the
+		six "parent" doctypes. Integration Credential is a child table
+		(istable=1): frappe.get_list on a child doctype goes through
+		has_child_permission instead, which raises PermissionError outright
+		rather than returning an empty list -- either outcome satisfies
+		"cannot list", so both are accepted here.
 		"""
 		frappe.set_user(self.reader.name)
 		try:
 			for doctype in GATEWAY_INTEGRATION_DOCTYPES:
-				rows = frappe.get_list(doctype, limit_page_length=0)
+				try:
+					rows = frappe.get_list(doctype, limit_page_length=0)
+				except frappe.PermissionError:
+					continue
 				self.assertEqual(
 					rows,
 					[],
