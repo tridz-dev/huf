@@ -123,30 +123,49 @@ def _send_message(kwargs: dict) -> str:
 
 
 def _send_template(kwargs: dict) -> str:
+	"""Send a pre-approved WhatsApp template message.
+
+	``parameters``, when supplied, is a plain list of strings that fill the
+	template's body placeholders in order (``{{1}}``, ``{{2}}``, ...) -- the
+	shape the GW-36 template-selection UI builds from its structured
+	parameter rows, rather than requiring a caller to hand-construct Meta's
+	full ``components`` array.
+	"""
 	phone_number_id, access_token = _get_whatsapp_credentials(kwargs)
 	recipient = (kwargs.get("to") or kwargs.get("recipient") or "").strip()
 	template_name = (kwargs.get("template_name") or "").strip()
 	language_code = (kwargs.get("language_code") or "en").strip()
+	parameters = kwargs.get("parameters") or []
 
 	if not recipient or not template_name:
 		return _error("Recipient ('to') and 'template_name' are required")
 	if not phone_number_id or not access_token:
 		return _error("WhatsApp credentials not found")
+	if not isinstance(parameters, list):
+		return _error("'parameters' must be a list of strings")
 
 	url = f"{META_GRAPH_URL}/{phone_number_id}/messages"
 	headers = {
 		"Authorization": f"Bearer {access_token}",
 		"Content-Type": "application/json",
 	}
+	template: dict[str, Any] = {
+		"name": template_name,
+		"language": {"code": language_code},
+	}
+	if parameters:
+		template["components"] = [
+			{
+				"type": "body",
+				"parameters": [{"type": "text", "text": str(value)} for value in parameters],
+			}
+		]
 	payload = {
 		"messaging_product": "whatsapp",
 		"recipient_type": "individual",
 		"to": recipient,
 		"type": "template",
-		"template": {
-			"name": template_name,
-			"language": {"code": language_code},
-		},
+		"template": template,
 	}
 
 	try:
