@@ -53,6 +53,9 @@ SENSITIVE_PAYLOAD_KEYS = {
     "community_token",
     "callback_secret",
     "verification_token",
+    # Google Chat (huf/ai/gateway_adapters/google_chat.py): G1/G6 credential
+    # schema -- service_account_key is a full service-account private key.
+    "service_account_key",
 }
 
 

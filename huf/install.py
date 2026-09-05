@@ -1297,7 +1297,12 @@ def register_integration_services():
 			"service_name": "google_chat",
 			"category": "Communication",
 			"surface": "Gateway",
-			"description": "Google Chat space messaging via incoming webhooks",
+			"description": "Google Chat space messaging via Bearer-JWT verified HTTP endpoint",
+			# GW-14: derived from GoogleChatGatewayAdapter.credential_schema
+			# (huf/ai/gateway_adapters/google_chat.py), single source of truth --
+			# `verification_token` (the retired body-token mechanism, see G1) is
+			# intentionally gone, since no current Google Chat app configuration
+			# can produce that field.
 			"required_credentials": _adapter_required_credentials("google_chat")
 		},
 		{

@@ -149,6 +149,31 @@ DISCORD_TOOLS = [
 	},
 ]
 
+GOOGLE_CHAT_TOOLS = [
+	{
+		"tool_name": "google_chat_send_message",
+		"description": "Proactively send a text message to a Google Chat space, outside of replying to an inbound event.",
+		"function_path": "huf.ai.tools.google_chat.handle_send_message",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("space_id", required=True, description="Target space resource name, e.g. 'spaces/AAAA1111'"),
+			_p("message", required=True, description="Message text to send"),
+			_p("thread_id", description="Thread resource name to reply within, e.g. 'spaces/AAAA1111/threads/BBBB2222'"),
+		],
+	},
+	{
+		"tool_name": "google_chat_send_card",
+		"description": "Send a Card V2 interactive message to a Google Chat space.",
+		"function_path": "huf.ai.tools.google_chat.handle_send_card",
+		"category": "Communication Tools",
+		"parameters": [
+			_p("space_id", required=True, description="Target space resource name, e.g. 'spaces/AAAA1111'"),
+			_p("card", required=True, description="Card V2 payload as a JSON object or JSON string"),
+			_p("thread_id", description="Thread resource name to reply within"),
+		],
+	},
+]
+
 TELEGRAM_TOOLS = [
 	{
 		"tool_name": "telegram",
@@ -2260,6 +2285,7 @@ ALL_INTEGRATION_TOOLS = (
 	# Tools backed by a connectable service. Keys match Integration Service
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
+	+ _with_service(GOOGLE_CHAT_TOOLS, "google_chat")
 	+ _with_service(TELEGRAM_TOOLS, "telegram")
 	+ _with_service(WHATSAPP_TOOLS, "whatsapp")
 	+ _with_service(MESSENGER_TOOLS, "messenger")
