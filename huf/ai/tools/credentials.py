@@ -153,10 +153,60 @@ def get_credential(service: str, key: str, default: str = None) -> str:
 		return default
 
 
+def set_credential(service: str, key: str, value: str):
+	"""
+	Update a credential value for a given service and key in Integration Settings.
+
+	Args:
+		service: The service name (e.g., "gmail")
+		key: The credential key name (e.g., "access_token")
+		value: The new credential value
+	"""
+	try:
+		# Find active integration settings for the service
+		settings = frappe.get_all(
+			"Integration Settings",
+			filters={"service": service, "is_active": 1},
+			fields=["name"],
+			order_by="is_default DESC, modified DESC",
+			limit=1
+		)
+
+		if settings:
+			doc = frappe.get_doc("Integration Settings", settings[0].name)
+
+			# Find existing credential with the same key
+			found = False
+			for cred in doc.credentials:
+				if cred.key == key:
+					cred.value = value
+					found = True
+					break
+
+			# If not found, add a new credential
+			if not found:
+				doc.append("credentials", {
+					"key": key,
+					"value": value,
+					"is_mandatory": 0
+				})
+
+			if frappe.has_permission("Integration Settings", "write", doc=doc):
+				doc.save()
+				commit_if_background()
+			else:
+				frappe.logger("huf").error(
+					f"Not permitted to persist credential '{key}' on Integration Settings {doc.name}"
+				)
+	except Exception as e:
+		# Silently fail - don't break tool execution for credential persistence
+		frappe.logger("huf").warning(f"Failed to set credential '{key}' for service '{service}': {e}")
+
+
 def update_last_error(service: str, error: str):
 	"""
 	Update the last_error field in Integration Settings for a service.
-	
+
 	Args:
 		service: The service name
 		error: The error message (will be truncated to 140 chars)
@@ -170,7 +220,7 @@ def update_last_error(service: str, error: str):
 			order_by="is_default DESC, modified DESC",
 			limit=1
 		)
-		
+
 		if settings:
 			doc = frappe.get_doc("Integration Settings", settings[0].name)
 			doc.last_error = error[:140]  # Truncate to field length
