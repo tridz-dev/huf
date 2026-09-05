@@ -655,16 +655,21 @@ class TestGatewayReplyDelivery(unittest.TestCase):
             sender_id="42",
         )
         configured_gateway = gateway(name="Support VK", execution_user="gateway-bot")
-        # Third item: the target Agent lookup added by the F1 access-control fix
-        # (gateway-routed runs are authorized as Guest -- see agent_access.py).
-        # allow_guest=True so this "delivered successfully" scenario still passes.
-        target_agent_doc = MagicMock(allow_guest=True)
+        # Third item: the target Agent lookup for the pre-gate. Since GW-08 that
+        # gate authorizes as the Gateway's execution_user, not as Guest, so this
+        # Agent no longer needs allow_guest=1 to be reachable from a Gateway.
+        target_agent_doc = MagicMock(allow_guest=False)
         mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-001", "response": "Hello back"})
         mock_send.return_value = SimpleNamespace(provider_message_id="vk-message-1")
 
-        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}):
+        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+            "huf.ai.agent_access.check_agent_access", return_value=True
+        ) as mock_check:
             result = gateway_service.process_gateway_event(event.name)
+
+        # The pre-gate asked about execution_user, never about Guest.
+        assert mock_check.call_args.args[1] == "gateway-bot"
 
         assert result == {
             "event_name": event.name,
@@ -818,6 +823,119 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
         # The Failed db_set must be the *last* status write, applied after
         # the rollback discarded any earlier partial state from this run.
         assert event.db_set.call_args_list[-1] == failed_calls[-1]
+class TestGatewayAgentAdmissionIdentity(unittest.TestCase):
+    """GW-08: gateway-routed Agent runs authorize as the Gateway's
+    execution_user, not as Guest."""
+
+    def _queued_agent_event(self):
+        return MagicMock(
+            name="GATEWAY-EVENT-0099",
+            status="Queued",
+            gateway="Support Telegram",
+            target_type="Agent",
+            target_agent="Support Agent",
+            message_text="hello",
+            thread_id="123",
+            conversation_id="2000000001",
+            sender_id="42",
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_non_entitled_execution_user_is_rejected_at_the_pre_gate(self, mock_frappe):
+        event = self._queued_agent_event()
+        configured_gateway = gateway(execution_user="under-privileged-bot")
+        # allow_guest is irrelevant now; entitlement of execution_user decides.
+        target_agent_doc = MagicMock(allow_guest=True)
+        mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
+
+        with patch("huf.ai.agent_access.check_agent_access", return_value=False) as mock_check:
+            result = gateway_service.process_gateway_event(event.name)
+
+        assert result == {"event_name": event.name, "status": "Rejected"}
+        assert mock_check.call_args.args[1] == "under-privileged-bot"
+        rejection = event.db_set.call_args.args[0]
+        assert rejection["status"] == "Rejected"
+        assert "under-privileged-bot" in rejection["error_message"]
+        assert "Support Agent" in rejection["error_message"]
+        # The run never started: no impersonation happened.
+        mock_frappe.set_user.assert_not_called()
+
+    @patch("huf.ai.gateway_service.frappe")
+    @patch("huf.ai.gateway_webhook.send_gateway_reply")
+    def test_allow_guest_zero_agent_is_reachable_when_execution_user_is_entitled(
+        self, mock_send, mock_frappe
+    ):
+        """The GW-08 coupling is gone: running an Agent behind a Gateway no
+        longer forces allow_guest=1, which is also the sole gate on the
+        unauthenticated run_agent_sync / run_agent_sync_chat endpoints."""
+        event = self._queued_agent_event()
+        configured_gateway = gateway(execution_user="gateway-bot")
+        target_agent_doc = MagicMock(allow_guest=False)
+        mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
+        mock_run = MagicMock(return_value={"agent_run_id": "AR-099", "response": "hi"})
+        mock_send.return_value = SimpleNamespace(provider_message_id="tg-1")
+
+        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+            "huf.ai.agent_access.check_agent_access", return_value=True
+        ):
+            result = gateway_service.process_gateway_event(event.name)
+
+        assert result["status"] == "Succeeded"
+        mock_frappe.set_user.assert_called_once_with("gateway-bot")
+
+
+class TestSurvivingRunAgentSyncCheck(unittest.TestCase):
+    """GW-08 acceptance: the load-bearing check is the one inside
+    run_agent_sync, which runs under the execution_user set by
+    process_gateway_event. A non-entitled execution_user is rejected there
+    even if the gateway_service pre-gate were bypassed."""
+
+    def _agent(self, **overrides):
+        values = {
+            "owner": "owner@example.com",
+            "allow_guest": False,
+            "allow_all_users": False,
+            "allowed_users": [SimpleNamespace(user="entitled-bot")],
+            "allowed_roles": [],
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_non_entitled_execution_user_rejected_by_assert_agent_access(self):
+        """``assert_agent_access`` throws iff ``check_agent_access`` is False,
+        so the predicate is the thing worth asserting here. (The throw itself
+        goes through ``frappe.throw`` -> ``frappe.msgprint``, which needs a
+        bound Frappe request context and so is only exercisable under
+        ``bench run-tests``.)"""
+        from huf.ai import agent_access
+
+        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+            "huf.permissions.has_capability", return_value=False
+        ):
+            self.assertFalse(
+                agent_access.check_agent_access(self._agent(), "under-privileged-bot")
+            )
+
+    def test_entitled_execution_user_accepted_by_assert_agent_access(self):
+        from huf.ai.agent_access import assert_agent_access
+
+        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+            "huf.permissions.has_capability", return_value=False
+        ):
+            assert_agent_access(self._agent(), user="entitled-bot")
+
+    def test_allow_guest_alone_does_not_entitle_a_named_execution_user(self):
+        """Regression guard for the old semantics: under the Guest pre-gate an
+        allow_guest=1 agent was reachable by any gateway regardless of
+        execution_user. Under the execution_user model it is not."""
+        from huf.ai.agent_access import check_agent_access
+
+        agent = self._agent(allow_guest=True)
+        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+            "huf.permissions.has_capability", return_value=False
+        ):
+            self.assertFalse(check_agent_access(agent, "under-privileged-bot"))
+            self.assertTrue(check_agent_access(agent, "Guest"))
 
 
 class TestApproveGatewayPairingIntegration(IntegrationTestCase):

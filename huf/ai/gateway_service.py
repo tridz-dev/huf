@@ -580,16 +580,39 @@ def process_gateway_event(event_name: str) -> dict:
         return {"event_name": event.name, "status": "Rejected"}
 
     if event.target_type == "Agent":
-        from huf.ai.agent_access import assert_agent_access
+        # GW-08: this pre-gate authorizes the run as the Gateway's configured
+        # execution_user, NOT as Guest.
+        #
+        # It used to call assert_agent_access(agent_doc, user="Guest"), which
+        # short-circuits on `allow_guest` alone (agent_access.check_agent_access).
+        # That made Agent.allow_guest=1 the only way to put any Agent behind any
+        # Gateway -- and because `Agent.allow_guest` is also the sole gate on the
+        # unauthenticated `run_agent_sync` / `run_agent_sync_chat` endpoints, the
+        # only way to enable a Telegram/WhatsApp integration was to simultaneously
+        # expose that Agent to anonymous callers over the public REST API. The
+        # gateway sender is anonymous, but the *authorization* for the run has
+        # never come from the sender: it comes from execution_user, which an admin
+        # configures on the Gateway and which Gateway.validate already constrains
+        # (allowed role + check_agent_access against default_agent, ST-04.4).
+        # Authorizing as Guest was therefore both weaker than intended and
+        # coupled to an unrelated, larger exposure.
+        #
+        # This is defence in depth and a clean rejection surface (the Gateway
+        # Event records why it was refused). The load-bearing check is the one
+        # inside run_agent_sync, which runs under the same execution_user after
+        # frappe.set_user() below and additionally requires the `agent.use`
+        # capability.
+        from huf.ai.agent_access import check_agent_access
 
         agent_doc = frappe.get_doc("Agent", event.target_agent)
-        try:
-            assert_agent_access(agent_doc, user="Guest")
-        except frappe.PermissionError:
+        if not check_agent_access(agent_doc, gateway.execution_user):
             event.db_set(
                 {
                     "status": "Rejected",
-                    "error_message": "Agent does not allow guest/public access",
+                    "error_message": (
+                        f"Gateway run-as user '{gateway.execution_user}' does not have access "
+                        f"to agent '{event.target_agent}'"
+                    ),
                 }
             )
             return {"event_name": event.name, "status": "Rejected"}
