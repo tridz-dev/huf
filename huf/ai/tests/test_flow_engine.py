@@ -781,6 +781,67 @@ class TestHopLimitAndEndCompletion(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# GW-02: a failed node with no successor must fail the run, not silently
+# report success.
+# ---------------------------------------------------------------------------
+
+
+class TestFailedNodeWithNoSuccessorFailsRun(unittest.TestCase):
+	"""GW-02 regression: ``huf.ai.graph.executor.GraphExecutor.run`` used to
+	read ``next_node_id is None`` as "run boundary reached, complete the run
+	successfully" no matter what the node's own outcome was. Router.resolve's
+	fail-closed guard (I7) only fires when Flow's own ``default_resolver`` is
+	NOT supplied -- but flow_engine.py always supplies one
+	(``_build_router``'s ``default_resolver``), so a failed tool.call node
+	with no ``next``/``on_error`` pointer and no matching edge silently
+	completed the whole Flow Run as "Success". The fix enforces fail-closed
+	centrally in ``GraphExecutor.run``, independent of which resolver
+	produced the (missing) next node id.
+	"""
+
+	def _run_failing_tool_call(self, on_error=None):
+		flow_run = FakeFlowRun(current_node_id="n1", hop_count=0, max_hops=10, mode="Normal")
+		_ctx(flow_run)
+		node = {"id": "n1", "type": "tool.call", "config": {"tool_id": "demo_tool", "input": {}}}
+		if on_error:
+			node["on_error"] = on_error
+		nodes_map = {"n1": node}
+		if on_error:
+			nodes_map[on_error] = {"id": on_error, "type": "end", "config": {}}
+
+		def fake_execute_tool(tool_name, call_args):
+			return {"success": False, "error": "boom"}
+
+		fake_run_doc = MagicMock()
+		fake_tool_call_doc = MagicMock()
+
+		with patch.object(flow_engine, "frappe") as fake_frappe, \
+			patch.object(flow_engine, "execute_tool", side_effect=fake_execute_tool), \
+			patch.object(flow_engine, "_create_flow_agent_run", return_value=fake_run_doc), \
+			patch.object(flow_engine, "_publish_flow_event"):
+			fake_frappe.db.get_value.return_value = None  # not an MCP tool
+			fake_frappe.get_doc.return_value = fake_tool_call_doc
+			flow_engine._execute_loop(flow_run, nodes_map, [], {})
+
+		return flow_run
+
+	def test_failed_node_no_successor_fails_the_run(self):
+		"""A single engineered-to-fail node with no on_error edge must report
+		Flow Run status Failed, not Success."""
+		flow_run = self._run_failing_tool_call(on_error=None)
+		self.assertEqual(flow_run.status, "Failed")
+		self.assertIn("boom", flow_run.last_error or "")
+
+	def test_failed_node_with_on_error_edge_still_succeeds(self):
+		"""Regression guard: a failing node that DOES declare a matching
+		on_error successor must still be able to complete the run
+		successfully by routing to the error-handling node -- the fail-closed
+		fix must not break existing on_error routing."""
+		flow_run = self._run_failing_tool_call(on_error="recover")
+		self.assertEqual(flow_run.status, "Success")
+
+
+# ---------------------------------------------------------------------------
 # Known defects (F-1..F-4): intended-behaviour acceptance tests for T-22
 # ---------------------------------------------------------------------------
 
