@@ -8,6 +8,12 @@ outbound message request. A Gateway endpoint or long-poll worker is responsible
 for passing verified events to Huf's routing foundation.
 """
 
+# PARKED PROVIDER (2026-09-05)
+# This adapter is not maintained and must be security-reviewed before re-enabling.
+# Reference: PR #630's "kept intact for future use" is a code-retention note, not a security review flag.
+# VK adapter declares a long_poll capability it does not implement.
+# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and HUF_INTEGRATIONS_GATEWAYS_TODO.md for details.
+
 from __future__ import annotations
 
 import hmac

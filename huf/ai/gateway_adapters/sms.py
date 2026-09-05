@@ -1,5 +1,11 @@
 """SMS (Twilio / Plivo / Frappe SMS Settings) Gateway Adapter for two-way SMS communications."""
 
+# PARKED PROVIDER (2026-09-05)
+# This adapter is not maintained and must be security-reviewed before re-enabling.
+# Reference: PR #630's "kept intact for future use" is a code-retention note, not a security review flag.
+# SMS adapter has a live fail-open bypass path that requires security review before any re-enable.
+# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and HUF_INTEGRATIONS_GATEWAYS_TODO.md for details.
+
 from __future__ import annotations
 
 import hmac
