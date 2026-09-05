@@ -224,14 +224,13 @@ class TestSavedFlowInvokesRealTool(unittest.TestCase):
 					"type": "tool.call",
 					# The schema's canonical, and only accepted, config shape
 					# (additionalProperties: false) -- tool_id/input, not
-					# tool_name/args.
+					# tool_name/args. No "next" -- this is the last node in the
+					# chain (huf.ai.flow_engine has no "output"/"foreach"/
+					# "parallel"/"validate" node executors at all, despite the
+					# shared graph-IR schema's Flow profile allowing those
+					# types -- a separate, out-of-scope gap for GW-01; see
+					# findings-cluster1.md).
 					"config": {"tool_id": tool_name, "input": {"numbers": [1, 2, 3]}},
-					"next": "finish",
-				},
-				{
-					"id": "finish",
-					"type": "output",
-					"config": {"value": {"$from": "call"}},
 				},
 			],
 			"contract": {

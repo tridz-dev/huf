@@ -66,7 +66,11 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 		tool_name = f"_test_gw33_telegram_{frappe.generate_hash(length=8)}"
 		doc = make_agent_tool_function(
 			tool_name=tool_name,
-			types="Custom Function",
+			# telegram.handle_action is registered app-wide via the huf_tools
+			# hook (huf/ai/tools/_registry.py), not individually
+			# @frappe.whitelist()-decorated -- "Custom Function" would fail
+			# AgentToolFunction.validate()'s is_whitelisted() check.
+			types="App Provided",
 			description="Test tool: dispatches Telegram Bot API actions.",
 			function_path="huf.ai.tools.telegram.handle_action",
 			params=json.dumps(
@@ -114,16 +118,15 @@ class TestToolCallSendsWithoutLLMTurn(IntegrationTestCase):
 				{
 					"id": "send",
 					"type": "tool.call",
+					# No "next" -- last node in the chain. huf.ai.flow_engine
+					# has no "output" node executor at all (a separate,
+					# out-of-scope gap from GW-01/GW-33; see
+					# findings-cluster1.md), so an "output" terminal node
+					# would fail at runtime despite passing schema validation.
 					"config": {
 						"tool_id": tool_name,
 						"input": {"action": "send_message", "chat_id": chat_id, "text": text},
 					},
-					"next": "finish",
-				},
-				{
-					"id": "finish",
-					"type": "output",
-					"config": {"value": {"$from": "send"}},
 				},
 			],
 			"contract": {
