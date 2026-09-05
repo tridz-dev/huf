@@ -23,22 +23,33 @@ from huf.ai.transaction import commit_if_background
 def require_credential(service: str, key: str) -> str:
 	"""
 	Retrieve a credential value for a given service and key.
-	
-	First checks HUF credential storage (HUF Settings DocType), 
+
+	First checks HUF credential storage (HUF Settings DocType),
 	then falls back to environment variables.
-	
+
 	Args:
 		service: The service name (e.g., "openai", "slack", "github")
 		key: The credential key name (e.g., "api_key", "client_id")
-	
+
 	Returns:
 		The credential value as a string
-	
+
 	Raises:
 		ValueError: If the credential is not found in either HUF settings or environment
 	"""
 	# First, try to get from Integration Settings DocType
 	try:
+		# GW-10: Org-wide credential scope by design. Integration credentials are
+		# intentionally retrieved as org-wide resources without per-user/per-agent
+		# filtering. This is by design (not an oversight) because:
+		# 1. Only admins can attach credentialed tools to agents (admin gate)
+		# 2. The tool's use is controlled, not its disclosure (controlled-use gap, not disclosure gap)
+		# 3. Frappe.get_all() does not check permissions by documented design
+		#
+		# If per-agent/per-user credential scoping is needed in the future, it would
+		# require: (a) an owning-agent/owning-user field on Integration Settings,
+		# (b) filtering logic here, and (c) a migration plan for existing credentials.
+		# See Tracks/safwan-erooth.IntegrationsGatewaysAudit/findings/GW-10-decision.md
 		integration = frappe.get_all(
 			"Integration Settings",
 			filters={"service": service, "is_active": 1},
@@ -50,6 +61,7 @@ def require_credential(service: str, key: str) -> str:
 			doc = frappe.get_doc("Integration Settings", integration[0].name)
 			for cred in doc.credentials:
 				if cred.key == key:
+					# get_password() also bypasses permissions by design (same rationale as above)
 					return cred.get_password("value")
 	except Exception:
 		pass
@@ -213,6 +225,8 @@ def update_last_error(service: str, error: str):
 	"""
 	try:
 		# Find active integration settings for the service
+		# GW-10: Same org-wide credential scope rationale as require_credential.
+		# See require_credential() and Tracks/safwan-erooth.IntegrationsGatewaysAudit/findings/GW-10-decision.md
 		settings = frappe.get_all(
 			"Integration Settings",
 			filters={"service": service, "is_active": 1},
@@ -222,6 +236,7 @@ def update_last_error(service: str, error: str):
 		)
 
 		if settings:
+			# GW-10: get_doc() also operates on org-wide credentials (same design decision)
 			doc = frappe.get_doc("Integration Settings", settings[0].name)
 			doc.last_error = error[:140]  # Truncate to field length
 			if frappe.has_permission("Integration Settings", "write", doc=doc):
