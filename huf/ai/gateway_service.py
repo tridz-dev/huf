@@ -9,13 +9,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
+import threading
+import time
 from typing import Any
 
 import frappe
 from frappe import _
 from frappe.rate_limiter import rate_limit
 from frappe.utils import add_to_date, now_datetime
+
+from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 
 
 MATCH_CONTEXT_KEY = {
@@ -50,6 +55,9 @@ SENSITIVE_PAYLOAD_KEYS = {
     "community_token",
     "callback_secret",
     "verification_token",
+    # Google Chat (huf/ai/gateway_adapters/google_chat.py): G1/G6 credential
+    # schema -- service_account_key is a full service-account private key.
+    "service_account_key",
 }
 
 
@@ -58,16 +66,176 @@ def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+# GW-07: a provider outbound call's HTTPError can carry the request URL
+# verbatim in its string representation (e.g. Telegram's
+# ``https://api.telegram.org/bot<TOKEN>/sendMessage`` scheme), and several
+# call sites here turn "whatever the exception says" into an externally
+# readable string -- ``notification_status`` returned to the caller of
+# ``approve_gateway_pairing``, and ``frappe.log_error``'s traceback dump.
+# This generalizes the ad hoc ``_sanitize_token`` helper in
+# ``huf.ai.tools.telegram`` (which only ever had the one bot token in scope
+# to redact) into a provider-agnostic pattern match so every adapter's
+# URL-embedded or header-embedded credential is stripped before it reaches
+# any such surface, not just Telegram's.
+_URL_TOKEN_PATTERNS = (
+    # Bot-token-in-path schemes (Telegram: /bot<digits>:<token>/...).
+    re.compile(r"(/bot)\d+:[A-Za-z0-9_-]+"),
+    # Authorization-style credentials appearing in dumped text.
+    re.compile(r"(?i)\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{8,}"),
+    # Sensitive query-string parameters embedded in a URL.
+    re.compile(r"(?i)([?&](?:token|api[_-]?key|secret|access_token|key|password)=)[^&\s\"'<>]+"),
+)
+
+
+def _redact_error_text(text: str) -> str:
+    """Strip provider credentials that leaked into an exception's string form
+    before it reaches any externally-readable field (``notification_status``,
+    ``frappe.log_error``, a ``db_set`` error_message, ...)."""
+    if not text:
+        return text
+    redacted = text
+    redacted = _URL_TOKEN_PATTERNS[0].sub(r"\1[redacted]", redacted)
+    redacted = _URL_TOKEN_PATTERNS[1].sub(r"\1 [redacted]", redacted)
+    redacted = _URL_TOKEN_PATTERNS[2].sub(r"\1[redacted]", redacted)
+    return redacted
+
+
+# Types that json.dumps (used by the JSON `raw_payload` field) can serialize
+# natively. Anything else (datetime/date/time, Decimal, set, a Frappe Document
+# child row, ...) must be stringified here rather than left for json.dumps to
+# choke on -- GW-04: `Communication.as_dict()` carries native `datetime`
+# objects (e.g. `communication_date`), and frappe's JSON field write path does
+# a plain `json.dumps` with no `default=str`, so passing one through
+# unconverted crashes with `TypeError: Object of type datetime is not JSON
+# serializable` on every real inbound email.
+_JSON_NATIVE_TYPES = (str, int, float, bool, type(None))
+
+
 def _redact_payload(value: Any) -> Any:
-    """Retain support evidence without persisting provider credentials."""
+    """Retain support evidence without persisting provider credentials.
+
+    Also makes the result safe to store in a JSON field: dict/list containers
+    are walked recursively, values of JSON-native types pass through as-is,
+    and anything else is coerced to its string representation.
+    """
     if isinstance(value, dict):
         return {
             key: "[redacted]" if key.lower() in SENSITIVE_PAYLOAD_KEYS else _redact_payload(item)
             for key, item in value.items()
         }
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_redact_payload(item) for item in value]
-    return value
+    if isinstance(value, _JSON_NATIVE_TYPES):
+        return value
+    return str(value)
+
+
+# CL-02: every adapter declares GatewayCapabilities.max_outbound_messages_per_second
+# but nothing previously read it before calling adapter.send_reply. This is a
+# minimal per-gateway token bucket (capacity 1 -- a single send is never
+# delayed, but a tight burst is spread out at the declared rate) enforced in
+# process_gateway_event just before send_gateway_reply is invoked.
+_OUTBOUND_RATE_LOCK = threading.Lock()
+_OUTBOUND_RATE_NEXT_ALLOWED: dict[str, float] = {}
+
+
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    if seconds > 0:
+        time.sleep(seconds)
+
+
+def _outbound_rate_cap(provider: str | None) -> float | None:
+    """Resolve the declared outbound rate cap for a Gateway's provider without
+    instantiating its adapter (capabilities is a class-level attribute, so no
+    credentials are needed just to read the declared limit)."""
+    if not provider:
+        return None
+    try:
+        from huf.ai.gateway_webhook import _adapter_class_for_provider
+
+        adapter_cls = _adapter_class_for_provider(provider)
+        return adapter_cls.capabilities.max_outbound_messages_per_second
+    except Exception:
+        return None
+
+
+def _throttle_outbound_send(gateway_name: str, max_per_second: float | None) -> None:
+    """Block only long enough to keep this gateway's outbound sends at or
+    under its declared ``max_outbound_messages_per_second`` cap."""
+    if not max_per_second or max_per_second <= 0:
+        return
+    min_interval = 1.0 / max_per_second
+    with _OUTBOUND_RATE_LOCK:
+        now = _monotonic()
+        next_allowed = _OUTBOUND_RATE_NEXT_ALLOWED.get(gateway_name, 0.0)
+        wait = max(0.0, next_allowed - now)
+        _OUTBOUND_RATE_NEXT_ALLOWED[gateway_name] = max(now, next_allowed) + min_interval
+    _sleep(wait)
+
+
+def _describe_attachments(raw_payload: Any) -> str:
+    """Best-effort, provider-agnostic sniff of stored raw payload for attachments.
+
+    GW-30 added an ``attachments`` field to ``NormalizedGatewayEvent``, but the
+    ``Gateway Event`` doctype has no dedicated column for it yet (out of scope
+    for this change -- see findings). Since the full (redacted) provider
+    payload is already persisted on every event, this recovers "was media
+    attached, and what kind" from the well-known per-provider payload shapes
+    so the note can survive round-tripping through storage, rather than
+    requiring attachments to be threaded through as a brand-new doctype field.
+    Returns "" when nothing recognizable is found -- callers must not assume
+    absence of a note means absence of media for providers not covered here.
+    """
+    if not isinstance(raw_payload, dict):
+        return ""
+
+    kinds: list[str] = []
+
+    # Telegram: message/edited_message carries one of these media keys directly.
+    message = raw_payload.get("message") or raw_payload.get("edited_message")
+    if isinstance(message, dict):
+        for key in ("photo", "document", "voice", "video", "audio", "video_note", "sticker"):
+            if message.get(key):
+                kinds.append(key)
+
+    # WhatsApp Business/Cloud API webhook shape.
+    try:
+        value = raw_payload["entry"][0]["changes"][0]["value"]
+        msg = (value.get("messages") or [None])[0]
+        if isinstance(msg, dict) and msg.get("type") in (
+            "image", "document", "audio", "video", "sticker",
+        ):
+            kinds.append(msg["type"])
+    except (KeyError, IndexError, TypeError):
+        pass
+
+    # Messenger/Instagram webhook shape.
+    try:
+        messaging_event = raw_payload["entry"][0]["messaging"][0]
+        for attachment in (messaging_event.get("message") or {}).get("attachments") or []:
+            if attachment.get("type"):
+                kinds.append(str(attachment["type"]))
+    except (KeyError, IndexError, TypeError):
+        pass
+
+    # MS Teams Bot Framework activity shape.
+    for attachment in raw_payload.get("attachments") or []:
+        if isinstance(attachment, dict) and attachment.get("contentUrl"):
+            kinds.append("file")
+
+    # Twilio-style SMS/MMS form payload (persisted as a flat dict of params).
+    if raw_payload.get("NumMedia") not in (None, "0", 0):
+        kinds.append("mms")
+
+    if not kinds:
+        return ""
+
+    unique_kinds = sorted(set(kinds))
+    return "[Attachment(s) present: " + ", ".join(unique_kinds) + "]"
 
 
 def _binding_matches(binding: dict, context: dict[str, Any]) -> bool:
@@ -163,7 +331,7 @@ def _create_pairing_request(
                 )
                 adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
         except Exception as exc:
-            frappe.logger("huf").warning(f"Failed to send pairing code message: {exc}")
+            frappe.logger("huf").warning(f"Failed to send pairing code message: {_redact_error_text(str(exc))}")
 
     return pairing_code
 
@@ -299,8 +467,12 @@ def approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None) -
             ))
             notification_status = "Welcome message sent to sender"
     except Exception as exc:
-        notification_status = f"Approval saved, welcome message notice: {exc}"
-        frappe.log_error("Failed to send welcome message on frontend approval", f"{exc}\n{frappe.get_traceback()}")
+        safe_exc = _redact_error_text(str(exc))
+        notification_status = f"Approval saved, welcome message notice: {safe_exc}"
+        frappe.log_error(
+            "Failed to send welcome message on frontend approval",
+            _redact_error_text(f"{exc}\n{frappe.get_traceback()}"),
+        )
 
     return {
         "name": entry.name,
@@ -474,18 +646,44 @@ def process_gateway_event(event_name: str) -> dict:
         return {"event_name": event.name, "status": "Rejected"}
 
     if event.target_type == "Agent":
-        from huf.ai.agent_access import assert_agent_access
+        # GW-08: this pre-gate authorizes the run as the Gateway's configured
+        # execution_user, NOT as Guest.
+        #
+        # It used to call assert_agent_access(agent_doc, user="Guest"), which
+        # short-circuits on `allow_guest` alone (agent_access.check_agent_access).
+        # That made Agent.allow_guest=1 the only way to put any Agent behind any
+        # Gateway -- and because `Agent.allow_guest` is also the sole gate on the
+        # unauthenticated `run_agent_sync` / `run_agent_sync_chat` endpoints, the
+        # only way to enable a Telegram/WhatsApp integration was to simultaneously
+        # expose that Agent to anonymous callers over the public REST API. The
+        # gateway sender is anonymous, but the *authorization* for the run has
+        # never come from the sender: it comes from execution_user, which an admin
+        # configures on the Gateway and which Gateway.validate already constrains
+        # (allowed role + check_agent_access against default_agent, ST-04.4).
+        # Authorizing as Guest was therefore both weaker than intended and
+        # coupled to an unrelated, larger exposure.
+        #
+        # This is defence in depth and a clean rejection surface (the Gateway
+        # Event records why it was refused). The load-bearing check is the one
+        # inside run_agent_sync, which runs under the same execution_user after
+        # frappe.set_user() below and additionally requires the `agent.use`
+        # capability.
+        #
+        # GW-11: this pre-gate is now routed through the shared
+        # resolve_run_identity_and_authorize() helper alongside the other 3
+        # "run an agent" trigger surfaces, but keeps its own rejection
+        # reporting shape (a Gateway Event status/error_message, not a raised
+        # exception) -- see agent_access.RunIdentityResult's docstring.
+        from huf.ai.agent_access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
 
         agent_doc = frappe.get_doc("Agent", event.target_agent)
-        try:
-            assert_agent_access(agent_doc, user="Guest")
-        except frappe.PermissionError:
-            event.db_set(
-                {
-                    "status": "Rejected",
-                    "error_message": "Agent does not allow guest/public access",
-                }
-            )
+        identity = resolve_run_identity_and_authorize(
+            agent_doc,
+            TRIGGER_GATEWAY,
+            {"execution_user": gateway.execution_user, "target_agent": event.target_agent},
+        )
+        if not identity.authorized:
+            event.db_set({"status": "Rejected", "error_message": identity.reason})
             return {"event_name": event.name, "status": "Rejected"}
 
     try:
@@ -495,9 +693,12 @@ def process_gateway_event(event_name: str) -> dict:
             from huf.ai.agent_integration import run_agent_sync
             from huf.ai.gateway_webhook import send_gateway_reply
 
+            attachment_note = _describe_attachments(event.raw_payload)
+            prompt = f"{attachment_note}\n{event.message_text}" if attachment_note else event.message_text
+
             result = run_agent_sync(
                 agent_name=event.target_agent,
-                prompt=event.message_text,
+                prompt=prompt,
                 channel_id=f"gateway:{gateway.name}",
                 external_id=event.thread_id or event.conversation_id or event.sender_id,
                 now=True,
@@ -506,6 +707,7 @@ def process_gateway_event(event_name: str) -> dict:
             if not response or not str(response).strip():
                 raise frappe.ValidationError(_("Gateway agent run completed without a text response."))
             try:
+                _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
                 delivery = send_gateway_reply(gateway, event, str(response))
                 provider_message_id = delivery.provider_message_id
             except frappe.ValidationError as exc:
@@ -545,10 +747,81 @@ def process_gateway_event(event_name: str) -> dict:
 
         raise frappe.ValidationError(_("Gateway event has no valid target."))
     except Exception:
-        message = frappe.get_traceback()
+        message = _redact_error_text(frappe.get_traceback())
+        # GW-06: a failure here (e.g. send_gateway_reply raising after a
+        # successful agent run) can leave uncommitted state from this request
+        # queued behind the background job's own rollback-on-reraise. Discard
+        # that partial state first, then reapply *only* the Failed status
+        # against a clean transaction and commit it immediately, so the event
+        # can never surface stuck at "Running" -- re-raising afterwards still
+        # propagates the failure to the job queue for logging/retry policy.
+        frappe.db.rollback()
         event.db_set({"status": "Failed", "error_message": message[-500:]})
+        frappe.db.commit()
         frappe.log_error(message, "Gateway event failed")
         raise
+
+
+@frappe.whitelist(methods=["POST"])
+def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
+	"""Send a test message through a gateway to verify credentials and connectivity.
+
+	Returns a dict with:
+	- success (bool): Whether the message was sent
+	- message (str): Human-readable status or error message
+	- provider_response (str): Raw response from the provider (if applicable)
+	"""
+	if not frappe.has_permission("Gateway", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if not gateway_name or not test_recipient_id:
+		frappe.throw(_("Gateway name and test recipient ID are required."))
+
+	try:
+		gateway = frappe.get_doc("Gateway", gateway_name)
+
+		if not gateway.enabled:
+			return {
+				"success": False,
+				"message": "Gateway is disabled. Enable it to test.",
+				"provider_response": None,
+			}
+
+		if not gateway.integration_settings:
+			return {
+				"success": False,
+				"message": "Gateway has no credentials configured.",
+				"provider_response": None,
+			}
+
+		# Get the adapter for this gateway
+		from huf.ai.gateway_webhook import get_gateway_adapter
+		from huf.ai.gateway_adapters.types import GatewayReply
+
+		adapter = get_gateway_adapter(gateway)
+
+		# Send a test message
+		test_message = "Test message from Huf. If you see this, the connection is working."
+		reply = GatewayReply(
+			conversation_id=test_recipient_id,
+			text=test_message,
+		)
+
+		delivery = adapter.send_reply(reply)
+
+		return {
+			"success": True,
+			"message": f"Test message sent successfully to {test_recipient_id}",
+			"provider_response": json.dumps({"delivery_id": delivery.delivery_id}) if delivery else None,
+		}
+
+	except Exception as exc:
+		error_msg = str(exc)
+		return {
+			"success": False,
+			"message": f"Failed to send test message: {error_msg}",
+			"provider_response": error_msg,
+		}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -559,6 +832,130 @@ def preview_gateway_route(gateway_name: str, context: str | dict) -> dict:
     if isinstance(context, str):
         context = json.loads(context)
     return resolve_gateway_route(gateway_name, context or {})
+
+
+# GW-15: the frontend readiness checklist (gatewayReadiness.ts) only checked 3
+# conditions (credentials connected, route target set, enabled) while
+# Gateway.validate() enforces at least 5 more before an enabled gateway can
+# actually save: execution_user set, the chosen route target concretely
+# filled in, required provider credentials present, execution_user's role,
+# and execution_user's access to the default agent. Rather than re-encode
+# those rules a second time in TypeScript (and have them drift again), this
+# endpoint runs the real Gateway.validate() checks in dry-run mode -- read
+# only, no save, no side effects -- and returns each one as a pass/fail item
+# the frontend can render directly.
+GATEWAY_READINESS_CHECKS = (
+    ("enabled", "Gateway enabled"),
+    ("execution-user", "Run as user set"),
+    ("route-target", "Route target set"),
+    ("route-target-concrete", "Route target fully chosen"),
+    ("credentials", "Credentials connected"),
+    ("credential-values", "Required credential values set"),
+    ("execution-user-role", "Run-as user has gateway role"),
+    ("agent-access", "Run-as user can access default agent"),
+)
+
+
+@frappe.whitelist()
+def preview_gateway_readiness(gateway_name: str) -> dict:
+    """Report, per-check, whether a Gateway meets every precondition Gateway.validate()
+    would enforce if it were enabled and saved right now -- without saving it.
+
+    Reuses Gateway's own private validation methods (read-only) so this list can
+    never silently drift from what actually blocks save/enable.
+    """
+    if not frappe.has_permission("Gateway", "read"):
+        frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+    gateway = frappe.get_doc("Gateway", gateway_name)
+    results: dict[str, dict] = {}
+
+    def record(check_id: str, label: str, ok: bool, hint: str | None = None):
+        results[check_id] = {"id": check_id, "label": label, "done": bool(ok), "hint": None if ok else hint}
+
+    def run_check(check_id: str, label: str, fn, default_hint: str):
+        try:
+            fn()
+            record(check_id, label, True)
+        except frappe.exceptions.ValidationError as e:
+            record(check_id, label, False, str(e) or default_hint)
+        except Exception as e:  # defensive: never let a lookup error break the preview
+            record(check_id, label, False, str(e) or default_hint)
+
+    record("enabled", "Gateway enabled", bool(gateway.is_enabled), "Turn the gateway on")
+
+    def _execution_user_set():
+        if not gateway.execution_user:
+            frappe.throw(_("Set a Run as user."))
+
+    run_check("execution-user", "Run as user set", _execution_user_set, "Set a least-privileged Run as user")
+
+    record(
+        "route-target",
+        "Route target set",
+        bool(gateway.default_target_type),
+        "Choose an agent or flow to receive messages",
+    )
+
+    def _route_target_concrete():
+        if gateway.default_target_type == "Agent" and not gateway.default_agent:
+            frappe.throw(_("Choose a default agent or clear the default route."))
+        if gateway.default_target_type == "Flow" and not gateway.default_flow:
+            frappe.throw(_("Choose a default flow or clear the default route."))
+
+    run_check(
+        "route-target-concrete",
+        "Route target fully chosen",
+        _route_target_concrete,
+        "Finish choosing the agent or flow for this route",
+    )
+
+    def _credentials_connected():
+        expected_service = provider_to_service_id(gateway.provider) if gateway.provider else None
+        if not expected_service:
+            return
+        if not gateway.integration_settings:
+            frappe.throw(_("Connect credentials for this channel."))
+        integration = frappe.get_doc("Integration Settings", gateway.integration_settings)
+        if integration.service != expected_service:
+            frappe.throw(
+                _("The connected integration must use the {0} service.").format(expected_service)
+            )
+
+    run_check("credentials", "Credentials connected", _credentials_connected, "Connect credentials for this channel")
+
+    run_check(
+        "credential-values",
+        "Required credential values set",
+        gateway._validate_required_credentials,
+        "Fill in the required credential fields for this provider",
+    )
+
+    def _execution_user_role():
+        if gateway.execution_user:
+            gateway._validate_execution_user_role()
+
+    run_check(
+        "execution-user-role",
+        "Run-as user has gateway role",
+        _execution_user_role,
+        "Grant the Run as user the required gateway role",
+    )
+
+    def _agent_access():
+        if gateway.execution_user and gateway.default_agent:
+            gateway._validate_agent_access()
+
+    run_check(
+        "agent-access",
+        "Run-as user can access default agent",
+        _agent_access,
+        "Grant the Run as user access to the default agent",
+    )
+
+    ordered = [results[check_id] for check_id, _label in GATEWAY_READINESS_CHECKS]
+    blocking = [c for c in ordered if not c["done"]]
+    return {"ready": len(blocking) == 0, "blocking_count": len(blocking), "checks": ordered}
 
 
 GATEWAY_EVENT_REJECTED_RETENTION_DAYS = 30

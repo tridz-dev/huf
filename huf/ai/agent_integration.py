@@ -27,7 +27,12 @@ from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
-from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.ai.agent_access import (
+    assert_agent_access,
+    check_agent_access as _check_agent_access,
+    resolve_run_identity_and_authorize,
+    TRIGGER_DIRECT_API,
+)
 from frappe.rate_limiter import rate_limit
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
@@ -1214,13 +1219,13 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
-    assert_agent_access(agent_doc, user=frappe.session.user)
-
-    if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError
-        )
+    identity = resolve_run_identity_and_authorize(
+        agent_doc,
+        TRIGGER_DIRECT_API,
+        {"user": frappe.session.user},
+    )
+    if not identity.authorized:
+        frappe.throw(_(identity.reason), frappe.PermissionError)
 
     if frappe.session.user == "Guest":
         # Guests may not redirect execution to a caller-chosen provider/model.

@@ -518,8 +518,19 @@ def _run_flow_webhook(flow_id: str, webhook_key: str | None, payload: dict | Non
 	if not _webhook_key_is_valid(defn, webhook_key):
 		frappe.throw(_("Invalid webhook key"), frappe.AuthenticationError)
 
-	# Switch execution identity to the flow owner so the run does not execute as Guest
-	frappe.set_user(defn_doc.owner or "Administrator")
+	# Switch execution identity to the flow owner so the run does not execute as Guest.
+	# GW-11: identity resolution for this trigger surface is routed through the
+	# shared resolve_run_identity_and_authorize() helper. The webhook-key check
+	# above already authorizes this trigger, so authorized is always True here --
+	# this call only resolves who the run executes as, matching prior behavior.
+	from huf.ai.agent_access import TRIGGER_FLOW_WEBHOOK, resolve_run_identity_and_authorize
+
+	identity = resolve_run_identity_and_authorize(
+		None,
+		TRIGGER_FLOW_WEBHOOK,
+		{"owner": defn_doc.owner},
+	)
+	frappe.set_user(identity.run_as_user)
 
 	if payload is None:
 		payload = _parse_webhook_payload()

@@ -895,12 +895,18 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	its ``Agent Tool Call`` record directly, the same way the pre-T-22
 	implementation did for every tool call.
 	"""
-	tool_name = config.get("tool_name")
+	# ``tool_id``/``input`` are the graph-IR schema's canonical field names for a
+	# tool.call node (huf/ai/graph/graph_ir.schema.json) -- the only shape
+	# huf.huf.doctype.flow_definition.flow_definition.FlowDefinition.validate()
+	# will ever let through save_flow_definition, since the schema node also sets
+	# additionalProperties: false. ``tool_name``/``args``/``parameters`` are kept
+	# as a read-only fallback for any flow definition JSON constructed directly
+	# (e.g. in tests) rather than through the validated save path.
+	tool_name = config.get("tool_id") or config.get("tool_name")
 	if not tool_name:
-		return {"status": "failed", "error": "tool.call node missing tool_name in config"}
+		return {"status": "failed", "error": "tool.call node missing tool_id in config"}
 
-	# Support both 'args' (preferred) and 'parameters' (legacy)
-	args = dict(config.get("args") or config.get("parameters") or {})
+	args = dict(config.get("input") or config.get("args") or config.get("parameters") or {})
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
 	args = ctx.resolve(args)

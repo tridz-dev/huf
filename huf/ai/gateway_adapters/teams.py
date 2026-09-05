@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -20,7 +21,13 @@ from huf.ai.gateway_adapters.types import (
 def _requests_post(url: str, *, headers: Mapping[str, str], json_data: Any, timeout: int) -> Any:
 	import requests
 
-	return requests.post(url, headers=headers, json=json_data, timeout=timeout)
+	# GW-05: this used to return the raw response without ever calling
+	# raise_for_status(), so a non-2xx Bot Framework response (e.g. an
+	# expired/invalid app_id+app_password pair) fell straight through to the
+	# `.json()`/dict-shape handling below as if it had succeeded.
+	response = requests.post(url, headers=headers, json=json_data, timeout=timeout)
+	response.raise_for_status()
+	return response
 
 
 class TeamsGatewayAdapter(GatewayAdapter):
@@ -119,6 +126,20 @@ class TeamsGatewayAdapter(GatewayAdapter):
 
 		text = str(activity.get("text") or "").strip()
 
+		attachments = []
+		for attachment in activity.get("attachments") or []:
+			content_url = attachment.get("contentUrl")
+			if not content_url:
+				continue
+			attachments.append(
+				GatewayAttachment(
+					mime_type=str(attachment.get("contentType") or ""),
+					filename=str(attachment.get("name") or ""),
+					url=content_url,
+					kind="file",
+				)
+			)
+
 		return NormalizedGatewayEvent(
 			provider_event_id=activity_id,
 			sender_id=sender_id,
@@ -127,6 +148,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 			thread_id=activity.get("replyToId"),
 			is_room=bool(conversation.get("isGroup")),
 			raw_payload=activity,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
@@ -148,9 +170,13 @@ class TeamsGatewayAdapter(GatewayAdapter):
 			timeout=10,
 		)
 		body = response.json() if hasattr(response, "json") else response
-		activity_id = str(body.get("id") or f"teams-{hash(reply.text)}") if isinstance(body, dict) else f"teams-{hash(reply.text)}"
+		# GW-05: a missing "id" in the Bot Framework response means the reply
+		# was never actually accepted -- fabricating a hash-derived delivery
+		# id here made every such failure look like a successful send.
+		if not isinstance(body, dict) or not body.get("id"):
+			raise ValueError(f"Microsoft Teams message delivery failed: {body!r}")
 
-		return OutboundDelivery(activity_id, provider_response=body if isinstance(body, dict) else {"status": "ok"})
+		return OutboundDelivery(str(body["id"]), provider_response=body)
 
 	def send_adaptive_card(self, conversation_id: str, card_content: dict[str, Any]) -> OutboundDelivery:
 		"""Post an Adaptive Card attachment to an MS Teams conversation."""

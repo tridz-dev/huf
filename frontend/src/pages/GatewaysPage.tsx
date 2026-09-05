@@ -51,6 +51,18 @@ import type { IntegrationSettingsDoc } from '@/types/integration.types';
 import { cn } from '@/lib/utils';
 import { formatTimeAgo } from '@/utils/time';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
+import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Mirrors huf/ai/gateway_adapters/provider_ids.py::provider_to_service_id
 // Must stay in sync with the backend canonical transform for all 12 gateway providers.
@@ -90,6 +102,14 @@ const uiProviders: GatewayProvider[] = [
   'Microsoft Teams',
 ];
 
+// Interim mitigation (Phase 5, "G1-G6: Google Chat finish path"): Google Chat's
+// adapter isn't finish-path-ready yet, so hide it from the create-new-gateway
+// picker. We deliberately do NOT remove it from gateway.json's provider Select —
+// doing so would break existing Google Chat gateway rows on their next save.
+// This list is for the "new gateway" dropdown only; existing rows still load
+// and save fine via providerNames/getProviderBrandIcon, which keep every provider.
+const CREATABLE_PROVIDERS: GatewayProvider[] = uiProviders.filter((p) => p !== 'Google Chat');
+
 export default function GatewaysPage() {
   const { user } = useUser();
   const navigate = useNavigate();
@@ -127,6 +147,8 @@ export default function GatewaysPage() {
   const [editingGateway, setEditingGateway] = useState<GatewayDoc | null>(null);
   const [saving, setSaving] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string | null>(null);
+  const [deletingGateway, setDeletingGateway] = useState(false);
 
   // Pending access (pairing approval) state
   const [pendingEntries, setPendingEntries] = useState<GatewayAccessEntry[]>([]);
@@ -290,8 +312,10 @@ export default function GatewaysPage() {
       setAgents(agentList);
       setFlows(flowList);
       setIntegrationSettings(Array.isArray(settingsResponse) ? settingsResponse : settingsResponse.items);
-    } catch {
-      setError('Could not load gateway configurations.');
+    } catch (err) {
+      // GW-23: surface the real backend text (e.g. a 403 permission message)
+      // instead of a generic string, matching the sibling Integrations pages.
+      setError(getFrappeErrorMessage(err) || 'Could not load gateway configurations.');
     } finally {
       setLoading(false);
     }
@@ -342,6 +366,10 @@ export default function GatewaysPage() {
         integration_settings: editingGateway.integration_settings || '',
         description: editingGateway.description || '',
         direct_policy: editingGateway.direct_policy,
+        room_policy: editingGateway.room_policy,
+        room_sender_policy: editingGateway.room_sender_policy,
+        mention_required: editingGateway.mention_required,
+        pairing_ttl_minutes: editingGateway.pairing_ttl_minutes,
         default_target_type: editingGateway.default_target_type,
         default_agent: editingGateway.default_agent || '',
         default_flow: editingGateway.default_flow || '',
@@ -358,25 +386,29 @@ export default function GatewaysPage() {
   }
 
   async function handleDeleteGateway(name: string) {
-    if (!confirm('Are you sure you want to delete this gateway?')) return;
+    setDeletingGateway(true);
     try {
       await deleteGateway(name);
       setGateways((prev) => prev.filter((gw) => gw.name !== name));
       if (editingGateway?.name === name) {
         setEditingGateway(null);
       }
-    } catch {
-      setError('Failed to delete gateway.');
+      toast.success('Gateway deleted');
+    } catch (err) {
+      // GW-23: surface the real backend text instead of a generic string.
+      toast.error(getFrappeErrorMessage(err) || 'Failed to delete gateway.');
+    } finally {
+      setDeletingGateway(false);
+      setDeleteConfirmName(null);
     }
   }
 
-  function getWebhookUrl(gwName: string) {
-    const host = window.location.origin;
-    return `${host}/api/method/huf.ai.gateway_webhook.handle_gateway_webhook?gateway_name=${encodeURIComponent(gwName)}`;
+  function getWebhookUrl(gwName: string, provider?: string) {
+    return getGatewayWebhookUrl(gwName, provider);
   }
 
-  function handleCopyWebhook(gwName: string) {
-    navigator.clipboard.writeText(getWebhookUrl(gwName));
+  function handleCopyWebhook(gwName: string, provider?: string) {
+    navigator.clipboard.writeText(getGatewayWebhookUrl(gwName, provider));
     setCopiedWebhook(true);
     setTimeout(() => setCopiedWebhook(false), 2000);
   }
@@ -570,7 +602,7 @@ export default function GatewaysPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {uiProviders.map((p) => (
+                {CREATABLE_PROVIDERS.map((p) => (
                   <SelectItem key={p} value={p}>
                     {p}
                   </SelectItem>
@@ -912,6 +944,83 @@ export default function GatewaysPage() {
                 </Select>
               </label>
 
+              {/* GW-18: room/group-chat admission policy */}
+              <div className="grid gap-3 rounded-lg border border-line bg-paper p-4">
+                <p className="text-xs font-semibold text-ink">Room &amp; group chat admission</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-1 text-xs font-medium text-ink">
+                    Room policy
+                    <Select
+                      value={editingGateway.room_policy || 'Allow list'}
+                      onValueChange={(v) =>
+                        setEditingGateway({ ...editingGateway, room_policy: v as GatewayPolicy })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Allow list">Allow list — require an approved room</SelectItem>
+                        <SelectItem value="Disabled">Disabled — reject room messages</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-ink">
+                    Sender policy within a room
+                    <Select
+                      value={editingGateway.room_sender_policy || 'Allow list'}
+                      onValueChange={(v) =>
+                        setEditingGateway({ ...editingGateway, room_sender_policy: v as GatewayPolicy })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Allow list">Allow list — require an approved sender</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="grid gap-1 text-xs font-medium text-ink">
+                    Pairing code lifetime (minutes)
+                    <Input
+                      type="number"
+                      min={1}
+                      className="h-9 text-xs"
+                      value={editingGateway.pairing_ttl_minutes ?? 60}
+                      onChange={(e) =>
+                        setEditingGateway({
+                          ...editingGateway,
+                          pairing_ttl_minutes: e.target.value ? Number(e.target.value) : undefined,
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="flex items-end justify-between rounded-lg border border-line bg-panel p-3">
+                    <div>
+                      <p className="text-xs font-medium text-ink">Require @mention in rooms</p>
+                      <p className="text-[11px] text-steel">Only respond when explicitly mentioned</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={Boolean(editingGateway.mention_required)}
+                        onChange={(e) =>
+                          setEditingGateway({
+                            ...editingGateway,
+                            mention_required: e.target.checked ? 1 : 0,
+                          })
+                        }
+                      />
+                      <div className="w-9 h-5 bg-line peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-panel after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-panel after:border-line after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-good"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               {/* Webhook Configuration Section */}
               <div className="rounded-lg border border-line bg-paper p-4 space-y-2">
                 <p className="text-xs font-semibold text-ink">Live Inbound Webhook Endpoint</p>
@@ -922,13 +1031,13 @@ export default function GatewaysPage() {
                   <Input
                     readOnly
                     className="h-8 flex-1 font-mono text-[11px] text-steel selection:bg-primary/20"
-                    value={getWebhookUrl(editingGateway.name)}
+                    value={getWebhookUrl(editingGateway.name, editingGateway.provider)}
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     className="h-8 px-2.5 text-xs"
-                    onClick={() => handleCopyWebhook(editingGateway.name)}
+                    onClick={() => handleCopyWebhook(editingGateway.name, editingGateway.provider)}
                   >
                     {copiedWebhook ? (
                       <>
@@ -950,7 +1059,7 @@ export default function GatewaysPage() {
                 variant="destructive"
                 size="sm"
                 className="h-9 text-xs"
-                onClick={() => handleDeleteGateway(editingGateway.name)}
+                onClick={() => setDeleteConfirmName(editingGateway.name)}
               >
                 <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete Gateway
               </Button>
@@ -967,6 +1076,28 @@ export default function GatewaysPage() {
           </div>
         </div>
       )}
+
+      <AlertDialog open={Boolean(deleteConfirmName)} onOpenChange={(open) => !open && setDeleteConfirmName(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this gateway?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes &quot;{deleteConfirmName}&quot; and stops it from receiving messages.
+              Connected credentials are not deleted and can be reused by another gateway.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingGateway}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteConfirmName && handleDeleteGateway(deleteConfirmName)}
+              disabled={deletingGateway}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingGateway ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageFrame>
   );
 }

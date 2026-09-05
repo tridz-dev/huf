@@ -35,7 +35,7 @@ class InstagramGatewayAdapter(MessengerGatewayAdapter):
 		frozenset({"webhook"}),
 		supports_text_reply=True,
 		supports_thread_reply=True,
-		supports_media_reply=True,
+		supports_media_reply=False,  # GW-32: send_reply only sends text today
 		max_outbound_messages_per_second=20,
 	)
 

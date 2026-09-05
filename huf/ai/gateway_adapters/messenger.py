@@ -17,6 +17,7 @@ from typing import Any
 import frappe
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -51,7 +52,7 @@ class MessengerGatewayAdapter(GatewayAdapter):
 		frozenset({"webhook"}),
 		supports_text_reply=True,
 		supports_thread_reply=True,
-		supports_media_reply=True,
+		supports_media_reply=False,  # GW-32: send_reply only sends text today
 		max_outbound_messages_per_second=50,
 	)
 
@@ -134,9 +135,22 @@ class MessengerGatewayAdapter(GatewayAdapter):
 		provider_event_id = str(message.get("mid") or f"{sender_id}:{event.get('timestamp')}")
 		message_text = str(message.get("text") or "")
 
-		if not message_text and "attachments" in message:
-			att_type = message["attachments"][0].get("type", "attachment")
+		raw_attachments = message.get("attachments") or []
+		if not message_text and raw_attachments:
+			att_type = raw_attachments[0].get("type", "attachment")
 			message_text = f"[{att_type} attachment]"
+
+		attachments = []
+		for attachment in raw_attachments:
+			url = ((attachment.get("payload") or {}).get("url")) or None
+			if not url:
+				continue
+			attachments.append(
+				GatewayAttachment(
+					url=url,
+					kind=str(attachment.get("type") or "file"),
+				)
+			)
 
 		return NormalizedGatewayEvent(
 			provider_event_id=provider_event_id,
@@ -146,6 +160,7 @@ class MessengerGatewayAdapter(GatewayAdapter):
 			thread_id=str(message["reply_to"]["mid"]) if message.get("reply_to") else None,
 			is_room=False,
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:

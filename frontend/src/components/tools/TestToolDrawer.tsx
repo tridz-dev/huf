@@ -15,6 +15,11 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { db } from '@/lib/frappe-sdk';
+import {
+  WhatsAppTemplateComposer,
+  DEFAULT_WHATSAPP_TEMPLATE_VALUE,
+  type WhatsAppTemplateValue,
+} from './WhatsAppTemplateComposer';
 
 interface TestToolDrawerProps {
   open: boolean;
@@ -63,7 +68,24 @@ export function TestToolDrawer({
   functionDefinition,
 }: TestToolDrawerProps) {
   const argSpecs = useMemo(() => extractArgSpecs(functionDefinition), [functionDefinition]);
+
+  // GW-36: the WhatsApp send_template action is identified by its distinctive
+  // template_name/language_code/parameters argument trio. When present,
+  // those three raw args are edited through a structured template composer
+  // (name field + add/remove parameter rows) instead of generic text/JSON
+  // inputs, so sending a template never requires hand-writing the
+  // underlying components JSON. Every other argument (e.g. "to", "action")
+  // still uses the generic inputs below.
+  const WHATSAPP_TEMPLATE_ARG_NAMES = new Set(['template_name', 'language_code', 'parameters']);
+  const isWhatsAppTemplateTool =
+    argSpecs.some((spec) => spec.name === 'template_name') &&
+    argSpecs.some((spec) => spec.name === 'parameters');
+  const genericArgSpecs = isWhatsAppTemplateTool
+    ? argSpecs.filter((spec) => !WHATSAPP_TEMPLATE_ARG_NAMES.has(spec.name))
+    : argSpecs;
+
   const [values, setValues] = useState<Record<string, string | boolean>>({});
+  const [templateValue, setTemplateValue] = useState<WhatsAppTemplateValue>(DEFAULT_WHATSAPP_TEMPLATE_VALUE);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; payload: unknown; dryRun: boolean } | null>(
     null
@@ -77,7 +99,17 @@ export function TestToolDrawer({
 
   const parseArgs = (): { args: Record<string, unknown>; error?: string } => {
     const args: Record<string, unknown> = {};
-    for (const spec of argSpecs) {
+
+    if (isWhatsAppTemplateTool) {
+      if (!templateValue.template_name.trim()) {
+        return { args, error: 'Missing required argument: template_name' };
+      }
+      args.template_name = templateValue.template_name.trim();
+      args.language_code = templateValue.language_code.trim() || 'en_US';
+      args.parameters = templateValue.parameters;
+    }
+
+    for (const spec of genericArgSpecs) {
       const raw = values[spec.name];
       if (raw === undefined || raw === '') {
         if (spec.required) {
@@ -205,13 +237,24 @@ export function TestToolDrawer({
             </Alert>
           )}
 
-          {argSpecs.length === 0 ? (
-            <div className="text-sm text-steel border border-dashed rounded p-4 text-center">
-              This tool takes no arguments.
+          {isWhatsAppTemplateTool && (
+            <div className="space-y-1.5">
+              <SheetDescription className="text-xs uppercase tracking-wide text-steel-soft">
+                Template
+              </SheetDescription>
+              <WhatsAppTemplateComposer value={templateValue} onChange={setTemplateValue} />
             </div>
+          )}
+
+          {genericArgSpecs.length === 0 ? (
+            !isWhatsAppTemplateTool && (
+              <div className="text-sm text-steel border border-dashed rounded p-4 text-center">
+                This tool takes no arguments.
+              </div>
+            )
           ) : (
             <div className="space-y-4">
-              {argSpecs.map((spec) => (
+              {genericArgSpecs.map((spec) => (
                 <div key={spec.name} className="space-y-1.5">
                   <Label htmlFor={`test-arg-${spec.name}`} className="flex items-center gap-2">
                     <span className="font-mono text-sm">{spec.name}</span>

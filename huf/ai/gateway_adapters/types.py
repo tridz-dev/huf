@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +62,33 @@ class GatewayCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
+class GatewayAttachment:
+	"""A media/file reference carried by an inbound event or outbound reply.
+
+	Providers identify media either by an opaque ``file_id`` (Telegram, WeCom
+	media IDs) that must be resolved via a follow-up provider API call, or by
+	a directly fetchable ``url`` (Messenger/WhatsApp/Teams attachment URLs,
+	VK doc URLs). At least one of the two should be populated by adapters;
+	both are optional here so a partially-known attachment can still be
+	surfaced rather than dropped.
+	"""
+
+	mime_type: str = ""
+	filename: str = ""
+	url: str | None = None
+	file_id: str | None = None
+	# Populated once GW-31-style download logic has saved the content to a
+	# Frappe File doctype record; empty for providers/attachments that are
+	# only referenced, not yet downloaded.
+	file_doc: str | None = None
+	kind: str = "file"
+
+	def __post_init__(self) -> None:
+		if not self.url and not self.file_id:
+			raise ValueError("GatewayAttachment requires a url or a file_id")
+
+
+@dataclass(frozen=True, slots=True)
 class GatewayInboundRequest:
 	"""Transport-neutral request data received from a provider."""
 
@@ -88,6 +115,10 @@ class NormalizedGatewayEvent:
 	# adapter but Telegram today -- need no changes; a pending pairing entry
 	# then falls back to the bare "Sender <id>" label.
 	display_name: str = ""
+	# Media/file references carried by this event. Defaults to an empty
+	# tuple so adapters that don't populate it need no changes; populated on
+	# a best-effort basis per provider payload shape (see GW-30/GW-31).
+	attachments: Sequence[GatewayAttachment] = field(default_factory=tuple)
 
 	def __post_init__(self) -> None:
 		for name in ("provider_event_id", "sender_id", "conversation_id"):
@@ -103,6 +134,11 @@ class GatewayReply:
 	text: str
 	thread_id: str | None = None
 	reply_to_provider_message_id: str | None = None
+	# Media to send alongside/instead of text. Adapters that don't support
+	# media replies (see GatewayCapabilities.supports_media_reply) ignore
+	# this field entirely; it defaults to empty so no existing caller needs
+	# changes.
+	attachments: Sequence[GatewayAttachment] = field(default_factory=tuple)
 
 	def __post_init__(self) -> None:
 		if not self.conversation_id.strip():

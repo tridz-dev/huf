@@ -21,10 +21,29 @@ class TestHooksRegistration(IntegrationTestCase):
 			"Agent Conversation",
 			"Agent Tool Call",
 			"Agent Context Artifact",
+			# GW-12: Gateway/Integration doctype family, previously missing
+			# has_permission entirely (unlike the Agent-run family above).
+			"Gateway",
+			"Gateway Access Entry",
+			"Gateway Event",
+			"Gateway Binding",
+			"Integration Settings",
+			"Integration Service",
+			"Integration Credential",
 		]
 
 		for doctype in expected_doctypes:
 			assert hooks.get(doctype), f"no has_permission hook registered for {doctype}"
+
+	def test_gateway_webhook_auth_hook_registered(self):
+		"""GW-03: the exempted-route auth hook must be wired into auth_hooks.
+
+		Without this, ``huf/hooks.py`` could silently drop the entry and the
+		Teams/Bot-Framework webhook routes would go back to being terminated
+		by Frappe core's ``validate_auth`` before their own verification runs.
+		"""
+		hooks = frappe.get_hooks("auth_hooks")
+		assert "huf.ai.gateway_webhook.exempt_gateway_webhook_auth" in hooks
 
 	def test_pqc_hooks_registered_for_list_scoped_doctypes(self):
 		"""Verify that permission_query_conditions hooks are registered for list-scoped doctypes.
@@ -39,6 +58,13 @@ class TestHooksRegistration(IntegrationTestCase):
 			"Agent Run Prompt Snapshot",
 			"Huf API Key",
 			"Agent Procedure Run",
+			"Gateway",
+			"Gateway Access Entry",
+			"Gateway Event",
+			"Gateway Binding",
+			"Integration Settings",
+			"Integration Service",
+			"Integration Credential",
 		]
 
 		for doctype in expected_doctypes:

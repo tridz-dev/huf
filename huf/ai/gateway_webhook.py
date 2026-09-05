@@ -18,6 +18,140 @@ from huf.ai.gateway_adapters.provider_ids import provider_to_service_id
 from huf.ai.gateway_adapters.registered import get_adapter_class
 
 
+EXEMPT_AUTH_ROUTES: frozenset[str] = frozenset(
+	{
+		# Bot Framework (and every other native-adapter) webhook: Teams posts
+		# ``Authorization: Bearer <token>``; verification happens inside
+		# ``TeamsGatewayAdapter.verify_inbound`` after this route is reached.
+		"/api/method/huf.ai.gateway_webhook.handle_gateway_webhook",
+		# Teams *Outgoing Webhook*: posts ``Authorization: HMAC <base64>``,
+		# verified inside ``handle_teams_outgoing_webhook`` itself.
+		"/api/method/huf.ai.tools.teams_webhook.handle_teams_outgoing_webhook",
+	}
+)
+
+
+def exempt_gateway_webhook_auth() -> None:
+	"""``auth_hooks`` entry: let allowlisted webhook routes reach their own auth.
+
+	Frappe's core ``validate_auth`` (``frappe/auth.py``) splits the
+	``Authorization`` header and, whenever it has exactly two parts (a scheme
+	and a token — e.g. ``Bearer <token>`` or ``HMAC <token>``), first tries
+	OAuth/API-key auth and then, if neither matched, raises
+	``AuthenticationError`` unless ``frappe.session.user`` is already a real
+	user. That check runs *before* Frappe ever looks at ``allow_guest=True``
+	on the target whitelisted method, so any Gateway webhook that authenticates
+	itself with a custom two-part ``Authorization`` scheme (rather than
+	Frappe's own token/basic/oauth schemes) is rejected at 401 by core before
+	its own signature/HMAC verification ever runs.
+
+	This hook runs inside ``validate_auth`` (via ``validate_auth_via_hooks``),
+	strictly before that terminal guest check. For routes on the
+	``EXEMPT_AUTH_ROUTES`` allowlist only, it authenticates the request as a
+	deliberately unprivileged, disabled technical user so the terminal check
+	passes and control reaches the whitelisted method's own verification
+	(HMAC/Bearer/signature). The route's handler still fails closed on a bad
+	or missing signature; this hook only gets it past the framework-level
+	guest check, it grants no document permissions of its own.
+	"""
+	request = frappe.request
+	if request is None or request.method != "POST":
+		return
+	if request.path not in EXEMPT_AUTH_ROUTES:
+		return
+
+	authorization = frappe.get_request_header("Authorization") or ""
+	if len(authorization.split(" ")) != 2:
+		return
+
+	if frappe.session.user not in ("", "Guest"):
+		return
+
+	frappe.set_user(_gateway_webhook_auth_user())
+
+
+def _gateway_webhook_auth_user() -> str:
+	"""Return (creating once) the disabled technical user used only to satisfy
+	Frappe's terminal guest check for allowlisted webhook routes.
+
+	It is created ``enabled=0`` and with no roles: it cannot log in, and
+	nothing about it grants any Gateway/Integration document permission —
+	those doctypes are exempt from generic /api/resource access entirely
+	(see the ``has_permission``/``permission_query_conditions`` hooks in
+	``huf/hooks.py``). Its only job is to be a non-"Guest", non-empty
+	``frappe.session.user`` value.
+	"""
+	technical_user = "gateway-webhook@huf.system"
+	if not frappe.db.exists("User", technical_user):
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": technical_user,
+				"first_name": "Gateway Webhook (system)",
+				"user_type": "System User",
+				"enabled": 0,
+				"send_welcome_email": 0,
+				"roles": [],
+			}
+		).insert(ignore_permissions=True, ignore_if_duplicate=True)
+	return technical_user
+
+
+# Doctypes in the Gateway/Integration family. None of them have a per-row
+# owner or "shared with" concept the way Agent/Agent Run do: a Gateway Access
+# Entry, Integration Credential, etc. are account-wide configuration, and the
+# app only ever reads/writes them through its own bespoke whitelisted methods
+# (gateway pairing, adapter routing, the Integrations UI's own controllers),
+# never through a generic list/get. Rather than invent row-level semantics
+# these doctypes were never designed for, generic ``/api/resource/<DocType>``
+# access is blocked outright for everyone except System Manager, matching how
+# the app itself never talks to them that way.
+GATEWAY_INTEGRATION_DOCTYPES: frozenset[str] = frozenset(
+	{
+		"Gateway",
+		"Gateway Access Entry",
+		"Gateway Event",
+		"Gateway Binding",
+		"Integration Settings",
+		"Integration Service",
+		"Integration Credential",
+	}
+)
+
+
+def has_permission_gateway_family(doc, ptype: str = "read", user: str | None = None) -> bool:
+	"""``has_permission`` hook: only System Manager may touch these doctypes.
+
+	Registered for every doctype in ``GATEWAY_INTEGRATION_DOCTYPES``. These
+	records carry credentials and routing/permission data for every configured
+	Gateway and Integration; the app itself never reads or writes them through
+	generic ``/api/resource`` access, only through its own whitelisted
+	pairing/adapter/API surface (which runs with ``ignore_permissions=True``
+	where appropriate and does its own checks). A user with a generic DocType
+	read/write role permission on these doctypes, but who is not a System
+	Manager, must not gain list/get/save access to them just because the
+	doctype exists — hence this hook rather than leaving them to the
+	role-permission default.
+	"""
+	user = user or frappe.session.user
+	return bool(frappe.db.get_value("Has Role", {"parent": user, "role": "System Manager"}, "name"))
+
+
+def get_permission_query_conditions_gateway_family(user: str | None = None) -> str:
+	"""``permission_query_conditions`` hook mirroring ``has_permission_gateway_family``.
+
+	Without this, a non-System-Manager user with a generic read role on one of
+	these doctypes could still see rows show up in a ``/api/resource`` list
+	call (list views apply ``permission_query_conditions``, not
+	``has_permission``, to filter rows) even though ``has_permission`` would
+	refuse a ``get`` on any individual one.
+	"""
+	user = user or frappe.session.user
+	if frappe.db.get_value("Has Role", {"parent": user, "role": "System Manager"}, "name"):
+		return ""
+	return "1=0"
+
+
 def _adapter_class_for_provider(provider: str):
 	"""Resolve a ``Gateway.provider`` display value to its adapter class.
 
@@ -103,13 +237,16 @@ def handle_gateway_webhook() -> dict | None:
 
 	gateway_name = frappe.request.args.get("gateway_name") if frappe.request is not None else None
 	if not gateway_name:
+		frappe.local.response.http_status_code = 400
 		return {"success": False, "error": "Missing gateway_name"}
 
 	try:
 		gateway = frappe.get_doc("Gateway", gateway_name)
 	except frappe.DoesNotExistError:
+		frappe.local.response.http_status_code = 404
 		return {"success": False, "error": "Unknown gateway"}
 	if not gateway.is_enabled:
+		frappe.local.response.http_status_code = 403
 		return {"success": False, "error": "Gateway is disabled"}
 
 	adapter = get_gateway_adapter(gateway)
@@ -118,6 +255,7 @@ def handle_gateway_webhook() -> dict | None:
 		_text_response(adapter.verify_url(request) or "")
 		return None
 	if not adapter.verify_inbound(request):
+		frappe.local.response.http_status_code = 401
 		return {"success": False, "error": "Provider verification failed"}
 
 	event = adapter.normalize_inbound(request)

@@ -1,6 +1,7 @@
 """Focused unit tests for the provider-neutral Gateway foundation."""
 
 from types import SimpleNamespace
+import json
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -109,6 +110,27 @@ class TestGatewayIngress(unittest.TestCase):
         assert gateway_service._redact_payload(
             {"token": "top-secret", "body": {"signature": "sig", "message": "hello"}}
         ) == {"token": "[redacted]", "body": {"signature": "[redacted]", "message": "hello"}}
+
+    def test_payload_redaction_stringifies_non_json_native_values(self):
+        """GW-04: a real inbound Communication's `as_dict()` carries native
+        `datetime`/`Decimal` values. Gateway Event's `raw_payload` is a JSON
+        field with no `default=str`, so these must be coerced to strings
+        rather than passed through and left to crash `json.dumps`."""
+        from decimal import Decimal
+
+        payload = {
+            "communication_date": datetime(2026, 7, 26, 12, 0, 0),
+            "amount": Decimal("9.99"),
+            "tags": (datetime(2026, 1, 1), "kept"),
+            "message": "kept",
+        }
+        redacted = gateway_service._redact_payload(payload)
+        assert redacted["communication_date"] == str(datetime(2026, 7, 26, 12, 0, 0))
+        assert redacted["amount"] == str(Decimal("9.99"))
+        assert redacted["tags"] == [str(datetime(2026, 1, 1)), "kept"]
+        assert redacted["message"] == "kept"
+        # Must actually be JSON-serializable now.
+        json.dumps(redacted)
 
     def test_payload_redaction_covers_additional_credential_keys(self):
         """ST-R5.13: SENSITIVE_PAYLOAD_KEYS was extended with additional
@@ -633,16 +655,21 @@ class TestGatewayReplyDelivery(unittest.TestCase):
             sender_id="42",
         )
         configured_gateway = gateway(name="Support VK", execution_user="gateway-bot")
-        # Third item: the target Agent lookup added by the F1 access-control fix
-        # (gateway-routed runs are authorized as Guest -- see agent_access.py).
-        # allow_guest=True so this "delivered successfully" scenario still passes.
-        target_agent_doc = MagicMock(allow_guest=True)
+        # Third item: the target Agent lookup for the pre-gate. Since GW-08 that
+        # gate authorizes as the Gateway's execution_user, not as Guest, so this
+        # Agent no longer needs allow_guest=1 to be reachable from a Gateway.
+        target_agent_doc = MagicMock(allow_guest=False)
         mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-001", "response": "Hello back"})
         mock_send.return_value = SimpleNamespace(provider_message_id="vk-message-1")
 
-        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}):
+        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+            "huf.ai.agent_access.check_agent_access", return_value=True
+        ) as mock_check:
             result = gateway_service.process_gateway_event(event.name)
+
+        # The pre-gate asked about execution_user, never about Guest.
+        assert mock_check.call_args.args[1] == "gateway-bot"
 
         assert result == {
             "event_name": event.name,
@@ -652,6 +679,263 @@ class TestGatewayReplyDelivery(unittest.TestCase):
         }
         assert mock_run.call_args.kwargs["now"] is True
         mock_send.assert_called_once_with(configured_gateway, event, "Hello back")
+
+
+class TestRedactErrorText(unittest.TestCase):
+    """GW-07: any outbound-provider-call exception whose string form embeds a
+    URL credential (Telegram's `.../bot<TOKEN>/...` scheme, a Bearer header
+    dump, or a token/secret query parameter) must not surface that credential
+    in cleartext once it reaches an externally-readable field."""
+
+    def test_redacts_telegram_style_bot_token_in_url(self):
+        text = (
+            "404 Client Error: Not Found for url: "
+            "https://api.telegram.org/bot123456789:AAFakeTokenValue-1234567890/sendMessage"
+        )
+        redacted = gateway_service._redact_error_text(text)
+        assert "AAFakeTokenValue" not in redacted
+        assert "/bot[redacted]" in redacted
+
+    def test_redacts_bearer_token_in_text(self):
+        text = "Authorization failed: Bearer sk-live-abcdef1234567890 was rejected"
+        redacted = gateway_service._redact_error_text(text)
+        assert "sk-live-abcdef1234567890" not in redacted
+
+    def test_redacts_token_query_parameter(self):
+        text = "GET https://example.com/webhook?token=super-secret-value&ok=1 failed"
+        redacted = gateway_service._redact_error_text(text)
+        assert "super-secret-value" not in redacted
+
+    def test_leaves_non_sensitive_text_untouched(self):
+        text = "Gateway agent run completed without a text response."
+        assert gateway_service._redact_error_text(text) == text
+
+    def test_empty_text_is_a_noop(self):
+        assert gateway_service._redact_error_text("") == ""
+
+
+class TestThrottleOutboundSend(unittest.TestCase):
+    """CL-02: every adapter declares GatewayCapabilities.max_outbound_messages_per_second;
+    a burst of sends against one gateway must be spaced out to respect it."""
+
+    def setUp(self):
+        gateway_service._OUTBOUND_RATE_NEXT_ALLOWED.clear()
+
+    def test_no_cap_never_sleeps(self):
+        with patch.object(gateway_service, "_sleep") as mock_sleep:
+            gateway_service._throttle_outbound_send("gw-1", None)
+            gateway_service._throttle_outbound_send("gw-1", 0)
+        mock_sleep.assert_not_called()
+
+    def test_burst_is_throttled_to_the_declared_rate(self):
+        """A mocked clock that never advances on its own means every wait the
+        limiter computes must be satisfied by the `_sleep` calls it makes --
+        assert those add up to the minimum spacing for the declared cap."""
+        fake_now = [0.0]
+
+        def fake_monotonic():
+            return fake_now[0]
+
+        def fake_sleep(seconds):
+            fake_now[0] += seconds
+
+        cap = 0.5  # WeCom-style low cap: one message every 2 seconds.
+        with patch.object(gateway_service, "_monotonic", fake_monotonic), patch.object(
+            gateway_service, "_sleep", fake_sleep
+        ):
+            for _ in range(4):
+                gateway_service._throttle_outbound_send("wecom-gateway", cap)
+
+        # 4 sends at 0.5/s must span at least 3 full intervals (6 seconds).
+        assert fake_now[0] >= 3 * (1.0 / cap)
+
+    def test_different_gateways_are_throttled_independently(self):
+        with patch.object(gateway_service, "_monotonic", return_value=100.0), patch.object(
+            gateway_service, "_sleep"
+        ) as mock_sleep:
+            gateway_service._throttle_outbound_send("gw-a", 1)
+            gateway_service._throttle_outbound_send("gw-b", 1)
+        # Neither call should have had to wait -- they're on separate buckets,
+        # so any _sleep call it makes must be a zero-length no-op.
+        for call in mock_sleep.call_args_list:
+            assert call.args[0] == 0.0
+
+
+class TestGatewayEventFailureHandling(unittest.TestCase):
+    """GW-05/GW-06: an adapter that raises after a successful agent run
+    (rather than fabricating a fake delivery id) must leave the Gateway Event
+    at Failed -- never stuck at Running -- with the failure text redacted
+    (GW-07) before it reaches frappe.log_error."""
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_real_teams_adapter_raising_on_missing_id_fails_the_event(self, mock_frappe):
+        from huf.ai.gateway_adapters.teams import TeamsGatewayAdapter
+
+        # frappe.ValidationError must be a real exception class for the
+        # `except frappe.ValidationError` clause inside process_gateway_event
+        # to even evaluate -- only its identity matters here, since the
+        # adapter raises a plain ValueError that isn't an instance of it.
+        mock_frappe.ValidationError = frappe.ValidationError
+        mock_frappe.get_traceback.return_value = (
+            "Traceback (most recent call last):\n"
+            "ValueError: Microsoft Teams message delivery failed: {}"
+        )
+
+        mock_post = MagicMock()
+        mock_post.return_value.json.return_value = {}  # no "id" in the response
+        real_adapter = TeamsGatewayAdapter(
+            {"app_id": "appid", "app_password": "apppass"}, http_post=mock_post
+        )
+
+        event = MagicMock(
+            name="GATEWAY-EVENT-0099",
+            status="Queued",
+            gateway="Support Teams",
+            target_type="Agent",
+            target_agent="Support Agent",
+            message_text="hello",
+            thread_id=None,
+            conversation_id="conv1",
+            sender_id="user1",
+        )
+        configured_gateway = gateway(name="Support Teams", provider="Microsoft Teams", execution_user="gateway-bot")
+        target_agent_doc = MagicMock(allow_guest=True)
+        mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
+        mock_run = MagicMock(return_value={"agent_run_id": "AR-002", "response": "Hello back"})
+
+        with patch("huf.ai.gateway_webhook.get_gateway_adapter", return_value=real_adapter), patch.dict(
+            sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}
+        ):
+            with self.assertRaises(ValueError):
+                gateway_service.process_gateway_event(event.name)
+
+        mock_frappe.db.rollback.assert_called_once()
+        mock_frappe.db.commit.assert_called_once()
+
+        failed_calls = [
+            c for c in event.db_set.call_args_list
+            if isinstance(c.args[0], dict) and c.args[0].get("status") == "Failed"
+        ]
+        assert failed_calls, "event.db_set was never called with status=Failed"
+        error_message = failed_calls[-1].args[0]["error_message"]
+        assert "Microsoft Teams message delivery failed" in error_message
+
+        # The Failed db_set must be the *last* status write, applied after
+        # the rollback discarded any earlier partial state from this run.
+        assert event.db_set.call_args_list[-1] == failed_calls[-1]
+class TestGatewayAgentAdmissionIdentity(unittest.TestCase):
+    """GW-08: gateway-routed Agent runs authorize as the Gateway's
+    execution_user, not as Guest."""
+
+    def _queued_agent_event(self):
+        return MagicMock(
+            name="GATEWAY-EVENT-0099",
+            status="Queued",
+            gateway="Support Telegram",
+            target_type="Agent",
+            target_agent="Support Agent",
+            message_text="hello",
+            thread_id="123",
+            conversation_id="2000000001",
+            sender_id="42",
+        )
+
+    @patch("huf.ai.gateway_service.frappe")
+    def test_non_entitled_execution_user_is_rejected_at_the_pre_gate(self, mock_frappe):
+        event = self._queued_agent_event()
+        configured_gateway = gateway(execution_user="under-privileged-bot")
+        # allow_guest is irrelevant now; entitlement of execution_user decides.
+        target_agent_doc = MagicMock(allow_guest=True)
+        mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
+
+        with patch("huf.ai.agent_access.check_agent_access", return_value=False) as mock_check:
+            result = gateway_service.process_gateway_event(event.name)
+
+        assert result == {"event_name": event.name, "status": "Rejected"}
+        assert mock_check.call_args.args[1] == "under-privileged-bot"
+        rejection = event.db_set.call_args.args[0]
+        assert rejection["status"] == "Rejected"
+        assert "under-privileged-bot" in rejection["error_message"]
+        assert "Support Agent" in rejection["error_message"]
+        # The run never started: no impersonation happened.
+        mock_frappe.set_user.assert_not_called()
+
+    @patch("huf.ai.gateway_service.frappe")
+    @patch("huf.ai.gateway_webhook.send_gateway_reply")
+    def test_allow_guest_zero_agent_is_reachable_when_execution_user_is_entitled(
+        self, mock_send, mock_frappe
+    ):
+        """The GW-08 coupling is gone: running an Agent behind a Gateway no
+        longer forces allow_guest=1, which is also the sole gate on the
+        unauthenticated run_agent_sync / run_agent_sync_chat endpoints."""
+        event = self._queued_agent_event()
+        configured_gateway = gateway(execution_user="gateway-bot")
+        target_agent_doc = MagicMock(allow_guest=False)
+        mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
+        mock_run = MagicMock(return_value={"agent_run_id": "AR-099", "response": "hi"})
+        mock_send.return_value = SimpleNamespace(provider_message_id="tg-1")
+
+        with patch.dict(sys.modules, {"huf.ai.agent_integration": SimpleNamespace(run_agent_sync=mock_run)}), patch(
+            "huf.ai.agent_access.check_agent_access", return_value=True
+        ):
+            result = gateway_service.process_gateway_event(event.name)
+
+        assert result["status"] == "Succeeded"
+        mock_frappe.set_user.assert_called_once_with("gateway-bot")
+
+
+class TestSurvivingRunAgentSyncCheck(unittest.TestCase):
+    """GW-08 acceptance: the load-bearing check is the one inside
+    run_agent_sync, which runs under the execution_user set by
+    process_gateway_event. A non-entitled execution_user is rejected there
+    even if the gateway_service pre-gate were bypassed."""
+
+    def _agent(self, **overrides):
+        values = {
+            "owner": "owner@example.com",
+            "allow_guest": False,
+            "allow_all_users": False,
+            "allowed_users": [SimpleNamespace(user="entitled-bot")],
+            "allowed_roles": [],
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_non_entitled_execution_user_rejected_by_assert_agent_access(self):
+        """``assert_agent_access`` throws iff ``check_agent_access`` is False,
+        so the predicate is the thing worth asserting here. (The throw itself
+        goes through ``frappe.throw`` -> ``frappe.msgprint``, which needs a
+        bound Frappe request context and so is only exercisable under
+        ``bench run-tests``.)"""
+        from huf.ai import agent_access
+
+        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+            "huf.permissions.has_capability", return_value=False
+        ):
+            self.assertFalse(
+                agent_access.check_agent_access(self._agent(), "under-privileged-bot")
+            )
+
+    def test_entitled_execution_user_accepted_by_assert_agent_access(self):
+        from huf.ai.agent_access import assert_agent_access
+
+        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+            "huf.permissions.has_capability", return_value=False
+        ):
+            assert_agent_access(self._agent(), user="entitled-bot")
+
+    def test_allow_guest_alone_does_not_entitle_a_named_execution_user(self):
+        """Regression guard for the old semantics: under the Guest pre-gate an
+        allow_guest=1 agent was reachable by any gateway regardless of
+        execution_user. Under the execution_user model it is not."""
+        from huf.ai.agent_access import check_agent_access
+
+        agent = self._agent(allow_guest=True)
+        with patch("huf.ai.agent_access.frappe.get_roles", return_value=[]), patch(
+            "huf.permissions.has_capability", return_value=False
+        ):
+            self.assertFalse(check_agent_access(agent, "under-privileged-bot"))
+            self.assertTrue(check_agent_access(agent, "Guest"))
 
 
 class TestApproveGatewayPairingIntegration(IntegrationTestCase):

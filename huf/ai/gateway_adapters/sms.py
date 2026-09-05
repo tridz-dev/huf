@@ -1,5 +1,11 @@
 """SMS (Twilio / Plivo / Frappe SMS Settings) Gateway Adapter for two-way SMS communications."""
 
+# PARKED PROVIDER (2026-09-05)
+# This adapter is not maintained and must be security-reviewed before re-enabling.
+# Reference: PR #630's "kept intact for future use" is a code-retention note, not a security review flag.
+# SMS adapter has a live fail-open bypass path that requires security review before any re-enable.
+# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and HUF_INTEGRATIONS_GATEWAYS_TODO.md for details.
+
 from __future__ import annotations
 
 import hmac
@@ -11,6 +17,7 @@ import frappe
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -96,6 +103,23 @@ class SMSGatewayAdapter(GatewayAdapter):
 		message_text = get_val("Body") or get_val("text") or get_val("message")
 		message_sid = get_val("MessageSid") or get_val("SmsSid") or f"sms-{hash(body_str)}"
 
+		try:
+			num_media = int(get_val("NumMedia") or "0")
+		except ValueError:
+			num_media = 0
+		attachments = []
+		for index in range(num_media):
+			media_url = get_val(f"MediaUrl{index}")
+			if not media_url:
+				continue
+			attachments.append(
+				GatewayAttachment(
+					mime_type=get_val(f"MediaContentType{index}"),
+					url=media_url,
+					kind="file",
+				)
+			)
+
 		return NormalizedGatewayEvent(
 			provider_event_id=message_sid,
 			sender_id=sender_id,
@@ -104,6 +128,7 @@ class SMSGatewayAdapter(GatewayAdapter):
 			thread_id=None,
 			is_room=False,
 			raw_payload=dict(params),
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
