@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Check, Copy, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Copy, RefreshCw, ShieldCheck, Trash2, Send, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
@@ -40,6 +40,7 @@ import { getIntegrationSetting, setupTelegramWebhook } from '@/services/integrat
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { call } from '@/lib/frappe-sdk';
 
 interface ChannelTabProps {
   /** Name of the Integration Settings record this channel's credentials live on. */
@@ -72,6 +73,9 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     lastSetup?: string;
   }>({});
   const [settingUpWebhook, setSettingUpWebhook] = useState(false);
+  const [testRecipientId, setTestRecipientId] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!settingId) return;
@@ -204,6 +208,42 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
+    }
+  };
+
+  const handleTestSend = async () => {
+    if (!gateway || !testRecipientId.trim()) {
+      toast.error('Enter a test recipient ID');
+      return;
+    }
+
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const result = await call.post('huf.ai.gateway_service.test_gateway_send', {
+        gateway_name: gateway.name,
+        test_recipient_id: testRecipientId.trim(),
+      });
+
+      setTestResult({
+        success: result.success,
+        message: result.message,
+      });
+
+      if (result.success) {
+        toast.success('Test message sent successfully');
+      } else {
+        toast.error(result.message);
+      }
+    } catch (error) {
+      const errorMsg = getFrappeErrorMessage(error) || 'Failed to send test message';
+      setTestResult({
+        success: false,
+        message: errorMsg,
+      });
+      toast.error(errorMsg);
+    } finally {
+      setTestSending(false);
     }
   };
 
@@ -453,6 +493,51 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
             />
           </div>
         </div>
+      </div>
+
+      <div className="space-y-2 rounded-lg border p-4">
+        <p className="text-sm font-medium">Test message</p>
+        <p className="text-xs text-muted-foreground">
+          Send a test message to verify your channel configuration and credentials are working.
+        </p>
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Input
+              placeholder="Enter test recipient ID (e.g., user ID, chat ID, phone)"
+              value={testRecipientId}
+              onChange={(e) => setTestRecipientId(e.target.value)}
+              disabled={testSending}
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleTestSend}
+            disabled={testSending || !testRecipientId.trim() || !gateway.is_enabled}
+          >
+            {testSending ? (
+              <>
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> Sending
+              </>
+            ) : (
+              <>
+                <Send className="mr-1 h-3.5 w-3.5" /> Send
+              </>
+            )}
+          </Button>
+        </div>
+        {testResult && (
+          <div
+            className={`rounded text-xs p-2 ${
+              testResult.success
+                ? 'bg-success/10 text-success border border-success/30'
+                : 'bg-destructive/10 text-destructive border border-destructive/30'
+            }`}
+          >
+            {testResult.message}
+          </div>
+        )}
       </div>
 
       <div className="space-y-2 rounded-lg border p-4">

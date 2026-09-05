@@ -699,6 +699,68 @@ def process_gateway_event(event_name: str) -> dict:
 
 
 @frappe.whitelist(methods=["POST"])
+def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
+	"""Send a test message through a gateway to verify credentials and connectivity.
+
+	Returns a dict with:
+	- success (bool): Whether the message was sent
+	- message (str): Human-readable status or error message
+	- provider_response (str): Raw response from the provider (if applicable)
+	"""
+	if not frappe.has_permission("Gateway", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if not gateway_name or not test_recipient_id:
+		frappe.throw(_("Gateway name and test recipient ID are required."))
+
+	try:
+		gateway = frappe.get_doc("Gateway", gateway_name)
+
+		if not gateway.enabled:
+			return {
+				"success": False,
+				"message": "Gateway is disabled. Enable it to test.",
+				"provider_response": None,
+			}
+
+		if not gateway.integration_settings:
+			return {
+				"success": False,
+				"message": "Gateway has no credentials configured.",
+				"provider_response": None,
+			}
+
+		# Get the adapter for this gateway
+		from huf.ai.gateway_webhook import get_gateway_adapter
+		from huf.ai.gateway_adapters.types import GatewayReply
+
+		adapter = get_gateway_adapter(gateway)
+
+		# Send a test message
+		test_message = "Test message from Huf. If you see this, the connection is working."
+		reply = GatewayReply(
+			conversation_id=test_recipient_id,
+			text=test_message,
+		)
+
+		delivery = adapter.send_reply(reply)
+
+		return {
+			"success": True,
+			"message": f"Test message sent successfully to {test_recipient_id}",
+			"provider_response": json.dumps({"delivery_id": delivery.delivery_id}) if delivery else None,
+		}
+
+	except Exception as exc:
+		error_msg = str(exc)
+		return {
+			"success": False,
+			"message": f"Failed to send test message: {error_msg}",
+			"provider_response": error_msg,
+		}
+
+
+@frappe.whitelist(methods=["POST"])
 def preview_gateway_route(gateway_name: str, context: str | dict) -> dict:
     """Preview a route for administrators without executing any work."""
     if not frappe.has_permission("Gateway", "read"):
