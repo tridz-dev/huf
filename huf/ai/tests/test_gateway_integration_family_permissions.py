@@ -88,19 +88,22 @@ class TestGatewayIntegrationFamilyPermissions(IntegrationTestCase):
 		frappe.db.commit()
 
 	def test_generic_reader_cannot_list_any_family_doctype(self):
-		"""has_permission_gateway_family denies at the doctype-permission gate
-		itself, so frappe.get_list raises PermissionError outright rather than
-		silently returning an empty list -- the strictest possible outcome,
-		and still "cannot list", which is what the acceptance criteria asks
-		for.
+		"""frappe.get_list's initial permission gate calls frappe.has_permission
+		without a doc, which only consults role permissions (we deliberately
+		granted a generic read Custom DocPerm, so that gate alone passes);
+		row visibility is then filtered by get_permission_query_conditions_gateway_family
+		("1=0" for a non-System-Manager), so the list comes back empty rather
+		than raising -- still "cannot list" as the acceptance criteria requires.
 		"""
 		frappe.set_user(self.reader.name)
 		try:
 			for doctype in GATEWAY_INTEGRATION_DOCTYPES:
-				with self.assertRaises(
-					frappe.PermissionError, msg=f"{doctype} leaked rows to a non-System-Manager generic reader"
-				):
-					frappe.get_list(doctype, limit_page_length=0)
+				rows = frappe.get_list(doctype, limit_page_length=0)
+				self.assertEqual(
+					rows,
+					[],
+					f"{doctype} leaked rows to a non-System-Manager generic reader",
+				)
 		finally:
 			frappe.set_user("Administrator")
 
