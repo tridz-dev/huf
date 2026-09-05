@@ -128,10 +128,17 @@ class GoogleChatGatewayAdapter(GatewayAdapter):
 			json_data=data,
 			timeout=10,
 		)
+		if hasattr(response, "raise_for_status"):
+			response.raise_for_status()
 		body = response.json() if hasattr(response, "json") else response
-		msg_id = str(body.get("name") or f"gchat-{hash(reply.text)}") if isinstance(body, dict) else f"gchat-{hash(reply.text)}"
+		# GW-05: a missing "name" in the Google Chat response means the
+		# message was never actually created -- fabricating a hash-derived
+		# delivery id here made every such failure look like a successful
+		# send.
+		if not isinstance(body, dict) or not body.get("name"):
+			raise ValueError(f"Google Chat message delivery failed: {body!r}")
 
-		return OutboundDelivery(msg_id, provider_response=body if isinstance(body, dict) else {"status": "ok"})
+		return OutboundDelivery(str(body["name"]), provider_response=body)
 
 	def send_card(self, space_id: str, card_v2_payload: dict[str, Any], thread_id: str | None = None) -> OutboundDelivery:
 		"""Send a Card V2 interactive message to a Google Chat space."""
