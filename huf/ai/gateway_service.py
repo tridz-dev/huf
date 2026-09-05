@@ -602,19 +602,22 @@ def process_gateway_event(event_name: str) -> dict:
         # inside run_agent_sync, which runs under the same execution_user after
         # frappe.set_user() below and additionally requires the `agent.use`
         # capability.
-        from huf.ai.agent_access import check_agent_access
+        #
+        # GW-11: this pre-gate is now routed through the shared
+        # resolve_run_identity_and_authorize() helper alongside the other 3
+        # "run an agent" trigger surfaces, but keeps its own rejection
+        # reporting shape (a Gateway Event status/error_message, not a raised
+        # exception) -- see agent_access.RunIdentityResult's docstring.
+        from huf.ai.agent_access import TRIGGER_GATEWAY, resolve_run_identity_and_authorize
 
         agent_doc = frappe.get_doc("Agent", event.target_agent)
-        if not check_agent_access(agent_doc, gateway.execution_user):
-            event.db_set(
-                {
-                    "status": "Rejected",
-                    "error_message": (
-                        f"Gateway run-as user '{gateway.execution_user}' does not have access "
-                        f"to agent '{event.target_agent}'"
-                    ),
-                }
-            )
+        identity = resolve_run_identity_and_authorize(
+            agent_doc,
+            TRIGGER_GATEWAY,
+            {"execution_user": gateway.execution_user, "target_agent": event.target_agent},
+        )
+        if not identity.authorized:
+            event.db_set({"status": "Rejected", "error_message": identity.reason})
             return {"event_name": event.name, "status": "Rejected"}
 
     try:
