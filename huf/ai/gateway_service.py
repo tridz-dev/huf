@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import secrets
+import threading
+import time
 from typing import Any
 
 import frappe
@@ -58,16 +61,115 @@ def _idempotency_key(gateway_name: str, provider_event_id: str) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+# GW-07: a provider outbound call's HTTPError can carry the request URL
+# verbatim in its string representation (e.g. Telegram's
+# ``https://api.telegram.org/bot<TOKEN>/sendMessage`` scheme), and several
+# call sites here turn "whatever the exception says" into an externally
+# readable string -- ``notification_status`` returned to the caller of
+# ``approve_gateway_pairing``, and ``frappe.log_error``'s traceback dump.
+# This generalizes the ad hoc ``_sanitize_token`` helper in
+# ``huf.ai.tools.telegram`` (which only ever had the one bot token in scope
+# to redact) into a provider-agnostic pattern match so every adapter's
+# URL-embedded or header-embedded credential is stripped before it reaches
+# any such surface, not just Telegram's.
+_URL_TOKEN_PATTERNS = (
+    # Bot-token-in-path schemes (Telegram: /bot<digits>:<token>/...).
+    re.compile(r"(/bot)\d+:[A-Za-z0-9_-]+"),
+    # Authorization-style credentials appearing in dumped text.
+    re.compile(r"(?i)\b(Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{8,}"),
+    # Sensitive query-string parameters embedded in a URL.
+    re.compile(r"(?i)([?&](?:token|api[_-]?key|secret|access_token|key|password)=)[^&\s\"'<>]+"),
+)
+
+
+def _redact_error_text(text: str) -> str:
+    """Strip provider credentials that leaked into an exception's string form
+    before it reaches any externally-readable field (``notification_status``,
+    ``frappe.log_error``, a ``db_set`` error_message, ...)."""
+    if not text:
+        return text
+    redacted = text
+    redacted = _URL_TOKEN_PATTERNS[0].sub(r"\1[redacted]", redacted)
+    redacted = _URL_TOKEN_PATTERNS[1].sub(r"\1 [redacted]", redacted)
+    redacted = _URL_TOKEN_PATTERNS[2].sub(r"\1[redacted]", redacted)
+    return redacted
+
+
+# Types that json.dumps (used by the JSON `raw_payload` field) can serialize
+# natively. Anything else (datetime/date/time, Decimal, set, a Frappe Document
+# child row, ...) must be stringified here rather than left for json.dumps to
+# choke on -- GW-04: `Communication.as_dict()` carries native `datetime`
+# objects (e.g. `communication_date`), and frappe's JSON field write path does
+# a plain `json.dumps` with no `default=str`, so passing one through
+# unconverted crashes with `TypeError: Object of type datetime is not JSON
+# serializable` on every real inbound email.
+_JSON_NATIVE_TYPES = (str, int, float, bool, type(None))
+
+
 def _redact_payload(value: Any) -> Any:
-    """Retain support evidence without persisting provider credentials."""
+    """Retain support evidence without persisting provider credentials.
+
+    Also makes the result safe to store in a JSON field: dict/list containers
+    are walked recursively, values of JSON-native types pass through as-is,
+    and anything else is coerced to its string representation.
+    """
     if isinstance(value, dict):
         return {
             key: "[redacted]" if key.lower() in SENSITIVE_PAYLOAD_KEYS else _redact_payload(item)
             for key, item in value.items()
         }
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return [_redact_payload(item) for item in value]
-    return value
+    if isinstance(value, _JSON_NATIVE_TYPES):
+        return value
+    return str(value)
+
+
+# CL-02: every adapter declares GatewayCapabilities.max_outbound_messages_per_second
+# but nothing previously read it before calling adapter.send_reply. This is a
+# minimal per-gateway token bucket (capacity 1 -- a single send is never
+# delayed, but a tight burst is spread out at the declared rate) enforced in
+# process_gateway_event just before send_gateway_reply is invoked.
+_OUTBOUND_RATE_LOCK = threading.Lock()
+_OUTBOUND_RATE_NEXT_ALLOWED: dict[str, float] = {}
+
+
+def _monotonic() -> float:
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    if seconds > 0:
+        time.sleep(seconds)
+
+
+def _outbound_rate_cap(provider: str | None) -> float | None:
+    """Resolve the declared outbound rate cap for a Gateway's provider without
+    instantiating its adapter (capabilities is a class-level attribute, so no
+    credentials are needed just to read the declared limit)."""
+    if not provider:
+        return None
+    try:
+        from huf.ai.gateway_webhook import _adapter_class_for_provider
+
+        adapter_cls = _adapter_class_for_provider(provider)
+        return adapter_cls.capabilities.max_outbound_messages_per_second
+    except Exception:
+        return None
+
+
+def _throttle_outbound_send(gateway_name: str, max_per_second: float | None) -> None:
+    """Block only long enough to keep this gateway's outbound sends at or
+    under its declared ``max_outbound_messages_per_second`` cap."""
+    if not max_per_second or max_per_second <= 0:
+        return
+    min_interval = 1.0 / max_per_second
+    with _OUTBOUND_RATE_LOCK:
+        now = _monotonic()
+        next_allowed = _OUTBOUND_RATE_NEXT_ALLOWED.get(gateway_name, 0.0)
+        wait = max(0.0, next_allowed - now)
+        _OUTBOUND_RATE_NEXT_ALLOWED[gateway_name] = max(now, next_allowed) + min_interval
+    _sleep(wait)
 
 
 def _binding_matches(binding: dict, context: dict[str, Any]) -> bool:
@@ -163,7 +265,7 @@ def _create_pairing_request(
                 )
                 adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
         except Exception as exc:
-            frappe.logger("huf").warning(f"Failed to send pairing code message: {exc}")
+            frappe.logger("huf").warning(f"Failed to send pairing code message: {_redact_error_text(str(exc))}")
 
     return pairing_code
 
@@ -299,8 +401,12 @@ def approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None) -
             ))
             notification_status = "Welcome message sent to sender"
     except Exception as exc:
-        notification_status = f"Approval saved, welcome message notice: {exc}"
-        frappe.log_error("Failed to send welcome message on frontend approval", f"{exc}\n{frappe.get_traceback()}")
+        safe_exc = _redact_error_text(str(exc))
+        notification_status = f"Approval saved, welcome message notice: {safe_exc}"
+        frappe.log_error(
+            "Failed to send welcome message on frontend approval",
+            _redact_error_text(f"{exc}\n{frappe.get_traceback()}"),
+        )
 
     return {
         "name": entry.name,
@@ -506,6 +612,7 @@ def process_gateway_event(event_name: str) -> dict:
             if not response or not str(response).strip():
                 raise frappe.ValidationError(_("Gateway agent run completed without a text response."))
             try:
+                _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
                 delivery = send_gateway_reply(gateway, event, str(response))
                 provider_message_id = delivery.provider_message_id
             except frappe.ValidationError as exc:
@@ -545,8 +652,17 @@ def process_gateway_event(event_name: str) -> dict:
 
         raise frappe.ValidationError(_("Gateway event has no valid target."))
     except Exception:
-        message = frappe.get_traceback()
+        message = _redact_error_text(frappe.get_traceback())
+        # GW-06: a failure here (e.g. send_gateway_reply raising after a
+        # successful agent run) can leave uncommitted state from this request
+        # queued behind the background job's own rollback-on-reraise. Discard
+        # that partial state first, then reapply *only* the Failed status
+        # against a clean transaction and commit it immediately, so the event
+        # can never surface stuck at "Running" -- re-raising afterwards still
+        # propagates the failure to the job queue for logging/retry policy.
+        frappe.db.rollback()
         event.db_set({"status": "Failed", "error_message": message[-500:]})
+        frappe.db.commit()
         frappe.log_error(message, "Gateway event failed")
         raise
 
