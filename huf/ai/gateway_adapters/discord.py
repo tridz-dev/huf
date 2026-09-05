@@ -16,6 +16,7 @@ from urllib.parse import quote
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -104,6 +105,20 @@ class DiscordGatewayAdapter(GatewayAdapter):
 		options = data.get("options") or []
 		message_text = f"/{command_name} " + " ".join(str(opt.get("value", "")) for option in options for opt in [option])
 
+		# Slash-command attachment options resolve via data.resolved.attachments,
+		# keyed by attachment id (rather than embedded inline like other providers).
+		resolved_attachments = (data.get("resolved") or {}).get("attachments") or {}
+		attachments = [
+			GatewayAttachment(
+				mime_type=str(att.get("content_type") or ""),
+				filename=str(att.get("filename") or ""),
+				url=att.get("url"),
+				kind="file",
+			)
+			for att in resolved_attachments.values()
+			if att.get("url")
+		]
+
 		return NormalizedGatewayEvent(
 			provider_event_id=event_id,
 			sender_id=sender_id,
@@ -112,6 +127,7 @@ class DiscordGatewayAdapter(GatewayAdapter):
 			thread_id=None,
 			is_room=bool(payload.get("guild_id")),
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:

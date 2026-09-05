@@ -177,6 +177,67 @@ def _throttle_outbound_send(gateway_name: str, max_per_second: float | None) -> 
     _sleep(wait)
 
 
+def _describe_attachments(raw_payload: Any) -> str:
+    """Best-effort, provider-agnostic sniff of stored raw payload for attachments.
+
+    GW-30 added an ``attachments`` field to ``NormalizedGatewayEvent``, but the
+    ``Gateway Event`` doctype has no dedicated column for it yet (out of scope
+    for this change -- see findings). Since the full (redacted) provider
+    payload is already persisted on every event, this recovers "was media
+    attached, and what kind" from the well-known per-provider payload shapes
+    so the note can survive round-tripping through storage, rather than
+    requiring attachments to be threaded through as a brand-new doctype field.
+    Returns "" when nothing recognizable is found -- callers must not assume
+    absence of a note means absence of media for providers not covered here.
+    """
+    if not isinstance(raw_payload, dict):
+        return ""
+
+    kinds: list[str] = []
+
+    # Telegram: message/edited_message carries one of these media keys directly.
+    message = raw_payload.get("message") or raw_payload.get("edited_message")
+    if isinstance(message, dict):
+        for key in ("photo", "document", "voice", "video", "audio", "video_note", "sticker"):
+            if message.get(key):
+                kinds.append(key)
+
+    # WhatsApp Business/Cloud API webhook shape.
+    try:
+        value = raw_payload["entry"][0]["changes"][0]["value"]
+        msg = (value.get("messages") or [None])[0]
+        if isinstance(msg, dict) and msg.get("type") in (
+            "image", "document", "audio", "video", "sticker",
+        ):
+            kinds.append(msg["type"])
+    except (KeyError, IndexError, TypeError):
+        pass
+
+    # Messenger/Instagram webhook shape.
+    try:
+        messaging_event = raw_payload["entry"][0]["messaging"][0]
+        for attachment in (messaging_event.get("message") or {}).get("attachments") or []:
+            if attachment.get("type"):
+                kinds.append(str(attachment["type"]))
+    except (KeyError, IndexError, TypeError):
+        pass
+
+    # MS Teams Bot Framework activity shape.
+    for attachment in raw_payload.get("attachments") or []:
+        if isinstance(attachment, dict) and attachment.get("contentUrl"):
+            kinds.append("file")
+
+    # Twilio-style SMS/MMS form payload (persisted as a flat dict of params).
+    if raw_payload.get("NumMedia") not in (None, "0", 0):
+        kinds.append("mms")
+
+    if not kinds:
+        return ""
+
+    unique_kinds = sorted(set(kinds))
+    return "[Attachment(s) present: " + ", ".join(unique_kinds) + "]"
+
+
 def _binding_matches(binding: dict, context: dict[str, Any]) -> bool:
     if binding.match_type == "Any conversation":
         return True
@@ -632,9 +693,12 @@ def process_gateway_event(event_name: str) -> dict:
             from huf.ai.agent_integration import run_agent_sync
             from huf.ai.gateway_webhook import send_gateway_reply
 
+            attachment_note = _describe_attachments(event.raw_payload)
+            prompt = f"{attachment_note}\n{event.message_text}" if attachment_note else event.message_text
+
             result = run_agent_sync(
                 agent_name=event.target_agent,
-                prompt=event.message_text,
+                prompt=prompt,
                 channel_id=f"gateway:{gateway.name}",
                 external_id=event.thread_id or event.conversation_id or event.sender_id,
                 now=True,

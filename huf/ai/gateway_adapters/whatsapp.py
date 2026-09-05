@@ -17,6 +17,7 @@ from typing import Any
 import frappe
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -51,7 +52,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		frozenset({"webhook"}),
 		supports_text_reply=True,
 		supports_thread_reply=True,
-		supports_media_reply=True,
+		supports_media_reply=False,  # GW-32: send_reply only sends text today
 		max_outbound_messages_per_second=80,
 	)
 
@@ -150,6 +151,20 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		context = msg.get("context") or {}
 		reply_to_id = str(context.get("id") or "") if context else None
 
+		attachments = []
+		if msg_type in ("image", "document", "audio", "video", "sticker"):
+			media = msg.get(msg_type) or {}
+			media_id = str(media.get("id") or "")
+			if media_id:
+				attachments.append(
+					GatewayAttachment(
+						mime_type=str(media.get("mime_type") or ""),
+						filename=str(media.get("filename") or ""),
+						file_id=media_id,
+						kind=msg_type,
+					)
+				)
+
 		return NormalizedGatewayEvent(
 			provider_event_id=provider_event_id,
 			sender_id=sender_id,
@@ -158,6 +173,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			thread_id=reply_to_id,
 			is_room=False,
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:

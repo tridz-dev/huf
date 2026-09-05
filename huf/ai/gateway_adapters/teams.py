@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -125,6 +126,20 @@ class TeamsGatewayAdapter(GatewayAdapter):
 
 		text = str(activity.get("text") or "").strip()
 
+		attachments = []
+		for attachment in activity.get("attachments") or []:
+			content_url = attachment.get("contentUrl")
+			if not content_url:
+				continue
+			attachments.append(
+				GatewayAttachment(
+					mime_type=str(attachment.get("contentType") or ""),
+					filename=str(attachment.get("name") or ""),
+					url=content_url,
+					kind="file",
+				)
+			)
+
 		return NormalizedGatewayEvent(
 			provider_event_id=activity_id,
 			sender_id=sender_id,
@@ -133,6 +148,7 @@ class TeamsGatewayAdapter(GatewayAdapter):
 			thread_id=activity.get("replyToId"),
 			is_room=bool(conversation.get("isGroup")),
 			raw_payload=activity,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:

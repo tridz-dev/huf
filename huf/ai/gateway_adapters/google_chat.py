@@ -35,6 +35,7 @@ from typing import Any, Callable, Mapping
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -234,6 +235,20 @@ class GoogleChatGatewayAdapter(GatewayAdapter):
 		thread = message.get("thread") or {}
 		thread_id = str(thread.get("name") or "") if thread else None
 
+		attachments = []
+		for attachment in message.get("attachment") or []:
+			resource_name = attachment.get("attachmentDataRef", {}).get("resourceName") or attachment.get("name")
+			if not resource_name:
+				continue
+			attachments.append(
+				GatewayAttachment(
+					mime_type=str(attachment.get("contentType") or ""),
+					filename=str(attachment.get("contentName") or ""),
+					file_id=str(resource_name),
+					kind="file",
+				)
+			)
+
 		return NormalizedGatewayEvent(
 			provider_event_id=event_id,
 			sender_id=sender_id,
@@ -242,6 +257,7 @@ class GoogleChatGatewayAdapter(GatewayAdapter):
 			thread_id=thread_id,
 			is_room=True,
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	# -- Outbound: authenticated REST, or webhook fallback -----------------

@@ -24,6 +24,7 @@ from typing import Any
 
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -108,6 +109,18 @@ class VKGatewayAdapter(GatewayAdapter):
 		conversation_id = str(message.get("peer_id") or "")
 		if not provider_event_id or not sender_id or not conversation_id:
 			raise ValueError("VK message event is missing event, sender, or peer identifiers")
+		attachments = []
+		for attachment in message.get("attachments") or []:
+			att_type = attachment.get("type")
+			att_obj = attachment.get(att_type) or {}
+			url = att_obj.get("url")
+			if not url:
+				sizes = att_obj.get("sizes") or []
+				url = sizes[-1].get("url") if sizes else None
+			if not url:
+				continue
+			attachments.append(GatewayAttachment(url=url, kind=str(att_type or "file")))
+
 		return NormalizedGatewayEvent(
 			provider_event_id=provider_event_id,
 			sender_id=sender_id,
@@ -116,6 +129,7 @@ class VKGatewayAdapter(GatewayAdapter):
 			thread_id=str(message["conversation_message_id"]) if message.get("conversation_message_id") else None,
 			is_room=int(conversation_id) >= 2_000_000_000,
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
