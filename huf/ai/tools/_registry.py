@@ -191,6 +191,59 @@ TELEGRAM_TOOLS = [
 	},
 ]
 
+WHATSAPP_TOOLS = [
+	{
+		"tool_name": "whatsapp",
+		"description": (
+			"Manage WhatsApp Business messaging via the Meta Cloud API. Actions: "
+			"send_message (to/recipient/phone_number, message/text), "
+			"send_template (to/recipient, template_name, language_code), "
+			"list_messages (to, from, limit), get_account_info."
+		),
+		"function_path": "huf.ai.tools.whatsapp.handle_action",
+		"category": "Communication Tools",
+		"parameters": [
+			_action("send_message|send_template|list_messages|get_account_info"),
+			_p("to", description="Recipient phone number (E.164). Alias: recipient, phone_number."),
+			_p("recipient", description="Alias for 'to'."),
+			_p("phone_number", description="Alias for 'to'."),
+			_p("message", description="Message text for send_message. Alias: text."),
+			_p("text", description="Alias for 'message'."),
+			_p("template_name", description="Template name for send_template."),
+			_p("language_code", description="Template language code for send_template (default 'en')."),
+			_p("limit", type="integer", description="Max messages to return for list_messages (default 20)."),
+			_p("phone_number_id", description="Override the configured WhatsApp Phone Number ID."),
+			_p("access_token", description="Override the configured Meta access token."),
+		],
+	},
+]
+
+MESSENGER_TOOLS = [
+	{
+		"tool_name": "messenger",
+		"description": (
+			"Manage Facebook Messenger and Instagram Direct messaging via the Meta Graph API. "
+			"Actions: send_message/reply_message (recipient_id/to/psid, message/text), "
+			"list_conversations, list_messages (conversation_id, limit)."
+		),
+		"function_path": "huf.ai.tools.messenger.handle_action",
+		"category": "Communication Tools",
+		"parameters": [
+			_action("send_message|reply_message|list_conversations|list_messages"),
+			_p("recipient_id", description="PSID/recipient of the message. Alias: to, psid."),
+			_p("to", description="Alias for 'recipient_id'."),
+			_p("psid", description="Alias for 'recipient_id'."),
+			_p("message", description="Message text. Alias: text."),
+			_p("text", description="Alias for 'message'."),
+			_p("platform", description="'messenger' (default) or 'instagram'."),
+			_p("conversation_id", description="Conversation ID for list_messages."),
+			_p("limit", type="integer", description="Max results to return."),
+			_p("page_id", description="Override the configured Facebook Page ID."),
+			_p("access_token", description="Override the configured Meta access token."),
+		],
+	},
+]
+
 
 # ---------------------------------------------------------------------------
 # Developer Tools
@@ -2208,6 +2261,8 @@ ALL_INTEGRATION_TOOLS = (
 	# docnames and the SERVICE_NAME each tool module uses for credentials.
 	+ _with_service(SLACK_TOOLS, "slack")
 	+ _with_service(TELEGRAM_TOOLS, "telegram")
+	+ _with_service(WHATSAPP_TOOLS, "whatsapp")
+	+ _with_service(MESSENGER_TOOLS, "messenger")
 	+ _with_service(GITHUB_TOOLS, "github")
 	+ _with_service(GMAIL_TOOLS, "gmail")
 	+ _with_service(GOOGLE_SHEETS_TOOLS, "google_sheets")

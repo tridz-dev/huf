@@ -194,6 +194,9 @@ def _get_account_info(kwargs: dict) -> str:
 
 	try:
 		res = requests.get(url, headers=headers, timeout=10)
-		return _success(res.json())
+		data = res.json()
+		if res.status_code != 200 or "error" in data:
+			return _error(f"WhatsApp API Error: {data.get('error', {}).get('message', res.text)}")
+		return _success(data)
 	except Exception as e:
 		return _error(f"Failed to fetch WhatsApp account info: {str(e)}")
