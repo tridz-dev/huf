@@ -185,6 +185,13 @@ permission_query_conditions = {
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
     "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
     "Agent Run Feedback": "huf.ai.record_access.get_feedback_permission_conditions",
+    "Gateway": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Gateway Access Entry": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Gateway Event": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Gateway Binding": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
 }
 
 has_permission = {
@@ -193,6 +200,13 @@ has_permission = {
 	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
 	"Agent Tool Call": "huf.ai.hooks.has_permission_agent_tool_call",
 	"Agent Context Artifact": "huf.ai.hooks.has_permission_agent_context_artifact",
+	"Gateway": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Gateway Access Entry": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Gateway Event": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Gateway Binding": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Integration Settings": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Integration Service": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Integration Credential": "huf.ai.gateway_webhook.has_permission_gateway_family",
 }
 
 # DocType Class

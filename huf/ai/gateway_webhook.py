@@ -97,6 +97,61 @@ def _gateway_webhook_auth_user() -> str:
 	return technical_user
 
 
+# Doctypes in the Gateway/Integration family. None of them have a per-row
+# owner or "shared with" concept the way Agent/Agent Run do: a Gateway Access
+# Entry, Integration Credential, etc. are account-wide configuration, and the
+# app only ever reads/writes them through its own bespoke whitelisted methods
+# (gateway pairing, adapter routing, the Integrations UI's own controllers),
+# never through a generic list/get. Rather than invent row-level semantics
+# these doctypes were never designed for, generic ``/api/resource/<DocType>``
+# access is blocked outright for everyone except System Manager, matching how
+# the app itself never talks to them that way.
+GATEWAY_INTEGRATION_DOCTYPES: frozenset[str] = frozenset(
+	{
+		"Gateway",
+		"Gateway Access Entry",
+		"Gateway Event",
+		"Gateway Binding",
+		"Integration Settings",
+		"Integration Service",
+		"Integration Credential",
+	}
+)
+
+
+def has_permission_gateway_family(doc, ptype: str = "read", user: str | None = None) -> bool:
+	"""``has_permission`` hook: only System Manager may touch these doctypes.
+
+	Registered for every doctype in ``GATEWAY_INTEGRATION_DOCTYPES``. These
+	records carry credentials and routing/permission data for every configured
+	Gateway and Integration; the app itself never reads or writes them through
+	generic ``/api/resource`` access, only through its own whitelisted
+	pairing/adapter/API surface (which runs with ``ignore_permissions=True``
+	where appropriate and does its own checks). A user with a generic DocType
+	read/write role permission on these doctypes, but who is not a System
+	Manager, must not gain list/get/save access to them just because the
+	doctype exists — hence this hook rather than leaving them to the
+	role-permission default.
+	"""
+	user = user or frappe.session.user
+	return bool(frappe.db.get_value("Has Role", {"parent": user, "role": "System Manager"}, "name"))
+
+
+def get_permission_query_conditions_gateway_family(user: str | None = None) -> str:
+	"""``permission_query_conditions`` hook mirroring ``has_permission_gateway_family``.
+
+	Without this, a non-System-Manager user with a generic read role on one of
+	these doctypes could still see rows show up in a ``/api/resource`` list
+	call (list views apply ``permission_query_conditions``, not
+	``has_permission``, to filter rows) even though ``has_permission`` would
+	refuse a ``get`` on any individual one.
+	"""
+	user = user or frappe.session.user
+	if frappe.db.get_value("Has Role", {"parent": user, "role": "System Manager"}, "name"):
+		return ""
+	return "1=0"
+
+
 def _adapter_class_for_provider(provider: str):
 	"""Resolve a ``Gateway.provider`` display value to its adapter class.
 

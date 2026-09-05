@@ -21,6 +21,15 @@ class TestHooksRegistration(IntegrationTestCase):
 			"Agent Conversation",
 			"Agent Tool Call",
 			"Agent Context Artifact",
+			# GW-12: Gateway/Integration doctype family, previously missing
+			# has_permission entirely (unlike the Agent-run family above).
+			"Gateway",
+			"Gateway Access Entry",
+			"Gateway Event",
+			"Gateway Binding",
+			"Integration Settings",
+			"Integration Service",
+			"Integration Credential",
 		]
 
 		for doctype in expected_doctypes:
@@ -49,6 +58,13 @@ class TestHooksRegistration(IntegrationTestCase):
 			"Agent Run Prompt Snapshot",
 			"Huf API Key",
 			"Agent Procedure Run",
+			"Gateway",
+			"Gateway Access Entry",
+			"Gateway Event",
+			"Gateway Binding",
+			"Integration Settings",
+			"Integration Service",
+			"Integration Credential",
 		]
 
 		for doctype in expected_doctypes:
