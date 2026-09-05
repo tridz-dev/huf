@@ -182,13 +182,16 @@ def handle_gateway_webhook() -> dict | None:
 
 	gateway_name = frappe.request.args.get("gateway_name") if frappe.request is not None else None
 	if not gateway_name:
+		frappe.local.response.http_status_code = 400
 		return {"success": False, "error": "Missing gateway_name"}
 
 	try:
 		gateway = frappe.get_doc("Gateway", gateway_name)
 	except frappe.DoesNotExistError:
+		frappe.local.response.http_status_code = 404
 		return {"success": False, "error": "Unknown gateway"}
 	if not gateway.is_enabled:
+		frappe.local.response.http_status_code = 403
 		return {"success": False, "error": "Gateway is disabled"}
 
 	adapter = get_gateway_adapter(gateway)
@@ -197,6 +200,7 @@ def handle_gateway_webhook() -> dict | None:
 		_text_response(adapter.verify_url(request) or "")
 		return None
 	if not adapter.verify_inbound(request):
+		frappe.local.response.http_status_code = 401
 		return {"success": False, "error": "Provider verification failed"}
 
 	event = adapter.normalize_inbound(request)
