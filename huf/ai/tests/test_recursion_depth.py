@@ -132,7 +132,7 @@ class TestDepthCheckBehavior(IntegrationTestCase):
 class TestDepthCheckUsesDefaults(IntegrationTestCase):
     """Test that check_depth uses Agent Settings defaults when no arg provided."""
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_check_depth_default_from_settings(self, mock_get_value):
         """check_depth() with no arg uses Agent Settings.max_depth."""
         mock_get_value.return_value = 4  # Default from settings
@@ -153,7 +153,7 @@ class TestDepthCheckUsesDefaults(IntegrationTestCase):
         with self.assertRaises(frappe.ValidationError):
             budget.check_depth()
 
-    @patch("frappe.get_value")
+    @patch("frappe.db.get_single_value")
     def test_check_depth_fallback_to_hardcoded_default(self, mock_get_value):
         """check_depth() falls back to 5 if Agent Settings not available."""
         mock_get_value.return_value = None  # Settings not available
