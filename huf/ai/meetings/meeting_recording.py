@@ -102,6 +102,10 @@ def upload_chunk(
         "upload_status": "Uploaded",
         "client_started_at": client_started_at,
         "duration_seconds": duration_seconds,
+        # See meeting_api.create_meeting: is_system_owned defaults to 1 to
+        # protect system/fixture-seeded records; user-uploaded chunks belong
+        # to the user and must be deletable via Meeting's cascade delete.
+        "is_system_owned": 0,
     })
     chunk.insert()
 

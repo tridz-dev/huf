@@ -49,6 +49,11 @@ def create_meeting(title: str = None, description: str = None, participants: str
         "description": description,
         "participants": participants,
         "status": "Draft",
+        # Meetings created through this user-facing endpoint are owned by the
+        # user, not the system — is_system_owned defaults to 1 to protect
+        # system/fixture-seeded meetings from deletion; explicitly clear it
+        # here so a user can delete their own recordings (see delete_meeting).
+        "is_system_owned": 0,
     })
     meeting.insert()
 

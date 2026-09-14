@@ -74,6 +74,10 @@ def _insert_message(meeting_name: str, role: str, content: str, error: str = Non
         "content": content or "",
         "error": error,
         "applied_to_summary": 1 if applied_to_summary else 0,
+        # See meeting_api.create_meeting: is_system_owned defaults to 1 to
+        # protect system/fixture-seeded records; chat messages belong to the
+        # user's meeting and must be deletable via Meeting's cascade delete.
+        "is_system_owned": 0,
     })
     doc.insert(ignore_permissions=True)
     return doc
