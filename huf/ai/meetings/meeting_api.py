@@ -232,8 +232,17 @@ def retry_chunk_transcription(chunk_name: str):
     if not chunk_name:
         frappe.throw(_("chunk_name is required"))
 
+    # Fetch the chunk's parent meeting name without loading the full doc.
+    # This prevents an info disclosure vulnerability: we check permission
+    # on the parent meeting BEFORE loading the chunk, so "chunk doesn't exist"
+    # and "chunk exists but no access" fail indistinguishably.
+    meeting_name = frappe.db.get_value("Meeting Recording Chunk", chunk_name, "meeting")
+    if not meeting_name:
+        # Chunk doesn't exist, or the lookup failed. Fail with generic error.
+        frappe.throw(_("Not permitted to access this Meeting"), frappe.PermissionError)
+
+    meeting = _get_meeting(meeting_name, "write")
     chunk = frappe.get_doc("Meeting Recording Chunk", chunk_name)
-    meeting = _get_meeting(chunk.meeting, "write")
 
     if not _agent_is_configured(meeting_transcription.TRANSCRIPTION_AGENT):
         frappe.throw(_(MODEL_NOT_CONFIGURED_MESSAGE))
@@ -283,3 +292,69 @@ def retry_summary(meeting_name: str):
     )
 
     return {"meeting_name": meeting.name, "status": meeting.status}
+
+
+@frappe.whitelist()
+def delete_meeting(meeting_name: str):
+    """
+    Delete a Meeting and cascade-delete all related Meeting Chat Message
+    and Meeting Recording Chunk records.
+
+    Honors the on_trash guards on all three doctypes (Meeting, Meeting Chat Message,
+    Meeting Recording Chunk) — system-owned meetings and their related records
+    cannot be deleted.
+
+    The cascade order is critical: delete messages and chunks FIRST
+    (which are linked to the meeting via Link fields), then delete the Meeting itself.
+    Reversing this order causes Frappe to throw LinkExistsError.
+
+    Attached audio files (Attach fields on chunks) are automatically cleaned up
+    by Frappe's delete_doc since they have attached_to_doctype/attached_to_name set.
+
+    Returns:
+        dict: {"success": True}
+    """
+    meeting = _get_meeting(meeting_name, "delete")
+
+    # Check the on_trash guard: system-owned meetings cannot be deleted.
+    if meeting.is_system_owned:
+        frappe.throw(
+            _("System-owned meetings cannot be deleted."),
+            title=_("Meeting Protected"),
+        )
+
+    try:
+        # Delete all Chat Messages for this meeting.
+        chat_messages = frappe.get_all(
+            "Meeting Chat Message",
+            filters={"meeting": meeting_name},
+            fields=["name"],
+        )
+        for msg in chat_messages:
+            frappe.delete_doc("Meeting Chat Message", msg.name)
+
+        # Delete all Recording Chunks for this meeting.
+        chunks = frappe.get_all(
+            "Meeting Recording Chunk",
+            filters={"meeting": meeting_name},
+            fields=["name"],
+        )
+        for chunk in chunks:
+            frappe.delete_doc("Meeting Recording Chunk", chunk.name)
+
+        # Finally, delete the Meeting itself.
+        frappe.delete_doc("Meeting", meeting_name)
+
+        # Commit transaction to finalize all deletes.
+        frappe.db.commit()
+
+    except Exception as exc:  # noqa: BLE001
+        # Rollback on any error to ensure we don't leave a partially deleted meeting.
+        frappe.db.rollback()
+        frappe.log_error(f"Failed to delete meeting {meeting_name}: {exc}")
+        frappe.throw(
+            _("Failed to delete meeting. Please try again."),
+            exc=exc,
+        )
+
+    return {"success": True}
