@@ -66,8 +66,7 @@ class TestMeetingTranscription(unittest.TestCase):
                 "huf.ai.audio_service.transcribe_audio_file",
                 return_value={"success": False, "error": "provider down"},
             ),
-            patch("time.sleep"),
-            patch("frappe.enqueue") as mock_enqueue,
+            patch("huf.ai.meetings.meeting_transcription._enqueue_after_delay") as mock_enqueue,
         ):
             for _ in range(meeting_transcription.MAX_RETRY_COUNT):
                 meeting_transcription.transcribe_meeting_chunk(chunk.name)
@@ -102,18 +101,35 @@ class TestMeetingTranscription(unittest.TestCase):
         self._make_chunk(upload_status="Transcribing")
         meeting_api.stop_recording(self.meeting["meeting_name"])
 
-        with patch("time.sleep") as mock_sleep, patch("frappe.enqueue") as mock_enqueue:
+        with patch(
+            "huf.ai.meetings.meeting_transcription._enqueue_after_delay"
+        ) as mock_enqueue:
             meeting_transcription.finalize_meeting(self.meeting["meeting_name"])
 
-        mock_sleep.assert_called_once()
         mock_enqueue.assert_called_once_with(
             "huf.ai.meetings.meeting_transcription.finalize_meeting",
-            queue="default",
+            meeting_transcription.FINALIZE_POLL_SECONDS,
             meeting_name=self.meeting["meeting_name"],
         )
 
         meeting_doc = frappe.get_doc("Meeting", self.meeting["meeting_name"])
         self.assertEqual(meeting_doc.status, "Stopped")
+
+    def test_finalize_meeting_with_zero_chunks_fails_instead_of_looping(self):
+        meeting_api.stop_recording(self.meeting["meeting_name"])
+
+        with patch(
+            "huf.ai.meetings.meeting_transcription._enqueue_after_delay"
+        ) as mock_enqueue:
+            meeting_transcription.finalize_meeting(self.meeting["meeting_name"])
+
+        mock_enqueue.assert_not_called()
+
+        meeting_doc = frappe.get_doc("Meeting", self.meeting["meeting_name"])
+        self.assertEqual(meeting_doc.status, "Failed")
+        self.assertEqual(meeting_doc.failed_step, "No audio recorded")
+        self.assertTrue(meeting_doc.last_error)
+        self.assertTrue(meeting_doc.error_log)
 
     def test_finalize_meeting_assembles_transcript_with_gap_markers_and_timestamps(self):
         meeting_doc = frappe.get_doc("Meeting", self.meeting["meeting_name"])
