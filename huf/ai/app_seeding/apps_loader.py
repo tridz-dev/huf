@@ -75,6 +75,7 @@ ALLOWED_FIELDS = {
 	"is_public",
 	"agent",
 	"www_template",
+	"delivery",
 }
 
 STRING_FIELDS = (
@@ -90,7 +91,14 @@ STRING_FIELDS = (
 	"alias",
 	"agent",
 	"www_template",
+	"delivery",
 )
+
+# Declares how a HUF App is delivered to users; see doc/features/apps/manifest.md
+# and doc/features/apps/delivery-portal-vs-desk.md. Default preserves today's
+# only behavior (SPA launcher tile) for manifests that don't declare it.
+DELIVERY_MODES = ("portal", "desk", "spa-deep-link")
+DEFAULT_DELIVERY = "spa-deep-link"
 
 
 def _is_int(value) -> bool:
@@ -335,6 +343,10 @@ def validate_manifest(data) -> tuple:
 		if error := _validate_www_template_shape(www_template):
 			return None, error
 
+	delivery = (data.get("delivery") or "").strip() or DEFAULT_DELIVERY
+	if delivery not in DELIVERY_MODES:
+		return None, f"delivery must be one of {', '.join(DELIVERY_MODES)}"
+
 	normalized = {
 		"app_id": app_id,
 		"title": title,
@@ -352,6 +364,7 @@ def validate_manifest(data) -> tuple:
 		"is_public": 1 if data.get("is_public", False) else 0,
 		"agent": agent,
 		"www_template": www_template,
+		"delivery": delivery,
 		# Stored on the DocType as a comma-joined string.
 		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}

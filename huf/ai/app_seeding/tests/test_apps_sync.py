@@ -392,6 +392,55 @@ class TestAppsSync(unittest.TestCase):
 		self.assertNotEqual(doc.manifest_hash, hash_before, "manifest_hash must still update")
 
 	# ------------------------------------------------------------------
+	# delivery (Phase 4: portal / desk / spa-deep-link)
+	# ------------------------------------------------------------------
+
+	def test_delivery_defaults_to_spa_deep_link(self):
+		"""A manifest that omits `delivery` normalizes to today's only
+		behavior (SPA launcher tile), so existing manifests keep working
+		unchanged."""
+		normalized, error = validate_manifest(self._valid_manifest(self._app_id("deliverydefault")))
+		self.assertIsNone(error)
+		self.assertEqual(normalized["delivery"], "spa-deep-link")
+
+	def test_delivery_accepts_declared_modes(self):
+		for mode in ("portal", "desk", "spa-deep-link"):
+			normalized, error = validate_manifest(
+				self._valid_manifest(self._app_id(f"delivery-{mode}"), delivery=mode)
+			)
+			self.assertIsNone(error, f"delivery={mode!r} should validate")
+			self.assertEqual(normalized["delivery"], mode)
+
+	def test_delivery_rejects_unknown_mode(self):
+		normalized, error = validate_manifest(
+			self._valid_manifest(self._app_id("deliverybad"), delivery="carrier-pigeon")
+		)
+		self.assertIsNone(normalized)
+		self.assertIn("delivery", error)
+
+	def test_delivery_applied_and_updated_on_sync(self):
+		"""Unlike `enabled`/`alias`/`is_public`/`agent`, `delivery` has no
+		manual-override carve-out -- it is a declarative manifest property,
+		not something a System Manager is expected to hand-edit -- so it
+		must apply on every sync, not just the initial insert."""
+		app_id = self._app_id("deliveryupdate")
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, delivery="spa-deep-link"),
+			self.test_app,
+			"huf/apps/delivery_update.app.json",
+		)
+		self.assertTrue(ok, error)
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "delivery"), "spa-deep-link")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, delivery="desk"),
+			self.test_app,
+			"huf/apps/delivery_update.app.json",
+		)
+		self.assertTrue(ok, error)
+		self.assertEqual(frappe.db.get_value("HUF App", app_id, "delivery"), "desk")
+
+	# ------------------------------------------------------------------
 	# Category conventions
 	# ------------------------------------------------------------------
 
