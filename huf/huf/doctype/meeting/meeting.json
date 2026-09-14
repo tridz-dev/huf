@@ -136,7 +136,7 @@
    "fieldname": "failed_step",
    "fieldtype": "Select",
    "label": "Failed Step",
-   "options": "\nModel Not Configured\nTranscription\nSummary",
+   "options": "\nModel Not Configured\nTranscription\nSummary\nNo Audio Recorded",
    "read_only": 1
   },
   {

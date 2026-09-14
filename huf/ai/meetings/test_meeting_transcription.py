@@ -127,7 +127,7 @@ class TestMeetingTranscription(unittest.TestCase):
 
         meeting_doc = frappe.get_doc("Meeting", self.meeting["meeting_name"])
         self.assertEqual(meeting_doc.status, "Failed")
-        self.assertEqual(meeting_doc.failed_step, "No audio recorded")
+        self.assertEqual(meeting_doc.failed_step, "No Audio Recorded")
         self.assertTrue(meeting_doc.last_error)
         self.assertTrue(meeting_doc.error_log)
 

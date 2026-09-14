@@ -182,7 +182,7 @@ def _fail_meeting_for_no_audio(meeting) -> None:
     re-enqueuing itself every ``FINALIZE_POLL_SECONDS``.
     """
     meeting.status = "Failed"
-    meeting.failed_step = "No audio recorded"
+    meeting.failed_step = "No Audio Recorded"
     meeting.last_error = NO_AUDIO_RECORDED_MESSAGE
     _append_error_log(meeting, NO_AUDIO_RECORDED_MESSAGE)
     meeting.save(ignore_permissions=True)
