@@ -320,7 +320,8 @@ scheduler_events = {
     "hourly": [
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
         "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
-        "huf.ai.meetings.meeting_recording.cleanup_stale_recordings"
+        "huf.ai.meetings.meeting_recording.cleanup_stale_recordings",
+        "huf.ai.meetings.meeting_recording.recover_stuck_uploaded_chunks"
     ]
 }
 

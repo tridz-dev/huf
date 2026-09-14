@@ -18,6 +18,12 @@ from frappe.utils import add_to_date, cint, now_datetime
 from huf.ai import audio_service
 from huf.ai.meetings.meeting_api import RUNNING_STATUSES, _get_meeting
 
+# How long a chunk may sit in "Uploaded" status without being transcribed before
+# the recovery sweep re-enqueues its job (e.g. if the initial enqueue call failed
+# or the process died mid-request). 10 minutes is a safe threshold for legitimate
+# processing time without being too lenient for stuck jobs.
+STUCK_CHUNK_THRESHOLD_MINUTES = 10
+
 # How long a Meeting may sit in "Recording"/"Paused" with no new chunk
 # activity before the stale-recording sweep auto-stops it (K-table row 1:
 # "auto-stop after N hours of no new chunk"). 6 hours comfortably covers any
@@ -57,7 +63,8 @@ def upload_chunk(
     """
     meeting_doc = _get_meeting(meeting, "write")
 
-    if meeting_doc.status not in ("Recording", "Paused"):
+    # Allow Recording, Paused, and Stopped (late chunk uploads after auto-stop or user stop).
+    if meeting_doc.status not in ("Recording", "Paused", "Stopped"):
         frappe.throw(_("Meeting is not currently recording"))
 
     if sequence is None:
@@ -113,11 +120,33 @@ def upload_chunk(
     # The transcription job itself (huf.ai.meetings.meeting_transcription.
     # transcribe_meeting_chunk) is built in Phase 4; the dotted path is
     # referenced here so Phase 4's job name/signature is already pinned.
-    frappe.enqueue(
-        "huf.ai.meetings.meeting_transcription.transcribe_meeting_chunk",
-        queue="default",
-        chunk_name=chunk.name,
-    )
+    try:
+        frappe.enqueue(
+            "huf.ai.meetings.meeting_transcription.transcribe_meeting_chunk",
+            queue="default",
+            chunk_name=chunk.name,
+        )
+    except Exception as exc:  # noqa: BLE001
+        # If enqueue fails (Redis down, serialization error, etc.), mark the chunk
+        # as Failed so it surfaces through the retry UI instead of silently vanishing.
+        chunk.upload_status = "Failed"
+        chunk.transcription_error = f"Failed to queue transcription job: {exc!s}"
+        chunk.save()
+        frappe.db.commit()
+        # Re-raise so the caller knows the enqueue failed
+        frappe.throw(
+            _("Failed to queue transcription job. Chunk marked as failed for manual retry."),
+            exc=exc
+        )
+
+    # For late uploads to Stopped meetings, trigger finalize_meeting so the meeting
+    # doesn't stay stuck in Stopped status if it had already reached a terminal check.
+    if meeting_doc.status == "Stopped":
+        frappe.enqueue(
+            "huf.ai.meetings.meeting_transcription._maybe_finalize_meeting",
+            queue="default",
+            meeting_name=meeting_doc.name,
+        )
 
     return {
         "chunk_name": chunk.name,
@@ -167,11 +196,52 @@ def cleanup_stale_recordings():
                 queue="default",
                 meeting_name=meeting.name,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             frappe.log_error(
                 title="Stale meeting cleanup failed",
                 message=frappe.get_traceback(),
             )
 
     if stale_meetings:
+        frappe.db.commit()
+
+
+def recover_stuck_uploaded_chunks():
+    """
+    Scheduled sweep (see ``huf/hooks.py`` ``scheduler_events["hourly"]``):
+    find and re-enqueue transcription jobs for chunks stuck in ``Uploaded``
+    status for longer than ``STUCK_CHUNK_THRESHOLD_MINUTES``.
+
+    Covers the edge case where the initial ``frappe.enqueue()`` call never ran
+    (e.g. process died mid-request) or where a chunk got into Uploaded state
+    through some other path. Re-enqueuing ensures the transcription job is
+    eventually attempted, allowing the meeting to proceed to finalization
+    instead of staying stuck forever.
+    """
+    cutoff = add_to_date(now_datetime(), minutes=-STUCK_CHUNK_THRESHOLD_MINUTES)
+
+    stuck_chunks = frappe.get_all(
+        "Meeting Recording Chunk",
+        filters={
+            "upload_status": "Uploaded",
+            "modified": ["<", cutoff],
+        },
+        fields=["name", "meeting"],
+    )
+
+    for chunk_row in stuck_chunks:
+        try:
+            chunk = frappe.get_doc("Meeting Recording Chunk", chunk_row["name"])
+            frappe.enqueue(
+                "huf.ai.meetings.meeting_transcription.transcribe_meeting_chunk",
+                queue="default",
+                chunk_name=chunk.name,
+            )
+        except Exception:  # noqa: BLE001
+            frappe.log_error(
+                title="Stuck chunk recovery failed",
+                message=frappe.get_traceback(),
+            )
+
+    if stuck_chunks:
         frappe.db.commit()
