@@ -11,6 +11,7 @@
   "column_break_main",
   "route",
   "alias",
+  "www_template",
   "icon",
   "icon_source",
   "agent",
@@ -89,6 +90,12 @@
    "fieldtype": "Data",
    "label": "Alias",
    "unique": 1
+  },
+  {
+   "description": "Directory name under this app's own www/ (see huf.ai.app_seeding.scanner.find_www_template_dir). When set, HUF serves this app's declared route as a real portal page instead of inert launcher metadata (huf.ai.app_portal_renderer.HufAppPortalRenderer).",
+   "fieldname": "www_template",
+   "fieldtype": "Data",
+   "label": "WWW Template"
   },
   {
    "default": "Other",

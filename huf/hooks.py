@@ -90,6 +90,14 @@ page_renderer = [
     "huf.ai.agent_stream_renderer.AgentStreamRenderer",
     "huf.ai.app_public_renderer.HufAppPublicRenderer",
     "huf.api.v1.router.ApiV1Router",
+    # Per-app www/ template registry (Phase 2, HufAppDeskPortalDelivery):
+    # matches a provider app's declared `route` against the HUF App registry
+    # rather than a static website_route_rules entry, so it must be tried
+    # before Frappe's built-in TemplatePage/StaticPage/etc (which would
+    # otherwise 404 first since no template exists under huf/www/ for these
+    # routes). Ordered last among HUF's own renderers since it's the most
+    # general (any route, not a fixed prefix like /huf/apps/... above).
+    "huf.ai.app_portal_renderer.HufAppPortalRenderer",
 ]
 
 

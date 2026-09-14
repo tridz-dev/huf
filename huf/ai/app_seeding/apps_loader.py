@@ -15,7 +15,7 @@ from pathlib import Path
 
 import frappe
 
-from .scanner import find_seed_dirs, get_seed_files
+from .scanner import find_seed_dirs, find_www_template_dir, get_seed_files
 
 APPS_FOLDER = "apps"
 
@@ -27,6 +27,17 @@ URL_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # alias is a URL path segment (served at /huf/apps/<alias>, see
 # huf.ai.app_public_renderer), so it is constrained the same way app_id is.
 ALIAS_PATTERN = APP_ID_PATTERN
+# www_template names a directory under the provider app's own www/ (see
+# scanner.find_www_template_dir) -- a single path segment, same shape as
+# app_id, never a path (no traversal risk).
+WWW_TEMPLATE_PATTERN = APP_ID_PATTERN
+
+# Routes under these prefixes are reserved for HUF's own fixed www/ surface
+# (huf/hooks.py website_route_rules) and can never be claimed by a provider
+# app's manifest -- distinct from the DB-level route-uniqueness collision
+# check in upsert_huf_app, this is a static shape rule checked at grammar
+# validation time, before any database lookup is possible.
+RESERVED_ROUTE_PREFIXES = ("/huf", "/mcp-oauth-callback", "/api")
 
 # Documented default launcher categories. Custom categories are allowed (only
 # shape-checked) but noted at sync time; see _nonstandard_category_note.
@@ -63,6 +74,7 @@ ALLOWED_FIELDS = {
 	"alias",
 	"is_public",
 	"agent",
+	"www_template",
 }
 
 STRING_FIELDS = (
@@ -77,6 +89,7 @@ STRING_FIELDS = (
 	"permission_method",
 	"alias",
 	"agent",
+	"www_template",
 )
 
 
@@ -92,6 +105,9 @@ def _validate_route(route) -> str | None:
 		return "route must begin with exactly one '/' (protocol-relative URLs are not allowed)"
 	if "://" in route or URL_SCHEME_PATTERN.search(route):
 		return "route must not contain a URL scheme (external URLs are not allowed)"
+	for prefix in RESERVED_ROUTE_PREFIXES:
+		if route == prefix or route.startswith(prefix + "/"):
+			return f"route must not start with reserved prefix '{prefix}' (reserved for HUF's own routes)"
 	return None
 
 
@@ -135,6 +151,21 @@ def _validate_alias(alias) -> str | None:
 	"""
 	if not ALIAS_PATTERN.match(alias):
 		return "alias must match ^[a-z][a-z0-9_\\-]*$"
+	return None
+
+
+def _validate_www_template_shape(www_template) -> str | None:
+	"""Return an error message unless www_template is a bare directory-name
+	segment (same shape as app_id/alias -- see WWW_TEMPLATE_PATTERN).
+
+	This only checks shape (no traversal, single segment). Whether the
+	directory actually exists under the provider app's own www/ is a
+	live-site concern checked in upsert_huf_app via
+	scanner.find_www_template_dir, same split as exposed_tables ownership
+	(shape here, existence/ownership there).
+	"""
+	if not WWW_TEMPLATE_PATTERN.match(www_template):
+		return "www_template must match ^[a-z][a-z0-9_\\-]*$ (a bare directory name, not a path)"
 	return None
 
 
@@ -299,6 +330,11 @@ def validate_manifest(data) -> tuple:
 		if error := _validate_agent(agent):
 			return None, error
 
+	www_template = (data.get("www_template") or "").strip()
+	if www_template:
+		if error := _validate_www_template_shape(www_template):
+			return None, error
+
 	normalized = {
 		"app_id": app_id,
 		"title": title,
@@ -315,6 +351,7 @@ def validate_manifest(data) -> tuple:
 		"alias": alias,
 		"is_public": 1 if data.get("is_public", False) else 0,
 		"agent": agent,
+		"www_template": www_template,
 		# Stored on the DocType as a comma-joined string.
 		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}
@@ -346,6 +383,21 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 	if error := _validate_exposed_tables(tables, source_app):
 		_record_invalid_manifest(data, error, source_app, source_file)
 		return False, error
+
+	# www_template's shape was already checked by validate_manifest; whether
+	# the directory actually exists under the provider app's own www/ can
+	# only be checked against the live filesystem, same split as
+	# exposed_tables ownership above.
+	if normalized["www_template"]:
+		if find_www_template_dir(source_app, normalized["www_template"]) is None:
+			error = (
+				f"www_template '{normalized['www_template']}' not found under "
+				f"provider app '{source_app}' (expected an index.html under its "
+				"own www/<www_template>/, see huf.ai.app_seeding.scanner."
+				"find_www_template_dir)"
+			)
+			_record_invalid_manifest(data, error, source_app, source_file)
+			return False, error
 
 	app_id = normalized["app_id"]
 	manifest_hash = compute_manifest_hash(normalized)
@@ -399,6 +451,31 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 				frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
 			return False, note
 
+	# Same first-registration-wins pattern again, this time for route
+	# uniqueness (gap list item 6, doc/features/apps/delivery-portal-vs-desk.md):
+	# two provider apps declaring the same route is undesirable regardless of
+	# whether either serves a real portal page via www_template, since the
+	# launcher would otherwise show two tiles resolving to the same
+	# destination. Checked here (not just at grammar-validation time,
+	# unlike the RESERVED_ROUTE_PREFIXES shape check in _validate_route)
+	# because it needs the live registry, exactly like the alias check above.
+	route = normalized.get("route")
+	if route:
+		conflicting_route = frappe.db.get_value(
+			"HUF App", {"route": route, "name": ["!=", app_id]}, ["name", "source_app"], as_dict=True
+		)
+		if conflicting_route:
+			note = (
+				f"Duplicate route '{route}': already registered by HUF App "
+				f"'{conflicting_route.name}' (app '{conflicting_route.source_app}'); "
+				f"manifest for app_id '{app_id}' from app '{source_app}' "
+				f"({source_file}) was rejected."
+			)
+			frappe.log_error(title="HUF App Registration Collision", message=note)
+			if existing:
+				frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
+			return False, note
+
 	now = frappe.utils.now_datetime()
 	values = {
 		**normalized,
@@ -430,6 +507,7 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 			values.pop("alias", None)
 			values.pop("is_public", None)
 			values.pop("agent", None)
+			values.pop("www_template", None)
 			doc = frappe.get_doc("HUF App", app_id)
 			doc.update(values)
 			doc.save(ignore_permissions=True)

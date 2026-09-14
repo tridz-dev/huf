@@ -581,6 +581,120 @@ class TestAppsSync(unittest.TestCase):
 		)
 
 	# ------------------------------------------------------------------
+	# route reservation / uniqueness (Phase 2: per-app www/ template registry)
+	# ------------------------------------------------------------------
+
+	def test_reserved_route_prefix_rejected(self):
+		"""A manifest may not claim a route under HUF's own reserved
+		prefixes (/huf, /mcp-oauth-callback, /api)."""
+		for bad_route in ("/huf", "/huf/apps/whatever", "/mcp-oauth-callback", "/api/v1/foo"):
+			normalized, error = validate_manifest(self._valid_manifest("tapps_x", route=bad_route))
+			self.assertIsNone(normalized, f"{bad_route} should have been rejected")
+			self.assertIn("reserved", error)
+
+	def test_duplicate_route_rejected_without_overwriting(self):
+		"""Two different app_ids declaring the same route: the first
+		registration keeps it, the second is rejected and logged -- same
+		first-registration-wins pattern as app_id/alias."""
+		route = f"/dup-route-{self.suffix}"
+		first_id = self._app_id("routefirst")
+		second_id = self._app_id("routesecond")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(first_id, route=route, title="First"),
+			self.test_app,
+			"huf/apps/routefirst.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(second_id, route=route, title="Second"),
+			self.test_app_b,
+			"huf/apps/routesecond.app.json",
+		)
+		self.assertFalse(ok, "Duplicate route must be rejected")
+		self.assertIn("Duplicate route", error)
+
+		first_doc = frappe.get_doc("HUF App", first_id)
+		self.assertEqual(first_doc.route, route, "First registration keeps the route")
+		self.assertFalse(
+			frappe.db.exists("HUF App", second_id),
+			"Rejected manifest with a brand-new app_id is not inserted at all",
+		)
+
+	# ------------------------------------------------------------------
+	# www_template (Phase 2: per-app www/ template registry)
+	# ------------------------------------------------------------------
+
+	def test_invalid_www_template_shape_rejected(self):
+		"""www_template must match the same bare-directory-name slug shape
+		as app_id/alias -- no paths, no traversal."""
+		for bad in ("../escape", "has/slash", "Has Spaces", "UpperCase"):
+			normalized, error = validate_manifest(self._valid_manifest("tapps_x", www_template=bad))
+			self.assertIsNone(normalized, f"{bad!r} should have been rejected")
+			self.assertIn("www_template", error)
+
+	def test_www_template_normalized_when_shape_valid(self):
+		normalized, error = validate_manifest(
+			self._valid_manifest("tapps_x", www_template="my-template")
+		)
+		self.assertIsNone(error)
+		self.assertEqual(normalized["www_template"], "my-template")
+
+	def test_www_template_missing_on_disk_rejected(self):
+		"""Shape-valid www_template that doesn't resolve to a real directory
+		(scanner.find_www_template_dir) is rejected at upsert time, recorded
+		Invalid, same split as exposed_tables (shape vs. live-site checks)."""
+		app_id = self._app_id("missingtemplate")
+		original = apps_loader.find_www_template_dir
+		apps_loader.find_www_template_dir = lambda app_name, name: None
+		try:
+			ok, error = upsert_huf_app(
+				self._valid_manifest(app_id, www_template="does-not-exist"),
+				self.test_app,
+				"huf/apps/missingtemplate.app.json",
+			)
+		finally:
+			apps_loader.find_www_template_dir = original
+
+		self.assertFalse(ok)
+		self.assertIn("www_template", error)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.sync_status, "Invalid")
+
+	def test_www_template_applied_on_initial_insert_and_survives_manual_override(self):
+		"""www_template follows the same first-insert-only / manual-override-
+		wins carve-out as alias/is_public/agent."""
+		app_id = self._app_id("templateguest")
+		original = apps_loader.find_www_template_dir
+		apps_loader.find_www_template_dir = lambda app_name, name: "/fake/path"
+		try:
+			ok, error = upsert_huf_app(
+				self._valid_manifest(app_id, www_template="portal-tpl"),
+				self.test_app,
+				"huf/apps/templateguest.app.json",
+			)
+			self.assertTrue(ok, error)
+			doc = frappe.get_doc("HUF App", app_id)
+			self.assertEqual(doc.www_template, "portal-tpl")
+
+			# Administrator manually clears it (e.g. rolling back a broken
+			# portal page) -- re-sync must not silently restore it.
+			frappe.db.set_value("HUF App", app_id, "www_template", "")
+
+			ok, error = upsert_huf_app(
+				self._valid_manifest(app_id, www_template="portal-tpl", title="Renamed"),
+				self.test_app,
+				"huf/apps/templateguest.app.json",
+			)
+			self.assertTrue(ok, error)
+			doc = frappe.get_doc("HUF App", app_id)
+			self.assertEqual(doc.www_template, "", "Manual clear must survive re-sync")
+			self.assertEqual(doc.title, "Renamed", "Other manifest changes still apply")
+		finally:
+			apps_loader.find_www_template_dir = original
+
+	# ------------------------------------------------------------------
 	# exposed_tables
 	# ------------------------------------------------------------------
 
