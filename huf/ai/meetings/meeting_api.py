@@ -336,7 +336,10 @@ def delete_meeting(meeting_name: str):
             fields=["name"],
         )
         for msg in chat_messages:
-            frappe.delete_doc("Meeting Chat Message", msg.name)
+            # Ownership was already enforced above via _get_meeting(meeting_name, "delete");
+            # these child records don't grant delete rights to Huf User in DocPerm, so we
+            # bypass that check here rather than widen DocPerm for all users.
+            frappe.delete_doc("Meeting Chat Message", msg.name, ignore_permissions=True)
 
         # Delete all Recording Chunks for this meeting.
         chunks = frappe.get_all(
@@ -345,7 +348,7 @@ def delete_meeting(meeting_name: str):
             fields=["name"],
         )
         for chunk in chunks:
-            frappe.delete_doc("Meeting Recording Chunk", chunk.name)
+            frappe.delete_doc("Meeting Recording Chunk", chunk.name, ignore_permissions=True)
 
         # Finally, delete the Meeting itself.
         frappe.delete_doc("Meeting", meeting_name)
