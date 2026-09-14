@@ -332,6 +332,7 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 - [**Bruno API Collection**](./docs/bruno/) — Ready-to-use API collection for testing and exploration
 - [**AGENTS.md**](./AGENTS.md) — Technical context for AI agents. Adopts the [agents.md](https://agents.md) standard.
 - [**CLAUDE.md**](./CLAUDE.md) — Defines coding standards, review criteria, and project-specific rules.
+- [**huf_app_skill**](https://github.com/tridz-dev/huf_app_skill) — An AI coding agent skill (Claude Code, Codex, Cursor, OpenCode, Kimi) that scaffolds new Huf Apps or external HUF API clients through a guided plan-then-build flow.
 
 ---
 
