@@ -445,6 +445,142 @@ class TestAppsSync(unittest.TestCase):
 		self.assertIn("category", doc.sync_error)
 
 	# ------------------------------------------------------------------
+	# alias / is_public / agent (Phase 1: guest portal fields)
+	# ------------------------------------------------------------------
+
+	def _make_test_agent(self, name):
+		"""Create a minimal Agent doc for agent-link validation tests."""
+		if frappe.db.exists("Agent", name):
+			return name
+		doc = frappe.get_doc(
+			{
+				"doctype": "Agent",
+				"agent_name": name,
+				"instructions": "You are a test agent used by test_apps_sync.py.",
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc.name
+
+	def test_alias_is_public_agent_normalized(self):
+		"""A manifest declaring alias/is_public/agent validates and normalizes
+		them onto the record, same as any other field."""
+		agent_name = self._make_test_agent(f"tapps-agent-{self.suffix}")
+		app_id = self._app_id("guestportal")
+		manifest = self._valid_manifest(
+			app_id, alias=f"alias-{self.suffix}", is_public=True, agent=agent_name
+		)
+
+		normalized, error = validate_manifest(manifest)
+
+		self.assertIsNone(error)
+		self.assertEqual(normalized["alias"], f"alias-{self.suffix}")
+		self.assertEqual(normalized["is_public"], 1)
+		self.assertEqual(normalized["agent"], agent_name)
+
+	def test_invalid_alias_rejected(self):
+		"""alias must match the same slug shape as app_id."""
+		normalized, error = validate_manifest(self._valid_manifest("tapps_x", alias="Not A Valid Alias!"))
+		self.assertIsNone(normalized)
+		self.assertIn("alias", error)
+
+	def test_is_public_must_be_boolean(self):
+		normalized, error = validate_manifest(self._valid_manifest("tapps_x", is_public="yes"))
+		self.assertIsNone(normalized)
+		self.assertIn("is_public", error)
+
+	def test_nonexistent_agent_rejected(self):
+		"""agent must resolve to an existing Agent doc."""
+		normalized, error = validate_manifest(self._valid_manifest("tapps_x", agent="no-such-agent-doc"))
+		self.assertIsNone(normalized)
+		self.assertIn("agent", error)
+
+	def test_alias_is_public_agent_applied_on_initial_insert(self):
+		"""The manifest's alias/is_public/agent apply when a record is first
+		created -- same first-insert semantics as `enabled`."""
+		agent_name = self._make_test_agent(f"tapps-agent2-{self.suffix}")
+		app_id = self._app_id("insertguest")
+		alias = f"insertguest-{self.suffix}"
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, alias=alias, is_public=True, agent=agent_name),
+			self.test_app,
+			"huf/apps/insertguest.app.json",
+		)
+		self.assertTrue(ok, error)
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.alias, alias)
+		self.assertEqual(doc.is_public, 1)
+		self.assertEqual(doc.agent, agent_name)
+
+	def test_manual_override_survives_resync_for_guest_fields(self):
+		"""Re-syncing never overwrites an admin's manual alias/is_public/agent
+		edit -- same manual-disable-wins carve-out `enabled` already has."""
+		agent_name = self._make_test_agent(f"tapps-agent3-{self.suffix}")
+		other_agent_name = self._make_test_agent(f"tapps-agent3b-{self.suffix}")
+		app_id = self._app_id("manualguest")
+		alias = f"manualguest-{self.suffix}"
+		ok, error = upsert_huf_app(
+			self._valid_manifest(app_id, alias=alias, is_public=True, agent=agent_name),
+			self.test_app,
+			"huf/apps/manualguest.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		# Administrator manually flips is_public off and repoints the agent.
+		frappe.db.set_value("HUF App", app_id, "is_public", 0)
+		frappe.db.set_value("HUF App", app_id, "agent", other_agent_name)
+
+		# Re-sync with a manifest that (again) asks for is_public=True and the
+		# original agent, plus an unrelated title change.
+		ok, error = upsert_huf_app(
+			self._valid_manifest(
+				app_id,
+				alias=alias,
+				is_public=True,
+				agent=agent_name,
+				title="Renamed Guest App",
+			),
+			self.test_app,
+			"huf/apps/manualguest.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		doc = frappe.get_doc("HUF App", app_id)
+		self.assertEqual(doc.is_public, 0, "Manual is_public override must survive re-sync")
+		self.assertEqual(doc.agent, other_agent_name, "Manual agent override must survive re-sync")
+		self.assertEqual(doc.title, "Renamed Guest App", "Other manifest changes still apply")
+
+	def test_duplicate_alias_rejected_without_overwriting(self):
+		"""Two different app_ids declaring the same alias: the first
+		registration keeps the alias, the second is rejected and logged."""
+		alias = f"dupalias-{self.suffix}"
+		first_id = self._app_id("aliasfirst")
+		second_id = self._app_id("aliassecond")
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(first_id, alias=alias, title="First"),
+			self.test_app,
+			"huf/apps/aliasfirst.app.json",
+		)
+		self.assertTrue(ok, error)
+
+		ok, error = upsert_huf_app(
+			self._valid_manifest(second_id, alias=alias, title="Second"),
+			self.test_app_b,
+			"huf/apps/aliassecond.app.json",
+		)
+		self.assertFalse(ok, "Duplicate alias must be rejected")
+		self.assertIn("Duplicate alias", error)
+
+		first_doc = frappe.get_doc("HUF App", first_id)
+		self.assertEqual(first_doc.alias, alias, "First registration keeps the alias")
+		self.assertEqual(first_doc.title, "First", "First registration is untouched")
+		self.assertFalse(
+			frappe.db.exists("HUF App", second_id),
+			"Rejected manifest with a brand-new app_id is not inserted at all",
+		)
+
+	# ------------------------------------------------------------------
 	# exposed_tables
 	# ------------------------------------------------------------------
 

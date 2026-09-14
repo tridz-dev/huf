@@ -24,6 +24,9 @@ SUPPORTED_MANIFEST_VERSION = 1
 APP_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_\-]*$")
 ICON_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-]*$")
 URL_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
+# alias is a URL path segment (served at /huf/apps/<alias>, see
+# huf.ai.app_public_renderer), so it is constrained the same way app_id is.
+ALIAS_PATTERN = APP_ID_PATTERN
 
 # Documented default launcher categories. Custom categories are allowed (only
 # shape-checked) but noted at sync time; see _nonstandard_category_note.
@@ -57,6 +60,9 @@ ALLOWED_FIELDS = {
 	"sort_order",
 	"enabled",
 	"exposed_tables",
+	"alias",
+	"is_public",
+	"agent",
 }
 
 STRING_FIELDS = (
@@ -69,6 +75,8 @@ STRING_FIELDS = (
 	"category",
 	"required_huf_version",
 	"permission_method",
+	"alias",
+	"agent",
 )
 
 
@@ -115,6 +123,25 @@ def _validate_permission_method(path) -> str | None:
 		return f"permission_method '{path}' could not be imported: {e}"
 	if not callable(fn):
 		return f"permission_method '{path}' does not resolve to a callable"
+	return None
+
+
+def _validate_alias(alias) -> str | None:
+	"""Return an error message unless alias is a valid URL path segment.
+
+	Served at ``/huf/apps/<alias>`` (huf.ai.app_public_renderer), so it is
+	constrained the same way app_id is -- not merely shape-checked like
+	category/icon.
+	"""
+	if not ALIAS_PATTERN.match(alias):
+		return "alias must match ^[a-z][a-z0-9_\\-]*$"
+	return None
+
+
+def _validate_agent(agent) -> str | None:
+	"""Return an error message unless agent resolves to an existing Agent doc."""
+	if not frappe.db.exists("Agent", agent):
+		return f"agent '{agent}' does not exist"
 	return None
 
 
@@ -254,9 +281,22 @@ def validate_manifest(data) -> tuple:
 	if "enabled" in data and not isinstance(data["enabled"], bool):
 		return None, "enabled must be a boolean"
 
+	if "is_public" in data and not isinstance(data["is_public"], bool):
+		return None, "is_public must be a boolean"
+
 	permission_method = (data.get("permission_method") or "").strip()
 	if permission_method:
 		if error := _validate_permission_method(permission_method):
+			return None, error
+
+	alias = (data.get("alias") or "").strip()
+	if alias:
+		if error := _validate_alias(alias):
+			return None, error
+
+	agent = (data.get("agent") or "").strip()
+	if agent:
+		if error := _validate_agent(agent):
 			return None, error
 
 	normalized = {
@@ -272,6 +312,9 @@ def validate_manifest(data) -> tuple:
 		"permission_method": permission_method,
 		"sort_order": data.get("sort_order", 100),
 		"enabled": 1 if data.get("enabled", True) else 0,
+		"alias": alias,
+		"is_public": 1 if data.get("is_public", False) else 0,
+		"agent": agent,
 		# Stored on the DocType as a comma-joined string.
 		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}
@@ -329,6 +372,33 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 		frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
 		return False, note
 
+	# Same first-registration-wins pattern as app_id above, but for alias
+	# uniqueness: two provider apps (or two manifests from the same app)
+	# declaring the same alias would otherwise silently race for
+	# /huf/apps/<alias> (huf.ai.app_public_renderer). The DocType's own
+	# `unique: 1` on alias would only catch this at save time with a raw
+	# DB error; check explicitly first so the collision is logged and
+	# recorded the same way as an app_id collision.
+	alias = normalized.get("alias")
+	if alias:
+		conflicting = frappe.db.get_value(
+			"HUF App", {"alias": alias, "name": ["!=", app_id]}, ["name", "source_app"], as_dict=True
+		)
+		if conflicting:
+			note = (
+				f"Duplicate alias '{alias}': already registered by HUF App "
+				f"'{conflicting.name}' (app '{conflicting.source_app}'); manifest "
+				f"for app_id '{app_id}' from app '{source_app}' ({source_file}) "
+				f"was rejected."
+			)
+			frappe.log_error(title="HUF App Registration Collision", message=note)
+			# Surface the collision on *this* app_id's record (if it already
+			# exists) without overwriting the record that legitimately holds
+			# the alias.
+			if existing:
+				frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
+			return False, note
+
 	now = frappe.utils.now_datetime()
 	values = {
 		**normalized,
@@ -350,10 +420,16 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 
 	try:
 		if existing:
-			# Manual-disable-wins: the manifest's enabled applies only when
-			# inserting a new record; updates never touch the stored flag
-			# (an admin may have disabled the app manually).
+			# Manual-disable-wins (and the same carve-out for alias/is_public/
+			# agent): these apply only when inserting a new record; updates
+			# never touch the stored values, so a System Manager's manual
+			# edit (e.g. hand-setting alias/is_public/agent, or disabling the
+			# app) survives re-sync instead of being silently overwritten by
+			# whatever the manifest says on the next install/upgrade.
 			values.pop("enabled", None)
+			values.pop("alias", None)
+			values.pop("is_public", None)
+			values.pop("agent", None)
 			doc = frappe.get_doc("HUF App", app_id)
 			doc.update(values)
 			doc.save(ignore_permissions=True)
