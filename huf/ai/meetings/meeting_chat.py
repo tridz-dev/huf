@@ -19,6 +19,10 @@ from frappe.rate_limiter import rate_limit
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.meetings.meeting_api import _get_meeting
 from huf.ai.meetings.meeting_summary import SUMMARY_AGENT
+from huf.ai.meetings.meeting_transcription import (
+	MODEL_NOT_CONFIGURED_MESSAGE,
+	_agent_is_configured,
+)
 
 CHAT_HISTORY_LIMIT = 10
 MAX_TRANSCRIPT_CHARS = 24_000
@@ -94,6 +98,11 @@ def ask_meeting(meeting_name: str, message: str):
 
     _insert_message(meeting_name, "user", message)
 
+    if not _agent_is_configured(SUMMARY_AGENT):
+        error_message = MODEL_NOT_CONFIGURED_MESSAGE
+        reply_doc = _insert_message(meeting_name, "assistant", "", error=error_message[:500])
+        return {"error": error_message, "message_name": reply_doc.name}
+
     history = _format_history(_recent_history(meeting_name))
     prompt_parts = [
         "You are answering questions about a specific meeting, using only the "
@@ -146,6 +155,11 @@ def revise_summary(meeting_name: str, instruction: str):
 
     _insert_message(meeting_name, "user", f"Revise summary: {instruction}")
 
+    if not _agent_is_configured(SUMMARY_AGENT):
+        error_message = MODEL_NOT_CONFIGURED_MESSAGE
+        reply_doc = _insert_message(meeting_name, "assistant", "", error=error_message[:500])
+        return {"error": error_message, "message_name": reply_doc.name}
+
     prompt = "\n\n".join([
         "Revise the meeting summary below per the instruction. Output the "
         "complete revised summary again in the same four-section Markdown "
@@ -171,7 +185,15 @@ def revise_summary(meeting_name: str, instruction: str):
     if result.get("success") and result.get("status") == "Success":
         new_summary = result.get("response")
         meeting.summary = new_summary
-        meeting.summary_agent_run = result.get("agent_run_id")
+        agent_run_id = result.get("agent_run_id")
+        if agent_run_id:
+            meeting.summary_agent_run = agent_run_id
+        else:
+            frappe.log_error(
+                title="Missing agent_run_id in summary revision",
+                message=f"Meeting {meeting_name}: run_agent_sync returned Success but agent_run_id is None. "
+                "Audit trail linking may be affected.",
+            )
         meeting.save(ignore_permissions=True)
         frappe.db.commit()
         _insert_message(meeting_name, "assistant", new_summary, applied_to_summary=True)
