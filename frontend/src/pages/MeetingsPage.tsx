@@ -6,7 +6,7 @@ import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, GridView, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { MeetingCard } from '@/components/meetings/MeetingCard';
-import { createMeeting, listMeetings, startRecording } from '@/services/meetingApi';
+import { beginMeetingRecording, listMeetings } from '@/services/meetingApi';
 import type { MeetingListItem, MeetingStatus } from '@/types/meeting.types';
 
 const STATUS_FILTER_OPTIONS: Array<{ label: string; value: string }> = [
@@ -33,6 +33,7 @@ export default function MeetingsPage() {
     loadMore,
     total,
     error,
+    reset,
   } = useInfiniteScroll<
     { page?: number; limit?: number; start?: number; search?: string; status?: string },
     MeetingListItem
@@ -57,8 +58,7 @@ export default function MeetingsPage() {
 
   const handleEmptyStateQuickStart = async () => {
     try {
-      const { meeting_name: meetingName } = await createMeeting({});
-      await startRecording(meetingName);
+      const { meeting_name: meetingName } = await beginMeetingRecording({});
       navigate(`/meetings/${meetingName}/record`);
     } catch (err) {
       toast.error('Could not start recording', {
@@ -128,6 +128,7 @@ export default function MeetingsPage() {
           <MeetingCard
             meeting={meeting}
             onClick={() => navigate(`/meetings/${meeting.name}`)}
+            onDelete={() => reset()}
           />
         )}
         keyExtractor={(meeting) => meeting.name}
