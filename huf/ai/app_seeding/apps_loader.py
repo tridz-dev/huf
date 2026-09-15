@@ -644,7 +644,7 @@ def sync_huf_apps() -> dict:
 			for file_path in sorted(get_seed_files(huf_dir, APPS_FOLDER), key=lambda p: p.name):
 				source_file = f"huf/{APPS_FOLDER}/{file_path.name}"
 				try:
-					with open(file_path, "r", encoding="utf-8") as f:
+					with open(file_path, encoding="utf-8") as f:
 						data = json.load(f)
 				except Exception as e:
 					summary["invalid"] += 1

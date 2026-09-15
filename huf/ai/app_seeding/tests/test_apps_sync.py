@@ -263,7 +263,7 @@ class TestAppsSync(unittest.TestCase):
 		original_find_seed_dirs = apps_loader.find_seed_dirs
 		original_get_installed_apps = frappe.get_installed_apps
 		apps_loader.find_seed_dirs = lambda: {self.test_app: self.huf_dir}
-		frappe.get_installed_apps = lambda: original_get_installed_apps() + [self.test_app]
+		frappe.get_installed_apps = lambda: [*original_get_installed_apps(), self.test_app]
 		try:
 			summary = sync_huf_apps()
 			self.assertEqual(summary["invalid"], 0, f"Unexpected errors: {summary['errors']}")
@@ -458,7 +458,7 @@ class TestAppsSync(unittest.TestCase):
 		original_find_seed_dirs = apps_loader.find_seed_dirs
 		original_get_installed_apps = frappe.get_installed_apps
 		apps_loader.find_seed_dirs = lambda: {self.test_app: self.huf_dir}
-		frappe.get_installed_apps = lambda: original_get_installed_apps() + [self.test_app]
+		frappe.get_installed_apps = lambda: [*original_get_installed_apps(), self.test_app]
 		try:
 			summary = sync_huf_apps()
 		finally:
