@@ -670,6 +670,18 @@ def create_meeting_recorder_app():
 	following the same get_value-check-then-insert-or-update pattern used
 	for the other install.py-seeded primitives (e.g. create_hub_orchestrator_agent).
 	Safe to call on both after_install and after_migrate.
+
+	This is also huf's own reference/example app, so it seeds alias/is_public/
+	agent/delivery to demonstrate Phase 1's public guest portal
+	(/huf/apps/meeting-recorder) and Phase 4's delivery metadata out of the
+	box, matching what apps_loader.upsert_huf_app does for third-party
+	manifests (see huf.ai.app_seeding.apps_loader.upsert_huf_app and
+	doc/features/apps/delivery-portal-vs-desk.md).
+
+	"route" stays "/huf/meetings" -- the classic SPA deep-link route -- since
+	Phase 4 deliberately kept Desk pages coexisting with the SPA rather than
+	replacing it; "delivery": "desk" only controls which surface renders
+	/huf/apps/meeting-recorder, it does not retire the SPA route.
 	"""
 	app_id = "meeting-recorder"
 	fields = {
@@ -681,11 +693,23 @@ def create_meeting_recorder_app():
 		"enabled": 1,
 		"sync_status": "Active",
 		"source_app": "huf",
+		"alias": "meeting-recorder",
+		"is_public": 1,
+		"agent": MEETING_SUMMARY_AGENT_NAME,
+		"delivery": "desk",
 	}
 
 	existing_name = frappe.db.get_value("HUF App", {"app_id": app_id}, "name")
 	if existing_name:
-		frappe.db.set_value("HUF App", existing_name, fields)
+		# Same manual-override carve-out as apps_loader.upsert_huf_app: a
+		# System Manager's hand-edit to enabled/alias/is_public/agent should
+		# survive re-sync on migrate, so updates never touch those fields.
+		update_fields = {
+			k: v
+			for k, v in fields.items()
+			if k not in ("enabled", "alias", "is_public", "agent")
+		}
+		frappe.db.set_value("HUF App", existing_name, update_fields)
 		return
 
 	doc = frappe.get_doc({"doctype": "HUF App", "app_id": app_id, **fields})
