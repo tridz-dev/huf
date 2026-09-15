@@ -16,6 +16,8 @@ huf.ai.audio_service) regardless of test ordering:
     python -m unittest huf.tests.standalone_doc_event_audio huf.tests.standalone_audio_service
 """
 
+import importlib.util
+import os
 import sys
 import types
 import unittest
@@ -43,7 +45,11 @@ _audio_mocks = sys.modules.get("huf.tests.standalone_audio_service") or sys.modu
     "standalone_audio_service"
 )
 if _audio_mocks is None:
-    from huf.tests import standalone_audio_service as _audio_mocks
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "standalone_audio_service.py"))
+    spec = importlib.util.spec_from_file_location("standalone_audio_service", path)
+    _audio_mocks = importlib.util.module_from_spec(spec)
+    sys.modules["standalone_audio_service"] = _audio_mocks
+    spec.loader.exec_module(_audio_mocks)
 
 frappe_mock = _audio_mocks.frappe_mock
 frappe_utils = sys.modules["frappe.utils"]
