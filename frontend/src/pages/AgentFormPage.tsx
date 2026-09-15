@@ -2232,9 +2232,9 @@ export function AgentFormPage() {
   const handleCreateKnowledge = () => {
     if (!id || id === 'new') {
       toast.error('Please save the agent first before creating knowledge');
-      return;
+      return false;
     }
-    navigate(`/knowledge/new?agent=${encodeURIComponent(id)}`);
+    return true;
   };
 
   const handleCreateMCP = () => {
@@ -2369,6 +2369,12 @@ export function AgentFormPage() {
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt
                   locked={systemLocked}
+                  onPromptCreated={(option) => {
+                    setPromptOptions((prev) => {
+                      if (prev.some((p) => p.value === option.value)) return prev;
+                      return [option, ...prev];
+                    });
+                  }}
                 />
               </TabsContent>
 
