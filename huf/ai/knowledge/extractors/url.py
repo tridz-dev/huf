@@ -1,11 +1,42 @@
 """URL content extractor using requests and BeautifulSoup."""
 
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
 
 from . import ExtractedText, TextExtractor
+
+
+def normalize_google_sheets_url(url: str) -> str:
+	"""Convert a public Google Sheets share/edit URL to a CSV export URL."""
+	parsed = urlparse(url)
+	if parsed.netloc.lower() not in {"docs.google.com", "www.docs.google.com"}:
+		return url
+
+	parts = parsed.path.strip("/").split("/")
+	if len(parts) < 3 or parts[0] != "spreadsheets" or parts[1] != "d":
+		return url
+
+	spreadsheet_id = parts[2]
+	if not spreadsheet_id:
+		return url
+
+	query = parse_qs(parsed.query)
+	fragment_query = parse_qs(parsed.fragment)
+	gid = (query.get("gid") or fragment_query.get("gid") or [None])[0]
+	export_query = {"format": "csv"}
+	if gid:
+		export_query["gid"] = gid
+
+	return urlunparse((
+		"https",
+		"docs.google.com",
+		f"/spreadsheets/d/{spreadsheet_id}/export",
+		"",
+		urlencode(export_query),
+		"",
+	))
 
 
 class URLExtractor(TextExtractor):

@@ -574,6 +574,20 @@ We generally recommend altering this or temperature but not both.`}
                         placeholder="Enter a starter prompt"
                         className="min-h-[60px] resize-y"
                         {...field}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab') {
+                            e.preventDefault();
+                            const focusable = Array.from(
+                              document.querySelectorAll<HTMLElement>(
+                                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                              )
+                            ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+                            const currentIndex = focusable.indexOf(e.currentTarget);
+                            if (currentIndex === -1) return;
+                            const nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
+                            focusable[nextIndex]?.focus();
+                          }
+                        }}
                       />
                     </FormControl>
                     <FormMessage />

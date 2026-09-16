@@ -11,6 +11,7 @@ from frappe.utils import now_datetime
 from .backends import get_backend
 from .chunkers.sentence import chunk_text
 from .extractors import ExtractedText, TextExtractor
+from .extractors.url import normalize_google_sheets_url
 
 
 def _build_backend_config(source) -> dict:
@@ -292,7 +293,8 @@ def _extract_text(doc) -> ExtractedText:
 
 	elif doc.input_type == "URL":
 		# Fetch URL content
-		response = requests.get(doc.url, timeout=30)
+		fetch_url = normalize_google_sheets_url(doc.url)
+		response = requests.get(fetch_url, timeout=30)
 		response.raise_for_status()
 
 		# Extract text from HTML

@@ -103,6 +103,11 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"tts_voice",
 		"stt_model",
 	),
+	"embed": (
+		"embed_enabled",
+		"publishable_key",
+		"allowed_origins",
+	),
 	"advanced": (
 		"context_strategy",
 		"summary_model",
