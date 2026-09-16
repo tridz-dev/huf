@@ -113,7 +113,7 @@ export function IntegrationSettingsListingPage({
     const byKind = allSettings.filter((item) => {
       const surface = serviceSurfaceMap?.get(item.service.toLowerCase()) || 'Integration';
       const isGateway = surface === 'Gateway';
-      return kind === 'channels' ? isGateway : !isGateway;
+      return kind === 'channels' ? isGateway : true;
     });
     if (categoryFilter === 'all') return byKind;
     return byKind.filter((item) => serviceCategoryMap.get(item.service) === categoryFilter);
