@@ -573,6 +573,7 @@ We generally recommend altering this or temperature but not both.`}
                       <Textarea
                         placeholder="Enter a starter prompt"
                         className="min-h-[60px] resize-y"
+                        data-starter-prompt-index={index}
                         {...field}
                         onKeyDown={(e) => {
                           if (e.key === 'Tab') {
@@ -589,6 +590,12 @@ We generally recommend altering this or temperature but not both.`}
                           }
                         }}
                       />
+
+                     
+
+
+
+
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -611,7 +618,7 @@ We generally recommend altering this or temperature but not both.`}
               </Button>
             </div>
           ))}
-          {(form.watch('starter_prompts') || []).length < 3 && (
+         {(form.watch('starter_prompts') || []).length < 3 && (
             <Button
               type="button"
               variant="outline"
@@ -625,11 +632,34 @@ We generally recommend altering this or temperature but not both.`}
                   { shouldDirty: true }
                 );
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && !e.shiftKey) {
+                  const current = form.getValues('starter_prompts') || [];
+                  if (current.length >= 3) return;
+                  e.preventDefault();
+                  const newIndex = current.length;
+                  form.setValue(
+                    'starter_prompts',
+                    [...current, { prompt_text: '' }],
+                    { shouldDirty: true }
+                  );
+                  requestAnimationFrame(() => {
+                    document
+                      .querySelector<HTMLElement>(
+                        `[data-starter-prompt-index="${newIndex}"]`
+                      )
+                      ?.focus();
+                  });
+                }
+              }}
             >
               <Plus className="h-4 w-4 mr-1" />
               Add starter prompt
             </Button>
           )}
+
+        
+
         </CardContent>
       </Card>
       )}
