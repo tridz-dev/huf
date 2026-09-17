@@ -164,6 +164,14 @@ export interface AutomationTriggerSummary {
   trigger_type: AutomationTriggerType | '';
   schedule_type?: AutomationScheduleType | '';
   cron_expression?: string;
+  scheduled_interval?: AutomationScheduledInterval | '';
+  interval_count?: number;
+  execution_mode?: AutomationExecutionMode | '';
+  reference_doctype?: string;
+  doc_event?: AutomationDocEvent | '';
+  condition?: string;
+  prompt_field?: string;
+  prompt_field_mode?: AutomationPromptFieldMode | '';
   last_execution?: string;
   next_execution?: string;
   modified?: string;
