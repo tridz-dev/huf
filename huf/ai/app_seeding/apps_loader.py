@@ -15,7 +15,7 @@ from pathlib import Path
 
 import frappe
 
-from .scanner import find_seed_dirs, get_seed_files
+from .scanner import find_seed_dirs, find_www_template_dir, get_seed_files
 
 APPS_FOLDER = "apps"
 
@@ -24,6 +24,20 @@ SUPPORTED_MANIFEST_VERSION = 1
 APP_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_\-]*$")
 ICON_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_\-]*$")
 URL_SCHEME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
+# alias is a URL path segment (served at /huf/apps/<alias>, see
+# huf.ai.app_public_renderer), so it is constrained the same way app_id is.
+ALIAS_PATTERN = APP_ID_PATTERN
+# www_template names a directory under the provider app's own www/ (see
+# scanner.find_www_template_dir) -- a single path segment, same shape as
+# app_id, never a path (no traversal risk).
+WWW_TEMPLATE_PATTERN = APP_ID_PATTERN
+
+# Routes under these prefixes are reserved for HUF's own fixed www/ surface
+# (huf/hooks.py website_route_rules) and can never be claimed by a provider
+# app's manifest -- distinct from the DB-level route-uniqueness collision
+# check in upsert_huf_app, this is a static shape rule checked at grammar
+# validation time, before any database lookup is possible.
+RESERVED_ROUTE_PREFIXES = ("/huf", "/mcp-oauth-callback", "/api")
 
 # Documented default launcher categories. Custom categories are allowed (only
 # shape-checked) but noted at sync time; see _nonstandard_category_note.
@@ -57,6 +71,11 @@ ALLOWED_FIELDS = {
 	"sort_order",
 	"enabled",
 	"exposed_tables",
+	"alias",
+	"is_public",
+	"agent",
+	"www_template",
+	"delivery",
 }
 
 STRING_FIELDS = (
@@ -69,7 +88,17 @@ STRING_FIELDS = (
 	"category",
 	"required_huf_version",
 	"permission_method",
+	"alias",
+	"agent",
+	"www_template",
+	"delivery",
 )
+
+# Declares how a HUF App is delivered to users; see doc/features/apps/manifest.md
+# and doc/features/apps/delivery-portal-vs-desk.md. Default preserves today's
+# only behavior (SPA launcher tile) for manifests that don't declare it.
+DELIVERY_MODES = ("portal", "desk", "spa-deep-link")
+DEFAULT_DELIVERY = "spa-deep-link"
 
 
 def _is_int(value) -> bool:
@@ -84,6 +113,9 @@ def _validate_route(route) -> str | None:
 		return "route must begin with exactly one '/' (protocol-relative URLs are not allowed)"
 	if "://" in route or URL_SCHEME_PATTERN.search(route):
 		return "route must not contain a URL scheme (external URLs are not allowed)"
+	for prefix in RESERVED_ROUTE_PREFIXES:
+		if route == prefix or route.startswith(prefix + "/"):
+			return f"route must not start with reserved prefix '{prefix}' (reserved for HUF's own routes)"
 	return None
 
 
@@ -115,6 +147,40 @@ def _validate_permission_method(path) -> str | None:
 		return f"permission_method '{path}' could not be imported: {e}"
 	if not callable(fn):
 		return f"permission_method '{path}' does not resolve to a callable"
+	return None
+
+
+def _validate_alias(alias) -> str | None:
+	"""Return an error message unless alias is a valid URL path segment.
+
+	Served at ``/huf/apps/<alias>`` (huf.ai.app_public_renderer), so it is
+	constrained the same way app_id is -- not merely shape-checked like
+	category/icon.
+	"""
+	if not ALIAS_PATTERN.match(alias):
+		return "alias must match ^[a-z][a-z0-9_\\-]*$"
+	return None
+
+
+def _validate_www_template_shape(www_template) -> str | None:
+	"""Return an error message unless www_template is a bare directory-name
+	segment (same shape as app_id/alias -- see WWW_TEMPLATE_PATTERN).
+
+	This only checks shape (no traversal, single segment). Whether the
+	directory actually exists under the provider app's own www/ is a
+	live-site concern checked in upsert_huf_app via
+	scanner.find_www_template_dir, same split as exposed_tables ownership
+	(shape here, existence/ownership there).
+	"""
+	if not WWW_TEMPLATE_PATTERN.match(www_template):
+		return "www_template must match ^[a-z][a-z0-9_\\-]*$ (a bare directory name, not a path)"
+	return None
+
+
+def _validate_agent(agent) -> str | None:
+	"""Return an error message unless agent resolves to an existing Agent doc."""
+	if not frappe.db.exists("Agent", agent):
+		return f"agent '{agent}' does not exist"
 	return None
 
 
@@ -254,10 +320,32 @@ def validate_manifest(data) -> tuple:
 	if "enabled" in data and not isinstance(data["enabled"], bool):
 		return None, "enabled must be a boolean"
 
+	if "is_public" in data and not isinstance(data["is_public"], bool):
+		return None, "is_public must be a boolean"
+
 	permission_method = (data.get("permission_method") or "").strip()
 	if permission_method:
 		if error := _validate_permission_method(permission_method):
 			return None, error
+
+	alias = (data.get("alias") or "").strip()
+	if alias:
+		if error := _validate_alias(alias):
+			return None, error
+
+	agent = (data.get("agent") or "").strip()
+	if agent:
+		if error := _validate_agent(agent):
+			return None, error
+
+	www_template = (data.get("www_template") or "").strip()
+	if www_template:
+		if error := _validate_www_template_shape(www_template):
+			return None, error
+
+	delivery = (data.get("delivery") or "").strip() or DEFAULT_DELIVERY
+	if delivery not in DELIVERY_MODES:
+		return None, f"delivery must be one of {', '.join(DELIVERY_MODES)}"
 
 	normalized = {
 		"app_id": app_id,
@@ -272,6 +360,11 @@ def validate_manifest(data) -> tuple:
 		"permission_method": permission_method,
 		"sort_order": data.get("sort_order", 100),
 		"enabled": 1 if data.get("enabled", True) else 0,
+		"alias": alias,
+		"is_public": 1 if data.get("is_public", False) else 0,
+		"agent": agent,
+		"www_template": www_template,
+		"delivery": delivery,
 		# Stored on the DocType as a comma-joined string.
 		"exposed_tables": ",".join(t.strip() for t in exposed_tables),
 	}
@@ -304,6 +397,21 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 		_record_invalid_manifest(data, error, source_app, source_file)
 		return False, error
 
+	# www_template's shape was already checked by validate_manifest; whether
+	# the directory actually exists under the provider app's own www/ can
+	# only be checked against the live filesystem, same split as
+	# exposed_tables ownership above.
+	if normalized["www_template"]:
+		if find_www_template_dir(source_app, normalized["www_template"]) is None:
+			error = (
+				f"www_template '{normalized['www_template']}' not found under "
+				f"provider app '{source_app}' (expected an index.html under its "
+				"own www/<www_template>/, see huf.ai.app_seeding.scanner."
+				"find_www_template_dir)"
+			)
+			_record_invalid_manifest(data, error, source_app, source_file)
+			return False, error
+
 	app_id = normalized["app_id"]
 	manifest_hash = compute_manifest_hash(normalized)
 
@@ -329,6 +437,58 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 		frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
 		return False, note
 
+	# Same first-registration-wins pattern as app_id above, but for alias
+	# uniqueness: two provider apps (or two manifests from the same app)
+	# declaring the same alias would otherwise silently race for
+	# /huf/apps/<alias> (huf.ai.app_public_renderer). The DocType's own
+	# `unique: 1` on alias would only catch this at save time with a raw
+	# DB error; check explicitly first so the collision is logged and
+	# recorded the same way as an app_id collision.
+	alias = normalized.get("alias")
+	if alias:
+		conflicting = frappe.db.get_value(
+			"HUF App", {"alias": alias, "name": ["!=", app_id]}, ["name", "source_app"], as_dict=True
+		)
+		if conflicting:
+			note = (
+				f"Duplicate alias '{alias}': already registered by HUF App "
+				f"'{conflicting.name}' (app '{conflicting.source_app}'); manifest "
+				f"for app_id '{app_id}' from app '{source_app}' ({source_file}) "
+				f"was rejected."
+			)
+			frappe.log_error(title="HUF App Registration Collision", message=note)
+			# Surface the collision on *this* app_id's record (if it already
+			# exists) without overwriting the record that legitimately holds
+			# the alias.
+			if existing:
+				frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
+			return False, note
+
+	# Same first-registration-wins pattern again, this time for route
+	# uniqueness (gap list item 6, doc/features/apps/delivery-portal-vs-desk.md):
+	# two provider apps declaring the same route is undesirable regardless of
+	# whether either serves a real portal page via www_template, since the
+	# launcher would otherwise show two tiles resolving to the same
+	# destination. Checked here (not just at grammar-validation time,
+	# unlike the RESERVED_ROUTE_PREFIXES shape check in _validate_route)
+	# because it needs the live registry, exactly like the alias check above.
+	route = normalized.get("route")
+	if route:
+		conflicting_route = frappe.db.get_value(
+			"HUF App", {"route": route, "name": ["!=", app_id]}, ["name", "source_app"], as_dict=True
+		)
+		if conflicting_route:
+			note = (
+				f"Duplicate route '{route}': already registered by HUF App "
+				f"'{conflicting_route.name}' (app '{conflicting_route.source_app}'); "
+				f"manifest for app_id '{app_id}' from app '{source_app}' "
+				f"({source_file}) was rejected."
+			)
+			frappe.log_error(title="HUF App Registration Collision", message=note)
+			if existing:
+				frappe.db.set_value("HUF App", app_id, "sync_error", note, update_modified=False)
+			return False, note
+
 	now = frappe.utils.now_datetime()
 	values = {
 		**normalized,
@@ -350,10 +510,17 @@ def upsert_huf_app(data: dict, source_app: str, source_file: str) -> tuple:
 
 	try:
 		if existing:
-			# Manual-disable-wins: the manifest's enabled applies only when
-			# inserting a new record; updates never touch the stored flag
-			# (an admin may have disabled the app manually).
+			# Manual-disable-wins (and the same carve-out for alias/is_public/
+			# agent): these apply only when inserting a new record; updates
+			# never touch the stored values, so a System Manager's manual
+			# edit (e.g. hand-setting alias/is_public/agent, or disabling the
+			# app) survives re-sync instead of being silently overwritten by
+			# whatever the manifest says on the next install/upgrade.
 			values.pop("enabled", None)
+			values.pop("alias", None)
+			values.pop("is_public", None)
+			values.pop("agent", None)
+			values.pop("www_template", None)
 			doc = frappe.get_doc("HUF App", app_id)
 			doc.update(values)
 			doc.save(ignore_permissions=True)
@@ -477,7 +644,7 @@ def sync_huf_apps() -> dict:
 			for file_path in sorted(get_seed_files(huf_dir, APPS_FOLDER), key=lambda p: p.name):
 				source_file = f"huf/{APPS_FOLDER}/{file_path.name}"
 				try:
-					with open(file_path, "r", encoding="utf-8") as f:
+					with open(file_path, encoding="utf-8") as f:
 						data = json.load(f)
 				except Exception as e:
 					summary["invalid"] += 1

@@ -81,4 +81,23 @@ class HufAppPublicRenderer(BaseRenderer):
 		# Both gates passed — serve the same SPA shell `/huf` serves,
 		# reusing www/huf.py:get_context's existing Guest-branching boot
 		# logic rather than reimplementing it.
-		return TemplatePage("huf", self.http_status_code).render()
+		#
+		# TemplatePage.set_template_path() (called from __init__) only sets
+		# self.app_path/self.template_path etc. when it actually finds
+		# huf/www/huf.html on disk (e.g. the frontend build hasn't been run
+		# yet, so huf.html -- generated at build time by
+		# frontend/scripts/copy-html-entry.mjs -- doesn't exist). Calling
+		# .render() unconditionally in that state raises AttributeError deep
+		# inside set_pymodule() instead of a clean 404. PathResolver's normal
+		# flow always guards this with can_render() first; do the same here
+		# so a missing/unbuilt shell degrades to the same PageDoesNotExistError
+		# every other rejection in this method already produces, rather than
+		# a 500.
+		template_page = TemplatePage("huf", self.http_status_code)
+		if not template_page.can_render():
+			frappe.log_error(
+				title="HUF App Public Renderer",
+				message="huf/www/huf.html not found -- has `bench build --app huf` been run?",
+			)
+			raise frappe.PageDoesNotExistError
+		return template_page.render()
