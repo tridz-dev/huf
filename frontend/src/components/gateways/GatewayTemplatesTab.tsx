@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
 import { toast } from 'sonner';
-import { Plus, Trash2, Upload, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Upload, RefreshCw, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DataListView } from '@/components/dashboard/DataListView';
@@ -12,12 +12,9 @@ import {
   syncGatewayTemplate,
   deleteGatewayTemplate,
   createGatewayTemplate,
-  updateGatewayTemplate,
   type GatewayTemplate,
 } from '@/services/gatewayTemplateApi';
 import { cn } from '@/lib/utils';
-import { X } from 'lucide-react';
-import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +36,6 @@ export function GatewayTemplatesTab({ gatewayName }: GatewayTemplatesTabProps) {
   const [templates, setTemplates] = useState<GatewayTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [formMode, setFormMode] = useState<TemplateFormMode>(null);
-  const [editingTemplate, setEditingTemplate] = useState<GatewayTemplate | null>(null);
   const [formData, setFormData] = useState<Partial<GatewayTemplate>>({});
   const [saving, setSaving] = useState(false);
   const [actioningName, setActioningName] = useState<string | null>(null);
@@ -64,7 +60,6 @@ export function GatewayTemplatesTab({ gatewayName }: GatewayTemplatesTabProps) {
 
   function openCreateForm() {
     setFormMode('create');
-    setEditingTemplate(null);
     setFormData({
       gateway: gatewayName,
       template_type: 'TEXT',
@@ -75,12 +70,6 @@ export function GatewayTemplatesTab({ gatewayName }: GatewayTemplatesTabProps) {
     });
   }
 
-  function openEditForm(template: GatewayTemplate) {
-    setFormMode('edit');
-    setEditingTemplate(template);
-    setFormData({ ...template });
-  }
-
   async function handleSaveTemplate() {
     if (!formData.template_name?.trim()) {
       toast.error('Template name is required');
@@ -89,15 +78,9 @@ export function GatewayTemplatesTab({ gatewayName }: GatewayTemplatesTabProps) {
 
     setSaving(true);
     try {
-      if (formMode === 'create') {
-        const created = await createGatewayTemplate(formData);
-        setTemplates((prev) => [created, ...prev]);
-        toast.success('Template created');
-      } else if (formMode === 'edit' && editingTemplate) {
-        const updated = await updateGatewayTemplate(editingTemplate.name, formData);
-        setTemplates((prev) => prev.map((t) => (t.name === updated.name ? updated : t)));
-        toast.success('Template updated');
-      }
+      const created = await createGatewayTemplate(formData);
+      setTemplates((prev) => [created, ...prev]);
+      toast.success('Template created');
       closeForm();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save template');
@@ -108,7 +91,6 @@ export function GatewayTemplatesTab({ gatewayName }: GatewayTemplatesTabProps) {
 
   function closeForm() {
     setFormMode(null);
-    setEditingTemplate(null);
     setFormData({});
   }
 
@@ -257,9 +239,7 @@ export function GatewayTemplatesTab({ gatewayName }: GatewayTemplatesTabProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs">
           <div className="w-full max-w-lg rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-line pb-4">
-              <h3 className="text-base font-semibold text-ink">
-                {formMode === 'create' ? 'New Template' : 'Edit Template'}
-              </h3>
+              <h3 className="text-base font-semibold text-ink">New Template</h3>
               <Button
                 variant="ghost"
                 size="icon"

@@ -1,5 +1,4 @@
 import { db, call } from '@/lib/frappe-sdk';
-import { doctype } from '@/data/doctypes';
 
 export interface GatewayTemplate {
   name: string;
