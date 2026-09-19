@@ -15,6 +15,7 @@ after it resets a failed Meeting back to "Summarizing".
 """
 
 import frappe
+from frappe import _
 
 from huf.ai.agent_integration import run_agent_sync
 from huf.ai.meetings.meeting_transcription import (
@@ -28,16 +29,19 @@ SUMMARY_AGENT = "Meeting Summary Agent"
 
 
 def _build_summary_prompt(meeting) -> str:
-    parts = ["Meeting transcript:", meeting.transcript]
+	if not meeting.transcript:
+		frappe.throw(_("Cannot generate summary: Meeting has no transcript"))
 
-    if meeting.title:
-        parts.append(f"Meeting title: {meeting.title}")
-    if meeting.description:
-        parts.append(f"Meeting description: {meeting.description}")
-    if meeting.participants:
-        parts.append(f"Participants: {meeting.participants}")
+	parts = ["Meeting transcript:", meeting.transcript]
 
-    return "\n\n".join(parts)
+	if meeting.title:
+		parts.append(f"Meeting title: {meeting.title}")
+	if meeting.description:
+		parts.append(f"Meeting description: {meeting.description}")
+	if meeting.participants:
+		parts.append(f"Participants: {meeting.participants}")
+
+	return "\n\n".join(parts)
 
 
 def run_meeting_summary(meeting_name: str):

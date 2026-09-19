@@ -25,7 +25,7 @@ def get_permission_query_conditions(user):
 
     from huf.permissions import has_capability
     if has_capability(user, "agent.view_all") or has_capability(user, "agent.edit"):
-        return "`tabAgent`.is_system = 0"
+        return "`tabAgent`.is_system = 0 AND `tabAgent`.disabled = 0"
 
     user_roles = frappe.get_roles(user)
     user_roles_str = "', '".join([r.replace("'", "''") for r in user_roles])
@@ -55,11 +55,66 @@ def get_permission_query_conditions(user):
                 NOT EXISTS (SELECT 1 FROM `tabAgent User` WHERE parent = `tabAgent`.name)
                 AND
                 NOT EXISTS (SELECT 1 FROM `tabAgent Role` WHERE parent = `tabAgent`.name)
+                AND
+                `tabAgent`.allow_all_users = 1
             )
         )
         AND `tabAgent`.is_system = 0
+        AND `tabAgent`.disabled = 0
     """
     return conditions
+
+
+@frappe.whitelist()
+def archive_agent(agent_name: str):
+    """Soft-delete an Agent by disabling it via a plain field update.
+
+    Never called from on_trash: on_trash runs inside Frappe's delete
+    transaction and any write it makes is rolled back if the subsequent
+    link check throws, so this must always be invoked as its own,
+    separate whitelisted action (see WP-R4 ST-R4.4).
+    """
+    from huf.permissions import has_capability
+
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    user = frappe.session.user
+    if not (has_capability(user, "agent.edit") or agent_doc.owner == user):
+        frappe.throw(
+            _("You do not have permission to archive this agent."), frappe.PermissionError
+        )
+
+    frappe.db.set_value("Agent", agent_name, "disabled", 1)
+    clear_doc_event_agents_cache()
+
+
+@frappe.whitelist()
+def delete_agent_cascade(agent_name: str):
+    """Hard-delete an Agent and its children, System-Manager-only.
+
+    Deletes children before the parent so that Frappe's own
+    check_if_doc_is_linked finds nothing linked and the normal delete
+    path (including on_trash's system-agent guard) succeeds without
+    ignore_links=1. This is destructive and irreversible.
+    """
+    if "System Manager" not in frappe.get_roles(frappe.session.user):
+        frappe.throw(
+            _("Only System Manager may hard-delete an agent."), frappe.PermissionError
+        )
+
+    frappe.logger().info(
+        f"delete_agent_cascade: user={frappe.session.user} agent={agent_name}"
+    )
+
+    conversation_names = frappe.get_all(
+        "Agent Conversation", filters={"agent": agent_name}, pluck="name"
+    )
+    if conversation_names:
+        frappe.db.delete("Agent Message", {"conversation": ("in", conversation_names)})
+        frappe.db.delete("Agent Conversation", {"name": ("in", conversation_names)})
+
+    frappe.db.delete("Agent Run", {"agent": agent_name})
+
+    frappe.delete_doc("Agent", agent_name)
 
 
 def _check_model_supports_caching(model_name: str, provider_name: str) -> bool:
@@ -87,7 +142,11 @@ def _get_cacheable_models_for_provider(
 
 
 @frappe.whitelist()
-def get_cacheable_models(provider: str, model: str = None) -> dict:
+def get_cacheable_models(provider: str = None, model: str = None) -> dict:
+    from huf.permissions import has_capability
+    if not has_capability(frappe.session.user, "agent.edit"):
+        return []
+
     if not provider:
         return {"supported": False, "alternatives": []}
 
@@ -127,6 +186,7 @@ class Agent(Document):
         self._validate_skills()
         self._validate_starter_prompts()
         self._validate_allowed_users_and_roles()
+        self._validate_max_turns_ceiling()
         self._update_mcp_tool_counts()
         self._ensure_publishable_key()
         self._sync_modality_voice_flag()
@@ -222,6 +282,23 @@ class Agent(Document):
         for row in prompts:
             if not row.prompt_text:
                 frappe.throw(_("Prompt Text is required for all starter prompts."))
+
+    def _validate_max_turns_ceiling(self):
+        """Warn (non-blocking) when max_turns exceeds Agent Settings ceiling.
+
+        The ceiling is enforced at run time by clamping, not by rejecting saves.
+        This allows pre-existing agents to remain editable even if their
+        max_turns exceed a newly-configured ceiling.
+        """
+        if not self.max_turns:
+            return
+        ceiling = frappe.get_cached_value("Agent Settings", None, "max_turns_ceiling") or 20
+        if self.max_turns > ceiling:
+            frappe.msgprint(
+                _("max_turns exceeds the site ceiling; it will be clamped to {0} at run time.").format(ceiling),
+                indicator="orange",
+                alert=True
+            )
 
     def _validate_system_field_tamper(self):
         """Prevent non-admins from flipping is_system via API/UI."""
@@ -472,7 +549,12 @@ class Agent(Document):
         if self.enable_multi_run and (
             prompt_changed or self.has_value_changed("enable_multi_run")
         ):
-            self.generate_default_plan()
+            frappe.enqueue(
+                "huf.huf.doctype.agent.agent.generate_default_plan_job",
+                agent=self.name,
+                enqueue_after_commit=True,
+                queue="long"
+            )
         
     def on_trash(self):
         if self.is_system and not (
@@ -545,7 +627,7 @@ class Agent(Document):
             
             return planning_run_id, steps
 
-        except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
+        except Exception as e:
             frappe.log_error(title="Agent Plan Error", message=f"Plan Generation Failed: {str(e)}")
             return None
 
@@ -576,18 +658,13 @@ class Agent(Document):
         from huf.ai.prompt_resolver import resolve_prompt
         resolved = resolve_prompt(self)
         if self.enable_multi_run and resolved:
-            try:
-                planning_run_id, steps = self.generate_default_plan()
-                if planning_run_id:
-                    create_orchestration(
-                        agent_name=self.name,
-                        user_prompt=resolved,
-                        parent_run_id=planning_run_id,
-                        override_plan=steps
-                    )
-
-            except (ValueError, TypeError, KeyError, AttributeError, json.JSONDecodeError, ImportError) as e:
-                frappe.log_error(title="Agent Creation Error", message=f"Multi-Run Setup Failed: {str(e)}")
+            frappe.enqueue(
+                "huf.huf.doctype.agent.agent.generate_default_plan_and_orchestration_job",
+                agent=self.name,
+                user_prompt=resolved,
+                enqueue_after_commit=True,
+                queue="long"
+            )
 
     
     def has_permission(self, permission_type=None, verbose=False):
@@ -616,3 +693,55 @@ class Agent(Document):
         # Access/Read Permissions — delegated to the shared helper so this
         # stays in sync with huf.ai.agent_integration's access checks.
         return check_agent_access(self, user)
+
+
+def generate_default_plan_job(agent: str) -> None:
+    """
+    Module-level job function to generate default plan for an agent.
+    Enqueued from Agent.on_update() to defer planning from request to queue.
+
+    Args:
+        agent: Agent name (string)
+    """
+    try:
+        agent_doc = frappe.get_doc("Agent", agent)
+        agent_doc.generate_default_plan()
+        frappe.logger().info(f"Planning enqueued for agent {agent}")
+    except Exception as e:
+        frappe.log_error(
+            title="Agent Planning Job Failed",
+            message=f"Failed to generate default plan for agent {agent}: {str(e)}"
+        )
+
+
+def generate_default_plan_and_orchestration_job(agent: str, user_prompt: str) -> None:
+    """
+    Module-level job function to generate the default plan and create the
+    Multi-Run orchestration for a newly created agent.
+
+    Enqueued from Agent.after_insert() to defer planning and orchestration
+    creation from the request to the queue, so agent creation does not block
+    a web worker on the LLM+tool loop.
+
+    Args:
+        agent: Agent name (string)
+        user_prompt: Resolved prompt captured at insert time
+    """
+    try:
+        agent_doc = frappe.get_doc("Agent", agent)
+        result = agent_doc.generate_default_plan()
+        if not result:
+            return
+        planning_run_id, steps = result
+        if planning_run_id:
+            create_orchestration(
+                agent_name=agent,
+                user_prompt=user_prompt,
+                parent_run_id=planning_run_id,
+                override_plan=steps
+            )
+    except Exception as e:
+        frappe.log_error(
+            title="Agent Creation Error",
+            message=f"Multi-Run Setup Failed: {str(e)}"
+        )

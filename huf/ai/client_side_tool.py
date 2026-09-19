@@ -118,6 +118,9 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "message": "Client-side tools are not available in guest conversations.",
         }
 
+    # Check permission to write to the conversation
+    frappe.has_permission("Agent Conversation", "write", conversation_id) or frappe.throw(_("Not permitted"), frappe.PermissionError)
+
     call = _get_or_create_call(conversation_id, agent_run_id, function_name, call_id, kwargs)
     correlation_id = call_id or call.name
 
@@ -138,6 +141,17 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "message": "Could not dispatch the tool call to the frontend (cache unavailable).",
         }
 
+    # Scope this to the conversation's owner. Without ``user=``, Frappe's
+    # realtime layer fans this out to every socket subscribed to the
+    # ``conversation:<id>`` room -- i.e. anyone who can guess/obtain this
+    # conversation_id and subscribe, not just the conversation owner (see
+    # ST-R6.6c). The owner is looked up from the DB rather than taken from
+    # ``frappe.session.user`` because this can run from a queue-first
+    # background worker, where the session user would be the worker's
+    # service account, not the human whose browser should receive the
+    # dialog.
+    conversation_owner = frappe.db.get_value("Agent Conversation", conversation_id, "owner")
+
     frappe.publish_realtime(
         event=f'conversation:{conversation_id}',
         message={
@@ -149,6 +163,7 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
             "tool_params": kwargs,
             "call_id": correlation_id,
         },
+        user=conversation_owner or frappe.session.user,
     )
 
     try:
@@ -189,7 +204,13 @@ def client_side_function(conversation_id=None, agent_run_id=None, function_name=
     except Exception:
         pass
 
-    _, raw_payload = popped
+    # NOT `_, raw_payload = popped`: `_` is `frappe`'s translation function
+    # (imported at module level, `from frappe import _`, used earlier in this
+    # very function for frappe.throw(_("Not permitted"), ...)). Assigning to
+    # `_` anywhere in a function body makes Python treat it as local for the
+    # *whole* function -- shadowing the module-level import from the first
+    # line, and raising UnboundLocalError on the earlier reference.
+    _key, raw_payload = popped
     try:
         payload = json.loads(raw_payload)
     except (TypeError, ValueError):

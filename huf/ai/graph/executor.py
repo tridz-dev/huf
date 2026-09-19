@@ -756,6 +756,26 @@ class GraphExecutor:
 			self._update_foreach(node, next_node_id, state)
 
 			if not next_node_id:
+				# A caller-supplied resolver (e.g. Flow's default_resolver) can
+				# legitimately return None for a SUCCEEDED node with no outgoing
+				# edge -- that is a normal run boundary. It must not also be
+				# read as success for a FAILED node: Router.resolve's own
+				# fail-closed guard (I7) only fires when no resolver was
+				# supplied at all, so a resolver that silently swallows a
+				# failed outcome into "no successor" (GW-02) would otherwise
+				# make the whole run report success. Enforce fail-closed here,
+				# centrally, regardless of which resolver produced the answer.
+				if outcome.status == "failed":
+					on_error = node.raw.get("on_error")
+					if on_error:
+						state.cursor = on_error
+						self.store.save_cursor(on_error)
+						continue
+					detail = f": {outcome.error}" if outcome.error else ""
+					return self._fail(
+						state,
+						f"Node '{node.id}' of type '{node.type}' failed and declares no on_error successor{detail}",
+					)
 				return self._complete(state, node.id)
 
 			state.cursor = next_node_id

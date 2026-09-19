@@ -27,11 +27,18 @@ from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
 from huf.ai.transaction import safe_commit, transaction_checkpoint
-from huf.ai.agent_access import assert_agent_access, check_agent_access as _check_agent_access
+from huf.ai.agent_access import (
+    assert_agent_access,
+    check_agent_access as _check_agent_access,
+    resolve_run_identity_and_authorize,
+    TRIGGER_DIRECT_API,
+)
+from frappe.rate_limiter import rate_limit
 from huf.ai.usage_extraction import extract_round_usage, normalise_usage_payload
 from huf.ai.model_metadata import resolve_model_context_window
 from huf.permissions import has_capability
 from huf.ai.tool_serializer import serialize_tools
+from huf.ai.run_budget import RunBudget, RunBudgetExceeded, get_current_budget, set_current_budget
 
 class _LazyLogger:
 	"""Defer frappe.logger() until first use so test discovery can import this module."""
@@ -118,6 +125,10 @@ class AgentManager:
         # mcp). Populated by _setup_tools() and read by compute_tools_breakdown()
         # at the two agent_integration call sites — see context_segments.py.
         self.tool_sources = {}
+        # Populated by _setup_tools() when a tool-setup step raises; flushed
+        # onto the Agent Run doc's `tool_setup_warnings` field by the callers
+        # that create AgentManager after the run doc already exists.
+        self.tool_setup_warnings = []
         self._setup_client()
         self._setup_tools()
 
@@ -201,6 +212,7 @@ class AgentManager:
                 )
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load agent tools: {e!s}")
+            self.tool_setup_warnings.append(f"agent tools: {e!s}")
 
         # Merge skill MCP servers with agent-level MCP servers so attached
         # skills can contribute runtime tools without replacing direct tools.
@@ -286,6 +298,7 @@ class AgentManager:
 
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
+            self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -910,10 +923,26 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
         raise
     except Exception as e:
         # Tool-call persistence boundary: any failure here corrupts run audit state.
-        frappe.log_error(
-            f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
-            "Agent Tool Call Error"
-        )
+        try:
+            frappe.log_error(
+                f"Error processing tool call: {str(e)}\n{frappe.get_traceback()}",
+                "Agent Tool Call Error"
+            )
+        except Exception:
+            # A failure while logging must never prevent the audit_incomplete
+            # flag below from being set (or mask the original error).
+            pass
+        if agent_run:
+            try:
+                existing = frappe.db.get_value("Agent Run", agent_run, "audit_incomplete")
+                note = f"tool call persistence ({name or tool_call_id}): {e!s}"
+                combined = f"{existing}; {note}" if existing else note
+                frappe.db.set_value(
+                    "Agent Run", agent_run, "audit_incomplete", combined, update_modified=False
+                )
+            except Exception:
+                # Never let audit-flagging failures mask the original error.
+                pass
         return None
 
 def log_tool_call(run_doc, conversation, raw_call, tool_result=None, error=None, is_output=False):
@@ -1121,6 +1150,7 @@ def _link_preexisting_user_message(conversation_name: str, run_name: str):
 
 
 @frappe.whitelist(allow_guest=True)
+@rate_limit(key="agent_name", limit=20, seconds=60, ip_based=True)
 def run_agent_sync(
     agent_name: str,
     prompt: str = None,
@@ -1144,7 +1174,29 @@ def run_agent_sync(
     skip_user_message: bool = False,
     now=None,
     project: str = None,
+    client_idempotency_key: str = None,
 ):
+    """Run an agent synchronously (queue-first by default; see ``now``).
+
+    ``allow_guest=True`` is intentional (Track-Item: ST-R4.3) — Agent has a
+    per-agent ``allow_guest`` flag that is a deliberate, supported product
+    feature, not dead weight. Do not remove this decorator to "clean up"
+    guest access; that deletes a supported feature.
+
+    Oracle-avoidance invariant this relies on: a nonexistent ``agent_name``
+    and an existing agent with ``allow_guest=0`` must throw an identical
+    ``frappe.PermissionError`` with the same message to a Guest caller — see
+    the check a few lines below (``agent_doc is None or (frappe.session.user
+    == "Guest" and not agent_doc.allow_guest)``). If you change either branch
+    of that condition, keep the exception type and message identical for
+    both cases, otherwise the exception shape becomes an oracle for
+    enumerating agent names.
+
+    The ``@rate_limit`` decorator above is IP-scoped and applies to every
+    caller, not only Guests, but its limit (20 calls/60s per IP) is sized to
+    be a no-op for a normal authenticated browser session while throttling a
+    flooding script against an ``allow_guest=1`` agent.
+    """
 
     if not agent_name:
         frappe.throw(_("Agent Name is required"))
@@ -1167,18 +1219,44 @@ def run_agent_sync(
             frappe.ValidationError,
         )
 
-    assert_agent_access(agent_doc, user=frappe.session.user)
-
-    if frappe.session.user != "Guest" and not has_capability(frappe.session.user, "agent.use"):
-        frappe.throw(
-            _("You are not authorized to use this agent."),
-            frappe.PermissionError
-        )
+    identity = resolve_run_identity_and_authorize(
+        agent_doc,
+        TRIGGER_DIRECT_API,
+        {"user": frappe.session.user},
+    )
+    if not identity.authorized:
+        frappe.throw(_(identity.reason), frappe.PermissionError)
 
     if frappe.session.user == "Guest":
         # Guests may not redirect execution to a caller-chosen provider/model.
         provider = None
         model = None
+
+    # Check model override permissions (ST-09.10)
+    if model or provider:
+        allowed_set = {
+            (row.provider, row.model)
+            for row in frappe.get_all(
+                "Agent Allowed Model",
+                filters={"parent": agent_doc.name},
+                fields=["provider", "model"],
+            )
+        }
+        # Semantics are explicit, not inferred from emptiness: an empty
+        # allow-list means "only the agent's configured model is accepted" —
+        # ANY override, including one that would otherwise be a no-op
+        # (matching the agent's own model), is rejected unless the caller
+        # holds agent.model.override. Reviewer item 13: the original
+        # `if agent.allowed_models and not allowed` skipped the check
+        # entirely whenever the list was empty — the default state of every
+        # agent — which is the exact unguarded behavior F-21 reports.
+        override_requested = (provider, model) != (agent_doc.provider, agent_doc.model)
+        if override_requested and (provider, model) not in allowed_set:
+            if not has_capability(frappe.session.user, "agent.model.override"):
+                frappe.throw(
+                    _("Model override not allowed for this agent"),
+                    frappe.PermissionError,
+                )
 
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
@@ -1260,6 +1338,14 @@ def run_agent_sync(
         "sequence": sequence,
         "runtime_context": frappe.as_json(runtime_context),
     }
+
+    # Compute and persist budget fields (ST-09.2)
+    budget = RunBudget.from_agent(agent_doc, parent_run_id=parent_run_id)
+    run_doc_data["budget_deadline_at"] = budget.deadline_at
+    run_doc_data["budget_depth"] = budget.current_depth
+    run_doc_data["budget_ancestry"] = frappe.as_json(budget.ancestry)
+    run_doc_data["budget_spend_usd"] = budget.spend_so_far_usd
+
     # Add flow linkage fields if provided
     if flow_run_id:
         run_doc_data["flow_run"] = flow_run_id
@@ -1271,6 +1357,31 @@ def run_agent_sync(
         flow_id = frappe.db.get_value("Flow Run", flow_run_id, "flow_id")
         if flow_id:
             run_doc_data["flow_id"] = flow_id
+
+    if client_idempotency_key:
+        # A client that retries a request (network timeout, double-click)
+        # must not fan out into a second Agent Run for the same logical
+        # request. Scoped by conversation since idempotency_key alone is
+        # not globally unique across conversations/clients.
+        existing_run_name = frappe.db.get_value(
+            "Agent Run",
+            {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+            "name",
+        )
+        if existing_run_name:
+            existing_run = frappe.get_doc("Agent Run", existing_run_name)
+            return {
+                "success": True,
+                "queued": existing_run.status in ("Queued", "Started"),
+                "status": existing_run.status,
+                "response": existing_run.response if existing_run.status == "Success" else None,
+                "provider": existing_run.provider,
+                "agent_run_id": existing_run.name,
+                "conversation_id": existing_run.conversation,
+                "session_id": conv_manager.session_id,
+                "sequence": existing_run.sequence,
+            }
+        run_doc_data["idempotency_key"] = client_idempotency_key
 
     if not frappe.has_permission("Agent Run", "create"):
         frappe.throw(
@@ -1429,7 +1540,17 @@ def get_agent_run_status(agent_run_id: str):
     run = frappe.db.get_value(
         "Agent Run",
         agent_run_id,
-        ["name", "agent", "status", "response", "error_message", "conversation"],
+        [
+            "name",
+            "agent",
+            "status",
+            "response",
+            "error_message",
+            "conversation",
+            "owner",
+            "tool_setup_warnings",
+            "audit_incomplete",
+        ],
         as_dict=True,
     )
     if not run:
@@ -1437,6 +1558,16 @@ def get_agent_run_status(agent_run_id: str):
 
     agent_doc = frappe.get_doc("Agent", run.agent)
     assert_agent_access(agent_doc, user=frappe.session.user)
+
+    # Record-level gate: check run ownership for the caller
+    conversation_owner = frappe.db.get_value("Agent Conversation", run.conversation, "owner") if run.conversation else run.owner
+    caller = frappe.session.user
+    if caller == "Guest":
+        if not agent_doc.allow_guest or conversation_owner != "Guest":
+            frappe.throw(_("Not permitted to view this run"), frappe.PermissionError)
+    elif "System Manager" not in frappe.get_roles(caller):
+        if conversation_owner != caller and not has_capability(caller, "agent.view_all"):
+            frappe.throw(_("Not permitted to view this run"), frappe.PermissionError)
 
     agent_message_id = None
     if run.status in ("Success", "Failed"):
@@ -1457,6 +1588,8 @@ def get_agent_run_status(agent_run_id: str):
         "conversation_id": run.conversation,
         "agent": run.agent,
         "agent_message_id": agent_message_id,
+        "tool_setup_warnings": run.tool_setup_warnings,
+        "audit_incomplete": run.audit_incomplete,
     }
 
 
@@ -1562,48 +1695,53 @@ def _execute_agent_run(
     )
     conversation = frappe.get_doc("Agent Conversation", conversation_id)
     run_doc = frappe.get_doc("Agent Run", run_id)
-    run_doc.db_set("start_time", now_datetime())
 
-    # Optimized history fetching with dynamic limit + buffer.
-    # This turn's user message was persisted just before execution: inline
-    # (direct path) or by the queued worker under the conversation lock.
-    # The lock serializes queued runs per conversation, so the trailing
-    # user message is always this run's own turn — drop it from history
-    # because ``prompt`` carries the full turn.
-    user_message_persisted = skip_user_message or bool(
-        prompt and not str(prompt).startswith("[SILENT_TRIGGER]")
-    )
-    fetch_limit = (agent_doc.history_limit or 20) + 10
-    history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
-    history = _history_without_pending_user_turn(history, user_message_persisted)
-
-    # Check for multi-run orchestration mode
-    # Skip if already called from orchestration to prevent infinite loop
-    if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
-        from huf.ai.orchestration.orchestrator import create_orchestration
-        orch_name = create_orchestration(
-            agent_name,
-            prompt,
-            parent_run_id=run_doc.name,
-            conversation_id=run_doc.conversation
-        )
-
-        run_doc.db_set({
-            "agent_orchestration": orch_name,
-            "status": "Started", # Mark as started, but not "Success" yet
-            "response": f"Orchestration started. Job ID: {orch_name}"
-        })
-        transaction_checkpoint(reason="agent_streaming_progress")
-        return {
-            "success": True,
-            "response": f"Orchestration started: {orch_name}",
-            "orchestration_id": orch_name,
-            "mode": "multi_run",
-            "agent_run_id": run_doc.name
-        }
-
+    # Reconstruct and cache the budget (ST-09.2)
+    budget = RunBudget.from_run_doc(run_doc)
+    set_current_budget(budget)
+    # Mark the run for its duration (ST-09.5 point a)
+    frappe.flags.huf_current_agent_run_id = run_doc.name
 
     try:
+        run_doc.db_set("start_time", now_datetime())
+
+        # Optimized history fetching with dynamic limit + buffer.
+        # This turn's user message was persisted just before execution: inline
+        # (direct path) or by the queued worker under the conversation lock.
+        # The lock serializes queued runs per conversation, so the trailing
+        # user message is always this run's own turn — drop it from history
+        # because ``prompt`` carries the full turn.
+        user_message_persisted = skip_user_message or bool(
+            prompt and not str(prompt).startswith("[SILENT_TRIGGER]")
+        )
+        fetch_limit = (agent_doc.history_limit or 20) + 10
+        history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
+        history = _history_without_pending_user_turn(history, user_message_persisted)
+
+        # Check for multi-run orchestration mode
+        # Skip if already called from orchestration to prevent infinite loop
+        if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
+            from huf.ai.orchestration.orchestrator import create_orchestration
+            orch_name = create_orchestration(
+                agent_name,
+                prompt,
+                parent_run_id=run_doc.name,
+                conversation_id=run_doc.conversation
+            )
+
+            run_doc.db_set({
+                "agent_orchestration": orch_name,
+                "status": "Started", # Mark as started, but not "Success" yet
+                "response": f"Orchestration started. Job ID: {orch_name}"
+            })
+            transaction_checkpoint(reason="agent_streaming_progress")
+            return {
+                "success": True,
+                "response": f"Orchestration started: {orch_name}",
+                "orchestration_id": orch_name,
+                "mode": "multi_run",
+                "agent_run_id": run_doc.name
+            }
         frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
         _emit_run_lifecycle_event(run_doc, conversation, "started")
         safe_commit()
@@ -1618,6 +1756,11 @@ def _execute_agent_run(
             model_override=resolved_model,
             conversation_id=conversation_id,
         )
+
+        if manager.tool_setup_warnings:
+            run_doc.db_set(
+                "tool_setup_warnings", "; ".join(manager.tool_setup_warnings), update_modified=False
+            )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.prompt_mode = "Template"
@@ -2151,18 +2294,23 @@ def _execute_agent_run(
             run_update["reasoning_snapshot"] = r_snap
 
         frappe.db.set_value("Agent Run", run_doc.name, run_update, update_modified=True)
-        try:
-            frappe.enqueue(
-                "huf.ai.memory_tools.extract_memory_from_run",
-                queue="default",
-                timeout=300,
-                is_async=True,
-                enqueue_after_commit=True,
-                run_id=run_doc.name,
-            )
-        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
-                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
-            frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
+        from huf.ai.memory_tools import should_extract_memory
+
+        # An extraction run must never queue another extraction: its own
+        # success would re-trigger the job and loop indefinitely.
+        if should_extract_memory(agent_doc, run_doc.run_kind):
+            try:
+                frappe.enqueue(
+                    "huf.ai.memory_tools.extract_memory_from_run",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    enqueue_after_commit=True,
+                    run_id=run_doc.name,
+                )
+            except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                    frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
+                frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
         _emit_run_lifecycle_event(
             run_doc,
             conversation,
@@ -2391,6 +2539,9 @@ def _execute_agent_run(
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id
         }
+    finally:
+        # Clear the run context flag (ST-09.5 point a)
+        frappe.flags.huf_current_agent_run_id = None
 
 
 # Conversation-scoped execution lock for queued runs. Serializes workers of
@@ -2708,6 +2859,7 @@ async def run_agent_stream(
     skip_user_message: bool = False,
     files=None,
     project: str = None,
+    client_idempotency_key: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -2855,6 +3007,27 @@ async def run_agent_stream(
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         history = _history_without_pending_user_turn(history, skip_user_message)
 
+        if client_idempotency_key:
+            # Mirror run_agent_sync's dedupe: a retried streaming request for
+            # the same conversation must reuse the prior run rather than
+            # starting a second one.
+            existing_run_name = frappe.db.get_value(
+                "Agent Run",
+                {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+                "name",
+            )
+            if existing_run_name:
+                existing_run = frappe.get_doc("Agent Run", existing_run_name)
+                yield {
+                    "type": "duplicate_request",
+                    "success": True,
+                    "status": existing_run.status,
+                    "response": existing_run.response if existing_run.status == "Success" else None,
+                    "agent_run_id": existing_run.name,
+                    "conversation_id": existing_run.conversation,
+                }
+                return
+
         # Create Agent Run document
         if not frappe.has_permission("Agent Run", "create"):
             yield {
@@ -2863,7 +3036,7 @@ async def run_agent_stream(
             }
             return
 
-        run_doc = frappe.get_doc({
+        run_doc_data = {
             "doctype": "Agent Run",
             "agent": agent_name,
             "status": "Started",
@@ -2872,7 +3045,11 @@ async def run_agent_stream(
             "prompt_template": resolved_prompt_template,
             "model": resolved_model,
             "provider": resolved_provider
-        })
+        }
+        if client_idempotency_key:
+            run_doc_data["idempotency_key"] = client_idempotency_key
+
+        run_doc = frappe.get_doc(run_doc_data)
         run_doc.insert()
         if not skip_user_message:
             conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
@@ -2897,6 +3074,11 @@ async def run_agent_stream(
             model_override=resolved_model,
             conversation_id=conversation.name,
         )
+
+        if manager.tool_setup_warnings:
+            run_doc.db_set(
+                "tool_setup_warnings", "; ".join(manager.tool_setup_warnings), update_modified=False
+            )
 
         if (prompt_template or prompt_version) and resolved_prompt_template:
             manager.agent_doc.update({
@@ -3055,6 +3237,20 @@ async def run_agent_stream(
             stream = RunProvider.run_stream(agent, enhanced_prompt, resolved_provider, resolved_model_name, context)
 
             async for chunk in stream:
+                # Check deadline per chunk (ST-09.3)
+                try:
+                    budget = get_current_budget()
+                    budget.check_deadline()
+                except RunBudgetExceeded:
+                    yield {
+                        "type": "error",
+                        "error": "Run budget deadline exceeded",
+                        "success": False,
+                        "agent_run_id": run_doc.name,
+                        "conversation_id": conversation.name
+                    }
+                    return
+
                 chunk_type = chunk.get("type")
 
                 if chunk_type == "delta":
@@ -3761,3 +3957,63 @@ def get_run_permission_conditions(user):
 		return None
 
 	return f"`tabAgent Run`.owner = {frappe.db.escape(user)}"
+
+
+def get_tool_call_permission_conditions(user):
+	"""
+	Restrict Agent Tool Call list to calls from runs the user owns,
+	unless the user has agent.view_all capability.
+
+	Agent Tool Call has a direct `agent_run` link field; join to Agent Run's owner.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	# Agent Tool Call links directly to Agent Run; join on agent_run field.
+	return f"`tabAgent Tool Call`.agent_run IN (SELECT name FROM `tabAgent Run` WHERE owner = {frappe.db.escape(user)})"
+
+
+def get_prompt_snapshot_permission_conditions(user):
+	"""
+	Restrict Agent Run Prompt Snapshot list to snapshots from runs the user owns,
+	unless the user has agent.view_all capability.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	# Only own runs' snapshots
+	return f"`tabAgent Run Prompt Snapshot`.agent_run IN (SELECT name FROM `tabAgent Run` WHERE owner = {frappe.db.escape(user)})"
+
+
+def get_procedure_run_permission_conditions(user):
+	"""
+	Restrict Agent Procedure Run list to runs the user owns.
+
+	Agent Procedure Run carries its own standard Frappe owner field.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	# Only own runs
+	return f"`tabAgent Procedure Run`.owner = {frappe.db.escape(user)}"

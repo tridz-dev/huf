@@ -54,6 +54,12 @@ class RateLimitError(ApiError):
 	default_message = "Too many requests. Please try again later."
 
 
+class ConflictError(ApiError):
+	status_code = 409
+	code = "conflict"
+	default_message = "The request could not be completed due to a conflict with the current state."
+
+
 def error_response(exc: ApiError, request_id: Optional[str] = None) -> dict:
 	"""Build the stable JSON error envelope for an `ApiError`.
 

@@ -4,7 +4,6 @@ import json
 import os
 
 import frappe
-import requests
 from frappe import _
 from frappe.utils import now_datetime
 
@@ -291,13 +290,9 @@ def _extract_text(doc) -> ExtractedText:
 		return extractor.extract(file_path)
 
 	elif doc.input_type == "URL":
-		# Fetch URL content
-		response = requests.get(doc.url, timeout=30)
-		response.raise_for_status()
-
-		# Extract text from HTML
-		extractor = TextExtractor.get_extractor("html")
-		return extractor.extract_from_content(response.text, doc.url)
+		# URLExtractor handles fetching HTML and delegates supported documents.
+		extractor = TextExtractor.get_extractor("url")
+		return extractor.extract(doc.url)
 
 	else:
 		frappe.throw(_("Unsupported input type: {0}").format(doc.input_type))

@@ -69,23 +69,54 @@ def handle_create_conversation(context: RequestContext, agent_id: str, title: st
 	return _to_public_shape(conv_doc)
 
 
+MAX_PAGE_LENGTH = 50
+
+# Fields fetched directly via `frappe.get_all` - exactly what `_to_public_shape` uses.
+_CONVERSATION_LIST_FIELDS = ["name", "agent", "title", "created_at", "status"]
+
+
 def handle_list_conversations(context: RequestContext, agent_id: str = None) -> dict:
-	"""GET /huf/api/v1/conversations - the calling user's own conversations."""
+	"""GET /huf/api/v1/conversations - the calling user's own conversations.
+
+	Paginated: accepts `limit` (capped at `MAX_PAGE_LENGTH`) and `offset`
+	query params, and returns `has_more`/`cursor` so callers can page
+	through the full result set.
+	"""
 	require_scope(context, "conversations:read")
 
 	filters = {"owner": context.user}
 	if agent_id:
 		filters["agent"] = agent_id
 
-	conversation_names = frappe.get_all(
+	form_dict = frappe.local.form_dict
+	try:
+		limit = int(form_dict.get("limit") or MAX_PAGE_LENGTH)
+	except (TypeError, ValueError):
+		limit = MAX_PAGE_LENGTH
+	limit = max(1, min(limit, MAX_PAGE_LENGTH))
+
+	try:
+		offset = int(form_dict.get("offset") or 0)
+	except (TypeError, ValueError):
+		offset = 0
+	offset = max(0, offset)
+
+	rows = frappe.get_all(
 		"Agent Conversation",
 		filters=filters,
+		fields=_CONVERSATION_LIST_FIELDS,
 		order_by="creation desc",
-		pluck="name",
+		limit_page_length=limit,
+		limit_start=offset,
 	)
-	conversations = [_to_public_shape(frappe.get_doc("Agent Conversation", name)) for name in conversation_names]
+	has_more = len(rows) == limit
+	conversations = [_to_public_shape(row) for row in rows]
 
-	return {"conversations": conversations}
+	return {
+		"conversations": conversations,
+		"has_more": has_more,
+		"cursor": offset + limit if has_more else None,
+	}
 
 
 def handle_get_conversation(context: RequestContext, conversation_id: str) -> dict:

@@ -22,7 +22,6 @@ import { AddIntegrationToAgentModal } from '@/components/integrations/AddIntegra
 import { GeneralTab } from '@/components/integrations/GeneralTab';
 import { CredentialsTab } from '@/components/integrations/CredentialsTab';
 import { RecipientsTab } from '@/components/integrations/RecipientsTab';
-import { TelegramTab } from '@/components/integrations/TelegramTab';
 import { ChannelTab } from '@/components/integrations/ChannelTab';
 import { integrationFormSchema, type IntegrationFormValues } from '@/components/integrations/types';
 import {
@@ -30,10 +29,8 @@ import {
   deleteIntegrationSetting,
   getIntegrationService,
   getIntegrationSetting,
-  setupTelegramWebhook,
   updateIntegrationSetting,
 } from '@/services/integrationApi';
-import { getAgents } from '@/services/agentApi';
 import {
   buildCredentialsPayload,
   parseRequiredCredentials,
@@ -69,17 +66,12 @@ export function IntegrationSettingsDetailsPage({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [settingUpWebhook, setSettingUpWebhook] = useState(false);
   const [addToAgentOpen, setAddToAgentOpen] = useState(false);
   const [credentialSchema, setCredentialSchema] = useState<CredentialSchemaItem[]>([]);
   const [serviceCategory, setServiceCategory] = useState<string>('');
-  const [agents, setAgents] = useState<Array<{ name: string; agent_name: string }>>([]);
   const [docMeta, setDocMeta] = useState({
     lastUsed: undefined as string | undefined,
     lastError: undefined as string | undefined,
-    webhookUrl: undefined as string | undefined,
-    webhookStatus: undefined as string | undefined,
-    lastWebhookSetup: undefined as string | undefined,
   });
 
   const form = useForm<IntegrationFormValues>({
@@ -99,7 +91,6 @@ export function IntegrationSettingsDetailsPage({
   const watchIsActive = form.watch('is_active');
   const watchIsDefault = form.watch('is_default');
   const isDirty = form.formState.isDirty;
-  const isTelegram = (isNew ? initialService : watchService) === 'telegram';
 
   const tabConfig = useMemo(() => {
     const base: Record<string, { label: string; fields: string[]; default: boolean; disabled: boolean }> = {
@@ -126,15 +117,10 @@ export function IntegrationSettingsDetailsPage({
       };
     }
 
-    if ((isNew ? initialService : watchService) === 'telegram') {
-      base.telegram = {
-        label: 'Telegram',
-        fields: ['telegram_agent', 'telegram_auto_setup_webhook'],
-        default: false,
-        disabled: isNew,
-      };
-    }
-
+    // CL-04: Telegram no longer gets its own tab. Every Gateway-surface
+    // provider, Telegram included, is configured entirely from the generic
+    // Channel tab below (routing, admission policy, webhook URL, and for
+    // Telegram specifically, the "Setup Webhook" convenience action).
     if (surface === 'Gateway') {
       base.channel = {
         label: 'Channel',
@@ -255,9 +241,6 @@ export function IntegrationSettingsDetailsPage({
         setDocMeta({
           lastUsed: data.last_used,
           lastError: data.last_error,
-          webhookUrl: data.telegram_webhook_url,
-          webhookStatus: data.telegram_webhook_status,
-          lastWebhookSetup: data.telegram_last_webhook_setup,
         });
 
         return schemaPromise;
@@ -267,17 +250,6 @@ export function IntegrationSettingsDetailsPage({
       })
       .finally(() => setLoading(false));
   }, [isNew, initialService, settingId, form, navigate, loadServiceSchema, listRoute]);
-
-  useEffect(() => {
-    if (isTelegram) {
-      getAgents().then((result) => {
-        const list = Array.isArray(result) ? result : result.items;
-        setAgents(list.map((a) => ({ name: a.name, agent_name: a.agent_name || a.name })));
-      }).catch(() => {
-        // Agents optional for display
-      });
-    }
-  }, [isTelegram]);
 
   const validateCredentials = (
     values: IntegrationFormValues,
@@ -355,9 +327,6 @@ export function IntegrationSettingsDetailsPage({
         setDocMeta({
           lastUsed: updated.last_used,
           lastError: updated.last_error,
-          webhookUrl: updated.telegram_webhook_url,
-          webhookStatus: updated.telegram_webhook_status,
-          lastWebhookSetup: updated.telegram_last_webhook_setup,
         });
       }
     } catch (error) {
@@ -393,30 +362,6 @@ export function IntegrationSettingsDetailsPage({
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
-    }
-  };
-
-  const handleSetupWebhook = async () => {
-    if (!settingId || isNew) {
-      toast.error('Save the integration before setting up the webhook');
-      return;
-    }
-
-    setSettingUpWebhook(true);
-    try {
-      const result = await setupTelegramWebhook(settingId);
-      toast.success(result.status || 'Webhook setup completed');
-      const refreshed = await getIntegrationSetting(settingId);
-      setDocMeta((prev) => ({
-        ...prev,
-        webhookUrl: refreshed.telegram_webhook_url,
-        webhookStatus: refreshed.telegram_webhook_status,
-        lastWebhookSetup: refreshed.telegram_last_webhook_setup,
-      }));
-    } catch (error) {
-      toast.error(getFrappeErrorMessage(error) || 'Failed to setup webhook');
-    } finally {
-      setSettingUpWebhook(false);
     }
   };
 
@@ -486,20 +431,6 @@ export function IntegrationSettingsDetailsPage({
               <TabsContent value="recipients" className="space-y-4">
                 <RecipientsTab form={form} />
               </TabsContent>
-
-              {'telegram' in tabConfig && (
-                <TabsContent value="telegram" className="space-y-4">
-                  <TelegramTab
-                    form={form}
-                    agents={agents}
-                    webhookUrl={docMeta.webhookUrl}
-                    webhookStatus={docMeta.webhookStatus}
-                    lastWebhookSetup={docMeta.lastWebhookSetup}
-                    settingUpWebhook={settingUpWebhook}
-                    onSetupWebhook={handleSetupWebhook}
-                  />
-                </TabsContent>
-              )}
 
               {'channel' in tabConfig && (
                 <TabsContent value="channel" className="space-y-4">

@@ -9,6 +9,7 @@ from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.conformance import GatewayAdapterConformanceError, assert_adapter_conforms
 from huf.ai.gateway_adapters.registry import GatewayAdapterRegistry
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -26,6 +27,7 @@ __all__ = [
 	"GatewayAdapter",
 	"GatewayAdapterConformanceError",
 	"GatewayAdapterRegistry",
+	"GatewayAttachment",
 	"GatewayCapabilities",
 	"GatewayCredentialField",
 	"GatewayCredentialSchema",

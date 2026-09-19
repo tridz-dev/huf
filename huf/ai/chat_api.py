@@ -2,6 +2,7 @@ import json
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 from .agent_integration import run_agent_sync
 from .agent_access import assert_agent_access
@@ -23,6 +24,7 @@ def _as_bool(value) -> bool:
 
 
 @frappe.whitelist(allow_guest=True)
+@rate_limit(key="agent_name", limit=20, seconds=60, ip_based=True)
 def run_agent_sync_chat(
     agent_name: str,
     prompt: str = None,
@@ -59,6 +61,25 @@ def run_agent_sync_chat(
 
     Runs are queue-first by default; pass ``now=true`` to force direct
     execution in the request (see ``run_agent_sync``).
+
+    ``allow_guest=True`` is intentional (Track-Item: ST-R4.3), mirroring
+    ``run_agent_sync``. This function re-implements the same oracle-avoidance
+    check inline in its ``create_new`` branch (a nonexistent ``agent_name``
+    and an existing ``allow_guest=0`` agent must throw an identical
+    ``frappe.PermissionError`` to a Guest caller) rather than delegating to
+    ``run_agent_sync`` for that check — note the drift risk already flagged
+    in docs/testing/CURRENT_STATE.md ("`n` (guest-facing) duplicates
+    guest/capability/access checks from `run_agent_sync` rather than
+    delegating"). When ``create_new`` is falsy, this function skips its own
+    check entirely and delegates straight to ``run_agent_sync``, which
+    performs the identical check itself — so the invariant still holds
+    end-to-end, but only because both copies are kept in sync by hand. The
+    ``@rate_limit`` decorator above is applied directly to this entrypoint
+    (rather than relying solely on the one inside ``run_agent_sync``)
+    because the ``create_new=True`` branch does real work (creating a new
+    Agent Conversation) before ever calling ``run_agent_sync``, so gating
+    only the inner call would let a flooding Guest caller spam conversation
+    creation without ever tripping the limiter.
     """
     if not agent_name:
         frappe.throw(_("Agent Name is required"))

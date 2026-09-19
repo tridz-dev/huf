@@ -12,7 +12,6 @@ _LOCK_PREFIX = "huf:automation_scheduler:lock:"
 _LOCK_TTL_SEC = 60
 
 
-@frappe.whitelist()
 def run_due_automations():
 	"""Fire every due Schedule-type Automation Trigger.
 

@@ -20,8 +20,17 @@ from huf.ai.tool_functions import (
     send_email,
 )
 from huf.ai.transaction import commit_if_background
+from huf.ai.tool_doctype_guard import _check_doctype_allowed
 
 logger = frappe.logger("huf")
+
+# Get List tool limit resolution: an agent (or a compromised/careless
+# upstream) requesting an unbounded or huge limit must not be able to make
+# a single tool call pull the whole table. default_limit applies when no
+# limit (or a non-positive one) is given; hard_cap bounds any requested
+# limit regardless of how large the caller asks for.
+default_limit = 20
+hard_cap = 500
 
 
 def wrap_frappe_function(func: Callable) -> Callable:
@@ -244,8 +253,10 @@ def create_list_function(doctype: str) -> Callable:
         if not fields:
             fields = ["name", "modified"]
 
+        limit_page_length = min(limit or default_limit, hard_cap)
+
         result = frappe.get_list(
-            doctype, filters=filters, fields=fields, limit_page_length=limit, order_by=order_by
+            doctype, filters=filters, fields=fields, limit_page_length=limit_page_length, order_by=order_by
         )
 
         return result
@@ -273,6 +284,10 @@ def handle_create_document(reference_doctype=None, ignore_permissions=False, **k
     try:
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
+
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
 
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
@@ -323,6 +338,10 @@ def handle_delete_document(document_id=None, reference_doctype=None, ignore_perm
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
 
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
+
         if not frappe.db.exists(reference_doctype, document_id):
             return {"success": False, "error": f"Document {document_id} not found in {reference_doctype}"}
 
@@ -372,6 +391,10 @@ def handle_get_list(
                 "error": "No reference doctype provided. Please specify a valid DocType.",
             }
 
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
+
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
@@ -417,14 +440,14 @@ def handle_get_list(
                 filter_warning = f"Filter fields {', '.join(invalid_filter_fields)} do not exist in DocType '{reference_doctype}' and were ignored."
                 warning = f"{warning}\n{filter_warning}" if warning else filter_warning
 
-        page_length = limit if limit and int(limit) > 0 else None
+        limit_page_length = min(int(limit) if limit and int(limit) > 0 else default_limit, hard_cap)
         ignore_permissions = kwargs.get("ignore_permissions", False)
 
         result = frappe.get_list(
             reference_doctype,
             filters=filters,
             fields=filtered_fields,
-            limit_page_length=page_length,
+            limit_page_length=limit_page_length,
             order_by=order_by,
             ignore_permissions=ignore_permissions,
         )
@@ -466,6 +489,10 @@ def handle_update_document(document_id=None, data=None, reference_doctype=None, 
 
     if not reference_doctype:
         return {"success": False, "error": "No reference doctype provided."}
+
+    _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
 
     if not frappe.db.exists(reference_doctype, document_id):
         return {"success": False, "error": f"{reference_doctype} {document_id} not found"}
@@ -518,6 +545,10 @@ def handle_get_document(document_id=None, reference_doctype=None, **filters):
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
 
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
+
         if not frappe.db.exists("DocType", reference_doctype):
             return {"success": False, "error": f"DocType '{reference_doctype}' does not exist."}
 
@@ -568,6 +599,10 @@ def handle_get_documents(reference_doctype: str = None, document_ids: list = Non
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
 
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
+
         ids = document_ids or kwargs.get("ids") or kwargs.get("documents") or []
         if not isinstance(ids, list):
             ids = [ids]
@@ -595,6 +630,10 @@ def handle_create_documents(reference_doctype: str, documents: list = None, data
     Create multiple documents.
     Accepts either 'documents' or 'data' depending on schema auto-generation.
     """
+    _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     docs = documents or data or []
     sanitized = [
         _sanitize_for_doctype(reference_doctype, d)
@@ -604,6 +643,10 @@ def handle_create_documents(reference_doctype: str, documents: list = None, data
 
 
 def handle_update_documents(reference_doctype: str, documents: list = None, data: list = None, **kwargs):
+    _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     docs = documents or data or []
     sanitized = []
     for d in docs:
@@ -620,6 +663,10 @@ def handle_update_documents(reference_doctype: str, documents: list = None, data
 
 
 def handle_delete_documents(reference_doctype: str, document_ids: list, **kwargs):
+    _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
+
     return delete_documents(reference_doctype, document_ids or [])
 
 
@@ -630,6 +677,10 @@ def handle_submit_document(reference_doctype: str = None, document_id: str = Non
 
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
+
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
 
         if not document_id:
             document_id = kwargs.get("name")
@@ -658,6 +709,10 @@ def handle_cancel_document(reference_doctype: str = None, document_id: str = Non
 
         if not reference_doctype:
             return {"success": False, "error": "No reference doctype provided."}
+
+        _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+        if _guard_err:
+            return json.loads(_guard_err)
 
         if not document_id:
             document_id = kwargs.get("name")
@@ -689,6 +744,10 @@ def handle_get_value(doctype: str = None, filters: dict = None, fieldname=None, 
             "success": False,
             "error": "Missing required parameters: doctype, filters, fieldname"
         }
+
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
 
     try:
         if isinstance(filters, dict):
@@ -727,6 +786,10 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
     """
     if not doctype or not filters or not fieldname:
         return {"success": False, "error": "Missing required parameters"}
+
+    _meta, _guard_err = _check_doctype_allowed(doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
 
     try:
         if isinstance(filters, dict):
@@ -768,6 +831,10 @@ def handle_set_value(doctype: str = None, filters: dict = None, fieldname: str =
 
 
 def handle_get_report_result(report_name: str, filters: dict | None = None, limit: int | None = None, ignore_permissions=False, **kwargs):
+    _meta, _guard_err = _check_doctype_allowed("Report")
+    if _guard_err:
+        return json.loads(_guard_err)
+
     if not ignore_permissions and not frappe.has_permission("Report", "read", doc=report_name):
         return {"success": False, "error": f"You do not have permission to read Report {report_name}"}
     return get_report_result(report_name, filters=filters, limit=limit, user=frappe.session.user)
@@ -782,6 +849,10 @@ def handle_attach_file_to_document(reference_doctype, document_id, **kwargs):
             "success": False,
             "error": "reference_doctype and document_id are required"
         }
+
+    _meta, _guard_err = _check_doctype_allowed(reference_doctype)
+    if _guard_err:
+        return json.loads(_guard_err)
 
     normalized_kwargs = {}
     for k, v in (kwargs or {}).items():

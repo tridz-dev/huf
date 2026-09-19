@@ -38,6 +38,30 @@ from frappe.model.document import Document
 from huf.ai.graph.procedure_binding import get_binding_cap
 
 
+def get_permission_query_conditions(user=None):
+	"""Restrict Agent Procedure Binding list/read to bindings the user owns,
+	unless the user has agent.view_all capability.
+
+	Fix for the same defect pattern as F-02 (see huf.ai.agent_integration
+	.get_run_permission_conditions, the reference implementation this mirrors):
+	Huf User / Huf Manager hold create+write on this DocType but there was no
+	if_owner restriction and no permission_query_conditions hook, so any
+	authenticated user could read or list another user's bindings. Registered
+	in hooks.py.
+	"""
+	if not user:
+		user = frappe.session.user
+
+	from huf.permissions import has_capability, SYSTEM_MANAGER
+	if SYSTEM_MANAGER in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "agent.view_all"):
+		return None
+
+	return f"`tabAgent Procedure Binding`.owner = {frappe.db.escape(user)}"
+
+
 class AgentProcedureBinding(Document):
 	def validate(self):
 		self._denormalize_from_procedure()

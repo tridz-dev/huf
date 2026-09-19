@@ -17,6 +17,7 @@ from typing import Any
 import frappe
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -44,14 +45,14 @@ class MessengerGatewayAdapter(GatewayAdapter):
 			GatewayCredentialField("page_id", "Facebook Page ID", secret=False),
 			GatewayCredentialField("access_token", "Facebook Page Access Token"),
 			GatewayCredentialField("webhook_verify_token", "Webhook Verify Token"),
-			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=False),
+			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=True),
 		)
 	)
 	capabilities = GatewayCapabilities(
 		frozenset({"webhook"}),
 		supports_text_reply=True,
 		supports_thread_reply=True,
-		supports_media_reply=True,
+		supports_media_reply=False,  # GW-32: send_reply only sends text today
 		max_outbound_messages_per_second=50,
 	)
 
@@ -80,23 +81,32 @@ class MessengerGatewayAdapter(GatewayAdapter):
 		raise ValueError("Messenger webhook verification token mismatch")
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify Facebook Messenger webhook signature or object."""
+		"""Verify Meta Messenger webhook signature using HMAC-SHA256.
+
+		For GET requests (initial verification): validate hub.verify_token matches configured token.
+		For POST requests (events): require X-Hub-Signature-256 HMAC-SHA256 signature verification.
+
+		Fails closed (returns False) if:
+		- POST request: X-Hub-Signature-256 header is missing or invalid
+		- POST request: signature does not match HMAC-SHA256(app_secret, body)
+		"""
 		if request.method == "GET":
 			query = request.query or {}
 			token = query.get("hub.verify_token") or query.get("hub_verify_token")
 			return bool(token and token == self._verify_token)
 
-		if self._app_secret:
-			signature = request.headers.get("x-hub-signature-256") or request.headers.get("X-Hub-Signature-256")
-			if not signature or not signature.startswith("sha256="):
-				return False
-			expected = hmac.new(self._app_secret.encode("utf-8"), request.body, "sha256").hexdigest()
-			return hmac.compare_digest(signature[7:], expected)
-
-		payload = self._payload(request)
-		if not payload or payload.get("object") not in ("page", "instagram"):
+		# POST request: mandatory HMAC-SHA256 signature verification
+		# app_secret is required (schema marks it required=True)
+		if not self._app_secret:
 			return False
-		return True
+
+		signature = request.headers.get("x-hub-signature-256") or request.headers.get("X-Hub-Signature-256")
+		if not signature or not signature.startswith("sha256="):
+			return False
+
+		# Extract and validate the signature
+		expected = hmac.new(self._app_secret.encode("utf-8"), request.body, "sha256").hexdigest()
+		return hmac.compare_digest(signature[7:], expected)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
 		"""Extract normalized event from Facebook Messenger payload."""
@@ -125,9 +135,22 @@ class MessengerGatewayAdapter(GatewayAdapter):
 		provider_event_id = str(message.get("mid") or f"{sender_id}:{event.get('timestamp')}")
 		message_text = str(message.get("text") or "")
 
-		if not message_text and "attachments" in message:
-			att_type = message["attachments"][0].get("type", "attachment")
+		raw_attachments = message.get("attachments") or []
+		if not message_text and raw_attachments:
+			att_type = raw_attachments[0].get("type", "attachment")
 			message_text = f"[{att_type} attachment]"
+
+		attachments = []
+		for attachment in raw_attachments:
+			url = ((attachment.get("payload") or {}).get("url")) or None
+			if not url:
+				continue
+			attachments.append(
+				GatewayAttachment(
+					url=url,
+					kind=str(attachment.get("type") or "file"),
+				)
+			)
 
 		return NormalizedGatewayEvent(
 			provider_event_id=provider_event_id,
@@ -137,6 +160,7 @@ class MessengerGatewayAdapter(GatewayAdapter):
 			thread_id=str(message["reply_to"]["mid"]) if message.get("reply_to") else None,
 			is_room=False,
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:

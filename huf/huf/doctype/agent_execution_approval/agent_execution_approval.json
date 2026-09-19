@@ -11,6 +11,7 @@
   "code_ref",
   "status",
   "expires_on",
+  "requested_by",
   "approval_section",
   "approver_role",
   "approver_users",
@@ -63,6 +64,14 @@
    "fieldname": "expires_on",
    "fieldtype": "Datetime",
    "label": "Expires On"
+  },
+  {
+   "description": "The user who requested this execution / triggered the approval request. Used to prevent self-approval.",
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
   },
   {
    "fieldname": "approval_section",

@@ -10,12 +10,15 @@
   "agent",
   "prompt",
   "sequence",
+  "idempotency_key",
   "runtime_context",
   "response_tab",
   "response",
   "status",
   "error_code",
   "error_message",
+  "tool_setup_warnings",
+  "audit_incomplete",
   "metadata",
   "provider",
   "start_time",
@@ -44,6 +47,11 @@
   "parent_run",
   "is_child",
   "agent_orchestration",
+  "budget_section",
+  "budget_deadline_at",
+  "budget_depth",
+  "budget_ancestry",
+  "budget_spend_usd",
   "knowledge_section",
   "knowledge_sources_used",
   "chunks_injected",
@@ -105,6 +113,18 @@
    "read_only": 1
   },
   {
+   "fieldname": "tool_setup_warnings",
+   "fieldtype": "Long Text",
+   "label": "Tool Setup Warnings",
+   "read_only": 1
+  },
+  {
+   "fieldname": "audit_incomplete",
+   "fieldtype": "Long Text",
+   "label": "Audit Incomplete",
+   "read_only": 1
+  },
+  {
    "fieldname": "response",
    "fieldtype": "Code",
    "label": "Response",
@@ -126,6 +146,15 @@
    "fieldtype": "Int",
    "hidden": 1,
    "label": "Sequence",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Idempotency Key",
+   "length": 64,
    "read_only": 1,
    "search_index": 1
   },
@@ -321,6 +350,39 @@
    "read_only": 1
   },
   {
+   "fieldname": "budget_section",
+   "fieldtype": "Section Break",
+   "label": "Run Budget"
+  },
+  {
+   "description": "The wall-clock deadline when the run started.",
+   "fieldname": "budget_deadline_at",
+   "fieldtype": "Datetime",
+   "label": "Budget Deadline At",
+   "read_only": 1
+  },
+  {
+   "description": "The depth of this run in the recursion chain.",
+   "fieldname": "budget_depth",
+   "fieldtype": "Int",
+   "label": "Budget Depth",
+   "read_only": 1
+  },
+  {
+   "description": "List of parent run IDs in the ancestry chain (stored as JSON).",
+   "fieldname": "budget_ancestry",
+   "fieldtype": "JSON",
+   "label": "Budget Ancestry",
+   "read_only": 1
+  },
+  {
+   "description": "Actual spend for this run in USD.",
+   "fieldname": "budget_spend_usd",
+   "fieldtype": "Float",
+   "label": "Budget Spend USD",
+   "read_only": 1
+  },
+  {
    "fieldname": "trigger_reference_section",
    "fieldtype": "Section Break",
    "label": "Trigger Reference"
@@ -409,7 +471,7 @@
    "fieldname": "run_kind",
    "fieldtype": "Select",
    "label": "Run Kind",
-   "options": "agent\ntool\norchestrator",
+   "options": "agent\ntool\norchestrator\nmemory_extraction",
    "read_only": 1
   },
   {
@@ -420,7 +482,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-14 16:40:35.708364",
+ "modified": "2026-09-17 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Run",

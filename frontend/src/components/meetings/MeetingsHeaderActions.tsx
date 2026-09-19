@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { NewMeetingDialog } from './NewMeetingDialog';
-import { createMeeting, startRecording } from '@/services/meetingApi';
+import { beginMeetingRecording } from '@/services/meetingApi';
 
 /**
  * Quick Start is a single click, zero intermediate screens: it creates the
@@ -19,8 +19,7 @@ export function MeetingsHeaderActions() {
   const [starting, setStarting] = useState(false);
 
   const beginRecording = async (details: { title?: string; description?: string; participants?: string }) => {
-    const { meeting_name: meetingName } = await createMeeting(details);
-    await startRecording(meetingName);
+    const { meeting_name: meetingName } = await beginMeetingRecording(details);
     navigate(`/meetings/${meetingName}/record`);
   };
 
@@ -53,7 +52,7 @@ export function MeetingsHeaderActions() {
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)} disabled={quickStarting}>
+      <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
         <Plus className="w-4 h-4 mr-2" />
         New meeting with details
       </Button>

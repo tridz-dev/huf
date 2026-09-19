@@ -38,6 +38,7 @@ import tempfile
 from typing import Any
 from urllib.parse import urlparse
 
+import frappe
 from frappe.utils.data import add_to_date, now_datetime
 
 
@@ -620,6 +621,7 @@ def run_python(
 				"code_ref": code_ref,
 				"status": "Pending",
 				"expires_on": add_to_date(now_datetime(), hours=_APPROVAL_TTL_HOURS),
+				"requested_by": acting_user,
 			}
 		)
 		original_user = frappe.session.user

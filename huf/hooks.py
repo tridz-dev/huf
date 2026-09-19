@@ -176,13 +176,38 @@ permission_query_conditions = {
     "Agent Message": "huf.ai.agent_integration.get_message_permission_conditions",
     "Agent Run": "huf.ai.agent_integration.get_run_permission_conditions",
     "Agent Context Artifact": "huf.ai.agent_integration.get_context_artifact_permission_conditions",
+    "Agent Tool Call": "huf.ai.agent_integration.get_tool_call_permission_conditions",
+    "Agent Run Prompt Snapshot": "huf.ai.agent_integration.get_prompt_snapshot_permission_conditions",
+    "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
+    "Agent Procedure Run": "huf.ai.agent_integration.get_procedure_run_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
+    "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
+    "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
+    "Agent Run Feedback": "huf.ai.record_access.get_feedback_permission_conditions",
+    "Gateway": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Gateway Access Entry": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Gateway Event": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Gateway Binding": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
 }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+
+has_permission = {
+	"Agent Run": "huf.ai.hooks.has_permission_agent_run",
+	"Agent Message": "huf.ai.hooks.has_permission_agent_message",
+	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
+	"Agent Tool Call": "huf.ai.hooks.has_permission_agent_tool_call",
+	"Agent Context Artifact": "huf.ai.hooks.has_permission_agent_context_artifact",
+	"Gateway": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Gateway Access Entry": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Gateway Event": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Gateway Binding": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Integration Settings": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Integration Service": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"Integration Credential": "huf.ai.gateway_webhook.has_permission_gateway_family",
+}
 
 # DocType Class
 # ---------------
@@ -278,6 +303,7 @@ scheduler_events = {
         "huf.ai.memory_tools.expire_stale_memory_records",
         "huf.ai.agent_chat.purge_trashed_conversations",
         "huf.ai.context_artifacts.purge_expired_context_artifacts",
+        "huf.ai.gateway_service.purge_old_rejected_gateway_events",
     ],
     "cron": {
         "*/1 * * * *": [
@@ -294,7 +320,8 @@ scheduler_events = {
     "hourly": [
         "huf.ai.mcp_client.auto_sync_mcp_server_tools",
         "huf.ai.mcp_oauth.auto_refresh_oauth_tokens",
-        "huf.ai.meetings.meeting_recording.cleanup_stale_recordings"
+        "huf.ai.meetings.meeting_recording.cleanup_stale_recordings",
+        "huf.ai.meetings.meeting_recording.recover_stuck_uploaded_chunks"
     ]
 }
 
@@ -364,9 +391,9 @@ scheduler_events = {
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"huf.auth.validate"
-# ]
+auth_hooks = [
+	"huf.ai.gateway_webhook.exempt_gateway_webhook_auth"
+]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

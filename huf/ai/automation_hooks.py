@@ -163,26 +163,33 @@ def run_hooked_automations(doc, method=None, *args, **kwargs):
 				return
 			cache.set_value(lock_key, now_datetime().isoformat(), expires_in_sec=30)
 
+			# Read originating run ID if set (ST-09.5 point b)
+			originating_run_id = frappe.flags.get("huf_current_agent_run_id")
+
 			enqueue(
 				run_automation_for_doc,
 				queue="long",
-				job_id=f"run-automation-{t['automation']}-{d.doctype}-{safe_name}-{m}-{uuid4()}",
+				job_id=f"run-automation-{t['automation']}-{d.doctype}-{safe_name}-{m}",
 				trigger=t,
 				doc=d.as_dict(),
 				event_name=m,
 				initiating_user=u,
+				originating_run_id=originating_run_id,
 			)
 
 		frappe.db.after_commit.add(_queue_after_commit)
 
 
-def run_automation_for_doc(trigger, doc, event_name, initiating_user=None):
+def run_automation_for_doc(trigger, doc, event_name, initiating_user=None, originating_run_id=None):
 	"""Background worker: resolve trigger_context for a fired Doc Event
 	Automation Trigger and hand off to the canonical run_automation().
 
 	Runs in its own background-job transaction (enqueued via
 	run_hooked_automations above), so commit=True (run_automation's
 	default) is correct and safe here.
+
+	originating_run_id: the Agent Run ID that triggered this automation (if any),
+	threaded from frappe.flags.huf_current_agent_run_id at hook time (ST-09.5).
 	"""
 	from .automation_runner import run_automation
 
@@ -367,6 +374,7 @@ def run_automation_for_doc(trigger, doc, event_name, initiating_user=None):
 			trigger_name=trigger.get("name"),
 			trigger_context=trigger_context,
 			initiating_user=initiating_user,
+			parent_run_id=originating_run_id,
 		)
 	finally:
 		if frappe.session.user != original_user:

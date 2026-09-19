@@ -28,14 +28,14 @@ class InstagramGatewayAdapter(MessengerGatewayAdapter):
 			GatewayCredentialField("instagram_account_id", "Instagram Professional Account ID / Page ID", secret=False),
 			GatewayCredentialField("access_token", "Facebook / Instagram Page Access Token"),
 			GatewayCredentialField("webhook_verify_token", "Webhook Verify Token"),
-			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=False),
+			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=True),
 		)
 	)
 	capabilities = GatewayCapabilities(
 		frozenset({"webhook"}),
 		supports_text_reply=True,
 		supports_thread_reply=True,
-		supports_media_reply=True,
+		supports_media_reply=False,  # GW-32: send_reply only sends text today
 		max_outbound_messages_per_second=20,
 	)
 

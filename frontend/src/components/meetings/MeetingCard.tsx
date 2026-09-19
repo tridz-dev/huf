@@ -1,12 +1,26 @@
-import { Calendar, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { Calendar, Clock, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { ItemCard } from '@/components/dashboard';
 import { formatTimeAgo } from '@/utils/time';
+import { deleteMeeting } from '@/services/meetingApi';
 import type { MeetingListItem, MeetingStatus } from '@/types/meeting.types';
 import type { BadgeVariant } from '@/utils/status';
 
 interface MeetingCardProps {
   meeting: MeetingListItem;
   onClick: () => void;
+  onDelete?: () => void;
 }
 
 function statusPresentation(status: MeetingStatus): { label: string; variant: BadgeVariant } {
@@ -51,23 +65,74 @@ function formatDuration(seconds?: number): string {
 /** Thin `ItemCard` wrapper for one meeting in the history grid — title (or
  * placeholder), relative date, duration, status pill, and a summary
  * excerpt once available (PLAN.md G.1 "Meeting-history usability"). */
-export function MeetingCard({ meeting, onClick }: MeetingCardProps) {
+export function MeetingCard({ meeting, onClick, onDelete }: MeetingCardProps) {
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   const status = statusPresentation(meeting.status);
   const title = meeting.title?.trim() || `Meeting — ${formatTimeAgo(meeting.started_at || meeting.modified)}`;
 
   const description =
     failureReason(meeting) ?? (meeting.summary ? meeting.summary.slice(0, 140) : meeting.description?.slice(0, 140));
 
+  const handleDeleteConfirm = async () => {
+    setDeleting(true);
+    try {
+      await deleteMeeting(meeting.name);
+      toast.success('Meeting deleted');
+      setDeleteDialogOpen(false);
+      onDelete?.();
+    } catch (err) {
+      toast.error('Failed to delete meeting', {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred.',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
-    <ItemCard
-      title={title}
-      description={description}
-      status={status}
-      metadata={[
-        { label: 'When', value: formatTimeAgo(meeting.started_at || meeting.modified), icon: Calendar },
-        { label: 'Duration', value: formatDuration(meeting.duration_seconds), icon: Clock },
-      ]}
-      onClick={onClick}
-    />
+    <>
+      <ItemCard
+        title={title}
+        description={description}
+        status={status}
+        metadata={[
+          { label: 'When', value: formatTimeAgo(meeting.started_at || meeting.modified), icon: Calendar },
+          { label: 'Duration', value: formatDuration(meeting.duration_seconds), icon: Clock },
+        ]}
+        menuActions={[
+          {
+            icon: Trash2,
+            label: 'Delete',
+            variant: 'destructive',
+            onClick: () => setDeleteDialogOpen(true),
+          },
+        ]}
+        onClick={onClick}
+      />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(next) => { if (!deleting) setDeleteDialogOpen(next); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete meeting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the meeting and all its recordings.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

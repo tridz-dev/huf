@@ -88,6 +88,23 @@ class AgentStreamRenderer(BaseRenderer):
 		def _get_param(key: str, default=None):
 			return frappe.form_dict.get(key) or body.get(key) or default
 
+		# Agent lookup and permission check happen first, before any other
+		# validation, and use a single uniform error message regardless of
+		# whether the agent does not exist or the caller lacks permission —
+		# this avoids leaking agent names or existence to unauthorized callers
+		# (SSE enumeration oracle).
+		try:
+			agent_doc = frappe.get_doc("Agent", agent_name)
+			if not frappe.has_permission("Agent", ptype="read", doc=agent_doc):
+				return self._sse_error_response("Agent not found")
+		except frappe.DoesNotExistError:
+			return self._sse_error_response("Agent not found")
+		except frappe.PermissionError:
+			return self._sse_error_response("Agent not found")
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Agent Stream Renderer Error")
+			return self._sse_error_response("Agent not found")
+
 		# Get prompt from query parameters or request body
 		prompt = _get_param("prompt") or _get_param("message", "")
 
@@ -113,53 +130,21 @@ class AgentStreamRenderer(BaseRenderer):
 				},
 			)
 
-		# Get agent configuration
-		try:
-			agent_doc = frappe.get_doc("Agent", agent_name)
-			if not model:
-				model = agent_doc.model
-			# If a model override was supplied but no explicit provider, resolve
-			# the provider from the override model so the right API key/base URL
-			# is used for cross-provider switches.
-			if model and model != agent_doc.model:
-				try:
-					resolved_provider, _, _ = _resolve_effective_model(
-						agent_doc, model=model, provider=provider
-					)
-					provider = resolved_provider
-				except Exception:
-					pass
-			if not provider:
-				provider = agent_doc.provider
-		except frappe.DoesNotExistError:
-			def error_generator() -> Generator[str, None, None]:
-				error_data = {"type": "error", "error": f"Agent '{agent_name}' not found"}
-				yield f"data: {json.dumps(error_data)}\n\n"
-
-			return Response(
-				error_generator(),
-				mimetype="text/event-stream",
-				headers={
-					"Cache-Control": "no-cache",
-					"Connection": "keep-alive",
-					"X-Accel-Buffering": "no",
-				},
-			)
-		except Exception as e:
-			frappe.log_error(frappe.get_traceback(), "Agent Stream Renderer Error")
-			def error_generator() -> Generator[str, None, None]:
-				error_data = {"type": "error", "error": f"Error loading agent: {str(e)}"}
-				yield f"data: {json.dumps(error_data)}\n\n"
-
-			return Response(
-				error_generator(),
-				mimetype="text/event-stream",
-				headers={
-					"Cache-Control": "no-cache",
-					"Connection": "keep-alive",
-					"X-Accel-Buffering": "no",
-				},
-			)
+		if not model:
+			model = agent_doc.model
+		# If a model override was supplied but no explicit provider, resolve
+		# the provider from the override model so the right API key/base URL
+		# is used for cross-provider switches.
+		if model and model != agent_doc.model:
+			try:
+				resolved_provider, _, _ = _resolve_effective_model(
+					agent_doc, model=model, provider=provider
+				)
+				provider = resolved_provider
+			except Exception:
+				pass
+		if not provider:
+			provider = agent_doc.provider
 
 		# Queue-first policy: streaming is a direct-execution compatibility path,
 		# allowed only when the agent opts in via the 'Run Immediately' policy.

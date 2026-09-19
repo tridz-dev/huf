@@ -319,7 +319,7 @@ class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 			captured.update(kwargs)
 			return {"ok": True}
 
-		ti.get_function_from_name = lambda path: fake_handler
+		ti.get_function_from_name = lambda path, tool_type=None: fake_handler
 		self._register_tool("dangerous_tool", "Update Document", reference_doctype="Task")
 
 		result = _run(ti.invoke_tool(
@@ -339,7 +339,7 @@ class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 			captured.update(kwargs)
 			return {"ok": True}
 
-		ti.get_function_from_name = lambda path: fake_handler
+		ti.get_function_from_name = lambda path, tool_type=None: fake_handler
 		self.frappe.session.user = "Administrator"
 
 		result = _run(ti.invoke_tool(
@@ -351,7 +351,7 @@ class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 		self.assertNotIn("ignore_permissions", captured)
 
 	def test_guest_blocked_from_mutating_alias_with_no_backing_doc(self):
-		ti.get_function_from_name = lambda path: (lambda **kw: {"ok": True})
+		ti.get_function_from_name = lambda path, tool_type=None: (lambda **kw: {"ok": True})
 		self.frappe.session.user = "Guest"
 
 		result = _run(ti.invoke_tool("delete_document", {"name": "TASK-0001"}))
@@ -360,7 +360,7 @@ class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 		self.assertTrue(result.denied)
 
 	def test_guest_pinned_type_without_pin_is_refused(self):
-		ti.get_function_from_name = lambda path: (lambda **kw: {"ok": True})
+		ti.get_function_from_name = lambda path, tool_type=None: (lambda **kw: {"ok": True})
 		self._register_tool("open_lookup", "Get Document", reference_doctype=None, allowed_for_guest=1)
 		self.frappe.session.user = "Guest"
 
@@ -377,7 +377,7 @@ class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 			captured.update(kwargs)
 			return {"ok": True}
 
-		ti.get_function_from_name = lambda path: fake_handler
+		ti.get_function_from_name = lambda path, tool_type=None: fake_handler
 		self._register_tool("public_faq", "Get Document", reference_doctype="FAQ", allowed_for_guest=1)
 		self.frappe.session.user = "Guest"
 
@@ -398,7 +398,7 @@ class InvokeToolSecurityTests(_FrappeDoubleTestCase):
 			captured.update(kwargs)
 			return {"ok": True}
 
-		ti.get_function_from_name = lambda path: fake_handler
+		ti.get_function_from_name = lambda path, tool_type=None: fake_handler
 		self._register_tool("pinned_tool", "Get List", reference_doctype="Task")
 
 		_run(ti.invoke_tool("pinned_tool", {"reference_doctype": "User"}))
@@ -418,7 +418,7 @@ class SignatureFilteringTests(_FrappeDoubleTestCase):
 			captured["kwargs"] = {"name": name, "reference_doctype": reference_doctype}
 			return {"ok": True}
 
-		ti.get_function_from_name = lambda path: fake_handler
+		ti.get_function_from_name = lambda path, tool_type=None: fake_handler
 		self.frappe.db.tool_function_rows["strict_tool"] = {
 			"name": "ATF-strict", "tool_name": "strict_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": "Task", "agent": None,
@@ -439,7 +439,7 @@ class SignatureFilteringTests(_FrappeDoubleTestCase):
 			captured.update(kwargs)
 			return {"ok": True}
 
-		ti.get_function_from_name = lambda path: fake_handler
+		ti.get_function_from_name = lambda path, tool_type=None: fake_handler
 		self.frappe.db.tool_function_rows["loose_tool"] = {
 			"name": "ATF-loose", "tool_name": "loose_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
@@ -482,7 +482,7 @@ class TelemetryTests(_FrappeDoubleTestCase):
 	"""
 
 	def test_telemetry_off_by_default_creates_no_doc(self):
-		ti.get_function_from_name = lambda path: (lambda **kw: {"ok": True})
+		ti.get_function_from_name = lambda path, tool_type=None: (lambda **kw: {"ok": True})
 		self.frappe.db.tool_function_rows["quiet_tool"] = {
 			"name": "ATF-quiet", "tool_name": "quiet_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
@@ -494,7 +494,7 @@ class TelemetryTests(_FrappeDoubleTestCase):
 		self.assertEqual(len(self.frappe.docs), 0)
 
 	def test_telemetry_on_creates_started_then_finalizes_completed(self):
-		ti.get_function_from_name = lambda path: (lambda **kw: {"value": 42})
+		ti.get_function_from_name = lambda path, tool_type=None: (lambda **kw: {"value": 42})
 		self.frappe.db.tool_function_rows["loud_tool"] = {
 			"name": "ATF-loud", "tool_name": "loud_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
@@ -517,7 +517,7 @@ class TelemetryTests(_FrappeDoubleTestCase):
 		def raising_handler(**kwargs):
 			raise ValueError("boom")
 
-		ti.get_function_from_name = lambda path: raising_handler
+		ti.get_function_from_name = lambda path, tool_type=None: raising_handler
 		self.frappe.db.tool_function_rows["failing_tool"] = {
 			"name": "ATF-fail", "tool_name": "failing_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
@@ -537,7 +537,7 @@ class InvokeToolSyncTests(_FrappeDoubleTestCase):
 	"""
 
 	def test_sync_wrapper_runs_to_completion(self):
-		ti.get_function_from_name = lambda path: (lambda **kw: {"value": 1})
+		ti.get_function_from_name = lambda path, tool_type=None: (lambda **kw: {"value": 1})
 		self.frappe.db.tool_function_rows["sync_tool"] = {
 			"name": "ATF-sync", "tool_name": "sync_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,
@@ -553,7 +553,7 @@ class InvokeToolSyncTests(_FrappeDoubleTestCase):
 		async def async_handler(**kwargs):
 			return {"async": True}
 
-		ti.get_function_from_name = lambda path: async_handler
+		ti.get_function_from_name = lambda path, tool_type=None: async_handler
 		self.frappe.db.tool_function_rows["async_tool"] = {
 			"name": "ATF-async", "tool_name": "async_tool", "types": "Get Document",
 			"function_path": None, "reference_doctype": None, "agent": None,

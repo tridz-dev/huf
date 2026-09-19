@@ -765,7 +765,7 @@ function AppShell() {
           <Route
             path="/integrations"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsListingPageWrapper />
                 </Suspense>
@@ -775,7 +775,7 @@ function AppShell() {
           <Route
             path="/integrations/:settingId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationSettingsDetailsPageWrapper />
                 </Suspense>
@@ -785,7 +785,7 @@ function AppShell() {
           <Route
             path="/gateways"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="system.integrations.manage">
                 <UnifiedLayout>
                   <Suspense fallback={<PageLoader />}>
                     <GatewaysPage />
@@ -797,7 +797,7 @@ function AppShell() {
           <Route
             path="/gateways/:settingId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <GatewayDetailsPageWrapper />
                 </Suspense>
@@ -807,7 +807,7 @@ function AppShell() {
           <Route
             path="/integration-services"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServicesListingPageWrapper />
                 </Suspense>
@@ -817,7 +817,7 @@ function AppShell() {
           <Route
             path="/integration-services/:serviceId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredCapability="system.integrations.manage">
                 <Suspense fallback={<PageLoader />}>
                   <IntegrationServiceFormPageWrapper />
                 </Suspense>

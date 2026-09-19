@@ -2,13 +2,13 @@ import { Clock, Play, Save, MessageSquare, MoreVertical, FileText, Lock, Copy, T
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useNavigate } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { UseFormReturn } from 'react-hook-form';
@@ -124,6 +124,17 @@ export function AgentHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mr-2">
+          <Label htmlFor="agent-disabled" className="text-sm font-normal">
+            Disable
+          </Label>
+          <Switch
+            id="agent-disabled"
+            checked={watchDisabled}
+            disabled={locked}
+            onCheckedChange={(checked) => form.setValue('disabled', checked)}
+          />
+        </div>
         {!isNew && !isVoiceOnly && (<Button
           variant="outline"
           size="icon-sm"
@@ -144,43 +155,29 @@ export function AgentHeader({
             {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
           </Button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <div className="px-2 py-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Disable</span>
-                <Switch
-                  checked={watchDisabled}
-                  disabled={locked}
-                  onCheckedChange={(checked) => form.setValue('disabled', checked)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-            {!isNew && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onDuplicate} disabled={duplicating || locked}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  {duplicating ? 'Duplicating...' : 'Duplicate'}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onViewLogs}>
-                  <FileText className="w-4 h-4 mr-2" />
-                  View logs
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {!isNew && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onDuplicate} disabled={duplicating || locked}>
+                <Copy className="w-4 h-4 mr-2" />
+                {duplicating ? 'Duplicating...' : 'Duplicate'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onViewLogs}>
+                <FileText className="w-4 h-4 mr-2" />
+                View logs
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} disabled={locked} className="text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </div>
   );

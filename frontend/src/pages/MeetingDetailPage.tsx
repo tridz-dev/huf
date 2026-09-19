@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { AlertTriangle, Calendar, Clock, FileDown, Users } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, FileDown, Users, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { MeetingChatPanel } from '@/components/meetings/MeetingChatPanel';
 import { MeetingFailureCard } from '@/components/meetings/MeetingFailureCard';
 import { MeetingProcessingStatus } from '@/components/meetings/MeetingProcessingStatus';
@@ -12,7 +22,7 @@ import { MeetingTranscriptPanel } from '@/components/meetings/MeetingTranscriptP
 import { MeetingRecordingPlayer } from '@/components/meetings/MeetingRecordingPlayer';
 import { PostMeetingContextPanel } from '@/components/meetings/PostMeetingContextPanel';
 import { useMeetingProcessingSocket } from '@/hooks/useMeetingProcessingSocket';
-import { getMeeting, retryChunkTranscription, retrySummary } from '@/services/meetingApi';
+import { getMeeting, retryChunkTranscription, retrySummary, deleteMeeting } from '@/services/meetingApi';
 import { downloadMeetingMinutes, downloadMeetingTranscript } from '@/services/meetingExport';
 import { formatTimeAgo } from '@/utils/time';
 import type { GetMeetingResult } from '@/services/meetingApi';
@@ -47,6 +57,8 @@ function MeetingDetailPage() {
   const [error, setError] = useState<Error | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [contextDismissed, setContextDismissed] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const lastLiveSignatureRef = useRef<string | null>(null);
 
   const { status: liveStatus, chunksTranscribed } = useMeetingProcessingSocket(meetingId ?? null);
@@ -130,6 +142,23 @@ function MeetingDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!data?.meeting) return;
+    setDeleting(true);
+    try {
+      await deleteMeeting(data.meeting.name);
+      toast.success('Meeting deleted');
+      navigate('/meetings');
+    } catch (err) {
+      toast.error('Could not delete meeting', {
+        description: err instanceof Error ? err.message : 'An unexpected error occurred.',
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
   const showContextPanel = !meeting.context_completed && !contextDismissed && status !== 'Recording' && status !== 'Paused';
 
   const header = (
@@ -168,6 +197,24 @@ function MeetingDetailPage() {
             onDismiss={() => setContextDismissed(true)}
             onSaved={() => load()}
           />
+        )}
+
+        {(status === 'Recording' || status === 'Paused') && (
+          <div className="rounded-lg border border-line bg-card p-4">
+            <div className="mb-4">
+              <p className="font-body text-sm text-ink">
+                {status === 'Recording'
+                  ? 'This meeting is still being recorded.'
+                  : 'Recording is paused.'}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => navigate(`/meetings/${meeting.name}/record`)}
+            >
+              Rejoin recording
+            </Button>
+          </div>
         )}
 
         {(status === 'Transcribing' || status === 'Summarizing') && (
@@ -261,11 +308,47 @@ function MeetingDetailPage() {
           </div>
         )}
 
-        <div>
+        <div className="flex items-center justify-between gap-4">
           <Button variant="link" size="sm" className="h-auto p-0" onClick={() => navigate('/meetings')}>
             Back to meetings
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDeleteDialogOpen(true)}
+            disabled={deleting}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+            Delete meeting
+          </Button>
         </div>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this meeting?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {status === 'Recording' || status === 'Paused'
+                  ? 'This will stop and discard the recording. This action cannot be undone.'
+                  : 'This meeting and all associated data will be permanently deleted. This action cannot be undone.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleDelete();
+                }}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

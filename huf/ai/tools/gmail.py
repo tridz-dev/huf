@@ -1,27 +1,39 @@
 import json
 import base64
+import time
 from email.mime.text import MIMEText
 import frappe
 logger = frappe.logger("huf")
 import httpx
-from huf.ai.tools.credentials import require_credential, get_credential, update_last_error
+from huf.ai.tools.credentials import require_credential, get_credential, update_last_error, set_credential
 
 
 def _get_gmail_access_token() -> str:
-    """Get Gmail OAuth2 access token by refreshing if possible."""
+    """Get Gmail OAuth2 access token by refreshing if needed and persisting tokens."""
     service_name = "gmail"
+
     # Try to get existing access token first
     access_token = get_credential(service_name, "access_token")
-    if access_token:
-        # Check if it's still valid (in a real flow you'd check expiry, but for now we try to refresh if missing)
-        return access_token
-    
+    access_token_expiry_str = get_credential(service_name, "access_token_expiry")
+
+    # Check if token is still valid (not expired)
+    if access_token and access_token_expiry_str:
+        try:
+            expiry_time = float(access_token_expiry_str)
+            current_time = time.time()
+            # If token expires in more than 60 seconds, use it
+            if current_time < expiry_time - 60:
+                return access_token
+        except (ValueError, TypeError):
+            # If expiry time is malformed, proceed to refresh
+            pass
+
     # Try to refresh using client_id, client_secret, refresh_token
     try:
         client_id = require_credential(service_name, "client_id")
         client_secret = require_credential(service_name, "client_secret")
         refresh_token = require_credential(service_name, "refresh_token")
-        
+
         response = httpx.post(
             "https://oauth2.googleapis.com/token",
             data={
@@ -35,7 +47,15 @@ def _get_gmail_access_token() -> str:
         response.raise_for_status()
         data = response.json()
         new_token = data.get("access_token")
-        # In a real app, you might want to save this back to credentials
+        expires_in = data.get("expires_in", 3600)  # Default to 1 hour if not provided
+
+        # Calculate expiry time as current time + expires_in (in seconds)
+        expiry_time = time.time() + expires_in
+
+        # Persist the new token and expiry back to Integration Settings
+        set_credential(service_name, "access_token", new_token)
+        set_credential(service_name, "access_token_expiry", str(expiry_time))
+
         return new_token
     except Exception as e:
         logger.warning(f"Gmail token refresh error: {e}")

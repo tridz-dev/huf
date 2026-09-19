@@ -12,6 +12,7 @@
   "column_break_lrkj",
   "types",
   "reference_doctype",
+  "reference_report",
   "agent",
   "base_url",
   "provider_app",
@@ -65,6 +66,13 @@
    "fieldtype": "Link",
    "label": "Reference DocType",
    "options": "DocType"
+  },
+  {
+   "depends_on": "eval: doc.types == \"Get Report Result\"",
+   "fieldname": "reference_report",
+   "fieldtype": "Link",
+   "label": "Reference Report",
+   "options": "Report"
   },
   {
    "description": "Permission level required to use this tool",
@@ -247,10 +255,10 @@
    "create": 0,
    "delete": 0,
    "email": 1,
-   "export": 1,
+   "export": 0,
    "print": 1,
    "read": 1,
-   "report": 1,
+   "report": 0,
    "role": "Huf User",
    "share": 1,
    "write": 0

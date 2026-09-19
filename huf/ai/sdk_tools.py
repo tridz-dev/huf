@@ -31,7 +31,7 @@ from huf.ai.tool_invocation import (
     check_tool_permission as _check_tool_permission,
 )
 from huf.ai.tool_registry import PermissionAwareToolRegistry
-from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES
+from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES
 from huf.ai.tools.perplexity import handle_perplexity_search
 
 logger = frappe.logger("huf")
@@ -482,7 +482,7 @@ def create_function_tool(
         FunctionTool: Function tool
     """
 
-    function = get_function_from_name(tool_name)
+    function = get_function_from_name(tool_name, tool_type=tool_type)
 
     if not function:
         return None
@@ -523,7 +523,21 @@ def create_function_tool(
                             ),
                             "denied": True,
                         })
+                    if tool_type in _GUEST_REPORT_PINNED_TYPES and not _extra_args.get("reference_report"):
+                        return json.dumps({
+                            "error": (
+                                "This tool is not available for guest access: it has no "
+                                "fixed target report configured."
+                            ),
+                            "denied": True,
+                        })
                     args_dict["ignore_permissions"] = True
+
+                    # Override report_name with reference_report if pinned for guest.
+                    # Scoped to this branch only -- a non-guest caller's LLM-supplied
+                    # report_name must not be silently overwritten by a guest pin.
+                    if _extra_args.get("reference_report"):
+                        args_dict["report_name"] = _extra_args["reference_report"]
 
                 if _function.__name__ in ["handle_get_request", "handle_post_request"]:
                     args_dict["tool_name"] = name
@@ -592,16 +606,26 @@ def create_function_tool(
         return None
 
 
-def get_function_from_name(tool_name: str) -> Callable:
+def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Callable:
     """
     Get a function from its name
 
     Args:
-        function_name: Fully qualified function name (module.function)
+        tool_name: Fully qualified function name (module.function)
+        tool_type: Optional tool type ("App Provided", "Custom Function", etc.)
+                   When "App Provided", validates against the hook allow-set.
 
     Returns:
-        Callable: Function
+        Callable: Function, or None if not found or validation fails
     """
+
+    if tool_type == "App Provided":
+        from huf.ai.tool_registry import get_hook_declared_function_paths
+        if tool_name not in get_hook_declared_function_paths():
+            frappe.logger("huf").debug(
+                f"App Provided function path not in hook allow-set: {tool_name}"
+            )
+            return None
 
     try:
         try:

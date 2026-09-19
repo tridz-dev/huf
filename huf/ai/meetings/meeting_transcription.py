@@ -15,7 +15,7 @@ summary step (``huf.ai.meetings.meeting_summary.run_meeting_summary``,
 built in Phase 5).
 """
 
-import time
+import datetime
 
 import frappe
 from frappe.utils import cint, flt, get_datetime, now_datetime, time_diff_in_seconds
@@ -31,6 +31,25 @@ MODEL_NOT_CONFIGURED_MESSAGE = (
     "No AI model is configured for the Meeting Summary Agent. Configure a model in"
     " Agent settings, then retry."
 )
+NO_AUDIO_RECORDED_MESSAGE = (
+    "The meeting was stopped without any audio chunks being uploaded, so there is nothing to"
+    " transcribe."
+)
+
+
+def _enqueue_after_delay(job_path: str, seconds: int, **kwargs):
+    """Re-enqueue ``job_path`` after ``seconds`` without blocking the calling worker.
+
+    ``frappe.enqueue()`` in this codebase's Frappe version has no ``delay``
+    parameter, so a blocking ``time.sleep()`` followed by an immediate
+    ``frappe.enqueue()`` would tie up an RQ worker thread for the whole
+    backoff/poll window. Use RQ's scheduler-backed delay instead.
+    """
+    frappe.get_queue("default").enqueue_in(
+        datetime.timedelta(seconds=seconds),
+        job_path,
+        **kwargs,
+    )
 
 
 def _agent_is_configured(agent_name: str = TRANSCRIPTION_AGENT) -> bool:
@@ -101,10 +120,9 @@ def _handle_transcription_failure(chunk, error_message: str):
         chunk.save(ignore_permissions=True)
         frappe.db.commit()
 
-        time.sleep(RETRY_BACKOFF_SECONDS * chunk.retry_count)
-        frappe.enqueue(
+        _enqueue_after_delay(
             "huf.ai.meetings.meeting_transcription.transcribe_meeting_chunk",
-            queue="default",
+            RETRY_BACKOFF_SECONDS * chunk.retry_count,
             chunk_name=chunk.name,
         )
         return
@@ -151,6 +169,27 @@ def _all_chunks_terminal(meeting_name: str) -> bool:
     return all(status in TERMINAL_UPLOAD_STATUSES for status in statuses)
 
 
+def _has_chunks(meeting_name: str) -> bool:
+    return bool(frappe.db.exists("Meeting Recording Chunk", {"meeting": meeting_name}))
+
+
+def _fail_meeting_for_no_audio(meeting) -> None:
+    """Terminate a Stopped meeting that has zero uploaded chunks.
+
+    Without this, ``_all_chunks_terminal`` returns False for an empty chunk
+    list, so ``finalize_meeting`` (called both from ``_maybe_finalize_meeting``
+    and directly by ``cleanup_stale_recordings``) would loop forever,
+    re-enqueuing itself every ``FINALIZE_POLL_SECONDS``.
+    """
+    meeting.status = "Failed"
+    meeting.failed_step = "No Audio Recorded"
+    meeting.last_error = NO_AUDIO_RECORDED_MESSAGE
+    _append_error_log(meeting, NO_AUDIO_RECORDED_MESSAGE)
+    meeting.save(ignore_permissions=True)
+    frappe.db.commit()
+    _emit_processing_status(meeting.name, meeting.status)
+
+
 def _chunk_progress(meeting_name: str) -> tuple:
     """Return (chunks_transcribed, chunks_total) for the meeting's chunks."""
     statuses = frappe.get_all(
@@ -195,11 +234,22 @@ def _emit_processing_status(meeting_name: str, status: str):
 def finalize_meeting(meeting_name: str):
     meeting = frappe.get_doc("Meeting", meeting_name)
 
-    if meeting.status != "Stopped" or not _all_chunks_terminal(meeting_name):
-        time.sleep(FINALIZE_POLL_SECONDS)
-        frappe.enqueue(
+    if meeting.status != "Stopped":
+        _enqueue_after_delay(
             "huf.ai.meetings.meeting_transcription.finalize_meeting",
-            queue="default",
+            FINALIZE_POLL_SECONDS,
+            meeting_name=meeting_name,
+        )
+        return
+
+    if not _has_chunks(meeting_name):
+        _fail_meeting_for_no_audio(meeting)
+        return
+
+    if not _all_chunks_terminal(meeting_name):
+        _enqueue_after_delay(
+            "huf.ai.meetings.meeting_transcription.finalize_meeting",
+            FINALIZE_POLL_SECONDS,
             meeting_name=meeting_name,
         )
         return

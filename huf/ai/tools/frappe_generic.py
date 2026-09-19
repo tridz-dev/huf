@@ -23,6 +23,7 @@ import json
 
 import frappe
 from frappe.model import default_fields
+from huf.ai.tool_doctype_guard import _check_doctype_allowed, _DENYLISTED_DOCTYPES, _DENYLISTED_PREFIXES
 
 logger = frappe.logger("huf")
 
@@ -31,26 +32,6 @@ logger = frappe.logger("huf")
 # Shared security helpers - every handler below goes through both of these.
 # ---------------------------------------------------------------------------
 
-#: Exact doctype names (case-insensitive) that are never accessible through
-#: this generic surface, regardless of the caller's roles. These are either
-#: security-sensitive (User, Role, *Script, Property Setter, File — which
-#: guards arbitrary file records, not just literal uploads) or would let an
-#: agent read/manufacture privilege (Role Profile).
-_DENYLISTED_DOCTYPES = {
-    "user",
-    "role",
-    "role profile",
-    "custom script",
-    "server script",
-    "property setter",
-    "file",
-}
-
-#: Doctype name PREFIXES (case-insensitive) that are denied wholesale, since
-#: individual doctype names under these families change across versions/apps
-#: (e.g. "OAuth Client", "OAuth Bearer Token", "Integration Request",
-#: "Integration Service") and an allowlist-by-exact-name would miss new ones.
-_DENYLISTED_PREFIXES = ("oauth", "integration")
 
 
 def _error(msg: str) -> str:

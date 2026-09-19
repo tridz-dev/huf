@@ -1,4 +1,4 @@
-import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users } from 'lucide-react';
+import { Plus, Server, Plug, Trash2, RefreshCw, Edit, Users, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -131,10 +131,18 @@ export function ToolsTab({
               </CardTitle>
               <CardDescription>The set of tools this agent is allowed to use to interact with the system.</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={onAddTools} type="button" disabled={locked}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add tool
-            </Button>
+            <div className="flex items-center gap-2">
+              <Link to="/integrations">
+                <Button size="sm" variant="ghost" type="button" className="text-xs h-8">
+                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                  Browse Integrations
+                </Button>
+              </Link>
+              <Button size="sm" variant="outline" onClick={onAddTools} type="button" disabled={locked}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add tool
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

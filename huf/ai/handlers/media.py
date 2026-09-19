@@ -67,6 +67,15 @@ async def handle_generate_image(
             "message": str
         }
     """
+    # LATENT GUARD — Frappe's whitelisted-method dispatch does not await
+    # coroutines, so this call does not execute on inbound HTTP requests.
+    # It only takes effect if a future refactor converts this handler to a
+    # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
+    # OPEN finding, not closed, until that refactor lands.
+    from huf.ai.agent_access import assert_agent_access
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
+
     try:
         # Get agent configuration from context
         if not agent_name:
@@ -230,7 +239,7 @@ async def handle_generate_image(
                         image_bytes,
                         "Agent Message",
                         message_doc.name,
-                        is_private=False,
+                        is_private=True,
                         df="generated_image"
                     )
                 else:
@@ -240,7 +249,7 @@ async def handle_generate_image(
                         image_bytes,
                         "Agent Conversation",
                         conversation_id or "Unknown",
-                        is_private=False
+                        is_private=True
                     )
 
                 # save_file returns a File document object
@@ -249,7 +258,7 @@ async def handle_generate_image(
 
                 # Ensure we have a file_url
                 if not file_url:
-                    file_url = f"/files/{getattr(saved_file, 'file_name', filename)}"
+                    file_url = f"/private/files/{getattr(saved_file, 'file_name', filename)}"
 
                 # Update the message with the file URL if message was created
                 # This ensures the Attach Image field displays the image correctly
@@ -280,7 +289,7 @@ async def handle_generate_image(
                         )
 
                 images.append({
-                    "url": file_url or f"/files/{filename}",
+                    "url": file_url or f"/private/files/{filename}",
                     "file_id": file_id
                 })
 
@@ -359,6 +368,15 @@ async def handle_ocr_document(
             "error": str
         }
     """
+    # LATENT GUARD — Frappe's whitelisted-method dispatch does not await
+    # coroutines, so this call does not execute on inbound HTTP requests.
+    # It only takes effect if a future refactor converts this handler to a
+    # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
+    # OPEN finding, not closed, until that refactor lands.
+    from huf.ai.agent_access import assert_agent_access
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
+
     try:
         from huf.ai.ocr_engine import extract_document
 
@@ -637,6 +655,15 @@ async def handle_generate_audio(
             "conversation_id": str
         }
     """
+    # LATENT GUARD — Frappe's whitelisted-method dispatch does not await
+    # coroutines, so this call does not execute on inbound HTTP requests.
+    # It only takes effect if a future refactor converts this handler to a
+    # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
+    # OPEN finding, not closed, until that refactor lands.
+    from huf.ai.agent_access import assert_agent_access
+    _guard_agent_doc = frappe.get_doc("Agent", agent_name)
+    assert_agent_access(_guard_agent_doc, frappe.session.user, for_execution=True)
+
     try:
         # Get agent configuration from context
         if not agent_name:
@@ -758,7 +785,7 @@ async def handle_generate_audio(
                 audio_bytes,
                 "Agent Message",
                 message_doc.name,
-                is_private=False,
+                is_private=True,
                 df="generated_audio"
             )
         else:
@@ -768,7 +795,7 @@ async def handle_generate_audio(
                 audio_bytes,
                 "Agent Conversation",
                 conversation_id or "Unknown",
-                is_private=False
+                is_private=True
             )
 
         # Get file URL
@@ -776,7 +803,7 @@ async def handle_generate_audio(
         file_id = getattr(saved_file, 'name', None)
 
         if not file_url:
-            file_url = f"/files/{getattr(saved_file, 'file_name', filename)}"
+            file_url = f"/private/files/{getattr(saved_file, 'file_name', filename)}"
 
         # Update the message with the file URL
         if message_doc and file_url:
@@ -891,6 +918,15 @@ async def handle_transcribe_audio(
             "provider": str
         }
     """
+    # LATENT GUARD — Frappe's whitelisted-method dispatch does not await
+    # coroutines, so this call does not execute on inbound HTTP requests.
+    # It only takes effect if a future refactor converts this handler to a
+    # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
+    # OPEN finding, not closed, until that refactor lands.
+    from huf.ai.agent_access import assert_agent_access
+    agent_doc = frappe.get_doc("Agent", agent_name)
+    assert_agent_access(agent_doc, frappe.session.user, for_execution=True)
+
     try:
         # Pure transcription (no message/socket side effects) via the
         # canonical audio service.
@@ -967,6 +1003,15 @@ async def handle_generate_video(
         dict: {"success": False, "error": str} — always, until a provider
             call is implemented. Never returns a fabricated success.
     """
+    # LATENT GUARD — Frappe's whitelisted-method dispatch does not await
+    # coroutines, so this call does not execute on inbound HTTP requests.
+    # It only takes effect if a future refactor converts this handler to a
+    # sync wrapper (see ST-R4.2, Audit F-33, review item 21). Tracked as an
+    # OPEN finding, not closed, until that refactor lands.
+    from huf.ai.agent_access import assert_agent_access
+    _guard_agent_doc = frappe.get_doc("Agent", agent_name)
+    assert_agent_access(_guard_agent_doc, frappe.session.user, for_execution=True)
+
     try:
         if not agent_name:
             return {"success": False, "error": "Agent name not found in context"}

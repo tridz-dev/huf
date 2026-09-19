@@ -18,6 +18,7 @@ import secrets
 from typing import Optional
 
 import frappe
+from frappe.rate_limiter import rate_limit
 logger = frappe.logger("huf")
 from frappe.utils.background_jobs import enqueue
 
@@ -54,6 +55,7 @@ def _get_request_header(name: str) -> str:
 
 
 @frappe.whitelist(allow_guest=True, methods=["POST"])
+@rate_limit(limit=100, seconds=60)
 def handle_update():
     """
     Public webhook endpoint for Telegram updates.

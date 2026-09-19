@@ -22,12 +22,13 @@ CORRECTION_WINDOW_HOURS = 26
 # Single source of truth for the rollup's grouping dimensions. `_dimension_key()`,
 # `_affected_dimensions()`, and `_recompute_rollup()` all derive from this tuple so
 # they can never drift out of agreement with each other or with the doc fields they
-# populate. `conversation` is appended at the END, not inserted alongside the other
-# fields: `dimension_key` values are persisted in existing rollup rows, and appending
-# keeps every previously-stored key string decodable positionally (old rows simply
-# decode with `conversation == "__none__"`). Inserting it earlier in the tuple would
-# silently reinterpret every stored key's remaining fields.
-DIMENSION_FIELDS = ("agent", "provider", "model", "run_kind", "conversation")
+# populate. `conversation` was removed in 2026-09-04 (WP-10) to eliminate O(conversations)
+# scaling from the refresh_rollups job; existing conversation-dimensioned rows are
+# archived to Agent Run Analytics Rollup Archive and must never be decoded against this
+# 4-field tuple. Raw Agent Runs (unconditional source of truth) retain conversation, so
+# conversation-level analytics are queryable directly from Agent Message/Agent Run grouped
+# by conversation, now fast via the (conversation, conversation_index) index added in ST-10.1.
+DIMENSION_FIELDS = ("agent", "provider", "model", "run_kind")
 
 
 def _bucket_start(value, granularity: str):
@@ -42,19 +43,28 @@ def _dimension_key(row: dict) -> str:
 
 
 def _affected_dimensions(since):
+    """Return dict mapping (granularity, bucket_start, dimension_key) -> max_start_time.
+
+    ST-10.4: Tracks max start_time per bucket so refresh_rollups can identify buckets
+    that have aged out of the CORRECTION_WINDOW_HOURS and skip recomputation.
+    """
     rows = frappe.db.get_all(
         "Agent Run",
         filters={"status": ["in", TERMINAL_STATUSES], "start_time": [">=", since]},
         fields=["start_time", *DIMENSION_FIELDS],
         limit_page_length=0,
     )
-    affected = set()
+    affected = {}
     for row in rows:
         if not row.start_time:
             continue
         row = dict(row)
+        start_time = get_datetime(row["start_time"])
         for granularity in ("hour", "day"):
-            affected.add((granularity, _bucket_start(row["start_time"], granularity), _dimension_key(row)))
+            key = (granularity, _bucket_start(row["start_time"], granularity), _dimension_key(row))
+            # Store the maximum start_time for this bucket
+            if key not in affected or start_time > get_datetime(affected[key]):
+                affected[key] = row["start_time"]
     return affected
 
 
@@ -161,6 +171,16 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
     dimension_values = {
         field: (None if value == "__none__" else value) for field, value in zip(DIMENSION_FIELDS, dimensions)
     }
+    new_composition_totals = json.dumps(composition_totals) if composition_totals else None
+
+    # ST-10.3: Check if this is an existing doc with unchanged metrics before updating
+    metrics_unchanged = False
+    composition_unchanged = False
+    if existing:
+        # Compare new computed metrics with existing doc's values
+        metrics_unchanged = all(doc.get(key) == metrics[key] for key in metrics.keys())
+        composition_unchanged = new_composition_totals == doc.composition_totals
+
     doc.update({
         "granularity": granularity,
         "bucket_start": bucket_start,
@@ -170,10 +190,16 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
         # Serialised explicitly, matching how this codebase writes every other JSON
         # field. An empty dict is stored as NULL rather than "{}": no segment was
         # measured at all, which is "not measured", not "measured as zero".
-        "composition_totals": json.dumps(composition_totals) if composition_totals else None,
+        "composition_totals": new_composition_totals,
         "last_recomputed_at": now_datetime(),
     })
     doc.flags.ignore_permissions = True
+
+    # Skip write if metrics are unchanged (optimization to reduce write volume)
+    if existing and metrics_unchanged and composition_unchanged:
+        frappe.logger().debug(f"Skipped unchanged bucket {granularity}:{bucket_start}:{dimension_key}")
+        return
+
     doc.save() if existing else doc.insert()
 
 
@@ -184,7 +210,20 @@ def refresh_rollups(full_backfill: bool = False):
     has_rollups = bool(frappe.db.count(ROLLUP_DOCTYPE))
     window_days = 90 if (full_backfill or not has_rollups) else 7
     since = add_to_date(now_datetime(), days=-window_days)
-    for granularity, bucket_start, dimension_key in _affected_dimensions(since):
+    affected_with_times = _affected_dimensions(since)
+
+    # ST-10.4: Compute correction window cutoff for skipping stable buckets
+    correction_cutoff = add_to_date(now_datetime(), hours=-CORRECTION_WINDOW_HOURS) if not full_backfill else None
+
+    for (granularity, bucket_start, dimension_key), max_start_time in affected_with_times.items():
+        # Skip recompute for buckets outside correction window (unless full_backfill)
+        if correction_cutoff and max_start_time < correction_cutoff:
+            frappe.logger().debug(
+                f"Skipping recompute for stable bucket {dimension_key}@{bucket_start}: "
+                f"outside {CORRECTION_WINDOW_HOURS}h correction window"
+            )
+            continue
+
         try:
             _recompute_rollup(granularity, bucket_start, dimension_key)
         except Exception:

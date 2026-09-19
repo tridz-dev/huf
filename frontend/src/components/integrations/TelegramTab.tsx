@@ -1,3 +1,11 @@
+/**
+ * @deprecated CL-04: no longer rendered anywhere. This duplicated ChannelTab.tsx
+ * with a separate field set (telegram_agent) and a separate webhook flow. Both
+ * have been consolidated into ChannelTab.tsx (default_agent/default_flow routing,
+ * plus a Telegram-only "Setup Webhook" section gated on provider === 'Telegram').
+ * Kept here only in case something outside this app still imports it directly;
+ * remove once that's confirmed not to be the case.
+ */
 import { RefreshCw } from 'lucide-react';
 import type { UseFormReturn } from 'react-hook-form';
 import { Button } from '@/components/ui/button';

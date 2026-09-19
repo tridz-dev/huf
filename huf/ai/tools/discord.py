@@ -3,6 +3,10 @@ Discord integration tools for sending messages and managing channels.
 Uses HUF Integration Settings for credential management.
 """
 
+# PARKED PROVIDER (2026-09-05)
+# This tool module is not maintained; dropped per product decision to defer implementation.
+# See gateway_adapters/discord.py and HUF_INTEGRATIONS_GATEWAYS_AUDIT.md for details.
+
 import json
 import frappe
 logger = frappe.logger("huf")

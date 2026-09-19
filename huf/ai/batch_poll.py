@@ -332,7 +332,6 @@ def _process_batch_job(job: dict) -> None:
 	frappe.db.commit()  # nosemgrep: justified background-job commit
 
 
-@frappe.whitelist()
 def poll_pending_batch_jobs():
 	"""Poll every Submitted/In Progress Batch Job and write back its status.
 

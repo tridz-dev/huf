@@ -208,13 +208,15 @@ def test_provider_connection(
     used for this probe only and are never persisted. Supplying any of them
     requires write access to the provider, since it is equivalent to editing
     the record and then testing it.
+
+    Testing a provider — with or without overrides — makes an outbound,
+    credentialed call to the provider's API using stored (or supplied)
+    secrets, so the permission check below runs unconditionally, before any
+    such call can be made.
     """
     result = {"provider": {"ok": False, "error": None}, "models": []}
 
-    overrides_supplied = any(
-        v is not None for v in (api_key, api_base_url, provider_brand, is_local_llm)
-    )
-    if overrides_supplied and not frappe.has_permission("AI Provider", "write", provider_name):
+    if not frappe.has_permission("AI Provider", "write", provider_name):
         result["provider"]["error"] = _("You do not have permission to test this provider.")
         return result
 

@@ -3,6 +3,12 @@
 
 """WeCom self-built-application callback and messaging adapter."""
 
+# PARKED PROVIDER (2026-09-05)
+# This adapter is not maintained and must be security-reviewed before re-enabling.
+# Reference: PR #630's "kept intact for future use" is a code-retention note, not a security review flag.
+# WeCom adapter has unexercised crypto surface area (full AES decryption) requiring security review.
+# See HUF_INTEGRATIONS_GATEWAYS_AUDIT.md and HUF_INTEGRATIONS_GATEWAYS_TODO.md for details.
+
 from __future__ import annotations
 
 import base64

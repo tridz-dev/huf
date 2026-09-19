@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Loader2, Search, Wrench } from 'lucide-react';
+import { Bot, Loader2, Search, Wrench, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -16,10 +16,10 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getAgents } from '@/services/agentApi';
-import { attachServiceTools } from '@/services/integrationApi';
+import { attachServiceTools, getIntegrationSettings } from '@/services/integrationApi';
 import { getServiceToolsCached } from '@/services/serviceToolsCache';
 import type { AgentDoc } from '@/types/agent.types';
-import type { ServiceTool } from '@/types/integration.types';
+import type { ServiceTool, IntegrationSettingsDoc } from '@/types/integration.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 
 interface AddIntegrationToAgentModalProps {
@@ -43,12 +43,16 @@ export function AddIntegrationToAgentModal({
   const [selectedAgentNames, setSelectedAgentNames] = useState<Set<string>>(new Set());
   const [agentSearch, setAgentSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [defaultIntegration, setDefaultIntegration] = useState<IntegrationSettingsDoc | null>(null);
+  const [allIntegrationsForService, setAllIntegrationsForService] = useState<IntegrationSettingsDoc[]>([]);
 
   useEffect(() => {
     if (!open) {
       setSelectedAgentNames(new Set());
       setSelectedToolNames(new Set());
       setAgentSearch('');
+      setDefaultIntegration(null);
+      setAllIntegrationsForService([]);
       return;
     }
 
@@ -76,6 +80,22 @@ export function AddIntegrationToAgentModal({
         toast.error(getFrappeErrorMessage(error) || 'Failed to load agents');
       })
       .finally(() => setAgentsLoading(false));
+
+    // Fetch Integration Settings to find the is_default one
+    getIntegrationSettings()
+      .then((result) => {
+        const settingsList = Array.isArray(result) ? result : result.items || [];
+        const activeSettingsForService = settingsList.filter(
+          (s) => s.service === service && s.is_active
+        );
+        setAllIntegrationsForService(activeSettingsForService);
+
+        const defaultSettings = activeSettingsForService.find((s) => s.is_default);
+        setDefaultIntegration(defaultSettings || null);
+      })
+      .catch((error) => {
+        console.error('Failed to load integration settings:', error);
+      });
   }, [open, service]);
 
   const filteredAgents = useMemo(() => {
@@ -177,8 +197,28 @@ export function AddIntegrationToAgentModal({
             Add to Agent
           </DialogTitle>
           <DialogDescription>
-            Attach the <span className="font-medium">{service}</span> tools to one or more agents.
-            {integrationName ? ` Integration: ${integrationName}` : ''}
+            <div className="space-y-2">
+              <div>
+                Attach the <span className="font-medium">{service}</span> tools to one or more agents.
+                {integrationName ? ` Integration: ${integrationName}` : ''}
+              </div>
+              {defaultIntegration && (
+                <div className="text-xs text-foreground pt-1">
+                  Credential set: <span className="font-medium">{defaultIntegration.name}</span>
+                </div>
+              )}
+              {allIntegrationsForService.length > 1 && (
+                <div className="flex items-start gap-2 text-xs bg-warning/10 border border-warning/30 rounded p-2">
+                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 text-warning flex-shrink-0" />
+                  <span>
+                    Multiple {service} credential sets exist. Tools will use the default set{defaultIntegration ? ` (${defaultIntegration.name})` : ''}.{' '}
+                    <a href="/huf/integrations" className="underline hover:text-foreground">
+                      Change default
+                    </a>
+                  </span>
+                </div>
+              )}
+            </div>
           </DialogDescription>
         </DialogScrollHeader>
 

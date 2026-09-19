@@ -36,7 +36,7 @@ from uuid import uuid4
 
 import frappe
 
-from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, MUTATING_TOOL_TYPES
+from huf.ai.tool_types import _GUEST_DOCTYPE_PINNED_TYPES, _GUEST_REPORT_PINNED_TYPES, MUTATING_TOOL_TYPES
 
 logger = frappe.logger("huf")
 
@@ -157,7 +157,7 @@ def resolve_tool_doc(tool_name: str) -> dict | None:
 		"Agent Tool Function",
 		{"tool_name": tool_name},
 		["name", "tool_name", "types", "function_path", "reference_doctype",
-			"agent", "function_name", "allowed_for_guest", "blocking", "base_url"],
+			"reference_report", "agent", "function_name", "allowed_for_guest", "blocking", "base_url"],
 		as_dict=True,
 	)
 	if doc:
@@ -171,6 +171,7 @@ def resolve_tool_doc(tool_name: str) -> dict | None:
 			"types": alias_type,
 			"function_path": None,
 			"reference_doctype": None,
+			"reference_report": None,
 			"agent": None,
 			"function_name": None,
 			"allowed_for_guest": False,
@@ -216,6 +217,8 @@ def build_extra_args(tool_doc: dict) -> dict:
 
 	if types in REFERENCE_DOCTYPE_PIN_TYPES and tool_doc.get("reference_doctype"):
 		extra["reference_doctype"] = tool_doc["reference_doctype"]
+	elif types in _GUEST_REPORT_PINNED_TYPES and tool_doc.get("reference_report"):
+		extra["reference_report"] = tool_doc["reference_report"]
 	elif types == CLIENT_SIDE_TOOL_TYPE and tool_doc.get("function_name"):
 		extra["function_name"] = tool_doc["function_name"]
 	elif types == "Run Agent" and tool_doc.get("agent"):
@@ -290,7 +293,7 @@ class ToolResult:
 		return out
 
 
-def get_function_from_name(tool_name: str) -> Callable | None:
+def get_function_from_name(tool_name: str, tool_type: str | None = None) -> Callable | None:
 	"""Re-exported for callers that only need resolution, not invocation.
 	The real implementation stays single-sourced in sdk_tools.py (seam
 	audit §"Recommended target shape": "already single-sourced ... just
@@ -299,7 +302,7 @@ def get_function_from_name(tool_name: str) -> Callable | None:
 	import cycle (sdk_tools imports resolution helpers from this module).
 	"""
 	from huf.ai.sdk_tools import get_function_from_name as _impl
-	return _impl(tool_name)
+	return _impl(tool_name, tool_type=tool_type)
 
 
 async def invoke_tool(
@@ -338,7 +341,7 @@ async def invoke_tool(
 	if not function_path:
 		return ToolResult(success=False, error=f"Cannot resolve handler for tool type '{tool_type}'")
 
-	handler = get_function_from_name(function_path)
+	handler = get_function_from_name(function_path, tool_type=tool_type)
 	if not handler:
 		return ToolResult(success=False, error=f"Handler function not found: {function_path}")
 
@@ -370,7 +373,22 @@ async def invoke_tool(
 					"fixed target doctype configured."
 				),
 			)
+		if tool_type in _GUEST_REPORT_PINNED_TYPES and not extra_args.get("reference_report"):
+			return ToolResult(
+				success=False,
+				denied=True,
+				error=(
+					"This tool is not available for guest access: it has no "
+					"fixed target report configured."
+				),
+			)
 		args_dict["ignore_permissions"] = True
+
+		# Override report_name with reference_report if pinned for guest.
+		# Scoped to this branch only -- a non-guest caller's LLM-supplied
+		# report_name must not be silently overwritten by a guest pin.
+		if extra_args.get("reference_report"):
+			args_dict["report_name"] = extra_args["reference_report"]
 
 	telemetry_doc = None
 	if telemetry:

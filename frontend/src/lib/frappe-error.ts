@@ -115,10 +115,7 @@ export function getFrappeErrorMessage(error: unknown): string {
     // Return the first message (usually the most relevant)
     const message = serverMessages[0].message || serverMessages[0].title || 'An error occurred';
     // Strip HTML tags safely using DOMPurify without regexes or double-escaping
-    const clean =
-      typeof window !== 'undefined'
-        ? DOMPurify.sanitize(message, { ALLOWED_TAGS: [] }).trim()
-        : message.replace(/<[^>]*>/g, '').trim();
+    const clean = DOMPurify.sanitize(message, { ALLOWED_TAGS: [] }).trim();
     return clean || 'An error occurred';
   }
 

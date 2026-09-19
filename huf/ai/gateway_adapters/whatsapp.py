@@ -17,6 +17,7 @@ from typing import Any
 import frappe
 from huf.ai.gateway_adapters.adapter import GatewayAdapter
 from huf.ai.gateway_adapters.types import (
+	GatewayAttachment,
 	GatewayCapabilities,
 	GatewayCredentialField,
 	GatewayCredentialSchema,
@@ -44,14 +45,14 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			GatewayCredentialField("phone_number_id", "Phone Number ID", secret=False),
 			GatewayCredentialField("access_token", "Meta Permanent/System Access Token"),
 			GatewayCredentialField("webhook_verify_token", "Webhook Verify Token"),
-			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=False),
+			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=True),
 		)
 	)
 	capabilities = GatewayCapabilities(
 		frozenset({"webhook"}),
 		supports_text_reply=True,
 		supports_thread_reply=True,
-		supports_media_reply=True,
+		supports_media_reply=False,  # GW-32: send_reply only sends text today
 		max_outbound_messages_per_second=80,
 	)
 
@@ -80,25 +81,32 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		raise ValueError("WhatsApp webhook verification token mismatch")
 
 	def verify_inbound(self, request: GatewayInboundRequest) -> bool:
-		"""Verify Meta webhook HMAC signature or verify token."""
+		"""Verify Meta webhook signature using HMAC-SHA256.
+
+		For GET requests (initial verification): validate hub.verify_token matches configured token.
+		For POST requests (events): require X-Hub-Signature-256 HMAC-SHA256 signature verification.
+
+		Fails closed (returns False) if:
+		- POST request: X-Hub-Signature-256 header is missing or invalid
+		- POST request: signature does not match HMAC-SHA256(app_secret, body)
+		"""
 		if request.method == "GET":
 			query = request.query or {}
 			token = query.get("hub.verify_token") or query.get("hub_verify_token")
 			return bool(token and token == self._verify_token)
 
-		# POST request signature verification
-		if self._app_secret:
-			signature = request.headers.get("x-hub-signature-256") or request.headers.get("X-Hub-Signature-256")
-			if not signature or not signature.startswith("sha256="):
-				return False
-			expected = hmac.new(self._app_secret.encode("utf-8"), request.body, "sha256").hexdigest()
-			return hmac.compare_digest(signature[7:], expected)
-
-		# If app_secret is not supplied, verify payload shape
-		payload = self._payload(request)
-		if not payload or payload.get("object") != "whatsapp_business_account":
+		# POST request: mandatory HMAC-SHA256 signature verification
+		# app_secret is required (schema marks it required=True)
+		if not self._app_secret:
 			return False
-		return True
+
+		signature = request.headers.get("x-hub-signature-256") or request.headers.get("X-Hub-Signature-256")
+		if not signature or not signature.startswith("sha256="):
+			return False
+
+		# Extract and validate the signature
+		expected = hmac.new(self._app_secret.encode("utf-8"), request.body, "sha256").hexdigest()
+		return hmac.compare_digest(signature[7:], expected)
 
 	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
 		"""Extract normalized event from Meta WhatsApp payload."""
@@ -143,6 +151,20 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		context = msg.get("context") or {}
 		reply_to_id = str(context.get("id") or "") if context else None
 
+		attachments = []
+		if msg_type in ("image", "document", "audio", "video", "sticker"):
+			media = msg.get(msg_type) or {}
+			media_id = str(media.get("id") or "")
+			if media_id:
+				attachments.append(
+					GatewayAttachment(
+						mime_type=str(media.get("mime_type") or ""),
+						filename=str(media.get("filename") or ""),
+						file_id=media_id,
+						kind=msg_type,
+					)
+				)
+
 		return NormalizedGatewayEvent(
 			provider_event_id=provider_event_id,
 			sender_id=sender_id,
@@ -151,6 +173,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			thread_id=reply_to_id,
 			is_room=False,
 			raw_payload=payload,
+			attachments=tuple(attachments),
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:

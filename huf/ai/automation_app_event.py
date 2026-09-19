@@ -49,6 +49,7 @@ def trigger_app_event(app_name: str, event_name: str, payload: dict | None = Non
 					"event_name": event_name,
 					"payload": payload or {},
 				},
+				initiating_user=frappe.session.user,
 			)
 			triggered_automations.append(t["automation"])
 		except Exception:

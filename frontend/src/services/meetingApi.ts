@@ -226,3 +226,46 @@ export async function uploadChunk(params: UploadChunkParams): Promise<UploadChun
     throw error;
   }
 }
+
+export async function deleteMeeting(meetingName: string): Promise<void> {
+  try {
+    await call.post(`${API_PREFIX}.delete_meeting`, { meeting_name: meetingName });
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+/**
+ * Atomically creates a meeting and starts recording. If recording fails to start,
+ * the meeting is deleted (best-effort cleanup) before the error is re-thrown.
+ * This prevents orphaned meetings with status "Recording" and zero chunks.
+ *
+ * @param details - Optional meeting context (title, description, participants)
+ * @returns Meeting name on success (can be used to navigate to `/meetings/${meeting_name}/record`)
+ * @throws If either createMeeting or startRecording fails; if cleanup fails, the original error is re-thrown
+ */
+export async function beginMeetingRecording(
+  details: CreateMeetingParams = {},
+): Promise<CreateMeetingResult> {
+  const meetingResult = await createMeeting(details);
+  const { meeting_name } = meetingResult;
+
+  try {
+    await startRecording(meeting_name);
+  } catch (error) {
+    // Best-effort cleanup: attempt to delete the meeting before re-throwing
+    try {
+      await deleteMeeting(meeting_name);
+    } catch (deleteError) {
+      // Log but don't mask the original error
+      console.error(
+        `Failed to clean up orphaned meeting ${meeting_name} after startRecording failure:`,
+        deleteError,
+      );
+    }
+    throw error;
+  }
+
+  return meetingResult;
+}

@@ -343,5 +343,68 @@ class TestInjectModeRelevance(unittest.TestCase):
             mock_search.assert_not_called()
 
 
+@unittest.skipIf(_HAS_REAL_FRAPPE, _SKIP_REASON)
+class TestMemoryExtractionGating(unittest.TestCase):
+    """Background extraction must not run with memory off or loop on itself."""
+
+    def setUp(self):
+        _mock_frappe.db.get_value.reset_mock()
+        _mock_frappe.db.get_value.side_effect = None
+        _mock_frappe.get_doc.reset_mock()
+
+    def tearDown(self):
+        _mock_frappe.db.get_value.side_effect = None
+        _mock_frappe.db.get_value.return_value = None
+
+    def test_memory_disabled_with_stale_policy_does_not_extract(self):
+        agent = MagicMock(enable_memory=0, memory_policy="Research")
+        self.assertFalse(memory_tools.should_extract_memory(agent, "agent"))
+
+    def test_extraction_run_never_queues_another_extraction(self):
+        agent = MagicMock(enable_memory=1, memory_policy="Research")
+        self.assertFalse(
+            memory_tools.should_extract_memory(agent, memory_tools.MEMORY_EXTRACTION_RUN_KIND)
+        )
+
+    def test_memory_enabled_with_policy_extracts(self):
+        agent = MagicMock(enable_memory=1, memory_policy="Research")
+        self.assertTrue(memory_tools.should_extract_memory(agent, "agent"))
+        self.assertTrue(memory_tools.should_extract_memory(agent, None))
+
+    def _set_db_values(self, run, agent):
+        def get_value(doctype, name, fields=None, as_dict=False):
+            if doctype == "Agent Run":
+                return frappe_dict(run)
+            if doctype == "Agent":
+                return frappe_dict(agent)
+            return None
+
+        _mock_frappe.db.get_value.side_effect = get_value
+
+    def test_extract_skips_when_memory_disabled(self):
+        self._set_db_values(
+            {"agent": "A", "conversation": "C", "run_kind": "agent"},
+            {"enable_memory": 0, "memory_policy": "Research"},
+        )
+        memory_tools.extract_memory_from_run("RUN-1")
+        _mock_frappe.get_doc.assert_not_called()
+
+    def test_extract_skips_extraction_runs(self):
+        self._set_db_values(
+            {"agent": "A", "conversation": "C", "run_kind": memory_tools.MEMORY_EXTRACTION_RUN_KIND},
+            {"enable_memory": 1, "memory_policy": "Research"},
+        )
+        memory_tools.extract_memory_from_run("RUN-1")
+        _mock_frappe.get_doc.assert_not_called()
+
+
+def frappe_dict(values):
+    """Attribute-and-key access dict, like frappe._dict."""
+    obj = MagicMock()
+    obj.configure_mock(**values)
+    obj.get.side_effect = values.get
+    return obj
+
+
 if __name__ == "__main__":
     unittest.main()
