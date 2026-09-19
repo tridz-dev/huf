@@ -1,0 +1,101 @@
+{
+ "actions": [],
+ "autoname": "hash",
+ "creation": "2026-09-19 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "gateway",
+  "template_type",
+  "template_name",
+  "external_id",
+  "category",
+  "language",
+  "status",
+  "components",
+  "quality_rating",
+  "last_synced_on"
+ ],
+ "fields": [
+  {
+   "fieldname": "gateway",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Gateway",
+   "options": "Gateway",
+   "reqd": 1
+  },
+  {
+   "fieldname": "template_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Template Type",
+   "options": "WhatsApp HSM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "template_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Template Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "external_id",
+   "fieldtype": "Data",
+   "label": "External ID"
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "label": "Category",
+   "options": "Authentication\nMarketing\nUtility"
+  },
+  {
+   "fieldname": "language",
+   "fieldtype": "Data",
+   "label": "Language",
+   "default": "en"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nPending\nApproved\nRejected\nPaused\nDisabled",
+   "default": "Draft",
+   "reqd": 1
+  },
+  {
+   "fieldname": "components",
+   "fieldtype": "Code",
+   "label": "Components",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "quality_rating",
+   "fieldtype": "Data",
+   "label": "Quality Rating"
+  },
+  {
+   "fieldname": "last_synced_on",
+   "fieldtype": "Datetime",
+   "label": "Last Synced On",
+   "read_only": 1
+  }
+ ],
+ "module": "Huf",
+ "name": "Gateway Template",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

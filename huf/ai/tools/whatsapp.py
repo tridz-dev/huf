@@ -63,10 +63,12 @@ def handle_action(action: str, **kwargs: Any) -> str:
 		return _send_template(kwargs)
 	elif action == "list_messages":
 		return _list_messages(kwargs)
+	elif action == "list_templates":
+		return _list_templates(kwargs)
 	elif action == "get_account_info":
 		return _get_account_info(kwargs)
 	else:
-		return _error(f"Unknown action '{action}'. Supported actions: send_message, send_template, list_messages, get_account_info")
+		return _error(f"Unknown action '{action}'. Supported actions: send_message, send_template, list_templates, list_messages, get_account_info")
 
 
 def _send_message(kwargs: dict) -> str:
@@ -219,3 +221,32 @@ def _get_account_info(kwargs: dict) -> str:
 		return _success(data)
 	except Exception as e:
 		return _error(f"Failed to fetch WhatsApp account info: {str(e)}")
+
+
+def _list_templates(kwargs: dict) -> str:
+	"""List Gateway Template docs scoped to WhatsApp gateways, optionally filtered by gateway."""
+	gateway = (kwargs.get("gateway") or "").strip()
+
+	try:
+		filters = {}
+		if gateway:
+			filters["gateway"] = gateway
+		else:
+			filters["gateway"] = ("in", frappe.get_all(
+				"Gateway",
+				filters={"provider": "WhatsApp"},
+				pluck="name"
+			))
+
+		templates = frappe.get_all(
+			"Gateway Template",
+			filters=filters,
+			fields=[
+				"name", "gateway", "template_type", "template_name", "external_id",
+				"category", "language", "status", "quality_rating", "last_synced_on",
+			],
+			order_by="creation desc",
+		)
+		return _success(templates)
+	except Exception as e:
+		return _error(f"Failed to list Gateway Templates: {str(e)}")

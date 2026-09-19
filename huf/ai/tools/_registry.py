@@ -223,12 +223,12 @@ WHATSAPP_TOOLS = [
 			"Manage WhatsApp Business messaging via the Meta Cloud API. Actions: "
 			"send_message (to/recipient/phone_number, message/text), "
 			"send_template (to/recipient, template_name, language_code), "
-			"list_messages (to, from, limit), get_account_info."
+			"list_messages (to, from, limit), list_templates (gateway), get_account_info."
 		),
 		"function_path": "huf.ai.tools.whatsapp.handle_action",
 		"category": "Communication Tools",
 		"parameters": [
-			_action("send_message|send_template|list_messages|get_account_info"),
+			_action("send_message|send_template|list_messages|list_templates|get_account_info"),
 			_p("to", description="Recipient phone number (E.164). Alias: recipient, phone_number."),
 			_p("recipient", description="Alias for 'to'."),
 			_p("phone_number", description="Alias for 'to'."),
@@ -237,6 +237,7 @@ WHATSAPP_TOOLS = [
 			_p("template_name", description="Template name for send_template."),
 			_p("language_code", description="Template language code for send_template (default 'en')."),
 			_p("limit", type="integer", description="Max messages to return for list_messages (default 20)."),
+			_p("gateway", description="Gateway name filter for list_templates (optional; lists all WhatsApp gateways if omitted)."),
 			_p("phone_number_id", description="Override the configured WhatsApp Phone Number ID."),
 			_p("access_token", description="Override the configured Meta access token."),
 		],

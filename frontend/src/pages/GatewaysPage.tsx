@@ -15,6 +15,7 @@ import {
   Trash2,
   UserCheck,
   X,
+  FileText,
 } from 'lucide-react';
 import { PageFrame } from '@/layouts/PageFrame';
 import { GridView, ItemCard, EmptyState } from '@/components/dashboard';
@@ -53,6 +54,8 @@ import { formatTimeAgo } from '@/utils/time';
 import { getGatewayReadiness } from '@/utils/gatewayReadiness';
 import { getGatewayWebhookUrl } from '@/utils/gatewayWebhook';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { GatewayTemplatesTab } from '@/components/gateways/GatewayTemplatesTab';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -145,6 +148,7 @@ export default function GatewaysPage() {
 
   // Edit / Modal State
   const [editingGateway, setEditingGateway] = useState<GatewayDoc | null>(null);
+  const [gatewayDetailTab, setGatewayDetailTab] = useState<'configuration' | 'templates'>('configuration');
   const [saving, setSaving] = useState(false);
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [deleteConfirmName, setDeleteConfirmName] = useState<string | null>(null);
@@ -717,7 +721,7 @@ export default function GatewaysPage() {
       {/* Native In-App Gateway Settings Modal / Drawer */}
       {editingGateway && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-xl rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl border border-line bg-panel p-6 shadow-xl space-y-6 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-line pb-4">
               <div className="flex items-center gap-3">
@@ -732,17 +736,35 @@ export default function GatewaysPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setEditingGateway(null)}
+                onClick={() => {
+                  setEditingGateway(null);
+                  setGatewayDetailTab('configuration');
+                }}
                 className="h-auto w-auto rounded-lg p-1.5 text-steel hover:bg-paper hover:text-ink transition-colors"
               >
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
-            {/* Form Fields */}
-            <div className="space-y-4">
-              {/* Enabled Toggle */}
-              <div className="flex items-center justify-between rounded-lg border border-line bg-paper p-3.5">
+            {/* Tabs */}
+            <Tabs value={gatewayDetailTab} onValueChange={(v: string) => setGatewayDetailTab(v as 'configuration' | 'templates')}>
+              <TabsList variant="underline" layout="inline" className="w-full justify-start">
+                <TabsTrigger value="configuration" className="flex items-center gap-1">
+                  <Settings className="h-4 w-4" />
+                  Configuration
+                </TabsTrigger>
+                {editingGateway.provider === 'WhatsApp' && (
+                  <TabsTrigger value="templates" className="flex items-center gap-1">
+                    <FileText className="h-4 w-4" />
+                    Templates
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              {/* Configuration Tab */}
+              <TabsContent value="configuration" className="space-y-4 mt-6">
+                {/* Enabled Toggle */}
+                <div className="flex items-center justify-between rounded-lg border border-line bg-paper p-3.5">
                 <div>
                   <p className="text-xs font-medium text-ink">Gateway Status</p>
                   <p className="text-[11px] text-steel">Receive and process inbound messages from this channel</p>
@@ -1051,7 +1073,15 @@ export default function GatewaysPage() {
                   </Button>
                 </div>
               </div>
-            </div>
+              </TabsContent>
+
+              {/* Templates Tab */}
+              {editingGateway.provider === 'WhatsApp' && (
+                <TabsContent value="templates" className="mt-6">
+                  <GatewayTemplatesTab gatewayName={editingGateway.name} />
+                </TabsContent>
+              )}
+            </Tabs>
 
             {/* Footer Controls */}
             <div className="flex items-center justify-between border-t border-line pt-4">
@@ -1065,7 +1095,15 @@ export default function GatewaysPage() {
               </Button>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => setEditingGateway(null)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs"
+                  onClick={() => {
+                    setEditingGateway(null);
+                    setGatewayDetailTab('configuration');
+                  }}
+                >
                   Cancel
                 </Button>
                 <Button size="sm" className="h-9 text-xs" disabled={saving} onClick={handleSaveEditing}>

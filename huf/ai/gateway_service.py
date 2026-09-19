@@ -856,6 +856,133 @@ GATEWAY_READINESS_CHECKS = (
 )
 
 
+@frappe.whitelist(methods=["GET"])
+def list_gateway_templates(gateway: str) -> list[dict]:
+	"""List templates known to a gateway's provider.
+
+	Fetches all Gateway Template docs configured for this gateway's provider
+	without invoking the adapter or calling the provider API.
+	"""
+	if not frappe.has_permission("Gateway Template", "read"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not gateway or not gateway.strip():
+		frappe.throw(_("A gateway name is required."))
+	return frappe.get_all(
+		"Gateway Template",
+		filters={"gateway": gateway},
+		fields=[
+			"name", "gateway", "template_type", "template_name", "external_id",
+			"category", "language", "status", "quality_rating", "last_synced_on",
+		],
+		order_by="creation desc",
+		limit_page_length=0,
+	)
+
+
+@frappe.whitelist(methods=["POST"])
+def push_gateway_template(name: str) -> dict:
+	"""Push a template to the provider, creating or updating it."""
+	if not frappe.has_permission("Gateway Template", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not name or not name.strip():
+		frappe.throw(_("A template name is required."))
+
+	doc = frappe.get_doc("Gateway Template", name)
+	gateway = frappe.get_doc("Gateway", doc.gateway)
+
+	from huf.ai.gateway_webhook import get_gateway_adapter
+	from huf.ai.gateway_adapters.types import GatewayTemplateSpec
+
+	adapter = get_gateway_adapter(gateway)
+	if not adapter.capabilities.supports_templates:
+		frappe.throw(_("This gateway's provider does not support templates."))
+
+	components_data = {}
+	if doc.components:
+		try:
+			components_data = json.loads(doc.components) if isinstance(doc.components, str) else doc.components
+		except (ValueError, TypeError):
+			components_data = {}
+
+	spec = GatewayTemplateSpec(
+		name=doc.template_name,
+		language=doc.language or "en",
+		category=doc.category or "",
+		components=components_data,
+		external_id=doc.external_id or None,
+	)
+
+	status = adapter.push_template(spec)
+	doc.db_set({
+		"external_id": status.external_id,
+		"status": status.status,
+		"quality_rating": status.quality_rating or "",
+		"last_synced_on": now_datetime(),
+	})
+
+	return {
+		"name": doc.name,
+		"external_id": status.external_id,
+		"status": status.status,
+		"quality_rating": status.quality_rating,
+		"last_synced_on": doc.last_synced_on,
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def sync_gateway_template(name: str) -> dict:
+	"""Sync a template's status from the provider."""
+	if not frappe.has_permission("Gateway Template", "write"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not name or not name.strip():
+		frappe.throw(_("A template name is required."))
+
+	doc = frappe.get_doc("Gateway Template", name)
+	if not doc.external_id:
+		frappe.throw(_("This template has no external ID. Push it first."))
+
+	gateway = frappe.get_doc("Gateway", doc.gateway)
+	from huf.ai.gateway_webhook import get_gateway_adapter
+
+	adapter = get_gateway_adapter(gateway)
+	if not adapter.capabilities.supports_templates:
+		frappe.throw(_("This gateway's provider does not support templates."))
+
+	status = adapter.sync_template_status(doc.external_id)
+	doc.db_set({
+		"status": status.status,
+		"quality_rating": status.quality_rating or "",
+		"last_synced_on": now_datetime(),
+	})
+
+	return {
+		"name": doc.name,
+		"status": status.status,
+		"quality_rating": status.quality_rating,
+		"last_synced_on": doc.last_synced_on,
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def delete_gateway_template(name: str) -> None:
+	"""Delete a template from the provider and remove the local doc."""
+	if not frappe.has_permission("Gateway Template", "delete"):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not name or not name.strip():
+		frappe.throw(_("A template name is required."))
+
+	doc = frappe.get_doc("Gateway Template", name)
+	if doc.external_id:
+		gateway = frappe.get_doc("Gateway", doc.gateway)
+		from huf.ai.gateway_webhook import get_gateway_adapter
+
+		adapter = get_gateway_adapter(gateway)
+		if adapter.capabilities.supports_templates:
+			adapter.delete_template(doc.external_id)
+
+	frappe.delete_doc("Gateway Template", name)
+
+
 @frappe.whitelist()
 def preview_gateway_readiness(gateway_name: str) -> dict:
     """Report, per-check, whether a Gateway meets every precondition Gateway.validate()

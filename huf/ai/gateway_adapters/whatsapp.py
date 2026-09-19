@@ -23,6 +23,8 @@ from huf.ai.gateway_adapters.types import (
 	GatewayCredentialSchema,
 	GatewayInboundRequest,
 	GatewayReply,
+	GatewayTemplateSpec,
+	GatewayTemplateStatus,
 	NormalizedGatewayEvent,
 	OutboundDelivery,
 )
@@ -36,6 +38,18 @@ def _requests_post(url: str, *, json: dict, headers: dict, timeout: int) -> Any:
 	return requests.post(url, json=json, headers=headers, timeout=timeout)
 
 
+def _requests_get(url: str, *, headers: dict, timeout: int) -> Any:
+	import requests
+
+	return requests.get(url, headers=headers, timeout=timeout)
+
+
+def _requests_delete(url: str, *, headers: dict, timeout: int) -> Any:
+	import requests
+
+	return requests.delete(url, headers=headers, timeout=timeout)
+
+
 class WhatsAppGatewayAdapter(GatewayAdapter):
 	"""Authenticate Meta WhatsApp Cloud API webhooks and deliver text replies."""
 
@@ -46,6 +60,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 			GatewayCredentialField("access_token", "Meta Permanent/System Access Token"),
 			GatewayCredentialField("webhook_verify_token", "Webhook Verify Token"),
 			GatewayCredentialField("app_secret", "Meta App Secret (for HMAC signature verification)", required=True),
+			GatewayCredentialField("business_id", "WhatsApp Business Account ID", secret=False, required=True),
 		)
 	)
 	capabilities = GatewayCapabilities(
@@ -53,6 +68,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		supports_text_reply=True,
 		supports_thread_reply=True,
 		supports_media_reply=False,  # GW-32: send_reply only sends text today
+		supports_templates=True,
 		max_outbound_messages_per_second=80,
 	)
 
@@ -61,6 +77,8 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		credentials: Mapping[str, str],
 		*,
 		http_post: Callable[..., Any] = _requests_post,
+		http_get: Callable[..., Any] = _requests_get,
+		http_delete: Callable[..., Any] = _requests_delete,
 	) -> None:
 		missing = self.credential_schema.missing_required(credentials)
 		if missing:
@@ -69,7 +87,10 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self._access_token = str(credentials["access_token"]).strip()
 		self._verify_token = str(credentials["webhook_verify_token"]).strip()
 		self._app_secret = str(credentials.get("app_secret") or "").strip()
+		self._business_id = str(credentials["business_id"]).strip()
 		self._http_post = http_post
+		self._http_get = http_get
+		self._http_delete = http_delete
 
 	def verify_url(self, request: GatewayInboundRequest) -> str:
 		"""Return Meta hub.challenge if verify token matches GET request."""
@@ -227,3 +248,132 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		except (UnicodeDecodeError, json.JSONDecodeError):
 			return None
 		return payload if isinstance(payload, dict) else None
+
+	def list_templates(self) -> list[GatewayTemplateStatus]:
+		"""Fetch all message templates from Meta's account."""
+		url = f"{META_GRAPH_URL}/{self._business_id}/message_templates"
+		headers = {
+			"Authorization": f"Bearer {self._access_token}",
+		}
+		response = self._http_get(url, headers=headers, timeout=15)
+		if hasattr(response, "raise_for_status"):
+			response.raise_for_status()
+		body = response.json() if hasattr(response, "json") else response
+
+		if not isinstance(body, Mapping) or "data" not in body:
+			raise ValueError(f"WhatsApp template list API returned invalid response: {body}")
+
+		templates = []
+		for entry in body.get("data", []):
+			if "id" in entry:
+				quality_rating = None
+				if "quality_score" in entry and isinstance(entry["quality_score"], Mapping):
+					quality_rating = str(entry["quality_score"].get("score"))
+				templates.append(
+					GatewayTemplateStatus(
+						external_id=str(entry["id"]),
+						status=str(entry.get("status", "PENDING")),
+						quality_rating=quality_rating,
+					)
+				)
+		return templates
+
+	def push_template(self, template: GatewayTemplateSpec) -> GatewayTemplateStatus:
+		"""Create a new template or update an existing one."""
+		headers = {
+			"Authorization": f"Bearer {self._access_token}",
+			"Content-Type": "application/json",
+		}
+
+		if not template.external_id:
+			url = f"{META_GRAPH_URL}/{self._business_id}/message_templates"
+			components_list = template.components.get("components", []) if template.components else []
+			data = {
+				"name": template.name,
+				"language": template.language,
+				"category": template.category.upper(),
+				"components": components_list,
+			}
+			response = self._http_post(url, json=data, headers=headers, timeout=15)
+			if hasattr(response, "raise_for_status"):
+				response.raise_for_status()
+			body = response.json() if hasattr(response, "json") else response
+
+			if not isinstance(body, Mapping) or "id" not in body:
+				raise ValueError(f"WhatsApp template creation API returned invalid response: {body}")
+
+			return GatewayTemplateStatus(
+				external_id=str(body["id"]),
+				status=str(body.get("status", "PENDING")),
+			)
+		else:
+			url = f"{META_GRAPH_URL}/{template.external_id}"
+			components_list = template.components.get("components", []) if template.components else []
+			data = {
+				"components": components_list,
+			}
+			response = self._http_post(url, json=data, headers=headers, timeout=15)
+			if hasattr(response, "raise_for_status"):
+				response.raise_for_status()
+			body = response.json() if hasattr(response, "json") else response
+
+			if isinstance(body, Mapping) and "error" in body:
+				raise ValueError(f"WhatsApp template update API returned error: {body['error']}")
+
+			return GatewayTemplateStatus(
+				external_id=template.external_id,
+				status="PENDING",
+			)
+
+	def sync_template_status(self, external_id: str) -> GatewayTemplateStatus:
+		"""Fetch the current review/approval status for one template."""
+		url = f"{META_GRAPH_URL}/{external_id}"
+		headers = {
+			"Authorization": f"Bearer {self._access_token}",
+		}
+		response = self._http_get(url, headers=headers, timeout=15)
+		if hasattr(response, "raise_for_status"):
+			response.raise_for_status()
+		body = response.json() if hasattr(response, "json") else response
+
+		if not isinstance(body, Mapping) or "id" not in body:
+			raise ValueError(f"WhatsApp template fetch API returned invalid response: {body}")
+
+		quality_rating = None
+		if "quality_score" in body and isinstance(body["quality_score"], Mapping):
+			quality_rating = str(body["quality_score"].get("score"))
+
+		return GatewayTemplateStatus(
+			external_id=str(body["id"]),
+			status=str(body.get("status", "PENDING")),
+			quality_rating=quality_rating,
+			rejected_reason=body.get("rejected_reason"),
+		)
+
+	def delete_template(self, external_id: str) -> None:
+		"""Delete a template from the provider's account."""
+		url = f"{META_GRAPH_URL}/{self._business_id}/message_templates"
+		params_str = f"?hsm_id={external_id}"
+		full_url = url + params_str
+		headers = {
+			"Authorization": f"Bearer {self._access_token}",
+		}
+		response = self._http_delete(full_url, headers=headers, timeout=15)
+		if hasattr(response, "raise_for_status"):
+			try:
+				response.raise_for_status()
+			except Exception as e:
+				if "not found" in str(e).lower() or (hasattr(response, "status_code") and response.status_code == 404):
+					return
+				raise
+
+		body = response.json() if hasattr(response, "json") else response
+		if isinstance(body, Mapping) and "error" in body:
+			error = body["error"]
+			if isinstance(error, Mapping):
+				error_code = error.get("code")
+				if error_code == 368:
+					return
+				raise ValueError(f"WhatsApp template delete API returned error: {error}")
+			elif "not found" not in str(error).lower():
+				raise ValueError(f"WhatsApp template delete API returned error: {error}")

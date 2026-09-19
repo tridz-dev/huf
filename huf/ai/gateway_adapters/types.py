@@ -51,6 +51,11 @@ class GatewayCapabilities:
 	supports_thread_reply: bool = False
 	supports_media_reply: bool = False
 	max_outbound_messages_per_second: float | None = None
+	# Declares whether this provider has a pre-approved-message-template
+	# concept (WhatsApp HSM templates today) that can be managed as
+	# `Gateway Template` records. Providers without one simply leave this
+	# False and never implement the template methods on `GatewayAdapter`.
+	supports_templates: bool = False
 
 	def __post_init__(self) -> None:
 		if not self.ingress_transports:
@@ -145,6 +150,41 @@ class GatewayReply:
 			raise ValueError("conversation_id is required")
 		if not self.text.strip():
 			raise ValueError("Reply text is required")
+
+
+@dataclass(frozen=True, slots=True)
+class GatewayTemplateSpec:
+	"""Provider-neutral request to create/update a pre-approved message template.
+
+	``components`` is deliberately opaque (``Mapping[str, Any]``) rather than
+	modeled field-by-field: template shapes (header/body/footer/buttons for
+	WhatsApp HSM today) vary enough by provider that forcing a single schema
+	here would just push provider-specific branching into this shared type
+	instead of into the adapter that actually knows the shape. Adapters own
+	translating ``components`` to and from their own wire format.
+	"""
+
+	name: str
+	language: str
+	category: str
+	components: Mapping[str, Any] = field(default_factory=dict)
+	external_id: str | None = None
+
+	def __post_init__(self) -> None:
+		if not self.name.strip():
+			raise ValueError("Template name is required")
+		if not self.language.strip():
+			raise ValueError("Template language is required")
+
+
+@dataclass(frozen=True, slots=True)
+class GatewayTemplateStatus:
+	"""A provider's current view of one template's review/approval state."""
+
+	external_id: str
+	status: str
+	quality_rating: str | None = None
+	rejected_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
