@@ -257,7 +257,7 @@ def get_meeting_status_counts():
     # (Frappe applies the permission WHERE clause automatically)
     grouped_counts = frappe.get_list(
         "Meeting",
-        fields=["status", "count(name) as cnt"],
+        fields=["status", {"COUNT": "*", "as": "cnt"}],
         group_by="status",
         order_by="status asc",
         as_list=False,
