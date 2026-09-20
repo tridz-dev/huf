@@ -177,6 +177,12 @@ def list_meetings(start: int = 0, limit: int = 20, status: str = None, search: s
     Uses the ``limit+1`` pattern: fetches one extra row to compute
     ``has_more`` without a separate count query.
 
+    Supports two grouped pseudo-statuses:
+    - ``status="Processing"``: maps to ``status in [Stopped, Transcribing, Summarizing]``
+    - ``status="Recording"``: maps to ``status in [Recording, Paused]``
+
+    For any other status value, uses exact-match filtering.
+
     Returns:
         dict: {"meetings": list, "has_more": bool}
     """
@@ -185,7 +191,12 @@ def list_meetings(start: int = 0, limit: int = 20, status: str = None, search: s
 
     filters = {}
     if status:
-        filters["status"] = status
+        if status == "Processing":
+            filters["status"] = ["in", ["Stopped", "Transcribing", "Summarizing"]]
+        elif status == "Recording":
+            filters["status"] = ["in", ["Recording", "Paused"]]
+        else:
+            filters["status"] = status
 
     or_filters = None
     if search:
@@ -222,6 +233,43 @@ def list_meetings(start: int = 0, limit: int = 20, status: str = None, search: s
     meetings = meetings[:limit]
 
     return {"meetings": meetings, "has_more": has_more}
+
+
+@frappe.whitelist()
+def get_meeting_status_counts():
+    """
+    Return a permission-aware grouped count of Meetings by status.
+
+    Zero-fills all statuses from the Meeting doctype's status field so the
+    frontend doesn't need defensive fallback logic for missing statuses.
+
+    Returns:
+        dict: {"counts": {"Recording": n, "Paused": n, ..., zero-filled for all statuses}}
+    """
+    # Get all status options from the Meeting doctype's status field
+    status_field = frappe.get_meta("Meeting").get_field("status")
+    status_options = [opt.strip() for opt in status_field.options.split("\n") if opt.strip()]
+
+    # Seed counts dict with all statuses defaulting to 0
+    counts = {status: 0 for status in status_options}
+
+    # Query grouped counts by status, respecting implicit permission filtering
+    # (Frappe applies the permission WHERE clause automatically)
+    grouped_counts = frappe.get_list(
+        "Meeting",
+        fields=["status", "count(name) as cnt"],
+        group_by="status",
+        order_by="status asc",
+        as_list=False,
+    )
+
+    # Overlay query results on top of zero-seeded dict
+    for row in grouped_counts:
+        status = row.get("status")
+        if status in counts:
+            counts[status] = row.get("cnt", 0)
+
+    return {"counts": counts}
 
 
 @frappe.whitelist()

@@ -23,6 +23,7 @@ from frappe.utils import cint, flt, get_datetime, now_datetime, time_diff_in_sec
 from huf.ai import audio_service
 
 TRANSCRIPTION_AGENT = "Meeting Summary Agent"
+MEETINGS_OVERVIEW_EVENT = "meetings_overview_status"
 MAX_RETRY_COUNT = 3
 RETRY_BACKOFF_SECONDS = 5
 FINALIZE_POLL_SECONDS = 5
@@ -215,15 +216,21 @@ def _emit_processing_status(meeting_name: str, status: str):
             return
 
         chunks_transcribed, chunks_total = _chunk_progress(meeting_name)
+        message = {
+            "type": "meeting_processing_status",
+            "meeting": meeting_name,
+            "status": status,
+            "chunks_transcribed": chunks_transcribed,
+            "chunks_total": chunks_total,
+        }
         frappe.publish_realtime(
             event=f"meeting:{meeting_name}",
-            message={
-                "type": "meeting_processing_status",
-                "meeting": meeting_name,
-                "status": status,
-                "chunks_transcribed": chunks_transcribed,
-                "chunks_total": chunks_total,
-            },
+            message=message,
+            user=owner,
+        )
+        frappe.publish_realtime(
+            event=MEETINGS_OVERVIEW_EVENT,
+            message=message,
             user=owner,
         )
     except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
