@@ -21,16 +21,26 @@ interface MeetingCardProps {
   meeting: MeetingListItem;
   onClick: () => void;
   onDelete?: () => void;
+  chunksTranscribed?: number;
+  chunksTotal?: number;
 }
 
-function statusPresentation(status: MeetingStatus): { label: string; variant: BadgeVariant } {
+function statusPresentation(
+  status: MeetingStatus,
+  chunksTranscribed?: number,
+  chunksTotal?: number
+): { label: string; variant: BadgeVariant } {
   switch (status) {
     case 'Recording':
       return { label: 'recording', variant: 'destructive' };
     case 'Paused':
       return { label: 'paused', variant: 'secondary' };
-    case 'Stopped':
     case 'Transcribing':
+      if (chunksTranscribed !== undefined && chunksTotal !== undefined && chunksTotal > 0) {
+        return { label: `transcribing ${chunksTranscribed}/${chunksTotal}`, variant: 'outline' };
+      }
+      return { label: 'processing', variant: 'outline' };
+    case 'Stopped':
     case 'Summarizing':
       return { label: 'processing', variant: 'outline' };
     case 'Completed':
@@ -65,11 +75,17 @@ function formatDuration(seconds?: number): string {
 /** Thin `ItemCard` wrapper for one meeting in the history grid — title (or
  * placeholder), relative date, duration, status pill, and a summary
  * excerpt once available (PLAN.md G.1 "Meeting-history usability"). */
-export function MeetingCard({ meeting, onClick, onDelete }: MeetingCardProps) {
+export function MeetingCard({
+  meeting,
+  onClick,
+  onDelete,
+  chunksTranscribed,
+  chunksTotal,
+}: MeetingCardProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const status = statusPresentation(meeting.status);
+  const status = statusPresentation(meeting.status, chunksTranscribed, chunksTotal);
   const title = meeting.title?.trim() || `Meeting — ${formatTimeAgo(meeting.started_at || meeting.modified)}`;
 
   const description =
