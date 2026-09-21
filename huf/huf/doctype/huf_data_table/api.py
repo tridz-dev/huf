@@ -4,6 +4,7 @@ import re
 import frappe
 from frappe import _
 from frappe.model import display_fieldtypes, no_value_fields, table_fields
+from frappe.utils.csvutils import validate_google_sheets_url
 
 from huf.permissions import (
 	DEFAULT_ROLE_CAPABILITIES,
@@ -433,7 +434,11 @@ def start_table_bulk_import(table_id: str, file_url: str) -> dict:
 	registry = frappe.get_doc("Huf Data Table", table_id)
 	doctype_name = registry.doctype_name
 
-	if not frappe.db.exists("File", {"file_url": file_url}):
+	is_google_sheet = "docs.google.com/spreadsheets" in file_url
+	if is_google_sheet:
+		# Let Frappe Data Import fetch and normalize the Sheet URL.
+		validate_google_sheets_url(file_url)
+	elif not frappe.db.exists("File", {"file_url": file_url}):
 		frappe.throw(_("Import file not found: {0}").format(file_url))
 
 	# Older tables predate allow_import; retrofit before Data Import validates.
@@ -444,7 +449,7 @@ def start_table_bulk_import(table_id: str, file_url: str) -> dict:
 			"doctype": "Data Import",
 			"reference_doctype": doctype_name,
 			"import_type": "Insert New Records",
-			"import_file": file_url,
+			"google_sheets_url" if is_google_sheet else "import_file": file_url,
 			"mute_emails": 1,
 		}
 	)
