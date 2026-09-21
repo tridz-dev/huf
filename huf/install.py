@@ -107,6 +107,8 @@ def after_install():
     create_design_system_skill()
     create_meeting_summary_agent()
     create_meeting_recorder_app()
+    create_chess_agent()
+    create_chess_app()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
@@ -226,6 +228,16 @@ def after_migrate():
 		create_meeting_recorder_app()
 	except Exception as e:
 		logger.warning(f"Failed to seed Meeting Recorder HUF App after migrate: {e!s}")
+
+	try:
+		create_chess_agent()
+	except Exception as e:
+		logger.warning(f"Failed to seed HUF Chess Player agent after migrate: {e!s}")
+
+	try:
+		create_chess_app()
+	except Exception as e:
+		logger.warning(f"Failed to seed Chess HUF App after migrate: {e!s}")
 
 	try:
 		from huf.ai.app_seeding.apps_loader import sync_huf_apps
@@ -717,6 +729,32 @@ def create_meeting_recorder_app():
 		doc.insert(ignore_permissions=True)
 	except Exception as e:
 		logger.warning(f"Failed to seed Meeting Recorder HUF App: {e!s}")
+
+
+def create_chess_agent():
+	"""
+	Idempotent: seed the "HUF Chess Player" agent.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.chess.seed import create_chess_agent as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed HUF Chess Player agent: {e!s}")
+
+
+def create_chess_app():
+	"""
+	Idempotent: seed the "Chess" HUF App manifest entry.
+	Safe to call on both after_install and after_migrate.
+	"""
+	from huf.ai.chess.seed import create_chess_app as _create
+
+	try:
+		_create()
+	except Exception as e:
+		logger.warning(f"Failed to seed Chess HUF App: {e!s}")
 
 
 def create_image_generation_tool():
