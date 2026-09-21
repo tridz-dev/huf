@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Chessboard } from 'react-chessboard';
-import type { Square, Piece } from 'react-chessboard/dist/chessboard/types';
+import type { Square } from 'react-chessboard/dist/chessboard/types';
 import { PromotionDialog } from './PromotionDialog';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +59,7 @@ export function ChessBoardPanel({
 	 *   2. Return its boolean result (true = move accepted, false = illegal)
 	 */
 	const handlePieceDrop = useCallback(
-		(sourceSquare: Square, targetSquare: Square, _piece: Piece): boolean => {
+		(sourceSquare: Square, targetSquare: Square): boolean => {
 			// Check if this move requires promotion
 			if (needsPromotionChoice(sourceSquare, targetSquare)) {
 				// Store the move and open dialog

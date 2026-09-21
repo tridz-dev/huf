@@ -36,10 +36,12 @@ export function ChessPage() {
 	const [agentError, setAgentError] = useState<string | undefined>(undefined);
 
 	// Effect: trigger agent move when it becomes the agent's turn
-	// Note: we suppress react-hooks/exhaustive-deps here because we intentionally
-	// depend on specific extracted properties of the game object rather than the
-	// entire game reference, which would cause infinite loops.
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+	// Note: we suppress react-hooks/exhaustive-deps below on the dependency array
+	// because we intentionally depend on specific extracted properties of the
+	// game object rather than the entire game reference — game is a new object
+	// literal every render, so depending on it directly would re-run this effect
+	// (and its state-setting side effects) on every render, not just when the
+	// values that actually matter change.
 	useEffect(() => {
 		// Only trigger if:
 		// 1. It's the agent's turn (not player's turn)
@@ -54,15 +56,19 @@ export function ChessPage() {
 
 		/**
 		 * Attempt to apply agent move, with one repair round on failure.
-		 * Returns true if successful, false if both original and repair failed.
+		 * Returns 'success', or a failure reason distinguishing an API/permission/
+		 * model-not-configured failure (requestAgentMove returned null) from a
+		 * move-validation failure (the agent responded but the move was illegal) —
+		 * these need different error messages regardless of move count or color,
+		 * unlike a move-count-based heuristic which only covers one specific case.
 		 */
 		const tryAgentMove = async (
 			params: Parameters<typeof requestAgentMove>[0]
-		): Promise<boolean> => {
+		): Promise<'success' | 'unavailable' | 'invalid-move'> => {
 			const response = await requestAgentMove(params);
 
 			if (response === null) {
-				return false;
+				return 'unavailable';
 			}
 
 			// Attempt to apply the move
@@ -72,11 +78,11 @@ export function ChessPage() {
 				if (response.comment) {
 					setAgentComment(response.comment);
 				}
-				return true;
+				return 'success';
 			}
 
 			// Move was invalid (shouldn't happen, but design accounts for it)
-			return false;
+			return 'invalid-move';
 		};
 
 		const executeAgentMove = async () => {
@@ -92,33 +98,42 @@ export function ChessPage() {
 				};
 
 				// First attempt
-				const firstAttemptSuccess = await tryAgentMove(params);
-				if (firstAttemptSuccess) {
+				const firstResult = await tryAgentMove(params);
+				if (firstResult === 'success') {
 					setIsAgentThinking(false);
 					return;
 				}
 
-				// First attempt failed; send one repair request
-				const repairSuccess = await tryAgentMove(params);
-				if (repairSuccess) {
-					setIsAgentThinking(false);
-					return;
-				}
-
-				// Both attempts failed
-				// Check if it's a model-not-configured case (first move returned null)
-				if (game.moves.length === 0 && playerColor === 'black') {
-					// First move by agent returned null -> likely model not configured
+				// An 'unavailable' result means requestAgentMove itself failed (no
+				// model configured, insufficient permission, rate limit, network) —
+				// retrying immediately won't help, so skip the repair round and
+				// surface the right message straight away.
+				if (firstResult === 'unavailable') {
 					setAgentError(
 						"This game's AI opponent isn't available right now — no model may be configured, or you may not have permission to play"
 					);
-					toast.error("AI opponent unavailable");
+					toast.error('AI opponent unavailable');
+					return;
+				}
+
+				// 'invalid-move': the agent responded but the move didn't validate —
+				// this is what the one-repair-round is for.
+				const repairResult = await tryAgentMove(params);
+				if (repairResult === 'success') {
+					setIsAgentThinking(false);
+					return;
+				}
+
+				if (repairResult === 'unavailable') {
+					setAgentError(
+						"This game's AI opponent isn't available right now — no model may be configured, or you may not have permission to play"
+					);
+					toast.error('AI opponent unavailable');
 				} else {
-					// Repair-also-failed case
 					setAgentError(
 						"The opponent's move couldn't be validated — try again or resign"
 					);
-					toast.error("Opponent move validation failed");
+					toast.error('Opponent move validation failed');
 				}
 			} finally {
 				setIsAgentThinking(false);
@@ -126,6 +141,7 @@ export function ChessPage() {
 		};
 
 		executeAgentMove();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [
 		game.isPlayerTurn,
 		isAgentThinking,
@@ -134,7 +150,6 @@ export function ChessPage() {
 		game.fen,
 		game.history,
 		game.legalMoves,
-		game.moves.length,
 		game.applyAgentMove,
 	]);
 
