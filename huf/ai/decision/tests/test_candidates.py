@@ -31,3 +31,10 @@ class TestDecisionCandidates(unittest.TestCase):
 		self.assertEqual([item.id for item in get_procedure_candidates(bindings)], ["support_lookup"])
 		self.assertEqual(constrain_selected_procedure("support_lookup", bindings), "support_lookup")
 		self.assertIsNone(constrain_selected_procedure("unbound", bindings))
+
+	def test_skill_candidates_require_permitted_skills(self):
+		from huf.ai.decision.candidates import constrain_selected_skill, get_skill_candidates
+		skills = [SimpleNamespace(skill_id="billing", display_name="Billing")]
+		self.assertEqual([item.id for item in get_skill_candidates(skills)], ["billing"])
+		self.assertEqual(constrain_selected_skill("billing", skills), "billing")
+		self.assertIsNone(constrain_selected_skill("admin", skills))
