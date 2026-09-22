@@ -14,11 +14,11 @@ def validate_answer_integrity(request: DecisionRequest, answer: DecisionAnswer) 
 		allowed = {option.id for option in question.options}
 		if request.candidates and not allowed <= {candidate.id for candidate in request.candidates}:
 			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
+		if answer.probabilities is not None and not set(answer.probabilities) <= allowed:
+			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
 		if answer.value == "none" and question.allow_none:
 			return
 		if not isinstance(answer.value, str) or answer.value not in allowed:
-			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
-		if answer.probabilities is not None and not set(answer.probabilities) <= allowed:
 			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
 	elif answer.kind == QuestionKind.SCORE:
 		allowed = {option.id for option in question.options}
@@ -33,6 +33,6 @@ def evaluate_gate(policy: DecisionPolicy, answers: dict[str, DecisionAnswer]) ->
 	if policy.minimum_confidence is None:
 		return "accepted"
 	confidences = [answer.confidence for answer in answers.values() if answer.confidence is not None]
-	if not confidences or min(confidences) < policy.minimum_confidence:
+	if len(confidences) != len(answers) or not confidences or min(confidences) < policy.minimum_confidence:
 		return "uncertain"
 	return "accepted"

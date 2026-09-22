@@ -52,10 +52,12 @@ graph TD
 
 ## Resume instructions
 
-Read this tracker, `BASELINE_FINDINGS.md`, `decision-runtime.md`, and the three copied source plans. Continue with the first pending node whose dependencies are complete. Keep all feature code in the PR 1 worktree at `/Users/safwan/Code/Huf/huf-worktrees/decision-runtime-pr1`.
+Read this tracker, `decision-runtime-baseline.md`, `decision-runtime.md`, and the three copied source plans. Continue with the first pending node whose dependencies are complete. Keep all feature code in the PR 1 worktree at `/Users/safwan/Code/Huf/huf-worktrees/decision-runtime-pr1`.
 
 
 ## Review constraints
 
-- `CandidateSource` records the claimed resolver provenance and the runtime enforces candidate membership; PR 1 does not prove that a domain authorization resolver produced the set. Future integration callers must source candidates from the named authoritative resolver.
+- `CandidateSource` records claimed resolver provenance and runtime checks candidate membership; PR 1 does not prove that a domain authorization resolver produced the set. Future integration callers must obtain candidates from the named authoritative resolver before request construction.
+- Structured state credential fields are redacted before provider dispatch and optional audit snapshots. Text-only backends reject typed image/audio/video structures even when the caller labels them as text.
+- Policy fallback emits its own Decision Call only after the caller confirms deployment exhaustion; missing per-answer confidence yields an uncertain gate.
 - Focused runtime tests and syntax compilation pass under Python 3.12 with a minimal Frappe logger stub. Full Frappe integration and unrelated provider DocType suites require the bench environment and have not been run here.

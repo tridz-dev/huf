@@ -12,8 +12,8 @@ from frappe import _
 def validate_api_base_url(api_base_url: str | None) -> None:
 	"""Reject unsafe API targets while permitting local development endpoints.
 
-	The existing provider boundary allows HTTP/HTTPS only, permits localhost
-	(loopback IPv4/IPv6 literals included) over either scheme, rejects private,
+	The existing provider boundary allows HTTP/HTTPS only, permits localhost,
+	127.0.0.1, and ::1 over either scheme, rejects private,
 	loopback, and link-local address ranges, and requires HTTPS for remote hosts.
 	Hostname DNS resolution is intentionally not performed here, matching the
 	previous AI Provider behavior.
