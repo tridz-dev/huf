@@ -1096,6 +1096,38 @@ def _exec_router_llm(flow_run, node: dict, config: dict, settings: dict) -> dict
 		return {"status": "failed", "error": str(e)}
 
 
+def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) -> dict:
+	"""Execute an opt-in normalized Decision Runtime route.
+
+	The decision adapter is injected through run settings so Flow execution does not
+	implicitly activate a provider or alter existing ``router.llm`` behavior.
+	"""
+	decision_router = (settings or {}).get("decision_router")
+	if not callable(decision_router):
+		return {"status": "failed", "error": "router.decision is not enabled for this Flow run"}
+	run_ctx = _run_context(settings)
+	ctx = _context_of(flow_run, settings)
+	edges_list = run_ctx.edges if run_ctx is not None else effective_edges(load_definition(flow_run.flow_id))
+	candidates = _get_outgoing_edges(node.get("id"), edges_list)
+	valid_node_ids = {candidate["to"] for candidate in candidates}
+	if not valid_node_ids:
+		return {"status": "failed", "error": "router.decision node has no outgoing edges"}
+	try:
+		from huf.ai.decision.flow_router import resolve_decision_route
+		response = decision_router(flow_run, node, config, ctx.as_dict(), candidates)
+		decision = resolve_decision_route(
+			response,
+			candidate_node_ids=valid_node_ids,
+			uncertain_next=config.get("uncertain_next"),
+			minimum_confidence=config.get("minimum_confidence"),
+		)
+		if decision["status"] == "uncertain" and not decision.get("next_node_id"):
+			return {"status": "failed", "error": decision.get("reason", "decision_uncertain")}
+		return decision
+	except Exception as exc:
+		return {"status": "failed", "error": str(exc)}
+
+
 def _exec_human_approval(flow_run, node: dict, config: dict, settings: dict) -> dict:
 	"""Execute human.approval node - pause for human decision.
 
@@ -1564,6 +1596,7 @@ _NODE_EXECUTORS = {
 	"agent.run": _exec_agent_run,
 	"tool.call": _exec_tool_call,
 	"router.llm": _exec_router_llm,
+	"router.decision": _exec_router_decision,
 	"human.approval": _exec_human_approval,
 	"http_request": _exec_http_request,
 	"condition": _exec_condition,
