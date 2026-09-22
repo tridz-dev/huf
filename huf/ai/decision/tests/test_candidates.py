@@ -24,3 +24,10 @@ class TestDecisionCandidates(unittest.TestCase):
 		selected, response = select_authorized_tool(DecisionRuntime(), request, FakeDecisionBackend(), [SimpleNamespace(tool_name="refund")])
 		self.assertEqual(response.status.value, "success")
 		self.assertEqual(selected, "refund")
+
+	def test_procedure_candidates_require_current_bindings(self):
+		from huf.ai.decision.candidates import constrain_selected_procedure, get_procedure_candidates
+		bindings = [SimpleNamespace(procedure_id="support_lookup", procedure_name="Support lookup", binding_name="binding-1")]
+		self.assertEqual([item.id for item in get_procedure_candidates(bindings)], ["support_lookup"])
+		self.assertEqual(constrain_selected_procedure("support_lookup", bindings), "support_lookup")
+		self.assertIsNone(constrain_selected_procedure("unbound", bindings))
