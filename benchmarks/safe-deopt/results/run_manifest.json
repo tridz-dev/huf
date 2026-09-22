@@ -1,0 +1,50 @@
+{
+  "_description": "Provenance manifest for the real (non-mocked) Gemini rows merged into results/runs.jsonl. Allowlisted fields only -- no full environment dump, no secret-adjacent values (API keys, tokens) anywhere in this file.",
+  "run_kind": "real_llm_execution",
+  "huf_commit_hash": "38fe07b28030f6ba742d9d45d01d489dcde5b00f",
+  "huf_commit_note": "HEAD of research/safe-deopt-experiment at the time these 5 workers were dispatched; all 600 merged real rows carry this exact huf_commit_hash per-row (verified: single distinct value across results/runs.jsonl).",
+  "model": {
+    "model_id": "gemini-3.5-flash-lite",
+    "provider": "google",
+    "provider_reported_model_version": "gemini-3.5-flash-lite",
+    "note": "provider_reported_model_version is the same string as model_id -- the harness does not separately capture a provider version string distinct from the requested model id; documented honestly rather than fabricating a finer-grained version."
+  },
+  "pricing_date": "2026-09-22",
+  "pricing_note": "Per the cost-wiring commit (1187f469, 'wire real dollar-cost computation for live LLM rows'). Each row's own pricing_date field ('2026-09-22' throughout) matches this.",
+  "seeds": {
+    "seed_list_per_cell": [42, 43],
+    "note": "Every real (condition, workload, fault, tool_guarantee) cell that actually dispatched a model call has exactly these 2 seeds. Cells for fault F0 (no fault) and F5 do not invoke a model and have no transcript/seed rows by design (see recovery_harness.py); this affects C4/C4+G/C5/C6 uniformly (12 no-model rows per condition) and does not affect C1."
+  },
+  "conditions": {
+    "real_gemini": ["C1", "C4", "C4+G", "C5", "C6"],
+    "mocked_only": ["C2", "C3"],
+    "note": "C2 (naive compiled replay) and C3 (deterministic resume) never invoke a model in this harness by construction (see run_experiment.py module docstring) -- they were never candidates for a real run and remain mocked/deterministic-only."
+  },
+  "total_real_rows": 600,
+  "total_real_cost_usd": 0.4562005,
+  "per_worker_cost_usd": {
+    "C1": 0.121272,
+    "C4": 0.0729948,
+    "C4+G": 0.0686117,
+    "C5": 0.0933791,
+    "C6": 0.099943
+  },
+  "worker_output_files_merged": [
+    "results/runs.workerC1.jsonl",
+    "results/runs.workerC4.jsonl",
+    "results/runs.workerC4G.jsonl",
+    "results/runs.workerC5.jsonl",
+    "results/runs.workerC6.jsonl"
+  ],
+  "transcripts_location": "results/transcripts/real/<condition>/<workload>/<fault>/<tool_guarantee>/<seed>.json",
+  "transcripts_location_note": "Merged from the 5 workers' results/transcripts.worker*/ directories into a dedicated results/transcripts/real/ subtree (NOT flattened into the top-level results/transcripts/ tree used by mocked rows) -- verification during the merge found that mocked transcripts already occupy the identical <condition>/<workload>/<fault>/<tool_guarantee>/42.json paths for every condition (mocked runs also use seed 42), so a flat merge would have silently overwritten 276 mocked transcript files. Each merged real row's transcript_path field was rewritten accordingly.",
+  "plan_reference": {
+    "path": "Tracks/SafeDeoptExperiment/PLAN_V3.md",
+    "commit_hash": null,
+    "note": "PLAN_V3.md lives under the workspace's Tracks/ directory, which is gitignored at the workspace-repo level (see .gitignore:26, '/Tracks/*') -- it is a local planning doc, not under version control, so no commit hash exists to point to. Referenced here by its stable local path; file mtime at manifest-write time was 2026-09-22T14:39:33 local."
+  },
+  "stale_data_quarantined": {
+    "note": "Before this merge, results/runs.jsonl already contained ONE pre-existing real row (condition C4/W1/F1, seed 42) and results/transcripts/C4/W1/F1/NA/42.json already held a real transcript -- both left over from an earlier one-off smoke test (commit 644f111a) against an OLDER commit hash (4f0160cf...), not the 5-worker run this manifest documents. That stale row/transcript was NOT included in the 600-row merge (it would have double-counted the C4/W1/F1/seed-42 cell against an inconsistent commit hash) and was backed up rather than deleted.",
+    "backup_location": "results/.stale_smoke_test_backup/"
+  }
+}

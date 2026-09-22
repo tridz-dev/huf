@@ -1460,14 +1460,49 @@ def write_runs_jsonl(
         runs_jsonl_path.unlink()
 
 
+def _wilson_ci_str(successes: int, n: int) -> str:
+    """95% Wilson score interval for a binomial proportion, formatted as a string and
+    explicitly flagged when n is tiny.
+
+    Issue (real-data merge): at n=2/cell (real Gemini rows) a CI is no longer strictly
+    undefined the way it is at n=1, but it is still extremely wide and easy to
+    over-read as precise. Decision (documented here rather than left implicit): we DO
+    compute a real Wilson interval for n>=2 groups -- it is honest about how little a
+    2-sample proportion tells you -- but we label it "(n=2, wide/unreliable)" (or
+    "(n=N, wide/unreliable)" for whatever N applies) rather than printing a bare
+    [lo, hi] that could be mistaken for a precise, paper-grade interval. n=1 groups
+    (the existing mocked pilot) still get a literal "NA": a Wilson interval is
+    *technically* definable at n=1 too, but PREREGISTRATION.md's existing commitment
+    for the n=1 pilot was "NA, undefined at this sample size", so n=1 rows keep that
+    wording unchanged rather than silently upgrading pilot-era rows to a new format.
+    """
+    if n <= 1:
+        return "NA"
+    import math
+
+    z = 1.959963984540054  # 95% two-sided normal quantile
+    phat = successes / n
+    denom = 1 + z * z / n
+    center = (phat + z * z / (2 * n)) / denom
+    half = (z * math.sqrt((phat * (1 - phat) / n) + (z * z / (4 * n * n)))) / denom
+    lo, hi = max(0.0, center - half), min(1.0, center + half)
+    return f"[{lo:.3f}, {hi:.3f}] (n={n}, wide/unreliable)"
+
+
 def write_summary_csv(rows: list[dict]) -> None:
+    # Issue (real-data merge): group by data_source (real Gemini vs mocked MockedModel) in
+    # ADDITION to (condition, fault, tool_guarantee) -- never averaged together, per the
+    # honesty convention that `tokens_are_real_accounting` already encodes per-row. A
+    # real-C6 row and a mocked-C6 row for the same (fault, guarantee) now produce two
+    # separate summary rows rather than one blended one.
     groups: dict[tuple, list[dict]] = {}
     for row in rows:
-        key = (row["condition"], row["fault"], row["tool_guarantee"])
+        data_source = "real" if row.get("tokens_are_real_accounting") else "mocked"
+        key = (row["condition"], row["fault"], row["tool_guarantee"], data_source)
         groups.setdefault(key, []).append(row)
 
     header = [
-        "condition", "fault", "tool_guarantee", "n_runs",
+        "condition", "fault", "tool_guarantee", "data_source", "n_runs",
         "correctness_rate", "correctness_rate_ci",
         "duplicate_write_rate", "duplicate_write_rate_ci",
         # Ground-truth outcome (from commit_log) -- kept SEPARATE from unsafe_retry_rate
@@ -1490,38 +1525,66 @@ def write_summary_csv(rows: list[dict]) -> None:
     ]
 
     with open(SUMMARY_CSV_PATH, "w", newline="") as f:
-        f.write("# PILOT -- n=1 per cell -- NOT PAPER-GRADE. CI columns are literally \"NA\" (n=1 gives no interval).\n")
+        f.write(
+            "# MIXED -- this file now contains BOTH real Gemini rows (data_source=real, "
+            "n=2/cell, gemini-3.5-flash-lite, real dollar cost) AND the original mocked "
+            "pilot rows (data_source=mocked, n=1/cell, MockedModel) -- see run_manifest.json "
+            "for the real run's provenance. They are grouped SEPARATELY by data_source and "
+            "are never averaged together; a (condition, fault, tool_guarantee) pair with "
+            "both real and mocked data appears as two distinct rows here.\n"
+        )
+        f.write(
+            "# CI policy: mocked rows are still n=1/cell -- correctness_rate_ci etc. remain "
+            "the literal string \"NA\" (undefined at n=1, per PREREGISTRATION.md). Real rows "
+            "are n=2/cell -- we DO compute a 95% Wilson score interval for the binary-rate "
+            "columns rather than hiding behind NA, but every real CI is explicitly suffixed "
+            "\"(n=2, wide/unreliable)\" so it is never mistaken for a precise estimate. "
+            "Non-binary columns (mean_blocked_retries, mean_tool_calls, mean_tokens_estimated, "
+            "mean_wall_time_seconds) have no CI column at all, real or mocked, at this sample "
+            "size.\n"
+        )
         writer = csv.writer(f)
         writer.writerow(header)
-        for (condition, fault, guarantee) in sorted(groups.keys()):
-            group = groups[(condition, fault, guarantee)]
+        for (condition, fault, guarantee, data_source) in sorted(groups.keys()):
+            group = groups[(condition, fault, guarantee, data_source)]
             n = len(group)
-            correctness = sum(1 for r in group if r["useful_completion"]) / n
-            dup_rate = sum(1 for r in group if r["duplicate_writes"] > 0) / n
-            dup_occurred_rate = sum(1 for r in group if r["duplicate_write_occurred"]) / n
-            unsafe_rate = sum(1 for r in group if r["unsafe_retries"] > 0) / n
-            blocked_rate = sum(1 for r in group if r["blocked_retries"] > 0) / n
+
+            def _rate_and_ci(pred) -> tuple[float, str]:
+                k = sum(1 for r in group if pred(r))
+                return k / n, _wilson_ci_str(k, n)
+
+            correctness, correctness_ci = _rate_and_ci(lambda r: r["useful_completion"])
+            dup_rate, dup_ci = _rate_and_ci(lambda r: r["duplicate_writes"] > 0)
+            dup_occurred_rate, dup_occurred_ci = _rate_and_ci(lambda r: r["duplicate_write_occurred"])
+            unsafe_rate, unsafe_ci = _rate_and_ci(lambda r: r["unsafe_retries"] > 0)
+            blocked_rate, blocked_ci = _rate_and_ci(lambda r: r["blocked_retries"] > 0)
             mean_blocked = sum(r["blocked_retries"] for r in group) / n
             esc_group = [r for r in group if r["escalated"]]
-            escalation_rate = len(esc_group) / n
+            escalation_rate, escalation_ci = _rate_and_ci(lambda r: r["escalated"])
             correct_esc = [r for r in esc_group if r["correct_escalation"] is True]
             unnecessary_esc = [r for r in esc_group if r["unnecessary_escalation"]]
-            correct_esc_rate = (len(correct_esc) / len(esc_group)) if esc_group else "NA"
-            unnecessary_esc_rate = (len(unnecessary_esc) / len(esc_group)) if esc_group else "NA"
+            if esc_group:
+                correct_esc_rate = len(correct_esc) / len(esc_group)
+                correct_esc_ci = _wilson_ci_str(len(correct_esc), len(esc_group))
+                unnecessary_esc_rate = len(unnecessary_esc) / len(esc_group)
+                unnecessary_esc_ci = _wilson_ci_str(len(unnecessary_esc), len(esc_group))
+            else:
+                correct_esc_rate = unnecessary_esc_rate = "NA"
+                correct_esc_ci = unnecessary_esc_ci = "NA"
             mean_tool_calls = sum(r["tool_calls"] for r in group) / n
             mean_tokens = sum(r["tokens_estimated"] for r in group) / n
             mean_wall = sum(r["wall_time_seconds"] for r in group) / n
             writer.writerow([
-                condition, fault, guarantee, n,
-                round(correctness, 4), "NA",
-                round(dup_rate, 4), "NA",
-                round(dup_occurred_rate, 4), "NA",
-                round(unsafe_rate, 4), "NA",
-                round(blocked_rate, 4), "NA",
+                condition, fault, guarantee, data_source, n,
+                round(correctness, 4), correctness_ci,
+                round(dup_rate, 4), dup_ci,
+                round(dup_occurred_rate, 4), dup_occurred_ci,
+                round(unsafe_rate, 4), unsafe_ci,
+                round(blocked_rate, 4), blocked_ci,
                 round(mean_blocked, 3),
-                round(escalation_rate, 4), "NA",
-                round(correct_esc_rate, 4) if correct_esc_rate != "NA" else "NA", "NA",
-                round(unnecessary_esc_rate, 4) if unnecessary_esc_rate != "NA" else "NA", "NA",
+                round(escalation_rate, 4), escalation_ci,
+                round(correct_esc_rate, 4) if correct_esc_rate != "NA" else "NA", correct_esc_ci,
+                round(unnecessary_esc_rate, 4) if unnecessary_esc_rate != "NA" else "NA", unnecessary_esc_ci,
                 round(mean_tool_calls, 3), round(mean_tokens, 3), round(mean_wall, 6),
             ])
 
@@ -1551,31 +1614,54 @@ def plot_correctness_by_fault(rows: list[dict], path: Path) -> None:
 
     conditions = ALL_CONDITIONS
     faults = FAULT_IDS
-    img = Image.new("RGB", (1400, 900), (255, 255, 255))
+    real_rows = [r for r in rows if r.get("tokens_are_real_accounting")]
+    mocked_rows = [r for r in rows if not r.get("tokens_are_real_accounting")]
+    has_real = bool(real_rows)
+
+    img = Image.new("RGB", (1400, 1000 if has_real else 900), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     draw.text((20, 10), "Correctness (useful_completion rate) by condition, grouped by fault", fill=(0, 0, 0))
-    draw.text((20, 30), "PILOT / MOCKED -- illustrative only (n=1/cell, MockedModel, not a real LLM)", fill=(200, 0, 0))
+    if has_real:
+        draw.text((20, 30), "TOP bars = MOCKED pilot (n=1/cell, MockedModel, illustrative only)", fill=(200, 0, 0))
+        draw.text((20, 46), "BOTTOM bars = REAL (n=2/cell, gemini-3.5-flash-lite) -- kept in a SEPARATE panel, never blended with mocked", fill=(0, 100, 0))
+    else:
+        draw.text((20, 30), "PILOT / MOCKED -- illustrative only (n=1/cell, MockedModel, not a real LLM)", fill=(200, 0, 0))
 
     palette = [(70, 130, 180), (60, 179, 113), (218, 165, 32), (205, 92, 92), (147, 112, 219), (255, 140, 0), (100, 149, 237)]
     col_w = 1400 // len(faults)
-    for fi, fault in enumerate(faults):
-        x0 = fi * col_w + 20
-        values = []
-        for cond in conditions:
-            cell_rows = [r for r in rows if r["condition"] == cond and r["fault"] == fault]
-            rate = (sum(1 for r in cell_rows if r["useful_completion"]) / len(cell_rows)) if cell_rows else 0.0
-            values.append(rate)
-        _draw_bars(draw, x0, 100, col_w - 40, 650, values, list(conditions), palette[: len(conditions)], title=fault, ImageFont=ImageFont)
+
+    def _panel(y0, panel_h, panel_rows, suffix):
+        for fi, fault in enumerate(faults):
+            x0 = fi * col_w + 20
+            values = []
+            for cond in conditions:
+                cell_rows = [r for r in panel_rows if r["condition"] == cond and r["fault"] == fault]
+                rate = (sum(1 for r in cell_rows if r["useful_completion"]) / len(cell_rows)) if cell_rows else 0.0
+                values.append(rate)
+            _draw_bars(draw, x0, y0, col_w - 40, panel_h, values, list(conditions), palette[: len(conditions)], title=f"{fault} ({suffix})", ImageFont=ImageFont)
+
+    if has_real:
+        _panel(100, 300, mocked_rows, "mocked, n=1")
+        _panel(500, 300, real_rows, "real, n=2")
+    else:
+        _panel(100, 650, mocked_rows, "mocked, n=1")
     img.save(path)
 
 
 def plot_cost_vs_correctness(rows: list[dict], path: Path) -> None:
     from PIL import Image, ImageDraw
 
+    real_rows = [r for r in rows if r.get("tokens_are_real_accounting")]
+    mocked_rows = [r for r in rows if not r.get("tokens_are_real_accounting")]
+    has_real = bool(real_rows)
+
     img = Image.new("RGB", (1000, 800), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     draw.text((20, 10), "Cost (tool_calls) vs correctness (useful_completion), per condition (mean across cells)", fill=(0, 0, 0))
-    draw.text((20, 30), "PILOT / MOCKED -- illustrative only (n=1/cell, MockedModel, not a real LLM)", fill=(200, 0, 0))
+    if has_real:
+        draw.text((20, 30), "circles = MOCKED pilot (n=1/cell, illustrative only); squares = REAL (n=2/cell, gemini-3.5-flash-lite)", fill=(0, 0, 0))
+    else:
+        draw.text((20, 30), "PILOT / MOCKED -- illustrative only (n=1/cell, MockedModel, not a real LLM)", fill=(200, 0, 0))
 
     x0, y0, w, h = 80, 100, 850, 600
     draw.line([(x0, y0), (x0, y0 + h)], fill=(0, 0, 0))
@@ -1585,19 +1671,29 @@ def plot_cost_vs_correctness(rows: list[dict], path: Path) -> None:
 
     max_calls = max((r["tool_calls"] for r in rows), default=1)
     palette = {"C1": (70, 130, 180), "C2": (60, 179, 113), "C3": (218, 165, 32), "C4": (205, 92, 92), "C4+G": (255, 99, 71), "C5": (147, 112, 219), "C6": (100, 149, 237)}
-    for cond in ALL_CONDITIONS:
-        cell_rows = [r for r in rows if r["condition"] == cond]
-        if not cell_rows:
-            # --condition can now restrict a run to a subset of ALL_CONDITIONS, so a given
-            # condition may simply have no rows this run -- skip it rather than divide by
-            # zero (mirrors plot_correctness_by_fault's existing `if cell_rows else 0.0`).
-            continue
-        mean_calls = sum(r["tool_calls"] for r in cell_rows) / len(cell_rows)
-        mean_correct = sum(1 for r in cell_rows if r["useful_completion"]) / len(cell_rows)
-        px = x0 + (mean_calls / max_calls) * w
-        py = y0 + h - mean_correct * h
-        draw.ellipse([px - 6, py - 6, px + 6, py + 6], fill=palette.get(cond, (0, 0, 0)))
-        draw.text((px + 8, py - 8), cond, fill=(0, 0, 0))
+
+    def _plot_series(series_rows, marker, label_suffix):
+        for cond in ALL_CONDITIONS:
+            cell_rows = [r for r in series_rows if r["condition"] == cond]
+            if not cell_rows:
+                # --condition can now restrict a run to a subset of ALL_CONDITIONS, so a given
+                # condition may simply have no rows this run -- skip it rather than divide by
+                # zero (mirrors plot_correctness_by_fault's existing `if cell_rows else 0.0`).
+                continue
+            mean_calls = sum(r["tool_calls"] for r in cell_rows) / len(cell_rows)
+            mean_correct = sum(1 for r in cell_rows if r["useful_completion"]) / len(cell_rows)
+            px = x0 + (mean_calls / max_calls) * w
+            py = y0 + h - mean_correct * h
+            color = palette.get(cond, (0, 0, 0))
+            if marker == "circle":
+                draw.ellipse([px - 6, py - 6, px + 6, py + 6], fill=color)
+            else:
+                draw.rectangle([px - 6, py - 6, px + 6, py + 6], fill=color, outline=(0, 0, 0))
+            draw.text((px + 8, py - 8), f"{cond}{label_suffix}", fill=(0, 0, 0))
+
+    _plot_series(mocked_rows, "circle", "")
+    if has_real:
+        _plot_series(real_rows, "square", " (real)")
     img.save(path)
 
 
@@ -1648,12 +1744,23 @@ def compute_breakeven(rows: list[dict]) -> dict:
     All costs are the MEASURED mocked wall-clock times from this run's own rows (or, for the
     "discovery run", from a dedicated one-off C1 timing below) -- these are illustrative
     only, since MockedModel executes near-instantly and does not reflect real LLM latency.
+
+    Issue (real-data merge): now that ``rows`` can contain real Gemini rows alongside the
+    mocked pilot rows, this function explicitly restricts itself to
+    ``tokens_are_real_accounting`` False (mocked) rows for every wall-time-based cost
+    below. Real API calls include network latency that has nothing to do with the
+    procedure-vs-full-agent comparison this breakeven analysis illustrates, and blending
+    real network wall-time into the same means as mocked near-instant wall-time would
+    silently corrupt every N* figure with an artifact of API round-trip time rather than
+    the thing being measured. This keeps compute_breakeven's numbers exactly as they were
+    before real rows existed.
     """
-    c1_rows = [r for r in rows if r["condition"] == "C1"]
-    c5_rows = [r for r in rows if r["condition"] == "C5"]
-    c6_rows = [r for r in rows if r["condition"] == "C6"]
-    c2_rows = [r for r in rows if r["condition"] == "C2"]
-    c3_rows = [r for r in rows if r["condition"] == "C3"]
+    mocked_rows = [r for r in rows if not r.get("tokens_are_real_accounting")]
+    c1_rows = [r for r in mocked_rows if r["condition"] == "C1"]
+    c5_rows = [r for r in mocked_rows if r["condition"] == "C5"]
+    c6_rows = [r for r in mocked_rows if r["condition"] == "C6"]
+    c2_rows = [r for r in mocked_rows if r["condition"] == "C2"]
+    c3_rows = [r for r in mocked_rows if r["condition"] == "C3"]
 
     # --condition (added for parallel real-run dispatch) can now restrict a single run to a
     # subset of ALL_CONDITIONS, so any of these groups may be empty -- fall back to 0.0
