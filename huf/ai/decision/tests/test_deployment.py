@@ -32,3 +32,23 @@ class TestDeploymentResolver(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+class TestDeploymentExecution(unittest.TestCase):
+	def test_runtime_records_failover_and_keeps_canonical_identity(self):
+		from huf.ai.decision.backends.fake import FakeDecisionBackend
+		from huf.ai.decision.runtime import DecisionRuntime
+		from huf.ai.decision.types import CandidateSource, DecisionPolicy, DecisionRequest, DecisionStatus, Question, QuestionKind, StateBinding
+
+		policy = DecisionPolicy(policy_id="support", questions=(Question("urgent", QuestionKind.JUDGE, "Urgent?"),), state_bindings=(StateBinding("request", "$"),))
+		request = DecisionRequest(policy=policy, state="payment failed", candidate_source=CandidateSource.POLICY_OPTIONS, identity=DecisionIdentity(canonical_model="Jev 1.13", canonical_version="1.13"))
+		primary = FakeDecisionBackend(status=DecisionStatus.UNAVAILABLE)
+		secondary = FakeDecisionBackend()
+		chain = resolve_deployment_chain(request.identity, (
+			DeploymentCandidate(DecisionIdentity(canonical_model="Jev 1.13", canonical_version="1.13", provider="OpenCode", deployment="primary"), primary, priority=1),
+			DeploymentCandidate(DecisionIdentity(canonical_model="Jev 1.13", canonical_version="1.13", provider="OpenRouter", deployment="backup"), secondary, priority=2),
+		))
+		response = DecisionRuntime().evaluate_deployment_chain(request, chain)
+		self.assertEqual(response.status, DecisionStatus.SUCCESS)
+		self.assertEqual(response.deployment_fallback_count, 1)
+		self.assertEqual(response.deployment_fallback_chain, ("primary", "backup"))
+		self.assertEqual(response.requested_model, "Jev 1.13")
