@@ -1,15 +1,9 @@
-import { Save, MoreVertical, RefreshCw, Database, RotateCcw } from 'lucide-react';
+import { Save, RefreshCw, Database, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { UseFormReturn } from 'react-hook-form';
 import type { KnowledgeSourceFormValues } from './types';
 import { InlineEditName } from '@/components/common/InlineEditName';
@@ -74,6 +68,16 @@ export function KnowledgeSourceHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 mr-2">
+          <Label htmlFor="knowledge-source-disabled" className="text-sm font-normal">
+            Disable
+          </Label>
+          <Switch
+            id="knowledge-source-disabled"
+            checked={watchDisabled}
+            onCheckedChange={(checked) => form.setValue('disabled', checked)}
+          />
+        </div>
         {fromAgent && onCancel && (
           <Button size="sm" variant="outline" onClick={onCancel} type="button" disabled={saving}>
             Cancel
@@ -120,34 +124,6 @@ export function KnowledgeSourceHeader({
             {saving ? (isNew ? 'Creating...' : 'Saving...') : (isNew ? 'Create' : 'Save')}
           </Button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <div className="px-2 py-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Disable</span>
-                <Switch
-                  checked={watchDisabled}
-                  onCheckedChange={(checked) => form.setValue('disabled', checked)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-            {!isNew && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onRefresh}>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Refresh
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </div>
   );

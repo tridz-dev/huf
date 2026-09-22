@@ -4,14 +4,12 @@ import json
 import os
 
 import frappe
-import requests
 from frappe import _
 from frappe.utils import now_datetime
 
 from .backends import get_backend
 from .chunkers.sentence import chunk_text
 from .extractors import ExtractedText, TextExtractor
-from .extractors.url import normalize_google_sheets_url
 
 
 def _build_backend_config(source) -> dict:
@@ -292,15 +290,9 @@ def _extract_text(doc) -> ExtractedText:
 		return extractor.extract(file_path)
 
 	elif doc.input_type == "URL":
-		# Fetch URL content
-		fetch_url = normalize_google_sheets_url(doc.url)
-		response = requests.get(fetch_url, timeout=30)
-		response.raise_for_status()
+elif doc.input_type == "URL":
 
-		# Extract text from HTML
-		extractor = TextExtractor.get_extractor("html")
-		return extractor.extract_from_content(response.text, doc.url)
-
+	from .extractors.url import normalize_google_sheets_url
 	else:
 		frappe.throw(_("Unsupported input type: {0}").format(doc.input_type))
 

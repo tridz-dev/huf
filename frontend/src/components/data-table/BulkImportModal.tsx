@@ -4,6 +4,7 @@ import {
 	Download,
 	Upload,
 	FileText,
+	Link,
 	Loader2,
 	CheckCircle2,
 	XCircle,
@@ -18,6 +19,7 @@ import {
 	DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { file as frappeFile } from '@/lib/frappe-sdk';
 import {
@@ -48,6 +50,7 @@ export function BulkImportModal({
 	const [downloadingTemplate, setDownloadingTemplate] = useState(false);
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
 	const [uploadedFileUrl, setUploadedFileUrl] = useState('');
+	const [googleSheetUrl, setGoogleSheetUrl] = useState('');
 	const [uploading, setUploading] = useState(false);
 	const [uploadProgress, setUploadProgress] = useState(0);
 	const [dragOver, setDragOver] = useState(false);
@@ -68,6 +71,7 @@ export function BulkImportModal({
 		stopPolling();
 		setSelectedFile(null);
 		setUploadedFileUrl('');
+		setGoogleSheetUrl('');
 		setUploading(false);
 		setUploadProgress(0);
 		setDragOver(false);
@@ -190,11 +194,13 @@ export function BulkImportModal({
 	);
 
 	const handleStartImport = async () => {
-		if (!uploadedFileUrl) return;
+		const importSource = googleSheetUrl.trim() || uploadedFileUrl;
+		if (!importSource) return;
 		setImporting(true);
 		setImportStatus(null);
 		try {
-			const result = await startTableBulkImport(tableId, uploadedFileUrl);
+			// Reuse the existing HUF/Frappe Data Import path for files and Sheets.
+			const result = await startTableBulkImport(tableId, importSource);
 			pollTimerRef.current = setTimeout(
 				() => pollStatus(result.import_name),
 				POLL_INTERVAL_MS
@@ -321,6 +327,19 @@ export function BulkImportModal({
 						/>
 					</div>
 
+					<div className="space-y-1.5">
+						<p className="text-sm font-medium">Or import from Google Sheets</p>
+						<div className="flex items-center gap-2">
+							<Link className="w-4 h-4 text-steel-soft shrink-0" />
+							<Input
+								placeholder="https://docs.google.com/spreadsheets/d/..."
+								value={googleSheetUrl}
+								onChange={(event) => setGoogleSheetUrl(event.target.value)}
+								disabled={uploading || importing}
+							/>
+						</div>
+					</div>
+
 					{/* Step 3: Import status */}
 					{importing && !importFinished && (
 						<div className="flex items-center gap-2 text-sm text-steel">
@@ -346,7 +365,7 @@ export function BulkImportModal({
 					</Button>
 					<Button
 						onClick={handleStartImport}
-						disabled={!uploadedFileUrl || uploading || importing}
+						disabled={(!uploadedFileUrl && !googleSheetUrl.trim()) || uploading || importing}
 					>
 						{importing && !importFinished ? (
 							<Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />

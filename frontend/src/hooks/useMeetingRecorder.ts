@@ -19,6 +19,12 @@
  *     decide the UX (offer "Resume recording" / discard).
  *   - `start()`, `pause()`, `resume()`, `toggleMute()`, `stop()` — the
  *     control surface used by `MeetingRecorderPage`/`RecorderControls`.
+ *   - `shareTabAudio()` / `tabAudioActive` — explicit opt-in add-on that
+ *     mixes browser/tab audio (other participants, e.g. a Google Meet tab)
+ *     into the mic recording via `getDisplayMedia` + Web Audio API. Must be
+ *     called from a real user gesture (click handler) — cannot auto-start.
+ *     `tabAudioActive` flips to `false` if the user stops sharing via the
+ *     browser's native UI; callers should show a banner when that happens.
  *   - `resumeQueuedUploads(meetingName)` / `discardQueuedUploads(meetingName)`
  *     — flush or drop a previous session's unsent segments without starting
  *     a new recording.
@@ -162,6 +168,16 @@ async function getQueuedChunksForMeeting(meeting: string): Promise<QueuedChunkRe
   });
 }
 
+/** Highest `sequence` already queued in IndexedDB for a meeting, or -1 if
+ * none. Used to seed `sequenceRef` on `start()` so a resumed session never
+ * reuses a sequence number that still has a queued (unconfirmed) record —
+ * reusing one would overwrite that record (same `${meeting}:${sequence}`
+ * primary key) and send a duplicate sequence to the backend. */
+export async function getMaxQueuedSequence(meeting: string): Promise<number> {
+  const queued = await getQueuedChunksForMeeting(meeting);
+  return queued.reduce((max, record) => Math.max(max, record.sequence), -1);
+}
+
 async function getAllQueuedChunks(): Promise<QueuedChunkRecord[]> {
   const db = await openQueueDb();
   return new Promise((resolve, reject) => {
@@ -222,17 +238,45 @@ export interface UseMeetingRecorderReturn {
   /** Set on mount (and after `stop()`) if the local queue holds unflushed
    * segments belonging to a meeting other than an active recording. */
   resumableMeeting: ResumableMeeting | null;
+  /** True once `shareTabAudio()` has successfully mixed in a live
+   * display-audio track; false initially and after that track ends (either
+   * because the user stopped sharing, or `stop()` was called). Callers can
+   * show a "tab audio stopped" banner when this flips from true to false
+   * while `status === 'recording'`. */
+  tabAudioActive: boolean;
   start: () => Promise<void>;
   pause: () => void;
   resume: () => Promise<void>;
   toggleMute: () => void;
   stop: () => Promise<void>;
+  /** Explicit opt-in add-on: prompts the user (via `getDisplayMedia`, which
+   * requires a real user gesture — call this only from a click handler) to
+   * share a browser tab/window, discards its video track immediately, and
+   * mixes its audio into the already-running mic recording via a Web Audio
+   * `AudioContext` graph. Reports unsupported browsers / denied permission
+   * through `onError` rather than throwing into the caller's event handler
+   * uncaught — callers may still `await` it to know when it settles. */
+  shareTabAudio: () => Promise<void>;
   /** Re-attempts upload for every queued segment of a past meeting without
    * starting a new recording (used from the resume-recovery prompt). */
-  resumeQueuedUploads: (meetingName: string) => Promise<void>;
+  resumeQueuedUploads: (meetingName: string, options?: { manual?: boolean }) => Promise<void>;
   /** Drops all queued segments for a meeting — used when the user declines
    * to resume an interrupted session. */
   discardQueuedUploads: (meetingName: string) => Promise<void>;
+}
+
+/** Feature-detects tab/window audio capture. Safari doesn't support
+ * `getDisplayMedia` audio capture at all; Firefox supports display capture
+ * but never offers tab audio. There's no reliable static capability check
+ * for "will an audio track actually come back", so this only guards against
+ * the API being entirely absent — the real signal is whether `shareTabAudio`
+ * gets back a stream with an audio track. */
+function isDisplayAudioCaptureSupported(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices &&
+    typeof navigator.mediaDevices.getDisplayMedia === 'function'
+  );
 }
 
 export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeetingRecorderReturn {
@@ -243,8 +287,24 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [pendingUploadCount, setPendingUploadCount] = useState(0);
   const [resumableMeeting, setResumableMeeting] = useState<ResumableMeeting | null>(null);
+  const [tabAudioActive, setTabAudioActive] = useState(false);
 
-  const streamRef = useRef<MediaStream | null>(null);
+  // Three separate stream refs, deliberately not collapsed into one:
+  //  - micStreamRef: raw `getUserMedia` mic capture. Mute toggles tracks
+  //    only on this stream, so muting yourself never silences tab audio.
+  //  - displayStreamRef: raw `getDisplayMedia` capture, video track
+  //    discarded immediately after grant — only the audio track is kept.
+  //  - mixedStreamRef: the `AudioContext` destination stream that actually
+  //    feeds `MediaRecorder`. Built from mic (+ display, once shared) via
+  //    two `MediaStreamAudioSourceNode`s into one
+  //    `MediaStreamAudioDestinationNode`.
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const displayStreamRef = useRef<MediaStream | null>(null);
+  const mixedStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const displaySourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const destinationNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const sequenceRef = useRef(0);
   const segmentStartedAtRef = useRef<number>(0);
@@ -387,18 +447,64 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
     [attachRecorderHandlers, timesliceMs],
   );
 
+  /** Ensures the AudioContext + destination node exist and the mic stream
+   * is wired into it. Safe to call more than once — reuses the existing
+   * graph rather than rebuilding it, so `shareTabAudio()` can add a second
+   * source into an already-running graph. */
+  const ensureAudioGraph = useCallback((micStream: MediaStream) => {
+    if (!audioContextRef.current) {
+      const AudioContextCtor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      audioContextRef.current = new AudioContextCtor();
+    }
+    const audioContext = audioContextRef.current;
+    if (!destinationNodeRef.current) {
+      destinationNodeRef.current = audioContext.createMediaStreamDestination();
+      mixedStreamRef.current = destinationNodeRef.current.stream;
+    }
+    if (!micSourceNodeRef.current) {
+      micSourceNodeRef.current = audioContext.createMediaStreamSource(micStream);
+      micSourceNodeRef.current.connect(destinationNodeRef.current);
+    }
+    return { audioContext, destination: destinationNodeRef.current };
+  }, []);
+
+  const teardownAudioGraph = useCallback(() => {
+    micSourceNodeRef.current?.disconnect();
+    micSourceNodeRef.current = null;
+    displaySourceNodeRef.current?.disconnect();
+    displaySourceNodeRef.current = null;
+    destinationNodeRef.current = null;
+    mixedStreamRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      void audioContextRef.current.close().catch(() => {});
+    }
+    audioContextRef.current = null;
+  }, []);
+
   const start = useCallback(async () => {
     if (!meetingName) {
       throw new Error('Cannot start recording before a meeting has been created');
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      sequenceRef.current = 0;
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = micStream;
+      const { destination } = ensureAudioGraph(micStream);
+      // Seed the sequence counter from whatever is already queued for this
+      // meeting in IndexedDB (e.g. a resumed session after a reload) so new
+      // segments never reuse a sequence number a still-queued record holds.
+      let nextSequence = 0;
+      try {
+        nextSequence = (await getMaxQueuedSequence(meetingName)) + 1;
+      } catch {
+        // IndexedDB unavailable — fall back to starting at 0.
+      }
+      sequenceRef.current = nextSequence;
       elapsedBeforePauseRef.current = 0;
       setElapsedSeconds(0);
       setIsMuted(false);
-      createRecorder(stream);
+      createRecorder(destination.stream);
       setStatus('recording');
       startTimer();
     } catch (error) {
@@ -407,12 +513,68 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
       );
       throw error;
     }
-  }, [meetingName, createRecorder, startTimer]);
+  }, [meetingName, ensureAudioGraph, createRecorder, startTimer]);
+
+  const shareTabAudio = useCallback(async () => {
+    if (!isDisplayAudioCaptureSupported()) {
+      onErrorRef.current?.(
+        new Error('Sharing tab audio is not supported in this browser'),
+      );
+      return;
+    }
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        audio: true,
+        video: true,
+      });
+      // Video is only requested because some browsers require it to be
+      // present to grant `getDisplayMedia` at all — discard it immediately,
+      // only the audio track is needed.
+      displayStream.getVideoTracks().forEach((track) => track.stop());
+      const audioTracks = displayStream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        displayStream.getTracks().forEach((track) => track.stop());
+        onErrorRef.current?.(
+          new Error('The shared tab/window did not include audio — this browser may not support tab audio capture'),
+        );
+        return;
+      }
+      if (!micStreamRef.current) {
+        // start() hasn't run yet — there's no audio graph to mix into.
+        displayStream.getTracks().forEach((track) => track.stop());
+        onErrorRef.current?.(new Error('Start recording before sharing tab audio'));
+        return;
+      }
+      const { audioContext, destination } = ensureAudioGraph(micStreamRef.current);
+      displaySourceNodeRef.current?.disconnect();
+      const displaySource = audioContext.createMediaStreamSource(displayStream);
+      displaySource.connect(destination);
+      displaySourceNodeRef.current = displaySource;
+      displayStreamRef.current = displayStream;
+      setTabAudioActive(true);
+      audioTracks[0].onended = () => {
+        // The user stopped sharing via the browser's native "Stop sharing"
+        // UI (or the track otherwise ended). Don't try to silently
+        // re-acquire it — surface it so the caller can show a banner;
+        // recording continues mic-only.
+        setTabAudioActive(false);
+        displaySourceNodeRef.current?.disconnect();
+        displaySourceNodeRef.current = null;
+        displayStreamRef.current?.getTracks().forEach((track) => track.stop());
+        displayStreamRef.current = null;
+      };
+    } catch (error) {
+      onErrorRef.current?.(
+        error instanceof Error ? error : new Error('Sharing tab audio failed or was denied'),
+      );
+    }
+  }, [ensureAudioGraph]);
 
   const pause = useCallback(() => {
     if (status !== 'recording' || !recorderRef.current) return;
     // Flush the in-flight partial segment for this span, then leave the
-    // stream open so resume() can start a fresh MediaRecorder instantly.
+    // streams/audio graph open so resume() can start a fresh MediaRecorder
+    // instantly.
     recorderRef.current.stop();
     recorderRef.current = null;
     elapsedBeforePauseRef.current = elapsedSeconds;
@@ -422,27 +584,39 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
 
   const resume = useCallback(async () => {
     if (status !== 'paused') return;
-    let stream = streamRef.current;
-    if (!stream || stream.getAudioTracks().every((track) => track.readyState === 'ended')) {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
+    let micStream = micStreamRef.current;
+    // Mic re-acquisition only — display media is intentionally NOT
+    // re-acquired here. It can't be silently re-granted (requires a fresh
+    // user gesture), so once tab audio stops it stays stopped for the rest
+    // of this recording session; the user must call `shareTabAudio()`
+    // again explicitly (the graph stays open to allow that).
+    if (!micStream || micStream.getAudioTracks().every((track) => track.readyState === 'ended')) {
+      micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = micStream;
+      // Rebuild the mic source node against the fresh stream.
+      micSourceNodeRef.current?.disconnect();
+      micSourceNodeRef.current = null;
     }
+    const { destination } = ensureAudioGraph(micStream);
     if (isMuted) {
-      stream.getAudioTracks().forEach((track) => {
+      micStream.getAudioTracks().forEach((track) => {
         track.enabled = false;
       });
     }
-    createRecorder(stream);
+    createRecorder(destination.stream);
     setStatus('recording');
     startTimer();
-  }, [status, isMuted, createRecorder, startTimer]);
+  }, [status, isMuted, ensureAudioGraph, createRecorder, startTimer]);
 
   const toggleMute = useCallback(() => {
-    const stream = streamRef.current;
-    if (!stream) return;
+    // Mute targets the mic source track only — never the tab-audio track —
+    // so muting yourself never silences the other meeting participants in
+    // the recording.
+    const micStream = micStreamRef.current;
+    if (!micStream) return;
     setIsMuted((prev) => {
       const next = !prev;
-      stream.getAudioTracks().forEach((track) => {
+      micStream.getAudioTracks().forEach((track) => {
         track.enabled = !next;
       });
       return next;
@@ -464,18 +638,39 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
       });
     }
     recorderRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    micStreamRef.current?.getTracks().forEach((track) => track.stop());
+    micStreamRef.current = null;
+    displayStreamRef.current?.getTracks().forEach((track) => track.stop());
+    displayStreamRef.current = null;
+    teardownAudioGraph();
+    setTabAudioActive(false);
     for (const timer of pendingTimersRef.current.values()) {
       clearTimeout(timer);
     }
     pendingTimersRef.current.clear();
     setStatus('stopped');
-  }, [status, stopTimer]);
+  }, [status, stopTimer, teardownAudioGraph]);
 
   const resumeQueuedUploads = useCallback(
-    async (targetMeeting: string) => {
-      const queued = await getQueuedChunksForMeeting(targetMeeting);
+    async (targetMeeting: string, options?: { manual?: boolean }) => {
+      let queued = await getQueuedChunksForMeeting(targetMeeting);
+      if (options?.manual) {
+        // A manual resume is an intentional retry request from the user —
+        // reset chunks that hit the automatic-retry ceiling (F8) so they
+        // aren't permanently stuck in the queue never being retried again.
+        queued = await Promise.all(
+          queued.map(async (record) => {
+            if (record.retryCount < MAX_AUTO_RETRIES) return record;
+            const reset: QueuedChunkRecord = { ...record, retryCount: 0 };
+            try {
+              await putQueuedChunk(reset);
+            } catch {
+              // Best-effort persistence; retry with in-memory reset regardless.
+            }
+            return reset;
+          }),
+        );
+      }
       await Promise.all(queued.map((record) => attemptUpload(record)));
       const found = await findResumableMeeting();
       setResumableMeeting(found);
@@ -500,12 +695,14 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
     return () => {
       stopTimer();
       recorderRef.current?.state !== 'inactive' && recorderRef.current?.stop();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
+      micStreamRef.current?.getTracks().forEach((track) => track.stop());
+      displayStreamRef.current?.getTracks().forEach((track) => track.stop());
+      teardownAudioGraph();
       for (const timer of pendingTimersRef.current.values()) {
         clearTimeout(timer);
       }
     };
-  }, [stopTimer]);
+  }, [stopTimer, teardownAudioGraph]);
 
   return {
     status,
@@ -514,11 +711,13 @@ export function useMeetingRecorder(options: UseMeetingRecorderOptions): UseMeeti
     pendingUploadCount,
     minutesRecorded: Math.floor(elapsedSeconds / 60),
     resumableMeeting,
+    tabAudioActive,
     start,
     pause,
     resume,
     toggleMute,
     stop,
+    shareTabAudio,
     resumeQueuedUploads,
     discardQueuedUploads,
   };

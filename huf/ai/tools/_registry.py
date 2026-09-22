@@ -1367,6 +1367,36 @@ BUILDER_TOOLS = [
 		],
 	},
 	{
+		"tool_name": "find_existing_agents",
+		"description": (
+			"Search for existing agents by query (read-only). Returns matching agent_name, "
+			"description, and disabled status for up to 'limit' agents. Use this when a user "
+			"asks a data/report/business task question to check if an existing agent already "
+			"handles it before building a new one."
+		),
+		"function_path": "huf.ai.tools.hub_triage.find_existing_agents",
+		"category": "Builder",
+		"parameters": [
+			_p("query", required=True, description="Search query to match against agent names and descriptions"),
+			_p("limit", type="integer", description="Max number of agents to return (default 5)"),
+		],
+	},
+	{
+		"tool_name": "discover_site_capabilities",
+		"description": (
+			"Discover what the site can do by checking its installed modules and available data "
+			"(read-only). Returns a summary of modules, installed apps, and data sources. Use this "
+			"after checking for existing agents to understand what capabilities are available "
+			"before proposing a solution."
+		),
+		"function_path": "huf.ai.tools.hub_triage.discover_site_capabilities",
+		"category": "Builder",
+		"parameters": [
+			_p("query", required=True, description="Query or context about what the user is trying to accomplish"),
+			_p("limit", type="integer", description="Max number of capabilities to return (default 8)"),
+		],
+	},
+	{
 		"tool_name": "get_agent",
 		"description": (
 			"Get a single Agent's summary (read-only) — agent_name, description, provider, "

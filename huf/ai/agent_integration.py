@@ -2294,18 +2294,23 @@ def _execute_agent_run(
             run_update["reasoning_snapshot"] = r_snap
 
         frappe.db.set_value("Agent Run", run_doc.name, run_update, update_modified=True)
-        try:
-            frappe.enqueue(
-                "huf.ai.memory_tools.extract_memory_from_run",
-                queue="default",
-                timeout=300,
-                is_async=True,
-                enqueue_after_commit=True,
-                run_id=run_doc.name,
-            )
-        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
-                frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
-            frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
+        from huf.ai.memory_tools import should_extract_memory
+
+        # An extraction run must never queue another extraction: its own
+        # success would re-trigger the job and loop indefinitely.
+        if should_extract_memory(agent_doc, run_doc.run_kind):
+            try:
+                frappe.enqueue(
+                    "huf.ai.memory_tools.extract_memory_from_run",
+                    queue="default",
+                    timeout=300,
+                    is_async=True,
+                    enqueue_after_commit=True,
+                    run_id=run_doc.name,
+                )
+            except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
+                    frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as e:
+                frappe.logger("huf").warning(f"Memory extraction enqueue failed: {e!s}")
         _emit_run_lifecycle_event(
             run_doc,
             conversation,

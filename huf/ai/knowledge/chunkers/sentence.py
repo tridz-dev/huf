@@ -25,7 +25,13 @@ def chunk_text(
 	"""
 	try:
 		from llama_index.core.node_parser import SentenceSplitter
-		
+
+		from huf.ai.knowledge.nltk_env import ensure_writable_nltk_data
+
+		# Re-check here, inside the job's site context: the package-import call
+		# can run before a site is set and then has to be retried.
+		ensure_writable_nltk_data()
+
 		splitter = SentenceSplitter(
 			chunk_size=chunk_size,
 			chunk_overlap=chunk_overlap,

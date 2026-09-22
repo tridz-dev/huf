@@ -66,6 +66,8 @@ BUILDER_TOOL_NAMES = (
     "list_provider_options",
     "ask_user",
     "list_agents",
+    "find_existing_agents",
+    "discover_site_capabilities",
     "get_agent",
     "list_apps",
     "get_app",
@@ -76,6 +78,7 @@ BUILDER_TOOL_NAMES = (
     "list_app_components",
     "render_app_component",
     "resolve_recent_resource",
+    "erpnext_list_reports",
 )
 
 
@@ -199,6 +202,7 @@ def create_hub_orchestrator_agent() -> bool:
     if frappe.db.exists("Agent", HUB_AGENT_NAME):
         provision_hub_orchestrator()
         ensure_hub_orchestrator_tools()
+        ensure_hub_orchestrator_instructions()
         return False
 
     seed = _load_seed_data()
@@ -232,6 +236,29 @@ def create_hub_orchestrator_agent() -> bool:
     with _seeding_flag():
         doc.insert(ignore_permissions=True)
     logger.info(f"Hub Orchestrator agent seeded (disabled={doc.disabled}).")
+    return True
+
+
+INSTRUCTIONS_MARKER = "0. TRIAGE"
+
+
+def ensure_hub_orchestrator_instructions() -> bool:
+    """Push the seeded instructions onto an existing Hub Orchestrator.
+
+    The generic provisioning never re-reads the seed file, so already-installed
+    sites would keep the pre-triage prompt. The agent is a locked system record,
+    so it is refreshed only while it lacks the current marker; idempotent.
+    """
+    if not frappe.db.exists("Agent", HUB_AGENT_NAME):
+        return False
+    current = frappe.db.get_value("Agent", HUB_AGENT_NAME, "instructions") or ""
+    if INSTRUCTIONS_MARKER in current:
+        return False
+    seeded = _load_seed_data().get("instructions")
+    if not seeded or seeded == current:
+        return False
+    frappe.db.set_value("Agent", HUB_AGENT_NAME, "instructions", seeded)
+    logger.info("Hub Orchestrator instructions refreshed from seed.")
     return True
 
 

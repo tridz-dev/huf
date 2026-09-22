@@ -5,8 +5,10 @@ import { toast } from 'sonner';
 import { PageFrame } from '@/layouts/PageFrame';
 import { FilterBar, GridView, LoadMoreButton, EmptyState } from '@/components/dashboard';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import { useMeetingsOverviewSocket } from '@/hooks/useMeetingsOverviewSocket';
 import { MeetingCard } from '@/components/meetings/MeetingCard';
-import { createMeeting, listMeetings, startRecording } from '@/services/meetingApi';
+import { MeetingStatusSummary } from '@/components/meetings/MeetingStatusSummary';
+import { beginMeetingRecording, listMeetings } from '@/services/meetingApi';
 import type { MeetingListItem, MeetingStatus } from '@/types/meeting.types';
 
 const STATUS_FILTER_OPTIONS: Array<{ label: string; value: string }> = [
@@ -21,6 +23,8 @@ const STATUS_FILTER_OPTIONS: Array<{ label: string; value: string }> = [
 export default function MeetingsPage() {
   const navigate = useNavigate();
 
+  const { overview, version } = useMeetingsOverviewSocket();
+
   const {
     items: meetings,
     hasMore,
@@ -33,6 +37,7 @@ export default function MeetingsPage() {
     loadMore,
     total,
     error,
+    reset,
   } = useInfiniteScroll<
     { page?: number; limit?: number; start?: number; search?: string; status?: string },
     MeetingListItem
@@ -57,8 +62,7 @@ export default function MeetingsPage() {
 
   const handleEmptyStateQuickStart = async () => {
     try {
-      const { meeting_name: meetingName } = await createMeeting({});
-      await startRecording(meetingName);
+      const { meeting_name: meetingName } = await beginMeetingRecording({});
       navigate(`/meetings/${meetingName}/record`);
     } catch (err) {
       toast.error('Could not start recording', {
@@ -101,6 +105,10 @@ export default function MeetingsPage() {
           <p className="text-sm text-steel mb-4">{error.message || 'An error occurred while fetching meetings.'}</p>
         </div>
       )}
+      <MeetingStatusSummary
+        overviewVersion={version}
+        onFilterClick={(status) => setFilter('status', status)}
+      />
       <GridView
         items={meetings}
         columns={{ sm: 1, md: 2, lg: 3 }}
@@ -124,12 +132,26 @@ export default function MeetingsPage() {
             />
           )
         }
-        renderItem={(meeting) => (
-          <MeetingCard
-            meeting={meeting}
-            onClick={() => navigate(`/meetings/${meeting.name}`)}
-          />
-        )}
+        renderItem={(meeting) => {
+          const liveUpdate = overview.get(meeting.name);
+          const meetingWithOverlay = liveUpdate
+            ? {
+                ...meeting,
+                status: liveUpdate.status,
+                chunksTranscribed: liveUpdate.chunksTranscribed,
+                chunksTotal: liveUpdate.chunksTotal,
+              }
+            : meeting;
+          return (
+            <MeetingCard
+              meeting={meetingWithOverlay}
+              chunksTranscribed={liveUpdate?.chunksTranscribed}
+              chunksTotal={liveUpdate?.chunksTotal}
+              onClick={() => navigate(`/meetings/${meeting.name}`)}
+              onDelete={() => reset()}
+            />
+          );
+        }}
         keyExtractor={(meeting) => meeting.name}
       />
       <LoadMoreButton

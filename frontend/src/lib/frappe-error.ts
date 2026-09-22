@@ -99,22 +99,6 @@ export function extractFrappeServerMessages(error: unknown): FrappeServerMessage
 }
 
 /**
- * Strip HTML tags by repeatedly applying the tag regex until a pass makes
- * no further change, so nested/malformed markup (e.g. `<<script>script>`)
- * can't survive a single incomplete pass. Only used server-side, where
- * DOMPurify has no DOM to sanitize against.
- */
-function stripTagsFully(input: string): string {
-  let previous = input;
-  let current = previous.replace(/<[^>]*>/g, '');
-  while (current !== previous) {
-    previous = current;
-    current = current.replace(/<[^>]*>/g, '');
-  }
-  return current;
-}
-
-/**
  * Get the primary error message from Frappe error
  * @param error - The error object from Frappe API (can be original or wrapped Error)
  * @returns User-friendly error message string
@@ -131,10 +115,7 @@ export function getFrappeErrorMessage(error: unknown): string {
     // Return the first message (usually the most relevant)
     const message = serverMessages[0].message || serverMessages[0].title || 'An error occurred';
     // Strip HTML tags safely using DOMPurify without regexes or double-escaping
-    const clean =
-      typeof window !== 'undefined'
-        ? DOMPurify.sanitize(message, { ALLOWED_TAGS: [] }).trim()
-        : stripTagsFully(message).trim();
+    const clean = DOMPurify.sanitize(message, { ALLOWED_TAGS: [] }).trim();
     return clean || 'An error occurred';
   }
 

@@ -14,7 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { UseFormReturn } from 'react-hook-form';
+import { UseFormReturn, useFieldArray } from 'react-hook-form';
 import type { AIProvider, AIModel } from '@/types/agent.types';
 import type { AgentFormValues } from './types';
 import { InstructionsTextarea } from './InstructionsTextarea';
@@ -55,6 +55,12 @@ export function GeneralTab({
   const promptMode = form.watch('prompt_mode');
   const watchModality = form.watch('agent_modality');
   const isVoiceOnly = watchModality === 'Voice';
+  // Stable keys keep focus and cursor on the right row when rows are added or removed.
+  const {
+    fields: starterPromptFields,
+    append: appendStarterPrompt,
+    remove: removeStarterPrompt,
+  } = useFieldArray({ control: form.control, name: 'starter_prompts' });
 
   const [cacheStatus, setCacheStatus] = useState<CacheableModelsResponse | null>(null);
     const [providerOptions, setProviderOptions] = useState<AIProvider[]>(providers);
@@ -562,8 +568,8 @@ We generally recommend altering this or temperature but not both.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {form.watch('starter_prompts')?.map((_row, index) => (
-            <div key={index} className="flex items-start gap-2">
+          {starterPromptFields.map((row, index) => (
+            <div key={row.id} className="flex items-start gap-2">
               <FormField
                 control={form.control}
                 name={`starter_prompts.${index}.prompt_text`}
@@ -605,44 +611,25 @@ We generally recommend altering this or temperature but not both.`}
                 type="button"
                 variant="ghost"
                 size="icon"
-                onClick={() => {
-                  const current = form.getValues('starter_prompts') || [];
-                  form.setValue(
-                    'starter_prompts',
-                    current.filter((_r, i) => i !== index),
-                    { shouldDirty: true }
-                  );
-                }}
+                aria-label="Remove starter prompt"
+                onClick={() => removeStarterPrompt(index)}
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
           ))}
-         {(form.watch('starter_prompts') || []).length < 3 && (
+          {starterPromptFields.length < 3 && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => {
-                const current = form.getValues('starter_prompts') || [];
-                if (current.length >= 3) return;
-                form.setValue(
-                  'starter_prompts',
-                  [...current, { prompt_text: '' }],
-                  { shouldDirty: true }
-                );
-              }}
+              onClick={() => appendStarterPrompt({ prompt_text: '' }, { shouldFocus: true })}
               onKeyDown={(e) => {
                 if (e.key === 'Tab' && !e.shiftKey) {
-                  const current = form.getValues('starter_prompts') || [];
-                  if (current.length >= 3) return;
+                  if (starterPromptFields.length >= 3) return;
                   e.preventDefault();
-                  const newIndex = current.length;
-                  form.setValue(
-                    'starter_prompts',
-                    [...current, { prompt_text: '' }],
-                    { shouldDirty: true }
-                  );
+                  const newIndex = starterPromptFields.length;
+                  appendStarterPrompt({ prompt_text: '' });
                   requestAnimationFrame(() => {
                     document
                       .querySelector<HTMLElement>(
@@ -652,7 +639,7 @@ We generally recommend altering this or temperature but not both.`}
                   });
                 }
               }}
-            >
+              
               <Plus className="h-4 w-4 mr-1" />
               Add starter prompt
             </Button>

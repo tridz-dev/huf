@@ -2,6 +2,10 @@
 
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+import os
+import tempfile
+
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -51,11 +55,12 @@ class URLExtractor(TextExtractor):
 			}
 			from huf.ai.http_handler import validate_url
 
-			is_valid, error_msg = validate_url(url)
+			fetch_url = normalize_google_sheets_url(url)
+			is_valid, error_msg = validate_url(fetch_url)
 			if not is_valid:
 				raise ValueError(f"URL blocked: {error_msg}")
 
-			current_url = url
+			current_url = fetch_url
 			response = None
 			for _hop in range(6):  # initial + up to 5 redirects
 				response = requests.get(
@@ -74,6 +79,21 @@ class URLExtractor(TextExtractor):
 			else:
 				raise ValueError("Too many redirects")
 			response.raise_for_status()
+
+			content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+			path_suffix = os.path.splitext(urlparse(current_url).path)[1].lower()
+			is_pdf = content_type == "application/pdf" or response.content.startswith(b"%PDF-")
+			if is_pdf or content_type not in ("", "text/html", "application/xhtml+xml"):
+				file_type = "pdf" if is_pdf else content_type
+				if content_type == "application/octet-stream":
+					file_type = path_suffix
+				extractor = TextExtractor.get_extractor(file_type)
+				with tempfile.NamedTemporaryFile(
+					mode="wb", suffix=path_suffix
+				) as temporary_file:
+					temporary_file.write(response.content)
+					temporary_file.flush()
+					return extractor.extract(temporary_file.name)
 
 			# Parse HTML
 			soup = BeautifulSoup(response.content, "html.parser")

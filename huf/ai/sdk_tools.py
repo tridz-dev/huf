@@ -589,6 +589,13 @@ def create_function_tool(
         if safe_name != name:
             frappe.log("SDK Functions Debug", f"Tool runtime name '{safe_name}' created for friendly name '{name}'")
 
+        # Tools with no declared parameters arrive as an empty/typeless schema, which
+        # OpenAI rejects for the whole request ('type: "None"'); normalise to an
+        # empty object schema.
+        if not isinstance(parameters, dict) or not parameters.get("type"):
+            parameters = {"type": "object", "properties": {}, **(parameters or {})}
+            parameters["type"] = "object"
+
         tool = FunctionTool(
             name=safe_name,
             description=description,

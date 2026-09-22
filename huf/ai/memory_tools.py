@@ -6,6 +6,8 @@ from frappe.utils import now_datetime
 
 MANAGER_ROLES = {"System Manager", "Huf Manager"}
 WRITE_BLOCKED_SCOPES_FOR_NON_MANAGER = {"Role", "Workspace", "Site", "Global"}
+MEMORY_EXTRACTION_RUN_KIND = "memory_extraction"
+MEMORY_EXTRACTION_CHANNEL = "memory_extraction"
 
 
 def _is_manager() -> bool:
@@ -426,20 +428,36 @@ def expire_stale_memory_records():
 		frappe.log_error(title="Memory Expiry Error", message=f"Memory expiry scheduler failed: {str(e)}")
 
 
+def should_extract_memory(agent_doc, run_kind=None) -> bool:
+	"""Return True if a finished run of this agent may queue memory extraction.
+
+	Requires memory to be enabled on the agent. The Agent form hides
+	memory_policy when enable_memory is off, but the stored value stays, so
+	the policy alone is not a reliable switch. Extraction runs are always
+	excluded, otherwise each extraction queues the next one.
+	"""
+	if run_kind == MEMORY_EXTRACTION_RUN_KIND:
+		return False
+	return bool(getattr(agent_doc, "enable_memory", 0) and getattr(agent_doc, "memory_policy", None))
+
+
 def extract_memory_from_run(run_id):
 	"""Background extraction: reviews a completed run's conversation and proposes
-	candidate Memory Records via the learning agent, if the owning Agent's Memory
-	Policy has capture_mode != "Manual". No-ops otherwise. Always safe to enqueue
-	unconditionally — this function does its own gating.
+	candidate Memory Records via the learning agent, if the owning Agent has
+	memory enabled and its Memory Policy has capture_mode != "Manual". No-ops
+	otherwise. Always safe to enqueue unconditionally — this function does its
+	own gating.
 	"""
-	run = frappe.db.get_value("Agent Run", run_id, ["agent", "conversation"], as_dict=True)
+	run = frappe.db.get_value("Agent Run", run_id, ["agent", "conversation", "run_kind"], as_dict=True)
 	if not run or not run.agent or not run.conversation:
 		return
 
 	agent_name = run.agent
-	policy_name = frappe.db.get_value("Agent", agent_name, "memory_policy")
-	if not policy_name:
+	agent = frappe.db.get_value("Agent", agent_name, ["enable_memory", "memory_policy"], as_dict=True)
+	if not agent or not should_extract_memory(agent, run.run_kind):
 		return
+
+	policy_name = agent.memory_policy
 
 	policy = frappe.get_doc("Memory Policy", policy_name)
 	if not policy.enabled or policy.capture_mode not in ("Agent Suggested", "Automatic"):
@@ -502,9 +520,16 @@ def extract_memory_from_run(run_id):
 
 	try:
 		from huf.ai.agent_integration import run_agent_sync
+		# Run in a dedicated conversation keyed by the source run. Without an
+		# explicit channel/external_id the run resolves to the user's own
+		# "api" session, writes its JSON reply into that chat history, and the
+		# next extraction reads it back as transcript.
 		result = run_agent_sync(
 			agent_name=extraction_agent,
 			prompt=extraction_prompt,
+			channel_id=MEMORY_EXTRACTION_CHANNEL,
+			external_id=run_id,
+			run_kind=MEMORY_EXTRACTION_RUN_KIND,
 			now=1,
 			skip_user_message=True,
 			response_format=response_format,

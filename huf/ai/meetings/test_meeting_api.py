@@ -183,6 +183,52 @@ class TestMeetingApi(unittest.TestCase):
             with self.assertRaises(frappe.ValidationError):
                 meeting_api.retry_chunk_transcription(chunk.name)
 
+    def test_delete_meeting_cascades_and_works_for_owning_huf_user(self):
+        # Regression test: delete_meeting must succeed for the plain
+        # non-Administrator owner of a meeting, not just Administrator/System
+        # Manager. The child-record deletes are only authorized via the
+        # ownership check on the Meeting itself (_get_meeting(..., "delete")),
+        # so they must run with ignore_permissions=True rather than relying
+        # on Huf User having delete rights on the child doctypes directly.
+        email = "test_huf_user_delete_meeting@example.com"
+        if not frappe.db.exists("User", email):
+            frappe.get_doc({
+                "doctype": "User",
+                "email": email,
+                "first_name": "Delete",
+                "last_name": "Tester",
+                "send_welcome_email": 0,
+                "roles": [{"role": "Huf User"}],
+            }).insert(ignore_permissions=True)
+
+        try:
+            frappe.set_user(email)
+            name = self._create()
+
+            chunk = frappe.get_doc({
+                "doctype": "Meeting Recording Chunk",
+                "meeting": name,
+                "sequence": 0,
+                "upload_status": "Uploaded",
+                "is_system_owned": 0,
+            }).insert(ignore_permissions=True)
+            message = frappe.get_doc({
+                "doctype": "Meeting Chat Message",
+                "meeting": name,
+                "role": "user",
+                "content": "hello",
+                "is_system_owned": 0,
+            }).insert(ignore_permissions=True)
+
+            result = meeting_api.delete_meeting(name)
+
+            self.assertEqual(result, {"success": True})
+            self.assertFalse(frappe.db.exists("Meeting", name))
+            self.assertFalse(frappe.db.exists("Meeting Recording Chunk", chunk.name))
+            self.assertFalse(frappe.db.exists("Meeting Chat Message", message.name))
+        finally:
+            frappe.set_user("Administrator")
+
     def test_retry_chunk_transcription_clears_stale_failure_fields(self):
         name = self._create()
         doc = frappe.get_doc("Meeting", name)
