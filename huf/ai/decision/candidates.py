@@ -52,3 +52,21 @@ def constrain_selected_procedure(selected_id: str, bound_procedures: Iterable[An
 		for bound in bound_procedures
 	}
 	return selected_id if selected_id in allowed else None
+
+
+def get_skill_candidates(permitted_skills: Iterable[Any]) -> tuple[Option, ...]:
+	"""Build candidates from an already permission-filtered skill resolver output."""
+	result = []
+	seen = set()
+	for skill in permitted_skills:
+		identifier = getattr(skill, "skill_id", None) or getattr(skill, "name", None)
+		if not isinstance(identifier, str) or not identifier.strip() or identifier in seen:
+			continue
+		seen.add(identifier)
+		result.append(Option(identifier, getattr(skill, "display_name", "") or identifier))
+	return tuple(result)
+
+
+def constrain_selected_skill(selected_id: str, permitted_skills: Iterable[Any]) -> str | None:
+	allowed = {getattr(skill, "skill_id", None) or getattr(skill, "name", None) for skill in permitted_skills}
+	return selected_id if selected_id in allowed else None
