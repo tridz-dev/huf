@@ -53,6 +53,7 @@ class FakeDecisionBackend:
 				identity=request.identity,
 				backend_adapter=self.adapter_id(),
 				requested_model=request.identity.canonical_model,
+				requested_model_version=request.identity.canonical_version,
 			)
 		answers = {}
 		for question in request.policy.questions:
@@ -83,7 +84,9 @@ class FakeDecisionBackend:
 			identity=request.identity,
 			backend_adapter=self.adapter_id(),
 			requested_model=request.identity.canonical_model,
+			requested_model_version=request.identity.canonical_version,
 			resolved_model=request.identity.canonical_model,
+			resolved_model_version=request.identity.canonical_version,
 			usage=DecisionUsage(),
 		)
 

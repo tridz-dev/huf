@@ -178,6 +178,7 @@ class DecisionRequest:
 	surface: str = "generic"
 	candidates: tuple[Option, ...] = ()
 	candidate_source: CandidateSource | None = None
+	candidate_resolver_id: str | None = None
 	modalities: frozenset[str] = frozenset({"text"})
 	execution_context: Mapping[str, Any] = field(default_factory=dict)
 
@@ -192,6 +193,7 @@ class DecisionBackendRequest:
 	surface: str
 	candidates: tuple[Option, ...]
 	candidate_source: CandidateSource | None
+	candidate_resolver_id: str | None
 	modalities: frozenset[str]
 
 
@@ -228,7 +230,9 @@ class DecisionResponse:
 	backend_adapter: str | None = None
 	requested_identity: DecisionIdentity = field(default_factory=DecisionIdentity)
 	requested_model: str | None = None
+	requested_model_version: str | None = None
 	resolved_model: str | None = None
+	resolved_model_version: str | None = None
 	usage: DecisionUsage = field(default_factory=DecisionUsage)
 	latency_ms: float | None = None
 	error_code: str | None = None

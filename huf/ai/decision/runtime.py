@@ -55,6 +55,7 @@ class DecisionRuntime:
 				surface=request.surface,
 				candidates=request.candidates,
 				candidate_source=request.candidate_source,
+				candidate_resolver_id=request.candidate_resolver_id,
 				modalities=request.modalities,
 			)
 			response = backend.evaluate(backend_request)
@@ -124,8 +125,13 @@ class DecisionRuntime:
 			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
 		if select_questions and request.candidate_source is None:
 			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID, "Select candidates require provenance")
+		if request.candidate_source is not None and not isinstance(request.candidate_source, CandidateSource):
+			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID, "Candidate provenance must use CandidateSource")
 		if request.candidates and request.candidate_source == CandidateSource.POLICY_OPTIONS:
 			raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
+		if request.candidates and request.candidate_source != CandidateSource.POLICY_OPTIONS:
+			if _safe_label(request.candidate_resolver_id) is None:
+				raise DecisionError(DecisionErrorCode.CANDIDATE_INVALID)
 		if request.candidates:
 			eligible_ids = set(candidate_ids)
 			for question in request.policy.questions:
@@ -156,10 +162,14 @@ class DecisionRuntime:
 			return replace(
 				response,
 				answers={},
-				identity=_merge_identity(request.identity, response.identity),
+				identity=_resolved_identity(request.identity, response.identity),
 				requested_identity=request.identity,
 				backend_adapter=_safe_label(adapter or response.backend_adapter),
 				error_code=error_code.value,
+				requested_model=request.identity.canonical_model,
+				requested_model_version=request.identity.canonical_version,
+				resolved_model=_safe_label(response.identity.canonical_model or request.identity.canonical_model),
+				resolved_model_version=_safe_label(response.identity.canonical_version or request.identity.canonical_version),
 				policy_fallback_action=None,
 				usage=replace(
 					response.usage,
@@ -196,11 +206,13 @@ class DecisionRuntime:
 		return replace(
 			response,
 			answers=normalized_answers,
-			identity=_merge_identity(request.identity, response.identity),
+			identity=_resolved_identity(request.identity, response.identity),
 			requested_identity=request.identity,
 			backend_adapter=_safe_label(adapter or response.backend_adapter),
 			requested_model=request.identity.canonical_model,
-			resolved_model=request.identity.canonical_model,
+			requested_model_version=request.identity.canonical_version,
+			resolved_model=_safe_label(response.identity.canonical_model or request.identity.canonical_model),
+			resolved_model_version=_safe_label(response.identity.canonical_version or request.identity.canonical_version),
 			usage=replace(
 				response.usage,
 				cost_source=response.usage.cost_source if response.usage.cost_source in {"provider_reported", "estimated"} else None,
@@ -229,6 +241,7 @@ class DecisionRuntime:
 			requested_identity=request.identity,
 			backend_adapter=_safe_label(adapter),
 			requested_model=request.identity.canonical_model,
+			requested_model_version=request.identity.canonical_version,
 			error_code=error.code.value,
 		)
 
@@ -255,13 +268,13 @@ class DecisionRuntime:
 			return
 
 
-def _merge_identity(requested: DecisionIdentity, resolved: DecisionIdentity) -> DecisionIdentity:
-	"""Preserve canonical request identity while taking resolved serving metadata from backend."""
+def _resolved_identity(requested: DecisionIdentity, resolved: DecisionIdentity) -> DecisionIdentity:
+	"""Return the actual resolved model/deployment, falling back to requested values when absent."""
 	return DecisionIdentity(
-		model_class=_safe_label(requested.model_class or resolved.model_class),
-		model_family=_safe_label(requested.model_family or resolved.model_family),
-		canonical_model=_safe_label(requested.canonical_model or resolved.canonical_model),
-		canonical_version=_safe_label(requested.canonical_version or resolved.canonical_version),
+		model_class=_safe_label(resolved.model_class or requested.model_class),
+		model_family=_safe_label(resolved.model_family or requested.model_family),
+		canonical_model=_safe_label(resolved.canonical_model or requested.canonical_model),
+		canonical_version=_safe_label(resolved.canonical_version or requested.canonical_version),
 		provider=_safe_label(resolved.provider or requested.provider),
 		deployment=_safe_label(resolved.deployment or requested.deployment),
 		provider_model_id=_safe_label(resolved.provider_model_id or requested.provider_model_id),

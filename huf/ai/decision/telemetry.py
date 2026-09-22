@@ -21,9 +21,12 @@ class DecisionCall:
 	requested_identity: DecisionIdentity
 	resolved_identity: DecisionIdentity
 	requested_model: str | None
+	requested_model_version: str | None
 	resolved_model: str | None
+	resolved_model_version: str | None
 	candidate_ids: tuple[str, ...]
 	candidate_source: CandidateSource | None
+	candidate_resolver_id: str | None
 	deployment_selection_source: str | None = None
 	deployment_fallback_count: int = 0
 	answers: Mapping[str, Any] = field(default_factory=dict)
@@ -51,20 +54,23 @@ def make_decision_call(
 	questions = {item.id: item for item in request.policy.questions}
 	return DecisionCall(
 		status=response.status.value,
-		policy_id=request.policy.policy_id,
-		policy_version=request.policy.version,
+		policy_id=_safe_telemetry_label(request.policy.policy_id) or "unknown",
+		policy_version=_safe_telemetry_label(request.policy.version),
 		policy_fingerprint=request.policy.fingerprint,
-		surface=request.surface,
-		backend_adapter=response.backend_adapter,
+		surface=_safe_telemetry_label(request.surface) or "generic",
+		backend_adapter=_safe_telemetry_label(response.backend_adapter),
 		requested_identity=response.requested_identity,
 		resolved_identity=response.identity,
 		requested_model=response.requested_model,
+		requested_model_version=response.requested_model_version,
 		resolved_model=response.resolved_model,
-		candidate_ids=tuple(dict.fromkeys(
+		resolved_model_version=response.resolved_model_version,
+		candidate_ids=tuple(_safe_telemetry_label(item) for item in dict.fromkeys(
 			[option.id for question in request.policy.questions if question.id in questions for option in question.options]
 			+ [candidate.id for candidate in request.candidates]
-		)),
+		) if _safe_telemetry_label(item) is not None),
 		candidate_source=request.candidate_source,
+		candidate_resolver_id=_safe_telemetry_label(request.candidate_resolver_id),
 		deployment_selection_source=response.deployment_selection_source,
 		deployment_fallback_count=response.deployment_fallback_count,
 		answers=response.answers,
@@ -77,3 +83,15 @@ def make_decision_call(
 		error_code=response.error_code,
 		deployment_fallback_chain=response.deployment_fallback_chain,
 	)
+
+
+def _safe_telemetry_label(value: str | None) -> str | None:
+	if value is None or not isinstance(value, str) or not value or len(value) > 128 or not value.isascii():
+		return None
+	allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._:/@+-"
+	if not value.isprintable() or any(char not in allowed for char in value):
+		return None
+	words = set(value.lower().replace("-", " ").replace("_", " ").split())
+	if words & {"token", "secret", "password", "credential", "authorization", "bearer", "apikey", "api"}:
+		return None
+	return value
