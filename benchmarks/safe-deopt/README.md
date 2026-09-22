@@ -106,6 +106,16 @@ the real conditions against a real model and provider pricing, which is exactly 
   seed per cell. This is a pilot pass per `PREREGISTRATION.md`'s "pilot run transparency"
   commitment: `summary.csv`'s confidence-interval columns are literally the string `"NA"`,
   not an estimate, and no result here should be read as a validated hypothesis.
+  **Critically: `run_experiment.py`'s mocked policy for each condition (see `_naive_rule`
+  vs. `_smart_rule`, and `trust_resolved_none` keyed on the condition name) is authored
+  per-condition to reflect what H1/H2 predict a real model would do** — e.g. C4/C5's
+  mocked policy is scripted to attempt an unsafe retry, and C6's is scripted to resolve a
+  guarantee before retrying. Every C4-vs-C6 contrast visible in `summary.csv` and the plots
+  is therefore **true by construction, not measured**: it demonstrates that the harness,
+  the fault injection, and the C6 guard correctly produce the outcomes the hypotheses
+  predict when a model behaves the scripted way — it is proof the machinery works, not
+  evidence about how a real model actually behaves under these conditions. Only a real
+  `LiveAPIModel` run can supply that evidence.
 - **(c) `LiveAPIModel` is a stub, not implemented.** `recovery_harness.LiveAPIModel` reads
   `MODEL` from the environment but its `next_step()` deliberately raises
   `NotImplementedError` rather than fabricating a response or silently no-op-ing. Real LLM

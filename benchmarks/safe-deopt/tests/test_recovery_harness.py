@@ -367,7 +367,7 @@ class TestGuardMarginalSafetyValue(unittest.TestCase):
 		tool_results = [e for e in log.entries if e.kind == "tool_result"]
 		self.assertEqual(len(tool_results), 1)
 		self.assertFalse(tool_results[0].content["ok"], "C4+G (guard active) must reject the unsafe retry")
-		self.assertIn("no further retry", tool_results[0].content["error"])
+		self.assertIn("replay rejected", tool_results[0].content["error"])
 
 	def test_c5_without_guard_does_not_reject_the_unsafe_retry(self):
 		store = _seeded_store()
@@ -413,7 +413,7 @@ class TestGuardMarginalSafetyValue(unittest.TestCase):
 
 class TestLiveAPIModelStub(unittest.TestCase):
 	def test_live_api_model_raises_rather_than_fabricating_a_response(self):
-		model = LiveAPIModel(model_id="claude-placeholder")
+		model = LiveAPIModel(model_id="placeholder-model")
 		with self.assertRaises(NotImplementedError):
 			model.next_step(transcript=[], available_tools=[])
 

@@ -26,7 +26,7 @@ from conditions import (  # noqa: E402
 	deterministic_resume_recover,
 	naive_replay_recover,
 )
-from faults import FaultInjector, get_operation_status  # noqa: E402
+from faults import FaultInjector, cancel_operation, get_operation_status  # noqa: E402
 from workloads import Invoice, Payment, PaymentAllocationStore  # noqa: E402
 
 
@@ -166,7 +166,8 @@ class TestDeterministicResumeRecover(unittest.TestCase):
 class TestReplayGuard(unittest.TestCase):
 	def setUp(self):
 		self.store, self.allocation_name = _store_with_allocation()
-		self.guard = ReplayGuard()
+		self.injector = FaultInjector()
+		self.guard = ReplayGuard(injector=self.injector)
 
 	def _write_fn(self):
 		return self.store.submit_allocation
@@ -195,9 +196,20 @@ class TestReplayGuard(unittest.TestCase):
 			)
 
 	def test_committed_plus_fenceable_is_rejected(self):
+		# The guard must not consult a raw ground-truth oracle for "fenceable" (it only
+		# knows what an ACTUAL cancel_operation call told this recovery session) -- so this
+		# test goes through the real fence path rather than hand-seeding session.fenced.
+		# Once a write has genuinely committed, a real cancel_operation() call correctly
+		# returns False (nothing left to fence), so record_fence(..., fenced=False) never
+		# adds the key to session.fenced, and rule 2c rejects for the honest reason "not
+		# fenced" -- the guard reaches the same safe outcome without ever peeking at truth
+		# it isn't entitled to for this guarantee level.
 		session = RecoverySession()
 		self.store.submit_allocation(allocation=self.allocation_name, operation_key="k1")
-		session.fenced.add("k1")  # even if (irrelevantly) fenced, COMMITTED wins
+		fenced_ok = cancel_operation(self.store, "k1", injector=self.injector)
+		session.record_fence("k1", fenced=fenced_ok)
+		self.assertFalse(fenced_ok, "a real cancel_operation on an already-committed key must fail")
+		self.assertNotIn("k1", session.fenced)
 		with self.assertRaises(ReplayRejected):
 			self.guard.attempt_write(
 				self._write_fn(), allocation=self.allocation_name, operation_key="k1",

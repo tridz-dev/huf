@@ -267,11 +267,21 @@ class ReplayGuard:
 			raise ValueError(f"unknown tool_guarantee {tool_guarantee!r}, expected one of {GUARANTEE_LEVELS}")
 
 		# -- resolve ground-truth status, where possible -----------------------
+		# IMPORTANT: only consult get_operation_status (a ground-truth oracle) when the
+		# declared guarantee actually entitles the recovery session to that information --
+		# server_idempotent (the store's own dedup ledger IS the guarantee) and
+		# status_resolvable (the tool explicitly offers a status query). For "none" and
+		# "fenceable", the guard must reason only from what recovery_session actually
+		# recorded (an explicit status_resolved entry, or a successful fence) -- giving it
+		# a free oracle lookup there would let the guard "know" things the declared
+		# guarantee model says it has no way to know, silently weakening the "none" rule
+		# and the "fenceable" rule to behave like status_resolvable.
 		resolved_status = recovery_session.status_resolved.get(operation_key)
 		ground_truth_committed = resolved_status == "COMMITTED"
-		if not ground_truth_committed and store is not None:
-			# Consult the store directly too (covers server_idempotent's own dedup ledger
-			# and any commit that landed without the session ever calling get_operation_status).
+		if not ground_truth_committed and store is not None and tool_guarantee in (
+			"server_idempotent",
+			"status_resolvable",
+		):
 			if get_operation_status(store, operation_key, injector=self._injector) == "COMMITTED":
 				ground_truth_committed = True
 
