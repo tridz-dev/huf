@@ -414,7 +414,7 @@ class _ProviderResponse:
 	"""
 
 	text: str | None = None
-	function_call: dict | None = None  # {"name": str, "args": dict}
+	function_call: dict | None = None  # {"name": str, "args": dict, "thought_signature": str | None}
 	prompt_tokens: int = 0
 	completion_tokens: int = 0
 	cached_tokens: int = 0
@@ -567,7 +567,17 @@ def _parse_gemini_response(payload: dict) -> _ProviderResponse:
 		for part in content.get("parts") or []:
 			if "functionCall" in part and function_call is None:
 				fc = part["functionCall"] or {}
-				function_call = {"name": fc.get("name"), "args": dict(fc.get("args") or {})}
+				# Newer Gemini models (the 3.x family) require the exact ``thoughtSignature``
+				# opaque token that accompanied this functionCall part to be echoed back
+				# verbatim on the SAME part when it's replayed into a later turn's history --
+				# a 400 INVALID_ARGUMENT ("Function call is missing a thought_signature")
+				# results otherwise. Captured here, threaded through unchanged, never
+				# inspected/decoded.
+				function_call = {
+					"name": fc.get("name"),
+					"args": dict(fc.get("args") or {}),
+					"thought_signature": part.get("thoughtSignature"),
+				}
 			elif "text" in part and text is None:
 				text = part["text"]
 
@@ -680,11 +690,19 @@ class LiveAPIModel:
 		if response.function_call is not None and response.function_call.get("name"):
 			name = response.function_call["name"]
 			args = dict(response.function_call.get("args") or {})
+			thought_signature = response.function_call.get("thought_signature")
 			# Record the model's OWN turn in our provider-native state so the NEXT call (once
 			# run_recovery appends the tool's result to the shared transcript) sees the
 			# functionCall this result answers -- see the class docstring's "Transcript
 			# bookkeeping" section for why the shared transcript alone can't provide this.
-			self._contents.append({"role": "model", "parts": [{"functionCall": {"name": name, "args": args}}]})
+			# The 3.x Gemini model family requires the exact `thoughtSignature` opaque token
+			# to be echoed back verbatim on this same part in the replayed history, or the
+			# next call 400s with "Function call is missing a thought_signature" -- carry it
+			# through unchanged when the API provided one (older/2.x models don't emit it).
+			part: dict = {"functionCall": {"name": name, "args": args}}
+			if thought_signature:
+				part["thoughtSignature"] = thought_signature
+			self._contents.append({"role": "model", "parts": [part]})
 			return ModelStep(
 				tool_call=ToolCallRequest(name, args),
 				estimated_prompt_tokens=response.prompt_tokens,

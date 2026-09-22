@@ -122,7 +122,10 @@ class TestParseGeminiResponse(unittest.TestCase):
             "modelVersion": "gemini-1.5-flash-002",
         }
         response = _parse_gemini_response(payload)
-        self.assertEqual(response.function_call, {"name": "submit_allocation", "args": {"allocation": "ALLOC-1", "operation_key": "opB"}})
+        self.assertEqual(
+            response.function_call,
+            {"name": "submit_allocation", "args": {"allocation": "ALLOC-1", "operation_key": "opB"}, "thought_signature": None},
+        )
         self.assertIsNone(response.text)
         self.assertEqual(response.prompt_tokens, 123)
         self.assertEqual(response.completion_tokens, 17)
