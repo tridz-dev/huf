@@ -1,0 +1,38 @@
+{
+  "name": "choice_success",
+  "http_status": 200,
+  "request": {
+    "model": "jev-1.13-free",
+    "state": "A customer says they were charged twice and need the invoice corrected.",
+    "questions": {
+      "department": {
+        "type": "choice",
+        "instructions": "Which team should handle this request?",
+        "criteria": {
+          "returns": "Refunds, exchanges, or damaged items",
+          "shipping": "Delivery delays or lost packages",
+          "billing": "Charges, invoices, or payment problems"
+        }
+      }
+    }
+  },
+  "response": {
+    "model": "jev-1.13-free",
+    "answers": {
+      "department": {
+        "type": "choice",
+        "choice": "billing",
+        "confidence": 1,
+        "probabilities": {
+          "shipping": 0,
+          "returns": 0,
+          "billing": 1
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 350,
+      "output_tokens": 38
+    }
+  }
+}
