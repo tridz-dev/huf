@@ -44,7 +44,7 @@ def make_frappe_telemetry_sink(*, frappe_module: Any | None = None, ignore_permi
             "state_snapshot": _json(call.state_snapshot) if call.state_snapshot is not None else None,
             "input_tokens": call.usage.input_tokens,
             "output_tokens": call.usage.output_tokens,
-            "cost": call.usage.cost,
+            "cost": call.usage.measured_cost,
             "cost_source": call.usage.cost_source,
             "gate_result": call.gate_result,
             "fallback_action": call.policy_fallback_action,

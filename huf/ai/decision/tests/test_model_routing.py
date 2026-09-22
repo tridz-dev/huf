@@ -19,8 +19,8 @@ class TestModelRouting(unittest.TestCase):
 		from huf.ai.decision.backends.fake import FakeDecisionBackend
 		from huf.ai.decision.model_routing import RouteableModel, select_routeable_model
 		from huf.ai.decision.runtime import DecisionRuntime
-		from huf.ai.decision.types import DecisionPolicy, DecisionRequest, Question, QuestionKind, StateBinding
-		policy = DecisionPolicy(policy_id="route", questions=(Question("model", QuestionKind.SELECT, "Pick model"),), state_bindings=(StateBinding("request", "$"),))
+		from huf.ai.decision.types import DecisionPolicy, DecisionRequest, Option, Question, QuestionKind, StateBinding
+		policy = DecisionPolicy(policy_id="route", questions=(Question("model", QuestionKind.SELECT, "Pick model", (Option("fast"), Option("safe"))),), state_bindings=(StateBinding("request", "$"),))
 		request = DecisionRequest(policy=policy, state="route")
 		selected, response = select_routeable_model(DecisionRuntime(), request, FakeDecisionBackend(), (RouteableModel("fast"), RouteableModel("safe")))
 		self.assertEqual(response.status.value, "success")

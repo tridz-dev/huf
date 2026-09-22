@@ -8,7 +8,7 @@ from typing import Any
 
 from huf.ai.decision.candidates import constrain_selected_tool, get_tool_candidates
 from huf.ai.decision.runtime import DecisionRuntime
-from huf.ai.decision.types import CandidateSource, DecisionRequest, DecisionResponse, DecisionStatus, QuestionKind
+from huf.ai.decision.types import CandidateSource, DecisionRequest, DecisionResponse, DecisionStatus, QuestionKind, Question
 
 
 def select_authorized_tool(
@@ -25,8 +25,14 @@ def select_authorized_tool(
 	candidates = get_tool_candidates(allowed_tools)
 	if not candidates:
 		return None, DecisionResponse(status=DecisionStatus.UNAVAILABLE, identity=request.identity)
+	policy = replace(request.policy, questions=tuple(
+		replace(question, options=tuple(option for option in question.options if option.id in {candidate.id for candidate in candidates}))
+		if question.kind == QuestionKind.SELECT else question
+		for question in request.policy.questions
+	))
 	request = replace(
 		request,
+		policy=policy,
 		candidates=candidates,
 		candidate_source=CandidateSource.PERMISSION_FILTERED_TOOLS,
 		candidate_resolver_id="permission_aware_tool_registry",
