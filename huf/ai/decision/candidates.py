@@ -30,3 +30,25 @@ def constrain_selected_tool(selected_id: str, allowed_tools: Iterable[Any]) -> s
 	"""Return a selected tool only when it remains in the current authorized set."""
 	allowed = {getattr(tool, "tool_name", None) for tool in allowed_tools}
 	return selected_id if selected_id in allowed else None
+
+
+def get_procedure_candidates(bound_procedures: Iterable[Any]) -> tuple[Option, ...]:
+	"""Build candidates from the current read-only bound-procedure resolver output."""
+	result = []
+	seen = set()
+	for bound in bound_procedures:
+		identifier = getattr(bound, "procedure_id", None) or getattr(bound, "binding_name", None)
+		if not isinstance(identifier, str) or not identifier.strip() or identifier in seen:
+			continue
+		seen.add(identifier)
+		result.append(Option(identifier, getattr(bound, "procedure_name", "") or identifier))
+	return tuple(result)
+
+
+def constrain_selected_procedure(selected_id: str, bound_procedures: Iterable[Any]) -> str | None:
+	"""Return a procedure only while its current binding remains authorized."""
+	allowed = {
+		getattr(bound, "procedure_id", None) or getattr(bound, "binding_name", None)
+		for bound in bound_procedures
+	}
+	return selected_id if selected_id in allowed else None
