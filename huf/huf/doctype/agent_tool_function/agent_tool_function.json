@@ -83,7 +83,7 @@
    "options": "\nread\nwrite\ncreate\ndelete\nsubmit\ncancel"
   },
   {
-   "description": "What a recovery agent may trust about this tool's write outcome after an in-doubt failure. Leave blank to keep today's behaviour (retry allowed, no guard). v1 note: only 'server_idempotent' currently admits a guarded retry; 'status_resolvable' and 'fenceable' are reserved for a follow-up (the session-recording hook that would let them resolve status/fences is not wired yet) and behave identically to 'none' (retry blocked) until then.",
+   "description": "What a recovery agent may trust about this tool's write outcome after an in-doubt failure. Leave blank to keep today's behaviour (retry allowed, no guard). v1 note: 'server_idempotent' always admits a guarded retry. 'status_resolvable' and 'fenceable' are functional WHEN the caller running the Procedure supplies the matching optional per-run hook to execute_procedure (status_check_fn / fence_fn respectively) -- that hook's result is what lets the guard admit the retry. Without the matching hook supplied for a given run, both levels still fall back to blanket rejection, identical to 'none'.",
    "fieldname": "recovery_guarantee",
    "fieldtype": "Select",
    "label": "Recovery Guarantee",

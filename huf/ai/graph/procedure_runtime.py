@@ -53,7 +53,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from huf.ai.graph.executor import (
 	ExecutionListener,
@@ -96,9 +96,11 @@ __all__ = [
 	"RECOVERY_MODES",
 	"RECOVERY_RESUME",
 	"RECOVERY_RETRY",
+	"FenceFn",
 	"ProcedureExecutionError",
 	"ProcedureLimitExceeded",
 	"ProcedureOutcome",
+	"StatusCheckFn",
 	"ToolInvoker",
 	"ToolInvocation",
 	"build_program",
@@ -146,6 +148,20 @@ RECOVERY_RESUME = "resume"
 RECOVERY_ABORT = "abort"
 RECOVERY_COMPENSATE = "compensate"
 RECOVERY_MODES = (RECOVERY_RETRY, RECOVERY_RESUME, RECOVERY_ABORT, RECOVERY_COMPENSATE)
+
+# -- SafeDeoptCommittedGuardWiring, stage 4: optional guard-resolution hooks ---------------
+# ``status_resolvable``/``fenceable`` are declarable on a tool (Stage 1) and consulted by
+# ``ReplayGuard.check`` (Stage 2/3), but until now nothing ever populated the
+# ``RecoverySession`` those two guarantee levels need -- so they behaved exactly like
+# ``none`` (see the v1 scope note added in a53df54c). These two optional per-run hooks are
+# the fix: a caller MAY supply one or both to ``execute_procedure``/``_Runner`` so the
+# runtime can actually resolve a status check or a fence BEFORE consulting the guard on a
+# ``RECOVERY_RETRY`` write. Left at their default of ``None`` (the only value every existing
+# caller passes), neither hook is ever invoked and behaviour for every guarantee level,
+# including ``status_resolvable``/``fenceable``, is byte-for-byte unchanged from before this
+# stage -- this is strictly additive.
+StatusCheckFn = Callable[[str], Literal["COMMITTED", "NOT_COMMITTED", "UNKNOWN"]]
+FenceFn = Callable[[str], bool]
 
 
 class ProcedureExecutionError(Exception):
@@ -411,6 +427,8 @@ class _Runner:
 		procedure_name: str = "",
 		dedup_window_seconds: int = DEDUP_WINDOW_SECONDS,
 		replay_guard_enabled: bool = False,
+		status_check_fn: StatusCheckFn | None = None,
+		fence_fn: FenceFn | None = None,
 	):
 		self.version = version
 		self.tool_invoker = tool_invoker
@@ -443,6 +461,14 @@ class _Runner:
 		self.replay_guard_enabled = replay_guard_enabled
 		self._replay_guard = ReplayGuard()
 		self._recovery_session = RecoverySession()
+
+		# -- SafeDeoptCommittedGuardWiring, stage 4: optional resolution hooks --------
+		# Both default to ``None`` -- the only value every caller passes before this stage
+		# existed -- so ``_resolve_status``/``_resolve_fence`` below are no-ops and
+		# ``status_resolvable``/``fenceable`` keep behaving exactly like ``none`` unless a
+		# caller opts in by supplying the corresponding hook for THIS run.
+		self.status_check_fn = status_check_fn
+		self.fence_fn = fence_fn
 
 		# -- T-30 concurrency bounds -------------------------------------------------
 		# One graph-wide semaphore for the whole run (shared by every parallel node,
@@ -565,6 +591,40 @@ class _Runner:
 			return "none"
 		return getattr(perm, "recovery_guarantee", None) or "none"
 
+	def _resolve_status_check(self, tool_id: str, operation_key: str) -> None:
+		"""Invoke ``self.status_check_fn`` (if supplied) and record its result into the
+		run's ``RecoverySession`` BEFORE the guard is consulted. A no-op when no hook was
+		supplied (the default) -- the guard then sees the same unresolved state it always
+		has, so ``status_resolvable`` continues to behave like ``none`` (fail closed).
+
+		A raising hook is treated the same as no hook: the exception is swallowed and
+		nothing is recorded, so a broken caller-supplied hook can only ever make the guard
+		MORE conservative (reject a retry it might otherwise have allowed), never less.
+		"""
+		if self.status_check_fn is None:
+			return
+		try:
+			status = self.status_check_fn(operation_key)
+		except Exception:  # noqa: BLE001 -- fail closed: an unresolved status blocks the retry, never fakes one
+			return
+		if status not in ("COMMITTED", "NOT_COMMITTED", "UNKNOWN"):
+			return
+		self._recovery_session.record_status_check(operation_key, status)
+
+	def _resolve_fence(self, tool_id: str, operation_key: str) -> None:
+		"""Invoke ``self.fence_fn`` (if supplied) and record its result into the run's
+		``RecoverySession`` BEFORE the guard is consulted. Mirrors
+		:meth:`_resolve_status_check` -- a no-op, or a swallowed exception from the hook,
+		leaves ``fenceable`` behaving exactly like ``none``.
+		"""
+		if self.fence_fn is None:
+			return
+		try:
+			fenced = bool(self.fence_fn(operation_key))
+		except Exception:  # noqa: BLE001 -- fail closed: a failed/raising fence attempt never unlocks a retry
+			return
+		self._recovery_session.record_fence(operation_key, fenced=fenced)
+
 	def _invoke_tool_once(self, tool_id: str, args: dict) -> ToolInvocation:
 		tool_sem = self._tool_semaphore(tool_id)
 		tool_sem.acquire()
@@ -682,6 +742,16 @@ class _Runner:
 			decision: GuardDecision | None = None
 			if self.replay_guard_enabled:
 				guarantee = self._recovery_guarantee(tool_id)
+				# SafeDeoptCommittedGuardWiring, stage 4: give the guard something real to
+				# see for status_resolvable/fenceable, via the caller's optional hooks --
+				# BEFORE ``check`` is consulted below. A no-op when the relevant hook was
+				# not supplied for this run (see ``_resolve_status_check``/``_resolve_fence``
+				# docstrings), so an opted-out caller's guard decision is identical to before
+				# this stage existed.
+				if guarantee == "status_resolvable":
+					self._resolve_status_check(tool_id, str(operation_key))
+				elif guarantee == "fenceable":
+					self._resolve_fence(tool_id, str(operation_key))
 				decision = self._replay_guard.check(
 					operation_key=str(operation_key),
 					tool_guarantee=guarantee,
@@ -1038,6 +1108,8 @@ def execute_procedure(
 	procedure_name: str = "",
 	dedup_window_seconds: int = DEDUP_WINDOW_SECONDS,
 	replay_guard_enabled: bool = False,
+	status_check_fn: StatusCheckFn | None = None,
+	fence_fn: FenceFn | None = None,
 ) -> ProcedureOutcome:
 	"""Execute a pinned Procedure graph to completion, frappe-free.
 
@@ -1068,6 +1140,14 @@ def execute_procedure(
 	:func:`run_agent_procedure_run`, which builds ``limits`` from the pinned graph's own
 	``contract.limits`` before calling this function): either source turning it on is
 	enough, and leaving both off/absent is what preserves the existing default.
+
+	``status_check_fn`` / ``fence_fn`` (SafeDeoptCommittedGuardWiring, stage 4): optional
+	per-run hooks that let a ``status_resolvable``/``fenceable`` tool's guarded retry
+	actually be admitted -- see the module-level ``StatusCheckFn``/``FenceFn`` docstring and
+	``_Runner._resolve_status_check``/``_resolve_fence``. Both default to ``None``, in which
+	case ``status_resolvable`` and ``fenceable`` continue to behave exactly like ``none``
+	(blanket rejection of a ``RECOVERY_RETRY`` write), unchanged from every version of this
+	function before this stage.
 	"""
 	graph = version.graph
 	contract = graph.get("contract") or {}
@@ -1095,6 +1175,8 @@ def execute_procedure(
 		procedure_name=procedure_name,
 		dedup_window_seconds=dedup_window_seconds,
 		replay_guard_enabled=replay_guard_enabled,
+		status_check_fn=status_check_fn,
+		fence_fn=fence_fn,
 	)
 
 	program = build_program(version)
