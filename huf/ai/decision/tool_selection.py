@@ -28,7 +28,7 @@ def select_authorized_tool(
 	request = replace(
 		request,
 		candidates=candidates,
-		candidate_source=CandidateSource.AUTHORITATIVE_RESOLVER,
+		candidate_source=CandidateSource.PERMISSION_FILTERED_TOOLS,
 		candidate_resolver_id="permission_aware_tool_registry",
 	)
 	response = runtime.evaluate(request, backend)
