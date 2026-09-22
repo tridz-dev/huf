@@ -32,7 +32,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.168870747089386e-07
+    "wall_time_s": 9.580980986356735e-07
   },
   {
     "kind": "tool_call",
@@ -54,11 +54,12 @@
       "tool_name": "submit_allocation",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": true,
       "error": "replay rejected for operation_key='opB' (tool_guarantee='status_resolvable'): operation_key is already known COMMITTED and the tool is not server_idempotent; no further retry is needed or permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.0421651899814606e-06
+    "wall_time_s": 3.3329706639051437e-06
   },
   {
     "kind": "model_step",
@@ -68,7 +69,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.33999365568161e-07
+    "wall_time_s": 1.00000761449337e-06
   },
   {
     "kind": "tool_call",
@@ -95,6 +96,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.998873919248581e-07
+    "wall_time_s": 6.658956408500671e-07
   }
 ]

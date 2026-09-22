@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.080379873514175e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "tool_call",
@@ -84,7 +84,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.1671876311302185e-06
+    "wall_time_s": 2.125045284628868e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0421499609947205e-06
+    "wall_time_s": 1.3748649507761002e-06
   },
   {
     "kind": "tool_call",
@@ -117,11 +117,12 @@
       "tool_name": "submit_linked_record",
       "ok": false,
       "dispatched": true,
+      "guard_rejected": false,
       "error": "timeout: no confirmation received for submit_linked_record (operation_key='opB')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.550000160932541e-05
+    "wall_time_s": 1.7625046893954277e-05
   },
   {
     "kind": "model_step",
@@ -131,7 +132,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.250067725777626e-06
+    "wall_time_s": 1.2079253792762756e-06
   },
   {
     "kind": "tool_call",
@@ -151,11 +152,12 @@
       "tool_name": "get_operation_status",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 7.08969309926033e-07
   },
   {
     "kind": "model_step",
@@ -165,7 +167,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.458916813135147e-06
+    "wall_time_s": 1.250067725777626e-06
   },
   {
     "kind": "tool_call",
@@ -192,6 +194,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.375105395913124e-06
+    "wall_time_s": 3.7509016692638397e-07
   }
 ]

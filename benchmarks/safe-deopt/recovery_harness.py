@@ -144,7 +144,7 @@ class ToolInvocationError(RuntimeError):
 	record, ...) so the loop can always hand the model a string, never a raw traceback.
 	"""
 
-	def __init__(self, *, tool_name: str, detail: str, dispatched: bool = False) -> None:
+	def __init__(self, *, tool_name: str, detail: str, dispatched: bool = False, guard_rejected: bool = False) -> None:
 		self.tool_name = tool_name
 		self.detail = detail
 		# ``dispatched`` distinguishes "the underlying store method actually ran and then
@@ -156,6 +156,15 @@ class ToolInvocationError(RuntimeError):
 		# correctly blocked it" the same as "it reached the store and blew up" -- only the
 		# latter is a real write attempt worth scoring for informational safety.
 		self.dispatched = dispatched
+		# ``guard_rejected`` is a strictly narrower flag than "not dispatched": it is True
+		# ONLY when the real ``ReplayGuard.attempt_write`` raised ``ReplayRejected`` -- i.e.
+		# the guard itself, evaluating its admission rule, actually refused this attempt.
+		# It is False for every OTHER never-dispatched refusal (no such tool, no
+		# RecoverySession wired up, a write tool called with no operation_key) even though
+		# those also have ``dispatched=False``. Scoring code (``score_blocked_retries``)
+		# uses this -- not ``dispatched``, not string-matching ``detail`` -- to count how
+		# many retry attempts the guard itself actually blocked.
+		self.guard_rejected = guard_rejected
 		super().__init__(f"tool '{tool_name}' failed: {detail}")
 
 
@@ -511,7 +520,7 @@ def _dispatch_tool_call(
 					store=store,
 				)
 			except ReplayRejected as exc:
-				raise ToolInvocationError(tool_name=tool.name, detail=str(exc)) from exc
+				raise ToolInvocationError(tool_name=tool.name, detail=str(exc), guard_rejected=True) from exc
 
 		# Bookkeeping for the guard's own admission rule (rules 2b/2c), even when the
 		# guard itself is inactive on this call (e.g. a read tool, or C5 without a guard):
@@ -629,7 +638,13 @@ def run_recovery(
 			call_wall = time.monotonic() - call_start
 			log.log(
 				"tool_result",
-				{"tool_name": call.tool_name, "ok": False, "dispatched": exc.dispatched, "error": exc.detail},
+				{
+					"tool_name": call.tool_name,
+					"ok": False,
+					"dispatched": exc.dispatched,
+					"guard_rejected": exc.guard_rejected,
+					"error": exc.detail,
+				},
 				wall_time_s=call_wall,
 			)
 			transcript.append({"role": "tool", "tool_name": call.tool_name, "content": {"error": exc.detail}})

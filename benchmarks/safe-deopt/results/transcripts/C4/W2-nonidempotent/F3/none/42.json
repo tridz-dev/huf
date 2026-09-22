@@ -31,7 +31,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.920898497104645e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "tool_call",
@@ -58,7 +58,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7499551177024841e-06
+    "wall_time_s": 1.541106030344963e-06
   },
   {
     "kind": "model_step",
@@ -68,7 +68,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.2515027821064e-07
+    "wall_time_s": 5.83939254283905e-07
   },
   {
     "kind": "final",

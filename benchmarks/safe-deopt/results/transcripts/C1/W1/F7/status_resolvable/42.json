@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.3748649507761002e-06
+    "wall_time_s": 8.749775588512421e-07
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.578652679920197e-07
+    "wall_time_s": 5.420297384262085e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.501803338527679e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "tool_call",
@@ -84,7 +84,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.6249402910470963e-06
+    "wall_time_s": 1.7909333109855652e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.291045919060707e-06
+    "wall_time_s": 1.041218638420105e-06
   },
   {
     "kind": "tool_call",
@@ -117,11 +117,12 @@
       "tool_name": "submit_linked_record",
       "ok": false,
       "dispatched": true,
+      "guard_rejected": false,
       "error": "timeout: no confirmation received for submit_linked_record (operation_key='opB')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.1458912417292595e-05
+    "wall_time_s": 1.49579718708992e-05
   },
   {
     "kind": "model_step",
@@ -131,7 +132,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7499551177024841e-06
+    "wall_time_s": 1.291045919060707e-06
   },
   {
     "kind": "tool_call",
@@ -155,7 +156,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.416075974702835e-06
+    "wall_time_s": 9.171199053525925e-07
   },
   {
     "kind": "model_step",
@@ -165,7 +166,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.708976924419403e-06
+    "wall_time_s": 1.2498348951339722e-06
   },
   {
     "kind": "tool_call",
@@ -192,6 +193,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.998873919248581e-07
+    "wall_time_s": 2.919696271419525e-07
   }
 ]

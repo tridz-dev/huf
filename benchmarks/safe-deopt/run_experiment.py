@@ -583,6 +583,43 @@ def score_unsafe_retries(
     return unsafe_count
 
 
+def score_blocked_retries_from_log(log_entries, write_tool_name: str) -> int:
+    """Count how many attempted retries of ``write_tool_name`` the REAL ``ReplayGuard``
+    actually rejected (a ``ReplayRejected`` was raised and caught) in an LLM-condition
+    transcript (C1/C4/C4+G/C5/C6, ``recovery_harness.run_recovery``'s log).
+
+    This is a distinct, narrower count than "never dispatched": ``_dispatch_tool_call``
+    also refuses a call before dispatch for reasons that have nothing to do with the guard
+    (no such tool, no ``RecoverySession`` wired up, a write tool called with no
+    ``operation_key`` at all). Only ``recovery_harness.ToolInvocationError.guard_rejected``
+    (set exclusively when ``conditions.ReplayGuard.attempt_write`` raises
+    ``conditions.ReplayRejected``) counts here -- the tool-result entry's ``guard_rejected``
+    field, threaded straight through from that flag, is used directly rather than
+    string-matching the error message.
+
+    Only C4+G and C6 ever activate a guard (see ``run_recovery``'s ``guard_active``), so this
+    is always 0 for C1/C4/C5 transcripts -- there is no guard present to reject anything.
+    """
+    count = 0
+    for entry in log_entries:
+        if entry.kind != "tool_result" or not isinstance(entry.content, dict):
+            continue
+        if entry.content.get("tool_name") != write_tool_name:
+            continue
+        if entry.content.get("guard_rejected"):
+            count += 1
+    return count
+
+
+def score_blocked_retries_from_results(results: list) -> int:
+    """Deterministic-condition (C3) counterpart to :func:`score_blocked_retries_from_log`:
+    ``conditions.guarantee_aware_resume_recover`` never raises ``ReplayRejected``, it
+    CAPTURES each rejection as a list entry (see its docstring) so callers can inspect why an
+    attempt was refused without a try/except. Count those captured rejections directly.
+    """
+    return sum(1 for r in results if isinstance(r, ReplayRejected))
+
+
 # ---------------------------------------------------------------------------
 # Reactive MockedModel rules
 # ---------------------------------------------------------------------------
@@ -923,6 +960,10 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
         tokens_estimated = c1["tokens_estimated"]
         write_b_name = wl["write_b_name"]
         accepts_operation_key = wl["accepts_operation_key"]
+        # Issue C: C1 never activates a ReplayGuard (guard_active is only True for C4+G/C6
+        # in recovery_harness.run_recovery), so this is always 0 -- computed via the same
+        # scorer as every other LLM condition for consistency, not hardcoded.
+        blocked_retries = score_blocked_retries_from_log(log_entries, write_b_name)
 
         if fault_id == "F0" or observed.ok:
             could_retry_safely_gt = True
@@ -953,6 +994,7 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
         escalated = False
         tokens_estimated = 0
         log_entries = []
+        blocked_retries = 0  # overwritten below for C3 (non-idempotent) / LLM conditions
 
         if fault_id == "F0" or observed.ok:
             # Control, or F5's fake-success: nothing to recover from at the model layer.
@@ -999,6 +1041,9 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
                         # Only count calls that were actually dispatched to write_b_fn -- a
                         # ReplayRejected entry means the guard refused and no call happened.
                         tool_calls += sum(1 for r in results if not isinstance(r, ReplayRejected))
+                        # Issue C: the guard's own rejection count, as a column distinct from
+                        # unsafe_retries -- see score_blocked_retries_from_results's docstring.
+                        blocked_retries = score_blocked_retries_from_results(results)
             else:
                 # -- LLM condition: build tools, context, and the reactive MockedModel rule --
                 read_tools = dict(wl["read_tools"])
@@ -1035,6 +1080,10 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
                 tool_calls += log.tool_call_count
                 escalated = log.outcome == "escalated"
                 tokens_estimated = sum(e.prompt_tokens + e.completion_tokens for e in log.entries)
+                # Issue C: the guard's own rejection count (only ever nonzero for C4+G/C6,
+                # the only conditions that activate a ReplayGuard at all -- see
+                # score_blocked_retries_from_log's docstring).
+                blocked_retries = score_blocked_retries_from_log(log_entries, write_b_name)
 
     wall_time = time.perf_counter() - wall_start
 
@@ -1155,6 +1204,7 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
         "duplicate_writes": duplicate_writes,
         "duplicate_write_occurred": duplicate_writes > 0,
         "unsafe_retries": unsafe_retries,
+        "blocked_retries": blocked_retries,
         "authorization_violations": authorization_violations,
         "escalated": escalated,
         "escalation_correct": correct_escalation_field,
@@ -1320,6 +1370,13 @@ def write_summary_csv(rows: list[dict]) -> None:
         # named explicitly so the two facts are never read as one metric.
         "duplicate_write_occurred_rate", "duplicate_write_occurred_rate_ci",
         "unsafe_retry_rate", "unsafe_retry_rate_ci",
+        # Issue C: the guard's own rejection count, reported separately from
+        # unsafe_retry_rate -- "blocked" (guard refused, nothing dispatched) is the
+        # opposite outcome from "unsafe" (guard-active conditions never let a dispatched
+        # retry be unsafe by construction; see score_unsafe_retries's docstring), so
+        # blending them would erase the distinction the review asked to keep separate.
+        "blocked_retry_rate", "blocked_retry_rate_ci",
+        "mean_blocked_retries",
         "escalation_rate", "escalation_rate_ci",
         "correct_escalation_rate", "correct_escalation_rate_ci",
         "unnecessary_escalation_rate", "unnecessary_escalation_rate_ci",
@@ -1337,6 +1394,8 @@ def write_summary_csv(rows: list[dict]) -> None:
             dup_rate = sum(1 for r in group if r["duplicate_writes"] > 0) / n
             dup_occurred_rate = sum(1 for r in group if r["duplicate_write_occurred"]) / n
             unsafe_rate = sum(1 for r in group if r["unsafe_retries"] > 0) / n
+            blocked_rate = sum(1 for r in group if r["blocked_retries"] > 0) / n
+            mean_blocked = sum(r["blocked_retries"] for r in group) / n
             esc_group = [r for r in group if r["escalated"]]
             escalation_rate = len(esc_group) / n
             correct_esc = [r for r in esc_group if r["correct_escalation"] is True]
@@ -1352,6 +1411,8 @@ def write_summary_csv(rows: list[dict]) -> None:
                 round(dup_rate, 4), "NA",
                 round(dup_occurred_rate, 4), "NA",
                 round(unsafe_rate, 4), "NA",
+                round(blocked_rate, 4), "NA",
+                round(mean_blocked, 3),
                 round(escalation_rate, 4), "NA",
                 round(correct_esc_rate, 4) if correct_esc_rate != "NA" else "NA", "NA",
                 round(unnecessary_esc_rate, 4) if unnecessary_esc_rate != "NA" else "NA", "NA",

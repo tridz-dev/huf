@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.59029421210289e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.420297384262085e-07
+    "wall_time_s": 5.00120222568512e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.66128471493721e-07
+    "wall_time_s": 5.00120222568512e-07
   },
   {
     "kind": "tool_call",
@@ -118,7 +118,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.4170149117708206e-06
+    "wall_time_s": 1.666136085987091e-06
   },
   {
     "kind": "model_step",
@@ -128,7 +128,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.1657830327749252e-06
+    "wall_time_s": 1.0421499609947205e-06
   },
   {
     "kind": "tool_call",
@@ -151,11 +151,12 @@
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
       "dispatched": true,
+      "guard_rejected": false,
       "error": "timeout: no confirmation received for submit_allocation_unsafe (operation_key='<unknown>')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.542060196399689e-06
+    "wall_time_s": 3.2088719308376312e-06
   },
   {
     "kind": "model_step",
@@ -165,7 +166,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.375097781419754e-06
+    "wall_time_s": 1.00000761449337e-06
   },
   {
     "kind": "tool_call",
@@ -189,7 +190,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.250067725777626e-06
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "model_step",
@@ -199,7 +200,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.583946868777275e-06
+    "wall_time_s": 1.1248048394918442e-06
   },
   {
     "kind": "tool_call",
@@ -226,6 +227,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.2515027821064e-07
+    "wall_time_s": 3.748573362827301e-07
   }
 ]

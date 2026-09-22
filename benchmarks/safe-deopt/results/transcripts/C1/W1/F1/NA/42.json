@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.125045284628868e-06
+    "wall_time_s": 1.00000761449337e-06
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.458916813135147e-06
+    "wall_time_s": 8.749775588512421e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 6.658956408500671e-07
   },
   {
     "kind": "tool_call",
@@ -84,7 +84,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.875008016824722e-06
+    "wall_time_s": 2.7921050786972046e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.5408731997013092e-06
+    "wall_time_s": 1.2079253792762756e-06
   },
   {
     "kind": "tool_call",
@@ -117,11 +117,12 @@
       "tool_name": "submit_linked_record",
       "ok": false,
       "dispatched": true,
+      "guard_rejected": false,
       "error": "rejected before dispatch: submit_linked_record (operation_key='opB')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.445916809141636e-05
+    "wall_time_s": 2.1292129531502724e-05
   },
   {
     "kind": "model_step",
@@ -131,7 +132,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.791166141629219e-06
+    "wall_time_s": 1.3329554349184036e-06
   },
   {
     "kind": "tool_call",
@@ -151,11 +152,12 @@
       "tool_name": "get_operation_status",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0831281542778015e-06
+    "wall_time_s": 8.752103894948959e-07
   },
   {
     "kind": "model_step",
@@ -165,7 +167,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.8328428268432617e-06
+    "wall_time_s": 1.3748649507761002e-06
   },
   {
     "kind": "tool_call",
@@ -192,6 +194,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.66128471493721e-07
+    "wall_time_s": 4.169996827840805e-07
   }
 ]

@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.168870747089386e-07
+    "wall_time_s": 2.6659108698368073e-06
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.499475032091141e-07
+    "wall_time_s": 8.330680429935455e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.330680429935455e-07
+    "wall_time_s": 8.749775588512421e-07
   },
   {
     "kind": "tool_call",
@@ -84,7 +84,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.125045284628868e-06
+    "wall_time_s": 2.334127202630043e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.2088567018508911e-06
+    "wall_time_s": 1.4170072972774506e-06
   },
   {
     "kind": "tool_call",
@@ -117,11 +117,12 @@
       "tool_name": "submit_linked_record",
       "ok": false,
       "dispatched": true,
+      "guard_rejected": false,
       "error": "timeout: no confirmation received for submit_linked_record (operation_key='opB')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.458311453461647e-05
+    "wall_time_s": 1.3999873772263527e-05
   },
   {
     "kind": "model_step",
@@ -131,7 +132,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7920974642038345e-06
+    "wall_time_s": 1.500127837061882e-06
   },
   {
     "kind": "tool_call",
@@ -158,7 +159,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.5830155462026596e-06
+    "wall_time_s": 1.334119588136673e-06
   },
   {
     "kind": "model_step",
@@ -168,7 +169,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.0041130483150482e-05
+    "wall_time_s": 1.1669471859931946e-06
   },
   {
     "kind": "final",

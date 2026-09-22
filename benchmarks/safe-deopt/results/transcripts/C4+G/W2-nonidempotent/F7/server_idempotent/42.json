@@ -32,7 +32,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.330680429935455e-07
+    "wall_time_s": 8.328352123498917e-07
   },
   {
     "kind": "tool_call",
@@ -55,11 +55,12 @@
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": false,
       "error": "guard active: write tool call carries no operation_key, cannot be gated safely"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 1.0409858077764511e-06
   },
   {
     "kind": "model_step",
@@ -69,7 +70,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.918570190668106e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "tool_call",
@@ -96,6 +97,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.830079317092896e-07
+    "wall_time_s": 5.408655852079391e-07
   }
 ]

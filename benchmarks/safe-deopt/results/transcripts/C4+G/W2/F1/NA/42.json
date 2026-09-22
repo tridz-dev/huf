@@ -31,7 +31,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.752103894948959e-07
+    "wall_time_s": 1.0831281542778015e-06
   },
   {
     "kind": "tool_call",
@@ -53,11 +53,12 @@
       "tool_name": "submit_allocation",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": true,
       "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.416091203689575e-06
+    "wall_time_s": 3.959052264690399e-06
   },
   {
     "kind": "model_step",
@@ -67,7 +68,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.33999365568161e-07
+    "wall_time_s": 1.0831281542778015e-06
   },
   {
     "kind": "tool_call",
@@ -94,6 +95,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.66128471493721e-07
+    "wall_time_s": 8.33999365568161e-07
   }
 ]

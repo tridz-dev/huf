@@ -80,7 +80,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.3748649507761002e-06
+    "wall_time_s": 1.3329554349184036e-06
   },
   {
     "kind": "model_step",
@@ -90,7 +90,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.499475032091141e-07
+    "wall_time_s": 7.501803338527679e-07
   },
   {
     "kind": "final",

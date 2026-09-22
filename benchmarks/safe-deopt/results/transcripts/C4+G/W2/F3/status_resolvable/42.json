@@ -32,7 +32,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.501803338527679e-07
+    "wall_time_s": 8.33999365568161e-07
   },
   {
     "kind": "tool_call",
@@ -54,11 +54,12 @@
       "tool_name": "submit_allocation",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": true,
       "error": "replay rejected for operation_key='opB' (tool_guarantee='status_resolvable'): the recovery session has not actually resolved this operation_key's status to NOT_COMMITTED via get_operation_status; a bare read does not count"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.2079406082630157e-06
+    "wall_time_s": 3.5408884286880493e-06
   },
   {
     "kind": "model_step",
@@ -95,6 +96,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.670597940683365e-07
+    "wall_time_s": 5.830079317092896e-07
   }
 ]

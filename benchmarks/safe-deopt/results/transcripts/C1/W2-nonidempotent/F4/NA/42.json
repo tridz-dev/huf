@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.083834260702133e-06
+    "wall_time_s": 7.918570190668106e-07
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.168870747089386e-07
+    "wall_time_s": 4.998873919248581e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.168870747089386e-07
+    "wall_time_s": 5.83939254283905e-07
   },
   {
     "kind": "tool_call",
@@ -81,7 +81,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.748573362827301e-07
+    "wall_time_s": 3.3318065106868744e-07
   },
   {
     "kind": "model_step",
@@ -91,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.168870747089386e-07
+    "wall_time_s": 5.408655852079391e-07
   },
   {
     "kind": "tool_call",
@@ -118,7 +118,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.749977961182594e-06
+    "wall_time_s": 1.6668345779180527e-06
   },
   {
     "kind": "model_step",
@@ -128,7 +128,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.6249250620603561e-06
+    "wall_time_s": 1.0419171303510666e-06
   },
   {
     "kind": "tool_call",
@@ -151,11 +151,12 @@
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
       "dispatched": true,
+      "guard_rejected": false,
       "error": "validation error at write B for submit_allocation_unsafe (operation_key='<unknown>'): target record changed concurrently before write B dispatched"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.133396290242672e-05
+    "wall_time_s": 5.37489540874958e-06
   },
   {
     "kind": "model_step",
@@ -165,7 +166,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.62515789270401e-06
+    "wall_time_s": 9.580980986356735e-07
   },
   {
     "kind": "tool_call",
@@ -185,11 +186,12 @@
       "tool_name": "get_operation_status",
       "ok": false,
       "dispatched": false,
+      "guard_rejected": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.1671800166368484e-06
+    "wall_time_s": 6.670597940683365e-07
   },
   {
     "kind": "model_step",
@@ -199,7 +201,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.9171275198459625e-06
+    "wall_time_s": 1.0421499609947205e-06
   },
   {
     "kind": "tool_call",
@@ -226,6 +228,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.830079317092896e-07
+    "wall_time_s": 3.3294782042503357e-07
   }
 ]
