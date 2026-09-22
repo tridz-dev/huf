@@ -25,6 +25,7 @@ from conditions import ReplayGuard  # noqa: E402
 from faults import FaultInjector  # noqa: E402
 from recovery_harness import (  # noqa: E402
 	CONDITIONS,
+	GEMINI_PRICING_USD_PER_MILLION_TOKENS,
 	MAX_TOOL_CALLS,
 	MockedModel,
 	ModelStep,
@@ -34,6 +35,7 @@ from recovery_harness import (  # noqa: E402
 	LiveAPIModel,
 	build_condition4_context,
 	build_condition5_payload,
+	compute_model_step_cost_usd,
 	make_tools_for_workload,
 	run_recovery,
 )
@@ -426,6 +428,94 @@ class TestLiveAPIModelStub(unittest.TestCase):
 		model = LiveAPIModel(model_id="gemini-1.5-flash", tools={}, provider=object())
 		self.assertEqual(model.model_id, "gemini-1.5-flash")
 		self.assertIsNone(model.last_model_version)
+
+
+# ---------------------------------------------------------------------------
+# Dollar-cost computation (Issue A, PLAN_V3)
+# ---------------------------------------------------------------------------
+
+
+class TestModelStepCost(unittest.TestCase):
+	"""compute_model_step_cost_usd on hand-picked, easy-to-verify-by-hand token counts."""
+
+	def setUp(self):
+		self.pricing = GEMINI_PRICING_USD_PER_MILLION_TOKENS["gemini-3.5-flash-lite"]
+		self.assertEqual(self.pricing["input"], 0.30)
+		self.assertEqual(self.pricing["output"], 2.50)
+		self.assertEqual(self.pricing["cached_input"], 0.03)
+
+	def test_no_cached_tokens(self):
+		# 1,000,000 prompt tokens @ $0.30/M + 1,000,000 completion tokens @ $2.50/M
+		# = $0.30 + $2.50 = $2.80
+		cost = compute_model_step_cost_usd(
+			prompt_tokens=1_000_000, completion_tokens=1_000_000, cached_tokens=0, pricing=self.pricing
+		)
+		self.assertAlmostEqual(cost, 2.80, places=9)
+
+	def test_with_cached_tokens_subset_of_prompt(self):
+		# prompt_tokens=1000 of which cached_tokens=400 (cached is a SUBSET, not additional):
+		#   non-cached = 600 @ $0.30/M -> 600 * 0.30 / 1e6 = 0.00018
+		#   cached     = 400 @ $0.03/M -> 400 * 0.03 / 1e6 = 0.000012
+		#   completion = 100 @ $2.50/M -> 100 * 2.50 / 1e6 = 0.00025
+		# total = 0.00018 + 0.000012 + 0.00025 = 0.000442
+		cost = compute_model_step_cost_usd(
+			prompt_tokens=1000, completion_tokens=100, cached_tokens=400, pricing=self.pricing
+		)
+		self.assertAlmostEqual(cost, 0.000442, places=12)
+
+	def test_zero_tokens_is_zero_cost(self):
+		cost = compute_model_step_cost_usd(prompt_tokens=0, completion_tokens=0, cached_tokens=0, pricing=self.pricing)
+		self.assertEqual(cost, 0.0)
+
+	def test_run_log_total_cost_sums_every_model_step_including_failed_and_recovery_calls(self):
+		"""A RunLog with THREE model_step entries -- as if a first call failed/escalated and
+		a recovery-phase call followed -- must sum cost across ALL of them, not just the
+		last/"final" one. Non-model_step entries (tool_call/tool_result/etc.) must be
+		ignored even though they carry a prompt_tokens/completion_tokens field too.
+		"""
+		log = RunLog(condition="C4")
+		# Step 1 (the "failed" attempt): 500 prompt / 20 completion / 0 cached.
+		log.log(
+			"model_step",
+			{"tool_call": None, "final_text": None},
+			prompt_tokens=500,
+			completion_tokens=20,
+			cached_tokens=0,
+		)
+		# A tool_call/tool_result pair in between -- must NOT be counted even though it
+		# carries prompt_tokens/completion_tokens fields (always 0 for these kinds).
+		log.log("tool_call", {"tool_name": "read_open_items", "kwargs": {}})
+		log.log("tool_result", {"tool_name": "read_open_items", "ok": False, "dispatched": True, "result": None})
+		# Step 2 (recovery-phase call after the failure): 300 prompt / 50 completion / 100 cached.
+		log.log(
+			"model_step",
+			{"tool_call": None, "final_text": None},
+			prompt_tokens=300,
+			completion_tokens=50,
+			cached_tokens=100,
+		)
+		# Step 3 (final escalation call): 200 prompt / 10 completion / 0 cached.
+		log.log(
+			"model_step",
+			{"tool_call": None, "final_text": "escalating"},
+			prompt_tokens=200,
+			completion_tokens=10,
+			cached_tokens=0,
+		)
+
+		expected = (
+			compute_model_step_cost_usd(prompt_tokens=500, completion_tokens=20, cached_tokens=0, pricing=self.pricing)
+			+ compute_model_step_cost_usd(prompt_tokens=300, completion_tokens=50, cached_tokens=100, pricing=self.pricing)
+			+ compute_model_step_cost_usd(prompt_tokens=200, completion_tokens=10, cached_tokens=0, pricing=self.pricing)
+		)
+		self.assertAlmostEqual(log.total_cost_usd(self.pricing), expected, places=12)
+		# Exact expected value, computed by hand:
+		#   step1 = 500*0.30/1e6 + 20*2.50/1e6           = 0.00015   + 0.00005   = 0.0002
+		#   step2 = (300-100)*0.30/1e6 + 100*0.03/1e6 + 50*2.50/1e6
+		#         = 0.00006 + 0.000003 + 0.000125       = 0.000188
+		#   step3 = 200*0.30/1e6 + 10*2.50/1e6            = 0.00006   + 0.000025  = 0.000085
+		#   total = 0.0002 + 0.000188 + 0.000085          = 0.000473
+		self.assertAlmostEqual(log.total_cost_usd(self.pricing), 0.000473, places=12)
 
 
 if __name__ == "__main__":

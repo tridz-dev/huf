@@ -313,6 +313,9 @@ class ModelStep:
 	# for MockedModel vs. a real model.
 	estimated_prompt_tokens: int = 0
 	estimated_completion_tokens: int = 0
+	# Cached-content portion of estimated_prompt_tokens (a subset of it, not additional to
+	# it -- see _ProviderResponse.cached_tokens). Always 0 for MockedModel.
+	estimated_cached_tokens: int = 0
 
 
 class RecoveryModel(Protocol):
@@ -707,6 +710,7 @@ class LiveAPIModel:
 				tool_call=ToolCallRequest(name, args),
 				estimated_prompt_tokens=response.prompt_tokens,
 				estimated_completion_tokens=response.completion_tokens,
+				estimated_cached_tokens=response.cached_tokens,
 			)
 
 		text = response.text or ""
@@ -715,7 +719,51 @@ class LiveAPIModel:
 			final_text=text,
 			estimated_prompt_tokens=response.prompt_tokens,
 			estimated_completion_tokens=response.completion_tokens,
+			estimated_cached_tokens=response.cached_tokens,
 		)
+
+
+# ---------------------------------------------------------------------------
+# Pricing (Issue A, PLAN_V3: "Must record real dollar cost: pull per-token pricing for the
+# configured model + pricing date, multiply by real token counts, INCLUDING failed calls
+# and recovery-phase calls.")
+# ---------------------------------------------------------------------------
+#
+# Source/confidence: fetched live from Google's official pricing page
+# (https://ai.google.dev/gemini-api/docs/pricing, Standard/Paid tier) on 2026-09-22 -- the
+# same day this table was added -- via WebFetch, and cross-checked against a WebSearch
+# summary (artificialanalysis.ai / openrouter.ai / cloudzero.com all reported the same
+# $0.30 / $2.50 input/output figures). This is a real, dated, authoritative-source lookup,
+# not a guess -- but it is a point-in-time snapshot; if Google changes pricing after
+# 2026-09-22, re-fetch and bump ``pricing_date`` before trusting a cost figure computed with
+# this table for a later run. Cached-input rate is Google's documented "10% of standard
+# input" context-caching rate, not separately confirmed against a second source.
+GEMINI_PRICING_USD_PER_MILLION_TOKENS: dict[str, dict[str, Any]] = {
+	"gemini-3.5-flash-lite": {
+		"input": 0.30,
+		"output": 2.50,
+		"cached_input": 0.03,
+		"pricing_date": "2026-09-22",
+		"source": "https://ai.google.dev/gemini-api/docs/pricing (Standard/Paid tier)",
+	},
+}
+
+
+def compute_model_step_cost_usd(*, prompt_tokens: int, completion_tokens: int, cached_tokens: int, pricing: dict) -> float:
+	"""Dollar cost of ONE model call, given its token counts and a pricing-table entry (one
+	value from :data:`GEMINI_PRICING_USD_PER_MILLION_TOKENS`).
+
+	``cached_tokens`` is a SUBSET of ``prompt_tokens`` (see ``_ProviderResponse.cached_tokens``
+	/ Gemini's ``cachedContentTokenCount``), not additional to it -- so the non-cached portion
+	billed at the standard input rate is ``prompt_tokens - cached_tokens``.
+	"""
+	non_cached_prompt_tokens = max(0, prompt_tokens - cached_tokens)
+	cost = (
+		non_cached_prompt_tokens * pricing["input"]
+		+ cached_tokens * pricing["cached_input"]
+		+ completion_tokens * pricing["output"]
+	) / 1_000_000
+	return cost
 
 
 # ---------------------------------------------------------------------------
@@ -735,6 +783,9 @@ class LogEntry:
 	# populate these from that provider's actual reported usage.
 	prompt_tokens: int = 0
 	completion_tokens: int = 0
+	# Cached-content subset of prompt_tokens (see ModelStep.estimated_cached_tokens). 0 for
+	# every MockedModel-driven entry, same caveat as prompt_tokens/completion_tokens above.
+	cached_tokens: int = 0
 	wall_time_s: float = 0.0
 
 
@@ -756,9 +807,44 @@ class RunLog:
 	tokens_are_estimated: bool = True
 	total_wall_time_s: float = 0.0
 
-	def log(self, kind: str, content: Any, *, prompt_tokens: int = 0, completion_tokens: int = 0, wall_time_s: float = 0.0) -> None:
+	def total_cost_usd(self, pricing: dict) -> float:
+		"""Sum :func:`compute_model_step_cost_usd` across EVERY ``model_step`` entry in this
+		run -- including calls that were part of a failed/escalated/recovery-phase
+		interaction, not just a "final" successful one (Issue A, PLAN_V3: "including failed
+		calls and recovery-phase calls"). ``pricing`` is one value from
+		``GEMINI_PRICING_USD_PER_MILLION_TOKENS`` (or an equivalent dict with "input",
+		"output", "cached_input" keys).
+		"""
+		return sum(
+			compute_model_step_cost_usd(
+				prompt_tokens=e.prompt_tokens,
+				completion_tokens=e.completion_tokens,
+				cached_tokens=e.cached_tokens,
+				pricing=pricing,
+			)
+			for e in self.entries
+			if e.kind == "model_step"
+		)
+
+	def log(
+		self,
+		kind: str,
+		content: Any,
+		*,
+		prompt_tokens: int = 0,
+		completion_tokens: int = 0,
+		cached_tokens: int = 0,
+		wall_time_s: float = 0.0,
+	) -> None:
 		self.entries.append(
-			LogEntry(kind=kind, content=content, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, wall_time_s=wall_time_s)
+			LogEntry(
+				kind=kind,
+				content=content,
+				prompt_tokens=prompt_tokens,
+				completion_tokens=completion_tokens,
+				cached_tokens=cached_tokens,
+				wall_time_s=wall_time_s,
+			)
 		)
 
 
@@ -987,6 +1073,7 @@ def run_recovery(
 			{"tool_call": step.tool_call, "final_text": step.final_text},
 			prompt_tokens=step.estimated_prompt_tokens,
 			completion_tokens=step.estimated_completion_tokens,
+			cached_tokens=step.estimated_cached_tokens,
 			wall_time_s=step_wall,
 		)
 
