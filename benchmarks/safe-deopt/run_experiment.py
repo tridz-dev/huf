@@ -5,17 +5,29 @@
 
 READ THIS FIRST -- HONESTY / SCOPE
 -----------------------------------
-This environment has no real model API key available (see recovery_harness.py's own module
-docstring). Every LLM condition (C1, C4, C4+G, C5, C6) below runs against
-``recovery_harness.MockedModel`` -- a deterministic, scripted/rule-based stand-in, NOT a real
-language model. Nothing here fabricates a real model transcript, a real token count, or a
-real latency number. This is a PILOT pass at n=1 seed/cell, per PREREGISTRATION.md's own
-"pilot run transparency" commitment: outputs are labeled pilot/not-paper-grade, and
-confidence intervals are reported as the literal string "NA".
+Model selection is a real branch in this file (see ``select_model_backend``): when both a
+``MODEL`` env var and a recognized API key (``ANTHROPIC_API_KEY``/``OPENAI_API_KEY``) are
+present, LLM-condition cells (C1, C4, C4+G, C5, C6) construct
+``recovery_harness.LiveAPIModel`` instead of the mocked stand-in below. This environment has
+no real model API key available, so in practice every run here still goes through the
+mocked path -- but the wiring is real, not documentation. Absent that pair, every LLM
+condition runs against ``recovery_harness.MockedModel`` -- a deterministic, scripted/
+rule-based stand-in, NOT a real language model. Nothing here fabricates a real model
+transcript, a real token count, or a real latency number. This is a PILOT pass at n=1
+seed/cell, per PREREGISTRATION.md's own "pilot run transparency" commitment: outputs are
+labeled pilot/not-paper-grade, and confidence intervals are reported as the literal string
+"NA".
 
-Because every run is mocked, no row is written to ``results/runs.jsonl`` -- that filename is
-reserved for real-model runs and is not produced by this script at all (see the note next to
-RUNS_JSONL_PATH below). All rows go to ``results/runs.mock.jsonl`` instead.
+``LiveAPIModel.next_step()`` remains a documented stub (see recovery_harness.py) that raises
+``NotImplementedError`` -- implementing a real API client is explicit follow-up work, out of
+scope here. If a MODEL+key pair is present but no real client exists yet, this script lets
+that error propagate loudly rather than silently falling back to MockedModel or fabricating
+a result, mirroring ``run_all.sh``'s own precedent.
+
+Because every run in this environment is mocked, no row is written to ``results/runs.jsonl``
+-- that filename is reserved for real-model rows and is not produced when nothing live ran
+(see ``write_runs_jsonl`` below, which is un-gated: it writes real rows there the moment a
+live run actually produces them). All mocked rows go to ``results/runs.mock.jsonl`` instead.
 
 What "the model" actually does here
 -------------------------------------
@@ -48,6 +60,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import sys
 import time
@@ -83,6 +96,7 @@ from recovery_harness import (  # noqa: E402
     AtomicTool,
     ModelStep,
     MockedModel,
+    LiveAPIModel,
     ToolCallRequest,
     build_condition4_context,
     build_condition5_payload,
@@ -115,6 +129,47 @@ SEED = 42  # Fixed: none of these workloads/faults consume any RNG (see note in 
 LLM_CONDITIONS = ("C1", "C4", "C4+G", "C5", "C6")
 DETERMINISTIC_CONDITIONS = ("C2", "C3")
 ALL_CONDITIONS = ("C1", "C2", "C3", "C4", "C4+G", "C5", "C6")
+
+RESULTS_TRANSCRIPTS_DIR = RESULTS_DIR / "transcripts"
+
+# API key env vars this harness recognizes as "a key is present" -- mirrors run_all.sh's
+# own check (ANTHROPIC_API_KEY or OPENAI_API_KEY). Neither is read for its VALUE beyond
+# "is it set" -- the key itself is only ever handed to a real API client inside
+# LiveAPIModel, never logged or embedded in any result row.
+_API_KEY_ENV_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+
+
+def select_model_backend() -> tuple[bool, str | None]:
+    """Issue 3 (Plan v2): real model selection, read fresh from the environment.
+
+    Returns ``(use_live, model_id)``. ``use_live`` is True iff both a ``MODEL`` env var
+    AND at least one recognized API key env var are present -- mirroring the check
+    ``run_all.sh`` already performs before attempting a real run. This is a real branch in
+    the code (not documentation): callers use the return value to decide between
+    constructing a :class:`recovery_harness.LiveAPIModel` or a scripted
+    :class:`recovery_harness.MockedModel` for the LLM-condition cells (C1/C4/C4+G/C5/C6).
+
+    Deliberately re-reads ``os.environ`` on every call rather than caching at import time,
+    so tests can monkeypatch the environment per-test without reload games.
+    """
+    model_id = os.environ.get("MODEL")
+    have_key = any(os.environ.get(var) for var in _API_KEY_ENV_VARS)
+    use_live = bool(model_id) and have_key
+    return use_live, (model_id if use_live else None)
+
+
+def _make_llm_model(*, rule: Callable[[list[dict], list[str]], ModelStep], use_live: bool, live_model_id: str | None):
+    """Construct the model implementation for an LLM-condition cell.
+
+    When a live backend is selected, returns a bare :class:`LiveAPIModel` -- NOT wrapped in
+    or steered by ``rule`` -- because Issue 3 requires that a live run be driven only by the
+    system prompt, the per-condition context payload, and the guard (C4+G/C6); the scripted
+    policies (``_naive_rule``/``_smart_rule``/``_c1_full_agent_rule``) exist purely to script
+    :class:`MockedModel` and must never be consulted when a real model is in the loop.
+    """
+    if use_live:
+        return LiveAPIModel(model_id=live_model_id)
+    return MockedModel(rule=rule)
 
 # F2/F3/F6/F7 are the "in-doubt" faults crossed with all four tool-guarantee levels, per
 # PREREGISTRATION.md ss4. F0/F1/F4/F5 are run once each with guarantee recorded as "NA".
@@ -736,7 +791,7 @@ def _gate_ground_truth_tools(tools: dict, *, guarantee: str, operation_key: str,
         tools.pop("cancel_operation", None)
 
 
-def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector: FaultInjector, operation_key: str) -> dict:
+def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector: FaultInjector, operation_key: str, use_live: bool, live_model_id: str | None) -> dict:
     """Issue 1: C1's from-scratch execution path.
 
     Builds the workload WITHOUT pre-seeding write A, exposes BOTH write-A and write-B tools
@@ -773,18 +828,24 @@ def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector:
     _gate_ground_truth_tools(tools, guarantee=guarantee, operation_key=operation_key, store=store, injector=injector)
 
     write_a_kwargs = {**wl["write_a_kwargs"], "operation_key": "opA"}
-    rule = _c1_full_agent_rule(
-        read_tool_names=sorted(read_tools.keys()),
-        write_a_name=write_a_name,
-        write_a_kwargs=write_a_kwargs,
-        write_b_name=write_b_name,
-        write_b_kwargs_from_write_a=wl["write_b_kwargs_from_write_a"],
-        operation_key_b=operation_key,
-        guarantee=guarantee,
-        accepts_operation_key=accepts_operation_key,
-        trust_resolved_none=True,
-    )
-    model = MockedModel(rule=rule)
+    if use_live:
+        # Issue 3: the scripted policy must never be built (let alone consulted) when a
+        # real model is selected -- a live run is steered only by the system prompt, the
+        # context payload below, and the guard (not applicable to C1). See _make_llm_model.
+        model = _make_llm_model(rule=None, use_live=True, live_model_id=live_model_id)
+    else:
+        rule = _c1_full_agent_rule(
+            read_tool_names=sorted(read_tools.keys()),
+            write_a_name=write_a_name,
+            write_a_kwargs=write_a_kwargs,
+            write_b_name=write_b_name,
+            write_b_kwargs_from_write_a=wl["write_b_kwargs_from_write_a"],
+            operation_key_b=operation_key,
+            guarantee=guarantee,
+            accepts_operation_key=accepts_operation_key,
+            trust_resolved_none=True,
+        )
+        model = _make_llm_model(rule=rule, use_live=False, live_model_id=None)
     context = {"original_request": f"Complete the {workload_name} task from scratch."}
     log = run_recovery(condition="C1", model=model, tools=tools, context=context, store=store, injector=injector)
 
@@ -800,6 +861,8 @@ def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector:
         "wl": wl,
         "store": store,
         "observed": observed,
+        "log": log,
+        "model": model,
         "log_entries": log.entries,
         "tool_calls": log.tool_call_count,
         "escalated": log.outcome == "escalated",
@@ -811,14 +874,30 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
     injector = FaultInjector()
     guarantee = guarantee_for_matrix if fault_id in GUARANTEE_CROSSED_FAULTS else "none"
     operation_key = "opB"
+    guarantee_field = guarantee_for_matrix if fault_id in GUARANTEE_CROSSED_FAULTS else "NA"
+
+    # Issue 3: real model selection, read fresh from the environment for this cell.
+    use_live, live_model_id = select_model_backend()
 
     wall_start = time.perf_counter()
+    run_log = None  # populated for LLM conditions below; used for transcript persistence
+    active_model = None  # populated for LLM conditions below; used for real-model row fields
 
     if condition == "C1":
         # -- Issue 1: C1 gets its own from-scratch execution path, entirely separate from
         # the "pre-faulted, hand it to a recovery condition" framing every other condition
         # uses below. See _run_c1_cell.
-        c1 = _run_c1_cell(workload_name=workload_name, fault_id=fault_id, guarantee=guarantee, injector=injector, operation_key=operation_key)
+        c1 = _run_c1_cell(
+            workload_name=workload_name,
+            fault_id=fault_id,
+            guarantee=guarantee,
+            injector=injector,
+            operation_key=operation_key,
+            use_live=use_live,
+            live_model_id=live_model_id,
+        )
+        run_log = c1["log"]
+        active_model = c1["model"]
         wl = c1["wl"]
         store = c1["store"]
         observed = c1["observed"]
@@ -899,7 +978,7 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
 
                 if condition in ("C4", "C4+G"):
                     context = build_condition4_context(original_request=f"Complete the {workload_name} task.", error=observed.error, tool_names=sorted(tools.keys()))
-                    rule = _naive_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, write_b_kwargs=write_b_kwargs)
+                    rule = None if use_live else _naive_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, write_b_kwargs=write_b_kwargs)
                 else:  # C5 / C6
                     context = build_condition5_payload(
                         procedure_id=f"safe-deopt-{workload_name}",
@@ -913,10 +992,15 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
                         pending_writes=[{"action": write_b_name, "tool_guarantee": guarantee}],
                         available_atomic_tools=sorted(tools.keys()),
                     )
-                    rule = _smart_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, trust_resolved_none=(condition == "C5"), write_b_kwargs=write_b_kwargs)
+                    rule = None if use_live else _smart_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, trust_resolved_none=(condition == "C5"), write_b_kwargs=write_b_kwargs)
 
-                model = MockedModel(rule=rule)
+                # Issue 3: scripted policies (rule) are only ever used to construct
+                # MockedModel; a live run is steered solely by the system prompt, the
+                # context payload above, and the guard (C4+G/C6) -- see _make_llm_model.
+                model = _make_llm_model(rule=rule, use_live=use_live, live_model_id=live_model_id)
                 log = run_recovery(condition=condition, model=model, tools=tools, context=context, store=store, injector=injector)
+                run_log = log
+                active_model = model
                 log_entries = log.entries
                 tool_calls += log.tool_call_count
                 escalated = log.outcome == "escalated"
@@ -974,15 +1058,57 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
     useful_completion = bool(task_completed and duplicate_writes == 0 and state_ok and ledger_ok)
     correct_escalation_field = "NA" if correct_escalation is None else bool(correct_escalation)
 
+    # Issue 3: a row is "real accounting" iff this cell is an LLM condition AND the live
+    # backend was actually selected for it -- never for C2/C3 (no model at all, keep the
+    # existing "NA" temperature placeholder) and never for a MockedModel-driven LLM cell
+    # (keeps going to runs.mock.jsonl exactly as before, unaffected).
+    is_live_row = condition in LLM_CONDITIONS and use_live
+    if is_live_row:
+        row_model_id = live_model_id
+        # Real temperature if obtainable from the model's own config; otherwise honestly
+        # None -- never the mocked-case placeholder string "NA", which specifically means
+        # "no model was involved at all".
+        row_temperature = getattr(active_model, "temperature", None)
+    elif condition in DETERMINISTIC_CONDITIONS:
+        row_model_id = DETERMINISTIC_MODEL_ID
+        row_temperature = "NA"
+    else:
+        row_model_id = MODEL_ID
+        row_temperature = "NA"
+
+    # Token accounting (Issue 3): input/output tokens summed across every model turn, plus
+    # "handoff" tokens counted separately -- the tokens attributable to the FIRST turn's
+    # prompt, which is where the full context/handoff payload (system prompt + condition
+    # context) is conveyed to the model. This is honest, non-fabricated wiring: MockedModel
+    # never tokenizes (always 0/0/0 here); a real LiveAPIModel implementation would report
+    # its provider's actual usage numbers through the same ModelStep/LogEntry fields, so
+    # this breakdown would already be correct without further changes here.
+    model_step_entries = [e for e in log_entries if e.kind == "model_step"]
+    input_tokens = sum(e.prompt_tokens for e in model_step_entries)
+    output_tokens = sum(e.completion_tokens for e in model_step_entries)
+    handoff_tokens = model_step_entries[0].prompt_tokens if model_step_entries else 0
+
+    if condition in LLM_CONDITIONS and run_log is not None:
+        transcript_path = persist_transcript(
+            condition=condition,
+            workload_name=workload_name,
+            fault_id=fault_id,
+            guarantee_field=guarantee_field,
+            seed=SEED,
+            log_entries=run_log.entries,
+        )
+    else:
+        transcript_path = None
+
     row = {
         "condition": condition,
         "workload": workload_name,
         "fault": fault_id,
         "tool_guarantee": guarantee if fault_id in GUARANTEE_CROSSED_FAULTS else "NA",
         "seed": SEED,
-        "model_id": DETERMINISTIC_MODEL_ID if condition in DETERMINISTIC_CONDITIONS else MODEL_ID,
+        "model_id": row_model_id,
         "run_date": time.strftime("%Y-%m-%d"),
-        "temperature": "NA",
+        "temperature": row_temperature,
         "huf_commit_hash": commit_hash,
         "invariant_no_duplicate_write": dup_passed,
         "invariant_ledger_balances": ledger_ok,
@@ -1002,7 +1128,11 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
         "tool_calls": tool_calls,
         "wall_time_seconds": round(wall_time, 6),
         "tokens_estimated": tokens_estimated,
-        "tokens_are_real_accounting": False,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "handoff_tokens": handoff_tokens,
+        "tokens_are_real_accounting": is_live_row,
+        "transcript_path": (str(transcript_path.relative_to(HERE)) if transcript_path is not None else None),
     }
     return row
 
@@ -1035,6 +1165,31 @@ def build_matrix() -> list[tuple[str, str, str, str]]:
 
 def run_all() -> list[dict]:
     commit_hash = huf_commit_hash()
+
+    use_live, live_model_id = select_model_backend()
+    if use_live:
+        print(
+            f"[run_experiment] MODEL={live_model_id!r} and an API key are present -- "
+            "attempting recovery_harness.LiveAPIModel for LLM-condition cells "
+            "(C1/C4/C4+G/C5/C6). LiveAPIModel.next_step() is a documented stub today (see "
+            "recovery_harness.py); unless it has been implemented, this WILL raise "
+            "NotImplementedError loudly rather than silently falling back to MockedModel or "
+            "fabricating a result -- see run_all.sh's own precedent for this behavior.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "##########################################################################\n"
+            "# PILOT / MOCKED RUN -- NOT A REAL LLM RUN.\n"
+            "#\n"
+            "# No MODEL env var + recognized API key pair is present, so every LLM\n"
+            "# condition (C1, C4, C4+G, C5, C6) below runs against\n"
+            "# recovery_harness.MockedModel -- no network call, no real model, no real\n"
+            "# tokens. See module docstring / README.md before citing any number.\n"
+            "##########################################################################",
+            file=sys.stderr,
+        )
+
     rows = []
     for condition, workload_name, fault_id, guarantee in build_matrix():
         row = run_cell(condition=condition, workload_name=workload_name, fault_id=fault_id, guarantee_for_matrix=guarantee, commit_hash=commit_hash)
@@ -1047,14 +1202,68 @@ def run_all() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
+def _serialize_log_entries(entries: list[Any]) -> list[dict]:
+    """LogEntry dataclasses -> plain dicts, JSON-safe (``default=str`` handles anything
+    inside ``content`` that isn't natively serializable, e.g. dataclass workload records or
+    exception objects captured in a tool-result error).
+    """
+    return [
+        {
+            "kind": e.kind,
+            "content": e.content,
+            "prompt_tokens": e.prompt_tokens,
+            "completion_tokens": e.completion_tokens,
+            "wall_time_s": e.wall_time_s,
+        }
+        for e in entries
+    ]
+
+
+def persist_transcript(
+    *,
+    condition: str,
+    workload_name: str,
+    fault_id: str,
+    guarantee_field: str,
+    seed: int,
+    log_entries: list[Any],
+) -> Path:
+    """Issue 3: persist a full RunLog transcript (every message, tool call, tool result) for
+    an LLM-condition cell, per PREREGISTRATION.md's "All raw transcripts and per-run
+    metadata retained" commitment -- applied here to BOTH MockedModel and LiveAPIModel runs (the
+    commitment says "every LLM conversation transcript", not "every real one"; retaining
+    mocked transcripts too costs nothing extra and keeps the audit trail complete).
+
+    Path: ``results/transcripts/<condition>/<workload>/<fault>/<guarantee_or_NA>/<seed>.json``.
+    """
+    out_dir = RESULTS_TRANSCRIPTS_DIR / condition / workload_name / fault_id / str(guarantee_field)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{seed}.json"
+    with open(out_path, "w") as f:
+        json.dump(_serialize_log_entries(log_entries), f, indent=2, default=str)
+    return out_path
+
+
 def write_runs_jsonl(rows: list[dict]) -> None:
+    """Issue 3: un-gated. Mocked rows (``tokens_are_real_accounting`` False) always go to
+    ``results/runs.mock.jsonl``, exactly as before. Rows actually produced by a live model
+    (``tokens_are_real_accounting`` True) go to ``results/runs.jsonl`` instead -- that file
+    is still never written, and any stale copy is removed, when no live rows exist in this
+    run (i.e. every normal mocked run, since no API key is available in this environment).
+    """
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    mocked_rows = [row for row in rows if not row.get("tokens_are_real_accounting")]
+    live_rows = [row for row in rows if row.get("tokens_are_real_accounting")]
+
     with open(RUNS_MOCK_JSONL_PATH, "w") as f:
-        for row in rows:
+        for row in mocked_rows:
             f.write(json.dumps(row) + "\n")
-    # Explicitly do not produce runs.jsonl -- see module docstring. Remove any stale copy so
-    # the directory never implies a real-model run happened.
-    if RUNS_JSONL_PATH.exists():
+
+    if live_rows:
+        with open(RUNS_JSONL_PATH, "w") as f:
+            for row in live_rows:
+                f.write(json.dumps(row) + "\n")
+    elif RUNS_JSONL_PATH.exists():
         RUNS_JSONL_PATH.unlink()
 
 
