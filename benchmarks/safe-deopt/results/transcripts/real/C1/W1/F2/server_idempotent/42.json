@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8527871668338776
+    "wall_time_s": 2.71810833318159
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.750210791826248e-06
+    "wall_time_s": 5.083158612251282e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.795173249905929
+    "wall_time_s": 1.2866576660890132
   },
   {
     "kind": "tool_call",
@@ -89,27 +89,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1458061635494232e-05
+    "wall_time_s": 2.6916852220892906e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'W1', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'W1'})",
       "final_text": null
     },
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0474597089923918
+    "wall_time_s": 2.5631770840846
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "W1",
         "reference_type": "Sales Invoice",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "operation_key": "W1"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.000458915950730443
+    "wall_time_s": 0.00032124994322657585
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.50904216687195
+    "wall_time_s": 1.934477458940819
   },
   {
     "kind": "tool_call",
@@ -166,22 +166,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.291076377034187e-06
+    "wall_time_s": 9.791925549507141e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The W1 task has been successfully completed from scratch and the linked record `SINV-2001` (Sales Invoice) has been committed."
+      "final_text": "The W1 task has been successfully completed and the operation status is now confirmed as COMMITTED."
     },
     "prompt_tokens": 568,
-    "completion_tokens": 31,
+    "completion_tokens": 20,
     "cached_tokens": 0,
-    "wall_time_s": 1.0243179579265416
+    "wall_time_s": 2.4225885418709368
   },
   {
     "kind": "final",
-    "content": "The W1 task has been successfully completed from scratch and the linked record `SINV-2001` (Sales Invoice) has been committed.",
+    "content": "The W1 task has been successfully completed and the operation status is now confirmed as COMMITTED.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

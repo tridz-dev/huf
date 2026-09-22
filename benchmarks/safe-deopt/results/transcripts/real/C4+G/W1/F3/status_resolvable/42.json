@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.2026214578654617
+    "wall_time_s": 2.211019749986008
   },
   {
     "kind": "tool_call",
@@ -60,26 +60,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0582851245999336e-05
+    "wall_time_s": 1.037493348121643e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'task', 'reference_name': 'W1', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'W1 Task', 'reference_type': 'task', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 337,
-    "completion_tokens": 38,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9893736250232905
+    "wall_time_s": 2.2761016250588
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
+        "reference_name": "W1 Task",
         "reference_type": "task",
-        "reference_name": "W1",
         "operation_key": "opB"
       }
     },
@@ -100,25 +100,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.300009898841381e-05
+    "wall_time_s": 2.7708010748028755e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB resulted in an unresolved-outcome write timeout and tool_guarantee is none, so submit_linked_record cannot be safely retried. Human intervention is required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB failed with a timeout and the write operation cannot be retried automatically due to tool recovery guarantees. Human intervention is required to verify the status of operation opB and complete the W1 task.'})",
       "final_text": null
     },
-    "prompt_tokens": 435,
-    "completion_tokens": 50,
+    "prompt_tokens": 436,
+    "completion_tokens": 55,
     "cached_tokens": 0,
-    "wall_time_s": 0.9663745420984924
+    "wall_time_s": 1.208398458082229
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB resulted in an unresolved-outcome write timeout and tool_guarantee is none, so submit_linked_record cannot be safely retried. Human intervention is required."
+        "reason": "Operation opB failed with a timeout and the write operation cannot be retried automatically due to tool recovery guarantees. Human intervention is required to verify the status of operation opB and complete the W1 task."
       }
     },
     "prompt_tokens": 0,
@@ -134,12 +134,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB resulted in an unresolved-outcome write timeout and tool_guarantee is none, so submit_linked_record cannot be safely retried. Human intervention is required."
+        "reason": "Operation opB failed with a timeout and the write operation cannot be retried automatically due to tool recovery guarantees. Human intervention is required to verify the status of operation opB and complete the W1 task."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.4999102354049683e-06
+    "wall_time_s": 5.417037755250931e-06
   }
 ]

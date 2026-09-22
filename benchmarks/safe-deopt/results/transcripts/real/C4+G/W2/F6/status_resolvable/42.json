@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8190819590818137
+    "wall_time_s": 2.087375208036974
   },
   {
     "kind": "tool_call",
@@ -61,22 +61,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.083166226744652e-06
+    "wall_time_s": 5.541834980249405e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation associated with `opB` has already been successfully committed (`COMMITTED`). Therefore, the W2 allocation task has been completed."
+      "final_text": "The allocation operation associated with `opB` has already been successfully committed (`COMMITTED`). Therefore, the W2 task / allocation submission is complete."
     },
     "prompt_tokens": 337,
-    "completion_tokens": 29,
+    "completion_tokens": 31,
     "cached_tokens": 0,
-    "wall_time_s": 0.829430874902755
+    "wall_time_s": 1.4941279580816627
   },
   {
     "kind": "final",
-    "content": "The operation associated with `opB` has already been successfully committed (`COMMITTED`). Therefore, the W2 allocation task has been completed.",
+    "content": "The allocation operation associated with `opB` has already been successfully committed (`COMMITTED`). Therefore, the W2 task / allocation submission is complete.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -35,7 +35,7 @@
     "prompt_tokens": 315,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9148014578968287
+    "wall_time_s": 1.319775209063664
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.291061148047447e-06
+    "wall_time_s": 7.3749106377363205e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 375,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7854039999656379
+    "wall_time_s": 1.7693712080363184
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.042188033461571e-06
+    "wall_time_s": 9.082956239581108e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 431,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 1.2472196659073234
+    "wall_time_s": 1.9001450419891626
   },
   {
     "kind": "tool_call",
@@ -137,22 +137,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.3624935895204544e-05
+    "wall_time_s": 2.595805563032627e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The allocation of payment `PAY-001` ($250) to invoice `INV-001` ($250) has been successfully resubmitted."
+      "final_text": "The allocation for payment `PAY-001` against invoice `INV-001` in the amount of 250 has been successfully submitted (Allocation reference: `ALLOC-UNSAFE-0002`)."
     },
     "prompt_tokens": 535,
-    "completion_tokens": 37,
+    "completion_tokens": 47,
     "cached_tokens": 0,
-    "wall_time_s": 1.7634304170496762
+    "wall_time_s": 1.7436578751076013
   },
   {
     "kind": "final",
-    "content": "The allocation of payment `PAY-001` ($250) to invoice `INV-001` ($250) has been successfully resubmitted.",
+    "content": "The allocation for payment `PAY-001` against invoice `INV-001` in the amount of 250 has been successfully submitted (Allocation reference: `ALLOC-UNSAFE-0002`).",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

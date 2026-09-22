@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9501990410499275
+    "wall_time_s": 0.9277034581173211
   },
   {
     "kind": "tool_call",
@@ -60,27 +60,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.833136573433876e-06
+    "wall_time_s": 1.1084135621786118e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'task', 'reference_name': 'W1', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'W1', 'reference_type': 'task'})",
       "final_text": null
     },
     "prompt_tokens": 337,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.8637079999316484
+    "wall_time_s": 0.9020187500864267
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "task",
+        "operation_key": "opB",
         "reference_name": "W1",
-        "operation_key": "opB"
+        "reference_type": "task"
       }
     },
     "prompt_tokens": 0,
@@ -100,7 +100,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1416152119636536e-05
+    "wall_time_s": 1.9666971638798714e-05
   },
   {
     "kind": "model_step",
@@ -111,7 +111,7 @@
     "prompt_tokens": 400,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8391854171641171
+    "wall_time_s": 1.3727454580366611
   },
   {
     "kind": "tool_call",
@@ -137,7 +137,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.750000804662704e-06
+    "wall_time_s": 8.249888196587563e-06
   },
   {
     "kind": "model_step",
@@ -148,7 +148,7 @@
     "prompt_tokens": 473,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.844311875058338
+    "wall_time_s": 1.4888342909980565
   },
   {
     "kind": "tool_call",
@@ -174,25 +174,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.3749106377363205e-06
+    "wall_time_s": 1.2292061001062393e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered timeout/error state on submit_linked_record for opB and the referenced task W1 does not exist in open items; open items only contain Sales Invoice SINV-2001. Escalating for manual review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB is not committed and reference W1 does not exist as an open item (the only open item is Sales Invoice SINV-2001). Need clarification on how to proceed.'})",
       "final_text": null
     },
     "prompt_tokens": 514,
-    "completion_tokens": 63,
+    "completion_tokens": 54,
     "cached_tokens": 0,
-    "wall_time_s": 1.3914711251854897
+    "wall_time_s": 0.8767345000524074
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered timeout/error state on submit_linked_record for opB and the referenced task W1 does not exist in open items; open items only contain Sales Invoice SINV-2001. Escalating for manual review."
+        "reason": "Operation opB is not committed and reference W1 does not exist as an open item (the only open item is Sales Invoice SINV-2001). Need clarification on how to proceed."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered timeout/error state on submit_linked_record for opB and the referenced task W1 does not exist in open items; open items only contain Sales Invoice SINV-2001. Escalating for manual review."
+        "reason": "Operation opB is not committed and reference W1 does not exist as an open item (the only open item is Sales Invoice SINV-2001). Need clarification on how to proceed."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9159709811210632e-06
+    "wall_time_s": 4.916917532682419e-06
   }
 ]

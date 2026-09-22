@@ -34,7 +34,7 @@
     "prompt_tokens": 291,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8024339999537915
+    "wall_time_s": 2.942750999936834
   },
   {
     "kind": "tool_call",
@@ -58,7 +58,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.375120624899864e-06
+    "wall_time_s": 6.666872650384903e-06
   },
   {
     "kind": "model_step",
@@ -69,7 +69,7 @@
     "prompt_tokens": 316,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 1.1273428341373801
+    "wall_time_s": 4.382943041855469
   },
   {
     "kind": "tool_call",
@@ -95,25 +95,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.249895811080933e-06
+    "wall_time_s": 9.37492586672306e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation opB timed out and cannot be cancelled or resolved automatically. Human intervention is required to safely complete the W1 task.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a timeout on submit_linked_record for operation_key 'opB' and could not cancel the operation; no open items found. Escalating to human for review.\"})",
       "final_text": null
     },
     "prompt_tokens": 347,
-    "completion_tokens": 40,
+    "completion_tokens": 52,
     "cached_tokens": 0,
-    "wall_time_s": 1.2025085408240557
+    "wall_time_s": 2.2035170421004295
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The operation opB timed out and cannot be cancelled or resolved automatically. Human intervention is required to safely complete the W1 task."
+        "reason": "Encountered a timeout on submit_linked_record for operation_key 'opB' and could not cancel the operation; no open items found. Escalating to human for review."
       }
     },
     "prompt_tokens": 0,
@@ -129,12 +129,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The operation opB timed out and cannot be cancelled or resolved automatically. Human intervention is required to safely complete the W1 task."
+        "reason": "Encountered a timeout on submit_linked_record for operation_key 'opB' and could not cancel the operation; no open items found. Escalating to human for review."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.250113412737846e-06
+    "wall_time_s": 5.333218723535538e-06
   }
 ]

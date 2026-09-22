@@ -57,7 +57,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9203944581095129
+    "wall_time_s": 1.3642716249451041
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.3499986380338669e-05
+    "wall_time_s": 1.1375173926353455e-05
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9229550829622895
+    "wall_time_s": 1.4177948751021177
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.124858140945435e-06
+    "wall_time_s": 6.375135853886604e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 589,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9047924170736223
+    "wall_time_s": 3.293808416929096
   },
   {
     "kind": "tool_call",
@@ -157,7 +157,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.00006091594696e-06
+    "wall_time_s": 6.708083674311638e-06
   },
   {
     "kind": "model_step",
@@ -168,7 +168,7 @@
     "prompt_tokens": 645,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.4160297908820212
+    "wall_time_s": 1.9122942918911576
   },
   {
     "kind": "tool_call",
@@ -196,25 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.283393405377865e-05
+    "wall_time_s": 2.4999957531690598e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Submit allocation failed with 'no such allocation' error after timeout check. Escalating for human review.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'submit_allocation failed with no such allocation error despite verifying invoices and payments.'})",
       "final_text": null
     },
     "prompt_tokens": 717,
-    "completion_tokens": 34,
+    "completion_tokens": 29,
     "cached_tokens": 0,
-    "wall_time_s": 0.9175076668616384
+    "wall_time_s": 1.16609612503089
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Submit allocation failed with 'no such allocation' error after timeout check. Escalating for human review."
+        "reason": "submit_allocation failed with no such allocation error despite verifying invoices and payments."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Submit allocation failed with 'no such allocation' error after timeout check. Escalating for human review."
+        "reason": "submit_allocation failed with no such allocation error despite verifying invoices and payments."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.624947905540466e-06
+    "wall_time_s": 5.499925464391708e-06
   }
 ]

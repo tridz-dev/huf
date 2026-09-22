@@ -34,7 +34,7 @@
     "prompt_tokens": 291,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.925860834075138
+    "wall_time_s": 3.386668459046632
   },
   {
     "kind": "tool_call",
@@ -58,7 +58,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.082925781607628e-06
+    "wall_time_s": 6.62519596517086e-06
   },
   {
     "kind": "model_step",
@@ -69,7 +69,7 @@
     "prompt_tokens": 316,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.9829025841318071
+    "wall_time_s": 1.853018500143662
   },
   {
     "kind": "tool_call",
@@ -95,25 +95,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.334150046110153e-06
+    "wall_time_s": 1.1833151802420616e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out and could not be cancelled or verified via read_open_items. Human intervention is required to safely resolve the state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out and could not be cancelled or found in open items; unable to safely proceed with completing the W1 task without further context.'})",
       "final_text": null
     },
     "prompt_tokens": 347,
-    "completion_tokens": 43,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9426623340696096
+    "wall_time_s": 1.8251433752011508
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timed out and could not be cancelled or verified via read_open_items. Human intervention is required to safely resolve the state."
+        "reason": "Operation opB timed out and could not be cancelled or found in open items; unable to safely proceed with completing the W1 task without further context."
       }
     },
     "prompt_tokens": 0,
@@ -129,12 +129,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timed out and could not be cancelled or verified via read_open_items. Human intervention is required to safely resolve the state."
+        "reason": "Operation opB timed out and could not be cancelled or found in open items; unable to safely proceed with completing the W1 task without further context."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.2919848561286926e-06
+    "wall_time_s": 4.833098500967026e-06
   }
 ]

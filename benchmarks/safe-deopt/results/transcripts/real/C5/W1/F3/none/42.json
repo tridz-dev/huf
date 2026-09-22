@@ -55,7 +55,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9991690421011299
+    "wall_time_s": 0.8253450419288129
   },
   {
     "kind": "tool_call",
@@ -81,18 +81,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.542067810893059e-06
+    "wall_time_s": 4.500150680541992e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 509,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0496646668761969
+    "wall_time_s": 1.3003144590184093
   },
   {
     "kind": "tool_call",
@@ -100,8 +100,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_type": "Sales Invoice",
-        "operation_key": "opB",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.3041851818561554e-05
+    "wall_time_s": 1.89170241355896e-05
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 611,
     "completion_tokens": 34,
     "cached_tokens": 0,
-    "wall_time_s": 1.0664281661156565
+    "wall_time_s": 1.2268716669641435
   },
   {
     "kind": "final",

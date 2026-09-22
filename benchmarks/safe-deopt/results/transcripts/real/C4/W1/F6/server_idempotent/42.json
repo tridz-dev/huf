@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8462054589763284
+    "wall_time_s": 1.320691917091608
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.125083357095718e-06
+    "wall_time_s": 5.125068128108978e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 335,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8940442078746855
+    "wall_time_s": 1.584921375149861
   },
   {
     "kind": "tool_call",
@@ -95,22 +95,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.624955520033836e-06
+    "wall_time_s": 7.082941010594368e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` for submitting the linked record has successfully committed, and there are no open items remaining. The W1 task is complete."
+      "final_text": "The W1 task has already been successfully committed (`opB` status is `COMMITTED`), and there are no open items remaining."
     },
     "prompt_tokens": 360,
-    "completion_tokens": 30,
+    "completion_tokens": 28,
     "cached_tokens": 0,
-    "wall_time_s": 1.024389250203967
+    "wall_time_s": 1.4542072908952832
   },
   {
     "kind": "final",
-    "content": "The operation `opB` for submitting the linked record has successfully committed, and there are no open items remaining. The W1 task is complete.",
+    "content": "The W1 task has already been successfully committed (`opB` status is `COMMITTED`), and there are no open items remaining.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

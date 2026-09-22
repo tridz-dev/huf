@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8826902501750737
+    "wall_time_s": 1.3751701661385596
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.6249707490205765e-06
+    "wall_time_s": 1.0875053703784943e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 535,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9154673330485821
+    "wall_time_s": 1.4058130830526352
   },
   {
     "kind": "tool_call",
@@ -119,7 +119,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.4589625000953674e-06
+    "wall_time_s": 7.999828085303307e-06
   },
   {
     "kind": "model_step",
@@ -130,7 +130,7 @@
     "prompt_tokens": 608,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.4844713748898357
+    "wall_time_s": 0.9155622499529272
   },
   {
     "kind": "tool_call",
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5124911442399025e-05
+    "wall_time_s": 1.533282920718193e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The failed operation `submit_linked_record` (operation key `opB`) was verified via `get_operation_status` to be `NOT_COMMITTED`. Following the safe recovery instructions, I then checked the current state with `read_open_items` and successfully retried the atomic tool call `submit_linked_record`. The linked record for Sales Invoice `SINV-2001` has now been successfully submitted."
+      "final_text": "The operation `submit_linked_record` with operation key `opB` initially timed out, but a check via `get_operation_status` confirmed that the write was **not committed**. Following safe recovery guidelines, I verified the open items with `read_open_items` and successfully retried the atomic tool call `submit_linked_record`, which has now successfully committed and submitted the linked record (`SINV-2001`)."
     },
     "prompt_tokens": 710,
     "completion_tokens": 92,
     "cached_tokens": 0,
-    "wall_time_s": 1.1745588751509786
+    "wall_time_s": 2.102687958162278
   },
   {
     "kind": "final",
-    "content": "The failed operation `submit_linked_record` (operation key `opB`) was verified via `get_operation_status` to be `NOT_COMMITTED`. Following the safe recovery instructions, I then checked the current state with `read_open_items` and successfully retried the atomic tool call `submit_linked_record`. The linked record for Sales Invoice `SINV-2001` has now been successfully submitted.",
+    "content": "The operation `submit_linked_record` with operation key `opB` initially timed out, but a check via `get_operation_status` confirmed that the write was **not committed**. Following safe recovery guidelines, I verified the open items with `read_open_items` and successfully retried the atomic tool call `submit_linked_record`, which has now successfully committed and submitted the linked record (`SINV-2001`).",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

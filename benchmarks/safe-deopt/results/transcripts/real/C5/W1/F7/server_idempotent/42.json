@@ -56,7 +56,7 @@
     "prompt_tokens": 495,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9858289998956025
+    "wall_time_s": 2.067070832941681
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.416827768087387e-06
+    "wall_time_s": 8.833827450871468e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.885252249892801
+    "wall_time_s": 1.0492858330253512
   },
   {
     "kind": "tool_call",
@@ -119,7 +119,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2875068932771683e-05
+    "wall_time_s": 6.2498729676008224e-06
   },
   {
     "kind": "model_step",
@@ -130,7 +130,7 @@
     "prompt_tokens": 605,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0203448340762407
+    "wall_time_s": 1.0465430000331253
   },
   {
     "kind": "tool_call",
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9208062440156937e-05
+    "wall_time_s": 1.5750061720609665e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation failed mid-run during `submit_linked_record` with `operation_key='opB'` due to a timeout. \n\nFollowing the recovery instructions:\n1. Checked the operation status via `get_operation_status`, which returned `UNKNOWN`.\n2. Verified the open items via `read_open_items`, confirming the item `SINV-2001` was still open and uncommitted.\n3. Successfully re-submitted the linked record using the atomic tool call `submit_linked_record` with `operation_key='opB'`. \n\nThe record has now been successfully submitted."
+      "final_text": "The previous procedure run (`safe-deopt-W1`, operation key `opB`) failed midway during `submit_linked_record` due to a timeout. \n\nFollowing safe recovery guidelines:\n1. Checked the operation status via `get_operation_status`, which returned `UNKNOWN`.\n2. Verified the open items via `read_open_items`, confirming the record (`SINV-2001`) was still open and uncommitted.\n3. Successfully re-submitted the linked record using the idempotent atomic tool call (`submit_linked_record`).\n\nThe record `SINV-2001` has now been successfully submitted."
     },
     "prompt_tokens": 707,
-    "completion_tokens": 131,
+    "completion_tokens": 136,
     "cached_tokens": 0,
-    "wall_time_s": 1.277313583996147
+    "wall_time_s": 1.3438644169364125
   },
   {
     "kind": "final",
-    "content": "The operation failed mid-run during `submit_linked_record` with `operation_key='opB'` due to a timeout. \n\nFollowing the recovery instructions:\n1. Checked the operation status via `get_operation_status`, which returned `UNKNOWN`.\n2. Verified the open items via `read_open_items`, confirming the item `SINV-2001` was still open and uncommitted.\n3. Successfully re-submitted the linked record using the atomic tool call `submit_linked_record` with `operation_key='opB'`. \n\nThe record has now been successfully submitted.",
+    "content": "The previous procedure run (`safe-deopt-W1`, operation key `opB`) failed midway during `submit_linked_record` due to a timeout. \n\nFollowing safe recovery guidelines:\n1. Checked the operation status via `get_operation_status`, which returned `UNKNOWN`.\n2. Verified the open items via `read_open_items`, confirming the record (`SINV-2001`) was still open and uncommitted.\n3. Successfully re-submitted the linked record using the idempotent atomic tool call (`submit_linked_record`).\n\nThe record `SINV-2001` has now been successfully submitted.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

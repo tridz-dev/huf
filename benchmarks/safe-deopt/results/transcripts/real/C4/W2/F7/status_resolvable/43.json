@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7648384170606732
+    "wall_time_s": 1.0137350829318166
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.329183578491211e-05
+    "wall_time_s": 1.0750023648142815e-05
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 335,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9466879169922322
+    "wall_time_s": 1.2381889999378473
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.415865987539291e-06
+    "wall_time_s": 6.2498729676008224e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 395,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8749670831020921
+    "wall_time_s": 0.9761040830053389
   },
   {
     "kind": "tool_call",
@@ -135,25 +135,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.3339324444532394e-06
+    "wall_time_s": 5.292007699608803e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:250', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 451,
-    "completion_tokens": 33,
+    "completion_tokens": 52,
     "cached_tokens": 0,
-    "wall_time_s": 0.8504413750488311
+    "wall_time_s": 1.2329198750667274
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "INV-001:250",
+        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
         "operation_key": "opB"
       }
     },
@@ -169,30 +169,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such allocation INV-001:250'"
+      "error": "'no such allocation {\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9250048100948334e-05
+    "wall_time_s": 1.612515188753605e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to submit allocation due to 'no such allocation INV-001:250' error when trying to allocate payment PAY-001 (amount 250) to invoice INV-001.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered error when submitting allocation for INV-001 and PAY-001: 'no such allocation'. Need human assistance to verify the correct allocation format or operation.\"})",
       "final_text": null
     },
-    "prompt_tokens": 511,
-    "completion_tokens": 60,
+    "prompt_tokens": 548,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.5848085831385106
+    "wall_time_s": 1.9713649170007557
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to submit allocation due to 'no such allocation INV-001:250' error when trying to allocate payment PAY-001 (amount 250) to invoice INV-001."
+        "reason": "Encountered error when submitting allocation for INV-001 and PAY-001: 'no such allocation'. Need human assistance to verify the correct allocation format or operation."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to submit allocation due to 'no such allocation INV-001:250' error when trying to allocate payment PAY-001 (amount 250) to invoice INV-001."
+        "reason": "Encountered error when submitting allocation for INV-001 and PAY-001: 'no such allocation'. Need human assistance to verify the correct allocation format or operation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.332985892891884e-06
+    "wall_time_s": 4.667090252041817e-06
   }
 ]

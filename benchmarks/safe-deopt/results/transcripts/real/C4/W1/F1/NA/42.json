@@ -33,7 +33,7 @@
     "prompt_tokens": 239,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8373020419385284
+    "wall_time_s": 4.435851166024804
   },
   {
     "kind": "tool_call",
@@ -53,31 +53,33 @@
       "ok": true,
       "dispatched": true,
       "result": [
-        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
+        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.4042092263698578e-05
+    "wall_time_s": 1.612515188753605e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The tool call submit_linked_record was rejected before dispatch with operation_key='opB'. I need human intervention or clarification on how to proceed safely.\"})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 312,
-    "completion_tokens": 46,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.1295395421329886
+    "wall_time_s": 2.4992934169713408
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_linked_record",
       "kwargs": {
-        "reason": "The tool call submit_linked_record was rejected before dispatch with operation_key='opB'. I need human intervention or clarification on how to proceed safely."
+        "reference_name": "SINV-2001",
+        "reference_type": "Sales Invoice",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -88,17 +90,33 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_linked_record",
       "ok": true,
       "dispatched": true,
-      "result": {
-        "escalated": true,
-        "reason": "The tool call submit_linked_record was rejected before dispatch with operation_key='opB'. I need human intervention or clarification on how to proceed safely."
-      }
+      "result": "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.458023563027382e-06
+    "wall_time_s": 1.8165912479162216e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": null,
+      "final_text": "The W1 task has been successfully completed. The linked record `SINV-2001` (Sales Invoice) associated with customer `CUST-1` has been submitted using operation key `opB`."
+    },
+    "prompt_tokens": 414,
+    "completion_tokens": 44,
+    "cached_tokens": 0,
+    "wall_time_s": 2.833132749889046
+  },
+  {
+    "kind": "final",
+    "content": "The W1 task has been successfully completed. The linked record `SINV-2001` (Sales Invoice) associated with customer `CUST-1` has been submitted using operation key `opB`.",
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
   }
 ]

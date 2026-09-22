@@ -65,7 +65,7 @@
     "prompt_tokens": 524,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9722060419153422
+    "wall_time_s": 0.8781476251315325
   },
   {
     "kind": "tool_call",
@@ -91,7 +91,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.500150680541992e-06
+    "wall_time_s": 8.416129276156425e-06
   },
   {
     "kind": "model_step",
@@ -102,7 +102,7 @@
     "prompt_tokens": 582,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.912296624854207
+    "wall_time_s": 1.1037860419601202
   },
   {
     "kind": "tool_call",
@@ -128,7 +128,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.916947990655899e-06
+    "wall_time_s": 6.791902706027031e-06
   },
   {
     "kind": "model_step",
@@ -139,7 +139,7 @@
     "prompt_tokens": 638,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.9303437501657754
+    "wall_time_s": 2.2173083750531077
   },
   {
     "kind": "tool_call",
@@ -165,25 +165,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.908303238451481e-05
+    "wall_time_s": 1.095794141292572e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out on submit_allocation and cancellation returned false; manual verification and intervention required to ensure state integrity.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB could not be cancelled and timed out; manual inspection needed to verify state safety before proceeding.'})",
       "final_text": null
     },
     "prompt_tokens": 669,
-    "completion_tokens": 38,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.9507199579384178
+    "wall_time_s": 0.9353892500512302
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timed out on submit_allocation and cancellation returned false; manual verification and intervention required to ensure state integrity."
+        "reason": "Operation opB could not be cancelled and timed out; manual inspection needed to verify state safety before proceeding."
       }
     },
     "prompt_tokens": 0,
@@ -199,12 +199,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timed out on submit_allocation and cancellation returned false; manual verification and intervention required to ensure state integrity."
+        "reason": "Operation opB could not be cancelled and timed out; manual inspection needed to verify state safety before proceeding."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.95791095495224e-06
+    "wall_time_s": 3.5420525819063187e-06
   }
 ]

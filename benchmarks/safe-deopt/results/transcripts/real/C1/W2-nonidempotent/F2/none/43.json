@@ -26,7 +26,7 @@
     "prompt_tokens": 290,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.4737335839308798
+    "wall_time_s": 1.0232089161872864
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.708984538912773e-06
+    "wall_time_s": 6.125075742602348e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 350,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.754719499964267
+    "wall_time_s": 1.8633195420261472
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.333008736371994e-06
+    "wall_time_s": 8.37491825222969e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'op-w2-001', 'amount': 250, 'invoice': 'INV-001', 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'amount': 250, 'operation_key': 'alloc-pay-001-inv-001', 'invoice': 'INV-001'})",
       "final_text": null
     },
     "prompt_tokens": 406,
-    "completion_tokens": 51,
+    "completion_tokens": 56,
     "cached_tokens": 0,
-    "wall_time_s": 0.9282128331251442
+    "wall_time_s": 1.0478525841608644
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "operation_key": "op-w2-001",
+        "payment": "PAY-001",
         "amount": 250,
-        "invoice": "INV-001",
-        "payment": "PAY-001"
+        "operation_key": "alloc-pay-001-inv-001",
+        "invoice": "INV-001"
       }
     },
     "prompt_tokens": 0,
@@ -124,27 +124,27 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-001', status='draft')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='alloc-pay-001-inv-001', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.58307646214962e-06
+    "wall_time_s": 2.350006252527237e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "I have successfully allocated the payment of 250 (PAY-001) to invoice INV-001 for Huf Retail Pvt Ltd. The allocation record (ALLOC-0001) has been created successfully with the operation key `op-w2-001`."
+      "final_text": "The payment `PAY-001` (amount $250) has been successfully allocated to invoice `INV-001` (amount $250) using allocation record `ALLOC-0001`."
     },
-    "prompt_tokens": 523,
-    "completion_tokens": 61,
+    "prompt_tokens": 533,
+    "completion_tokens": 47,
     "cached_tokens": 0,
-    "wall_time_s": 1.0336060000117868
+    "wall_time_s": 1.199525292031467
   },
   {
     "kind": "final",
-    "content": "I have successfully allocated the payment of 250 (PAY-001) to invoice INV-001 for Huf Retail Pvt Ltd. The allocation record (ALLOC-0001) has been created successfully with the operation key `op-w2-001`.",
+    "content": "The payment `PAY-001` (amount $250) has been successfully allocated to invoice `INV-001` (amount $250) using allocation record `ALLOC-0001`.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

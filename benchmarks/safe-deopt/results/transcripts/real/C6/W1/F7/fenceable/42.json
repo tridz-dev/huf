@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8182559160050005
+    "wall_time_s": 1.4221427920274436
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2875068932771683e-05
+    "wall_time_s": 5.041947588324547e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 560,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.7837777500972152
+    "wall_time_s": 1.8023341249208897
   },
   {
     "kind": "tool_call",
@@ -119,25 +119,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.200009137392044e-05
+    "wall_time_s": 1.49579718708992e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB-retry', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opC', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 591,
-    "completion_tokens": 46,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8524739579297602
+    "wall_time_s": 2.2030607499182224
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB-retry",
+        "operation_key": "opC",
         "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001"
       }
@@ -154,30 +154,30 @@
       "ok": false,
       "dispatched": false,
       "guard_rejected": true,
-      "error": "replay rejected for operation_key='opB-retry' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+      "error": "replay rejected for operation_key='opC' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.954101026058197e-05
+    "wall_time_s": 3.27499583363533e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The previous write timed out, and direct retry of submit_linked_record is prohibited due to unknown commitment status and lack of tool guarantee. Manual verification and human intervention required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_linked_record operation timed out previously and any untracked or pending writes cannot be safely retried due to the tool guarantee ('none' on retry/replay). Escalating to a human for manual verification and completion.\"})",
       "final_text": null
     },
-    "prompt_tokens": 699,
-    "completion_tokens": 49,
+    "prompt_tokens": 695,
+    "completion_tokens": 61,
     "cached_tokens": 0,
-    "wall_time_s": 1.3070471249520779
+    "wall_time_s": 1.3530378330033273
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The previous write timed out, and direct retry of submit_linked_record is prohibited due to unknown commitment status and lack of tool guarantee. Manual verification and human intervention required."
+        "reason": "The submit_linked_record operation timed out previously and any untracked or pending writes cannot be safely retried due to the tool guarantee ('none' on retry/replay). Escalating to a human for manual verification and completion."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The previous write timed out, and direct retry of submit_linked_record is prohibited due to unknown commitment status and lack of tool guarantee. Manual verification and human intervention required."
+        "reason": "The submit_linked_record operation timed out previously and any untracked or pending writes cannot be safely retried due to the tool guarantee ('none' on retry/replay). Escalating to a human for manual verification and completion."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.00004568696022e-06
+    "wall_time_s": 6.041023880243301e-06
   }
 ]

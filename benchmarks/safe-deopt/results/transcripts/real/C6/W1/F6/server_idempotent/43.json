@@ -64,7 +64,7 @@
     "prompt_tokens": 538,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.829894624883309
+    "wall_time_s": 0.9065695418976247
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2625008821487427e-05
+    "wall_time_s": 1.095794141292572e-05
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 577,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.84253304079175
+    "wall_time_s": 1.041409334167838
   },
   {
     "kind": "tool_call",
@@ -125,22 +125,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.666887879371643e-06
+    "wall_time_s": 8.20821151137352e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The procedure `safe-deopt-W1` experienced a timeout during the `submit_linked_record` step (`operation_key='opB'`). Upon checking the operation status, `opB` was confirmed as **COMMITTED**. Additionally, reading open items shows no remaining pending or open items requiring action. \n\nThe write has successfully completed, so no further retries or actions are needed."
+      "final_text": "The operation `opB` (associated with `submit_linked_record`) has successfully **COMMITTED**, despite the initial timeout error. A check of the open items shows no remaining pending actions. The procedure has successfully completed all required steps."
     },
     "prompt_tokens": 602,
-    "completion_tokens": 84,
+    "completion_tokens": 50,
     "cached_tokens": 0,
-    "wall_time_s": 1.8520870001520962
+    "wall_time_s": 1.019706082995981
   },
   {
     "kind": "final",
-    "content": "The procedure `safe-deopt-W1` experienced a timeout during the `submit_linked_record` step (`operation_key='opB'`). Upon checking the operation status, `opB` was confirmed as **COMMITTED**. Additionally, reading open items shows no remaining pending or open items requiring action. \n\nThe write has successfully completed, so no further retries or actions are needed.",
+    "content": "The operation `opB` (associated with `submit_linked_record`) has successfully **COMMITTED**, despite the initial timeout error. A check of the open items shows no remaining pending actions. The procedure has successfully completed all required steps.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -26,7 +26,7 @@
     "prompt_tokens": 318,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.923477458069101
+    "wall_time_s": 0.8579441250767559
   },
   {
     "kind": "tool_call",
@@ -46,13 +46,13 @@
       "ok": true,
       "dispatched": true,
       "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
+        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.166046321392059e-06
+    "wall_time_s": 7.6249707490205765e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 378,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.1668644158635288
+    "wall_time_s": 1.0970095410011709
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.458015948534012e-06
+    "wall_time_s": 7.333001121878624e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'invoice': 'INV-001', 'operation_key': 'w2-task-allocation-1', 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'w2_alloc_001', 'payment': 'PAY-001', 'invoice': 'INV-001', 'amount': 250})",
       "final_text": null
     },
     "prompt_tokens": 434,
     "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.056879083858803
+    "wall_time_s": 1.4185235840268433
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "amount": 250,
+        "operation_key": "w2_alloc_001",
+        "payment": "PAY-001",
         "invoice": "INV-001",
-        "operation_key": "w2-task-allocation-1",
-        "payment": "PAY-001"
+        "amount": 250
       }
     },
     "prompt_tokens": 0,
@@ -124,30 +124,30 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='w2-task-allocation-1', status='submitted')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='w2_alloc_001', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.483286127448082e-05
+    "wall_time_s": 1.945788972079754e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'w2-task-allocation-2', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'w2_alloc_001', 'allocation': 'ALLOC-0001'})",
       "final_text": null
     },
     "prompt_tokens": 551,
     "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.9609830828849226
+    "wall_time_s": 0.957217666786164
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "w2-task-allocation-2",
+        "operation_key": "w2_alloc_001",
         "allocation": "ALLOC-0001"
       }
     },
@@ -163,30 +163,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "timeout: no confirmation received for submit_allocation (operation_key='w2-task-allocation-2')"
+      "error": "timeout: no confirmation received for submit_allocation (operation_key='w2_alloc_001')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00020129093900322914
+    "wall_time_s": 0.00018783402629196644
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'w2-task-allocation-2'})",
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'w2_alloc_001'})",
       "final_text": null
     },
     "prompt_tokens": 623,
     "completion_tokens": 25,
     "cached_tokens": 0,
-    "wall_time_s": 1.4673999580554664
+    "wall_time_s": 1.154764167033136
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "cancel_operation",
       "kwargs": {
-        "operation_key": "w2-task-allocation-2"
+        "operation_key": "w2_alloc_001"
       }
     },
     "prompt_tokens": 0,
@@ -205,26 +205,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.583984941244125e-06
+    "wall_time_s": 4.708068445324898e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'w2-task-allocation-3', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_allocation operation timed out and requires verification or human intervention to safely complete.'})",
       "final_text": null
     },
     "prompt_tokens": 660,
-    "completion_tokens": 36,
+    "completion_tokens": 31,
     "cached_tokens": 0,
-    "wall_time_s": 0.8823963329195976
+    "wall_time_s": 1.466180708957836
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "submit_allocation",
+      "tool_name": "escalate",
       "kwargs": {
-        "operation_key": "w2-task-allocation-3",
-        "allocation": "ALLOC-0001"
+        "reason": "The submit_allocation operation timed out and requires verification or human intervention to safely complete."
       }
     },
     "prompt_tokens": 0,
@@ -235,33 +234,17 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "submit_allocation",
+      "tool_name": "escalate",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='w2-task-allocation-1', status='submitted')"
+      "result": {
+        "escalated": true,
+        "reason": "The submit_allocation operation timed out and requires verification or human intervention to safely complete."
+      }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.3250002413988113e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": null,
-      "final_text": "The W2 task has been completed successfully. \n\nPayment `PAY-001` ($250) has been allocated to invoice `INV-001` via allocation `ALLOC-0001` and successfully submitted."
-    },
-    "prompt_tokens": 762,
-    "completion_tokens": 50,
-    "cached_tokens": 0,
-    "wall_time_s": 1.11372624989599
-  },
-  {
-    "kind": "final",
-    "content": "The W2 task has been completed successfully. \n\nPayment `PAY-001` ($250) has been allocated to invoice `INV-001` via allocation `ALLOC-0001` and successfully submitted.",
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
+    "wall_time_s": 6.166985258460045e-06
   }
 ]

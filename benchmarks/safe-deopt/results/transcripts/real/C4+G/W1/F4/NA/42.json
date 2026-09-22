@@ -33,7 +33,7 @@
     "prompt_tokens": 250,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.773765625199303
+    "wall_time_s": 1.4615084168035537
   },
   {
     "kind": "tool_call",
@@ -57,25 +57,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.708068445324898e-06
+    "wall_time_s": 8.582836017012596e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Concurrent modification validation error encountered on submit_linked_record (operation_key='opB'), and no open items found in read_open_items. Escalating for manual or safe resolution.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered concurrent write modification error (ValidationErrorFault) on submit_linked_record and no open items found to retry or inspect. Escalating for manual review.'})",
       "final_text": null
     },
     "prompt_tokens": 275,
-    "completion_tokens": 53,
+    "completion_tokens": 47,
     "cached_tokens": 0,
-    "wall_time_s": 1.0880394999403507
+    "wall_time_s": 1.1580141671001911
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Concurrent modification validation error encountered on submit_linked_record (operation_key='opB'), and no open items found in read_open_items. Escalating for manual or safe resolution."
+        "reason": "Encountered concurrent write modification error (ValidationErrorFault) on submit_linked_record and no open items found to retry or inspect. Escalating for manual review."
       }
     },
     "prompt_tokens": 0,
@@ -91,12 +91,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Concurrent modification validation error encountered on submit_linked_record (operation_key='opB'), and no open items found in read_open_items. Escalating for manual or safe resolution."
+        "reason": "Encountered concurrent write modification error (ValidationErrorFault) on submit_linked_record and no open items found to retry or inspect. Escalating for manual review."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.458947271108627e-06
+    "wall_time_s": 5.875015631318092e-06
   }
 ]

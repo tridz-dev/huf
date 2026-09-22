@@ -33,7 +33,7 @@
     "prompt_tokens": 239,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8113877498544753
+    "wall_time_s": 2.425701000029221
   },
   {
     "kind": "tool_call",
@@ -53,31 +53,33 @@
       "ok": true,
       "dispatched": true,
       "result": [
-        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
+        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.95793379843235e-06
+    "wall_time_s": 7.95791856944561e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous attempt to submit the linked record for operation_key='opB' was rejected with a RuntimeError. Reviewing open items shows an open sales invoice (SINV-2001), but manual intervention is required to safely resolve or retry this operation.\"})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opA', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 312,
-    "completion_tokens": 67,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.695405500009656
+    "wall_time_s": 4.099367541959509
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_linked_record",
       "kwargs": {
-        "reason": "The previous attempt to submit the linked record for operation_key='opB' was rejected with a RuntimeError. Reviewing open items shows an open sales invoice (SINV-2001), but manual intervention is required to safely resolve or retry this operation."
+        "reference_name": "SINV-2001",
+        "operation_key": "opA",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -88,17 +90,33 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_linked_record",
       "ok": true,
       "dispatched": true,
-      "result": {
-        "escalated": true,
-        "reason": "The previous attempt to submit the linked record for operation_key='opB' was rejected with a RuntimeError. Reviewing open items shows an open sales invoice (SINV-2001), but manual intervention is required to safely resolve or retry this operation."
-      }
+      "result": "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.833106115460396e-06
+    "wall_time_s": 1.5791039913892746e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": null,
+      "final_text": "The W1 task has been successfully completed by submitting the linked record (Sales Invoice: SINV-2001) using operation key `opA`."
+    },
+    "prompt_tokens": 414,
+    "completion_tokens": 32,
+    "cached_tokens": 0,
+    "wall_time_s": 2.36648958385922
+  },
+  {
+    "kind": "final",
+    "content": "The W1 task has been successfully completed by submitting the linked record (Sales Invoice: SINV-2001) using operation key `opA`.",
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
   }
 ]

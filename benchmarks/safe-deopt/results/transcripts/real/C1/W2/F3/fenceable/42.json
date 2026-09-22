@@ -26,7 +26,7 @@
     "prompt_tokens": 318,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8974108749534935
+    "wall_time_s": 1.117319667013362
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.874798029661179e-06
+    "wall_time_s": 5.458947271108627e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 378,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.0174326670821756
+    "wall_time_s": 1.3959839171729982
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.58303838968277e-06
+    "wall_time_s": 5.875015631318092e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'op_w2_001', 'invoice': 'INV-001', 'payment': 'PAY-001', 'amount': 250})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'amount': 250, 'operation_key': 'op_w2_001', 'invoice': 'INV-001'})",
       "final_text": null
     },
     "prompt_tokens": 434,
     "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.5501157080288976
+    "wall_time_s": 1.1960647080559283
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "operation_key": "op_w2_001",
-        "invoice": "INV-001",
         "payment": "PAY-001",
-        "amount": 250
+        "amount": 250,
+        "operation_key": "op_w2_001",
+        "invoice": "INV-001"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.0250055715441704e-05
+    "wall_time_s": 1.691700890660286e-05
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 551,
     "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 1.0028193339239806
+    "wall_time_s": 0.9487163331359625
   },
   {
     "kind": "tool_call",
@@ -168,7 +168,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.0001330000814050436
+    "wall_time_s": 9.66670922935009e-05
   },
   {
     "kind": "model_step",
@@ -179,7 +179,7 @@
     "prompt_tokens": 623,
     "completion_tokens": 25,
     "cached_tokens": 0,
-    "wall_time_s": 1.457905458053574
+    "wall_time_s": 2.055211333092302
   },
   {
     "kind": "tool_call",
@@ -205,25 +205,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.237494871020317e-05
+    "wall_time_s": 5.291774868965149e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation timed out and operation cancellation failed. Human intervention required to resolve the allocation state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation timed out and operation cancellation returned false, requiring human intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 660,
-    "completion_tokens": 32,
+    "completion_tokens": 28,
     "cached_tokens": 0,
-    "wall_time_s": 0.8615932089742273
+    "wall_time_s": 1.4767820828128606
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Submit allocation timed out and operation cancellation failed. Human intervention required to resolve the allocation state."
+        "reason": "Submit allocation timed out and operation cancellation returned false, requiring human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -239,12 +239,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Submit allocation timed out and operation cancellation failed. Human intervention required to resolve the allocation state."
+        "reason": "Submit allocation timed out and operation cancellation returned false, requiring human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.0831357687711716e-06
+    "wall_time_s": 5.20818866789341e-06
   }
 ]

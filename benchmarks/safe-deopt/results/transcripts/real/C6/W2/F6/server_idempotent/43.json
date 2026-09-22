@@ -65,7 +65,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8908772498834878
+    "wall_time_s": 1.1807176668662578
   },
   {
     "kind": "tool_call",
@@ -91,7 +91,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1709053069353104e-05
+    "wall_time_s": 9.499955922365189e-06
   },
   {
     "kind": "model_step",
@@ -102,7 +102,7 @@
     "prompt_tokens": 571,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8372453751508147
+    "wall_time_s": 1.4621656669769436
   },
   {
     "kind": "tool_call",
@@ -128,7 +128,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.0419323593378067e-06
+    "wall_time_s": 7.333001121878624e-06
   },
   {
     "kind": "model_step",
@@ -139,7 +139,7 @@
     "prompt_tokens": 629,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9344917079433799
+    "wall_time_s": 0.9946099170483649
   },
   {
     "kind": "tool_call",
@@ -165,22 +165,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.542075425386429e-06
+    "wall_time_s": 7.708091288805008e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `submit_allocation` with operation key `opB` has been verified via `get_operation_status` and successfully committed. The invoices and payments state is consistent. No further writes are required."
+      "final_text": "The operation `opB` (associated with `submit_allocation`) has been successfully verified as **COMMITTED** via `get_operation_status`. Both invoices and payments lists are consistent with the completed process. No further actions or retries are required."
     },
     "prompt_tokens": 685,
-    "completion_tokens": 43,
+    "completion_tokens": 53,
     "cached_tokens": 0,
-    "wall_time_s": 1.0461008329875767
+    "wall_time_s": 1.2823477080091834
   },
   {
     "kind": "final",
-    "content": "The operation `submit_allocation` with operation key `opB` has been verified via `get_operation_status` and successfully committed. The invoices and payments state is consistent. No further writes are required.",
+    "content": "The operation `opB` (associated with `submit_allocation`) has been successfully verified as **COMMITTED** via `get_operation_status`. Both invoices and payments lists are consistent with the completed process. No further actions or retries are required.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -57,7 +57,7 @@
     "prompt_tokens": 519,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8255384159274399
+    "wall_time_s": 0.9131863338407129
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.292022928595543e-06
+    "wall_time_s": 8.624978363513947e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 579,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7890698330011219
+    "wall_time_s": 1.629048208007589
   },
   {
     "kind": "tool_call",
@@ -120,25 +120,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.584000170230865e-06
+    "wall_time_s": 1.5790807083249092e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Uncertain whether submit_allocation_unsafe committed before the timeout. Checked invoices and payments, but need human verification of the allocation state before proceeding.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure failed mid-run on submit_allocation_unsafe with an unknown operation key, and we need human verification before attempting any further allocation or recovery.'})",
       "final_text": null
     },
     "prompt_tokens": 635,
-    "completion_tokens": 43,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9343964168801904
+    "wall_time_s": 0.9348499160259962
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Uncertain whether submit_allocation_unsafe committed before the timeout. Checked invoices and payments, but need human verification of the allocation state before proceeding."
+        "reason": "Procedure failed mid-run on submit_allocation_unsafe with an unknown operation key, and we need human verification before attempting any further allocation or recovery."
       }
     },
     "prompt_tokens": 0,
@@ -154,12 +154,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Uncertain whether submit_allocation_unsafe committed before the timeout. Checked invoices and payments, but need human verification of the allocation state before proceeding."
+        "reason": "Procedure failed mid-run on submit_allocation_unsafe with an unknown operation key, and we need human verification before attempting any further allocation or recovery."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.083150997757912e-06
+    "wall_time_s": 6.458954885601997e-06
   }
 ]

@@ -34,7 +34,7 @@
     "prompt_tokens": 274,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.3713611250277609
+    "wall_time_s": 1.0249454998411238
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.2079329937696457e-06
+    "wall_time_s": 2.125045284628868e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 332,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8040132091846317
+    "wall_time_s": 0.8553217500448227
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.417037755250931e-06
+    "wall_time_s": 6.332993507385254e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered concurrent write modification error (ValidationErrorFault) during submit_allocation_unsafe, and invoice INV-001 has 0 outstanding amount while PAY-001 has remaining unallocated funds. Needs human review or intervention.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification / validation error (ValidationErrorFault) when trying to execute submit_allocation_unsafe, and the invoice INV-001 already shows an outstanding amount of 0. Need human intervention to verify allocation state and resolve safely.'})",
       "final_text": null
     },
     "prompt_tokens": 388,
-    "completion_tokens": 62,
+    "completion_tokens": 65,
     "cached_tokens": 0,
-    "wall_time_s": 1.090595917077735
+    "wall_time_s": 1.0497477089520544
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered concurrent write modification error (ValidationErrorFault) during submit_allocation_unsafe, and invoice INV-001 has 0 outstanding amount while PAY-001 has remaining unallocated funds. Needs human review or intervention."
+        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) when trying to execute submit_allocation_unsafe, and the invoice INV-001 already shows an outstanding amount of 0. Need human intervention to verify allocation state and resolve safely."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered concurrent write modification error (ValidationErrorFault) during submit_allocation_unsafe, and invoice INV-001 has 0 outstanding amount while PAY-001 has remaining unallocated funds. Needs human review or intervention."
+        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) when trying to execute submit_allocation_unsafe, and the invoice INV-001 already shows an outstanding amount of 0. Need human intervention to verify allocation state and resolve safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.208879545331001e-06
+    "wall_time_s": 3.2079406082630157e-06
   }
 ]

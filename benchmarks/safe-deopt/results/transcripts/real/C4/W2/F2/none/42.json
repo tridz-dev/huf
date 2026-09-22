@@ -32,9 +32,9 @@
       "final_text": null
     },
     "prompt_tokens": 243,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8110189589206129
+    "wall_time_s": 1.0747964580077678
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.875030860304832e-06
+    "wall_time_s": 5.041016265749931e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 301,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.933388875098899
+    "wall_time_s": 1.5442620001267642
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,64 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.6249402910470963e-06
+    "wall_time_s": 4.166970029473305e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered timeout or unclear state on submit_allocation (operation_key='opB') and need human guidance to proceed safely with the W2/allocation task.\"})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 357,
-    "completion_tokens": 48,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.9370599170215428
+    "wall_time_s": 1.3440060000866652
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "submit_allocation",
+      "kwargs": {
+        "allocation": "PAY-001 -> INV-001",
+        "operation_key": "opB"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "submit_allocation",
+      "ok": false,
+      "dispatched": true,
+      "guard_rejected": false,
+      "error": "'no such allocation PAY-001 -> INV-001'"
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 3.033410757780075e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The allocation 'PAY-001 -> INV-001' returned 'no such allocation' even though INV-001 has 0 outstanding amount and PAY-001 is present. Needs human review.\"})",
+      "final_text": null
+    },
+    "prompt_tokens": 421,
+    "completion_tokens": 60,
+    "cached_tokens": 0,
+    "wall_time_s": 1.804341624956578
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered timeout or unclear state on submit_allocation (operation_key='opB') and need human guidance to proceed safely with the W2/allocation task."
+        "reason": "The allocation 'PAY-001 -> INV-001' returned 'no such allocation' even though INV-001 has 0 outstanding amount and PAY-001 is present. Needs human review."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +170,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered timeout or unclear state on submit_allocation (operation_key='opB') and need human guidance to proceed safely with the W2/allocation task."
+        "reason": "The allocation 'PAY-001 -> INV-001' returned 'no such allocation' even though INV-001 has 0 outstanding amount and PAY-001 is present. Needs human review."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.1671952456235886e-06
+    "wall_time_s": 4.125060513615608e-06
   }
 ]

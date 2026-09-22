@@ -34,7 +34,7 @@
     "prompt_tokens": 274,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.142907208064571
+    "wall_time_s": 1.3274350420106202
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.916932761669159e-06
+    "wall_time_s": 8.250121027231216e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 332,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8882001249585301
+    "wall_time_s": 1.4966710829176009
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.124865755438805e-06
+    "wall_time_s": 8.542090654373169e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Concurrent modification/validation error encountered on submit_allocation_unsafe, and invoice INV-001 has an outstanding amount of 0. Need human intervention to verify state and handle non-idempotent allocation.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification / validation error (ValidationErrorFault) when attempting submit_allocation_unsafe, and the invoice INV-001 already shows an outstanding_amount of 0. Escalating for human review/resolution.'})",
       "final_text": null
     },
     "prompt_tokens": 388,
-    "completion_tokens": 57,
+    "completion_tokens": 61,
     "cached_tokens": 0,
-    "wall_time_s": 0.9617695829365402
+    "wall_time_s": 1.0328893749974668
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Concurrent modification/validation error encountered on submit_allocation_unsafe, and invoice INV-001 has an outstanding amount of 0. Need human intervention to verify state and handle non-idempotent allocation."
+        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) when attempting submit_allocation_unsafe, and the invoice INV-001 already shows an outstanding_amount of 0. Escalating for human review/resolution."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Concurrent modification/validation error encountered on submit_allocation_unsafe, and invoice INV-001 has an outstanding amount of 0. Need human intervention to verify state and handle non-idempotent allocation."
+        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) when attempting submit_allocation_unsafe, and the invoice INV-001 already shows an outstanding_amount of 0. Escalating for human review/resolution."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.167008101940155e-06
+    "wall_time_s": 6.333924829959869e-06
   }
 ]

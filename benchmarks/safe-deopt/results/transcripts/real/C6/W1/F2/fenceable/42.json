@@ -64,7 +64,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.4977860839571804
+    "wall_time_s": 1.0574526248965412
   },
   {
     "kind": "tool_call",
@@ -88,7 +88,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1999858543276787e-05
+    "wall_time_s": 9.58307646214962e-06
   },
   {
     "kind": "model_step",
@@ -99,7 +99,7 @@
     "prompt_tokens": 555,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.916664999909699
+    "wall_time_s": 1.1628036668989807
   },
   {
     "kind": "tool_call",
@@ -125,25 +125,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9916100427508354e-05
+    "wall_time_s": 9.624985978007317e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The failed submit_linked_record operation (opB) timed out and could not be confirmed via read_open_items or canceled via cancel_operation. Manual intervention is required to safely resolve the pending write state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out and could not be verified or cancelled successfully via cancel_operation (returned false). Safe continuation cannot be guaranteed without human intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 586,
-    "completion_tokens": 58,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0494933750014752
+    "wall_time_s": 1.7839669999666512
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The failed submit_linked_record operation (opB) timed out and could not be confirmed via read_open_items or canceled via cancel_operation. Manual intervention is required to safely resolve the pending write state."
+        "reason": "Operation opB timed out and could not be verified or cancelled successfully via cancel_operation (returned false). Safe continuation cannot be guaranteed without human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -159,12 +159,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The failed submit_linked_record operation (opB) timed out and could not be confirmed via read_open_items or canceled via cancel_operation. Manual intervention is required to safely resolve the pending write state."
+        "reason": "Operation opB timed out and could not be verified or cancelled successfully via cancel_operation (returned false). Safe continuation cannot be guaranteed without human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.832873284816742e-06
+    "wall_time_s": 3.541121259331703e-06
   }
 ]

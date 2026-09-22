@@ -57,7 +57,7 @@
     "prompt_tokens": 493,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0515199999790639
+    "wall_time_s": 0.8477910000365227
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4667166396975517e-05
+    "wall_time_s": 1.2125121429562569e-05
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7646052080672234
+    "wall_time_s": 0.7506315000355244
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.58304600417614e-06
+    "wall_time_s": 5.125068128108978e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 590,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7773190420120955
+    "wall_time_s": 1.7105561669450253
   },
   {
     "kind": "tool_call",
@@ -157,26 +157,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.4999406933784485e-06
+    "wall_time_s": 5.5409036576747894e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:PAY-001:250', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 646,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.8468912080861628
+    "wall_time_s": 1.2739577919710428
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "opB",
-        "allocation": "INV-001:PAY-001:250"
+        "allocation": "INV-001:PAY-001:250",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -196,25 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.0083971321582794e-05
+    "wall_time_s": 2.2541964426636696e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation failed and submission returned 'no such allocation INV-001:PAY-001:250', requiring human intervention to verify allocation data.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'submit_allocation failed with no such allocation error and operation_key status is UNKNOWN after timeout. Need human review.'})",
       "final_text": null
     },
     "prompt_tokens": 718,
-    "completion_tokens": 47,
+    "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.9345007499214262
+    "wall_time_s": 1.2017653328366578
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation failed and submission returned 'no such allocation INV-001:PAY-001:250', requiring human intervention to verify allocation data."
+        "reason": "submit_allocation failed with no such allocation error and operation_key status is UNKNOWN after timeout. Need human review."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation failed and submission returned 'no such allocation INV-001:PAY-001:250', requiring human intervention to verify allocation data."
+        "reason": "submit_allocation failed with no such allocation error and operation_key status is UNKNOWN after timeout. Need human review."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.207963451743126e-06
+    "wall_time_s": 1.8749851733446121e-06
   }
 ]

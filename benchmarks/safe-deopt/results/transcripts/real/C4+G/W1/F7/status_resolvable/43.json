@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.998899457976222
+    "wall_time_s": 1.444271583110094
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.300017513334751e-05
+    "wall_time_s": 1.2875068932771683e-05
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 333,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.1445397501811385
+    "wall_time_s": 2.046409917064011
   },
   {
     "kind": "tool_call",
@@ -97,27 +97,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.041039109230042e-06
+    "wall_time_s": 6.58305361866951e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 406,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9592771250754595
+    "wall_time_s": 1.7187549171503633
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "operation_key": "opB",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -137,7 +137,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.2625084966421127e-05
+    "wall_time_s": 2.5833025574684143e-05
   },
   {
     "kind": "model_step",
@@ -148,7 +148,7 @@
     "prompt_tokens": 510,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.3416014581453055
+    "wall_time_s": 1.910137375118211
   },
   {
     "kind": "tool_call",
@@ -174,25 +174,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.3999873772263527e-05
+    "wall_time_s": 1.200009137392044e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB had a timeout on submit_linked_record and returned UNKNOWN status, and replay is rejected due to lack of tool guarantee. Manual verification and resolution required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous write operation 'opB' timed out and its status is UNKNOWN, and retry is rejected by the system due to lack of a recovery guarantee ('replay rejected'). Escalating safely to human review.\"})",
       "final_text": null
     },
     "prompt_tokens": 547,
-    "completion_tokens": 49,
+    "completion_tokens": 56,
     "cached_tokens": 0,
-    "wall_time_s": 0.9514565421268344
+    "wall_time_s": 2.097772957989946
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB had a timeout on submit_linked_record and returned UNKNOWN status, and replay is rejected due to lack of tool guarantee. Manual verification and resolution required."
+        "reason": "The previous write operation 'opB' timed out and its status is UNKNOWN, and retry is rejected by the system due to lack of a recovery guarantee ('replay rejected'). Escalating safely to human review."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB had a timeout on submit_linked_record and returned UNKNOWN status, and replay is rejected due to lack of tool guarantee. Manual verification and resolution required."
+        "reason": "The previous write operation 'opB' timed out and its status is UNKNOWN, and retry is rejected by the system due to lack of a recovery guarantee ('replay rejected'). Escalating safely to human review."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.250082954764366e-06
+    "wall_time_s": 5.00003807246685e-06
   }
 ]

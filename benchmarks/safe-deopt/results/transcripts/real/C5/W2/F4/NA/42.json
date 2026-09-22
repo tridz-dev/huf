@@ -64,7 +64,7 @@
     "prompt_tokens": 482,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.3773826251272112
+    "wall_time_s": 1.6615906660445035
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.792135536670685e-06
+    "wall_time_s": 5.95790334045887e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 540,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.243304125033319
+    "wall_time_s": 1.3098622499965131
   },
   {
     "kind": "tool_call",
@@ -127,25 +127,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.917165592312813e-06
+    "wall_time_s": 5.624955520033836e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The target record changed concurrently before write B was dispatched, and following safety guidelines, I am escalating to human review to verify allocation state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous write failed due to concurrent modification (validation error at write B for submit_allocation with operation_key='opB'). Need human review to verify allocation state.\"})",
       "final_text": null
     },
     "prompt_tokens": 596,
-    "completion_tokens": 41,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 1.1047367078717798
+    "wall_time_s": 2.071405249880627
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The target record changed concurrently before write B was dispatched, and following safety guidelines, I am escalating to human review to verify allocation state."
+        "reason": "The previous write failed due to concurrent modification (validation error at write B for submit_allocation with operation_key='opB'). Need human review to verify allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -161,12 +161,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The target record changed concurrently before write B was dispatched, and following safety guidelines, I am escalating to human review to verify allocation state."
+        "reason": "The previous write failed due to concurrent modification (validation error at write B for submit_allocation with operation_key='opB'). Need human review to verify allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.458015948534012e-06
+    "wall_time_s": 5.916925147175789e-06
   }
 ]

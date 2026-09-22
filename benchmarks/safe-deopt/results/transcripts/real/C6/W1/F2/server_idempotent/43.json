@@ -64,7 +64,7 @@
     "prompt_tokens": 538,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.1074190000072122
+    "wall_time_s": 1.6362152921501547
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5292083844542503e-05
+    "wall_time_s": 9.666895493865013e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 577,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8140449579805136
+    "wall_time_s": 2.04316887492314
   },
   {
     "kind": "tool_call",
@@ -125,22 +125,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2042000889778137e-05
+    "wall_time_s": 3.250082954764366e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` (associated with `submit_linked_record`) has successfully reached the `COMMITTED` status, and a subsequent check of open items confirms that no further pending actions remain for this procedure run."
+      "final_text": "The operation `opB` (associated with `submit_linked_record`) successfully committed despite the timeout error. All open items have been processed and verified. The safe recovery and verification are complete."
     },
     "prompt_tokens": 602,
-    "completion_tokens": 46,
+    "completion_tokens": 40,
     "cached_tokens": 0,
-    "wall_time_s": 1.1136550419032574
+    "wall_time_s": 1.7460931250825524
   },
   {
     "kind": "final",
-    "content": "The operation `opB` (associated with `submit_linked_record`) has successfully reached the `COMMITTED` status, and a subsequent check of open items confirms that no further pending actions remain for this procedure run.",
+    "content": "The operation `opB` (associated with `submit_linked_record`) successfully committed despite the timeout error. All open items have been processed and verified. The safe recovery and verification are complete.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

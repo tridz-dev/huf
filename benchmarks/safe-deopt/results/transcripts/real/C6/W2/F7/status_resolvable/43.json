@@ -57,7 +57,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8881631668191403
+    "wall_time_s": 3.1262191249988973
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.8416903913021088e-05
+    "wall_time_s": 1.3124896213412285e-05
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0359279590193182
+    "wall_time_s": 1.6225671670399606
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.7080532163381577e-06
+    "wall_time_s": 6.9998204708099365e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 589,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9905282501131296
+    "wall_time_s": 3.798449916066602
   },
   {
     "kind": "tool_call",
@@ -157,7 +157,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.750016033649445e-06
+    "wall_time_s": 8.37491825222969e-06
   },
   {
     "kind": "model_step",
@@ -168,7 +168,7 @@
     "prompt_tokens": 645,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.1588150840252638
+    "wall_time_s": 3.411722583929077
   },
   {
     "kind": "tool_call",
@@ -196,25 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.929203376173973e-05
+    "wall_time_s": 2.674991264939308e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation key 'opB' status is UNKNOWN and replay was rejected for submit_allocation due to lack of recovery guarantee. Cannot safely retry without risking duplicate commits.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB failed mid-run with an unresolved outcome and replay was rejected for safety reasons.'})",
       "final_text": null
     },
     "prompt_tokens": 742,
-    "completion_tokens": 47,
+    "completion_tokens": 33,
     "cached_tokens": 0,
-    "wall_time_s": 1.0253730420954525
+    "wall_time_s": 2.1012569998856634
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation key 'opB' status is UNKNOWN and replay was rejected for submit_allocation due to lack of recovery guarantee. Cannot safely retry without risking duplicate commits."
+        "reason": "Operation opB failed mid-run with an unresolved outcome and replay was rejected for safety reasons."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation key 'opB' status is UNKNOWN and replay was rejected for submit_allocation due to lack of recovery guarantee. Cannot safely retry without risking duplicate commits."
+        "reason": "Operation opB failed mid-run with an unresolved outcome and replay was rejected for safety reasons."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0499963536858559e-05
+    "wall_time_s": 6.250105798244476e-06
   }
 ]

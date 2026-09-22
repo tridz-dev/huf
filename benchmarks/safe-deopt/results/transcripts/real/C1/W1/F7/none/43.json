@@ -26,7 +26,7 @@
     "prompt_tokens": 289,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8146863330621272
+    "wall_time_s": 1.652033916907385
   },
   {
     "kind": "tool_call",
@@ -52,25 +52,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.125060513615608e-06
+    "wall_time_s": 7.2498805820941925e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The request to 'Complete the W1 task from scratch' is ambiguous and lacks sufficient details regarding what specific actions need to be performed on the open item (Sales Invoice SINV-2001). Escalating to a human for clarification.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The user request is ambiguous ('Complete the W1 task from scratch') and does not specify what action to take regarding the open item (SINV-2001). Requesting human clarification.\"})",
       "final_text": null
     },
     "prompt_tokens": 362,
-    "completion_tokens": 63,
+    "completion_tokens": 54,
     "cached_tokens": 0,
-    "wall_time_s": 1.1136417090892792
+    "wall_time_s": 2.002107457956299
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The request to 'Complete the W1 task from scratch' is ambiguous and lacks sufficient details regarding what specific actions need to be performed on the open item (Sales Invoice SINV-2001). Escalating to a human for clarification."
+        "reason": "The user request is ambiguous ('Complete the W1 task from scratch') and does not specify what action to take regarding the open item (SINV-2001). Requesting human clarification."
       }
     },
     "prompt_tokens": 0,
@@ -86,12 +86,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The request to 'Complete the W1 task from scratch' is ambiguous and lacks sufficient details regarding what specific actions need to be performed on the open item (Sales Invoice SINV-2001). Escalating to a human for clarification."
+        "reason": "The user request is ambiguous ('Complete the W1 task from scratch') and does not specify what action to take regarding the open item (SINV-2001). Requesting human clarification."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.166023477911949e-06
+    "wall_time_s": 3.3329706639051437e-06
   }
 ]

@@ -63,7 +63,7 @@
     "prompt_tokens": 488,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8055041669867933
+    "wall_time_s": 2.2122205409687012
   },
   {
     "kind": "tool_call",
@@ -87,25 +87,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5750061720609665e-05
+    "wall_time_s": 6.750226020812988e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure safe-deopt-W1 failed mid-run due to a concurrent target record change on submit_linked_record (opB). Recovery check via read_open_items returned no open items. Escalating for manual review and safe resolution.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Procedure failed mid-run due to concurrent modification on submit_linked_record (opB). Recovery guidance indicates verifying the target record's state with a read (which returned empty/no open items) and avoiding blind retries. Escalating for human review/resolution.\"})",
       "final_text": null
     },
     "prompt_tokens": 513,
-    "completion_tokens": 65,
+    "completion_tokens": 69,
     "cached_tokens": 0,
-    "wall_time_s": 1.1306806248612702
+    "wall_time_s": 2.558761749882251
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Procedure safe-deopt-W1 failed mid-run due to a concurrent target record change on submit_linked_record (opB). Recovery check via read_open_items returned no open items. Escalating for manual review and safe resolution."
+        "reason": "Procedure failed mid-run due to concurrent modification on submit_linked_record (opB). Recovery guidance indicates verifying the target record's state with a read (which returned empty/no open items) and avoiding blind retries. Escalating for human review/resolution."
       }
     },
     "prompt_tokens": 0,
@@ -121,12 +121,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Procedure safe-deopt-W1 failed mid-run due to a concurrent target record change on submit_linked_record (opB). Recovery check via read_open_items returned no open items. Escalating for manual review and safe resolution."
+        "reason": "Procedure failed mid-run due to concurrent modification on submit_linked_record (opB). Recovery guidance indicates verifying the target record's state with a read (which returned empty/no open items) and avoiding blind retries. Escalating for human review/resolution."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.58305361866951e-06
+    "wall_time_s": 5.332985892891884e-06
   }
 ]

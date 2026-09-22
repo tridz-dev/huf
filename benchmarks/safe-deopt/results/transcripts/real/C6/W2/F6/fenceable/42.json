@@ -63,9 +63,9 @@
       "final_text": null
     },
     "prompt_tokens": 524,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9403071249835193
+    "wall_time_s": 0.986285415943712
   },
   {
     "kind": "tool_call",
@@ -91,7 +91,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.875038474798203e-06
+    "wall_time_s": 6.250105798244476e-06
   },
   {
     "kind": "model_step",
@@ -102,7 +102,7 @@
     "prompt_tokens": 582,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8981045000255108
+    "wall_time_s": 0.9890089170075953
   },
   {
     "kind": "tool_call",
@@ -128,7 +128,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.2908511608839035e-06
+    "wall_time_s": 7.416820153594017e-06
   },
   {
     "kind": "model_step",
@@ -139,7 +139,7 @@
     "prompt_tokens": 638,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8245062499772757
+    "wall_time_s": 0.7436224159318954
   },
   {
     "kind": "tool_call",
@@ -165,25 +165,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.033395528793335e-05
+    "wall_time_s": 9.790994226932526e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timeout recovery requires human intervention to verify partial commitment status and handle safely.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB submit_allocation timed out and could not be successfully canceled or verified; manual review is required per safety guidelines.'})",
       "final_text": null
     },
     "prompt_tokens": 669,
-    "completion_tokens": 31,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.5958808748982847
+    "wall_time_s": 1.4083924589212984
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timeout recovery requires human intervention to verify partial commitment status and handle safely."
+        "reason": "Operation opB submit_allocation timed out and could not be successfully canceled or verified; manual review is required per safety guidelines."
       }
     },
     "prompt_tokens": 0,
@@ -199,12 +199,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timeout recovery requires human intervention to verify partial commitment status and handle safely."
+        "reason": "Operation opB submit_allocation timed out and could not be successfully canceled or verified; manual review is required per safety guidelines."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.458015948534012e-06
+    "wall_time_s": 6.541842594742775e-06
   }
 ]

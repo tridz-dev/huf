@@ -55,7 +55,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8578522920142859
+    "wall_time_s": 0.992655250011012
   },
   {
     "kind": "tool_call",
@@ -81,27 +81,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.292007699608803e-06
+    "wall_time_s": 9.125098586082458e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 509,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8893704998772591
+    "wall_time_s": 0.817525208927691
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
         "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice"
+        "reference_type": "Sales Invoice",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -120,22 +120,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.050003968179226e-05
+    "wall_time_s": 1.7541926354169846e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous `submit_linked_record` operation (`opB`) timed out, but after verifying the current state via `read_open_items`, we confirmed the record `SINV-2001` was still open and uncommitted. We successfully retried and completed the `submit_linked_record` action. The record status is now successfully **submitted**."
+      "final_text": "The failed step `submit_linked_record` has been successfully verified and completed after checking the current state with `read_open_items`. The record `SINV-2001` (Sales Invoice) is now submitted."
     },
     "prompt_tokens": 611,
-    "completion_tokens": 76,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 1.106683666119352
+    "wall_time_s": 2.1343610419426113
   },
   {
     "kind": "final",
-    "content": "The previous `submit_linked_record` operation (`opB`) timed out, but after verifying the current state via `read_open_items`, we confirmed the record `SINV-2001` was still open and uncommitted. We successfully retried and completed the `submit_linked_record` action. The record status is now successfully **submitted**.",
+    "content": "The failed step `submit_linked_record` has been successfully verified and completed after checking the current state with `read_open_items`. The record `SINV-2001` (Sales Invoice) is now submitted.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -55,7 +55,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.768667999887839
+    "wall_time_s": 1.039045583223924
   },
   {
     "kind": "tool_call",
@@ -81,27 +81,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.292007699608803e-06
+    "wall_time_s": 6.708083674311638e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 509,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9763435418717563
+    "wall_time_s": 1.6263135001063347
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_name": "SINV-2001",
         "reference_type": "Sales Invoice",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "reference_name": "SINV-2001"
       }
     },
     "prompt_tokens": 0,
@@ -120,22 +120,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.833106115460396e-06
+    "wall_time_s": 1.6459031030535698e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The `submit_linked_record` operation has been successfully verified and completed. The target record (`SINV-2001`, type `Sales Invoice`) is now in a submitted state."
+      "final_text": "The previous run of procedure `safe-deopt-W1` failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). Following safe recovery guidelines, I first verified the current state of the target record using `read_open_items`. The record (`SINV-2001`, `Sales Invoice`) was still present and open, confirming the previous write had not committed. I then safely retried the `submit_linked_record` call with `operation_key='opB'`, which successfully submitted the record."
     },
     "prompt_tokens": 611,
-    "completion_tokens": 40,
+    "completion_tokens": 120,
     "cached_tokens": 0,
-    "wall_time_s": 1.1115447080228478
+    "wall_time_s": 1.6480222910176963
   },
   {
     "kind": "final",
-    "content": "The `submit_linked_record` operation has been successfully verified and completed. The target record (`SINV-2001`, type `Sales Invoice`) is now in a submitted state.",
+    "content": "The previous run of procedure `safe-deopt-W1` failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). Following safe recovery guidelines, I first verified the current state of the target record using `read_open_items`. The record (`SINV-2001`, `Sales Invoice`) was still present and open, confirming the previous write had not committed. I then safely retried the `submit_linked_record` call with `operation_key='opB'`, which successfully submitted the record.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

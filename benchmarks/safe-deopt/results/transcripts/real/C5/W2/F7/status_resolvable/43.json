@@ -57,7 +57,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8761837088968605
+    "wall_time_s": 1.2122878751251847
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.292015314102173e-06
+    "wall_time_s": 1.1791940778493881e-05
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7627230409998447
+    "wall_time_s": 1.8002611671108752
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.875038474798203e-06
+    "wall_time_s": 5.624955520033836e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 589,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7445492499973625
+    "wall_time_s": 1.0727427499368787
   },
   {
     "kind": "tool_call",
@@ -157,7 +157,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.125075742602348e-06
+    "wall_time_s": 2.708984538912773e-06
   },
   {
     "kind": "model_step",
@@ -168,7 +168,7 @@
     "prompt_tokens": 645,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.924779917113483
+    "wall_time_s": 1.5485283338930458
   },
   {
     "kind": "tool_call",
@@ -196,25 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.8542010113596916e-05
+    "wall_time_s": 1.5832949429750443e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'submit_allocation failed with no such allocation error despite verifying invoices and payments, requiring human intervention.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Submit allocation failed with 'no such allocation INV-001:PAY-001:250' after a mid-run timeout failure for operation_key='opB'. Manual inspection needed.\"})",
       "final_text": null
     },
     "prompt_tokens": 717,
-    "completion_tokens": 33,
+    "completion_tokens": 57,
     "cached_tokens": 0,
-    "wall_time_s": 0.9438554581720382
+    "wall_time_s": 1.1427458750549704
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_allocation failed with no such allocation error despite verifying invoices and payments, requiring human intervention."
+        "reason": "Submit allocation failed with 'no such allocation INV-001:PAY-001:250' after a mid-run timeout failure for operation_key='opB'. Manual inspection needed."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_allocation failed with no such allocation error despite verifying invoices and payments, requiring human intervention."
+        "reason": "Submit allocation failed with 'no such allocation INV-001:PAY-001:250' after a mid-run timeout failure for operation_key='opB'. Manual inspection needed."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.332993507385254e-06
+    "wall_time_s": 6.166985258460045e-06
   }
 ]

@@ -55,7 +55,7 @@
     "prompt_tokens": 434,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.4926333329640329
+    "wall_time_s": 0.8236267080064863
   },
   {
     "kind": "tool_call",
@@ -81,7 +81,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.033286727964878e-05
+    "wall_time_s": 2.533290535211563e-05
   },
   {
     "kind": "model_step",
@@ -92,7 +92,7 @@
     "prompt_tokens": 507,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.966217374894768
+    "wall_time_s": 0.9629134999122471
   },
   {
     "kind": "tool_call",
@@ -121,25 +121,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.8084032237529755e-05
+    "wall_time_s": 7.395888678729534e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Tool submit_linked_record failed with 'none' guarantee and retry was rejected. Cannot safely retry without a guarantee. Escalating for manual review.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record failed with tool_guarantee='none' and replay was rejected; unable to safely retry or proceed further without human intervention.\"})",
       "final_text": null
     },
     "prompt_tokens": 611,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9574816250242293
+    "wall_time_s": 1.7660386669449508
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Tool submit_linked_record failed with 'none' guarantee and retry was rejected. Cannot safely retry without a guarantee. Escalating for manual review."
+        "reason": "submit_linked_record failed with tool_guarantee='none' and replay was rejected; unable to safely retry or proceed further without human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -155,12 +155,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Tool submit_linked_record failed with 'none' guarantee and retry was rejected. Cannot safely retry without a guarantee. Escalating for manual review."
+        "reason": "submit_linked_record failed with tool_guarantee='none' and replay was rejected; unable to safely retry or proceed further without human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.2291049137711525e-05
+    "wall_time_s": 1.0750023648142815e-05
   }
 ]

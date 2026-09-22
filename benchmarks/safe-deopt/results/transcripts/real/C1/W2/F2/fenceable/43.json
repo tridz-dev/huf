@@ -26,7 +26,7 @@
     "prompt_tokens": 318,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8177067919168621
+    "wall_time_s": 2.4542710420209914
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.4999330788850784e-06
+    "wall_time_s": 3.7499703466892242e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 378,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8805610840208828
+    "wall_time_s": 1.0603732918389142
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.166985258460045e-06
+    "wall_time_s": 5.749985575675964e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'op_w2_001', 'payment': 'PAY-001', 'amount': 250, 'invoice': 'INV-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'payment': 'PAY-001', 'invoice': 'INV-001', 'operation_key': 'w2_task_key'})",
       "final_text": null
     },
     "prompt_tokens": 434,
-    "completion_tokens": 51,
+    "completion_tokens": 49,
     "cached_tokens": 0,
-    "wall_time_s": 0.8614897499792278
+    "wall_time_s": 1.263169249985367
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "operation_key": "op_w2_001",
-        "payment": "PAY-001",
         "amount": 250,
-        "invoice": "INV-001"
+        "payment": "PAY-001",
+        "invoice": "INV-001",
+        "operation_key": "w2_task_key"
       }
     },
     "prompt_tokens": 0,
@@ -124,31 +124,31 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op_w2_001', status='submitted')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='w2_task_key', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.945796586573124e-05
+    "wall_time_s": 1.9707949832081795e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'op_w2_001', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'ALLOC-0001', 'operation_key': 'w2_task_key'})",
       "final_text": null
     },
-    "prompt_tokens": 551,
-    "completion_tokens": 36,
+    "prompt_tokens": 547,
+    "completion_tokens": 34,
     "cached_tokens": 0,
-    "wall_time_s": 1.4391256670933217
+    "wall_time_s": 1.5574236658867449
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "op_w2_001",
-        "allocation": "ALLOC-0001"
+        "allocation": "ALLOC-0001",
+        "operation_key": "w2_task_key"
       }
     },
     "prompt_tokens": 0,
@@ -163,30 +163,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "timeout: no confirmation received for submit_allocation (operation_key='op_w2_001')"
+      "error": "timeout: no confirmation received for submit_allocation (operation_key='w2_task_key')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.0001447501126676798
+    "wall_time_s": 0.00015266705304384232
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'op_w2_001'})",
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'w2_task_key'})",
       "final_text": null
     },
-    "prompt_tokens": 623,
-    "completion_tokens": 25,
+    "prompt_tokens": 615,
+    "completion_tokens": 23,
     "cached_tokens": 0,
-    "wall_time_s": 0.9351925000082701
+    "wall_time_s": 1.2989777498878539
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "cancel_operation",
       "kwargs": {
-        "operation_key": "op_w2_001"
+        "operation_key": "w2_task_key"
       }
     },
     "prompt_tokens": 0,
@@ -205,25 +205,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.958128556609154e-06
+    "wall_time_s": 1.2125121429562569e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation timed out, and cancel operation returned false. Escalating to human for review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_allocation operation timed out or failed to confirm, and the operation could not be cancelled. Escalating to human support.'})",
       "final_text": null
     },
-    "prompt_tokens": 660,
-    "completion_tokens": 32,
+    "prompt_tokens": 650,
+    "completion_tokens": 40,
     "cached_tokens": 0,
-    "wall_time_s": 0.9928594999946654
+    "wall_time_s": 1.5761944998521358
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Submit allocation timed out, and cancel operation returned false. Escalating to human for review."
+        "reason": "The submit_allocation operation timed out or failed to confirm, and the operation could not be cancelled. Escalating to human support."
       }
     },
     "prompt_tokens": 0,
@@ -239,12 +239,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Submit allocation timed out, and cancel operation returned false. Escalating to human for review."
+        "reason": "The submit_allocation operation timed out or failed to confirm, and the operation could not be cancelled. Escalating to human support."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.041016265749931e-06
+    "wall_time_s": 4.792120307683945e-06
   }
 ]

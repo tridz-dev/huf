@@ -56,7 +56,7 @@
     "prompt_tokens": 495,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8929043328389525
+    "wall_time_s": 1.1187025420367718
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.292030543088913e-06
+    "wall_time_s": 1.1832918971776962e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 536,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.3723250420298427
+    "wall_time_s": 1.3318369169719517
   },
   {
     "kind": "tool_call",
@@ -119,18 +119,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.375135853886604e-06
+    "wall_time_s": 8.125090971589088e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 609,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.4673168750014156
+    "wall_time_s": 1.435048749903217
   },
   {
     "kind": "tool_call",
@@ -138,8 +138,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_name": "SINV-2001",
-        "operation_key": "opB",
-        "reference_type": "Sales Invoice"
+        "reference_type": "Sales Invoice",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9165920093655586e-05
+    "wall_time_s": 6.00004568696022e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` for submitting the linked record (`SINV-2001`, `Sales Invoice`) was verified as `NOT_COMMITTED` via `get_operation_status`. Following the safe recovery instructions, I verified the open items, confirmed the item state, and successfully re-submitted the linked record using the atomic tool call. The record status is now `submitted`."
+      "final_text": "The operation `submit_linked_record` with operation key `opB` initially timed out, but a check of the operation status confirmed that it was **NOT_COMMITTED**. \n\nFollowing the safety instructions:\n1. We verified the current state via `read_open_items` and confirmed the item was still open.\n2. We retried the atomic tool call `submit_linked_record` safely.\n3. The retry succeeded, returning `status: \"submitted\"` for `SINV-2001`."
     },
     "prompt_tokens": 711,
-    "completion_tokens": 81,
+    "completion_tokens": 112,
     "cached_tokens": 0,
-    "wall_time_s": 1.233787292148918
+    "wall_time_s": 2.7233302500098944
   },
   {
     "kind": "final",
-    "content": "The operation `opB` for submitting the linked record (`SINV-2001`, `Sales Invoice`) was verified as `NOT_COMMITTED` via `get_operation_status`. Following the safe recovery instructions, I verified the open items, confirmed the item state, and successfully re-submitted the linked record using the atomic tool call. The record status is now `submitted`.",
+    "content": "The operation `submit_linked_record` with operation key `opB` initially timed out, but a check of the operation status confirmed that it was **NOT_COMMITTED**. \n\nFollowing the safety instructions:\n1. We verified the current state via `read_open_items` and confirmed the item was still open.\n2. We retried the atomic tool call `submit_linked_record` safely.\n3. The retry succeeded, returning `status: \"submitted\"` for `SINV-2001`.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

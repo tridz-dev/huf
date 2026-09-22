@@ -34,7 +34,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8558586670551449
+    "wall_time_s": 2.0908685410395265
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.58306884765625e-06
+    "wall_time_s": 9.167008101940155e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 301,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7864655409939587
+    "wall_time_s": 1.5932136250194162
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1542113497853279e-05
+    "wall_time_s": 1.0250136256217957e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001 (250)', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 357,
-    "completion_tokens": 40,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.8498378749936819
+    "wall_time_s": 0.9441779169719666
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "PAY-001 -> INV-001 (250)",
+        "allocation": "PAY-001 -> INV-001",
         "operation_key": "opB"
       }
     },
@@ -136,25 +136,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.6292167603969574e-05
+    "wall_time_s": 3.4708064049482346e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_allocation call for operation_key='opB' was rejected with an unresolved-outcome write error, and tool guarantees do not permit retrying unconfirmed writes without escalation.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_allocation with operation_key='opB' was rejected with a replay rejection and no recovery guarantee.\"})",
       "final_text": null
     },
-    "prompt_tokens": 455,
-    "completion_tokens": 51,
+    "prompt_tokens": 450,
+    "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 1.5034855001140386
+    "wall_time_s": 2.053496750071645
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_allocation call for operation_key='opB' was rejected with an unresolved-outcome write error, and tool guarantees do not permit retrying unconfirmed writes without escalation."
+        "reason": "submit_allocation with operation_key='opB' was rejected with a replay rejection and no recovery guarantee."
       }
     },
     "prompt_tokens": 0,
@@ -170,12 +170,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_allocation call for operation_key='opB' was rejected with an unresolved-outcome write error, and tool guarantees do not permit retrying unconfirmed writes without escalation."
+        "reason": "submit_allocation with operation_key='opB' was rejected with a replay rejection and no recovery guarantee."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.292030543088913e-06
+    "wall_time_s": 6.791902706027031e-06
   }
 ]

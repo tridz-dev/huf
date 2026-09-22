@@ -35,7 +35,7 @@
     "prompt_tokens": 320,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9320427910424769
+    "wall_time_s": 0.8995597090106457
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.291083991527557e-06
+    "wall_time_s": 5.542067810893059e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 380,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9279087921604514
+    "wall_time_s": 0.9250744169112295
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.041955202817917e-06
+    "wall_time_s": 8.37491825222969e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 0.860735584050417
+    "wall_time_s": 0.8532333329785615
   },
   {
     "kind": "tool_call",
@@ -135,7 +135,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.333016350865364e-06
+    "wall_time_s": 1.0499963536858559e-05
   },
   {
     "kind": "model_step",
@@ -146,7 +146,7 @@
     "prompt_tokens": 478,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.8896103748120368
+    "wall_time_s": 1.2279562090989202
   },
   {
     "kind": "tool_call",
@@ -174,7 +174,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.537504769861698e-05
+    "wall_time_s": 2.804095856845379e-05
   },
   {
     "kind": "model_step",
@@ -185,7 +185,7 @@
     "prompt_tokens": 582,
     "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 0.8841035419609398
+    "wall_time_s": 1.070016749901697
   },
   {
     "kind": "tool_call",
@@ -211,22 +211,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.207971066236496e-06
+    "wall_time_s": 1.1083902791142464e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The payment allocation for invoice `INV-001` and payment `PAY-001` in the amount of 250 has been successfully submitted and confirmed (Status: `COMMITTED`, Allocation ID: `ALLOC-UNSAFE-0002`)."
+      "final_text": "The allocation of payment PAY-001 (amount 250) to invoice INV-001 has been successfully submitted and confirmed (operation status: COMMITTED)."
     },
     "prompt_tokens": 622,
-    "completion_tokens": 57,
+    "completion_tokens": 37,
     "cached_tokens": 0,
-    "wall_time_s": 1.152758042095229
+    "wall_time_s": 0.9900009999983013
   },
   {
     "kind": "final",
-    "content": "The payment allocation for invoice `INV-001` and payment `PAY-001` in the amount of 250 has been successfully submitted and confirmed (Status: `COMMITTED`, Allocation ID: `ALLOC-UNSAFE-0002`).",
+    "content": "The allocation of payment PAY-001 (amount 250) to invoice INV-001 has been successfully submitted and confirmed (operation status: COMMITTED).",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

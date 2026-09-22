@@ -65,7 +65,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8127583339810371
+    "wall_time_s": 1.4021322091575712
   },
   {
     "kind": "tool_call",
@@ -91,22 +91,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.665933713316917e-06
+    "wall_time_s": 8.790986612439156e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` for `submit_allocation` has been verified as successfully **COMMITTED** via `get_operation_status`. Following the safety recovery instructions, we do not blindly retry the write.\n\nThe mid-run procedure has completed its required steps."
+      "final_text": "The operation `opB` for `submit_allocation` has been verified as successfully **COMMITTED**. Following the recovery guidelines, I did not blindly retry the write and successfully checked the target record's state."
     },
     "prompt_tokens": 570,
-    "completion_tokens": 56,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.1728646669071168
+    "wall_time_s": 1.8542400838341564
   },
   {
     "kind": "final",
-    "content": "The operation `opB` for `submit_allocation` has been verified as successfully **COMMITTED** via `get_operation_status`. Following the safety recovery instructions, we do not blindly retry the write.\n\nThe mid-run procedure has completed its required steps.",
+    "content": "The operation `opB` for `submit_allocation` has been verified as successfully **COMMITTED**. Following the recovery guidelines, I did not blindly retry the write and successfully checked the target record's state.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

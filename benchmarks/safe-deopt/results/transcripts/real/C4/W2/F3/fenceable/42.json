@@ -35,7 +35,7 @@
     "prompt_tokens": 293,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.7698586250189692
+    "wall_time_s": 1.3508083750493824
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.70878978073597e-06
+    "wall_time_s": 8.499948307871819e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 324,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7855613750871271
+    "wall_time_s": 1.5181380829308182
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2167030945420265e-05
+    "wall_time_s": 5.9998128563165665e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 384,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.838503000093624
+    "wall_time_s": 0.8146246250253171
   },
   {
     "kind": "tool_call",
@@ -135,26 +135,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.500181138515472e-06
+    "wall_time_s": 5.292007699608803e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opC', 'allocation': 'INV-001:PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:250', 'operation_key': 'opC'})",
       "final_text": null
     },
     "prompt_tokens": 440,
-    "completion_tokens": 35,
+    "completion_tokens": 33,
     "cached_tokens": 0,
-    "wall_time_s": 1.5412504579871893
+    "wall_time_s": 1.0563057919498533
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "opC",
-        "allocation": "INV-001:PAY-001"
+        "allocation": "INV-001:250",
+        "operation_key": "opC"
       }
     },
     "prompt_tokens": 0,
@@ -169,30 +169,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such allocation INV-001:PAY-001'"
+      "error": "'no such allocation INV-001:250'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.295787610113621e-05
+    "wall_time_s": 2.591591328382492e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to complete allocation for W2 task due to unknown allocation format error (no such allocation INV-001:PAY-001) after operation timeout.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to complete the W2 task or allocate payment due to 'no such allocation INV-001:250' error and timeout on operation opB.\"})",
       "final_text": null
     },
-    "prompt_tokens": 504,
+    "prompt_tokens": 500,
     "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 1.020957333035767
+    "wall_time_s": 1.5869258330203593
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to complete allocation for W2 task due to unknown allocation format error (no such allocation INV-001:PAY-001) after operation timeout."
+        "reason": "Unable to complete the W2 task or allocate payment due to 'no such allocation INV-001:250' error and timeout on operation opB."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to complete allocation for W2 task due to unknown allocation format error (no such allocation INV-001:PAY-001) after operation timeout."
+        "reason": "Unable to complete the W2 task or allocate payment due to 'no such allocation INV-001:250' error and timeout on operation opB."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.4999330788850784e-06
+    "wall_time_s": 5.417037755250931e-06
   }
 ]

@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9725636248476803
+    "wall_time_s": 0.820350042078644
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1082971468567848e-05
+    "wall_time_s": 6.959075108170509e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8815060420893133
+    "wall_time_s": 1.0801369580440223
   },
   {
     "kind": "tool_call",
@@ -89,27 +89,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.125060513615608e-06
+    "wall_time_s": 8.415896445512772e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'W1', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'W1', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0407990419771522
+    "wall_time_s": 1.7988535829354078
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
+        "reference_name": "SINV-2001",
         "operation_key": "W1",
-        "reference_name": "SINV-2001"
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.266706183552742e-05
+    "wall_time_s": 0.00012237508781254292
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8325787498615682
+    "wall_time_s": 1.8953266250900924
   },
   {
     "kind": "tool_call",
@@ -166,25 +166,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.249888196587563e-06
+    "wall_time_s": 1.1833151802420616e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered an unknown operation status for W1 after submit_linked_record timeout; stopping to prevent duplicate submissions or inconsistent state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submission timed out and operation status is unknown; manual intervention needed to verify W1 completion.'})",
       "final_text": null
     },
     "prompt_tokens": 566,
-    "completion_tokens": 41,
+    "completion_tokens": 32,
     "cached_tokens": 0,
-    "wall_time_s": 1.0058897088747472
+    "wall_time_s": 1.2693833750672638
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered an unknown operation status for W1 after submit_linked_record timeout; stopping to prevent duplicate submissions or inconsistent state."
+        "reason": "Submission timed out and operation status is unknown; manual intervention needed to verify W1 completion."
       }
     },
     "prompt_tokens": 0,
@@ -200,12 +200,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered an unknown operation status for W1 after submit_linked_record timeout; stopping to prevent duplicate submissions or inconsistent state."
+        "reason": "Submission timed out and operation status is unknown; manual intervention needed to verify W1 completion."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.292007699608803e-06
+    "wall_time_s": 4.958128556609154e-06
   }
 ]

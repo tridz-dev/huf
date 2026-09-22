@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8775036248844117
+    "wall_time_s": 1.4712815419770777
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.0410010367631912e-06
+    "wall_time_s": 4.540896043181419e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.46603091689758
+    "wall_time_s": 1.9857826251536608
   },
   {
     "kind": "tool_call",
@@ -89,18 +89,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.083166226744652e-06
+    "wall_time_s": 8.082948625087738e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'W1', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'W1'})",
       "final_text": null
     },
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9616107088513672
+    "wall_time_s": 1.6741221249103546
   },
   {
     "kind": "tool_call",
@@ -108,8 +108,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_name": "SINV-2001",
-        "operation_key": "W1",
-        "reference_type": "Sales Invoice"
+        "reference_type": "Sales Invoice",
+        "operation_key": "W1"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.8042042180895805e-05
+    "wall_time_s": 0.0001456660684198141
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7676623750012368
+    "wall_time_s": 1.2107350418809801
   },
   {
     "kind": "tool_call",
@@ -166,28 +166,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.666189387440681e-06
+    "wall_time_s": 9.709037840366364e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_followup_todo', kwargs={'reference_name': 'SINV-2001', 'allocated_to': 'Billing Team', 'operation_key': 'W1', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='create_followup_todo', kwargs={'allocated_to': 'accounting', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'W1'})",
       "final_text": null
     },
     "prompt_tokens": 570,
-    "completion_tokens": 54,
+    "completion_tokens": 53,
     "cached_tokens": 0,
-    "wall_time_s": 0.9102221250068396
+    "wall_time_s": 1.8825093328487128
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_followup_todo",
       "kwargs": {
+        "allocated_to": "accounting",
+        "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001",
-        "allocated_to": "Billing Team",
-        "operation_key": "W1",
-        "reference_type": "Sales Invoice"
+        "operation_key": "W1"
       }
     },
     "prompt_tokens": 0,
@@ -201,30 +201,30 @@
       "tool_name": "create_followup_todo",
       "ok": true,
       "dispatched": true,
-      "result": "ToDo(name='TODO-0001', reference_type='Sales Invoice', reference_name='SINV-2001', allocated_to='Billing Team', operation_key='W1', description='')"
+      "result": "ToDo(name='TODO-0001', reference_type='Sales Invoice', reference_name='SINV-2001', allocated_to='accounting', operation_key='W1', description='')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.587501123547554e-05
+    "wall_time_s": 4.4958898797631264e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation W1 submission timed out repeatedly and could not be confirmed as committed, so a followup todo was created and the task is being escalated for manual review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation for W1 timed out and did not commit. Created a followup todo, but human intervention is needed to verify or complete the W1 task safely.'})",
       "final_text": null
     },
-    "prompt_tokens": 692,
-    "completion_tokens": 46,
+    "prompt_tokens": 690,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.8993921249639243
+    "wall_time_s": 1.0012078329455107
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The operation W1 submission timed out repeatedly and could not be confirmed as committed, so a followup todo was created and the task is being escalated for manual review."
+        "reason": "The submit_linked_record operation for W1 timed out and did not commit. Created a followup todo, but human intervention is needed to verify or complete the W1 task safely."
       }
     },
     "prompt_tokens": 0,
@@ -240,12 +240,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The operation W1 submission timed out repeatedly and could not be confirmed as committed, so a followup todo was created and the task is being escalated for manual review."
+        "reason": "The submit_linked_record operation for W1 timed out and did not commit. Created a followup todo, but human intervention is needed to verify or complete the W1 task safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.37488779425621e-06
+    "wall_time_s": 4.999805241823196e-06
   }
 ]

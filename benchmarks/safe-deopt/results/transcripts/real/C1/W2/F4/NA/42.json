@@ -26,7 +26,7 @@
     "prompt_tokens": 273,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9031877079978585
+    "wall_time_s": 1.870893832994625
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.832888513803482e-06
+    "wall_time_s": 6.458023563027382e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 333,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7681003329344094
+    "wall_time_s": 0.8972177910618484
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.0829105526208878e-06
+    "wall_time_s": 2.9997900128364563e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'invoice': 'INV-001', 'payment': 'PAY-001', 'amount': 250, 'operation_key': 'W2_TASK_KEY'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'op_w2_001', 'amount': 250, 'payment': 'PAY-001', 'invoice': 'INV-001'})",
       "final_text": null
     },
     "prompt_tokens": 389,
-    "completion_tokens": 49,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.9725331671070307
+    "wall_time_s": 1.1159822919871658
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "invoice": "INV-001",
-        "payment": "PAY-001",
+        "operation_key": "op_w2_001",
         "amount": 250,
-        "operation_key": "W2_TASK_KEY"
+        "payment": "PAY-001",
+        "invoice": "INV-001"
       }
     },
     "prompt_tokens": 0,
@@ -124,30 +124,30 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='W2_TASK_KEY', status='submitted')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op_w2_001', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.595914363861084e-05
+    "wall_time_s": 2.237502485513687e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'W2_TASK_KEY', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'op_w2_001', 'allocation': 'ALLOC-0001'})",
       "final_text": null
     },
-    "prompt_tokens": 502,
-    "completion_tokens": 34,
+    "prompt_tokens": 506,
+    "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.9474589170422405
+    "wall_time_s": 1.0569743330124766
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "W2_TASK_KEY",
+        "operation_key": "op_w2_001",
         "allocation": "ALLOC-0001"
       }
     },
@@ -163,29 +163,31 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "validation error at write B for submit_allocation (operation_key='W2_TASK_KEY'): target record changed concurrently before write B dispatched"
+      "error": "validation error at write B for submit_allocation (operation_key='op_w2_001'): target record changed concurrently before write B dispatched"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00015174993313848972
+    "wall_time_s": 0.0001699579879641533
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Concurrent modification conflict encountered when submitting allocation.'})",
       "final_text": null
     },
-    "prompt_tokens": 578,
-    "completion_tokens": 11,
+    "prompt_tokens": 586,
+    "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 0.7461323749739677
+    "wall_time_s": 1.0376499579288065
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
+      "tool_name": "escalate",
+      "kwargs": {
+        "reason": "Concurrent modification conflict encountered when submitting allocation."
+      }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
@@ -195,72 +197,17 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "list_invoices",
+      "tool_name": "escalate",
       "ok": true,
       "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
-      ]
+      "result": {
+        "escalated": true,
+        "reason": "Concurrent modification conflict encountered when submitting allocation."
+      }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.916947990655899e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 636,
-    "completion_tokens": 10,
-    "cached_tokens": 0,
-    "wall_time_s": 0.8228516248054802
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_payments",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_payments",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 7.707858458161354e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": null,
-      "final_text": "The W2 task has already been completed: invoice `INV-001` has an outstanding amount of `0`, and the payment has been successfully allocated."
-    },
-    "prompt_tokens": 692,
-    "completion_tokens": 33,
-    "cached_tokens": 0,
-    "wall_time_s": 0.9682337918784469
-  },
-  {
-    "kind": "final",
-    "content": "The W2 task has already been completed: invoice `INV-001` has an outstanding amount of `0`, and the payment has been successfully allocated.",
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
+    "wall_time_s": 5.749985575675964e-06
   }
 ]

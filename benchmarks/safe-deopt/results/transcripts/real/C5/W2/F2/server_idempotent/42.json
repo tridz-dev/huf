@@ -65,7 +65,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0925682501401752
+    "wall_time_s": 0.8625932498835027
   },
   {
     "kind": "tool_call",
@@ -91,7 +91,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.3749106377363205e-06
+    "wall_time_s": 8.37491825222969e-06
   },
   {
     "kind": "model_step",
@@ -100,9 +100,9 @@
       "final_text": null
     },
     "prompt_tokens": 571,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8744534160941839
+    "wall_time_s": 1.0536344998981804
   },
   {
     "kind": "tool_call",
@@ -128,7 +128,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.042180418968201e-06
+    "wall_time_s": 5.749985575675964e-06
   },
   {
     "kind": "model_step",
@@ -139,7 +139,7 @@
     "prompt_tokens": 629,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8464200419839472
+    "wall_time_s": 2.569757750025019
   },
   {
     "kind": "tool_call",
@@ -165,22 +165,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.458947271108627e-06
+    "wall_time_s": 2.040993422269821e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous `submit_allocation` operation (`opB`) timed out initially, but verification via `get_operation_status` confirmed that the operation successfully **COMMITTED**. Furthermore, checking the current state via `list_invoices` and `list_payments` shows the invoice has an outstanding amount of 0 and the payment allocation is properly accounted for. No further writes or retries are needed."
+      "final_text": "The write operation `submit_allocation` (operation key `opB`) has successfully committed, as verified by `get_operation_status`.\n\nHere is the current state of invoices and payments:\n- **Invoices**: `INV-001` (Company: Huf Retail Pvt Ltd, Customer: CUST-1, Outstanding Amount: 0)\n- **Payments**: `PAY-001` (Amount: 250, Company: Huf Retail Pvt Ltd, Customer: CUST-1)\n\nSince the operation successfully committed and the allocation is reflected, no further retry is necessary."
     },
     "prompt_tokens": 685,
-    "completion_tokens": 83,
+    "completion_tokens": 128,
     "cached_tokens": 0,
-    "wall_time_s": 1.125398457981646
+    "wall_time_s": 2.639263875083998
   },
   {
     "kind": "final",
-    "content": "The previous `submit_allocation` operation (`opB`) timed out initially, but verification via `get_operation_status` confirmed that the operation successfully **COMMITTED**. Furthermore, checking the current state via `list_invoices` and `list_payments` shows the invoice has an outstanding amount of 0 and the payment allocation is properly accounted for. No further writes or retries are needed.",
+    "content": "The write operation `submit_allocation` (operation key `opB`) has successfully committed, as verified by `get_operation_status`.\n\nHere is the current state of invoices and payments:\n- **Invoices**: `INV-001` (Company: Huf Retail Pvt Ltd, Customer: CUST-1, Outstanding Amount: 0)\n- **Payments**: `PAY-001` (Amount: 250, Company: Huf Retail Pvt Ltd, Customer: CUST-1)\n\nSince the operation successfully committed and the allocation is reflected, no further retry is necessary.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

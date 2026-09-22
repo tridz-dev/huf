@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.703865084098652
+    "wall_time_s": 1.2193099579308182
   },
   {
     "kind": "tool_call",
@@ -59,7 +59,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0292045772075653e-05
+    "wall_time_s": 9.375158697366714e-06
   },
   {
     "kind": "model_step",
@@ -70,7 +70,7 @@
     "prompt_tokens": 314,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8645125420298427
+    "wall_time_s": 1.4071102088782936
   },
   {
     "kind": "tool_call",
@@ -99,25 +99,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.5209039449691772e-05
+    "wall_time_s": 2.5499844923615456e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_linked_record operation with operation_key='opB' encountered a timeout and the system rejected a replay because the tool declares no recovery guarantee. Human intervention is required to verify the transaction status and safely resolve the W1 task.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record for operation_key='opB' encountered a timeout and the system rejected replay due to no recovery guarantee. Human intervention is required to safely verify and resolve the transaction state.\"})",
       "final_text": null
     },
     "prompt_tokens": 418,
-    "completion_tokens": 63,
+    "completion_tokens": 54,
     "cached_tokens": 0,
-    "wall_time_s": 0.9867193340323865
+    "wall_time_s": 1.7110119580756873
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation with operation_key='opB' encountered a timeout and the system rejected a replay because the tool declares no recovery guarantee. Human intervention is required to verify the transaction status and safely resolve the W1 task."
+        "reason": "submit_linked_record for operation_key='opB' encountered a timeout and the system rejected replay due to no recovery guarantee. Human intervention is required to safely verify and resolve the transaction state."
       }
     },
     "prompt_tokens": 0,
@@ -133,12 +133,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation with operation_key='opB' encountered a timeout and the system rejected a replay because the tool declares no recovery guarantee. Human intervention is required to verify the transaction status and safely resolve the W1 task."
+        "reason": "submit_linked_record for operation_key='opB' encountered a timeout and the system rejected replay due to no recovery guarantee. Human intervention is required to safely verify and resolve the transaction state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.875008016824722e-06
+    "wall_time_s": 5.499925464391708e-06
   }
 ]

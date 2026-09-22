@@ -65,7 +65,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9312441248912364
+    "wall_time_s": 1.0295513339806348
   },
   {
     "kind": "tool_call",
@@ -91,96 +91,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.0407834351062775e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 571,
-    "completion_tokens": 11,
-    "cached_tokens": 0,
-    "wall_time_s": 0.9471281659789383
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_invoices",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 6.791902706027031e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 629,
-    "completion_tokens": 10,
-    "cached_tokens": 0,
-    "wall_time_s": 0.8672640831209719
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_payments",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_payments",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 8.58306884765625e-06
+    "wall_time_s": 8.417060598731041e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` (associated with `submit_allocation`) has been verified via `get_operation_status` and is confirmed as **COMMITTED**. \n\nFurthermore, checking the current system state via `list_invoices` and `list_payments` confirms that the invoices and payments are fully reconciled and recorded. No further retries or write actions are necessary."
+      "final_text": "The operation `opB` for `submit_allocation` has been verified and its status is `COMMITTED`. Therefore, no retry or further submission is necessary."
     },
-    "prompt_tokens": 685,
-    "completion_tokens": 78,
+    "prompt_tokens": 571,
+    "completion_tokens": 34,
     "cached_tokens": 0,
-    "wall_time_s": 1.0550955419894308
+    "wall_time_s": 1.4863005839288235
   },
   {
     "kind": "final",
-    "content": "The operation `opB` (associated with `submit_allocation`) has been verified via `get_operation_status` and is confirmed as **COMMITTED**. \n\nFurthermore, checking the current system state via `list_invoices` and `list_payments` confirms that the invoices and payments are fully reconciled and recorded. No further retries or write actions are necessary.",
+    "content": "The operation `opB` for `submit_allocation` has been verified and its status is `COMMITTED`. Therefore, no retry or further submission is necessary.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

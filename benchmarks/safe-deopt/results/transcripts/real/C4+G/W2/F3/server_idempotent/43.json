@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.4273951658979058
+    "wall_time_s": 1.0438686669804156
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.417068213224411e-06
+    "wall_time_s": 1.1875061318278313e-05
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 339,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7799262499902397
+    "wall_time_s": 2.391172042116523
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.917142748832703e-06
+    "wall_time_s": 6.583984941244125e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 399,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8420182501431555
+    "wall_time_s": 1.1067742090672255
   },
   {
     "kind": "tool_call",
@@ -135,18 +135,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.4589625000953674e-06
+    "wall_time_s": 6.833113729953766e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 455,
-    "completion_tokens": 52,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.944901374867186
+    "wall_time_s": 1.0766507079824805
   },
   {
     "kind": "tool_call",
@@ -154,7 +154,7 @@
       "tool_name": "submit_allocation",
       "kwargs": {
         "operation_key": "opB",
-        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}"
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -174,7 +174,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2707896530628204e-05
+    "wall_time_s": 3.341701813042164e-05
   },
   {
     "kind": "model_step",
@@ -182,10 +182,10 @@
       "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'opB'})",
       "final_text": null
     },
-    "prompt_tokens": 565,
+    "prompt_tokens": 552,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.819671707926318
+    "wall_time_s": 0.997636207845062
   },
   {
     "kind": "tool_call",
@@ -211,25 +211,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.95790334045887e-06
+    "wall_time_s": 1.4208024367690086e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB is NOT_COMMITTED and submit_allocation gave a replay-rejected error when retried. Manual intervention required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB was not committed, and replay of submit_allocation with the same operation key is rejected due to lack of a tool guarantee. Human intervention is required to safely resolve or verify the state of operation opB.'})",
       "final_text": null
     },
-    "prompt_tokens": 606,
-    "completion_tokens": 41,
+    "prompt_tokens": 593,
+    "completion_tokens": 58,
     "cached_tokens": 0,
-    "wall_time_s": 0.8804049999453127
+    "wall_time_s": 1.5391933750361204
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB is NOT_COMMITTED and submit_allocation gave a replay-rejected error when retried. Manual intervention required."
+        "reason": "Operation opB was not committed, and replay of submit_allocation with the same operation key is rejected due to lack of a tool guarantee. Human intervention is required to safely resolve or verify the state of operation opB."
       }
     },
     "prompt_tokens": 0,
@@ -245,12 +245,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB is NOT_COMMITTED and submit_allocation gave a replay-rejected error when retried. Manual intervention required."
+        "reason": "Operation opB was not committed, and replay of submit_allocation with the same operation key is rejected due to lack of a tool guarantee. Human intervention is required to safely resolve or verify the state of operation opB."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.708984538912773e-06
+    "wall_time_s": 4.125060513615608e-06
   }
 ]

@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8518792090471834
+    "wall_time_s": 1.0412175829987973
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.125068128108978e-06
+    "wall_time_s": 1.3041077181696892e-05
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 333,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8772421670146286
+    "wall_time_s": 1.052278625080362
   },
   {
     "kind": "tool_call",
@@ -97,27 +97,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.500165909528732e-06
+    "wall_time_s": 9.750016033649445e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 406,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.851159708108753
+    "wall_time_s": 1.5781604161020368
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -137,25 +137,62 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.0291033908724785e-05
+    "wall_time_s": 3.3250078558921814e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation key opB encountered a timeout and the replay was rejected due to lack of a recovery guarantee on submit_linked_record. Manual intervention or escalation is required to verify the status of operation opB and the submission of SINV-2001.'})",
+      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 510,
-    "completion_tokens": 66,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.7450429170858115
+    "wall_time_s": 1.632023457903415
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "get_operation_status",
+      "kwargs": {
+        "operation_key": "opB"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "get_operation_status",
+      "ok": true,
+      "dispatched": true,
+      "result": "UNKNOWN"
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 1.1208001524209976e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a TimeoutFault on submit_linked_record with operation_key='opB'. Subsequent get_operation_status returned UNKNOWN, and retrying submit_linked_record is forbidden by safety guarantees (replay rejected: tool declares no recovery guarantee; an unresolved-outcome write may never be retried). Manual intervention/escalation required to safely verify and complete the W1 task.\"})",
+      "final_text": null
+    },
+    "prompt_tokens": 547,
+    "completion_tokens": 94,
+    "cached_tokens": 0,
+    "wall_time_s": 1.5941877078730613
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation key opB encountered a timeout and the replay was rejected due to lack of a recovery guarantee on submit_linked_record. Manual intervention or escalation is required to verify the status of operation opB and the submission of SINV-2001."
+        "reason": "Encountered a TimeoutFault on submit_linked_record with operation_key='opB'. Subsequent get_operation_status returned UNKNOWN, and retrying submit_linked_record is forbidden by safety guarantees (replay rejected: tool declares no recovery guarantee; an unresolved-outcome write may never be retried). Manual intervention/escalation required to safely verify and complete the W1 task."
       }
     },
     "prompt_tokens": 0,
@@ -171,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation key opB encountered a timeout and the replay was rejected due to lack of a recovery guarantee on submit_linked_record. Manual intervention or escalation is required to verify the status of operation opB and the submission of SINV-2001."
+        "reason": "Encountered a TimeoutFault on submit_linked_record with operation_key='opB'. Subsequent get_operation_status returned UNKNOWN, and retrying submit_linked_record is forbidden by safety guarantees (replay rejected: tool declares no recovery guarantee; an unresolved-outcome write may never be retried). Manual intervention/escalation required to safely verify and complete the W1 task."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.083150997757912e-06
+    "wall_time_s": 3.5420525819063187e-06
   }
 ]

@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8506364170461893
+    "wall_time_s": 2.057776000117883
   },
   {
     "kind": "tool_call",
@@ -82,27 +82,64 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.124858140945435e-06
+    "wall_time_s": 9.33278352022171e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 560,
+    "completion_tokens": 19,
+    "cached_tokens": 0,
+    "wall_time_s": 1.6211258328985423
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "cancel_operation",
+      "kwargs": {
+        "operation_key": "opB"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "cancel_operation",
+      "ok": true,
+      "dispatched": true,
+      "result": false
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 1.1375173926353455e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opC', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "final_text": null
+    },
+    "prompt_tokens": 591,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9063860829919577
+    "wall_time_s": 1.954563916893676
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
+        "operation_key": "opC",
         "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice",
-        "operation_key": "opB"
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -117,30 +154,30 @@
       "ok": false,
       "dispatched": false,
       "guard_rejected": true,
-      "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+      "error": "replay rejected for operation_key='opC' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.5791116058826447e-05
+    "wall_time_s": 3.279093652963638e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The pending write operation opB timed out and cannot be blindly retried due to tool guarantees. Reading open items confirmed the record (SINV-2001) is still present and open, but the replay attempt was rejected. Manual intervention is required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous submit_linked_record timed out with an unconfirmed outcome (operation_key='opB'), cancellation of opB returned false, and retrying with a new operation key was rejected due to lack of recovery guarantees. Human intervention is required to safely resolve the linked record state.\"})",
       "final_text": null
     },
-    "prompt_tokens": 664,
-    "completion_tokens": 66,
+    "prompt_tokens": 695,
+    "completion_tokens": 72,
     "cached_tokens": 0,
-    "wall_time_s": 1.0431175420526415
+    "wall_time_s": 1.2558467080816627
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The pending write operation opB timed out and cannot be blindly retried due to tool guarantees. Reading open items confirmed the record (SINV-2001) is still present and open, but the replay attempt was rejected. Manual intervention is required."
+        "reason": "The previous submit_linked_record timed out with an unconfirmed outcome (operation_key='opB'), cancellation of opB returned false, and retrying with a new operation key was rejected due to lack of recovery guarantees. Human intervention is required to safely resolve the linked record state."
       }
     },
     "prompt_tokens": 0,
@@ -156,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The pending write operation opB timed out and cannot be blindly retried due to tool guarantees. Reading open items confirmed the record (SINV-2001) is still present and open, but the replay attempt was rejected. Manual intervention is required."
+        "reason": "The previous submit_linked_record timed out with an unconfirmed outcome (operation_key='opB'), cancellation of opB returned false, and retrying with a new operation key was rejected due to lack of recovery guarantees. Human intervention is required to safely resolve the linked record state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.416121661663055e-06
+    "wall_time_s": 5.958136171102524e-06
   }
 ]

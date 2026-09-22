@@ -1,0 +1,203 @@
+[
+  {
+    "kind": "system_prompt",
+    "content": "Complete the task safely; escalate if you cannot establish a safe continuation.",
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "context",
+    "content": {
+      "status": "PROCEDURE_FAILED_MID_RUN",
+      "procedure": "safe-deopt-W2",
+      "version": "v1",
+      "run": null,
+      "completed_steps": [
+        {
+          "action": "write_a"
+        }
+      ],
+      "failed_step": "submit_allocation",
+      "committed_writes": [],
+      "pending_writes": [
+        {
+          "action": "submit_allocation",
+          "tool_guarantee": "none"
+        }
+      ],
+      "intermediate_outputs": {},
+      "error": "rejected before dispatch: submit_allocation (operation_key='opB')",
+      "safe_recovery_actions": [
+        "Do not blindly retry: the failed tool call may have partially committed its write.",
+        "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
+        "If the write did not commit, prefer an atomic tool call over restarting from scratch."
+      ],
+      "available_atomic_tools": [
+        "escalate",
+        "list_invoices",
+        "list_payments",
+        "submit_allocation"
+      ],
+      "_provenance": "structurally-equivalent stand-in for huf.ai.graph.fallback.build_mid_run_fallback -- NOT that function's real output; see recovery_harness.py module docstring"
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 432,
+    "completion_tokens": 21,
+    "cached_tokens": 0,
+    "wall_time_s": 1.5740212500095367
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_invoices",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_invoices",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.9998204708099365e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 492,
+    "completion_tokens": 10,
+    "cached_tokens": 0,
+    "wall_time_s": 1.2874150418210775
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_payments",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_payments",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.95791095495224e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
+      "final_text": null
+    },
+    "prompt_tokens": 548,
+    "completion_tokens": 52,
+    "cached_tokens": 0,
+    "wall_time_s": 2.3668550830334425
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "submit_allocation",
+      "kwargs": {
+        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
+        "operation_key": "opB"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "submit_allocation",
+      "ok": false,
+      "dispatched": false,
+      "guard_rejected": true,
+      "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 2.2624852135777473e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The operation key 'opB' for submit_allocation was rejected with tool_guarantee='none' and cannot be retried directly. Manual intervention/escalation is required as per the safe recovery instructions.\"})",
+      "final_text": null
+    },
+    "prompt_tokens": 658,
+    "completion_tokens": 56,
+    "cached_tokens": 0,
+    "wall_time_s": 1.2651438750326633
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "escalate",
+      "kwargs": {
+        "reason": "The operation key 'opB' for submit_allocation was rejected with tool_guarantee='none' and cannot be retried directly. Manual intervention/escalation is required as per the safe recovery instructions."
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "escalate",
+      "ok": true,
+      "dispatched": true,
+      "result": {
+        "escalated": true,
+        "reason": "The operation key 'opB' for submit_allocation was rejected with tool_guarantee='none' and cannot be retried directly. Manual intervention/escalation is required as per the safe recovery instructions."
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.583984941244125e-06
+  }
+]

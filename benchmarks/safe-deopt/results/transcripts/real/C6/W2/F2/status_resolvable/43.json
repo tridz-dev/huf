@@ -65,7 +65,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.832074583042413
+    "wall_time_s": 1.1836880000773817
   },
   {
     "kind": "tool_call",
@@ -91,22 +91,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.875015631318092e-06
+    "wall_time_s": 9.208917617797852e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous write operation `submit_allocation` (operation_key: `opB`) has successfully committed, as confirmed by checking its operation status (`COMMITTED`). Therefore, no retry or further submission is necessary."
+      "final_text": "The operation `opB` for `submit_allocation` has successfully committed. No retry is necessary."
     },
     "prompt_tokens": 570,
-    "completion_tokens": 44,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.294047832954675
+    "wall_time_s": 1.918288208078593
   },
   {
     "kind": "final",
-    "content": "The previous write operation `submit_allocation` (operation_key: `opB`) has successfully committed, as confirmed by checking its operation status (`COMMITTED`). Therefore, no retry or further submission is necessary.",
+    "content": "The operation `opB` for `submit_allocation` has successfully committed. No retry is necessary.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

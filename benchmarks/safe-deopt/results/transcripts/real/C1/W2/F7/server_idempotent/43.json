@@ -26,7 +26,7 @@
     "prompt_tokens": 321,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.948417792096734
+    "wall_time_s": 1.0808904999867082
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.20818105340004e-06
+    "wall_time_s": 7.709022611379623e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 381,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8306287499144673
+    "wall_time_s": 0.9549513328820467
   },
   {
     "kind": "tool_call",
@@ -89,18 +89,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.250105798244476e-06
+    "wall_time_s": 7.542083039879799e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'operation_key': 'op-w2-001', 'invoice': 'INV-001', 'amount': 250})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'operation_key': 'op-w2-001', 'amount': 250, 'invoice': 'INV-001'})",
       "final_text": null
     },
     "prompt_tokens": 437,
     "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.9224552079103887
+    "wall_time_s": 0.9607994579710066
   },
   {
     "kind": "tool_call",
@@ -109,8 +109,8 @@
       "kwargs": {
         "payment": "PAY-001",
         "operation_key": "op-w2-001",
-        "invoice": "INV-001",
-        "amount": 250
+        "amount": 250,
+        "invoice": "INV-001"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.929195761680603e-05
+    "wall_time_s": 1.9750092178583145e-05
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 554,
     "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.9929566669743508
+    "wall_time_s": 0.8922866659704596
   },
   {
     "kind": "tool_call",
@@ -168,7 +168,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00014062481932342052
+    "wall_time_s": 0.00019029201939702034
   },
   {
     "kind": "model_step",
@@ -179,7 +179,7 @@
     "prompt_tokens": 626,
     "completion_tokens": 27,
     "cached_tokens": 0,
-    "wall_time_s": 0.8249648748897016
+    "wall_time_s": 2.285899667069316
   },
   {
     "kind": "tool_call",
@@ -205,22 +205,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.154094934463501e-05
+    "wall_time_s": 1.0584015399217606e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The W2 task has been completed successfully from scratch. Payment `PAY-001` (250) has been fully allocated and submitted against invoice `INV-001` (250), and the operation status is confirmed as `COMMITTED`."
+      "final_text": "The W2 task has been completed successfully from scratch.\n\n**Summary of actions:**\n1. Listed invoices and found invoice `INV-001` with an outstanding amount of 250 for customer `CUST-1` (Huf Retail Pvt Ltd).\n2. Listed payments and found payment `PAY-001` for the same customer and amount (250).\n3. Created an allocation linking payment `PAY-001` to invoice `INV-001` for the full amount (Allocation: `ALLOC-0001`, Operation Key: `op-w2-001`).\n4. Submitted the allocation and verified that the operation status is `COMMITTED`."
     },
     "prompt_tokens": 671,
-    "completion_tokens": 56,
+    "completion_tokens": 152,
     "cached_tokens": 0,
-    "wall_time_s": 1.0050171660259366
+    "wall_time_s": 1.213912250008434
   },
   {
     "kind": "final",
-    "content": "The W2 task has been completed successfully from scratch. Payment `PAY-001` (250) has been fully allocated and submitted against invoice `INV-001` (250), and the operation status is confirmed as `COMMITTED`.",
+    "content": "The W2 task has been completed successfully from scratch.\n\n**Summary of actions:**\n1. Listed invoices and found invoice `INV-001` with an outstanding amount of 250 for customer `CUST-1` (Huf Retail Pvt Ltd).\n2. Listed payments and found payment `PAY-001` for the same customer and amount (250).\n3. Created an allocation linking payment `PAY-001` to invoice `INV-001` for the full amount (Allocation: `ALLOC-0001`, Operation Key: `op-w2-001`).\n4. Submitted the allocation and verified that the operation status is `COMMITTED`.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

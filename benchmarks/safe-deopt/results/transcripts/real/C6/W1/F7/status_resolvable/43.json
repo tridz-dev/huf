@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.1536136670038104
+    "wall_time_s": 1.7374016251415014
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2458069249987602e-05
+    "wall_time_s": 1.2667151167988777e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8957837498746812
+    "wall_time_s": 1.752695499919355
   },
   {
     "kind": "tool_call",
@@ -119,26 +119,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.458015948534012e-06
+    "wall_time_s": 8.790986612439156e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 604,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9088922501541674
+    "wall_time_s": 2.600861209211871
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
         "reference_name": "SINV-2001",
+        "operation_key": "opB",
         "reference_type": "Sales Invoice"
       }
     },
@@ -159,25 +159,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.7040874809026718e-05
+    "wall_time_s": 3.3207936212420464e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out and its status is UNKNOWN, and retrying submit_linked_record with the same operation key was rejected due to lack of a tool guarantee. Manual verification and resolution required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB failed with timeout and its status is UNKNOWN. Re-submitting the same operation key with tool_guarantee=none is rejected by policy, requiring human intervention to resolve the linked record status safely.'})",
       "final_text": null
     },
     "prompt_tokens": 708,
-    "completion_tokens": 55,
+    "completion_tokens": 58,
     "cached_tokens": 0,
-    "wall_time_s": 1.0168162088375539
+    "wall_time_s": 1.9666603340301663
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timed out and its status is UNKNOWN, and retrying submit_linked_record with the same operation key was rejected due to lack of a tool guarantee. Manual verification and resolution required."
+        "reason": "Operation opB failed with timeout and its status is UNKNOWN. Re-submitting the same operation key with tool_guarantee=none is rejected by policy, requiring human intervention to resolve the linked record status safely."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timed out and its status is UNKNOWN, and retrying submit_linked_record with the same operation key was rejected due to lack of a tool guarantee. Manual verification and resolution required."
+        "reason": "Operation opB failed with timeout and its status is UNKNOWN. Re-submitting the same operation key with tool_guarantee=none is rejected by policy, requiring human intervention to resolve the linked record status safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.750008419156075e-06
+    "wall_time_s": 6.084097549319267e-06
   }
 ]

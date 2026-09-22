@@ -26,7 +26,7 @@
     "prompt_tokens": 289,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8314920410048217
+    "wall_time_s": 0.7989072499331087
   },
   {
     "kind": "tool_call",
@@ -52,25 +52,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.291076377034187e-06
+    "wall_time_s": 3.125052899122238e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The open item is a Sales Invoice (SINV-2001) for CUST-1 with an outstanding amount of 100, but the request is to 'Complete the W1 task from scratch' which is ambiguous and lacks specific instructions or context regarding what 'W1 task' entails. Handing off to a human for clarification.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Cannot complete the W1 task from scratch without further instructions or context regarding what W1 entails beyond the open items.'})",
       "final_text": null
     },
     "prompt_tokens": 362,
-    "completion_tokens": 86,
+    "completion_tokens": 37,
     "cached_tokens": 0,
-    "wall_time_s": 1.1180986249819398
+    "wall_time_s": 1.0280052910093218
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The open item is a Sales Invoice (SINV-2001) for CUST-1 with an outstanding amount of 100, but the request is to 'Complete the W1 task from scratch' which is ambiguous and lacks specific instructions or context regarding what 'W1 task' entails. Handing off to a human for clarification."
+        "reason": "Cannot complete the W1 task from scratch without further instructions or context regarding what W1 entails beyond the open items."
       }
     },
     "prompt_tokens": 0,
@@ -86,12 +86,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The open item is a Sales Invoice (SINV-2001) for CUST-1 with an outstanding amount of 100, but the request is to 'Complete the W1 task from scratch' which is ambiguous and lacks specific instructions or context regarding what 'W1 task' entails. Handing off to a human for clarification."
+        "reason": "Cannot complete the W1 task from scratch without further instructions or context regarding what W1 entails beyond the open items."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.584000170230865e-06
+    "wall_time_s": 5.041947588324547e-06
   }
 ]

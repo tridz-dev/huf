@@ -56,7 +56,7 @@
     "prompt_tokens": 495,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9027566669974476
+    "wall_time_s": 1.3236451249103993
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.8167076632380486e-05
+    "wall_time_s": 1.4041783288121223e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9217784591019154
+    "wall_time_s": 0.8281824169680476
   },
   {
     "kind": "tool_call",
@@ -119,7 +119,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1833151802420616e-05
+    "wall_time_s": 4.749977961182594e-06
   },
   {
     "kind": "model_step",
@@ -130,7 +130,7 @@
     "prompt_tokens": 605,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8354101669974625
+    "wall_time_s": 2.600266250083223
   },
   {
     "kind": "tool_call",
@@ -159,62 +159,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.895800232887268e-05
+    "wall_time_s": 3.0374852940440178e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB status is UNKNOWN and replay of submit_linked_record was rejected due to lack of tool guarantee. Escalating for human intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 709,
-    "completion_tokens": 21,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9808693749364465
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "get_operation_status",
-      "kwargs": {
-        "operation_key": "opB"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "get_operation_status",
-      "ok": true,
-      "dispatched": true,
-      "result": "UNKNOWN"
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 1.737498678267002e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB status is UNKNOWN after timeout, and the tool guarantee disallows blind retry while read_open_items still lists SINV-2001 as open. Human intervention required to resolve operation state.'})",
-      "final_text": null
-    },
-    "prompt_tokens": 746,
-    "completion_tokens": 58,
-    "cached_tokens": 0,
-    "wall_time_s": 1.0316218750085682
+    "wall_time_s": 2.3387346661183983
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB status is UNKNOWN after timeout, and the tool guarantee disallows blind retry while read_open_items still lists SINV-2001 as open. Human intervention required to resolve operation state."
+        "reason": "Operation opB status is UNKNOWN and replay of submit_linked_record was rejected due to lack of tool guarantee. Escalating for human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB status is UNKNOWN after timeout, and the tool guarantee disallows blind retry while read_open_items still lists SINV-2001 as open. Human intervention required to resolve operation state."
+        "reason": "Operation opB status is UNKNOWN and replay of submit_linked_record was rejected due to lack of tool guarantee. Escalating for human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.3749106377363205e-06
+    "wall_time_s": 2.2498425096273422e-06
   }
 ]

@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.771731625078246
+    "wall_time_s": 1.2941661248914897
   },
   {
     "kind": "tool_call",
@@ -61,44 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0415911674499512e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 335,
-    "completion_tokens": 11,
-    "cached_tokens": 0,
-    "wall_time_s": 0.7686903330031782
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_invoices",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 9.041046723723412e-06
+    "wall_time_s": 1.1499971151351929e-05
   },
   {
     "kind": "model_step",
@@ -106,10 +69,10 @@
       "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
       "final_text": null
     },
-    "prompt_tokens": 395,
+    "prompt_tokens": 335,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.888526750029996
+    "wall_time_s": 1.6460578329861164
   },
   {
     "kind": "tool_call",
@@ -135,7 +98,44 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.333008736371994e-06
+    "wall_time_s": 4.791188985109329e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 391,
+    "completion_tokens": 11,
+    "cached_tokens": 0,
+    "wall_time_s": 0.9656462499406189
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_invoices",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_invoices",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.542075425386429e-06
   },
   {
     "kind": "model_step",
@@ -146,7 +146,7 @@
     "prompt_tokens": 451,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9360402920283377
+    "wall_time_s": 0.8750794171355665
   },
   {
     "kind": "tool_call",
@@ -174,7 +174,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.6958918422460556e-05
+    "wall_time_s": 3.7250109016895294e-05
   },
   {
     "kind": "model_step",
@@ -185,7 +185,7 @@
     "prompt_tokens": 548,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8858964170794934
+    "wall_time_s": 1.2230840418487787
   },
   {
     "kind": "tool_call",
@@ -211,25 +211,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.8666964024305344e-05
+    "wall_time_s": 1.6458099707961082e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'submit_allocation timed out under operation_key opB, status is UNKNOWN, and replay is rejected because the tool declares no recovery guarantee.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB had a timeout and submit_allocation is rejected on retry due to tool guarantee rules (unresolved-outcome write). Manual check/escalation needed to verify if the allocation went through or if it needs manual intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 585,
-    "completion_tokens": 43,
+    "completion_tokens": 60,
     "cached_tokens": 0,
-    "wall_time_s": 0.9656974580138922
+    "wall_time_s": 1.5708059170283377
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_allocation timed out under operation_key opB, status is UNKNOWN, and replay is rejected because the tool declares no recovery guarantee."
+        "reason": "Operation opB had a timeout and submit_allocation is rejected on retry due to tool guarantee rules (unresolved-outcome write). Manual check/escalation needed to verify if the allocation went through or if it needs manual intervention."
       }
     },
     "prompt_tokens": 0,
@@ -245,12 +245,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_allocation timed out under operation_key opB, status is UNKNOWN, and replay is rejected because the tool declares no recovery guarantee."
+        "reason": "Operation opB had a timeout and submit_allocation is rejected on retry due to tool guarantee rules (unresolved-outcome write). Manual check/escalation needed to verify if the allocation went through or if it needs manual intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.1660615503787994e-06
+    "wall_time_s": 6.332993507385254e-06
   }
 ]

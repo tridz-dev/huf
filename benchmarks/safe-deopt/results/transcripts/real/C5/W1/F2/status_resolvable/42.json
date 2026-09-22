@@ -64,7 +64,7 @@
     "prompt_tokens": 537,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8764122920110822
+    "wall_time_s": 2.8220919580198824
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.0209001377224922e-05
+    "wall_time_s": 9.208917617797852e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 576,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.0651212090160698
+    "wall_time_s": 3.511524874949828
   },
   {
     "kind": "tool_call",
@@ -125,22 +125,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.417068213224411e-06
+    "wall_time_s": 6.6659413278102875e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous operation (`submit_linked_record` with `operation_key='opB'`) timed out during confirmation, but a status check confirms that the operation successfully **COMMITTED**. Furthermore, reading the open items shows no remaining pending items.\n\nEverything has been safely resolved and committed. No further retry or escalation is necessary."
+      "final_text": "The operation with key `opB` (associated with `submit_linked_record`) has been successfully verified as **COMMITTED**. A read of open items indicates no remaining open items or pending actions required for this run."
     },
     "prompt_tokens": 601,
-    "completion_tokens": 68,
+    "completion_tokens": 46,
     "cached_tokens": 0,
-    "wall_time_s": 1.133836125023663
+    "wall_time_s": 3.0683354169595987
   },
   {
     "kind": "final",
-    "content": "The previous operation (`submit_linked_record` with `operation_key='opB'`) timed out during confirmation, but a status check confirms that the operation successfully **COMMITTED**. Furthermore, reading the open items shows no remaining pending items.\n\nEverything has been safely resolved and committed. No further retry or escalation is necessary.",
+    "content": "The operation with key `opB` (associated with `submit_linked_record`) has been successfully verified as **COMMITTED**. A read of open items indicates no remaining open items or pending actions required for this run.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

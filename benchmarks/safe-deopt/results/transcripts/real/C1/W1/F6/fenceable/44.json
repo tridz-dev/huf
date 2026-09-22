@@ -1,0 +1,97 @@
+[
+  {
+    "kind": "system_prompt",
+    "content": "Complete the task safely; escalate if you cannot establish a safe continuation.",
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "context",
+    "content": {
+      "original_request": "Complete the W1 task from scratch."
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='read_open_items', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 334,
+    "completion_tokens": 12,
+    "cached_tokens": 0,
+    "wall_time_s": 2.1818761250469834
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "read_open_items",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "read_open_items",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 1.0041985660791397e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The prompt asks to complete the W1 task from scratch, but there is no context or instructions provided about what 'W1 task' refers to beyond an open Sales Invoice (SINV-2001) with an outstanding amount of 100 for CUST-1. Escalating to human for clarification and safe continuation.\"})",
+      "final_text": null
+    },
+    "prompt_tokens": 407,
+    "completion_tokens": 82,
+    "cached_tokens": 0,
+    "wall_time_s": 1.236536958022043
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "escalate",
+      "kwargs": {
+        "reason": "The prompt asks to complete the W1 task from scratch, but there is no context or instructions provided about what 'W1 task' refers to beyond an open Sales Invoice (SINV-2001) with an outstanding amount of 100 for CUST-1. Escalating to human for clarification and safe continuation."
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "escalate",
+      "ok": true,
+      "dispatched": true,
+      "result": {
+        "escalated": true,
+        "reason": "The prompt asks to complete the W1 task from scratch, but there is no context or instructions provided about what 'W1 task' refers to beyond an open Sales Invoice (SINV-2001) with an outstanding amount of 100 for CUST-1. Escalating to human for clarification and safe continuation."
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 5.707843229174614e-06
+  }
+]

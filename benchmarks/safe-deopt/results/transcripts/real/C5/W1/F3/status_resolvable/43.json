@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.3403082920704037
+    "wall_time_s": 1.0462105828337371
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.082941010594368e-06
+    "wall_time_s": 1.3042008504271507e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 535,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.874134125187993
+    "wall_time_s": 2.3431392500642687
   },
   {
     "kind": "tool_call",
@@ -119,26 +119,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.624963134527206e-06
+    "wall_time_s": 8.291797712445259e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 608,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8955477918498218
+    "wall_time_s": 1.457767042098567
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001",
+        "reference_type": "Sales Invoice",
         "operation_key": "opB"
       }
     },
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.6584061086177826e-05
+    "wall_time_s": 1.60830095410347e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `submit_linked_record` for operation key `opB` initially timed out, but a check via `get_operation_status` confirmed that the write was **not committed**. Following the recovery instructions, we verified the current state with `read_open_items` and safely re-submitted the linked record (`SINV-2001`, `Sales Invoice`), which has now successfully completed with status `submitted`."
+      "final_text": "The procedure failed mid-run during `submit_linked_record` with operation key `opB` due to a timeout. \n\nFollowing safe recovery guidelines:\n1. Checked the operation status via `get_operation_status`, confirming that `opB` was `NOT_COMMITTED` (the write did not commit).\n2. Verified the current state with `read_open_items`, confirming the open item `SINV-2001` was present.\n3. Safely retried the atomic tool call `submit_linked_record` with `opB`, which successfully completed and returned a `submitted` status."
     },
     "prompt_tokens": 710,
-    "completion_tokens": 89,
+    "completion_tokens": 134,
     "cached_tokens": 0,
-    "wall_time_s": 1.2555364170111716
+    "wall_time_s": 1.7865591670852154
   },
   {
     "kind": "final",
-    "content": "The operation `submit_linked_record` for operation key `opB` initially timed out, but a check via `get_operation_status` confirmed that the write was **not committed**. Following the recovery instructions, we verified the current state with `read_open_items` and safely re-submitted the linked record (`SINV-2001`, `Sales Invoice`), which has now successfully completed with status `submitted`.",
+    "content": "The procedure failed mid-run during `submit_linked_record` with operation key `opB` due to a timeout. \n\nFollowing safe recovery guidelines:\n1. Checked the operation status via `get_operation_status`, confirming that `opB` was `NOT_COMMITTED` (the write did not commit).\n2. Verified the current state with `read_open_items`, confirming the open item `SINV-2001` was present.\n3. Safely retried the atomic tool call `submit_linked_record` with `opB`, which successfully completed and returned a `submitted` status.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

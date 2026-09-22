@@ -26,7 +26,7 @@
     "prompt_tokens": 273,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7953611249104142
+    "wall_time_s": 0.8694653329439461
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.041970431804657e-06
+    "wall_time_s": 5.041947588324547e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 333,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.802371040917933
+    "wall_time_s": 1.5512512910645455
   },
   {
     "kind": "tool_call",
@@ -89,18 +89,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.917157977819443e-06
+    "wall_time_s": 6.041955202817917e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'operation_key': 'W2-ALLOC-001', 'invoice': 'INV-001', 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'operation_key': 'op_alloc_001', 'invoice': 'INV-001', 'payment': 'PAY-001'})",
       "final_text": null
     },
     "prompt_tokens": 389,
-    "completion_tokens": 51,
+    "completion_tokens": 50,
     "cached_tokens": 0,
-    "wall_time_s": 1.424394499976188
+    "wall_time_s": 1.222028249874711
   },
   {
     "kind": "tool_call",
@@ -108,7 +108,7 @@
       "tool_name": "create_allocation",
       "kwargs": {
         "amount": 250,
-        "operation_key": "W2-ALLOC-001",
+        "operation_key": "op_alloc_001",
         "invoice": "INV-001",
         "payment": "PAY-001"
       }
@@ -124,30 +124,30 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='W2-ALLOC-001', status='draft')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op_alloc_001', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.1166866645216942e-05
+    "wall_time_s": 2.050003968179226e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'W2-SUBMIT-001', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'op_sub_001', 'allocation': 'ALLOC-0001'})",
       "final_text": null
     },
-    "prompt_tokens": 506,
-    "completion_tokens": 37,
+    "prompt_tokens": 504,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.9247200000099838
+    "wall_time_s": 1.5699993749149144
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "W2-SUBMIT-001",
+        "operation_key": "op_sub_001",
         "allocation": "ALLOC-0001"
       }
     },
@@ -163,30 +163,104 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "timeout: no confirmation received for submit_allocation (operation_key='W2-SUBMIT-001')"
+      "error": "timeout: no confirmation received for submit_allocation (operation_key='op_sub_001')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.0001236249227076769
+    "wall_time_s": 0.00013237493112683296
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation timed out, unsure if allocation was successfully submitted.'})",
+      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
       "final_text": null
     },
-    "prompt_tokens": 580,
-    "completion_tokens": 26,
+    "prompt_tokens": 574,
+    "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8359774588607252
+    "wall_time_s": 1.0488764171022922
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_payments",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_payments",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.1248429119586945e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 630,
+    "completion_tokens": 11,
+    "cached_tokens": 0,
+    "wall_time_s": 0.916013624984771
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_invoices",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_invoices",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 5.916925147175789e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation operation timed out. Manual verification of allocation status for ALLOC-0001 is required.'})",
+      "final_text": null
+    },
+    "prompt_tokens": 690,
+    "completion_tokens": 36,
+    "cached_tokens": 0,
+    "wall_time_s": 1.765229499898851
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Submit allocation timed out, unsure if allocation was successfully submitted."
+        "reason": "Submit allocation operation timed out. Manual verification of allocation status for ALLOC-0001 is required."
       }
     },
     "prompt_tokens": 0,
@@ -202,12 +276,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Submit allocation timed out, unsure if allocation was successfully submitted."
+        "reason": "Submit allocation operation timed out. Manual verification of allocation status for ALLOC-0001 is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.332985892891884e-06
+    "wall_time_s": 5.667097866535187e-06
   }
 ]

@@ -35,7 +35,7 @@
     "prompt_tokens": 293,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 1.006651959149167
+    "wall_time_s": 1.4352974169887602
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.125090971589088e-06
+    "wall_time_s": 8.791917935013771e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 324,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7029120421502739
+    "wall_time_s": 1.0638368329964578
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.125083357095718e-06
+    "wall_time_s": 5.58304600417614e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 384,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8047417921479791
+    "wall_time_s": 0.781877791043371
   },
   {
     "kind": "tool_call",
@@ -135,26 +135,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.333001121878624e-06
+    "wall_time_s": 5.541834980249405e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:PAY-001', 'operation_key': 'opC'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opC', 'allocation': 'INV-001:PAY-001'})",
       "final_text": null
     },
     "prompt_tokens": 440,
     "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.757128041004762
+    "wall_time_s": 0.976278583984822
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "INV-001:PAY-001",
-        "operation_key": "opC"
+        "operation_key": "opC",
+        "allocation": "INV-001:PAY-001"
       }
     },
     "prompt_tokens": 0,
@@ -174,25 +174,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.366684541106224e-05
+    "wall_time_s": 2.2958964109420776e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to allocate invoice INV-001 with payment PAY-001 ('no such allocation INV-001:PAY-001') and unable to cancel pending operation opB. Escalating to human.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to resolve W2 allocation task due to 'no such allocation INV-001:PAY-001' error after timeout on opB.\"})",
       "final_text": null
     },
     "prompt_tokens": 504,
-    "completion_tokens": 60,
+    "completion_tokens": 46,
     "cached_tokens": 0,
-    "wall_time_s": 0.9226051250007004
+    "wall_time_s": 1.1421301250811666
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to allocate invoice INV-001 with payment PAY-001 ('no such allocation INV-001:PAY-001') and unable to cancel pending operation opB. Escalating to human."
+        "reason": "Unable to resolve W2 allocation task due to 'no such allocation INV-001:PAY-001' error after timeout on opB."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to allocate invoice INV-001 with payment PAY-001 ('no such allocation INV-001:PAY-001') and unable to cancel pending operation opB. Escalating to human."
+        "reason": "Unable to resolve W2 allocation task due to 'no such allocation INV-001:PAY-001' error after timeout on opB."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.583984941244125e-06
+    "wall_time_s": 3.00002284348011e-06
   }
 ]

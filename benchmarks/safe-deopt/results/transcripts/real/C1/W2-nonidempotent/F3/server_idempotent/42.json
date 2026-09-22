@@ -26,7 +26,7 @@
     "prompt_tokens": 338,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9972377081867307
+    "wall_time_s": 1.570812416030094
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.291076377034187e-06
+    "wall_time_s": 5.833106115460396e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 398,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8566301250830293
+    "wall_time_s": 0.8526525408960879
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.416114047169685e-06
+    "wall_time_s": 6.333924829959869e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'payment': 'PAY-001', 'invoice': 'INV-001', 'operation_key': 'op-w2-alloc-1'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'amount': 250, 'invoice': 'INV-001', 'operation_key': 'op-w2-nonidempotent-001'})",
       "final_text": null
     },
     "prompt_tokens": 454,
-    "completion_tokens": 51,
+    "completion_tokens": 56,
     "cached_tokens": 0,
-    "wall_time_s": 0.8613602498080581
+    "wall_time_s": 1.5725762920919806
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "amount": 250,
         "payment": "PAY-001",
+        "amount": 250,
         "invoice": "INV-001",
-        "operation_key": "op-w2-alloc-1"
+        "operation_key": "op-w2-nonidempotent-001"
       }
     },
     "prompt_tokens": 0,
@@ -124,30 +124,30 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-alloc-1', status='draft')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-nonidempotent-001', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.587493509054184e-05
+    "wall_time_s": 2.7125002816319466e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'op-w2-alloc-1'})",
+      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'op-w2-nonidempotent-001'})",
       "final_text": null
     },
-    "prompt_tokens": 571,
-    "completion_tokens": 27,
+    "prompt_tokens": 581,
+    "completion_tokens": 32,
     "cached_tokens": 0,
-    "wall_time_s": 0.9702232501003891
+    "wall_time_s": 1.6270647500641644
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "get_operation_status",
       "kwargs": {
-        "operation_key": "op-w2-alloc-1"
+        "operation_key": "op-w2-nonidempotent-001"
       }
     },
     "prompt_tokens": 0,
@@ -166,22 +166,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.917150363326073e-06
+    "wall_time_s": 7.4589625000953674e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "I have successfully completed the task from scratch. Payment `PAY-001` (amount: 250) has been fully allocated to invoice `INV-001` via allocation `ALLOC-0001` (operation key: `op-w2-alloc-1`, status: COMMITTED)."
+      "final_text": "The W2-nonidempotent task has been successfully completed from scratch. \n\n- **Payment:** `PAY-001` (Amount: 250)\n- **Invoice:** `INV-001` (Outstanding: 250)\n- **Allocation:** `ALLOC-0001` created and successfully committed for the full amount of 250."
     },
-    "prompt_tokens": 616,
-    "completion_tokens": 68,
+    "prompt_tokens": 631,
+    "completion_tokens": 84,
     "cached_tokens": 0,
-    "wall_time_s": 1.054396583000198
+    "wall_time_s": 2.5648072080221027
   },
   {
     "kind": "final",
-    "content": "I have successfully completed the task from scratch. Payment `PAY-001` (amount: 250) has been fully allocated to invoice `INV-001` via allocation `ALLOC-0001` (operation key: `op-w2-alloc-1`, status: COMMITTED).",
+    "content": "The W2-nonidempotent task has been successfully completed from scratch. \n\n- **Payment:** `PAY-001` (Amount: 250)\n- **Invoice:** `INV-001` (Outstanding: 250)\n- **Allocation:** `ALLOC-0001` created and successfully committed for the full amount of 250.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

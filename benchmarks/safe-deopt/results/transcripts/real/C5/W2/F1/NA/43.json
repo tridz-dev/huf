@@ -56,7 +56,7 @@
     "prompt_tokens": 432,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8216339580249041
+    "wall_time_s": 1.771865624934435
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.58307646214962e-06
+    "wall_time_s": 5.832873284816742e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8034360411111265
+    "wall_time_s": 1.6398017501924187
   },
   {
     "kind": "tool_call",
@@ -119,26 +119,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.790978997945786e-06
+    "wall_time_s": 6.417045369744301e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:PAY-001:250', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 548,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.8529414169024676
+    "wall_time_s": 1.5740039160009474
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "INV-001:PAY-001:250",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -158,7 +158,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.020884469151497e-05
+    "wall_time_s": 3.4041935577988625e-05
   },
   {
     "kind": "model_step",
@@ -169,7 +169,7 @@
     "prompt_tokens": 620,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9900666668545455
+    "wall_time_s": 1.4500693341251463
   },
   {
     "kind": "tool_call",
@@ -195,7 +195,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.875015631318092e-06
+    "wall_time_s": 6.708083674311638e-06
   },
   {
     "kind": "model_step",
@@ -206,7 +206,7 @@
     "prompt_tokens": 680,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9694446248468012
+    "wall_time_s": 1.6844253330491483
   },
   {
     "kind": "tool_call",
@@ -232,25 +232,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.082918167114258e-06
+    "wall_time_s": 6.166985258460045e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to successfully submit allocation using operation_key opB as it returned 'no such allocation', and invoice/payment records need manual verification.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to submit allocation using operation_key opB because of an unknown error / invalid allocation format.'})",
       "final_text": null
     },
     "prompt_tokens": 736,
-    "completion_tokens": 42,
+    "completion_tokens": 34,
     "cached_tokens": 0,
-    "wall_time_s": 0.880644042044878
+    "wall_time_s": 1.076623542001471
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to successfully submit allocation using operation_key opB as it returned 'no such allocation', and invoice/payment records need manual verification."
+        "reason": "Unable to submit allocation using operation_key opB because of an unknown error / invalid allocation format."
       }
     },
     "prompt_tokens": 0,
@@ -266,12 +266,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to successfully submit allocation using operation_key opB as it returned 'no such allocation', and invoice/payment records need manual verification."
+        "reason": "Unable to submit allocation using operation_key opB because of an unknown error / invalid allocation format."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.2088719308376312e-06
+    "wall_time_s": 5.792127922177315e-06
   }
 ]

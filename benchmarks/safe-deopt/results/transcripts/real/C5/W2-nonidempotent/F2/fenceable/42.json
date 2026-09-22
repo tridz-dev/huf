@@ -55,9 +55,9 @@
       "final_text": null
     },
     "prompt_tokens": 511,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8510648750234395
+    "wall_time_s": 1.4729055829811841
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.2089023888111115e-06
+    "wall_time_s": 7.666880264878273e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 569,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8767518748063594
+    "wall_time_s": 0.8963877498172224
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.624955520033836e-06
+    "wall_time_s": 7.00005330145359e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 625,
     "completion_tokens": 20,
     "cached_tokens": 0,
-    "wall_time_s": 0.855015333974734
+    "wall_time_s": 0.8262414168566465
   },
   {
     "kind": "tool_call",
@@ -157,25 +157,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.7832964658737183e-05
+    "wall_time_s": 8.292030543088913e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation timed out during submit_allocation_unsafe, and invoice INV-001 has already been fully settled/paid (outstanding_amount: 0). Unable to safely determine if the previous write committed without an operation_key, and further allocation is not possible.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation timed out and could not be verified or cancelled cleanly; invoice INV-001 shows 0 outstanding but payment PAY-001 exists. Manual review required.'})",
       "final_text": null
     },
     "prompt_tokens": 657,
-    "completion_tokens": 68,
+    "completion_tokens": 49,
     "cached_tokens": 0,
-    "wall_time_s": 0.9405967500060797
+    "wall_time_s": 1.1085815411061049
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation timed out during submit_allocation_unsafe, and invoice INV-001 has already been fully settled/paid (outstanding_amount: 0). Unable to safely determine if the previous write committed without an operation_key, and further allocation is not possible."
+        "reason": "Operation timed out and could not be verified or cancelled cleanly; invoice INV-001 shows 0 outstanding but payment PAY-001 exists. Manual review required."
       }
     },
     "prompt_tokens": 0,
@@ -191,12 +191,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation timed out during submit_allocation_unsafe, and invoice INV-001 has already been fully settled/paid (outstanding_amount: 0). Unable to safely determine if the previous write committed without an operation_key, and further allocation is not possible."
+        "reason": "Operation timed out and could not be verified or cancelled cleanly; invoice INV-001 shows 0 outstanding but payment PAY-001 exists. Manual review required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.624947905540466e-06
+    "wall_time_s": 4.708068445324898e-06
   }
 ]

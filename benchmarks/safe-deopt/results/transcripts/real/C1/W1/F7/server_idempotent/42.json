@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9754731671418995
+    "wall_time_s": 0.9392936669755727
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.834029823541641e-06
+    "wall_time_s": 7.666880264878273e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0002397079952061
+    "wall_time_s": 1.570162125164643
   },
   {
     "kind": "tool_call",
@@ -89,7 +89,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2958189472556114e-05
+    "wall_time_s": 8.5409265011549e-06
   },
   {
     "kind": "model_step",
@@ -100,7 +100,7 @@
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9870483749546111
+    "wall_time_s": 0.964331709081307
   },
   {
     "kind": "tool_call",
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00018779211677610874
+    "wall_time_s": 0.00013233302161097527
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8903738330118358
+    "wall_time_s": 1.3203893329482526
   },
   {
     "kind": "tool_call",
@@ -166,25 +166,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.791910320520401e-06
+    "wall_time_s": 1.1458992958068848e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation timed out and the status returned UNKNOWN, so I cannot confirm whether the W1 task was successfully completed.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation status for W1 is UNKNOWN after a submission attempt timeout, so I cannot safely verify completion without human intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 566,
-    "completion_tokens": 43,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.6980726670008153
+    "wall_time_s": 1.2746224170550704
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation timed out and the status returned UNKNOWN, so I cannot confirm whether the W1 task was successfully completed."
+        "reason": "The operation status for W1 is UNKNOWN after a submission attempt timeout, so I cannot safely verify completion without human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -200,12 +200,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation timed out and the status returned UNKNOWN, so I cannot confirm whether the W1 task was successfully completed."
+        "reason": "The operation status for W1 is UNKNOWN after a submission attempt timeout, so I cannot safely verify completion without human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.37488779425621e-06
+    "wall_time_s": 5.541136488318443e-06
   }
 ]

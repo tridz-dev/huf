@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8624885838944465
+    "wall_time_s": 0.9093087501823902
   },
   {
     "kind": "tool_call",
@@ -82,64 +82,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.500158295035362e-06
+    "wall_time_s": 7.916940376162529e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 560,
-    "completion_tokens": 19,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8858189589809626
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "cancel_operation",
-      "kwargs": {
-        "operation_key": "opB"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "cancel_operation",
-      "ok": true,
-      "dispatched": true,
-      "result": true
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 4.37488779425621e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB-retry'})",
-      "final_text": null
-    },
-    "prompt_tokens": 591,
-    "completion_tokens": 46,
-    "cached_tokens": 0,
-    "wall_time_s": 1.0484309170860797
+    "wall_time_s": 1.4888823749497533
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001",
-        "operation_key": "opB-retry"
+        "reference_type": "Sales Invoice",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -158,22 +121,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.658312976360321e-05
+    "wall_time_s": 1.3666925951838493e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous procedure run failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). Following the safe recovery protocol:\n\n1. **Verified state:** Performed a read (`read_open_items`) to check the current state of open items, confirming that `SINV-2001` was still open and the write had not fully committed.\n2. **Cancelled pending operation:** Successfully fenced/cancelled the held write using `cancel_operation` (`operation_key='opB'`).\n3. **Completed action safely:** Submitted the linked record using a new operation key (`opB-retry`), resulting in a successful submission status (`status: submitted`)."
+      "final_text": "The previous procedure attempt (`safe-deopt-W1`) failed mid-run at the `submit_linked_record` step (`operation_key='opB'`) due to a timeout. \n\nFollowing safety recovery guidelines, I first verified the target record's current state using `read_open_items`. The check confirmed that the item (`SINV-2001`, type: `Sales Invoice`) was still open and the write had not committed. \n\nSince the write did not commit, I safely retried and successfully completed the `submit_linked_record` atomic tool call. The record status is now **submitted**."
     },
-    "prompt_tokens": 695,
-    "completion_tokens": 148,
+    "prompt_tokens": 662,
+    "completion_tokens": 133,
     "cached_tokens": 0,
-    "wall_time_s": 1.6883185419719666
+    "wall_time_s": 2.483336916891858
   },
   {
     "kind": "final",
-    "content": "The previous procedure run failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). Following the safe recovery protocol:\n\n1. **Verified state:** Performed a read (`read_open_items`) to check the current state of open items, confirming that `SINV-2001` was still open and the write had not fully committed.\n2. **Cancelled pending operation:** Successfully fenced/cancelled the held write using `cancel_operation` (`operation_key='opB'`).\n3. **Completed action safely:** Submitted the linked record using a new operation key (`opB-retry`), resulting in a successful submission status (`status: submitted`).",
+    "content": "The previous procedure attempt (`safe-deopt-W1`) failed mid-run at the `submit_linked_record` step (`operation_key='opB'`) due to a timeout. \n\nFollowing safety recovery guidelines, I first verified the target record's current state using `read_open_items`. The check confirmed that the item (`SINV-2001`, type: `Sales Invoice`) was still open and the write had not committed. \n\nSince the write did not commit, I safely retried and successfully completed the `submit_linked_record` atomic tool call. The record status is now **submitted**.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9436130828689784
+    "wall_time_s": 1.3275931251700968
   },
   {
     "kind": "tool_call",
@@ -59,27 +59,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.084097549319267e-06
+    "wall_time_s": 4.58303838968277e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 314,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9054597499780357
+    "wall_time_s": 1.6206775829195976
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "operation_key": "opB",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -99,25 +99,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9749935492873192e-05
+    "wall_time_s": 3.4125056117773056e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_linked_record operation with operation_key 'opB' previously timed out and the system rejected a retry due to lack of a recovery guarantee ('tool declares no recovery guarantee'). Manual inspection and resolution are required to avoid duplicate processing or unknown state.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record for operation_key='opB' encountered a timeout and the system rejected replay due to tool guarantee constraints ('none'). Manual intervention is required.\"})",
       "final_text": null
     },
     "prompt_tokens": 418,
-    "completion_tokens": 66,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 1.013591457856819
+    "wall_time_s": 1.3884559171274304
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation with operation_key 'opB' previously timed out and the system rejected a retry due to lack of a recovery guarantee ('tool declares no recovery guarantee'). Manual inspection and resolution are required to avoid duplicate processing or unknown state."
+        "reason": "submit_linked_record for operation_key='opB' encountered a timeout and the system rejected replay due to tool guarantee constraints ('none'). Manual intervention is required."
       }
     },
     "prompt_tokens": 0,
@@ -133,12 +133,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation with operation_key 'opB' previously timed out and the system rejected a retry due to lack of a recovery guarantee ('tool declares no recovery guarantee'). Manual inspection and resolution are required to avoid duplicate processing or unknown state."
+        "reason": "submit_linked_record for operation_key='opB' encountered a timeout and the system rejected replay due to tool guarantee constraints ('none'). Manual intervention is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.667120710015297e-06
+    "wall_time_s": 3.95788811147213e-06
   }
 ]

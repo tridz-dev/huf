@@ -57,7 +57,7 @@
     "prompt_tokens": 511,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8936591669917107
+    "wall_time_s": 0.9118663750123233
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.375128239393234e-06
+    "wall_time_s": 7.333001121878624e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 569,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.949203958036378
+    "wall_time_s": 1.0726397919934243
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2208940461277962e-05
+    "wall_time_s": 6.00004568696022e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 625,
     "completion_tokens": 20,
     "cached_tokens": 0,
-    "wall_time_s": 1.0849251251202077
+    "wall_time_s": 1.1511026248335838
   },
   {
     "kind": "tool_call",
@@ -157,25 +157,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.1625077351927757e-05
+    "wall_time_s": 5.834037438035011e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation timed out and could not be verified or cancelled cleanly via cancel_operation; invoice INV-001 shows 0 outstanding amount and payment PAY-001 exists, but state uncertainty requires human review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation timeout occurred during submit_allocation_unsafe, and while invoices list shows no outstanding amount, operation cancellation returned false and state is uncertain. Escalating to human to prevent duplicate or conflicting allocations.'})",
       "final_text": null
     },
     "prompt_tokens": 657,
-    "completion_tokens": 57,
+    "completion_tokens": 53,
     "cached_tokens": 0,
-    "wall_time_s": 1.0348100829869509
+    "wall_time_s": 1.023655332857743
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation timed out and could not be verified or cancelled cleanly via cancel_operation; invoice INV-001 shows 0 outstanding amount and payment PAY-001 exists, but state uncertainty requires human review."
+        "reason": "Operation timeout occurred during submit_allocation_unsafe, and while invoices list shows no outstanding amount, operation cancellation returned false and state is uncertain. Escalating to human to prevent duplicate or conflicting allocations."
       }
     },
     "prompt_tokens": 0,
@@ -191,12 +191,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation timed out and could not be verified or cancelled cleanly via cancel_operation; invoice INV-001 shows 0 outstanding amount and payment PAY-001 exists, but state uncertainty requires human review."
+        "reason": "Operation timeout occurred during submit_allocation_unsafe, and while invoices list shows no outstanding amount, operation cancellation returned false and state is uncertain. Escalating to human to prevent duplicate or conflicting allocations."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.5409036576747894e-06
+    "wall_time_s": 4.958827048540115e-06
   }
 ]

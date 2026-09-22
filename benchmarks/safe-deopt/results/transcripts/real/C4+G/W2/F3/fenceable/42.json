@@ -35,7 +35,7 @@
     "prompt_tokens": 293,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8744964161887765
+    "wall_time_s": 1.3924468329641968
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.833136573433876e-06
+    "wall_time_s": 1.2458069249987602e-05
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 324,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8809432501439005
+    "wall_time_s": 1.8607552500907332
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.750000804662704e-06
+    "wall_time_s": 6.792135536670685e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 384,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8386820829473436
+    "wall_time_s": 0.7291226661764085
   },
   {
     "kind": "tool_call",
@@ -135,7 +135,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.665956556797028e-06
+    "wall_time_s": 6.458954885601997e-06
   },
   {
     "kind": "model_step",
@@ -146,7 +146,7 @@
     "prompt_tokens": 440,
     "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 1.180723834084347
+    "wall_time_s": 1.6566479168832302
   },
   {
     "kind": "tool_call",
@@ -174,25 +174,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.3125048503279686e-05
+    "wall_time_s": 3.379094414412975e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation operation hit an unrecoverable replay restriction and cannot be safely retried without human review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Submit allocation operation encountered retry restriction with operation_key 'opC' and previous timeout on 'opB'. Manual intervention required to verify W2 allocation status.\"})",
       "final_text": null
     },
     "prompt_tokens": 533,
-    "completion_tokens": 34,
+    "completion_tokens": 46,
     "cached_tokens": 0,
-    "wall_time_s": 0.9328434159979224
+    "wall_time_s": 1.0714627921115607
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Submit allocation operation hit an unrecoverable replay restriction and cannot be safely retried without human review."
+        "reason": "Submit allocation operation encountered retry restriction with operation_key 'opC' and previous timeout on 'opB'. Manual intervention required to verify W2 allocation status."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Submit allocation operation hit an unrecoverable replay restriction and cannot be safely retried without human review."
+        "reason": "Submit allocation operation encountered retry restriction with operation_key 'opC' and previous timeout on 'opB'. Manual intervention required to verify W2 allocation status."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.2919924706220627e-06
+    "wall_time_s": 5.791895091533661e-06
   }
 ]

@@ -57,7 +57,7 @@
     "prompt_tokens": 493,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.2422918751835823
+    "wall_time_s": 3.751519041135907
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0207993909716606e-05
+    "wall_time_s": 1.0832911357283592e-05
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8400150409433991
+    "wall_time_s": 2.6683610829059035
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.9998128563165665e-06
+    "wall_time_s": 6.667105481028557e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 590,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.888530750060454
+    "wall_time_s": 3.2223481251858175
   },
   {
     "kind": "tool_call",
@@ -157,18 +157,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.416121661663055e-06
+    "wall_time_s": 7.417052984237671e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'PAY-001: INV-001 250'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 646,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9453496660571545
+    "wall_time_s": 3.7013520828913897
   },
   {
     "kind": "tool_call",
@@ -176,7 +176,7 @@
       "tool_name": "submit_allocation",
       "kwargs": {
         "operation_key": "opB",
-        "allocation": "PAY-001: INV-001 250"
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -196,25 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.058393485844135e-05
+    "wall_time_s": 3.287498839199543e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation key opB has an unknown status and cannot be retried directly due to replay rejection rules. Manual intervention required to verify allocation state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_allocation call for operation_key 'opB' failed with a timeout, and subsequent replay was rejected because the tool declares no recovery guarantee ('none'). Manual human inspection and intervention is required to safely resolve the allocation state.\"})",
       "final_text": null
     },
     "prompt_tokens": 743,
-    "completion_tokens": 42,
+    "completion_tokens": 61,
     "cached_tokens": 0,
-    "wall_time_s": 1.0494332499802113
+    "wall_time_s": 4.027462708996609
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation key opB has an unknown status and cannot be retried directly due to replay rejection rules. Manual intervention required to verify allocation state."
+        "reason": "The submit_allocation call for operation_key 'opB' failed with a timeout, and subsequent replay was rejected because the tool declares no recovery guarantee ('none'). Manual human inspection and intervention is required to safely resolve the allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation key opB has an unknown status and cannot be retried directly due to replay rejection rules. Manual intervention required to verify allocation state."
+        "reason": "The submit_allocation call for operation_key 'opB' failed with a timeout, and subsequent replay was rejected because the tool declares no recovery guarantee ('none'). Manual human inspection and intervention is required to safely resolve the allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.749985575675964e-06
+    "wall_time_s": 7.6249707490205765e-06
   }
 ]

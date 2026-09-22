@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8238840841222554
+    "wall_time_s": 0.969836208038032
   },
   {
     "kind": "tool_call",
@@ -61,44 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9582919776439667e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 335,
-    "completion_tokens": 10,
-    "cached_tokens": 0,
-    "wall_time_s": 1.3559460409451276
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_payments",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_payments",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 1.0958174243569374e-05
+    "wall_time_s": 1.3791024684906006e-05
   },
   {
     "kind": "model_step",
@@ -106,10 +69,10 @@
       "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
       "final_text": null
     },
-    "prompt_tokens": 391,
+    "prompt_tokens": 335,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.974936957936734
+    "wall_time_s": 0.943211916834116
   },
   {
     "kind": "tool_call",
@@ -135,25 +98,62 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.33394767343998e-06
+    "wall_time_s": 4.416098818182945e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"payment\": \"PAY-001\", \"invoice\": \"INV-001\", \"amount\": 250}', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 395,
+    "completion_tokens": 10,
+    "cached_tokens": 0,
+    "wall_time_s": 0.9969854999799281
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_payments",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_payments",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 7.250113412737846e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001:INV-001:250', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 451,
-    "completion_tokens": 52,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.0400214998517185
+    "wall_time_s": 1.133552041137591
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "{\"payment\": \"PAY-001\", \"invoice\": \"INV-001\", \"amount\": 250}",
+        "allocation": "PAY-001:INV-001:250",
         "operation_key": "opB"
       }
     },
@@ -174,62 +174,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5666941180825233e-05
+    "wall_time_s": 3.279210068285465e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB had a timeout on submit_allocation, its status is UNKNOWN, and re-submitting with the same operation key is rejected due to lack of tool guarantee. Human review is required to verify the allocation state.'})",
       "final_text": null
     },
-    "prompt_tokens": 561,
-    "completion_tokens": 21,
+    "prompt_tokens": 548,
+    "completion_tokens": 60,
     "cached_tokens": 0,
-    "wall_time_s": 1.0987418331205845
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "get_operation_status",
-      "kwargs": {
-        "operation_key": "opB"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "get_operation_status",
-      "ok": true,
-      "dispatched": true,
-      "result": "UNKNOWN"
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 1.3584038242697716e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB has an UNKNOWN status due to a timeout, and the submit_allocation tool has no recovery guarantee (replay rejected). Human intervention is required to safely verify whether the allocation was processed.'})",
-      "final_text": null
-    },
-    "prompt_tokens": 598,
-    "completion_tokens": 54,
-    "cached_tokens": 0,
-    "wall_time_s": 1.1238407080527395
+    "wall_time_s": 1.3497127920854837
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB has an UNKNOWN status due to a timeout, and the submit_allocation tool has no recovery guarantee (replay rejected). Human intervention is required to safely verify whether the allocation was processed."
+        "reason": "Operation opB had a timeout on submit_allocation, its status is UNKNOWN, and re-submitting with the same operation key is rejected due to lack of tool guarantee. Human review is required to verify the allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -245,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB has an UNKNOWN status due to a timeout, and the submit_allocation tool has no recovery guarantee (replay rejected). Human intervention is required to safely verify whether the allocation was processed."
+        "reason": "Operation opB had a timeout on submit_allocation, its status is UNKNOWN, and re-submitting with the same operation key is rejected due to lack of tool guarantee. Human review is required to verify the allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.791895091533661e-06
+    "wall_time_s": 5.834037438035011e-06
   }
 ]

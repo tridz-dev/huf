@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.4997935409191996
+    "wall_time_s": 0.9293465830851346
   },
   {
     "kind": "tool_call",
@@ -82,18 +82,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.4580007195472717e-06
+    "wall_time_s": 1.2292061001062393e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 560,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0069466659333557
+    "wall_time_s": 1.0488347080536187
   },
   {
     "kind": "tool_call",
@@ -101,8 +101,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_type": "Sales Invoice",
-        "reference_name": "SINV-2001",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "reference_name": "SINV-2001"
       }
     },
     "prompt_tokens": 0,
@@ -122,25 +122,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1250143870711327e-05
+    "wall_time_s": 3.083283081650734e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB failed with a timeout and has no recovery guarantee (replay rejected); unable to safely retry or verify partial commitment without risking duplicate writes.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record failed with an unresolved-outcome write ('opB') which cannot be replayed due to tool guarantee constraints; manual review required to verify current state before proceeding.\"})",
       "final_text": null
     },
     "prompt_tokens": 664,
-    "completion_tokens": 43,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.0054918329697102
+    "wall_time_s": 1.6226599591318518
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB failed with a timeout and has no recovery guarantee (replay rejected); unable to safely retry or verify partial commitment without risking duplicate writes."
+        "reason": "submit_linked_record failed with an unresolved-outcome write ('opB') which cannot be replayed due to tool guarantee constraints; manual review required to verify current state before proceeding."
       }
     },
     "prompt_tokens": 0,
@@ -156,12 +156,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB failed with a timeout and has no recovery guarantee (replay rejected); unable to safely retry or verify partial commitment without risking duplicate writes."
+        "reason": "submit_linked_record failed with an unresolved-outcome write ('opB') which cannot be replayed due to tool guarantee constraints; manual review required to verify current state before proceeding."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.624947905540466e-06
+    "wall_time_s": 5.458015948534012e-06
   }
 ]

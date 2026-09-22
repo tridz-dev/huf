@@ -33,9 +33,9 @@
       "final_text": null
     },
     "prompt_tokens": 320,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9663207919802517
+    "wall_time_s": 0.886631874833256
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.2910916060209274e-06
+    "wall_time_s": 8.874805644154549e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 380,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9408430000767112
+    "wall_time_s": 0.9049734168220311
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.4589625000953674e-06
+    "wall_time_s": 6.709014996886253e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 0.8028923750389367
+    "wall_time_s": 1.1145308341365308
   },
   {
     "kind": "tool_call",
@@ -135,18 +135,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.6666948795318604e-05
+    "wall_time_s": 1.1875061318278313e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation_unsafe', kwargs={'amount': 250, 'invoice': 'INV-001', 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation_unsafe', kwargs={'amount': 250, 'payment': 'PAY-001', 'invoice': 'INV-001'})",
       "final_text": null
     },
     "prompt_tokens": 478,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.8947523748502135
+    "wall_time_s": 0.7575114590581506
   },
   {
     "kind": "tool_call",
@@ -154,8 +154,8 @@
       "tool_name": "submit_allocation_unsafe",
       "kwargs": {
         "amount": 250,
-        "invoice": "INV-001",
-        "payment": "PAY-001"
+        "payment": "PAY-001",
+        "invoice": "INV-001"
       }
     },
     "prompt_tokens": 0,
@@ -175,25 +175,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.50000336766243e-05
+    "wall_time_s": 1.750001683831215e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to submit allocation safely due to lack of operation_key guard support for submit_allocation_unsafe.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to submit allocation due to safety guard requiring an operation_key which is unknown or missing.'})",
       "final_text": null
     },
     "prompt_tokens": 547,
-    "completion_tokens": 35,
+    "completion_tokens": 33,
     "cached_tokens": 0,
-    "wall_time_s": 0.9352592921350151
+    "wall_time_s": 1.0822008750401437
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to submit allocation safely due to lack of operation_key guard support for submit_allocation_unsafe."
+        "reason": "Unable to submit allocation due to safety guard requiring an operation_key which is unknown or missing."
       }
     },
     "prompt_tokens": 0,
@@ -209,12 +209,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to submit allocation safely due to lack of operation_key guard support for submit_allocation_unsafe."
+        "reason": "Unable to submit allocation due to safety guard requiring an operation_key which is unknown or missing."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.2498805820941925e-06
+    "wall_time_s": 7.458031177520752e-06
   }
 ]

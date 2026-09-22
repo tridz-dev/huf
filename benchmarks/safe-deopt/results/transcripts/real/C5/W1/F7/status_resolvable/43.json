@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8092237908858806
+    "wall_time_s": 1.6329098329879344
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.541842594742775e-06
+    "wall_time_s": 1.2499978765845299e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8720488750841469
+    "wall_time_s": 1.4544438750017434
   },
   {
     "kind": "tool_call",
@@ -119,27 +119,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.749962732195854e-06
+    "wall_time_s": 4.749977961182594e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 604,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8886722919996828
+    "wall_time_s": 1.395601874915883
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
+        "reference_name": "SINV-2001",
         "reference_type": "Sales Invoice",
-        "reference_name": "SINV-2001"
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -164,16 +164,16 @@
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation status for `opB` was initially unknown, and checking open items confirmed that the linked record (Sales Invoice `SINV-2001`) was still open. I then safely retried the `submit_linked_record` call, which successfully submitted the record."
+      "final_text": "I have successfully verified the state of the target record using `read_open_items`, confirmed that `submit_linked_record` had not committed its write (`UNKNOWN` status), and safely re-submitted the linked record `SINV-2001` (Sales Invoice). The operation is now complete and submitted."
     },
     "prompt_tokens": 706,
-    "completion_tokens": 58,
+    "completion_tokens": 66,
     "cached_tokens": 0,
-    "wall_time_s": 1.2318248748779297
+    "wall_time_s": 1.1712432911153883
   },
   {
     "kind": "final",
-    "content": "The operation status for `opB` was initially unknown, and checking open items confirmed that the linked record (Sales Invoice `SINV-2001`) was still open. I then safely retried the `submit_linked_record` call, which successfully submitted the record.",
+    "content": "I have successfully verified the state of the target record using `read_open_items`, confirmed that `submit_linked_record` had not committed its write (`UNKNOWN` status), and safely re-submitted the linked record `SINV-2001` (Sales Invoice). The operation is now complete and submitted.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

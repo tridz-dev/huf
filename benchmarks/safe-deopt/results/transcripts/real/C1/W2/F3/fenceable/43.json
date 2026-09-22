@@ -26,7 +26,7 @@
     "prompt_tokens": 318,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8131934171542525
+    "wall_time_s": 0.9823603329714388
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.541850209236145e-06
+    "wall_time_s": 5.875015631318092e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 378,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8599650838878006
+    "wall_time_s": 0.952587875071913
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.750008419156075e-06
+    "wall_time_s": 2.1669548004865646e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'invoice': 'INV-001', 'operation_key': 'op_w2_001', 'amount': 250})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'invoice': 'INV-001', 'operation_key': 'op_w2_001', 'payment': 'PAY-001'})",
       "final_text": null
     },
     "prompt_tokens": 434,
     "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.8721757088787854
+    "wall_time_s": 1.6472533748019487
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "payment": "PAY-001",
+        "amount": 250,
         "invoice": "INV-001",
         "operation_key": "op_w2_001",
-        "amount": 250
+        "payment": "PAY-001"
       }
     },
     "prompt_tokens": 0,
@@ -129,26 +129,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.27498821914196e-05
+    "wall_time_s": 2.054218202829361e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'ALLOC-0001', 'operation_key': 'op_w2_001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'op_w2_001', 'allocation': 'ALLOC-0001'})",
       "final_text": null
     },
     "prompt_tokens": 551,
     "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.9251794160809368
+    "wall_time_s": 1.0615840831305832
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "ALLOC-0001",
-        "operation_key": "op_w2_001"
+        "operation_key": "op_w2_001",
+        "allocation": "ALLOC-0001"
       }
     },
     "prompt_tokens": 0,
@@ -168,7 +168,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00010179192759096622
+    "wall_time_s": 0.00011020898818969727
   },
   {
     "kind": "model_step",
@@ -179,7 +179,7 @@
     "prompt_tokens": 623,
     "completion_tokens": 25,
     "cached_tokens": 0,
-    "wall_time_s": 1.4590808749198914
+    "wall_time_s": 0.8760550420265645
   },
   {
     "kind": "tool_call",
@@ -205,25 +205,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1082971468567848e-05
+    "wall_time_s": 8.875038474798203e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submission of the allocation timed out, and I am unable to confirm the completion of the task safely. Escalating to human operator.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit allocation timed out, and cancellation failed or returned false. Halting for human intervention to prevent duplicate allocations or incorrect state.'})",
       "final_text": null
     },
     "prompt_tokens": 660,
-    "completion_tokens": 41,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.6821293339598924
+    "wall_time_s": 1.3847112499643117
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submission of the allocation timed out, and I am unable to confirm the completion of the task safely. Escalating to human operator."
+        "reason": "Submit allocation timed out, and cancellation failed or returned false. Halting for human intervention to prevent duplicate allocations or incorrect state."
       }
     },
     "prompt_tokens": 0,
@@ -239,12 +239,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submission of the allocation timed out, and I am unable to confirm the completion of the task safely. Escalating to human operator."
+        "reason": "Submit allocation timed out, and cancellation failed or returned false. Halting for human intervention to prevent duplicate allocations or incorrect state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.834029823541641e-06
+    "wall_time_s": 3.6668498069047928e-06
   }
 ]

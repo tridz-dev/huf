@@ -55,7 +55,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.3284558339510113
+    "wall_time_s": 1.4797359160147607
   },
   {
     "kind": "tool_call",
@@ -81,27 +81,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.707873687148094e-06
+    "wall_time_s": 5.915993824601173e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 509,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0699949159752578
+    "wall_time_s": 1.000421583885327
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
         "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice"
+        "reference_type": "Sales Invoice",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -121,25 +121,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.674983210861683e-05
+    "wall_time_s": 3.533298149704933e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation opB has tool_guarantee='none' and timed out; direct retry is rejected by safety policy. Verified open items and escalated for human resolution.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_linked_record call for operation_key='opB' failed with a timeout and has tool_guarantee='none', meaning it cannot be retried safely. However, reading open items shows that the reference SINV-2001 is still open. Manual intervention or verification is required.\"})",
       "final_text": null
     },
     "prompt_tokens": 613,
-    "completion_tokens": 46,
+    "completion_tokens": 77,
     "cached_tokens": 0,
-    "wall_time_s": 1.0575205411296338
+    "wall_time_s": 2.00714029208757
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB has tool_guarantee='none' and timed out; direct retry is rejected by safety policy. Verified open items and escalated for human resolution."
+        "reason": "The submit_linked_record call for operation_key='opB' failed with a timeout and has tool_guarantee='none', meaning it cannot be retried safely. However, reading open items shows that the reference SINV-2001 is still open. Manual intervention or verification is required."
       }
     },
     "prompt_tokens": 0,
@@ -155,12 +155,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB has tool_guarantee='none' and timed out; direct retry is rejected by safety policy. Verified open items and escalated for human resolution."
+        "reason": "The submit_linked_record call for operation_key='opB' failed with a timeout and has tool_guarantee='none', meaning it cannot be retried safely. However, reading open items shows that the reference SINV-2001 is still open. Manual intervention or verification is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.166992872953415e-06
+    "wall_time_s": 6.332993507385254e-06
   }
 ]

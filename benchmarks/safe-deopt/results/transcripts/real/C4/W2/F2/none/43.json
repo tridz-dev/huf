@@ -34,7 +34,7 @@
     "prompt_tokens": 243,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7718193749897182
+    "wall_time_s": 1.5798430829308927
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9578728824853897e-06
+    "wall_time_s": 3.6670826375484467e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 301,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7863449999131262
+    "wall_time_s": 2.088820124976337
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2125121429562569e-05
+    "wall_time_s": 4.292000085115433e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001 (250)', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 357,
-    "completion_tokens": 40,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.8427868750877678
+    "wall_time_s": 1.229606624925509
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "PAY-001 -> INV-001 (250)",
+        "allocation": "PAY-001 -> INV-001",
         "operation_key": "opB"
       }
     },
@@ -131,104 +131,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such allocation PAY-001 -> INV-001 (250)'"
+      "error": "'no such allocation PAY-001 -> INV-001'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.8083956092596054e-05
+    "wall_time_s": 2.6541994884610176e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to submit allocation due to 'no such allocation PAY-001 -> INV-001' error after a previous timeout.\"})",
       "final_text": null
     },
-    "prompt_tokens": 430,
-    "completion_tokens": 11,
+    "prompt_tokens": 421,
+    "completion_tokens": 42,
     "cached_tokens": 0,
-    "wall_time_s": 0.8176814159378409
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_invoices",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 5.166977643966675e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 488,
-    "completion_tokens": 10,
-    "cached_tokens": 0,
-    "wall_time_s": 1.3492407090961933
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_payments",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_payments",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 3.2079406082630157e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Failed to submit allocation because the system returned 'no such allocation PAY-001 -> INV-001 (250)' despite INV-001 and PAY-001 existing.\"})",
-      "final_text": null
-    },
-    "prompt_tokens": 544,
-    "completion_tokens": 56,
-    "cached_tokens": 0,
-    "wall_time_s": 1.0151613750495017
+    "wall_time_s": 0.9520049579441547
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Failed to submit allocation because the system returned 'no such allocation PAY-001 -> INV-001 (250)' despite INV-001 and PAY-001 existing."
+        "reason": "Unable to submit allocation due to 'no such allocation PAY-001 -> INV-001' error after a previous timeout."
       }
     },
     "prompt_tokens": 0,
@@ -244,12 +170,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Failed to submit allocation because the system returned 'no such allocation PAY-001 -> INV-001 (250)' despite INV-001 and PAY-001 existing."
+        "reason": "Unable to submit allocation due to 'no such allocation PAY-001 -> INV-001' error after a previous timeout."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.20819628238678e-06
+    "wall_time_s": 5.499925464391708e-06
   }
 ]

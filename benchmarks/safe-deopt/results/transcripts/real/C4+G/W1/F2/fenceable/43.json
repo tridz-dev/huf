@@ -28,13 +28,48 @@
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='read_open_items', kwargs={})",
       "final_text": null
     },
     "prompt_tokens": 291,
+    "completion_tokens": 12,
+    "cached_tokens": 0,
+    "wall_time_s": 3.7155172920320183
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "read_open_items",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "read_open_items",
+      "ok": true,
+      "dispatched": true,
+      "result": []
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 9.791925549507141e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'opB'})",
+      "final_text": null
+    },
+    "prompt_tokens": 316,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.9290521249640733
+    "wall_time_s": 2.694604374933988
   },
   {
     "kind": "tool_call",
@@ -60,60 +95,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.958151400089264e-06
+    "wall_time_s": 1.0624993592500687e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='read_open_items', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 322,
-    "completion_tokens": 12,
-    "cached_tokens": 0,
-    "wall_time_s": 0.8569041250739247
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "read_open_items",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "read_open_items",
-      "ok": true,
-      "dispatched": true,
-      "result": []
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 1.3167038559913635e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out and could not be cancelled or found in open items; manual intervention required to safely complete the W1 task.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation opB timed out and could not be cancelled or found in open items; human assistance is required to resolve the state of the W1 task.'})",
       "final_text": null
     },
     "prompt_tokens": 347,
-    "completion_tokens": 41,
+    "completion_tokens": 45,
     "cached_tokens": 0,
-    "wall_time_s": 0.9704375418368727
+    "wall_time_s": 2.8610506660770625
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timed out and could not be cancelled or found in open items; manual intervention required to safely complete the W1 task."
+        "reason": "The operation opB timed out and could not be cancelled or found in open items; human assistance is required to resolve the state of the W1 task."
       }
     },
     "prompt_tokens": 0,
@@ -129,12 +129,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timed out and could not be cancelled or found in open items; manual intervention required to safely complete the W1 task."
+        "reason": "The operation opB timed out and could not be cancelled or found in open items; human assistance is required to resolve the state of the W1 task."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.00003045797348e-06
+    "wall_time_s": 4.291068762540817e-06
   }
 ]

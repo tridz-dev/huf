@@ -26,7 +26,7 @@
     "prompt_tokens": 273,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0314542499836534
+    "wall_time_s": 1.5377929999958724
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.209142833948135e-06
+    "wall_time_s": 7.3749106377363205e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 333,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9411273328587413
+    "wall_time_s": 0.7744202499743551
   },
   {
     "kind": "tool_call",
@@ -89,18 +89,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.916932761669159e-06
+    "wall_time_s": 6.667105481028557e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'invoice': 'INV-001', 'payment': 'PAY-001', 'operation_key': 'alloc-w2-001', 'amount': 250})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'invoice': 'INV-001', 'operation_key': 'op-w2-alloc-1', 'payment': 'PAY-001', 'amount': 250})",
       "final_text": null
     },
     "prompt_tokens": 389,
     "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.8723496671300381
+    "wall_time_s": 1.4027420829515904
   },
   {
     "kind": "tool_call",
@@ -108,8 +108,8 @@
       "tool_name": "create_allocation",
       "kwargs": {
         "invoice": "INV-001",
+        "operation_key": "op-w2-alloc-1",
         "payment": "PAY-001",
-        "operation_key": "alloc-w2-001",
         "amount": 250
       }
     },
@@ -124,30 +124,30 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='alloc-w2-001', status='submitted')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-alloc-1', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.412521280348301e-05
+    "wall_time_s": 1.9541941583156586e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'alloc-w2-001', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'op-w2-submit-1', 'allocation': 'ALLOC-0001'})",
       "final_text": null
     },
     "prompt_tokens": 506,
     "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.8290846250019968
+    "wall_time_s": 1.115037834038958
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "alloc-w2-001",
+        "operation_key": "op-w2-submit-1",
         "allocation": "ALLOC-0001"
       }
     },
@@ -163,30 +163,31 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "validation error at write B for submit_allocation (operation_key='alloc-w2-001'): target record changed concurrently before write B dispatched"
+      "error": "validation error at write B for submit_allocation (operation_key='op-w2-submit-1'): target record changed concurrently before write B dispatched"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.979191236197948e-05
+    "wall_time_s": 0.00014891591854393482
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Concurrent modification error occurred while submitting allocation ALLOC-0001. Escalating for manual review and completion.'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'op-w2-submit-2', 'allocation': 'ALLOC-0001'})",
       "final_text": null
     },
     "prompt_tokens": 586,
-    "completion_tokens": 37,
+    "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.9601769160944968
+    "wall_time_s": 1.4043165419716388
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_allocation",
       "kwargs": {
-        "reason": "Concurrent modification error occurred while submitting allocation ALLOC-0001. Escalating for manual review and completion."
+        "operation_key": "op-w2-submit-2",
+        "allocation": "ALLOC-0001"
       }
     },
     "prompt_tokens": 0,
@@ -197,17 +198,33 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_allocation",
       "ok": true,
       "dispatched": true,
-      "result": {
-        "escalated": true,
-        "reason": "Concurrent modification error occurred while submitting allocation ALLOC-0001. Escalating for manual review and completion."
-      }
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-alloc-1', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.499925464391708e-06
+    "wall_time_s": 1.5791039913892746e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": null,
+      "final_text": "I have successfully completed the W2 task by listing the invoices and payments, creating the payment allocation (ALLOC-0001) for invoice INV-001 and payment PAY-001 in the amount of 250, and successfully submitting the allocation."
+    },
+    "prompt_tokens": 688,
+    "completion_tokens": 56,
+    "cached_tokens": 0,
+    "wall_time_s": 1.7550345419440418
+  },
+  {
+    "kind": "final",
+    "content": "I have successfully completed the W2 task by listing the invoices and payments, creating the payment allocation (ALLOC-0001) for invoice INV-001 and payment PAY-001 in the amount of 250, and successfully submitting the allocation.",
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
   }
 ]

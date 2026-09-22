@@ -63,7 +63,7 @@
     "prompt_tokens": 479,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8960130419582129
+    "wall_time_s": 1.504219708032906
   },
   {
     "kind": "tool_call",
@@ -87,25 +87,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1082971468567848e-05
+    "wall_time_s": 7.333001121878624e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure failed mid-run during submit_linked_record (opB timeout), but read_open_items returned no open items. Need human review of state before proceeding with any recovery action.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous run failed mid-run during submit_linked_record with a timeout (operation_key='opB'), and a read_open_items check returned no open items. Safe recovery guidelines advise against blindly retrying. Escalating for human review to determine the correct next step.\"})",
       "final_text": null
     },
     "prompt_tokens": 504,
-    "completion_tokens": 53,
+    "completion_tokens": 72,
     "cached_tokens": 0,
-    "wall_time_s": 1.0864992919377983
+    "wall_time_s": 1.5938963750377297
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Procedure failed mid-run during submit_linked_record (opB timeout), but read_open_items returned no open items. Need human review of state before proceeding with any recovery action."
+        "reason": "The previous run failed mid-run during submit_linked_record with a timeout (operation_key='opB'), and a read_open_items check returned no open items. Safe recovery guidelines advise against blindly retrying. Escalating for human review to determine the correct next step."
       }
     },
     "prompt_tokens": 0,
@@ -121,12 +121,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Procedure failed mid-run during submit_linked_record (opB timeout), but read_open_items returned no open items. Need human review of state before proceeding with any recovery action."
+        "reason": "The previous run failed mid-run during submit_linked_record with a timeout (operation_key='opB'), and a read_open_items check returned no open items. Safe recovery guidelines advise against blindly retrying. Escalating for human review to determine the correct next step."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.16607677936554e-06
+    "wall_time_s": 5.624955520033836e-06
   }
 ]

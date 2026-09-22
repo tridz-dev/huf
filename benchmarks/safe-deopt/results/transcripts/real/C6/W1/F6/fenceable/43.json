@@ -64,7 +64,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8297437920700759
+    "wall_time_s": 1.6737932080868632
   },
   {
     "kind": "tool_call",
@@ -88,7 +88,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.833827450871468e-06
+    "wall_time_s": 3.7080608308315277e-06
   },
   {
     "kind": "model_step",
@@ -99,7 +99,7 @@
     "prompt_tokens": 555,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.9803355829790235
+    "wall_time_s": 0.9517544580157846
   },
   {
     "kind": "tool_call",
@@ -125,25 +125,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.249857738614082e-06
+    "wall_time_s": 7.3339324444532394e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation opB failed with a timeout, but the write was marked as committed in the run state (committed_writes). Attempting to read open items returned no items, and attempting to cancel the operation failed. Per safe recovery instructions, I am escalating to a human rather than blindly retrying or altering state further.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The failed operation submit_linked_record (opB) timed out and could not be verified via read_open_items (returned empty), nor could it be cancelled (cancel_operation returned false). To avoid risking duplicate writes or unsafe state manipulation, human intervention is required.'})",
       "final_text": null
     },
     "prompt_tokens": 586,
-    "completion_tokens": 78,
+    "completion_tokens": 70,
     "cached_tokens": 0,
-    "wall_time_s": 0.9819728329312056
+    "wall_time_s": 1.8361101250629872
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The operation opB failed with a timeout, but the write was marked as committed in the run state (committed_writes). Attempting to read open items returned no items, and attempting to cancel the operation failed. Per safe recovery instructions, I am escalating to a human rather than blindly retrying or altering state further."
+        "reason": "The failed operation submit_linked_record (opB) timed out and could not be verified via read_open_items (returned empty), nor could it be cancelled (cancel_operation returned false). To avoid risking duplicate writes or unsafe state manipulation, human intervention is required."
       }
     },
     "prompt_tokens": 0,
@@ -159,12 +159,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The operation opB failed with a timeout, but the write was marked as committed in the run state (committed_writes). Attempting to read open items returned no items, and attempting to cancel the operation failed. Per safe recovery instructions, I am escalating to a human rather than blindly retrying or altering state further."
+        "reason": "The failed operation submit_linked_record (opB) timed out and could not be verified via read_open_items (returned empty), nor could it be cancelled (cancel_operation returned false). To avoid risking duplicate writes or unsafe state manipulation, human intervention is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.4999330788850784e-06
+    "wall_time_s": 5.875015631318092e-06
   }
 ]

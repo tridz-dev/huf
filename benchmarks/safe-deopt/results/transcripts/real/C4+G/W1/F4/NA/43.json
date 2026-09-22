@@ -33,7 +33,7 @@
     "prompt_tokens": 250,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9289374169893563
+    "wall_time_s": 1.835149290971458
   },
   {
     "kind": "tool_call",
@@ -57,25 +57,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.100008375942707e-05
+    "wall_time_s": 7.2910916060209274e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a concurrent modification / validation error (ValidationErrorFault) during submit_linked_record for operation_key='opB', and no open items are currently found via read_open_items. Escalating for human assistance to resolve the concurrency conflict.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification / validation error (ValidationErrorFault) on submit_linked_record and no open items were found to retry or inspect. Escalating to human for resolution.'})",
       "final_text": null
     },
     "prompt_tokens": 275,
-    "completion_tokens": 66,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.5914781659375876
+    "wall_time_s": 1.2365792498458177
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) during submit_linked_record for operation_key='opB', and no open items are currently found via read_open_items. Escalating for human assistance to resolve the concurrency conflict."
+        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) on submit_linked_record and no open items were found to retry or inspect. Escalating to human for resolution."
       }
     },
     "prompt_tokens": 0,
@@ -91,12 +91,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) during submit_linked_record for operation_key='opB', and no open items are currently found via read_open_items. Escalating for human assistance to resolve the concurrency conflict."
+        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) on submit_linked_record and no open items were found to retry or inspect. Escalating to human for resolution."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.542075425386429e-06
+    "wall_time_s": 5.417037755250931e-06
   }
 ]

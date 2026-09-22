@@ -57,7 +57,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.465850125066936
+    "wall_time_s": 0.9859316670335829
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.4999330788850784e-06
+    "wall_time_s": 1.133396290242672e-05
   },
   {
     "kind": "model_step",
@@ -92,9 +92,9 @@
       "final_text": null
     },
     "prompt_tokens": 533,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8194686670321971
+    "wall_time_s": 1.0418862078804523
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.874798029661179e-06
+    "wall_time_s": 5.958136171102524e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 593,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.5043909158557653
+    "wall_time_s": 1.1869385419413447
   },
   {
     "kind": "tool_call",
@@ -157,26 +157,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.875030860304832e-06
+    "wall_time_s": 6.6659413278102875e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:PAY-001:250', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 649,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.757631208980456
+    "wall_time_s": 1.8096256661228836
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "INV-001:PAY-001:250",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -196,7 +196,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.304099664092064e-05
+    "wall_time_s": 2.1583866328001022e-05
   },
   {
     "kind": "model_step",
@@ -207,7 +207,7 @@
     "prompt_tokens": 721,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8824930409900844
+    "wall_time_s": 0.874177958117798
   },
   {
     "kind": "tool_call",
@@ -233,7 +233,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.499925464391708e-06
+    "wall_time_s": 6.7909713834524155e-06
   },
   {
     "kind": "model_step",
@@ -244,7 +244,7 @@
     "prompt_tokens": 777,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 1.326031125150621
+    "wall_time_s": 1.4524903330020607
   },
   {
     "kind": "tool_call",
@@ -270,25 +270,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.1248505264520645e-06
+    "wall_time_s": 6.00004568696022e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_allocation failed with 'no such allocation INV-001:PAY-001:250' even though invoice INV-001 and payment PAY-001 exist with matching amounts. Manual intervention required.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to successfully submit allocation using operation key opB due to unknown/invalid allocation format or non-existent allocation.'})",
       "final_text": null
     },
     "prompt_tokens": 837,
-    "completion_tokens": 63,
+    "completion_tokens": 37,
     "cached_tokens": 0,
-    "wall_time_s": 1.0328610001597553
+    "wall_time_s": 1.7402562501374632
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_allocation failed with 'no such allocation INV-001:PAY-001:250' even though invoice INV-001 and payment PAY-001 exist with matching amounts. Manual intervention required."
+        "reason": "Unable to successfully submit allocation using operation key opB due to unknown/invalid allocation format or non-existent allocation."
       }
     },
     "prompt_tokens": 0,
@@ -304,12 +304,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_allocation failed with 'no such allocation INV-001:PAY-001:250' even though invoice INV-001 and payment PAY-001 exist with matching amounts. Manual intervention required."
+        "reason": "Unable to successfully submit allocation using operation key opB due to unknown/invalid allocation format or non-existent allocation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.58303838968277e-06
+    "wall_time_s": 5.458947271108627e-06
   }
 ]

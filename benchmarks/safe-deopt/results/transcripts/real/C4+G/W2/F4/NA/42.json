@@ -32,9 +32,9 @@
       "final_text": null
     },
     "prompt_tokens": 252,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8443313750904053
+    "wall_time_s": 1.003427250077948
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.542098268866539e-06
+    "wall_time_s": 7.125083357095718e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 310,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8971866669598967
+    "wall_time_s": 0.6927150830160826
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.207986295223236e-06
+    "wall_time_s": 6.417045369744301e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification / validation error (ValidationErrorFault) when attempting submit_allocation. Manual review or intervention required to ensure safe allocation processing.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered concurrency validation error (ValidationErrorFault) when attempting submit_allocation. Manual intervention required.'})",
       "final_text": null
     },
     "prompt_tokens": 366,
-    "completion_tokens": 44,
+    "completion_tokens": 34,
     "cached_tokens": 0,
-    "wall_time_s": 0.9017552090808749
+    "wall_time_s": 1.9889749579597265
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) when attempting submit_allocation. Manual review or intervention required to ensure safe allocation processing."
+        "reason": "Encountered concurrency validation error (ValidationErrorFault) when attempting submit_allocation. Manual intervention required."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) when attempting submit_allocation. Manual review or intervention required to ensure safe allocation processing."
+        "reason": "Encountered concurrency validation error (ValidationErrorFault) when attempting submit_allocation. Manual intervention required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.250113412737846e-06
+    "wall_time_s": 6.375135853886604e-06
   }
 ]

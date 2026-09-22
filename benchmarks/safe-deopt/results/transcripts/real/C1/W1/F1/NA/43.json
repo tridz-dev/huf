@@ -26,7 +26,7 @@
     "prompt_tokens": 289,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8840655840467662
+    "wall_time_s": 3.7899164999835193
   },
   {
     "kind": "tool_call",
@@ -52,25 +52,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.084089934825897e-06
+    "wall_time_s": 6.458954885601997e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered an open item (Sales Invoice SINV-2001 for CUST-1 with outstanding amount 100) while attempting to complete the W1 task from scratch. Safe continuation cannot be determined without further operational context or instructions regarding this open item.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered unknown W1 task details; need human assistance to safely understand and complete the W1 task from scratch.'})",
       "final_text": null
     },
     "prompt_tokens": 362,
-    "completion_tokens": 70,
+    "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 1.0566792499739677
+    "wall_time_s": 2.3234950830228627
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered an open item (Sales Invoice SINV-2001 for CUST-1 with outstanding amount 100) while attempting to complete the W1 task from scratch. Safe continuation cannot be determined without further operational context or instructions regarding this open item."
+        "reason": "Encountered unknown W1 task details; need human assistance to safely understand and complete the W1 task from scratch."
       }
     },
     "prompt_tokens": 0,
@@ -86,12 +86,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered an open item (Sales Invoice SINV-2001 for CUST-1 with outstanding amount 100) while attempting to complete the W1 task from scratch. Safe continuation cannot be determined without further operational context or instructions regarding this open item."
+        "reason": "Encountered unknown W1 task details; need human assistance to safely understand and complete the W1 task from scratch."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.2919848561286926e-06
+    "wall_time_s": 6.3749030232429504e-06
   }
 ]

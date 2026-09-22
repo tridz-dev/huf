@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8126421659253538
+    "wall_time_s": 0.9586837089154869
   },
   {
     "kind": "tool_call",
@@ -82,18 +82,55 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.1541956812143326e-05
+    "wall_time_s": 7.458031177520752e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 560,
+    "completion_tokens": 19,
+    "cached_tokens": 0,
+    "wall_time_s": 2.0347576660569757
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "cancel_operation",
+      "kwargs": {
+        "operation_key": "opB"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "cancel_operation",
+      "ok": true,
+      "dispatched": true,
+      "result": false
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 1.1666910722851753e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
+      "final_text": null
+    },
+    "prompt_tokens": 591,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8528694589622319
+    "wall_time_s": 1.288467082893476
   },
   {
     "kind": "tool_call",
@@ -101,8 +138,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -121,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.499948307871819e-06
+    "wall_time_s": 1.5167053788900375e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous procedure failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). \n\nFollowing the safe recovery guidelines:\n1. I verified the target record's current state using `read_open_items`, which showed the item `SINV-2001` was still open and the write had not been committed.\n2. I successfully re-submitted the linked record with `submit_linked_record` using the same `operation_key='opB'`, and it is now successfully in the `submitted` status."
+      "final_text": "The previous operation timed out at `submit_linked_record` (operation key `opB`). Per safe recovery instructions, I verified the current state of open items using `read_open_items`, confirmed that the record `SINV-2001` was still open and uncommitted, and successfully submitted the linked record. The record status is now successfully updated to `submitted`."
     },
-    "prompt_tokens": 662,
-    "completion_tokens": 122,
+    "prompt_tokens": 693,
+    "completion_tokens": 79,
     "cached_tokens": 0,
-    "wall_time_s": 1.449306083843112
+    "wall_time_s": 1.2942347500938922
   },
   {
     "kind": "final",
-    "content": "The previous procedure failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). \n\nFollowing the safe recovery guidelines:\n1. I verified the target record's current state using `read_open_items`, which showed the item `SINV-2001` was still open and the write had not been committed.\n2. I successfully re-submitted the linked record with `submit_linked_record` using the same `operation_key='opB'`, and it is now successfully in the `submitted` status.",
+    "content": "The previous operation timed out at `submit_linked_record` (operation key `opB`). Per safe recovery instructions, I verified the current state of open items using `read_open_items`, confirmed that the record `SINV-2001` was still open and uncommitted, and successfully submitted the linked record. The record status is now successfully updated to `submitted`.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

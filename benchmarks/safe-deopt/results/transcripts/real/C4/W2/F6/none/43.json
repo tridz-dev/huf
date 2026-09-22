@@ -34,7 +34,7 @@
     "prompt_tokens": 243,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7326685418374836
+    "wall_time_s": 0.8071326250210404
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.666865035891533e-06
+    "wall_time_s": 3.500143066048622e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 301,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.0749025829136372
+    "wall_time_s": 0.798437749966979
   },
   {
     "kind": "tool_call",
@@ -97,138 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.295795664191246e-05
+    "wall_time_s": 6.4999330788850784e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001 (250)', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a timeout waiting for confirmation on submit_allocation (operation_key='opB'). Escalating for safe human review and handling.\"})",
       "final_text": null
     },
     "prompt_tokens": 357,
-    "completion_tokens": 40,
+    "completion_tokens": 43,
     "cached_tokens": 0,
-    "wall_time_s": 0.8315329169854522
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "submit_allocation",
-      "kwargs": {
-        "allocation": "PAY-001 -> INV-001 (250)",
-        "operation_key": "opB"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "submit_allocation",
-      "ok": false,
-      "dispatched": true,
-      "guard_rejected": false,
-      "error": "'no such allocation PAY-001 -> INV-001 (250)'"
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 2.8999987989664078e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 430,
-    "completion_tokens": 11,
-    "cached_tokens": 0,
-    "wall_time_s": 0.7605188749730587
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_invoices",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 5.666865035891533e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 488,
-    "completion_tokens": 10,
-    "cached_tokens": 0,
-    "wall_time_s": 0.922974957851693
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_payments",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_payments",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 7.917173206806183e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered 'no such allocation' error when trying to submit allocation for PAY-001 and INV-001, despite previous timeout. Need human review to verify correct allocation format or data.\"})",
-      "final_text": null
-    },
-    "prompt_tokens": 544,
-    "completion_tokens": 56,
-    "cached_tokens": 0,
-    "wall_time_s": 1.035194625146687
+    "wall_time_s": 1.0127692909445614
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered 'no such allocation' error when trying to submit allocation for PAY-001 and INV-001, despite previous timeout. Need human review to verify correct allocation format or data."
+        "reason": "Encountered a timeout waiting for confirmation on submit_allocation (operation_key='opB'). Escalating for safe human review and handling."
       }
     },
     "prompt_tokens": 0,
@@ -244,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered 'no such allocation' error when trying to submit allocation for PAY-001 and INV-001, despite previous timeout. Need human review to verify correct allocation format or data."
+        "reason": "Encountered a timeout waiting for confirmation on submit_allocation (operation_key='opB'). Escalating for safe human review and handling."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.833106115460396e-06
+    "wall_time_s": 5.166977643966675e-06
   }
 ]

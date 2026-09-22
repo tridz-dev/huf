@@ -35,7 +35,7 @@
     "prompt_tokens": 293,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8753746249713004
+    "wall_time_s": 1.4330907498952001
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.433398574590683e-05
+    "wall_time_s": 8.917180821299553e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 324,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.843764416873455
+    "wall_time_s": 1.5869480830151588
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1666910722851753e-05
+    "wall_time_s": 6.58305361866951e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 382,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8720583750400692
+    "wall_time_s": 1.2923397079575807
   },
   {
     "kind": "tool_call",
@@ -135,25 +135,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.082941010594368e-06
+    "wall_time_s": 7.917173206806183e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation opB timed out and could not be cancelled. I inspected invoices and payments, but completing the W2 task requires human intervention due to the unresolved allocation state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The previous allocation operation opB timed out and could not be cancelled. Manual review and safe continuation required.'})",
       "final_text": null
     },
     "prompt_tokens": 438,
-    "completion_tokens": 48,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.9931616669055074
+    "wall_time_s": 1.4698703750036657
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The operation opB timed out and could not be cancelled. I inspected invoices and payments, but completing the W2 task requires human intervention due to the unresolved allocation state."
+        "reason": "The previous allocation operation opB timed out and could not be cancelled. Manual review and safe continuation required."
       }
     },
     "prompt_tokens": 0,
@@ -169,12 +169,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The operation opB timed out and could not be cancelled. I inspected invoices and payments, but completing the W2 task requires human intervention due to the unresolved allocation state."
+        "reason": "The previous allocation operation opB timed out and could not be cancelled. Manual review and safe continuation required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.00006091594696e-06
+    "wall_time_s": 3.915978595614433e-06
   }
 ]

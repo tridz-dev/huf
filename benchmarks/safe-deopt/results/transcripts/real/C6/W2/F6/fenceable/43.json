@@ -63,9 +63,9 @@
       "final_text": null
     },
     "prompt_tokens": 524,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9719202909618616
+    "wall_time_s": 0.981406332924962
   },
   {
     "kind": "tool_call",
@@ -91,7 +91,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2208009138703346e-05
+    "wall_time_s": 9.125098586082458e-06
   },
   {
     "kind": "model_step",
@@ -102,7 +102,7 @@
     "prompt_tokens": 582,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.1158021250739694
+    "wall_time_s": 1.0868461250793189
   },
   {
     "kind": "tool_call",
@@ -128,7 +128,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0083196684718132e-05
+    "wall_time_s": 6.8747904151678085e-06
   },
   {
     "kind": "model_step",
@@ -139,7 +139,7 @@
     "prompt_tokens": 638,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8607959998771548
+    "wall_time_s": 1.0120837499853224
   },
   {
     "kind": "tool_call",
@@ -165,25 +165,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.624947905540466e-06
+    "wall_time_s": 1.2625008821487427e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The previous write operation opB timed out and could not be successfully canceled, leaving the system state uncertain regarding the allocation submit_allocation. Manual intervention required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timeout recovery requires human intervention: cancel_operation returned false and state is uncertain.'})",
       "final_text": null
     },
     "prompt_tokens": 669,
-    "completion_tokens": 45,
+    "completion_tokens": 33,
     "cached_tokens": 0,
-    "wall_time_s": 1.01354620908387
+    "wall_time_s": 1.048768541077152
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The previous write operation opB timed out and could not be successfully canceled, leaving the system state uncertain regarding the allocation submit_allocation. Manual intervention required."
+        "reason": "Operation opB timeout recovery requires human intervention: cancel_operation returned false and state is uncertain."
       }
     },
     "prompt_tokens": 0,
@@ -199,12 +199,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The previous write operation opB timed out and could not be successfully canceled, leaving the system state uncertain regarding the allocation submit_allocation. Manual intervention required."
+        "reason": "Operation opB timeout recovery requires human intervention: cancel_operation returned false and state is uncertain."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.749985575675964e-06
+    "wall_time_s": 4.667090252041817e-06
   }
 ]

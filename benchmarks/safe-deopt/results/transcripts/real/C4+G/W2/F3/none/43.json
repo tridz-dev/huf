@@ -32,9 +32,9 @@
       "final_text": null
     },
     "prompt_tokens": 243,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8826301670633256
+    "wall_time_s": 1.4768906671088189
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.499925464391708e-06
+    "wall_time_s": 6.582820788025856e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 303,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8047240001615137
+    "wall_time_s": 1.1392302091699094
   },
   {
     "kind": "tool_call",
@@ -97,18 +97,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.167000487446785e-06
+    "wall_time_s": 6.416114047169685e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 359,
-    "completion_tokens": 35,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.8589832501020283
+    "wall_time_s": 1.5566952920053154
   },
   {
     "kind": "tool_call",
@@ -116,7 +116,7 @@
       "tool_name": "submit_allocation",
       "kwargs": {
         "operation_key": "opB",
-        "allocation": "INV-001:PAY-001"
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -136,25 +136,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.3833167031407356e-05
+    "wall_time_s": 2.683396451175213e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_allocation failed with replay rejected for operation_key='opB' due to tool_guarantee='none'. Cannot safely retry or assume the outcome without human intervention.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_allocation call with operation_key 'opB' failed with a replay rejection due to unresolved-outcome write protection ('tool declares no recovery guarantee'). Cannot retry the write safely without human intervention.\"})",
       "final_text": null
     },
-    "prompt_tokens": 452,
-    "completion_tokens": 49,
+    "prompt_tokens": 456,
+    "completion_tokens": 55,
     "cached_tokens": 0,
-    "wall_time_s": 0.8839615839533508
+    "wall_time_s": 1.5775555840227753
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_allocation failed with replay rejected for operation_key='opB' due to tool_guarantee='none'. Cannot safely retry or assume the outcome without human intervention."
+        "reason": "The submit_allocation call with operation_key 'opB' failed with a replay rejection due to unresolved-outcome write protection ('tool declares no recovery guarantee'). Cannot retry the write safely without human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -170,12 +170,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_allocation failed with replay rejected for operation_key='opB' due to tool_guarantee='none'. Cannot safely retry or assume the outcome without human intervention."
+        "reason": "The submit_allocation call with operation_key 'opB' failed with a replay rejection due to unresolved-outcome write protection ('tool declares no recovery guarantee'). Cannot retry the write safely without human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.624955520033836e-06
+    "wall_time_s": 3.5830307751893997e-06
   }
 ]

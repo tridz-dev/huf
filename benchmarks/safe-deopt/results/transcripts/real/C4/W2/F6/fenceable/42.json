@@ -35,7 +35,7 @@
     "prompt_tokens": 293,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.7883267081342638
+    "wall_time_s": 0.9290024591609836
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2499978765845299e-05
+    "wall_time_s": 7.833121344447136e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 324,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8108446658588946
+    "wall_time_s": 0.9693155828863382
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.6249707490205765e-06
+    "wall_time_s": 3.833090886473656e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 382,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7502775411121547
+    "wall_time_s": 1.24789079092443
   },
   {
     "kind": "tool_call",
@@ -135,25 +135,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.37488779425621e-06
+    "wall_time_s": 2.500135451555252e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered timeout on submit_allocation (opB) which could not be cancelled. Manual intervention required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a timeout on submit_allocation with operation_key 'opB' and cancellation failed. Manual intervention or review is required for the W2 task allocation.\"})",
       "final_text": null
     },
     "prompt_tokens": 438,
-    "completion_tokens": 36,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 0.9718833749648184
+    "wall_time_s": 1.1604104170110077
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered timeout on submit_allocation (opB) which could not be cancelled. Manual intervention required."
+        "reason": "Encountered a timeout on submit_allocation with operation_key 'opB' and cancellation failed. Manual intervention or review is required for the W2 task allocation."
       }
     },
     "prompt_tokens": 0,
@@ -169,12 +169,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered timeout on submit_allocation (opB) which could not be cancelled. Manual intervention required."
+        "reason": "Encountered a timeout on submit_allocation with operation_key 'opB' and cancellation failed. Manual intervention or review is required for the W2 task allocation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.541834980249405e-06
+    "wall_time_s": 5.333917215466499e-06
   }
 ]

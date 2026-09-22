@@ -26,7 +26,7 @@
     "prompt_tokens": 335,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8287934171967208
+    "wall_time_s": 0.8973038750700653
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.00003807246685e-06
+    "wall_time_s": 7.458031177520752e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 395,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9130555829033256
+    "wall_time_s": 1.4562855418771505
   },
   {
     "kind": "tool_call",
@@ -89,27 +89,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.249895811080933e-06
+    "wall_time_s": 3.6249402910470963e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'op-w2-001', 'amount': 250, 'invoice': 'INV-001', 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'invoice': 'INV-001', 'operation_key': 'w2-nonidempotent-key', 'amount': 250, 'payment': 'PAY-001'})",
       "final_text": null
     },
     "prompt_tokens": 451,
-    "completion_tokens": 51,
+    "completion_tokens": 52,
     "cached_tokens": 0,
-    "wall_time_s": 1.0553518331144005
+    "wall_time_s": 1.7282667919062078
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "operation_key": "op-w2-001",
-        "amount": 250,
         "invoice": "INV-001",
+        "operation_key": "w2-nonidempotent-key",
+        "amount": 250,
         "payment": "PAY-001"
       }
     },
@@ -124,30 +124,88 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-001', status='draft')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='w2-nonidempotent-key', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9999995604157448e-05
+    "wall_time_s": 3.195786848664284e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": null,
-      "final_text": "I have completed the W2-nonidempotent task from scratch. \n\nSummary of actions:\n1. Checked outstanding invoices (Found `INV-001` for `Huf Retail Pvt Ltd` with an outstanding amount of 250).\n2. Checked received payments (Found `PAY-001` for the same customer/amount of 250).\n3. Created the allocation linking `PAY-001` to `INV-001` for the amount of 250 (`ALLOC-0001` in draft status)."
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'w2-nonidempotent-key'})",
+      "final_text": null
     },
-    "prompt_tokens": 568,
-    "completion_tokens": 123,
+    "prompt_tokens": 570,
+    "completion_tokens": 26,
     "cached_tokens": 0,
-    "wall_time_s": 1.6528537089470774
+    "wall_time_s": 1.6510435407981277
   },
   {
-    "kind": "final",
-    "content": "I have completed the W2-nonidempotent task from scratch. \n\nSummary of actions:\n1. Checked outstanding invoices (Found `INV-001` for `Huf Retail Pvt Ltd` with an outstanding amount of 250).\n2. Checked received payments (Found `PAY-001` for the same customer/amount of 250).\n3. Created the allocation linking `PAY-001` to `INV-001` for the amount of 250 (`ALLOC-0001` in draft status).",
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "cancel_operation",
+      "kwargs": {
+        "operation_key": "w2-nonidempotent-key"
+      }
+    },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
     "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "cancel_operation",
+      "ok": true,
+      "dispatched": true,
+      "result": false
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 1.3499986380338669e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The W2-nonidempotent task requires careful handling of non-idempotent operations and cancellation. The operation key could not be cancelled automatically. Escalating to human for review.'})",
+      "final_text": null
+    },
+    "prompt_tokens": 608,
+    "completion_tokens": 52,
+    "cached_tokens": 0,
+    "wall_time_s": 1.3907360420562327
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "escalate",
+      "kwargs": {
+        "reason": "The W2-nonidempotent task requires careful handling of non-idempotent operations and cancellation. The operation key could not be cancelled automatically. Escalating to human for review."
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "escalate",
+      "ok": true,
+      "dispatched": true,
+      "result": {
+        "escalated": true,
+        "reason": "The W2-nonidempotent task requires careful handling of non-idempotent operations and cancellation. The operation key could not be cancelled automatically. Escalating to human for review."
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 5.791196599602699e-06
   }
 ]

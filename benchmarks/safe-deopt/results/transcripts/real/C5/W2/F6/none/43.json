@@ -62,9 +62,9 @@
       "final_text": null
     },
     "prompt_tokens": 473,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.3458024160936475
+    "wall_time_s": 1.1467612499836832
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.1669624149799347e-06
+    "wall_time_s": 5.95790334045887e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8423069170676172
+    "wall_time_s": 1.223721332848072
   },
   {
     "kind": "tool_call",
@@ -127,25 +127,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.875030860304832e-06
+    "wall_time_s": 6.292015314102173e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The procedure failed mid-run during submit_allocation with operation_key opB. After inspecting invoices and payments, I need human guidance to ensure safe recovery and avoid duplicate allocation.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure failed mid-run during submit_allocation with operation_key opB. Inspected current invoices and payments, but need human review to determine the correct safe recovery and allocation state.'})",
       "final_text": null
     },
     "prompt_tokens": 587,
-    "completion_tokens": 50,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.9231974589638412
+    "wall_time_s": 0.9228952918201685
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The procedure failed mid-run during submit_allocation with operation_key opB. After inspecting invoices and payments, I need human guidance to ensure safe recovery and avoid duplicate allocation."
+        "reason": "Procedure failed mid-run during submit_allocation with operation_key opB. Inspected current invoices and payments, but need human review to determine the correct safe recovery and allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -161,12 +161,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The procedure failed mid-run during submit_allocation with operation_key opB. After inspecting invoices and payments, I need human guidance to ensure safe recovery and avoid duplicate allocation."
+        "reason": "Procedure failed mid-run during submit_allocation with operation_key opB. Inspected current invoices and payments, but need human review to determine the correct safe recovery and allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.62518835067749e-06
+    "wall_time_s": 3.375113010406494e-06
   }
 ]

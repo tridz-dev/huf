@@ -33,7 +33,7 @@
     "prompt_tokens": 250,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8401977089233696
+    "wall_time_s": 0.834519375115633
   },
   {
     "kind": "tool_call",
@@ -57,25 +57,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.875023245811462e-06
+    "wall_time_s": 7.082941010594368e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification / validation error (ValidationErrorFault) during submit_linked_record and no open items remain to retry or inspect. Escalating for manual review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered concurrent write modification error (ValidationErrorFault) during submit_linked_record for operation key 'opB', and no open items were returned by read_open_items. Escalating to human for safe resolution.\"})",
       "final_text": null
     },
     "prompt_tokens": 275,
-    "completion_tokens": 49,
+    "completion_tokens": 59,
     "cached_tokens": 0,
-    "wall_time_s": 1.0069380830973387
+    "wall_time_s": 0.9835973328445107
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) during submit_linked_record and no open items remain to retry or inspect. Escalating for manual review."
+        "reason": "Encountered concurrent write modification error (ValidationErrorFault) during submit_linked_record for operation key 'opB', and no open items were returned by read_open_items. Escalating to human for safe resolution."
       }
     },
     "prompt_tokens": 0,
@@ -91,12 +91,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a concurrent modification / validation error (ValidationErrorFault) during submit_linked_record and no open items remain to retry or inspect. Escalating for manual review."
+        "reason": "Encountered concurrent write modification error (ValidationErrorFault) during submit_linked_record for operation key 'opB', and no open items were returned by read_open_items. Escalating to human for safe resolution."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.2919924706220627e-06
+    "wall_time_s": 5.209119990468025e-06
   }
 ]

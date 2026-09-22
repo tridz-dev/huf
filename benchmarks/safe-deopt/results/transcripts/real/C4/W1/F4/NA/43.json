@@ -33,7 +33,7 @@
     "prompt_tokens": 250,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8776309587992728
+    "wall_time_s": 0.9106653749477118
   },
   {
     "kind": "tool_call",
@@ -57,25 +57,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.292000085115433e-06
+    "wall_time_s": 6.3749030232429504e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification validation error (ValidationErrorFault) during submit_linked_record, and no open items were returned by read_open_items. Escalating to human for safe resolution.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification validation error (ValidationErrorFault) on submit_linked_record and no open items were returned by read_open_items. Escalating for manual review and safe continuation.'})",
       "final_text": null
     },
     "prompt_tokens": 275,
     "completion_tokens": 54,
     "cached_tokens": 0,
-    "wall_time_s": 0.898644708096981
+    "wall_time_s": 1.6527745409402996
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a concurrent modification validation error (ValidationErrorFault) during submit_linked_record, and no open items were returned by read_open_items. Escalating to human for safe resolution."
+        "reason": "Encountered a concurrent modification validation error (ValidationErrorFault) on submit_linked_record and no open items were returned by read_open_items. Escalating for manual review and safe continuation."
       }
     },
     "prompt_tokens": 0,
@@ -91,12 +91,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a concurrent modification validation error (ValidationErrorFault) during submit_linked_record, and no open items were returned by read_open_items. Escalating to human for safe resolution."
+        "reason": "Encountered a concurrent modification validation error (ValidationErrorFault) on submit_linked_record and no open items were returned by read_open_items. Escalating for manual review and safe continuation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.959059879183769e-06
+    "wall_time_s": 5.041016265749931e-06
   }
 ]

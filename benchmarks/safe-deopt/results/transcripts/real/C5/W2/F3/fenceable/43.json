@@ -55,9 +55,9 @@
       "final_text": null
     },
     "prompt_tokens": 485,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.821423124987632
+    "wall_time_s": 0.8997979159466922
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.7921126931905746e-06
+    "wall_time_s": 5.499925464391708e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 545,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9193515828810632
+    "wall_time_s": 1.5500090420246124
   },
   {
     "kind": "tool_call",
@@ -120,64 +120,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.042180418968201e-06
+    "wall_time_s": 6.292015314102173e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Mid-run failure on submit_allocation (opB) with timeout. Invoices and payments listed, need human review to safely verify allocation state before proceeding.'})",
       "final_text": null
     },
     "prompt_tokens": 601,
-    "completion_tokens": 35,
+    "completion_tokens": 46,
     "cached_tokens": 0,
-    "wall_time_s": 0.87570087518543
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "submit_allocation",
-      "kwargs": {
-        "operation_key": "opB",
-        "allocation": "INV-001:PAY-001"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "submit_allocation",
-      "ok": false,
-      "dispatched": true,
-      "guard_rejected": false,
-      "error": "'no such allocation INV-001:PAY-001'"
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 1.0417075827717781e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Invoice INV-001 and payment PAY-001 do not match the expected allocation format or do not exist as valid targets for allocation submit, so a human must review the state.'})",
-      "final_text": null
-    },
-    "prompt_tokens": 665,
-    "completion_tokens": 53,
-    "cached_tokens": 0,
-    "wall_time_s": 0.9296505420934409
+    "wall_time_s": 1.1617824169807136
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Invoice INV-001 and payment PAY-001 do not match the expected allocation format or do not exist as valid targets for allocation submit, so a human must review the state."
+        "reason": "Mid-run failure on submit_allocation (opB) with timeout. Invoices and payments listed, need human review to safely verify allocation state before proceeding."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +154,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Invoice INV-001 and payment PAY-001 do not match the expected allocation format or do not exist as valid targets for allocation submit, so a human must review the state."
+        "reason": "Mid-run failure on submit_allocation (opB) with timeout. Invoices and payments listed, need human review to safely verify allocation state before proceeding."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.583984941244125e-06
+    "wall_time_s": 4.00003045797348e-06
   }
 ]

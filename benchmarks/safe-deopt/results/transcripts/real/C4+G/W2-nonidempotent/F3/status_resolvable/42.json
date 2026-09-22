@@ -33,9 +33,9 @@
       "final_text": null
     },
     "prompt_tokens": 320,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.6124044999014586
+    "wall_time_s": 1.5321162920445204
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.916009053587914e-06
+    "wall_time_s": 8.750008419156075e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 380,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7128267500083894
+    "wall_time_s": 1.0678691249340773
   },
   {
     "kind": "tool_call",
@@ -98,25 +98,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.9160014390945435e-06
+    "wall_time_s": 2.4579931050539017e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'unknown'})",
+      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': '<unknown>'})",
       "final_text": null
     },
     "prompt_tokens": 436,
-    "completion_tokens": 20,
+    "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 0.902669332921505
+    "wall_time_s": 1.3227630420587957
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "get_operation_status",
       "kwargs": {
-        "operation_key": "unknown"
+        "operation_key": "<unknown>"
       }
     },
     "prompt_tokens": 0,
@@ -135,27 +135,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.733284443616867e-05
+    "wall_time_s": 1.6249949112534523e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation_unsafe', kwargs={'invoice': 'INV-001', 'amount': 250, 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation_unsafe', kwargs={'amount': 250, 'payment': 'PAY-001', 'invoice': 'INV-001'})",
       "final_text": null
     },
-    "prompt_tokens": 476,
+    "prompt_tokens": 478,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.9219805418979377
+    "wall_time_s": 1.5446242089383304
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "kwargs": {
-        "invoice": "INV-001",
         "amount": 250,
-        "payment": "PAY-001"
+        "payment": "PAY-001",
+        "invoice": "INV-001"
       }
     },
     "prompt_tokens": 0,
@@ -175,25 +175,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.8249964341521263e-05
+    "wall_time_s": 1.829187385737896e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'submit_allocation_unsafe requires an operation_key due to non-idempotency safety guards, and we received a timeout/unknown operation key previously. Escalating safely.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Cannot execute submit_allocation_unsafe without a valid operation_key because the guard requires one to gate write tool calls safely.'})",
       "final_text": null
     },
-    "prompt_tokens": 545,
-    "completion_tokens": 49,
+    "prompt_tokens": 547,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9882541249971837
+    "wall_time_s": 1.0473744999617338
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_allocation_unsafe requires an operation_key due to non-idempotency safety guards, and we received a timeout/unknown operation key previously. Escalating safely."
+        "reason": "Cannot execute submit_allocation_unsafe without a valid operation_key because the guard requires one to gate write tool calls safely."
       }
     },
     "prompt_tokens": 0,
@@ -209,12 +209,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_allocation_unsafe requires an operation_key due to non-idempotency safety guards, and we received a timeout/unknown operation key previously. Escalating safely."
+        "reason": "Cannot execute submit_allocation_unsafe without a valid operation_key because the guard requires one to gate write tool calls safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.041970431804657e-06
+    "wall_time_s": 7.875030860304832e-06
   }
 ]

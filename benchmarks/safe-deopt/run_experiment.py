@@ -1462,19 +1462,29 @@ def write_runs_jsonl(
 
 def _wilson_ci_str(successes: int, n: int) -> str:
     """95% Wilson score interval for a binomial proportion, formatted as a string and
-    explicitly flagged when n is tiny.
+    explicitly flagged when n is small.
 
-    Issue (real-data merge): at n=2/cell (real Gemini rows) a CI is no longer strictly
-    undefined the way it is at n=1, but it is still extremely wide and easy to
-    over-read as precise. Decision (documented here rather than left implicit): we DO
-    compute a real Wilson interval for n>=2 groups -- it is honest about how little a
-    2-sample proportion tells you -- but we label it "(n=2, wide/unreliable)" (or
-    "(n=N, wide/unreliable)" for whatever N applies) rather than printing a bare
-    [lo, hi] that could be mistaken for a precise, paper-grade interval. n=1 groups
-    (the existing mocked pilot) still get a literal "NA": a Wilson interval is
-    *technically* definable at n=1 too, but PREREGISTRATION.md's existing commitment
-    for the n=1 pilot was "NA, undefined at this sample size", so n=1 rows keep that
-    wording unchanged rather than silently upgrading pilot-era rows to a new format.
+    Issue (real-data merge, n=2/cell): a CI is no longer strictly undefined the way it
+    is at n=1, but it is still extremely wide and easy to over-read as precise. Decision
+    (documented here rather than left implicit): we DO compute a real Wilson interval
+    for n>=2 groups -- it is honest about how little a small-sample proportion tells
+    you -- but it carries an explicit sample-size qualifier rather than a bare [lo, hi]
+    that could be mistaken for a precise, paper-grade interval. n=1 groups (the existing
+    mocked pilot) still get a literal "NA": a Wilson interval is *technically* definable
+    at n=1 too, but PREREGISTRATION.md's existing commitment for the n=1 pilot was "NA,
+    undefined at this sample size", so n=1 rows keep that wording unchanged rather than
+    silently upgrading pilot-era rows to a new format.
+
+    Issue (full n=10 real-data merge): at n=2 the qualifier was "(n=2, wide/unreliable)"
+    for every real group, because 2 samples genuinely cannot support anything stronger.
+    At n=10/cell (the full 10-seed real Gemini run) the interval is materially tighter
+    and worth reporting as a real, if still modest, CI rather than being lumped under
+    the same "wide/unreliable" wording used for n=2 -- that would misrepresent a 5x
+    larger sample as no better than the pilot. So the qualifier now varies with n: n<5
+    keeps "wide/unreliable" (still true at that size), 5<=n<30 is labeled "modest
+    sample" (a real interval, not paper-grade precision), and n>=30 drops the qualifier
+    to just the sample size. Thresholds are a judgment call, not a statistical law --
+    they only change the English label, never the interval math itself.
     """
     if n <= 1:
         return "NA"
@@ -1486,7 +1496,15 @@ def _wilson_ci_str(successes: int, n: int) -> str:
     center = (phat + z * z / (2 * n)) / denom
     half = (z * math.sqrt((phat * (1 - phat) / n) + (z * z / (4 * n * n)))) / denom
     lo, hi = max(0.0, center - half), min(1.0, center + half)
-    return f"[{lo:.3f}, {hi:.3f}] (n={n}, wide/unreliable)"
+    if n < 5:
+        qualifier = "wide/unreliable"
+    elif n < 30:
+        qualifier = "modest sample"
+    else:
+        qualifier = None
+    if qualifier is None:
+        return f"[{lo:.3f}, {hi:.3f}] (n={n})"
+    return f"[{lo:.3f}, {hi:.3f}] (n={n}, {qualifier})"
 
 
 def write_summary_csv(rows: list[dict]) -> None:
@@ -1527,21 +1545,25 @@ def write_summary_csv(rows: list[dict]) -> None:
     with open(SUMMARY_CSV_PATH, "w", newline="") as f:
         f.write(
             "# MIXED -- this file now contains BOTH real Gemini rows (data_source=real, "
-            "n=2/cell, gemini-3.5-flash-lite, real dollar cost) AND the original mocked "
-            "pilot rows (data_source=mocked, n=1/cell, MockedModel) -- see run_manifest.json "
-            "for the real run's provenance. They are grouped SEPARATELY by data_source and "
-            "are never averaged together; a (condition, fault, tool_guarantee) pair with "
-            "both real and mocked data appears as two distinct rows here.\n"
+            "n=10/cell, gemini-3.5-flash-lite, real dollar cost -- the full 10-seed run that "
+            "supersedes the earlier n=2 pilot) AND the original mocked pilot rows "
+            "(data_source=mocked, n=1/cell, MockedModel) -- see run_manifest.json for the "
+            "real run's provenance, and results/.n2_pilot_backup/ for the superseded n=2 "
+            "pilot data. They are grouped SEPARATELY by data_source and are never averaged "
+            "together; a (condition, fault, tool_guarantee) pair with both real and mocked "
+            "data appears as two distinct rows here.\n"
         )
         f.write(
             "# CI policy: mocked rows are still n=1/cell -- correctness_rate_ci etc. remain "
             "the literal string \"NA\" (undefined at n=1, per PREREGISTRATION.md). Real rows "
-            "are n=2/cell -- we DO compute a 95% Wilson score interval for the binary-rate "
-            "columns rather than hiding behind NA, but every real CI is explicitly suffixed "
-            "\"(n=2, wide/unreliable)\" so it is never mistaken for a precise estimate. "
-            "Non-binary columns (mean_blocked_retries, mean_tool_calls, mean_tokens_estimated, "
-            "mean_wall_time_seconds) have no CI column at all, real or mocked, at this sample "
-            "size.\n"
+            "are n=10/cell (up from n=2 in the earlier pilot) -- we compute a 95% Wilson "
+            "score interval for the binary-rate columns rather than hiding behind NA; at "
+            "n=10 this is a real, if still modest, interval, so it is suffixed \"(n=10, "
+            "modest sample)\" rather than the pilot's \"(n=2, wide/unreliable)\" wording -- "
+            "see _wilson_ci_str's docstring for the exact n-dependent labeling. Non-binary "
+            "columns (mean_blocked_retries, mean_tool_calls, mean_tokens_estimated, "
+            "mean_wall_time_seconds) have no CI column at all, real or mocked, at this "
+            "sample size.\n"
         )
         writer = csv.writer(f)
         writer.writerow(header)

@@ -57,7 +57,7 @@
     "prompt_tokens": 493,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7898262080270797
+    "wall_time_s": 0.8240435421466827
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4750054106116295e-05
+    "wall_time_s": 7.750000804662704e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9410387501120567
+    "wall_time_s": 1.4780323749873787
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.458954885601997e-06
+    "wall_time_s": 6.58305361866951e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 590,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.926830958109349
+    "wall_time_s": 0.7756993330549449
   },
   {
     "kind": "tool_call",
@@ -157,25 +157,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.4999330788850784e-06
+    "wall_time_s": 6.666872650384903e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001 (250)', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:PAY-001:250', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 646,
-    "completion_tokens": 40,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9170853749383241
+    "wall_time_s": 1.1608842918649316
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "PAY-001 -> INV-001 (250)",
+        "allocation": "INV-001:PAY-001:250",
         "operation_key": "opB"
       }
     },
@@ -191,30 +191,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such allocation PAY-001 -> INV-001 (250)'"
+      "error": "'no such allocation INV-001:PAY-001:250'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.945796586573124e-05
+    "wall_time_s": 2.8041889891028404e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to allocate PAY-001 to INV-001 via submit_allocation due to 'no such allocation' error after recovering from timeout.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Allocation submission failed with 'no such allocation' error after timeout recovery check.\"})",
       "final_text": null
     },
-    "prompt_tokens": 719,
-    "completion_tokens": 45,
+    "prompt_tokens": 718,
+    "completion_tokens": 29,
     "cached_tokens": 0,
-    "wall_time_s": 0.8464662921614945
+    "wall_time_s": 1.1070459589827806
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to allocate PAY-001 to INV-001 via submit_allocation due to 'no such allocation' error after recovering from timeout."
+        "reason": "Allocation submission failed with 'no such allocation' error after timeout recovery check."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to allocate PAY-001 to INV-001 via submit_allocation due to 'no such allocation' error after recovering from timeout."
+        "reason": "Allocation submission failed with 'no such allocation' error after timeout recovery check."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.541827365756035e-06
+    "wall_time_s": 5.875015631318092e-06
   }
 ]

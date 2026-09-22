@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.7865351671352983
+    "wall_time_s": 1.3916782909072936
   },
   {
     "kind": "tool_call",
@@ -59,26 +59,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2541888281702995e-05
+    "wall_time_s": 9.709037840366364e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 314,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.974051833152771
+    "wall_time_s": 1.666589916916564
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_name": "SINV-2001",
         "operation_key": "opB",
+        "reference_name": "SINV-2001",
         "reference_type": "Sales Invoice"
       }
     },
@@ -98,22 +98,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1958181858062744e-05
+    "wall_time_s": 1.13749410957098e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The W1 task has been successfully completed and the linked record `SINV-2001` (operation key `opB`) has been submitted."
+      "final_text": "The W1 task has been successfully completed. The linked record `SINV-2001` (Sales Invoice) for `CUST-1` has been successfully submitted with operation key `opB`."
     },
     "prompt_tokens": 416,
-    "completion_tokens": 32,
+    "completion_tokens": 43,
     "cached_tokens": 0,
-    "wall_time_s": 0.9641810827888548
+    "wall_time_s": 1.0546800000593066
   },
   {
     "kind": "final",
-    "content": "The W1 task has been successfully completed and the linked record `SINV-2001` (operation key `opB`) has been submitted.",
+    "content": "The W1 task has been successfully completed. The linked record `SINV-2001` (Sales Invoice) for `CUST-1` has been successfully submitted with operation key `opB`.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

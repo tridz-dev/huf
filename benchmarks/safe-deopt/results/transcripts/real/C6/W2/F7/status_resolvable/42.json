@@ -57,7 +57,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.1347462080884725
+    "wall_time_s": 2.7817408749833703
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5416881069540977e-05
+    "wall_time_s": 1.216609962284565e-05
   },
   {
     "kind": "model_step",
@@ -92,9 +92,9 @@
       "final_text": null
     },
     "prompt_tokens": 529,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9452097499743104
+    "wall_time_s": 4.517645665910095
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.166985258460045e-06
+    "wall_time_s": 2.2079329937696457e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 589,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8171004590112716
+    "wall_time_s": 3.1344784998800606
   },
   {
     "kind": "tool_call",
@@ -157,7 +157,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.58306884765625e-06
+    "wall_time_s": 5.916925147175789e-06
   },
   {
     "kind": "model_step",
@@ -168,7 +168,7 @@
     "prompt_tokens": 645,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.219927875092253
+    "wall_time_s": 2.5299431669991463
   },
   {
     "kind": "tool_call",
@@ -196,136 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.1458137780427933e-05
+    "wall_time_s": 2.8999987989664078e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB failed with timeout and replay is rejected due to lack of tool guarantee. Manual intervention required to verify allocation state.'})",
       "final_text": null
     },
     "prompt_tokens": 742,
-    "completion_tokens": 21,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.0081554998178035
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "get_operation_status",
-      "kwargs": {
-        "operation_key": "opB"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "get_operation_status",
-      "ok": true,
-      "dispatched": true,
-      "result": "UNKNOWN"
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 4.999805241823196e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 779,
-    "completion_tokens": 11,
-    "cached_tokens": 0,
-    "wall_time_s": 0.9916054580826312
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_invoices",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 8.33394005894661e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 839,
-    "completion_tokens": 10,
-    "cached_tokens": 0,
-    "wall_time_s": 0.867556249955669
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_payments",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_payments",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 7.1660615503787994e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB returned UNKNOWN status and retry/replay is rejected by tool guarantee rules. Invoices still show outstanding_amount: 250 with payment unallocated. Manual intervention needed.'})",
-      "final_text": null
-    },
-    "prompt_tokens": 895,
-    "completion_tokens": 53,
-    "cached_tokens": 0,
-    "wall_time_s": 1.3484720839187503
+    "wall_time_s": 2.5034676250070333
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB returned UNKNOWN status and retry/replay is rejected by tool guarantee rules. Invoices still show outstanding_amount: 250 with payment unallocated. Manual intervention needed."
+        "reason": "Operation opB failed with timeout and replay is rejected due to lack of tool guarantee. Manual intervention required to verify allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -341,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB returned UNKNOWN status and retry/replay is rejected by tool guarantee rules. Invoices still show outstanding_amount: 250 with payment unallocated. Manual intervention needed."
+        "reason": "Operation opB failed with timeout and replay is rejected due to lack of tool guarantee. Manual intervention required to verify allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.3749030232429504e-06
+    "wall_time_s": 6.417045369744301e-06
   }
 ]

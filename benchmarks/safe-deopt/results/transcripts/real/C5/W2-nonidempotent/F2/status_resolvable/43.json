@@ -55,9 +55,9 @@
       "final_text": null
     },
     "prompt_tokens": 518,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8813977909740061
+    "wall_time_s": 2.024878832977265
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.249865353107452e-06
+    "wall_time_s": 6.58305361866951e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 576,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7966146250255406
+    "wall_time_s": 1.2505839578807354
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.00004568696022e-06
+    "wall_time_s": 7.250113412737846e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 632,
     "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 0.8697727501858026
+    "wall_time_s": 1.1505854581482708
   },
   {
     "kind": "tool_call",
@@ -157,7 +157,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.16607677936554e-06
+    "wall_time_s": 1.950003206729889e-05
   },
   {
     "kind": "model_step",
@@ -168,7 +168,7 @@
     "prompt_tokens": 674,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8578320408705622
+    "wall_time_s": 0.8556626660283655
   },
   {
     "kind": "tool_call",
@@ -194,7 +194,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.375128239393234e-06
+    "wall_time_s": 8.041970431804657e-06
   },
   {
     "kind": "model_step",
@@ -205,7 +205,7 @@
     "prompt_tokens": 732,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.4975719170179218
+    "wall_time_s": 1.5125287920236588
   },
   {
     "kind": "tool_call",
@@ -231,25 +231,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.709022611379623e-06
+    "wall_time_s": 7.791910320520401e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The operation timed out and status check returned NOT_COMMITTED, but the available tool is submit_allocation_unsafe which is non-idempotent and risky to blindly retry without an operation key or confirmation. Escalating for human review.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Invoice INV-001 has an outstanding amount of 0 and payment PAY-001 has no allocation details or cannot be allocated further. Investigation required.'})",
       "final_text": null
     },
     "prompt_tokens": 788,
-    "completion_tokens": 63,
+    "completion_tokens": 47,
     "cached_tokens": 0,
-    "wall_time_s": 0.9843467909377068
+    "wall_time_s": 1.4985102079808712
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The operation timed out and status check returned NOT_COMMITTED, but the available tool is submit_allocation_unsafe which is non-idempotent and risky to blindly retry without an operation key or confirmation. Escalating for human review."
+        "reason": "Invoice INV-001 has an outstanding amount of 0 and payment PAY-001 has no allocation details or cannot be allocated further. Investigation required."
       }
     },
     "prompt_tokens": 0,
@@ -265,12 +265,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The operation timed out and status check returned NOT_COMMITTED, but the available tool is submit_allocation_unsafe which is non-idempotent and risky to blindly retry without an operation key or confirmation. Escalating for human review."
+        "reason": "Invoice INV-001 has an outstanding amount of 0 and payment PAY-001 has no allocation details or cannot be allocated further. Investigation required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9171275198459625e-06
+    "wall_time_s": 4.792120307683945e-06
   }
 ]

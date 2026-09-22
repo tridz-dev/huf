@@ -1,8 +1,8 @@
 {
   "_description": "Provenance manifest for the real (non-mocked) Gemini rows merged into results/runs.jsonl. Allowlisted fields only -- no full environment dump, no secret-adjacent values (API keys, tokens) anywhere in this file.",
   "run_kind": "real_llm_execution",
-  "huf_commit_hash": "38fe07b28030f6ba742d9d45d01d489dcde5b00f",
-  "huf_commit_note": "HEAD of research/safe-deopt-experiment at the time these 5 workers were dispatched; all 600 merged real rows carry this exact huf_commit_hash per-row (verified: single distinct value across results/runs.jsonl).",
+  "huf_commit_hash": "8ba45882b9e5494ac4d584ae3fd3e8c88d99dd4b",
+  "huf_commit_note": "HEAD of research/safe-deopt-experiment at the time the 5 full-10-seed workers were dispatched; all 3000 merged real rows carry this exact huf_commit_hash per-row (verified: single distinct value across results/runs.jsonl).",
   "model": {
     "model_id": "gemini-3.5-flash-lite",
     "provider": "google",
@@ -12,39 +12,46 @@
   "pricing_date": "2026-09-22",
   "pricing_note": "Per the cost-wiring commit (1187f469, 'wire real dollar-cost computation for live LLM rows'). Each row's own pricing_date field ('2026-09-22' throughout) matches this.",
   "seeds": {
-    "seed_list_per_cell": [42, 43],
-    "note": "Every real (condition, workload, fault, tool_guarantee) cell that actually dispatched a model call has exactly these 2 seeds. Cells for fault F0 (no fault) and F5 do not invoke a model and have no transcript/seed rows by design (see recovery_harness.py); this affects C4/C4+G/C5/C6 uniformly (12 no-model rows per condition) and does not affect C1."
+    "seed_list_per_cell": [42, 43, 44, 45, 46, 47, 48, 49, 50, 51],
+    "note": "Every real (condition, workload, fault, tool_guarantee) cell that actually dispatched a model call has exactly these 10 seeds. Cells for fault F0 (no fault) and F5 do not invoke a model and have no transcript/seed rows by design (see recovery_harness.py); this affects C4/C4+G/C5/C6 uniformly (60 no-model rows per condition) and does not affect C1."
   },
   "conditions": {
     "real_gemini": ["C1", "C4", "C4+G", "C5", "C6"],
     "mocked_only": ["C2", "C3"],
     "note": "C2 (naive compiled replay) and C3 (deterministic resume) never invoke a model in this harness by construction (see run_experiment.py module docstring) -- they were never candidates for a real run and remain mocked/deterministic-only."
   },
-  "total_real_rows": 600,
-  "total_real_cost_usd": 0.4562005,
-  "per_worker_cost_usd": {
-    "C1": 0.121272,
-    "C4": 0.0729948,
-    "C4+G": 0.0686117,
-    "C5": 0.0933791,
-    "C6": 0.099943
+  "total_real_rows": 3000,
+  "total_real_cost_usd": 2.249976,
+  "per_condition_cost_usd": {
+    "C1": 0.612154,
+    "C4": 0.350659,
+    "C4+G": 0.341396,
+    "C5": 0.471574,
+    "C6": 0.474193
   },
   "worker_output_files_merged": [
-    "results/runs.workerC1.jsonl",
-    "results/runs.workerC4.jsonl",
-    "results/runs.workerC4G.jsonl",
-    "results/runs.workerC5.jsonl",
-    "results/runs.workerC6.jsonl"
+    "results/runs.full10C1.jsonl",
+    "results/runs.full10C4.jsonl",
+    "results/runs.full10C4G.jsonl",
+    "results/runs.full10C5.jsonl",
+    "results/runs.full10C6.jsonl"
   ],
   "transcripts_location": "results/transcripts/real/<condition>/<workload>/<fault>/<tool_guarantee>/<seed>.json",
-  "transcripts_location_note": "Merged from the 5 workers' results/transcripts.worker*/ directories into a dedicated results/transcripts/real/ subtree (NOT flattened into the top-level results/transcripts/ tree used by mocked rows) -- verification during the merge found that mocked transcripts already occupy the identical <condition>/<workload>/<fault>/<tool_guarantee>/42.json paths for every condition (mocked runs also use seed 42), so a flat merge would have silently overwritten 276 mocked transcript files. Each merged real row's transcript_path field was rewritten accordingly.",
+  "transcripts_location_note": "Merged from the 5 full-10-seed workers' results/transcripts.full10<condition>/ directories into results/transcripts/real/, replacing the n=2 pilot's real transcripts (which occupied the same path convention). Mocked transcripts continue to live in the separate flat results/transcripts/<condition>/... tree and were not touched by this merge. Each merged real row's transcript_path field was rewritten from results/transcripts.full10<condition>/... to results/transcripts/real/... and verified to resolve on disk for all 2760 rows that carry a transcript (F0/F5 cells have none, by design).",
   "plan_reference": {
     "path": "Tracks/SafeDeoptExperiment/PLAN_V3.md",
     "commit_hash": null,
-    "note": "PLAN_V3.md lives under the workspace's Tracks/ directory, which is gitignored at the workspace-repo level (see .gitignore:26, '/Tracks/*') -- it is a local planning doc, not under version control, so no commit hash exists to point to. Referenced here by its stable local path; file mtime at manifest-write time was 2026-09-22T14:39:33 local."
+    "note": "PLAN_V3.md lives under the workspace's Tracks/ directory, which is gitignored at the workspace-repo level (see .gitignore:26, '/Tracks/*') -- it is a local planning doc, not under version control, so no commit hash exists to point to. Referenced here by its stable local path."
+  },
+  "supersedes_n2_pilot": {
+    "note": "This n=10/cell run (3000 real rows, $2.249976) supersedes the earlier n=2/cell pilot (600 real rows, $0.4562005, commit dfd97bf8) entirely -- same 5 conditions, same model, same commit lineage (built on the n=2 pilot's follow-on commit), just 5x the seeds per cell. The n=2 pilot's runs.jsonl rows and results/transcripts/real/ transcripts were backed up rather than deleted, and remain available as a first, smaller-sample reference point.",
+    "n2_pilot_backup_location": "results/.n2_pilot_backup/runs.n2.jsonl (600 rows) and results/.n2_pilot_backup/transcripts.real.n2/ (552 transcript files)",
+    "n2_pilot_cost_usd": 0.4562005,
+    "running_total_real_spend_across_both_passes_usd": 2.7061765,
+    "running_total_note": "2.249976 (this n=10 run) + 0.4562005 (n=2 pilot) = 2.7061765. The two runs are NOT the same data added together -- the n=10 run independently re-executed all 5 conditions at more seeds; this total is offered only as a running tally of real dollars spent across both experimental passes, not as a corrected or larger sample. The primary, citable real dataset is the n=10 run's $2.249976 alone."
   },
   "stale_data_quarantined": {
-    "note": "Before this merge, results/runs.jsonl already contained ONE pre-existing real row (condition C4/W1/F1, seed 42) and results/transcripts/C4/W1/F1/NA/42.json already held a real transcript -- both left over from an earlier one-off smoke test (commit 644f111a) against an OLDER commit hash (4f0160cf...), not the 5-worker run this manifest documents. That stale row/transcript was NOT included in the 600-row merge (it would have double-counted the C4/W1/F1/seed-42 cell against an inconsistent commit hash) and was backed up rather than deleted.",
+    "note": "Before the n=2 merge (commit dfd97bf8), results/runs.jsonl had briefly contained ONE pre-existing real row (condition C4/W1/F1, seed 42) and results/transcripts/C4/W1/F1/NA/42.json had held a real transcript -- both left over from an earlier one-off smoke test (commit 644f111a) against an OLDER commit hash (4f0160cf...). That stale row/transcript was excluded from every subsequent merge (including this one) and remains backed up, untouched, at the location below.",
     "backup_location": "results/.stale_smoke_test_backup/"
   }
 }

@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8660186671186239
+    "wall_time_s": 2.2643615000415593
   },
   {
     "kind": "tool_call",
@@ -60,26 +60,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.083887562155724e-06
+    "wall_time_s": 1.0249903425574303e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'task', 'reference_name': 'W1', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'W1', 'reference_type': 'task', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 337,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.8370408751070499
+    "wall_time_s": 2.5635921249631792
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "task",
         "reference_name": "W1",
+        "reference_type": "task",
         "operation_key": "opB"
       }
     },
@@ -100,25 +100,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1499971151351929e-05
+    "wall_time_s": 3.6333221942186356e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record for opB timed out and returned NOT_COMMITTED, but replay is rejected with tool_guarantee='none' preventing automatic retry. Manual intervention required.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record for opB timed out and returned NOT_COMMITTED, but the tool guarantee is 'none' and retrying/replaying writes is not permitted without a recovery guarantee. Escalating for safe continuation.\"})",
       "final_text": null
     },
     "prompt_tokens": 435,
-    "completion_tokens": 52,
+    "completion_tokens": 61,
     "cached_tokens": 0,
-    "wall_time_s": 0.9458462921902537
+    "wall_time_s": 1.335778292035684
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_linked_record for opB timed out and returned NOT_COMMITTED, but replay is rejected with tool_guarantee='none' preventing automatic retry. Manual intervention required."
+        "reason": "submit_linked_record for opB timed out and returned NOT_COMMITTED, but the tool guarantee is 'none' and retrying/replaying writes is not permitted without a recovery guarantee. Escalating for safe continuation."
       }
     },
     "prompt_tokens": 0,
@@ -134,12 +134,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_linked_record for opB timed out and returned NOT_COMMITTED, but replay is rejected with tool_guarantee='none' preventing automatic retry. Manual intervention required."
+        "reason": "submit_linked_record for opB timed out and returned NOT_COMMITTED, but the tool guarantee is 'none' and retrying/replaying writes is not permitted without a recovery guarantee. Escalating for safe continuation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.8330832719802856e-06
+    "wall_time_s": 5.125068128108978e-06
   }
 ]

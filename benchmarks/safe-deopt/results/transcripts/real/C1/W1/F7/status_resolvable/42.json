@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8274691249243915
+    "wall_time_s": 1.2615777088794857
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.749977961182594e-06
+    "wall_time_s": 6.6659413278102875e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8847330000717193
+    "wall_time_s": 1.9583529578521848
   },
   {
     "kind": "tool_call",
@@ -89,27 +89,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.041039109230042e-06
+    "wall_time_s": 8.042203262448311e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'W1', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'W1', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9268074589781463
+    "wall_time_s": 0.9203405410517007
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_name": "SINV-2001",
         "operation_key": "W1",
-        "reference_type": "Sales Invoice"
+        "reference_type": "Sales Invoice",
+        "reference_name": "SINV-2001"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00010958290658891201
+    "wall_time_s": 0.00014050002209842205
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.039132332894951
+    "wall_time_s": 1.050902625080198
   },
   {
     "kind": "tool_call",
@@ -166,25 +166,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0875053703784943e-05
+    "wall_time_s": 1.1249911040067673e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The status of operation W1 is UNKNOWN after a timeout error on submit_linked_record. Human intervention is required to safely verify and complete the task.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation for W1 timed out and the status is unknown; unable to verify if the task was completed successfully.'})",
       "final_text": null
     },
     "prompt_tokens": 566,
-    "completion_tokens": 46,
+    "completion_tokens": 42,
     "cached_tokens": 0,
-    "wall_time_s": 1.7742920001037419
+    "wall_time_s": 1.466403457801789
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The status of operation W1 is UNKNOWN after a timeout error on submit_linked_record. Human intervention is required to safely verify and complete the task."
+        "reason": "The submit_linked_record operation for W1 timed out and the status is unknown; unable to verify if the task was completed successfully."
       }
     },
     "prompt_tokens": 0,
@@ -200,12 +200,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The status of operation W1 is UNKNOWN after a timeout error on submit_linked_record. Human intervention is required to safely verify and complete the task."
+        "reason": "The submit_linked_record operation for W1 timed out and the status is unknown; unable to verify if the task was completed successfully."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.250075340270996e-06
+    "wall_time_s": 7.416121661663055e-06
   }
 ]

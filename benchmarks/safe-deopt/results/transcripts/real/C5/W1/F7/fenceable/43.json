@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8297368339262903
+    "wall_time_s": 1.9332562079653144
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.709030225872993e-06
+    "wall_time_s": 7.665948942303658e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 560,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.7491213751491159
+    "wall_time_s": 1.4166422500275075
   },
   {
     "kind": "tool_call",
@@ -119,7 +119,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1165859177708626e-05
+    "wall_time_s": 1.4416873455047607e-05
   },
   {
     "kind": "model_step",
@@ -130,7 +130,7 @@
     "prompt_tokens": 591,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9248827078845352
+    "wall_time_s": 2.0789260000456125
   },
   {
     "kind": "tool_call",
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0874820873141289e-05
+    "wall_time_s": 1.516612246632576e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The procedure recovery was successful:\n1. Checked the current state of open items using `read_open_items` to verify whether the previous write `submit_linked_record` (`opB`) had committed.\n2. The read confirmed the record was still open and not submitted.\n3. Fenced/cancelled the held write operation (`opB`) using `cancel_operation`.\n4. Successfully submitted the linked record (`SINV-2001`) with a new operation key (`opC`)."
+      "final_text": "The previous run failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). Following the safe recovery guidelines:\n\n1. **Verified state:** Read open items to confirm the current state (`SINV-2001` was open and had not been successfully submitted).\n2. **Cancelled the held operation:** Fenced and cancelled the pending write operation key `opB`.\n3. **Completed the recovery:** Used the atomic tool call `submit_linked_record` with a fresh operation key (`opC`) to successfully submit the record (`SINV-2001`), which is now in `submitted` status."
     },
     "prompt_tokens": 693,
-    "completion_tokens": 106,
+    "completion_tokens": 141,
     "cached_tokens": 0,
-    "wall_time_s": 1.7295819579157978
+    "wall_time_s": 1.8576941669452935
   },
   {
     "kind": "final",
-    "content": "The procedure recovery was successful:\n1. Checked the current state of open items using `read_open_items` to verify whether the previous write `submit_linked_record` (`opB`) had committed.\n2. The read confirmed the record was still open and not submitted.\n3. Fenced/cancelled the held write operation (`opB`) using `cancel_operation`.\n4. Successfully submitted the linked record (`SINV-2001`) with a new operation key (`opC`).",
+    "content": "The previous run failed mid-run during `submit_linked_record` due to a timeout (`operation_key='opB'`). Following the safe recovery guidelines:\n\n1. **Verified state:** Read open items to confirm the current state (`SINV-2001` was open and had not been successfully submitted).\n2. **Cancelled the held operation:** Fenced and cancelled the pending write operation key `opB`.\n3. **Completed the recovery:** Used the atomic tool call `submit_linked_record` with a fresh operation key (`opC`) to successfully submit the record (`SINV-2001`), which is now in `submitted` status.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -62,9 +62,9 @@
       "final_text": null
     },
     "prompt_tokens": 473,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 1.1006857079919428
+    "wall_time_s": 0.8319901251234114
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.583984941244125e-06
+    "wall_time_s": 6.875023245811462e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8639123330358416
+    "wall_time_s": 0.9669512079562992
   },
   {
     "kind": "tool_call",
@@ -127,25 +127,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.125075742602348e-06
+    "wall_time_s": 9.624985978007317e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous procedure failed mid-run during submit_allocation with operation_key 'opB'. After checking invoices and payments, the current state needs human review to safely determine the correct recovery action and allocation without risking duplicate writes.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered mid-run failure on submit_allocation (opB timed out). Checked invoice state via list_invoices and list_payments. Requesting human review and guidance on whether allocation was fully committed or requires manual intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 587,
-    "completion_tokens": 59,
+    "completion_tokens": 61,
     "cached_tokens": 0,
-    "wall_time_s": 1.3092590000014752
+    "wall_time_s": 1.6687970841303468
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The previous procedure failed mid-run during submit_allocation with operation_key 'opB'. After checking invoices and payments, the current state needs human review to safely determine the correct recovery action and allocation without risking duplicate writes."
+        "reason": "Encountered mid-run failure on submit_allocation (opB timed out). Checked invoice state via list_invoices and list_payments. Requesting human review and guidance on whether allocation was fully committed or requires manual intervention."
       }
     },
     "prompt_tokens": 0,
@@ -161,12 +161,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The previous procedure failed mid-run during submit_allocation with operation_key 'opB'. After checking invoices and payments, the current state needs human review to safely determine the correct recovery action and allocation without risking duplicate writes."
+        "reason": "Encountered mid-run failure on submit_allocation (opB timed out). Checked invoice state via list_invoices and list_payments. Requesting human review and guidance on whether allocation was fully committed or requires manual intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.790963768959045e-06
+    "wall_time_s": 5.58304600417614e-06
   }
 ]

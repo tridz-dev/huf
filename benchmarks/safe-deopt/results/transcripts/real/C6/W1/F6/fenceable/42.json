@@ -64,7 +64,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.873968165833503
+    "wall_time_s": 1.0844130420591682
   },
   {
     "kind": "tool_call",
@@ -88,7 +88,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.292007699608803e-06
+    "wall_time_s": 8.958857506513596e-06
   },
   {
     "kind": "model_step",
@@ -99,7 +99,7 @@
     "prompt_tokens": 555,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8530011659022421
+    "wall_time_s": 1.945546583039686
   },
   {
     "kind": "tool_call",
@@ -125,25 +125,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2708129361271858e-05
+    "wall_time_s": 1.100008375942707e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous write operation timed out and could not be verified via read_open_items or safely cancelled via cancel_operation (operation key 'opB'). Safe recovery requires human intervention to prevent duplicate or inconsistent submissions.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The failed submit_linked_record operation (opB) timed out and could not be confirmed via read_open_items (returned empty), and cancel_operation failed for operation_key 'opB'. To avoid duplicate submissions or inconsistent state, escalating to a human for safe recovery.\"})",
       "final_text": null
     },
     "prompt_tokens": 586,
-    "completion_tokens": 57,
+    "completion_tokens": 72,
     "cached_tokens": 0,
-    "wall_time_s": 1.03840645798482
+    "wall_time_s": 2.3546554159838706
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The previous write operation timed out and could not be verified via read_open_items or safely cancelled via cancel_operation (operation key 'opB'). Safe recovery requires human intervention to prevent duplicate or inconsistent submissions."
+        "reason": "The failed submit_linked_record operation (opB) timed out and could not be confirmed via read_open_items (returned empty), and cancel_operation failed for operation_key 'opB'. To avoid duplicate submissions or inconsistent state, escalating to a human for safe recovery."
       }
     },
     "prompt_tokens": 0,
@@ -159,12 +159,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The previous write operation timed out and could not be verified via read_open_items or safely cancelled via cancel_operation (operation key 'opB'). Safe recovery requires human intervention to prevent duplicate or inconsistent submissions."
+        "reason": "The failed submit_linked_record operation (opB) timed out and could not be confirmed via read_open_items (returned empty), and cancel_operation failed for operation_key 'opB'. To avoid duplicate submissions or inconsistent state, escalating to a human for safe recovery."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.958143785595894e-06
+    "wall_time_s": 4.666857421398163e-06
   }
 ]

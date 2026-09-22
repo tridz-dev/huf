@@ -64,7 +64,7 @@
     "prompt_tokens": 538,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8933440828695893
+    "wall_time_s": 1.1421494998503476
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.6249707490205765e-06
+    "wall_time_s": 7.58306123316288e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 577,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8554690829478204
+    "wall_time_s": 1.0273088330868632
   },
   {
     "kind": "tool_call",
@@ -125,22 +125,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.624947905540466e-06
+    "wall_time_s": 4.917150363326073e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` (associated with `submit_linked_record`) has successfully **COMMITTED** despite the previous timeout error. Verifying the operation status confirmed the write went through, and reading open items shows no remaining items requiring action. The task is complete."
+      "final_text": "The operation `opB` (associated with `submit_linked_record`) has been successfully verified as `COMMITTED`, and there are no open items remaining. All necessary actions have completed successfully."
     },
     "prompt_tokens": 602,
-    "completion_tokens": 56,
+    "completion_tokens": 41,
     "cached_tokens": 0,
-    "wall_time_s": 1.2511721248738468
+    "wall_time_s": 1.9074246669188142
   },
   {
     "kind": "final",
-    "content": "The operation `opB` (associated with `submit_linked_record`) has successfully **COMMITTED** despite the previous timeout error. Verifying the operation status confirmed the write went through, and reading open items shows no remaining items requiring action. The task is complete.",
+    "content": "The operation `opB` (associated with `submit_linked_record`) has been successfully verified as `COMMITTED`, and there are no open items remaining. All necessary actions have completed successfully.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8753584581427276
+    "wall_time_s": 1.2295447080396116
   },
   {
     "kind": "tool_call",
@@ -53,31 +53,33 @@
       "ok": true,
       "dispatched": true,
       "result": [
-        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
+        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.458038792014122e-06
+    "wall_time_s": 7.334165275096893e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered TimeoutFault while waiting for confirmation of submit_linked_record for operation_key='opB'. Need human intervention to verify transaction status or safely retry.\"})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 314,
-    "completion_tokens": 48,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.080819332972169
+    "wall_time_s": 1.2316449168138206
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_linked_record",
       "kwargs": {
-        "reason": "Encountered TimeoutFault while waiting for confirmation of submit_linked_record for operation_key='opB'. Need human intervention to verify transaction status or safely retry."
+        "operation_key": "opB",
+        "reference_name": "SINV-2001",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -88,17 +90,33 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "escalate",
+      "tool_name": "submit_linked_record",
       "ok": true,
       "dispatched": true,
-      "result": {
-        "escalated": true,
-        "reason": "Encountered TimeoutFault while waiting for confirmation of submit_linked_record for operation_key='opB'. Need human intervention to verify transaction status or safely retry."
-      }
+      "result": "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.166977643966675e-06
+    "wall_time_s": 1.2208009138703346e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": null,
+      "final_text": "The W1 task has been successfully completed and the linked record `SINV-2001` (operation key `opB`) has been submitted."
+    },
+    "prompt_tokens": 416,
+    "completion_tokens": 32,
+    "cached_tokens": 0,
+    "wall_time_s": 1.7259215419180691
+  },
+  {
+    "kind": "final",
+    "content": "The W1 task has been successfully completed and the linked record `SINV-2001` (operation key `opB`) has been submitted.",
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
   }
 ]

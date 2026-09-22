@@ -33,7 +33,7 @@
     "prompt_tokens": 239,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8121693748980761
+    "wall_time_s": 5.660574792185798
   },
   {
     "kind": "tool_call",
@@ -59,18 +59,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.583395689725876e-05
+    "wall_time_s": 1.937500201165676e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opA'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 312,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8999307921621948
+    "wall_time_s": 2.2125669170636684
   },
   {
     "kind": "tool_call",
@@ -79,7 +79,7 @@
       "kwargs": {
         "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001",
-        "operation_key": "opA"
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -94,30 +94,30 @@
       "ok": false,
       "dispatched": false,
       "guard_rejected": true,
-      "error": "replay rejected for operation_key='opA' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+      "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00011212518438696861
+    "wall_time_s": 5.137501284480095e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Attempted to submit linked record with operation_key 'opA', but received an unresolved-outcome write rejection ('tool declares no recovery guarantee'). Escalating safely to human review.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submission of linked record with operation_key 'opB' was rejected with a replay restriction (tool_guarantee='none'). An unresolved-outcome write cannot be safely retried without human intervention.\"})",
       "final_text": null
     },
     "prompt_tokens": 416,
-    "completion_tokens": 50,
+    "completion_tokens": 55,
     "cached_tokens": 0,
-    "wall_time_s": 1.1861859580967575
+    "wall_time_s": 2.481000167084858
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Attempted to submit linked record with operation_key 'opA', but received an unresolved-outcome write rejection ('tool declares no recovery guarantee'). Escalating safely to human review."
+        "reason": "The submission of linked record with operation_key 'opB' was rejected with a replay restriction (tool_guarantee='none'). An unresolved-outcome write cannot be safely retried without human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -133,12 +133,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Attempted to submit linked record with operation_key 'opA', but received an unresolved-outcome write rejection ('tool declares no recovery guarantee'). Escalating safely to human review."
+        "reason": "The submission of linked record with operation_key 'opB' was rejected with a replay restriction (tool_guarantee='none'). An unresolved-outcome write cannot be safely retried without human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.95909033715725e-06
+    "wall_time_s": 8.791917935013771e-06
   }
 ]

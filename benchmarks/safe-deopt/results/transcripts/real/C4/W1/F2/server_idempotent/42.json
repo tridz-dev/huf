@@ -34,7 +34,7 @@
     "prompt_tokens": 296,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8794057078193873
+    "wall_time_s": 2.2197541249915957
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.9160014390945435e-06
+    "wall_time_s": 6.832880899310112e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 335,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.1375746249686927
+    "wall_time_s": 3.060730708995834
   },
   {
     "kind": "tool_call",
@@ -95,22 +95,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9588118195533752e-06
+    "wall_time_s": 6.708083674311638e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `opB` has successfully committed, and there are no open items remaining. The W1 task is complete."
+      "final_text": "The operation `opB` has successfully committed, and there are no remaining open items. The W1 task is complete."
     },
     "prompt_tokens": 360,
     "completion_tokens": 25,
     "cached_tokens": 0,
-    "wall_time_s": 0.9046225000638515
+    "wall_time_s": 3.2316941251046956
   },
   {
     "kind": "final",
-    "content": "The operation `opB` has successfully committed, and there are no open items remaining. The W1 task is complete.",
+    "content": "The operation `opB` has successfully committed, and there are no remaining open items. The W1 task is complete.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

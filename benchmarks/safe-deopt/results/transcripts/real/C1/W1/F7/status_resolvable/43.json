@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9251249998342246
+    "wall_time_s": 2.083060499979183
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.166977643966675e-06
+    "wall_time_s": 7.3339324444532394e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8391902500297874
+    "wall_time_s": 1.017122041899711
   },
   {
     "kind": "tool_call",
@@ -89,27 +89,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.916955605149269e-06
+    "wall_time_s": 7.750000804662704e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'W1', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'W1', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9469232081901282
+    "wall_time_s": 1.7216416250448674
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
+        "reference_name": "SINV-2001",
         "operation_key": "W1",
-        "reference_name": "SINV-2001"
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00012429081834852695
+    "wall_time_s": 0.00014429213479161263
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.2069789171218872
+    "wall_time_s": 1.3932175000663847
   },
   {
     "kind": "tool_call",
@@ -166,25 +166,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.166992872953415e-06
+    "wall_time_s": 4.292000085115433e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation status for W1 is UNKNOWN after submit_linked_record timed out, preventing safe continuation.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation status for W1 is UNKNOWN after submitting linked record SINV-2001; manual verification is required.'})",
       "final_text": null
     },
     "prompt_tokens": 566,
-    "completion_tokens": 35,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.8731316670309752
+    "wall_time_s": 2.2746727920603007
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation status for W1 is UNKNOWN after submit_linked_record timed out, preventing safe continuation."
+        "reason": "Operation status for W1 is UNKNOWN after submitting linked record SINV-2001; manual verification is required."
       }
     },
     "prompt_tokens": 0,
@@ -200,12 +200,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation status for W1 is UNKNOWN after submit_linked_record timed out, preventing safe continuation."
+        "reason": "Operation status for W1 is UNKNOWN after submitting linked record SINV-2001; manual verification is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.291068762540817e-06
+    "wall_time_s": 6.082933396100998e-06
   }
 ]

@@ -55,7 +55,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8558889999985695
+    "wall_time_s": 0.9182606658432633
   },
   {
     "kind": "tool_call",
@@ -81,26 +81,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.834060281515121e-06
+    "wall_time_s": 6.666872650384903e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 509,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9957324170973152
+    "wall_time_s": 1.5733607918955386
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "operation_key": "opB",
+        "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001"
       }
     },
@@ -120,22 +120,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4791032299399376e-05
+    "wall_time_s": 1.5582889318466187e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The failed step `submit_linked_record` has been successfully verified and completed. The target record status is now `submitted`."
+      "final_text": "The operation `submit_linked_record` for reference `SINV-2001` (Sales Invoice) has been successfully verified and completed. The item status is now `submitted`."
     },
     "prompt_tokens": 611,
-    "completion_tokens": 26,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.1722327498719096
+    "wall_time_s": 1.1780629169661552
   },
   {
     "kind": "final",
-    "content": "The failed step `submit_linked_record` has been successfully verified and completed. The target record status is now `submitted`.",
+    "content": "The operation `submit_linked_record` for reference `SINV-2001` (Sales Invoice) has been successfully verified and completed. The item status is now `submitted`.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.0898450838867575
+    "wall_time_s": 1.2753823748789728
   },
   {
     "kind": "tool_call",
@@ -57,18 +57,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.791887477040291e-06
+    "wall_time_s": 9.458046406507492e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'W1 task', 'reference_type': 'task'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'W1', 'reference_type': 'task'})",
       "final_text": null
     },
     "prompt_tokens": 266,
-    "completion_tokens": 39,
+    "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 1.1281157080084085
+    "wall_time_s": 1.3124235409777611
   },
   {
     "kind": "tool_call",
@@ -76,7 +76,7 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "operation_key": "opB",
-        "reference_name": "W1 task",
+        "reference_name": "W1",
         "reference_type": "task"
       }
     },
@@ -92,30 +92,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such open item task:W1 task'"
+      "error": "'no such open item task:W1'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4415942132472992e-05
+    "wall_time_s": 2.545793540775776e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered timeout/error when attempting to submit the linked record (opB) and no open items were found matching 'W1 task'. Need human assistance to resolve state inconsistency.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to complete task W1 because submit_linked_record timed out and the item is no longer listed in open items ('no such open item task:W1').\"})",
       "final_text": null
     },
-    "prompt_tokens": 331,
-    "completion_tokens": 51,
+    "prompt_tokens": 329,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 0.8998350410256535
+    "wall_time_s": 1.0185251249931753
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered timeout/error when attempting to submit the linked record (opB) and no open items were found matching 'W1 task'. Need human assistance to resolve state inconsistency."
+        "reason": "Unable to complete task W1 because submit_linked_record timed out and the item is no longer listed in open items ('no such open item task:W1')."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered timeout/error when attempting to submit the linked record (opB) and no open items were found matching 'W1 task'. Need human assistance to resolve state inconsistency."
+        "reason": "Unable to complete task W1 because submit_linked_record timed out and the item is no longer listed in open items ('no such open item task:W1')."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.250082954764366e-06
+    "wall_time_s": 3.7918798625469208e-06
   }
 ]

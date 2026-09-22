@@ -63,7 +63,7 @@
     "prompt_tokens": 479,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.0077020002063364
+    "wall_time_s": 2.094582333927974
   },
   {
     "kind": "tool_call",
@@ -87,25 +87,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.7208047211170197e-05
+    "wall_time_s": 8.875038474798203e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure safe-deopt-W1 failed mid-run during submit_linked_record (timeout). Read open items returned no items, but safe recovery actions instruct not to blindly retry without verification. Escalating for safe manual review/continuation.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The procedure safe-deopt-W1 failed mid-run during submit_linked_record (operation_key='opB') with a timeout error. A read_open_items check returned no open items, but per safe recovery guidelines ('Do not blindly retry: the failed tool call may have partially committed its write. Verify the target record's current state with a read before retrying...'), further investigation or human intervention is required to safely resolve the state without risking duplicate or corrupted commits.\"})",
       "final_text": null
     },
     "prompt_tokens": 504,
-    "completion_tokens": 64,
+    "completion_tokens": 115,
     "cached_tokens": 0,
-    "wall_time_s": 1.0448215829674155
+    "wall_time_s": 1.7538751249667257
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Procedure safe-deopt-W1 failed mid-run during submit_linked_record (timeout). Read open items returned no items, but safe recovery actions instruct not to blindly retry without verification. Escalating for safe manual review/continuation."
+        "reason": "The procedure safe-deopt-W1 failed mid-run during submit_linked_record (operation_key='opB') with a timeout error. A read_open_items check returned no open items, but per safe recovery guidelines ('Do not blindly retry: the failed tool call may have partially committed its write. Verify the target record's current state with a read before retrying...'), further investigation or human intervention is required to safely resolve the state without risking duplicate or corrupted commits."
       }
     },
     "prompt_tokens": 0,
@@ -121,12 +121,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Procedure safe-deopt-W1 failed mid-run during submit_linked_record (timeout). Read open items returned no items, but safe recovery actions instruct not to blindly retry without verification. Escalating for safe manual review/continuation."
+        "reason": "The procedure safe-deopt-W1 failed mid-run during submit_linked_record (operation_key='opB') with a timeout error. A read_open_items check returned no open items, but per safe recovery guidelines ('Do not blindly retry: the failed tool call may have partially committed its write. Verify the target record's current state with a read before retrying...'), further investigation or human intervention is required to safely resolve the state without risking duplicate or corrupted commits."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.0419323593378067e-06
+    "wall_time_s": 6.542075425386429e-06
   }
 ]

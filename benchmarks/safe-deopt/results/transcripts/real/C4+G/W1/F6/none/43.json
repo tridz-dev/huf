@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8198074998799711
+    "wall_time_s": 1.0267122080549598
   },
   {
     "kind": "tool_call",
@@ -57,27 +57,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.458046406507492e-06
+    "wall_time_s": 1.095910556614399e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'task', 'operation_key': 'opB', 'reference_name': 'W1'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_type': 'task', 'reference_name': 'W1 task'})",
       "final_text": null
     },
     "prompt_tokens": 266,
-    "completion_tokens": 38,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9480363340117037
+    "wall_time_s": 1.2682098329532892
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "task",
         "operation_key": "opB",
-        "reference_name": "W1"
+        "reference_type": "task",
+        "reference_name": "W1 task"
       }
     },
     "prompt_tokens": 0,
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.2542040571570396e-05
+    "wall_time_s": 3.716698847711086e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_linked_record operation (opB) timed out and the system rejected a retry because the write has an unresolved outcome (tool_guarantee='none'). Manual human review and intervention are required to verify the record status safely.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation (opB) timed out previously, and replaying it is rejected due to lack of tool recovery guarantee. Manual intervention / human confirmation is required.'})",
       "final_text": null
     },
-    "prompt_tokens": 364,
-    "completion_tokens": 62,
+    "prompt_tokens": 365,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.013740791939199
+    "wall_time_s": 1.148411541013047
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation (opB) timed out and the system rejected a retry because the write has an unresolved outcome (tool_guarantee='none'). Manual human review and intervention are required to verify the record status safely."
+        "reason": "The submit_linked_record operation (opB) timed out previously, and replaying it is rejected due to lack of tool recovery guarantee. Manual intervention / human confirmation is required."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation (opB) timed out and the system rejected a retry because the write has an unresolved outcome (tool_guarantee='none'). Manual human review and intervention are required to verify the record status safely."
+        "reason": "The submit_linked_record operation (opB) timed out previously, and replaying it is rejected due to lack of tool recovery guarantee. Manual intervention / human confirmation is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.499955922365189e-06
+    "wall_time_s": 4.915986210107803e-06
   }
 ]

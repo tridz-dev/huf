@@ -55,7 +55,7 @@
     "prompt_tokens": 434,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.0081232080701739
+    "wall_time_s": 1.5184729169122875
   },
   {
     "kind": "tool_call",
@@ -81,7 +81,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5333062037825584e-05
+    "wall_time_s": 6.082933396100998e-06
   },
   {
     "kind": "model_step",
@@ -92,7 +92,7 @@
     "prompt_tokens": 507,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9026971668936312
+    "wall_time_s": 1.796551083913073
   },
   {
     "kind": "tool_call",
@@ -121,25 +121,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.63328280299902e-05
+    "wall_time_s": 6.279116496443748e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Tool call submit_linked_record with operation_key='opB' rejected due to tool_guarantee='none' and unresolved-outcome write policy preventing blind retry.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record failed with operation_key='opB' and tool_guarantee='none', and replay is rejected to prevent duplicate or unsafe writes. Manual verification required.\"})",
       "final_text": null
     },
     "prompt_tokens": 611,
-    "completion_tokens": 49,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 1.1003483331296593
+    "wall_time_s": 1.1570775830186903
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Tool call submit_linked_record with operation_key='opB' rejected due to tool_guarantee='none' and unresolved-outcome write policy preventing blind retry."
+        "reason": "submit_linked_record failed with operation_key='opB' and tool_guarantee='none', and replay is rejected to prevent duplicate or unsafe writes. Manual verification required."
       }
     },
     "prompt_tokens": 0,
@@ -155,12 +155,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Tool call submit_linked_record with operation_key='opB' rejected due to tool_guarantee='none' and unresolved-outcome write policy preventing blind retry."
+        "reason": "submit_linked_record failed with operation_key='opB' and tool_guarantee='none', and replay is rejected to prevent duplicate or unsafe writes. Manual verification required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.750000804662704e-06
+    "wall_time_s": 6.250105798244476e-06
   }
 ]

@@ -33,7 +33,7 @@
     "prompt_tokens": 239,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9072913341224194
+    "wall_time_s": 3.0160843750927597
   },
   {
     "kind": "tool_call",
@@ -59,25 +59,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.037493348121643e-05
+    "wall_time_s": 9.167008101940155e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a rejection on submit_linked_record for operation_key='opB' when trying to complete the W1 task. Inspecting open items shows an open sales invoice (SINV-2001) for CUST-1, but manual intervention is required due to the runtime rejection.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Task W1 failed with RuntimeError on submit_linked_record (operation_key='opB'); unable to safely complete the operation without intervention.\"})",
       "final_text": null
     },
     "prompt_tokens": 312,
-    "completion_tokens": 77,
+    "completion_tokens": 43,
     "cached_tokens": 0,
-    "wall_time_s": 1.0168776670470834
+    "wall_time_s": 2.749768250156194
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a rejection on submit_linked_record for operation_key='opB' when trying to complete the W1 task. Inspecting open items shows an open sales invoice (SINV-2001) for CUST-1, but manual intervention is required due to the runtime rejection."
+        "reason": "Task W1 failed with RuntimeError on submit_linked_record (operation_key='opB'); unable to safely complete the operation without intervention."
       }
     },
     "prompt_tokens": 0,
@@ -93,12 +93,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a rejection on submit_linked_record for operation_key='opB' when trying to complete the W1 task. Inspecting open items shows an open sales invoice (SINV-2001) for CUST-1, but manual intervention is required due to the runtime rejection."
+        "reason": "Task W1 failed with RuntimeError on submit_linked_record (operation_key='opB'); unable to safely complete the operation without intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.167210474610329e-06
+    "wall_time_s": 1.9581057131290436e-06
   }
 ]

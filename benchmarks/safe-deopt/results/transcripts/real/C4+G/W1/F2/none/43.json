@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.960912415990606
+    "wall_time_s": 1.213244125014171
   },
   {
     "kind": "tool_call",
@@ -57,26 +57,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0750023648142815e-05
+    "wall_time_s": 8.624978363513947e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'W1 task', 'reference_type': 'task', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'task', 'reference_name': 'W1_Task', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 266,
-    "completion_tokens": 39,
+    "completion_tokens": 40,
     "cached_tokens": 0,
-    "wall_time_s": 0.9484409999568015
+    "wall_time_s": 2.648221082985401
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_name": "W1 task",
         "reference_type": "task",
+        "reference_name": "W1_Task",
         "operation_key": "opB"
       }
     },
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.7582904547452927e-05
+    "wall_time_s": 3.4207943826913834e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB encountered a timeout and the write tool declares no recovery guarantee (unresolved-outcome write cannot be retried). Escalating safely per guidelines.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation with key opB timed out and the system rejected replay because it declares no recovery guarantee (unresolved-outcome write). Manual intervention or escalation is required to verify the state of W1 task.'})",
       "final_text": null
     },
-    "prompt_tokens": 365,
-    "completion_tokens": 45,
+    "prompt_tokens": 366,
+    "completion_tokens": 60,
     "cached_tokens": 0,
-    "wall_time_s": 1.2131394159514457
+    "wall_time_s": 2.565920165972784
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB encountered a timeout and the write tool declares no recovery guarantee (unresolved-outcome write cannot be retried). Escalating safely per guidelines."
+        "reason": "The submit_linked_record operation with key opB timed out and the system rejected replay because it declares no recovery guarantee (unresolved-outcome write). Manual intervention or escalation is required to verify the state of W1 task."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB encountered a timeout and the write tool declares no recovery guarantee (unresolved-outcome write cannot be retried). Escalating safely per guidelines."
+        "reason": "The submit_linked_record operation with key opB timed out and the system rejected replay because it declares no recovery guarantee (unresolved-outcome write). Manual intervention or escalation is required to verify the state of W1 task."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.208917617797852e-06
+    "wall_time_s": 6.958143785595894e-06
   }
 ]

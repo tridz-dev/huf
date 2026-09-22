@@ -55,7 +55,7 @@
     "prompt_tokens": 436,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.0507559159304947
+    "wall_time_s": 1.482399209169671
   },
   {
     "kind": "tool_call",
@@ -81,27 +81,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2625008821487427e-05
+    "wall_time_s": 8.083879947662354e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 509,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8174904577899724
+    "wall_time_s": 1.2307569170370698
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
         "reference_name": "SINV-2001",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -121,25 +121,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.108319990336895e-05
+    "wall_time_s": 3.074994310736656e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_linked_record call for operation key 'opB' timed out with tool_guarantee 'none', and direct retry was rejected due to lack of a recovery guarantee. Manual verification and resolution required.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'submit_linked_record failed with operation_key opB and tool_guarantee none, and replay is rejected due to lack of recovery guarantee. Manual verification and resolution required.'})",
       "final_text": null
     },
     "prompt_tokens": 613,
-    "completion_tokens": 57,
+    "completion_tokens": 50,
     "cached_tokens": 0,
-    "wall_time_s": 1.1209097090177238
+    "wall_time_s": 1.1591725000180304
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record call for operation key 'opB' timed out with tool_guarantee 'none', and direct retry was rejected due to lack of a recovery guarantee. Manual verification and resolution required."
+        "reason": "submit_linked_record failed with operation_key opB and tool_guarantee none, and replay is rejected due to lack of recovery guarantee. Manual verification and resolution required."
       }
     },
     "prompt_tokens": 0,
@@ -155,12 +155,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record call for operation key 'opB' timed out with tool_guarantee 'none', and direct retry was rejected due to lack of a recovery guarantee. Manual verification and resolution required."
+        "reason": "submit_linked_record failed with operation_key opB and tool_guarantee none, and replay is rejected due to lack of recovery guarantee. Manual verification and resolution required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.209127604961395e-06
+    "wall_time_s": 3.999797627329826e-06
   }
 ]

@@ -57,7 +57,7 @@
     "prompt_tokens": 485,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 1.5154122919775546
+    "wall_time_s": 0.8724032498430461
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.292022928595543e-06
+    "wall_time_s": 5.666166543960571e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 545,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7722330421674997
+    "wall_time_s": 0.9092903749551624
   },
   {
     "kind": "tool_call",
@@ -120,25 +120,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.417052984237671e-06
+    "wall_time_s": 6.334157660603523e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure failed mid-run on submit_allocation (opB) with timeout; manual verification and intervention needed to ensure safe recovery and avoid duplicate commits.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Invoice INV-001 and Payment PAY-001 exist for CUST-1 (amount 250), but the previous submit_allocation failed with a timeout (operation_key='opB'). Need manual verification/intervention to ensure allocation is correctly recorded without double allocation.\"})",
       "final_text": null
     },
     "prompt_tokens": 601,
-    "completion_tokens": 44,
+    "completion_tokens": 73,
     "cached_tokens": 0,
-    "wall_time_s": 1.0266410829499364
+    "wall_time_s": 1.229670250089839
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Procedure failed mid-run on submit_allocation (opB) with timeout; manual verification and intervention needed to ensure safe recovery and avoid duplicate commits."
+        "reason": "Invoice INV-001 and Payment PAY-001 exist for CUST-1 (amount 250), but the previous submit_allocation failed with a timeout (operation_key='opB'). Need manual verification/intervention to ensure allocation is correctly recorded without double allocation."
       }
     },
     "prompt_tokens": 0,
@@ -154,12 +154,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Procedure failed mid-run on submit_allocation (opB) with timeout; manual verification and intervention needed to ensure safe recovery and avoid duplicate commits."
+        "reason": "Invoice INV-001 and Payment PAY-001 exist for CUST-1 (amount 250), but the previous submit_allocation failed with a timeout (operation_key='opB'). Need manual verification/intervention to ensure allocation is correctly recorded without double allocation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.041955202817917e-06
+    "wall_time_s": 5.083158612251282e-06
   }
 ]

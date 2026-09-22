@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9142845829483122
+    "wall_time_s": 0.9801209580618888
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.834022209048271e-06
+    "wall_time_s": 6.375135853886604e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 560,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 1.0279046660289168
+    "wall_time_s": 0.961369541939348
   },
   {
     "kind": "tool_call",
@@ -119,25 +119,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.645786687731743e-05
+    "wall_time_s": 1.195794902741909e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB_retry_1', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 591,
-    "completion_tokens": 44,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 0.9530107921455055
+    "wall_time_s": 1.3785869998391718
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
+        "operation_key": "opB_retry_1",
         "reference_name": "SINV-2001",
         "reference_type": "Sales Invoice"
       }
@@ -154,30 +154,30 @@
       "ok": false,
       "dispatched": false,
       "guard_rejected": true,
-      "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+      "error": "replay rejected for operation_key='opB_retry_1' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9708025977015495e-05
+    "wall_time_s": 3.0291033908724785e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The pending write operation opB failed with a timeout and cannot be retried due to tool guarantee rules. Attempted cancellation and state verification indicate the operation must be escalated to a human.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The pending write submit_linked_record timed out, cancellation returned false, and retrying unverified/fenced writes is rejected by the harness. Human intervention is required to resolve the transaction state.'})",
       "final_text": null
     },
-    "prompt_tokens": 695,
-    "completion_tokens": 51,
+    "prompt_tokens": 703,
+    "completion_tokens": 54,
     "cached_tokens": 0,
-    "wall_time_s": 1.1188831659965217
+    "wall_time_s": 2.1041621658951044
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The pending write operation opB failed with a timeout and cannot be retried due to tool guarantee rules. Attempted cancellation and state verification indicate the operation must be escalated to a human."
+        "reason": "The pending write submit_linked_record timed out, cancellation returned false, and retrying unverified/fenced writes is rejected by the harness. Human intervention is required to resolve the transaction state."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The pending write operation opB failed with a timeout and cannot be retried due to tool guarantee rules. Attempted cancellation and state verification indicate the operation must be escalated to a human."
+        "reason": "The pending write submit_linked_record timed out, cancellation returned false, and retrying unverified/fenced writes is rejected by the harness. Human intervention is required to resolve the transaction state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.667097866535187e-06
+    "wall_time_s": 6.791902706027031e-06
   }
 ]

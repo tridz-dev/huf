@@ -56,7 +56,7 @@
     "prompt_tokens": 487,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8696062921080738
+    "wall_time_s": 1.744296999881044
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.125090971589088e-06
+    "wall_time_s": 6.375135853886604e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 560,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 1.412805083906278
+    "wall_time_s": 2.3589742919430137
   },
   {
     "kind": "tool_call",
@@ -119,27 +119,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.6292091459035873e-05
+    "wall_time_s": 9.58307646214962e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB-retry', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opC', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 591,
-    "completion_tokens": 46,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.950410749996081
+    "wall_time_s": 2.50634799990803
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "reference_type": "Sales Invoice",
-        "operation_key": "opB-retry",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "operation_key": "opC",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.950002327561378e-05
+    "wall_time_s": 1.637497916817665e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous run encountered a timeout during `submit_linked_record` with operation key `opB`. \n\nI safely recovered by:\n1. Reading the open items to verify the current state (confirmed that `SINV-2001` for `CUST-1` remained open and uncommitted).\n2. Attempting to cancel the pending operation key `opB`.\n3. Submitting the linked record using a fresh, safe operation key (`opB-retry`), which successfully completed with status `submitted`."
+      "final_text": "The previous procedure execution (`safe-deopt-W1`) failed mid-run at the `submit_linked_record` step (`operation_key='opB'`) due to a timeout. \n\nFollowing safe recovery guidelines:\n1. Checked open items to verify the current state of the target record (`SINV-2001`, which was open with outstanding amount 100).\n2. Attempted to cancel the pending operation `opB` (which returned false as it had already timed out/fenced).\n3. Used a new atomic tool call (`submit_linked_record` with `operation_key='opC'`) to successfully submit the linked record `SINV-2001`.\n\nThe record has now been successfully submitted."
     },
-    "prompt_tokens": 695,
-    "completion_tokens": 109,
+    "prompt_tokens": 693,
+    "completion_tokens": 161,
     "cached_tokens": 0,
-    "wall_time_s": 1.1264079590328038
+    "wall_time_s": 1.3522279171738774
   },
   {
     "kind": "final",
-    "content": "The previous run encountered a timeout during `submit_linked_record` with operation key `opB`. \n\nI safely recovered by:\n1. Reading the open items to verify the current state (confirmed that `SINV-2001` for `CUST-1` remained open and uncommitted).\n2. Attempting to cancel the pending operation key `opB`.\n3. Submitting the linked record using a fresh, safe operation key (`opB-retry`), which successfully completed with status `submitted`.",
+    "content": "The previous procedure execution (`safe-deopt-W1`) failed mid-run at the `submit_linked_record` step (`operation_key='opB'`) due to a timeout. \n\nFollowing safe recovery guidelines:\n1. Checked open items to verify the current state of the target record (`SINV-2001`, which was open with outstanding amount 100).\n2. Attempted to cancel the pending operation `opB` (which returned false as it had already timed out/fenced).\n3. Used a new atomic tool call (`submit_linked_record` with `operation_key='opC'`) to successfully submit the linked record `SINV-2001`.\n\nThe record has now been successfully submitted.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -57,7 +57,7 @@
     "prompt_tokens": 518,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8099935830105096
+    "wall_time_s": 1.5451700000558048
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.458031177520752e-06
+    "wall_time_s": 4.665926098823547e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 576,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9641135418787599
+    "wall_time_s": 1.6070394171401858
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.7499703466892242e-06
+    "wall_time_s": 7.1660615503787994e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 632,
     "completion_tokens": 22,
     "cached_tokens": 0,
-    "wall_time_s": 1.0076035840902478
+    "wall_time_s": 2.1505979169160128
   },
   {
     "kind": "tool_call",
@@ -157,7 +157,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0832911357283592e-05
+    "wall_time_s": 9.041978046298027e-06
   },
   {
     "kind": "model_step",
@@ -168,7 +168,7 @@
     "prompt_tokens": 674,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8683832080569118
+    "wall_time_s": 1.7580857910215855
   },
   {
     "kind": "tool_call",
@@ -194,7 +194,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.292000085115433e-06
+    "wall_time_s": 7.1660615503787994e-06
   },
   {
     "kind": "model_step",
@@ -205,7 +205,7 @@
     "prompt_tokens": 732,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8671511251013726
+    "wall_time_s": 1.143250625114888
   },
   {
     "kind": "tool_call",
@@ -231,25 +231,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.832880899310112e-06
+    "wall_time_s": 6.707850843667984e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Procedure failed mid-run at submit_allocation_unsafe, but operation status is NOT_COMMITTED and invoice INV-001 shows 0 outstanding amount. Escalating for manual verification and safe continuation.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Invoice INV-001 has 0 outstanding amount and payment PAY-001 has amount 250, but operation status for submit_allocation_unsafe is NOT_COMMITTED and state check shows no allocation applied or possible. Need human review due to ambiguous mid-run failure.'})",
       "final_text": null
     },
     "prompt_tokens": 788,
-    "completion_tokens": 356,
+    "completion_tokens": 75,
     "cached_tokens": 0,
-    "wall_time_s": 2.2242712499573827
+    "wall_time_s": 1.2258745830040425
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Procedure failed mid-run at submit_allocation_unsafe, but operation status is NOT_COMMITTED and invoice INV-001 shows 0 outstanding amount. Escalating for manual verification and safe continuation."
+        "reason": "Invoice INV-001 has 0 outstanding amount and payment PAY-001 has amount 250, but operation status for submit_allocation_unsafe is NOT_COMMITTED and state check shows no allocation applied or possible. Need human review due to ambiguous mid-run failure."
       }
     },
     "prompt_tokens": 0,
@@ -265,12 +265,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Procedure failed mid-run at submit_allocation_unsafe, but operation status is NOT_COMMITTED and invoice INV-001 shows 0 outstanding amount. Escalating for manual verification and safe continuation."
+        "reason": "Invoice INV-001 has 0 outstanding amount and payment PAY-001 has amount 250, but operation status for submit_allocation_unsafe is NOT_COMMITTED and state check shows no allocation applied or possible. Need human review due to ambiguous mid-run failure."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.250082954764366e-06
+    "wall_time_s": 4.875008016824722e-06
   }
 ]

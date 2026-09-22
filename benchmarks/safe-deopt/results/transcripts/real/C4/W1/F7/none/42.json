@@ -33,7 +33,7 @@
     "prompt_tokens": 241,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.018156124977395
+    "wall_time_s": 4.16016533295624
   },
   {
     "kind": "tool_call",
@@ -53,33 +53,31 @@
       "ok": true,
       "dispatched": true,
       "result": [
-        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
+        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.207978680729866e-06
+    "wall_time_s": 7.791910320520401e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous attempt to submit_linked_record with operation_key='opB' timed out, and the item remains open. Escalating to human for review.\"})",
       "final_text": null
     },
     "prompt_tokens": 314,
-    "completion_tokens": 44,
+    "completion_tokens": 47,
     "cached_tokens": 0,
-    "wall_time_s": 0.9062293330207467
+    "wall_time_s": 1.253093000035733
   },
   {
     "kind": "tool_call",
     "content": {
-      "tool_name": "submit_linked_record",
+      "tool_name": "escalate",
       "kwargs": {
-        "operation_key": "opB",
-        "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice"
+        "reason": "The previous attempt to submit_linked_record with operation_key='opB' timed out, and the item remains open. Escalating to human for review."
       }
     },
     "prompt_tokens": 0,
@@ -90,33 +88,17 @@
   {
     "kind": "tool_result",
     "content": {
-      "tool_name": "submit_linked_record",
+      "tool_name": "escalate",
       "ok": true,
       "dispatched": true,
-      "result": "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
+      "result": {
+        "escalated": true,
+        "reason": "The previous attempt to submit_linked_record with operation_key='opB' timed out, and the item remains open. Escalating to human for review."
+      }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.709007382392883e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": null,
-      "final_text": "The W1 task has been successfully completed and the linked record `SINV-2001` (operation key `opB`) has been submitted."
-    },
-    "prompt_tokens": 416,
-    "completion_tokens": 32,
-    "cached_tokens": 0,
-    "wall_time_s": 1.0869352500885725
-  },
-  {
-    "kind": "final",
-    "content": "The W1 task has been successfully completed and the linked record `SINV-2001` (operation key `opB`) has been submitted.",
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
+    "wall_time_s": 5.291076377034187e-06
   }
 ]

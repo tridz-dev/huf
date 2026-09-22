@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8045890419743955
+    "wall_time_s": 1.3522947919555008
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.958159014582634e-06
+    "wall_time_s": 1.2333039194345474e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8131002918817103
+    "wall_time_s": 1.355008624959737
   },
   {
     "kind": "tool_call",
@@ -119,18 +119,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.333008736371994e-06
+    "wall_time_s": 7.95791856944561e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 604,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8033340419642627
+    "wall_time_s": 1.9652103330008686
   },
   {
     "kind": "tool_call",
@@ -138,8 +138,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "reference_type": "Sales Invoice"
       }
     },
     "prompt_tokens": 0,
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0499963536858559e-05
+    "wall_time_s": 1.5834113582968712e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The operation `submit_linked_record` with operation key `opB` initially timed out, but upon checking its status it was `UNKNOWN` and the open items verified that the linked record was not yet committed. I then performed a safe read of open items and successfully re-submitted the linked record (`SINV-2001` of type `Sales Invoice`), which is now successfully committed with status `submitted`."
+      "final_text": "The `submit_linked_record` operation (`opB`) initially timed out, but a check of the operation status (`UNKNOWN`) and open items confirmed that the write had not been committed. Following safe recovery guidelines, I read the open items to verify the current state and then successfully retried the `submit_linked_record` call. The record `SINV-2001` of type `Sales Invoice` has now been successfully submitted."
     },
     "prompt_tokens": 706,
-    "completion_tokens": 86,
+    "completion_tokens": 92,
     "cached_tokens": 0,
-    "wall_time_s": 1.1412740419618785
+    "wall_time_s": 2.154944415902719
   },
   {
     "kind": "final",
-    "content": "The operation `submit_linked_record` with operation key `opB` initially timed out, but upon checking its status it was `UNKNOWN` and the open items verified that the linked record was not yet committed. I then performed a safe read of open items and successfully re-submitted the linked record (`SINV-2001` of type `Sales Invoice`), which is now successfully committed with status `submitted`.",
+    "content": "The `submit_linked_record` operation (`opB`) initially timed out, but a check of the operation status (`UNKNOWN`) and open items confirmed that the write had not been committed. Following safe recovery guidelines, I read the open items to verify the current state and then successfully retried the `submit_linked_record` call. The record `SINV-2001` of type `Sales Invoice` has now been successfully submitted.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

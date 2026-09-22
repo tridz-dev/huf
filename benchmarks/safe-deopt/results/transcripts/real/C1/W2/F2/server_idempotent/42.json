@@ -26,7 +26,7 @@
     "prompt_tokens": 321,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7904709579888731
+    "wall_time_s": 1.3168792079668492
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.2919848561286926e-06
+    "wall_time_s": 5.916925147175789e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 381,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9995934169273823
+    "wall_time_s": 1.0055004579480737
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.041016265749931e-06
+    "wall_time_s": 2.874992787837982e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'invoice': 'INV-001', 'payment': 'PAY-001', 'operation_key': 'op-w2-001', 'amount': 250})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'operation_key': 'W2-OP-01', 'amount': 250, 'invoice': 'INV-001', 'payment': 'PAY-001'})",
       "final_text": null
     },
     "prompt_tokens": 437,
-    "completion_tokens": 51,
+    "completion_tokens": 50,
     "cached_tokens": 0,
-    "wall_time_s": 0.8573685421142727
+    "wall_time_s": 0.9810904168989509
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
+        "operation_key": "W2-OP-01",
+        "amount": 250,
         "invoice": "INV-001",
-        "payment": "PAY-001",
-        "operation_key": "op-w2-001",
-        "amount": 250
+        "payment": "PAY-001"
       }
     },
     "prompt_tokens": 0,
@@ -124,23 +124,23 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op-w2-001', status='submitted')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='W2-OP-01', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.566686064004898e-05
+    "wall_time_s": 2.300017513334751e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'ALLOC-0001', 'operation_key': 'op-w2-001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'ALLOC-0001', 'operation_key': 'W2-OP-01'})",
       "final_text": null
     },
-    "prompt_tokens": 554,
-    "completion_tokens": 36,
+    "prompt_tokens": 552,
+    "completion_tokens": 35,
     "cached_tokens": 0,
-    "wall_time_s": 0.8517666249535978
+    "wall_time_s": 1.4110884168185294
   },
   {
     "kind": "tool_call",
@@ -148,7 +148,7 @@
       "tool_name": "submit_allocation",
       "kwargs": {
         "allocation": "ALLOC-0001",
-        "operation_key": "op-w2-001"
+        "operation_key": "W2-OP-01"
       }
     },
     "prompt_tokens": 0,
@@ -163,30 +163,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "timeout: no confirmation received for submit_allocation (operation_key='op-w2-001')"
+      "error": "timeout: no confirmation received for submit_allocation (operation_key='W2-OP-01')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.029203698039055e-05
+    "wall_time_s": 0.00010641687549650669
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'op-w2-001'})",
+      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'W2-OP-01'})",
       "final_text": null
     },
-    "prompt_tokens": 626,
-    "completion_tokens": 27,
+    "prompt_tokens": 622,
+    "completion_tokens": 26,
     "cached_tokens": 0,
-    "wall_time_s": 0.8657197079155594
+    "wall_time_s": 2.100276374956593
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "get_operation_status",
       "kwargs": {
-        "operation_key": "op-w2-001"
+        "operation_key": "W2-OP-01"
       }
     },
     "prompt_tokens": 0,
@@ -205,22 +205,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.875000402331352e-06
+    "wall_time_s": 8.041970431804657e-06
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The W2 task has been completed successfully from scratch. Payment `PAY-001` (250) has been allocated and submitted against invoice `INV-001` (250) for customer `CUST-1` (Huf Retail Pvt Ltd), and the operation status is confirmed as **COMMITTED**."
+      "final_text": "The W2 task has been completed successfully from scratch. Payment `PAY-001` (amount: 250) has been successfully allocated and submitted against invoice `INV-001` (amount: 250) for customer `CUST-1` (Huf Retail Pvt Ltd), and the operation status is confirmed as **COMMITTED**."
     },
-    "prompt_tokens": 671,
-    "completion_tokens": 70,
+    "prompt_tokens": 666,
+    "completion_tokens": 77,
     "cached_tokens": 0,
-    "wall_time_s": 1.0928910421207547
+    "wall_time_s": 1.6487548749428242
   },
   {
     "kind": "final",
-    "content": "The W2 task has been completed successfully from scratch. Payment `PAY-001` (250) has been allocated and submitted against invoice `INV-001` (250) for customer `CUST-1` (Huf Retail Pvt Ltd), and the operation status is confirmed as **COMMITTED**.",
+    "content": "The W2 task has been completed successfully from scratch. Payment `PAY-001` (amount: 250) has been successfully allocated and submitted against invoice `INV-001` (amount: 250) for customer `CUST-1` (Huf Retail Pvt Ltd), and the operation status is confirmed as **COMMITTED**.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

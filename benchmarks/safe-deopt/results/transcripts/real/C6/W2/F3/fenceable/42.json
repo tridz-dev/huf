@@ -55,9 +55,9 @@
       "final_text": null
     },
     "prompt_tokens": 485,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9509780001826584
+    "wall_time_s": 0.8254752079956234
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.249895811080933e-06
+    "wall_time_s": 4.792120307683945e-06
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 545,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8394332500174642
+    "wall_time_s": 1.0475562079809606
   },
   {
     "kind": "tool_call",
@@ -120,26 +120,63 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.082933396100998e-06
+    "wall_time_s": 7.5409188866615295e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='cancel_operation', kwargs={'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 601,
-    "completion_tokens": 52,
+    "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.9827212919481099
+    "wall_time_s": 0.8496782910078764
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "cancel_operation",
+      "kwargs": {
+        "operation_key": "opB"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "cancel_operation",
+      "ok": true,
+      "dispatched": true,
+      "result": false
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 1.1499971151351929e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB-retry', 'allocation': 'INV-001:PAY-001:250'})",
+      "final_text": null
+    },
+    "prompt_tokens": 632,
+    "completion_tokens": 41,
+    "cached_tokens": 0,
+    "wall_time_s": 0.9150550831109285
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
-        "operation_key": "opB"
+        "operation_key": "opB-retry",
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -154,30 +191,30 @@
       "ok": false,
       "dispatched": false,
       "guard_rejected": true,
-      "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+      "error": "replay rejected for operation_key='opB-retry' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.587493069469929e-05
+    "wall_time_s": 3.2667070627212524e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation key opB has an unresolved outcome (timeout during previous run), and retrying with the same operation key is rejected due to lack of a tool recovery guarantee. Manual verification and resolution required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_allocation operation timed out and returned an uncertain outcome, and retry with a new operation key was rejected due to lack of a tool guarantee. Human intervention is required to verify the state and resolve the allocation.'})",
       "final_text": null
     },
-    "prompt_tokens": 711,
-    "completion_tokens": 53,
+    "prompt_tokens": 733,
+    "completion_tokens": 57,
     "cached_tokens": 0,
-    "wall_time_s": 1.0691870420705527
+    "wall_time_s": 1.1760270840022713
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation key opB has an unresolved outcome (timeout during previous run), and retrying with the same operation key is rejected due to lack of a tool recovery guarantee. Manual verification and resolution required."
+        "reason": "The submit_allocation operation timed out and returned an uncertain outcome, and retry with a new operation key was rejected due to lack of a tool guarantee. Human intervention is required to verify the state and resolve the allocation."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation key opB has an unresolved outcome (timeout during previous run), and retrying with the same operation key is rejected due to lack of a tool recovery guarantee. Manual verification and resolution required."
+        "reason": "The submit_allocation operation timed out and returned an uncertain outcome, and retry with a new operation key was rejected due to lack of a tool guarantee. Human intervention is required to verify the state and resolve the allocation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.667128324508667e-06
+    "wall_time_s": 6.375135853886604e-06
   }
 ]

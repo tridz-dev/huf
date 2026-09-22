@@ -62,9 +62,9 @@
       "final_text": null
     },
     "prompt_tokens": 473,
-    "completion_tokens": 11,
+    "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8182368748821318
+    "wall_time_s": 1.6172865419648588
   },
   {
     "kind": "tool_call",
@@ -90,7 +90,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.292007699608803e-06
+    "wall_time_s": 5.667097866535187e-06
   },
   {
     "kind": "model_step",
@@ -101,7 +101,7 @@
     "prompt_tokens": 531,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9257510830648243
+    "wall_time_s": 1.8029585829935968
   },
   {
     "kind": "tool_call",
@@ -127,25 +127,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.875015631318092e-06
+    "wall_time_s": 3.0410010367631912e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a mid-run procedure failure (procedure safe-deopt-W2) on submit_allocation (operation_key='opB'). Checked state via list_invoices and list_payments, but need human review/escalation for safe recovery and continuation.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Previous run failed mid-run during submit_allocation with operation_key 'opB'. After verifying invoices and payments, the current state needs human review/intervention before safe recovery or further allocations.\"})",
       "final_text": null
     },
     "prompt_tokens": 587,
-    "completion_tokens": 70,
+    "completion_tokens": 53,
     "cached_tokens": 0,
-    "wall_time_s": 1.0794125839602202
+    "wall_time_s": 1.0511028750333935
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a mid-run procedure failure (procedure safe-deopt-W2) on submit_allocation (operation_key='opB'). Checked state via list_invoices and list_payments, but need human review/escalation for safe recovery and continuation."
+        "reason": "Previous run failed mid-run during submit_allocation with operation_key 'opB'. After verifying invoices and payments, the current state needs human review/intervention before safe recovery or further allocations."
       }
     },
     "prompt_tokens": 0,
@@ -161,12 +161,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a mid-run procedure failure (procedure safe-deopt-W2) on submit_allocation (operation_key='opB'). Checked state via list_invoices and list_payments, but need human review/escalation for safe recovery and continuation."
+        "reason": "Previous run failed mid-run during submit_allocation with operation_key 'opB'. After verifying invoices and payments, the current state needs human review/intervention before safe recovery or further allocations."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.708999767899513e-06
+    "wall_time_s": 5.082925781607628e-06
   }
 ]

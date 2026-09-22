@@ -64,7 +64,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8632929169107229
+    "wall_time_s": 0.9616665421053767
   },
   {
     "kind": "tool_call",
@@ -88,7 +88,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4167046174407005e-05
+    "wall_time_s": 2.583954483270645e-06
   },
   {
     "kind": "model_step",
@@ -99,7 +99,7 @@
     "prompt_tokens": 555,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8658342498820275
+    "wall_time_s": 1.0096749998629093
   },
   {
     "kind": "tool_call",
@@ -125,25 +125,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.207955837249756e-06
+    "wall_time_s": 1.0624993592500687e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation (opB) timed out and could not be verified via read_open_items (returned empty), and cancel_operation failed to fence/cancel the held write. Safe continuation cannot be established without risking duplicate or unverified writes.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The operation submit_linked_record timed out and could not be verified via read_open_items (returned empty), and cancel_operation failed for operation_key 'opB'. Manual intervention is required to safely reconcile state.\"})",
       "final_text": null
     },
     "prompt_tokens": 586,
-    "completion_tokens": 68,
+    "completion_tokens": 60,
     "cached_tokens": 0,
-    "wall_time_s": 1.0648037500213832
+    "wall_time_s": 1.352050625020638
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation (opB) timed out and could not be verified via read_open_items (returned empty), and cancel_operation failed to fence/cancel the held write. Safe continuation cannot be established without risking duplicate or unverified writes."
+        "reason": "The operation submit_linked_record timed out and could not be verified via read_open_items (returned empty), and cancel_operation failed for operation_key 'opB'. Manual intervention is required to safely reconcile state."
       }
     },
     "prompt_tokens": 0,
@@ -159,12 +159,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation (opB) timed out and could not be verified via read_open_items (returned empty), and cancel_operation failed to fence/cancel the held write. Safe continuation cannot be established without risking duplicate or unverified writes."
+        "reason": "The operation submit_linked_record timed out and could not be verified via read_open_items (returned empty), and cancel_operation failed for operation_key 'opB'. Manual intervention is required to safely reconcile state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.041978046298027e-06
+    "wall_time_s": 5.707843229174614e-06
   }
 ]

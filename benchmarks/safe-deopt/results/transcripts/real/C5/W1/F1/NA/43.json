@@ -55,7 +55,7 @@
     "prompt_tokens": 434,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 1.404192249989137
+    "wall_time_s": 2.0800533751025796
   },
   {
     "kind": "tool_call",
@@ -81,18 +81,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.095910556614399e-05
+    "wall_time_s": 1.1458992958068848e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 507,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.4741599999833852
+    "wall_time_s": 2.525012250058353
   },
   {
     "kind": "tool_call",
@@ -100,8 +100,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "reference_type": "Sales Invoice",
-        "operation_key": "opB",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -120,22 +120,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.624978363513947e-06
+    "wall_time_s": 1.3749813660979271e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The `submit_linked_record` action was successfully verified and completed. The open item state for `SINV-2001` (Sales Invoice) has now been successfully submitted."
+      "final_text": "The failed operation `submit_linked_record` (operation_key='opB') was verified using `read_open_items` (confirming the target record was still open and uncommitted) and successfully retried and completed."
     },
     "prompt_tokens": 609,
-    "completion_tokens": 39,
+    "completion_tokens": 48,
     "cached_tokens": 0,
-    "wall_time_s": 0.9724327919539064
+    "wall_time_s": 3.7646674171555787
   },
   {
     "kind": "final",
-    "content": "The `submit_linked_record` action was successfully verified and completed. The open item state for `SINV-2001` (Sales Invoice) has now been successfully submitted.",
+    "content": "The failed operation `submit_linked_record` (operation_key='opB') was verified using `read_open_items` (confirming the target record was still open and uncommitted) and successfully retried and completed.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

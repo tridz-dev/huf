@@ -32,9 +32,9 @@
       "final_text": null
     },
     "prompt_tokens": 252,
-    "completion_tokens": 21,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.739998749922961
+    "wall_time_s": 1.0573559580370784
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.209119990468025e-06
+    "wall_time_s": 6.791902706027031e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 310,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7929677090141922
+    "wall_time_s": 1.3588600410148501
   },
   {
     "kind": "tool_call",
@@ -97,25 +97,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.834060281515121e-06
+    "wall_time_s": 6.166985258460045e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered a concurrent modification validation error (ValidationErrorFault) when attempting to submit allocation, and need human review to safely handle the conflicting state.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Encountered concurrency validation error (target record changed concurrently) on submit_allocation. Needs human intervention or resolution of concurrent state changes.'})",
       "final_text": null
     },
     "prompt_tokens": 366,
-    "completion_tokens": 43,
+    "completion_tokens": 41,
     "cached_tokens": 0,
-    "wall_time_s": 1.0183336669579148
+    "wall_time_s": 1.2764644580893219
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a concurrent modification validation error (ValidationErrorFault) when attempting to submit allocation, and need human review to safely handle the conflicting state."
+        "reason": "Encountered concurrency validation error (target record changed concurrently) on submit_allocation. Needs human intervention or resolution of concurrent state changes."
       }
     },
     "prompt_tokens": 0,
@@ -131,12 +131,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a concurrent modification validation error (ValidationErrorFault) when attempting to submit allocation, and need human review to safely handle the conflicting state."
+        "reason": "Encountered concurrency validation error (target record changed concurrently) on submit_allocation. Needs human intervention or resolution of concurrent state changes."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.9160014390945435e-06
+    "wall_time_s": 5.37489540874958e-06
   }
 ]

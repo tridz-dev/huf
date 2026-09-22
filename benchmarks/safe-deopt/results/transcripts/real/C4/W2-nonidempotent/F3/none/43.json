@@ -34,7 +34,7 @@
     "prompt_tokens": 265,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.92932566604577
+    "wall_time_s": 1.7851395830512047
   },
   {
     "kind": "tool_call",
@@ -60,7 +60,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.875030860304832e-06
+    "wall_time_s": 5.624955520033836e-06
   },
   {
     "kind": "model_step",
@@ -71,7 +71,7 @@
     "prompt_tokens": 325,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.037037166999653
+    "wall_time_s": 0.8083473748993129
   },
   {
     "kind": "tool_call",
@@ -97,27 +97,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.166985258460045e-06
+    "wall_time_s": 8.542090654373169e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation_unsafe', kwargs={'payment': 'PAY-001', 'invoice': 'INV-001', 'amount': 250})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation_unsafe', kwargs={'invoice': 'INV-001', 'amount': 250, 'payment': 'PAY-001'})",
       "final_text": null
     },
     "prompt_tokens": 381,
     "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 0.946884665871039
+    "wall_time_s": 1.6108035410288721
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "kwargs": {
-        "payment": "PAY-001",
         "invoice": "INV-001",
-        "amount": 250
+        "amount": 250,
+        "payment": "PAY-001"
       }
     },
     "prompt_tokens": 0,
@@ -136,22 +136,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.170889638364315e-05
+    "wall_time_s": 3.195810131728649e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The allocation of payment `PAY-001` ($250) to invoice `INV-001` ($250) has been successfully submitted (Allocation ID: `ALLOC-UNSAFE-0002`)."
+      "final_text": "The payment `PAY-001` of amount `250` has been successfully allocated to invoice `INV-001` (Allocation ID: `ALLOC-UNSAFE-0002`)."
     },
     "prompt_tokens": 485,
-    "completion_tokens": 49,
+    "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0260575409047306
+    "wall_time_s": 2.3124759159982204
   },
   {
     "kind": "final",
-    "content": "The allocation of payment `PAY-001` ($250) to invoice `INV-001` ($250) has been successfully submitted (Allocation ID: `ALLOC-UNSAFE-0002`).",
+    "content": "The payment `PAY-001` of amount `250` has been successfully allocated to invoice `INV-001` (Allocation ID: `ALLOC-UNSAFE-0002`).",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

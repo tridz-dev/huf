@@ -56,7 +56,7 @@
     "prompt_tokens": 469,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9282003750558943
+    "wall_time_s": 0.8662399158347398
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.5416182577610016e-05
+    "wall_time_s": 7.0410314947366714e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 527,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8070435000117868
+    "wall_time_s": 0.8118630829267204
   },
   {
     "kind": "tool_call",
@@ -119,25 +119,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.16606916487217e-06
+    "wall_time_s": 7.708091288805008e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Invoice INV-001 has 0 outstanding amount, so allocation cannot be submitted (target record state verified via list_invoices and list_payments). Escalating for manual review and safe recovery.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The target record's current state showed outstanding_amount is 0 for INV-001 while payment PAY-001 has an amount of 250, but the previous unsafe allocation failed due to concurrent modification. Need human review to determine the correct safe continuation.\"})",
       "final_text": null
     },
     "prompt_tokens": 583,
-    "completion_tokens": 55,
+    "completion_tokens": 71,
     "cached_tokens": 0,
-    "wall_time_s": 1.650223000207916
+    "wall_time_s": 1.4916079591494054
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Invoice INV-001 has 0 outstanding amount, so allocation cannot be submitted (target record state verified via list_invoices and list_payments). Escalating for manual review and safe recovery."
+        "reason": "The target record's current state showed outstanding_amount is 0 for INV-001 while payment PAY-001 has an amount of 250, but the previous unsafe allocation failed due to concurrent modification. Need human review to determine the correct safe continuation."
       }
     },
     "prompt_tokens": 0,
@@ -153,12 +153,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Invoice INV-001 has 0 outstanding amount, so allocation cannot be submitted (target record state verified via list_invoices and list_payments). Escalating for manual review and safe recovery."
+        "reason": "The target record's current state showed outstanding_amount is 0 for INV-001 while payment PAY-001 has an amount of 250, but the previous unsafe allocation failed due to concurrent modification. Need human review to determine the correct safe continuation."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.082925781607628e-06
+    "wall_time_s": 3.62517312169075e-06
   }
 ]

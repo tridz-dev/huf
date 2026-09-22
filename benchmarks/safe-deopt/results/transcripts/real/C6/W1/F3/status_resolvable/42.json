@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9050352501217276
+    "wall_time_s": 1.179048749851063
   },
   {
     "kind": "tool_call",
@@ -87,50 +87,13 @@
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='read_open_items', kwargs={})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'safe-deopt-W1', 'reference_type': 'procedure'})",
       "final_text": null
     },
     "prompt_tokens": 535,
-    "completion_tokens": 12,
+    "completion_tokens": 43,
     "cached_tokens": 0,
-    "wall_time_s": 1.5433259999845177
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "read_open_items",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "read_open_items",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 2.9588118195533752e-06
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
-      "final_text": null
-    },
-    "prompt_tokens": 608,
-    "completion_tokens": 44,
-    "cached_tokens": 0,
-    "wall_time_s": 0.9869922080542892
+    "wall_time_s": 1.6445939999539405
   },
   {
     "kind": "tool_call",
@@ -138,8 +101,8 @@
       "tool_name": "submit_linked_record",
       "kwargs": {
         "operation_key": "opB",
-        "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice"
+        "reference_name": "safe-deopt-W1",
+        "reference_type": "procedure"
       }
     },
     "prompt_tokens": 0,
@@ -159,25 +122,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.079192876815796e-05
+    "wall_time_s": 1.774984411895275e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation key opB has an unresolved-outcome write whose replay was rejected due to lack of tool guarantee (tool_guarantee='none'). Safe recovery requires human intervention to prevent duplicate or conflicting commits.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation key opB has an unresolved-outcome write that was rejected for replay by tool safety policies. Manual intervention required.'})",
       "final_text": null
     },
-    "prompt_tokens": 712,
-    "completion_tokens": 54,
+    "prompt_tokens": 638,
+    "completion_tokens": 38,
     "cached_tokens": 0,
-    "wall_time_s": 1.4588153751101345
+    "wall_time_s": 1.7486762080807239
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation key opB has an unresolved-outcome write whose replay was rejected due to lack of tool guarantee (tool_guarantee='none'). Safe recovery requires human intervention to prevent duplicate or conflicting commits."
+        "reason": "Operation key opB has an unresolved-outcome write that was rejected for replay by tool safety policies. Manual intervention required."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +156,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation key opB has an unresolved-outcome write whose replay was rejected due to lack of tool guarantee (tool_guarantee='none'). Safe recovery requires human intervention to prevent duplicate or conflicting commits."
+        "reason": "Operation key opB has an unresolved-outcome write that was rejected for replay by tool safety policies. Manual intervention required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.791910320520401e-06
+    "wall_time_s": 6.1658211052417755e-06
   }
 ]

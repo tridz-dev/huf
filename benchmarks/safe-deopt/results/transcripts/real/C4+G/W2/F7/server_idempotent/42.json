@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9433326669968665
+    "wall_time_s": 1.4195601248648018
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.9459053874015808e-05
+    "wall_time_s": 5.166977643966675e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 335,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7280342499725521
+    "wall_time_s": 1.4272969579324126
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.749985575675964e-06
+    "wall_time_s": 7.041962817311287e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 395,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8431894581299275
+    "wall_time_s": 1.1389889160636812
   },
   {
     "kind": "tool_call",
@@ -135,26 +135,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.708106517791748e-06
+    "wall_time_s": 7.2908587753772736e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'PAY-001:INV-001:250'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 451,
-    "completion_tokens": 39,
+    "completion_tokens": 52,
     "cached_tokens": 0,
-    "wall_time_s": 0.8332696249708533
+    "wall_time_s": 1.7513380001764745
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "opB",
-        "allocation": "PAY-001:INV-001:250"
+        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -174,7 +174,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.3042008504271507e-05
+    "wall_time_s": 2.791709266602993e-05
   },
   {
     "kind": "model_step",
@@ -182,10 +182,10 @@
       "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'opB'})",
       "final_text": null
     },
-    "prompt_tokens": 548,
+    "prompt_tokens": 561,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8783318749628961
+    "wall_time_s": 0.9163194999564439
   },
   {
     "kind": "tool_call",
@@ -211,25 +211,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1999858543276787e-05
+    "wall_time_s": 9.665964171290398e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation opB timed out and status is UNKNOWN, and retry is blocked by tool guarantee rules ('none'). Cannot safely proceed without manual intervention.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB resulted in a timeout during submit_allocation and subsequent status checks return UNKNOWN, while replay is rejected because the tool declares no recovery guarantee. Human intervention is required to safely resolve the allocation state.'})",
       "final_text": null
     },
-    "prompt_tokens": 585,
-    "completion_tokens": 43,
+    "prompt_tokens": 598,
+    "completion_tokens": 56,
     "cached_tokens": 0,
-    "wall_time_s": 1.013145708013326
+    "wall_time_s": 1.4353847079910338
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timed out and status is UNKNOWN, and retry is blocked by tool guarantee rules ('none'). Cannot safely proceed without manual intervention."
+        "reason": "Operation opB resulted in a timeout during submit_allocation and subsequent status checks return UNKNOWN, while replay is rejected because the tool declares no recovery guarantee. Human intervention is required to safely resolve the allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -245,12 +245,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timed out and status is UNKNOWN, and retry is blocked by tool guarantee rules ('none'). Cannot safely proceed without manual intervention."
+        "reason": "Operation opB resulted in a timeout during submit_allocation and subsequent status checks return UNKNOWN, while replay is rejected because the tool declares no recovery guarantee. Human intervention is required to safely resolve the allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.708076059818268e-06
+    "wall_time_s": 6.541842594742775e-06
   }
 ]

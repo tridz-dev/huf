@@ -26,7 +26,7 @@
     "prompt_tokens": 337,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8805459160357714
+    "wall_time_s": 1.1220474999863654
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.332985892891884e-06
+    "wall_time_s": 7.707858458161354e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 410,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.755015084054321
+    "wall_time_s": 1.5050320830196142
   },
   {
     "kind": "tool_call",
@@ -89,7 +89,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.124835297465324e-06
+    "wall_time_s": 1.0750023648142815e-05
   },
   {
     "kind": "model_step",
@@ -100,7 +100,7 @@
     "prompt_tokens": 451,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8712211670354009
+    "wall_time_s": 1.8645471250638366
   },
   {
     "kind": "tool_call",
@@ -129,7 +129,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.641695603728294e-05
+    "wall_time_s": 0.00013541593216359615
   },
   {
     "kind": "model_step",
@@ -140,7 +140,7 @@
     "prompt_tokens": 529,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0391441660467535
+    "wall_time_s": 1.5085379579104483
   },
   {
     "kind": "tool_call",
@@ -166,65 +166,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.750008419156075e-06
+    "wall_time_s": 9.95793379843235e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_followup_todo', kwargs={'allocated_to': 'billing_team', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice', 'operation_key': 'W1'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Submit linked record operation for W1 timed out and operation remains NOT_COMMITTED.'})",
       "final_text": null
     },
     "prompt_tokens": 570,
-    "completion_tokens": 55,
+    "completion_tokens": 32,
     "cached_tokens": 0,
-    "wall_time_s": 0.9038602910004556
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "create_followup_todo",
-      "kwargs": {
-        "allocated_to": "billing_team",
-        "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice",
-        "operation_key": "W1"
-      }
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "create_followup_todo",
-      "ok": true,
-      "dispatched": true,
-      "result": "ToDo(name='TODO-0001', reference_type='Sales Invoice', reference_name='SINV-2001', allocated_to='billing_team', operation_key='W1', description='')"
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 2.3209024220705032e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation timed out and could not be confirmed as committed, even though a follow-up todo was created. Human intervention is required to verify the W1 task status.'})",
-      "final_text": null
-    },
-    "prompt_tokens": 694,
-    "completion_tokens": 53,
-    "cached_tokens": 0,
-    "wall_time_s": 1.1675108328927308
+    "wall_time_s": 1.4854425829835236
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation timed out and could not be confirmed as committed, even though a follow-up todo was created. Human intervention is required to verify the W1 task status."
+        "reason": "Submit linked record operation for W1 timed out and operation remains NOT_COMMITTED."
       }
     },
     "prompt_tokens": 0,
@@ -240,12 +200,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation timed out and could not be confirmed as committed, even though a follow-up todo was created. Human intervention is required to verify the W1 task status."
+        "reason": "Submit linked record operation for W1 timed out and operation remains NOT_COMMITTED."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.0831357687711716e-06
+    "wall_time_s": 3.6249402910470963e-06
   }
 ]

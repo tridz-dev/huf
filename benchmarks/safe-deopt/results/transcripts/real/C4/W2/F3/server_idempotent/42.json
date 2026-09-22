@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7831129590049386
+    "wall_time_s": 1.4518345829565078
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.458023563027382e-06
+    "wall_time_s": 4.125060513615608e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 339,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.7399574159644544
+    "wall_time_s": 1.608840666944161
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.832896128296852e-06
+    "wall_time_s": 6.624963134527206e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 399,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8513985830359161
+    "wall_time_s": 0.7636078749783337
   },
   {
     "kind": "tool_call",
@@ -135,7 +135,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.166977643966675e-06
+    "wall_time_s": 6.917165592312813e-06
   },
   {
     "kind": "model_step",
@@ -146,7 +146,7 @@
     "prompt_tokens": 455,
     "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.960738749941811
+    "wall_time_s": 1.2970017499756068
   },
   {
     "kind": "tool_call",
@@ -174,25 +174,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0124873369932175e-05
+    "wall_time_s": 2.879183739423752e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Submit allocation failed with 'no such allocation' error despite correct invoice and payment data.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Failed to submit allocation due to unrecognized format or server-side error despite checking operation status, invoices, and payments.'})",
       "final_text": null
     },
     "prompt_tokens": 520,
-    "completion_tokens": 31,
+    "completion_tokens": 37,
     "cached_tokens": 0,
-    "wall_time_s": 0.9252684579696506
+    "wall_time_s": 2.386811542091891
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Submit allocation failed with 'no such allocation' error despite correct invoice and payment data."
+        "reason": "Failed to submit allocation due to unrecognized format or server-side error despite checking operation status, invoices, and payments."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Submit allocation failed with 'no such allocation' error despite correct invoice and payment data."
+        "reason": "Failed to submit allocation due to unrecognized format or server-side error despite checking operation status, invoices, and payments."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.8330832719802856e-06
+    "wall_time_s": 4.959059879183769e-06
   }
 ]

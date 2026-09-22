@@ -56,7 +56,7 @@
     "prompt_tokens": 495,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8936446669977158
+    "wall_time_s": 0.9194041250739247
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.791902706027031e-06
+    "wall_time_s": 1.1082971468567848e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.873987999977544
+    "wall_time_s": 1.4079093339387327
   },
   {
     "kind": "tool_call",
@@ -119,27 +119,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.250113412737846e-06
+    "wall_time_s": 8.458038792014122e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'operation_key': 'opB', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 605,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9656062920112163
+    "wall_time_s": 1.570914417039603
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
+        "reference_type": "Sales Invoice",
         "operation_key": "opB",
-        "reference_name": "SINV-2001",
-        "reference_type": "Sales Invoice"
+        "reference_name": "SINV-2001"
       }
     },
     "prompt_tokens": 0,
@@ -158,22 +158,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.095794141292572e-05
+    "wall_time_s": 1.574982888996601e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The previous execution encountered a timeout during the `submit_linked_record` step (`operation_key='opB'`). Following the safe recovery protocol, I first verified the operation status (which returned `UNKNOWN`) and inspected the current open items to check the record state. Finding the item open and uncommitted, I safely re-executed the `submit_linked_record` atomic tool call with `operation_key='opB'`, which successfully completed with status `submitted`."
+      "final_text": "The mid-run failure (`submit_linked_record` timing out with operation key `opB`) has been safely recovered:\n\n1. **Checked operation status (`get_operation_status`)**: Confirmed the previous call returned `UNKNOWN`, meaning we could not verify whether it committed.\n2. **Read current state (`read_open_items`)**: Verified the target record (`SINV-2001`) was still present and open.\n3. **Re-submitted the record (`submit_linked_record`)**: Executed the atomic recovery tool call successfully (`status: submitted`)."
     },
     "prompt_tokens": 707,
-    "completion_tokens": 96,
+    "completion_tokens": 123,
     "cached_tokens": 0,
-    "wall_time_s": 1.438170833978802
+    "wall_time_s": 2.095760416937992
   },
   {
     "kind": "final",
-    "content": "The previous execution encountered a timeout during the `submit_linked_record` step (`operation_key='opB'`). Following the safe recovery protocol, I first verified the operation status (which returned `UNKNOWN`) and inspected the current open items to check the record state. Finding the item open and uncommitted, I safely re-executed the `submit_linked_record` atomic tool call with `operation_key='opB'`, which successfully completed with status `submitted`.",
+    "content": "The mid-run failure (`submit_linked_record` timing out with operation key `opB`) has been safely recovered:\n\n1. **Checked operation status (`get_operation_status`)**: Confirmed the previous call returned `UNKNOWN`, meaning we could not verify whether it committed.\n2. **Read current state (`read_open_items`)**: Verified the target record (`SINV-2001`) was still present and open.\n3. **Re-submitted the record (`submit_linked_record`)**: Executed the atomic recovery tool call successfully (`status: submitted`).",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

@@ -56,7 +56,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.853307125158608
+    "wall_time_s": 1.4342018340248615
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0041985660791397e-05
+    "wall_time_s": 7.166992872953415e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 535,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8244132499676198
+    "wall_time_s": 0.9980859579518437
   },
   {
     "kind": "tool_call",
@@ -119,26 +119,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.3041077181696892e-05
+    "wall_time_s": 1.0124873369932175e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_name': 'SINV-2001', 'reference_type': 'Sales Invoice'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_name': 'SINV-2001', 'operation_key': 'opB', 'reference_type': 'Sales Invoice'})",
       "final_text": null
     },
     "prompt_tokens": 608,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9610998330172151
+    "wall_time_s": 1.377752250060439
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
         "reference_name": "SINV-2001",
+        "operation_key": "opB",
         "reference_type": "Sales Invoice"
       }
     },
@@ -159,25 +159,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.27498821914196e-05
+    "wall_time_s": 3.92089132219553e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Replay of submit_linked_record with operation_key='opB' was rejected due to lack of tool guarantee ('none') after a timeout failure. Escalating to human operator to safely resolve the linked record submission.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB had an unresolved outcome and tool guarantee does not permit retry; human intervention required to verify state and proceed safely.'})",
       "final_text": null
     },
     "prompt_tokens": 712,
-    "completion_tokens": 59,
+    "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 1.1356225409545004
+    "wall_time_s": 1.0884273750707507
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Replay of submit_linked_record with operation_key='opB' was rejected due to lack of tool guarantee ('none') after a timeout failure. Escalating to human operator to safely resolve the linked record submission."
+        "reason": "Operation opB had an unresolved outcome and tool guarantee does not permit retry; human intervention required to verify state and proceed safely."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Replay of submit_linked_record with operation_key='opB' was rejected due to lack of tool guarantee ('none') after a timeout failure. Escalating to human operator to safely resolve the linked record submission."
+        "reason": "Operation opB had an unresolved outcome and tool guarantee does not permit retry; human intervention required to verify state and proceed safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.37492586672306e-06
+    "wall_time_s": 6.041955202817917e-06
   }
 ]

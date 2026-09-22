@@ -56,7 +56,7 @@
     "prompt_tokens": 432,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8543000419158489
+    "wall_time_s": 1.4071532909292728
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.291797712445259e-06
+    "wall_time_s": 5.542067810893059e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.9236343749798834
+    "wall_time_s": 0.8480937080457807
   },
   {
     "kind": "tool_call",
@@ -119,18 +119,18 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1582858860492706e-05
+    "wall_time_s": 4.708999767899513e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:250,PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 548,
-    "completion_tokens": 39,
+    "completion_tokens": 43,
     "cached_tokens": 0,
-    "wall_time_s": 1.1687284170184284
+    "wall_time_s": 1.1819171670358628
   },
   {
     "kind": "tool_call",
@@ -138,7 +138,7 @@
       "tool_name": "submit_allocation",
       "kwargs": {
         "operation_key": "opB",
-        "allocation": "INV-001:PAY-001:250"
+        "allocation": "INV-001:250,PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -158,25 +158,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.1584018617868423e-05
+    "wall_time_s": 3.1624920666217804e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_allocation with operation_key 'opB' was rejected with tool_guarantee 'none', prohibiting blind retry. Unable to safely retry or proceed without human intervention.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_allocation with operation_key 'opB' was rejected with tool_guarantee='none', meaning we cannot safely retry or replay it directly without risking duplicate or conflicting writes. Manual intervention / escalation is required per safety guidelines.\"})",
       "final_text": null
     },
-    "prompt_tokens": 645,
-    "completion_tokens": 49,
+    "prompt_tokens": 649,
+    "completion_tokens": 61,
     "cached_tokens": 0,
-    "wall_time_s": 1.005868332926184
+    "wall_time_s": 1.340857374947518
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_allocation with operation_key 'opB' was rejected with tool_guarantee 'none', prohibiting blind retry. Unable to safely retry or proceed without human intervention."
+        "reason": "submit_allocation with operation_key 'opB' was rejected with tool_guarantee='none', meaning we cannot safely retry or replay it directly without risking duplicate or conflicting writes. Manual intervention / escalation is required per safety guidelines."
       }
     },
     "prompt_tokens": 0,
@@ -192,12 +192,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_allocation with operation_key 'opB' was rejected with tool_guarantee 'none', prohibiting blind retry. Unable to safely retry or proceed without human intervention."
+        "reason": "submit_allocation with operation_key 'opB' was rejected with tool_guarantee='none', meaning we cannot safely retry or replay it directly without risking duplicate or conflicting writes. Manual intervention / escalation is required per safety guidelines."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.5420449674129486e-06
+    "wall_time_s": 6.207963451743126e-06
   }
 ]

@@ -34,7 +34,7 @@
     "prompt_tokens": 291,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8361469591036439
+    "wall_time_s": 1.1143880421295762
   },
   {
     "kind": "tool_call",
@@ -60,25 +60,65 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.4170225262641907e-06
+    "wall_time_s": 5.708076059818268e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The previous submit_linked_record operation (opB) timed out and needs human review/confirmation to ensure it is not duplicated or incorrectly processed.'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
       "final_text": null
     },
     "prompt_tokens": 364,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.8849405408836901
+    "wall_time_s": 1.842171125113964
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "submit_linked_record",
+      "kwargs": {
+        "operation_key": "opB",
+        "reference_type": "Sales Invoice",
+        "reference_name": "SINV-2001"
+      }
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "submit_linked_record",
+      "ok": false,
+      "dispatched": false,
+      "guard_rejected": true,
+      "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 3.21660190820694e-05
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB timed out without confirmation, and replay was rejected because the write declares no recovery guarantee (unresolved-outcome write). Escalating to a human to safely resolve the submission status.'})",
+      "final_text": null
+    },
+    "prompt_tokens": 468,
+    "completion_tokens": 52,
+    "cached_tokens": 0,
+    "wall_time_s": 2.385825250064954
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The previous submit_linked_record operation (opB) timed out and needs human review/confirmation to ensure it is not duplicated or incorrectly processed."
+        "reason": "Operation opB timed out without confirmation, and replay was rejected because the write declares no recovery guarantee (unresolved-outcome write). Escalating to a human to safely resolve the submission status."
       }
     },
     "prompt_tokens": 0,
@@ -94,12 +134,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The previous submit_linked_record operation (opB) timed out and needs human review/confirmation to ensure it is not duplicated or incorrectly processed."
+        "reason": "Operation opB timed out without confirmation, and replay was rejected because the write declares no recovery guarantee (unresolved-outcome write). Escalating to a human to safely resolve the submission status."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.624932676553726e-06
+    "wall_time_s": 5.458015948534012e-06
   }
 ]

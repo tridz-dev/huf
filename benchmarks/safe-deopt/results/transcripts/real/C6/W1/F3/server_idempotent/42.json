@@ -56,7 +56,7 @@
     "prompt_tokens": 495,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8843774159904569
+    "wall_time_s": 1.3969399998895824
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.233280636370182e-05
+    "wall_time_s": 9.750016033649445e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 536,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.849486666964367
+    "wall_time_s": 2.2713969592005014
   },
   {
     "kind": "tool_call",
@@ -119,7 +119,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 9.167008101940155e-06
+    "wall_time_s": 5.792127922177315e-06
   },
   {
     "kind": "model_step",
@@ -130,7 +130,7 @@
     "prompt_tokens": 609,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 0.9520858752075583
+    "wall_time_s": 1.627552666934207
   },
   {
     "kind": "tool_call",
@@ -159,25 +159,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.9958936870098114e-05
+    "wall_time_s": 3.1499890610575676e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"submit_linked_record failed with server_idempotent guarantee initially timing out (operation_key='opB'), and subsequent direct retry was rejected due to replay safety rules for tool_guarantee='none' on operation_key='opB'. State verified as NOT_COMMITTED via get_operation_status, but API forbids replay. Human intervention required.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation key opB has an unresolved-outcome write with tool_guarantee='none' (replay rejected), preventing safe automatic retry via submit_linked_record. Human intervention required to verify state and complete or resolve the linked record submission.\"})",
       "final_text": null
     },
     "prompt_tokens": 713,
-    "completion_tokens": 89,
+    "completion_tokens": 62,
     "cached_tokens": 0,
-    "wall_time_s": 1.286153957946226
+    "wall_time_s": 1.7187924170866609
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "submit_linked_record failed with server_idempotent guarantee initially timing out (operation_key='opB'), and subsequent direct retry was rejected due to replay safety rules for tool_guarantee='none' on operation_key='opB'. State verified as NOT_COMMITTED via get_operation_status, but API forbids replay. Human intervention required."
+        "reason": "Operation key opB has an unresolved-outcome write with tool_guarantee='none' (replay rejected), preventing safe automatic retry via submit_linked_record. Human intervention required to verify state and complete or resolve the linked record submission."
       }
     },
     "prompt_tokens": 0,
@@ -193,12 +193,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "submit_linked_record failed with server_idempotent guarantee initially timing out (operation_key='opB'), and subsequent direct retry was rejected due to replay safety rules for tool_guarantee='none' on operation_key='opB'. State verified as NOT_COMMITTED via get_operation_status, but API forbids replay. Human intervention required."
+        "reason": "Operation key opB has an unresolved-outcome write with tool_guarantee='none' (replay rejected), preventing safe automatic retry via submit_linked_record. Human intervention required to verify state and complete or resolve the linked record submission."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.041962817311287e-06
+    "wall_time_s": 6.041955202817917e-06
   }
 ]

@@ -56,7 +56,7 @@
     "prompt_tokens": 434,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.3544640839099884
+    "wall_time_s": 1.1182890830095857
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.875038474798203e-06
+    "wall_time_s": 5.95790334045887e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.7888640000019222
+    "wall_time_s": 0.7920752500649542
   },
   {
     "kind": "tool_call",
@@ -119,26 +119,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.500181138515472e-06
+    "wall_time_s": 6.209127604961395e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}'})",
       "final_text": null
     },
     "prompt_tokens": 550,
     "completion_tokens": 52,
     "cached_tokens": 0,
-    "wall_time_s": 1.1166334580630064
+    "wall_time_s": 1.7976383750792593
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}"
       }
     },
     "prompt_tokens": 0,
@@ -158,25 +158,99 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.316695801913738e-05
+    "wall_time_s": 3.683287650346756e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation opB failed mid-run with timeout and tool_guarantee 'none', preventing retry. Manual review required.\"})",
+      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
       "final_text": null
     },
     "prompt_tokens": 660,
-    "completion_tokens": 38,
+    "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.9813234999310225
+    "wall_time_s": 1.657100124983117
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_invoices",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_invoices",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.5409112721681595e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 720,
+    "completion_tokens": 10,
+    "cached_tokens": 0,
+    "wall_time_s": 0.9253347080666572
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_payments",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_payments",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 5.209119990468025e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_allocation call with operation_key 'opB' failed with a timeout and has a tool_guarantee of 'none'. The replay was rejected because unresolved-outcome writes with tool_guarantee='none' cannot be retried. The invoice INV-001 still has an outstanding amount of 250 and payment PAY-001 is unallocated. Manual intervention or escalation is required to safely resolve the allocation state.\"})",
+      "final_text": null
+    },
+    "prompt_tokens": 776,
+    "completion_tokens": 105,
+    "cached_tokens": 0,
+    "wall_time_s": 2.246051208814606
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB failed mid-run with timeout and tool_guarantee 'none', preventing retry. Manual review required."
+        "reason": "The submit_allocation call with operation_key 'opB' failed with a timeout and has a tool_guarantee of 'none'. The replay was rejected because unresolved-outcome writes with tool_guarantee='none' cannot be retried. The invoice INV-001 still has an outstanding amount of 250 and payment PAY-001 is unallocated. Manual intervention or escalation is required to safely resolve the allocation state."
       }
     },
     "prompt_tokens": 0,
@@ -192,12 +266,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB failed mid-run with timeout and tool_guarantee 'none', preventing retry. Manual review required."
+        "reason": "The submit_allocation call with operation_key 'opB' failed with a timeout and has a tool_guarantee of 'none'. The replay was rejected because unresolved-outcome writes with tool_guarantee='none' cannot be retried. The invoice INV-001 still has an outstanding amount of 250 and payment PAY-001 is unallocated. Manual intervention or escalation is required to safely resolve the allocation state."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.916940376162529e-06
+    "wall_time_s": 6.207963451743126e-06
   }
 ]

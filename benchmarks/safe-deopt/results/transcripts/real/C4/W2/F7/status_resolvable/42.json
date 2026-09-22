@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8595030829310417
+    "wall_time_s": 0.8468728330917656
   },
   {
     "kind": "tool_call",
@@ -61,44 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4750054106116295e-05
-  },
-  {
-    "kind": "model_step",
-    "content": {
-      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
-      "final_text": null
-    },
-    "prompt_tokens": 335,
-    "completion_tokens": 11,
-    "cached_tokens": 0,
-    "wall_time_s": 0.7614047909155488
-  },
-  {
-    "kind": "tool_call",
-    "content": {
-      "tool_name": "list_invoices",
-      "kwargs": {}
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 0.0
-  },
-  {
-    "kind": "tool_result",
-    "content": {
-      "tool_name": "list_invoices",
-      "ok": true,
-      "dispatched": true,
-      "result": [
-        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
-      ]
-    },
-    "prompt_tokens": 0,
-    "completion_tokens": 0,
-    "cached_tokens": 0,
-    "wall_time_s": 7.874798029661179e-06
+    "wall_time_s": 1.2125121429562569e-05
   },
   {
     "kind": "model_step",
@@ -106,10 +69,10 @@
       "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
       "final_text": null
     },
-    "prompt_tokens": 395,
+    "prompt_tokens": 335,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8218618750106543
+    "wall_time_s": 0.9979850000236183
   },
   {
     "kind": "tool_call",
@@ -135,18 +98,55 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.708083674311638e-06
+    "wall_time_s": 6.624963134527206e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:250'})",
+      "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
+      "final_text": null
+    },
+    "prompt_tokens": 391,
+    "completion_tokens": 11,
+    "cached_tokens": 0,
+    "wall_time_s": 0.8633445410523564
+  },
+  {
+    "kind": "tool_call",
+    "content": {
+      "tool_name": "list_invoices",
+      "kwargs": {}
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 0.0
+  },
+  {
+    "kind": "tool_result",
+    "content": {
+      "tool_name": "list_invoices",
+      "ok": true,
+      "dispatched": true,
+      "result": [
+        "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
+      ]
+    },
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "cached_tokens": 0,
+    "wall_time_s": 6.9160014390945435e-06
+  },
+  {
+    "kind": "model_step",
+    "content": {
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': '{\"INV-001\": 250}'})",
       "final_text": null
     },
     "prompt_tokens": 451,
-    "completion_tokens": 33,
+    "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.8767502079717815
+    "wall_time_s": 1.9859665830153972
   },
   {
     "kind": "tool_call",
@@ -154,7 +154,7 @@
       "tool_name": "submit_allocation",
       "kwargs": {
         "operation_key": "opB",
-        "allocation": "INV-001:250"
+        "allocation": "{\"INV-001\": 250}"
       }
     },
     "prompt_tokens": 0,
@@ -169,30 +169,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such allocation INV-001:250'"
+      "error": "'no such allocation {\"INV-001\": 250}'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.4374963939189911e-05
+    "wall_time_s": 1.4791032299399376e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to submit allocation due to unknown error/invalid allocation format for opB.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Received error 'no such allocation' when attempting to submit allocation for opB after timeout. Need clarification on correct allocation format or operation key.\"})",
       "final_text": null
     },
-    "prompt_tokens": 511,
-    "completion_tokens": 30,
+    "prompt_tokens": 516,
+    "completion_tokens": 42,
     "cached_tokens": 0,
-    "wall_time_s": 1.4420751668512821
+    "wall_time_s": 1.7163512501865625
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to submit allocation due to unknown error/invalid allocation format for opB."
+        "reason": "Received error 'no such allocation' when attempting to submit allocation for opB after timeout. Need clarification on correct allocation format or operation key."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to submit allocation due to unknown error/invalid allocation format for opB."
+        "reason": "Received error 'no such allocation' when attempting to submit allocation for opB after timeout. Need clarification on correct allocation format or operation key."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.166053935885429e-06
+    "wall_time_s": 6.2498729676008224e-06
   }
 ]

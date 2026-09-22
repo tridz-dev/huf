@@ -34,7 +34,7 @@
     "prompt_tokens": 291,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.9096711671445519
+    "wall_time_s": 2.6275228750891984
   },
   {
     "kind": "tool_call",
@@ -58,7 +58,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.95790334045887e-06
+    "wall_time_s": 7.292022928595543e-06
   },
   {
     "kind": "model_step",
@@ -69,7 +69,7 @@
     "prompt_tokens": 316,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8289161249995232
+    "wall_time_s": 3.104288167087361
   },
   {
     "kind": "tool_call",
@@ -95,25 +95,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.8250040486454964e-05
+    "wall_time_s": 1.616682857275009e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered a timeout on submit_linked_record for operation_key='opB' and the operation could not be canceled or found in open items. Need human intervention to safely resolve state.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation (opB) timed out and could not be completed or cancelled successfully. Manual review is required.'})",
       "final_text": null
     },
     "prompt_tokens": 347,
-    "completion_tokens": 54,
+    "completion_tokens": 41,
     "cached_tokens": 0,
-    "wall_time_s": 1.1429868750274181
+    "wall_time_s": 1.9989863340742886
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Encountered a timeout on submit_linked_record for operation_key='opB' and the operation could not be canceled or found in open items. Need human intervention to safely resolve state."
+        "reason": "The submit_linked_record operation (opB) timed out and could not be completed or cancelled successfully. Manual review is required."
       }
     },
     "prompt_tokens": 0,
@@ -129,12 +129,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Encountered a timeout on submit_linked_record for operation_key='opB' and the operation could not be canceled or found in open items. Need human intervention to safely resolve state."
+        "reason": "The submit_linked_record operation (opB) timed out and could not be completed or cancelled successfully. Manual review is required."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.083158612251282e-06
+    "wall_time_s": 5.749985575675964e-06
   }
 ]

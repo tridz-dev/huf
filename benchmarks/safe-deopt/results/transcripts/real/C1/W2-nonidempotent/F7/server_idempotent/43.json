@@ -26,7 +26,7 @@
     "prompt_tokens": 338,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.9319925829768181
+    "wall_time_s": 1.0372394579462707
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.2498805820941925e-06
+    "wall_time_s": 6.209127604961395e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 398,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8758034170605242
+    "wall_time_s": 0.829833708005026
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.708076059818268e-06
+    "wall_time_s": 8.750008419156075e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'invoice': 'INV-001', 'operation_key': 'alloc-inv-001-pay-001', 'amount': 250, 'payment': 'PAY-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'amount': 250, 'invoice': 'INV-001', 'operation_key': 'w2-nonidempotent-init-1'})",
       "final_text": null
     },
     "prompt_tokens": 454,
-    "completion_tokens": 56,
+    "completion_tokens": 54,
     "cached_tokens": 0,
-    "wall_time_s": 1.119836499914527
+    "wall_time_s": 1.6597899999469519
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
-        "invoice": "INV-001",
-        "operation_key": "alloc-inv-001-pay-001",
+        "payment": "PAY-001",
         "amount": 250,
-        "payment": "PAY-001"
+        "invoice": "INV-001",
+        "operation_key": "w2-nonidempotent-init-1"
       }
     },
     "prompt_tokens": 0,
@@ -124,30 +124,30 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='alloc-inv-001-pay-001', status='draft')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='w2-nonidempotent-init-1', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.033403143286705e-05
+    "wall_time_s": 1.4791963621973991e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'alloc-inv-001-pay-001'})",
+      "tool_call": "ToolCallRequest(tool_name='get_operation_status', kwargs={'operation_key': 'w2-nonidempotent-init-1'})",
       "final_text": null
     },
-    "prompt_tokens": 581,
-    "completion_tokens": 32,
+    "prompt_tokens": 577,
+    "completion_tokens": 30,
     "cached_tokens": 0,
-    "wall_time_s": 0.9536302089691162
+    "wall_time_s": 0.9532253749202937
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "get_operation_status",
       "kwargs": {
-        "operation_key": "alloc-inv-001-pay-001"
+        "operation_key": "w2-nonidempotent-init-1"
       }
     },
     "prompt_tokens": 0,
@@ -166,22 +166,22 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.1999858543276787e-05
+    "wall_time_s": 1.1208932846784592e-05
   },
   {
     "kind": "model_step",
     "content": {
       "tool_call": null,
-      "final_text": "The allocation of payment PAY-001 (amount: 250) to invoice INV-001 has been successfully created and committed (Operation Status: COMMITTED)."
+      "final_text": "The allocation of payment `PAY-001` (amount $250) to invoice `INV-001` has been successfully completed and committed."
     },
-    "prompt_tokens": 631,
-    "completion_tokens": 38,
+    "prompt_tokens": 625,
+    "completion_tokens": 34,
     "cached_tokens": 0,
-    "wall_time_s": 0.9456555000506341
+    "wall_time_s": 1.2851802080404013
   },
   {
     "kind": "final",
-    "content": "The allocation of payment PAY-001 (amount: 250) to invoice INV-001 has been successfully created and committed (Operation Status: COMMITTED).",
+    "content": "The allocation of payment `PAY-001` (amount $250) to invoice `INV-001` has been successfully completed and committed.",
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,

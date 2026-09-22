@@ -57,7 +57,7 @@
     "prompt_tokens": 492,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8947326249908656
+    "wall_time_s": 0.8839480420574546
   },
   {
     "kind": "tool_call",
@@ -83,7 +83,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2499978765845299e-05
+    "wall_time_s": 1.2167030945420265e-05
   },
   {
     "kind": "model_step",
@@ -94,7 +94,7 @@
     "prompt_tokens": 533,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8639296658802778
+    "wall_time_s": 1.5802731250878423
   },
   {
     "kind": "tool_call",
@@ -120,7 +120,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.999828085303307e-06
+    "wall_time_s": 6.6659413278102875e-06
   },
   {
     "kind": "model_step",
@@ -131,7 +131,7 @@
     "prompt_tokens": 593,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8412937498651445
+    "wall_time_s": 1.0611950419843197
   },
   {
     "kind": "tool_call",
@@ -157,26 +157,26 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.417045369744301e-06
+    "wall_time_s": 6.708083674311638e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:PAY-001:250', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'opB', 'allocation': 'INV-001:PAY-001:250'})",
       "final_text": null
     },
     "prompt_tokens": 649,
     "completion_tokens": 39,
     "cached_tokens": 0,
-    "wall_time_s": 0.9935292501468211
+    "wall_time_s": 1.3164316669572145
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "INV-001:PAY-001:250",
-        "operation_key": "opB"
+        "operation_key": "opB",
+        "allocation": "INV-001:PAY-001:250"
       }
     },
     "prompt_tokens": 0,
@@ -196,7 +196,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.591707304120064e-05
+    "wall_time_s": 2.1082814782857895e-05
   },
   {
     "kind": "model_step",
@@ -207,7 +207,7 @@
     "prompt_tokens": 746,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.5175513338763267
+    "wall_time_s": 1.5249652499333024
   },
   {
     "kind": "tool_call",
@@ -233,25 +233,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2125121429562569e-05
+    "wall_time_s": 1.654215157032013e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation opB timed out and its write did not commit, but the operation key is locked against replay (tool_guarantee='none'). Manual intervention required.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB failed to commit and was marked as not committed, but the tool guarantee restricts retrying the same operation key without a new key or handling. Escalating safely.'})",
       "final_text": null
     },
     "prompt_tokens": 787,
-    "completion_tokens": 46,
+    "completion_tokens": 49,
     "cached_tokens": 0,
-    "wall_time_s": 1.0039516671095043
+    "wall_time_s": 1.3263082921039313
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB timed out and its write did not commit, but the operation key is locked against replay (tool_guarantee='none'). Manual intervention required."
+        "reason": "Operation opB failed to commit and was marked as not committed, but the tool guarantee restricts retrying the same operation key without a new key or handling. Escalating safely."
       }
     },
     "prompt_tokens": 0,
@@ -267,12 +267,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB timed out and its write did not commit, but the operation key is locked against replay (tool_guarantee='none'). Manual intervention required."
+        "reason": "Operation opB failed to commit and was marked as not committed, but the tool guarantee restricts retrying the same operation key without a new key or handling. Escalating safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.0458054021000862e-05
+    "wall_time_s": 6.2498729676008224e-06
   }
 ]

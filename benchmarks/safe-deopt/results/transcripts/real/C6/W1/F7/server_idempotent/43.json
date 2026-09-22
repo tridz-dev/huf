@@ -56,7 +56,7 @@
     "prompt_tokens": 495,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8723157078493387
+    "wall_time_s": 1.745541458018124
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.499917849898338e-06
+    "wall_time_s": 1.0999850928783417e-05
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 532,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8432880418840796
+    "wall_time_s": 0.8931100419722497
   },
   {
     "kind": "tool_call",
@@ -119,27 +119,27 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.200009137392044e-05
+    "wall_time_s": 7.875030860304832e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'operation_key': 'opB', 'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_linked_record', kwargs={'reference_type': 'Sales Invoice', 'reference_name': 'SINV-2001', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 605,
     "completion_tokens": 44,
     "cached_tokens": 0,
-    "wall_time_s": 1.0352567499503493
+    "wall_time_s": 1.047664833953604
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_linked_record",
       "kwargs": {
-        "operation_key": "opB",
         "reference_type": "Sales Invoice",
-        "reference_name": "SINV-2001"
+        "reference_name": "SINV-2001",
+        "operation_key": "opB"
       }
     },
     "prompt_tokens": 0,
@@ -159,7 +159,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.4624943509697914e-05
+    "wall_time_s": 2.537504769861698e-05
   },
   {
     "kind": "model_step",
@@ -170,7 +170,7 @@
     "prompt_tokens": 709,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8299574998673052
+    "wall_time_s": 1.8534959580283612
   },
   {
     "kind": "tool_call",
@@ -196,25 +196,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.542060196399689e-06
+    "wall_time_s": 1.3584038242697716e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Operation opB has an unknown status and tool guarantee is 'none' for replay, preventing safe blind retry of submit_linked_record. Verified via read_open_items that SINV-2001 is still open.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Operation opB status is UNKNOWN following a mid-run timeout on submit_linked_record. Replay is rejected due to lack of idempotency guarantee on the tool call, and state cannot be definitively verified without human intervention.'})",
       "final_text": null
     },
     "prompt_tokens": 746,
-    "completion_tokens": 61,
+    "completion_tokens": 60,
     "cached_tokens": 0,
-    "wall_time_s": 0.9930343749001622
+    "wall_time_s": 1.0506023750640452
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Operation opB has an unknown status and tool guarantee is 'none' for replay, preventing safe blind retry of submit_linked_record. Verified via read_open_items that SINV-2001 is still open."
+        "reason": "Operation opB status is UNKNOWN following a mid-run timeout on submit_linked_record. Replay is rejected due to lack of idempotency guarantee on the tool call, and state cannot be definitively verified without human intervention."
       }
     },
     "prompt_tokens": 0,
@@ -230,12 +230,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Operation opB has an unknown status and tool guarantee is 'none' for replay, preventing safe blind retry of submit_linked_record. Verified via read_open_items that SINV-2001 is still open."
+        "reason": "Operation opB status is UNKNOWN following a mid-run timeout on submit_linked_record. Replay is rejected due to lack of idempotency guarantee on the tool call, and state cannot be definitively verified without human intervention."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.875015631318092e-06
+    "wall_time_s": 6.250105798244476e-06
   }
 ]

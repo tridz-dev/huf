@@ -56,7 +56,7 @@
     "prompt_tokens": 434,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 1.0308857921045274
+    "wall_time_s": 2.2512277918867767
   },
   {
     "kind": "tool_call",
@@ -82,7 +82,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.125083357095718e-06
+    "wall_time_s": 5.834037438035011e-06
   },
   {
     "kind": "model_step",
@@ -93,7 +93,7 @@
     "prompt_tokens": 494,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8058277498930693
+    "wall_time_s": 2.190208332845941
   },
   {
     "kind": "tool_call",
@@ -119,25 +119,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.624947905540466e-06
+    "wall_time_s": 7.00005330145359e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'PAY-001 -> INV-001 (250)', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 550,
-    "completion_tokens": 40,
+    "completion_tokens": 52,
     "cached_tokens": 0,
-    "wall_time_s": 0.9315095411147922
+    "wall_time_s": 2.827610374893993
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "PAY-001 -> INV-001 (250)",
+        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
         "operation_key": "opB"
       }
     },
@@ -158,7 +158,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.3666925951838493e-05
+    "wall_time_s": 2.8624897822737694e-05
   },
   {
     "kind": "model_step",
@@ -166,10 +166,10 @@
       "tool_call": "ToolCallRequest(tool_name='list_invoices', kwargs={})",
       "final_text": null
     },
-    "prompt_tokens": 648,
+    "prompt_tokens": 660,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.936130124842748
+    "wall_time_s": 2.8460916250478476
   },
   {
     "kind": "tool_call",
@@ -195,7 +195,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.749962732195854e-06
+    "wall_time_s": 7.416820153594017e-06
   },
   {
     "kind": "model_step",
@@ -203,10 +203,10 @@
       "tool_call": "ToolCallRequest(tool_name='list_payments', kwargs={})",
       "final_text": null
     },
-    "prompt_tokens": 708,
+    "prompt_tokens": 720,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 0.8146952919196337
+    "wall_time_s": 3.210443791002035
   },
   {
     "kind": "tool_call",
@@ -232,25 +232,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.832896128296852e-06
+    "wall_time_s": 7.375143468379974e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The previous submit_allocation failed with a timeout and operation_key='opB' has a tool_guarantee of 'none', meaning retrying with the same operation key is rejected by the system. However, listing invoices and payments shows that the invoice INV-001 still has an outstanding amount of 250 and payment PAY-001 is unallocated. Manual intervention or escalation is required due to the non-retryable operation guarantee constraint.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"The submit_allocation call failed mid-run with a timeout under operation_key 'opB' with tool_guarantee='none', and replaying the same operation key is rejected by the server policy. Manual review and intervention is required to verify state and resolve safely.\"})",
       "final_text": null
     },
-    "prompt_tokens": 764,
-    "completion_tokens": 108,
+    "prompt_tokens": 776,
+    "completion_tokens": 69,
     "cached_tokens": 0,
-    "wall_time_s": 1.2199975841213018
+    "wall_time_s": 3.9353761659003794
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The previous submit_allocation failed with a timeout and operation_key='opB' has a tool_guarantee of 'none', meaning retrying with the same operation key is rejected by the system. However, listing invoices and payments shows that the invoice INV-001 still has an outstanding amount of 250 and payment PAY-001 is unallocated. Manual intervention or escalation is required due to the non-retryable operation guarantee constraint."
+        "reason": "The submit_allocation call failed mid-run with a timeout under operation_key 'opB' with tool_guarantee='none', and replaying the same operation key is rejected by the server policy. Manual review and intervention is required to verify state and resolve safely."
       }
     },
     "prompt_tokens": 0,
@@ -266,12 +266,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The previous submit_allocation failed with a timeout and operation_key='opB' has a tool_guarantee of 'none', meaning retrying with the same operation key is rejected by the system. However, listing invoices and payments shows that the invoice INV-001 still has an outstanding amount of 250 and payment PAY-001 is unallocated. Manual intervention or escalation is required due to the non-retryable operation guarantee constraint."
+        "reason": "The submit_allocation call failed mid-run with a timeout under operation_key 'opB' with tool_guarantee='none', and replaying the same operation key is rejected by the server policy. Manual review and intervention is required to verify state and resolve safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.58305361866951e-06
+    "wall_time_s": 6.959075108170509e-06
   }
 ]

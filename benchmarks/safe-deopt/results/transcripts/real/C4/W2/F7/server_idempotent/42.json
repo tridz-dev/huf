@@ -35,7 +35,7 @@
     "prompt_tokens": 298,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.8311729999259114
+    "wall_time_s": 1.0241681670304388
   },
   {
     "kind": "tool_call",
@@ -61,7 +61,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 1.2208009138703346e-05
+    "wall_time_s": 9.624985978007317e-06
   },
   {
     "kind": "model_step",
@@ -72,7 +72,7 @@
     "prompt_tokens": 335,
     "completion_tokens": 11,
     "cached_tokens": 0,
-    "wall_time_s": 0.8305088749621063
+    "wall_time_s": 1.575327416881919
   },
   {
     "kind": "tool_call",
@@ -98,7 +98,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 6.583984941244125e-06
+    "wall_time_s": 5.95790334045887e-06
   },
   {
     "kind": "model_step",
@@ -109,7 +109,7 @@
     "prompt_tokens": 395,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.4340372909791768
+    "wall_time_s": 0.9490442918613553
   },
   {
     "kind": "tool_call",
@@ -135,25 +135,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 7.458031177520752e-06
+    "wall_time_s": 2.5420449674129486e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': '{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}', 'operation_key': 'opB'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'INV-001:250', 'operation_key': 'opB'})",
       "final_text": null
     },
     "prompt_tokens": 451,
-    "completion_tokens": 52,
+    "completion_tokens": 33,
     "cached_tokens": 0,
-    "wall_time_s": 1.0898711669724435
+    "wall_time_s": 1.631396875018254
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "allocation": "{\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}",
+        "allocation": "INV-001:250",
         "operation_key": "opB"
       }
     },
@@ -169,30 +169,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "'no such allocation {\"invoice\": \"INV-001\", \"payment\": \"PAY-001\", \"amount\": 250}'"
+      "error": "'no such allocation INV-001:250'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 3.408384509384632e-05
+    "wall_time_s": 3.0667055398225784e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Unable to complete allocation submission for W2 task: submit_allocation returned 'no such allocation' error and operation status remains unknown.\"})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': \"Encountered error 'no such allocation INV-001:250' when attempting to submit allocation for opB. Unable to determine correct allocation format or proceed safely.\"})",
       "final_text": null
     },
-    "prompt_tokens": 548,
-    "completion_tokens": 40,
+    "prompt_tokens": 511,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.8951772078871727
+    "wall_time_s": 0.9158947919495404
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to complete allocation submission for W2 task: submit_allocation returned 'no such allocation' error and operation status remains unknown."
+        "reason": "Encountered error 'no such allocation INV-001:250' when attempting to submit allocation for opB. Unable to determine correct allocation format or proceed safely."
       }
     },
     "prompt_tokens": 0,
@@ -208,12 +208,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to complete allocation submission for W2 task: submit_allocation returned 'no such allocation' error and operation status remains unknown."
+        "reason": "Encountered error 'no such allocation INV-001:250' when attempting to submit allocation for opB. Unable to determine correct allocation format or proceed safely."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.9578804969787598e-06
+    "wall_time_s": 5.417037755250931e-06
   }
 ]

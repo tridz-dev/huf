@@ -26,7 +26,7 @@
     "prompt_tokens": 273,
     "completion_tokens": 21,
     "cached_tokens": 0,
-    "wall_time_s": 0.7455809169914573
+    "wall_time_s": 1.6611329999286681
   },
   {
     "kind": "tool_call",
@@ -52,7 +52,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.958128556609154e-06
+    "wall_time_s": 4.417030140757561e-06
   },
   {
     "kind": "model_step",
@@ -63,7 +63,7 @@
     "prompt_tokens": 333,
     "completion_tokens": 10,
     "cached_tokens": 0,
-    "wall_time_s": 1.0552122499793768
+    "wall_time_s": 1.9286790830083191
   },
   {
     "kind": "tool_call",
@@ -89,28 +89,28 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.207955837249756e-06
+    "wall_time_s": 3.4999102354049683e-06
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'amount': 250, 'invoice': 'INV-001', 'payment': 'PAY-001', 'operation_key': 'alloc-op-001'})",
+      "tool_call": "ToolCallRequest(tool_name='create_allocation', kwargs={'payment': 'PAY-001', 'amount': 250, 'invoice': 'INV-001', 'operation_key': 'op_key_w2_1'})",
       "final_text": null
     },
     "prompt_tokens": 389,
-    "completion_tokens": 50,
+    "completion_tokens": 51,
     "cached_tokens": 0,
-    "wall_time_s": 0.9447309589013457
+    "wall_time_s": 1.2569840420037508
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "create_allocation",
       "kwargs": {
+        "payment": "PAY-001",
         "amount": 250,
         "invoice": "INV-001",
-        "payment": "PAY-001",
-        "operation_key": "alloc-op-001"
+        "operation_key": "op_key_w2_1"
       }
     },
     "prompt_tokens": 0,
@@ -124,31 +124,31 @@
       "tool_name": "create_allocation",
       "ok": true,
       "dispatched": true,
-      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='alloc-op-001', status='draft')"
+      "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250, operation_key='op_key_w2_1', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 5.666702054440975e-05
+    "wall_time_s": 2.3124972358345985e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'operation_key': 'sub-op-001', 'allocation': 'ALLOC-0001'})",
+      "tool_call": "ToolCallRequest(tool_name='submit_allocation', kwargs={'allocation': 'ALLOC-0001', 'operation_key': 'op_key_w2_2'})",
       "final_text": null
     },
-    "prompt_tokens": 504,
-    "completion_tokens": 35,
+    "prompt_tokens": 506,
+    "completion_tokens": 36,
     "cached_tokens": 0,
-    "wall_time_s": 0.7717306250706315
+    "wall_time_s": 1.0675279160495847
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "submit_allocation",
       "kwargs": {
-        "operation_key": "sub-op-001",
-        "allocation": "ALLOC-0001"
+        "allocation": "ALLOC-0001",
+        "operation_key": "op_key_w2_2"
       }
     },
     "prompt_tokens": 0,
@@ -163,30 +163,30 @@
       "ok": false,
       "dispatched": true,
       "guard_rejected": false,
-      "error": "rejected before dispatch: submit_allocation (operation_key='sub-op-001')"
+      "error": "rejected before dispatch: submit_allocation (operation_key='op_key_w2_2')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 0.00011037499643862247
+    "wall_time_s": 0.0001657500397413969
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to submit allocation due to rejection/validation error on submission.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'Unable to submit allocation due to operation key rejection or failure in submission step.'})",
       "final_text": null
     },
-    "prompt_tokens": 572,
-    "completion_tokens": 27,
+    "prompt_tokens": 576,
+    "completion_tokens": 29,
     "cached_tokens": 0,
-    "wall_time_s": 0.931390083860606
+    "wall_time_s": 1.125391332898289
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "Unable to submit allocation due to rejection/validation error on submission."
+        "reason": "Unable to submit allocation due to operation key rejection or failure in submission step."
       }
     },
     "prompt_tokens": 0,
@@ -202,12 +202,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "Unable to submit allocation due to rejection/validation error on submission."
+        "reason": "Unable to submit allocation due to operation key rejection or failure in submission step."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.500135451555252e-06
+    "wall_time_s": 5.166977643966675e-06
   }
 ]

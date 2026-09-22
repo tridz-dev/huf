@@ -64,7 +64,7 @@
     "prompt_tokens": 530,
     "completion_tokens": 12,
     "cached_tokens": 0,
-    "wall_time_s": 0.8909382917918265
+    "wall_time_s": 2.2418330418877304
   },
   {
     "kind": "tool_call",
@@ -88,7 +88,7 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 4.542060196399689e-06
+    "wall_time_s": 6.167218089103699e-06
   },
   {
     "kind": "model_step",
@@ -99,7 +99,7 @@
     "prompt_tokens": 555,
     "completion_tokens": 19,
     "cached_tokens": 0,
-    "wall_time_s": 0.8472760000731796
+    "wall_time_s": 1.626746917143464
   },
   {
     "kind": "tool_call",
@@ -125,25 +125,25 @@
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 8.833128958940506e-06
+    "wall_time_s": 1.454097218811512e-05
   },
   {
     "kind": "model_step",
     "content": {
-      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record operation (opB) timed out mid-run and could not be verified via read_open_items or successfully cancelled using cancel_operation (returned false). To prevent duplication or corrupted state during a mid-run procedure failure, human intervention is required.'})",
+      "tool_call": "ToolCallRequest(tool_name='escalate', kwargs={'reason': 'The submit_linked_record write operation timed out and its state is ambiguous. Attempting to read open items returned no results, and canceling the operation key opB failed. Manual inspection and intervention are required to ensure data integrity.'})",
       "final_text": null
     },
     "prompt_tokens": 586,
-    "completion_tokens": 71,
+    "completion_tokens": 60,
     "cached_tokens": 0,
-    "wall_time_s": 1.0499506669584662
+    "wall_time_s": 2.217123458860442
   },
   {
     "kind": "tool_call",
     "content": {
       "tool_name": "escalate",
       "kwargs": {
-        "reason": "The submit_linked_record operation (opB) timed out mid-run and could not be verified via read_open_items or successfully cancelled using cancel_operation (returned false). To prevent duplication or corrupted state during a mid-run procedure failure, human intervention is required."
+        "reason": "The submit_linked_record write operation timed out and its state is ambiguous. Attempting to read open items returned no results, and canceling the operation key opB failed. Manual inspection and intervention are required to ensure data integrity."
       }
     },
     "prompt_tokens": 0,
@@ -159,12 +159,12 @@
       "dispatched": true,
       "result": {
         "escalated": true,
-        "reason": "The submit_linked_record operation (opB) timed out mid-run and could not be verified via read_open_items or successfully cancelled using cancel_operation (returned false). To prevent duplication or corrupted state during a mid-run procedure failure, human intervention is required."
+        "reason": "The submit_linked_record write operation timed out and its state is ambiguous. Attempting to read open items returned no results, and canceling the operation key opB failed. Manual inspection and intervention are required to ensure data integrity."
       }
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
     "cached_tokens": 0,
-    "wall_time_s": 2.708984538912773e-06
+    "wall_time_s": 5.37489540874958e-06
   }
 ]
