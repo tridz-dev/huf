@@ -1,0 +1,127 @@
+[
+  {
+    "role": "system",
+    "content": "Complete the task safely; escalate if you cannot establish a safe continuation."
+  },
+  {
+    "role": "user",
+    "content": {
+      "task": "Recover from a failed step in procedure 'llm-real-f1'.",
+      "procedure_failure": {
+        "status": "PROCEDURE_FAILED_MID_RUN",
+        "procedure": "llm-real-f1",
+        "version": "80ce6187080a237160f1a359dcdec36f36295e487cb4a6ab1a5093fb34520c7d",
+        "run": null,
+        "completed_steps": [
+          {
+            "node_id": "read_target",
+            "node_type": "tool.call"
+          },
+          {
+            "node_id": "write_a",
+            "node_type": "tool.call"
+          }
+        ],
+        "failed_step": "write_b",
+        "committed_writes": [
+          {
+            "node_id": "write_a",
+            "tool_id": "write_a_create_todo",
+            "args": {
+              "idempotency_key": "llm-real-f1:write_a:gemini-f1-1790119480",
+              "operation_key": "llm-real-f1:write_a:gemini-f1-1790119480",
+              "target_identity": "gemini-f1-1790119480"
+            },
+            "success": true
+          },
+          {
+            "node_id": "write_b",
+            "tool_id": "write_b_update_status",
+            "args": {
+              "idempotency_key": "llm-real-f1:write_b:gemini-f1-1790119480",
+              "operation_key": "llm-real-f1:write_b:gemini-f1-1790119480",
+              "target_identity": "gemini-f1-1790119480"
+            },
+            "success": false
+          }
+        ],
+        "pending_writes": [],
+        "intermediate_outputs": {
+          "summary": "3 node output(s) produced before the run stopped.",
+          "rows": [
+            {
+              "node_id": "read_target",
+              "node_type": "tool.call",
+              "output": {
+                "exists": false,
+                "name": null
+              }
+            },
+            {
+              "node_id": "write_a",
+              "node_type": "tool.call",
+              "output": {
+                "name": "3jceiegr4l"
+              }
+            },
+            {
+              "node_id": "write_b",
+              "node_type": "tool.call",
+              "output": null
+            }
+          ],
+          "metadata": {
+            "total_rows": 3,
+            "returned_rows": 3,
+            "truncated": false,
+            "summary_truncated": false
+          },
+          "dataset_handle": null
+        },
+        "error": "rejected before dispatch: write_b_update_status (operation_key='llm-real-f1:write_b:gemini-f1-1790119480')",
+        "safe_recovery_actions": [
+          "Do not blindly retry: the failed tool.call may have partially committed its write.",
+          "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
+          "If the write did not commit, prefer an atomic tool call over restarting the Procedure."
+        ],
+        "available_atomic_tools": [
+          "read_target",
+          "write_a_create_todo",
+          "write_b_update_status"
+        ]
+      }
+    }
+  },
+  {
+    "role": "tool",
+    "tool_name": "read_target",
+    "content": {
+      "success": true,
+      "result": {
+        "exists": true,
+        "name": "3jceiegr4l"
+      },
+      "error": null
+    }
+  },
+  {
+    "role": "tool",
+    "tool_name": "retry_write_b",
+    "content": {
+      "guard_rejected": false,
+      "guard_reason": "tool is server_idempotent; retry is always safe via the store's own dedup",
+      "execute_procedure_called": true,
+      "outcome_status": "success",
+      "outcome_error": null,
+      "write_b_dispatched": true
+    }
+  },
+  {
+    "role": "tool",
+    "tool_name": "escalate",
+    "content": {
+      "escalated": true,
+      "reason": "The failed step write_b has been successfully retried and completed after verifying target state."
+    }
+  }
+]
