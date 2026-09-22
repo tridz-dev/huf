@@ -83,7 +83,7 @@
    "options": "\nread\nwrite\ncreate\ndelete\nsubmit\ncancel"
   },
   {
-   "description": "What a recovery agent may trust about this tool's write outcome after an in-doubt failure. Leave blank to keep today's behaviour (retry allowed, no guard).",
+   "description": "What a recovery agent may trust about this tool's write outcome after an in-doubt failure. Leave blank to keep today's behaviour (retry allowed, no guard). v1 note: only 'server_idempotent' currently admits a guarded retry; 'status_resolvable' and 'fenceable' are reserved for a follow-up (the session-recording hook that would let them resolve status/fences is not wired yet) and behave identically to 'none' (retry blocked) until then.",
    "fieldname": "recovery_guarantee",
    "fieldtype": "Select",
    "label": "Recovery Guarantee",
