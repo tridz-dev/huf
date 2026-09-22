@@ -90,12 +90,32 @@ LLM cost and is deliberately not done anywhere in this benchmark's outputs (`sum
 the real conditions against a real model and provider pricing, which is exactly the gap
 `LiveAPIModel` currently blocks on.
 
+## v2 update
+
+An external review of an earlier commit found 4 real issues, since fixed: C1 was not a
+genuine full-agent baseline (it received pre-existing write state instead of executing from
+scratch), the ground-truth `get_operation_status` tool was exposed to the model even for
+`none`-guarantee write tools (defeating the guard's purpose), `MockedModel` was hardcoded
+rather than switchable to a real model, and unsafe-retry scoring conflated outcome with
+informational safety. All four are fixed — see `Tracks/SafeDeoptExperiment/REPORT.md`'s "v2
+update" section for the full writeup, including a genuine cross-validation finding (C5's
+mocked policy produces a real duplicate write in one non-idempotent case that C6's guard
+correctly rejects) and a second-pass bug fix (a `dispatched`-vs-`ok` conflation in the new
+scoring code, caught by a follow-up review and fixed with regression tests). A new workload,
+W3 (an 8-step realistic flow), was also added and measured for real on a live bench — see
+`results/w3_bench_report.md`.
+
 ## Known limitations
 
-- **(a) Simulated in-memory stores, not a real ERPNext bench.** `workloads.py`'s `CrmStore`
-  and `PaymentAllocationStore` are deliberately Frappe-free, in-memory Python objects with
-  their own `commit_log` as ground truth — they do not exercise a real Frappe bench,
-  MariaDB, or `huf.ai.graph.procedure_runtime`. A separate bench-level verification effort
+- **(a) W1/W2 are simulated in-memory stores, not a real ERPNext bench.** `workloads.py`'s
+  `CrmStore` and `PaymentAllocationStore` are deliberately Frappe-free, in-memory Python
+  objects with their own `commit_log` as ground truth — they do not exercise a real Frappe
+  bench, MariaDB, or `huf.ai.graph.procedure_runtime` directly. This is necessary for the
+  fault-injection design (a real bench can't easily provide a synchronous ground-truth
+  ledger independent of what the caller is told). **W3, added separately, does exercise a
+  real bench** for a subset of checks — see `results/w3_bench_report.md`; it is a real-bench
+  cost-baseline measurement, not a replacement for the W1/W2 fault-injection matrix. A
+  separate bench-level verification effort
   exists to check this benchmark's claims against a real bench; see
   `Tracks/SafeDeoptExperiment/BENCH_VERIFICATION.md` if that file exists in your checkout —
   this benchmark does not depend on it and does not block on its existence.
