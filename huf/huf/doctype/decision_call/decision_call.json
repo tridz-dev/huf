@@ -1,0 +1,315 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:call_id",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "call_id",
+  "status",
+  "surface",
+  "policy",
+  "policy_version",
+  "policy_fingerprint",
+  "decision_provider",
+  "decision_model",
+  "resolved_model",
+  "resolved_model_version",
+  "backend_adapter",
+  "agent",
+  "agent_run",
+  "flow_run",
+  "flow_node_id",
+  "conversation",
+  "mode",
+  "started_at",
+  "ended_at",
+  "latency_ms",
+  "candidate_count",
+  "candidate_ids_json",
+  "answer_json",
+  "confidence",
+  "probabilities_json",
+  "state_hash",
+  "state_snapshot",
+  "question_snapshot",
+  "input_tokens",
+  "output_tokens",
+  "cost",
+  "cost_source",
+  "gate_result",
+  "fallback_action",
+  "deployment_selection_source",
+  "deployment_fallback_chain",
+  "deployment_fallback_count",
+  "error_code",
+  "error_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "call_id",
+   "fieldtype": "Data",
+   "label": "Call Id",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "success\nunsupported\nunavailable\nauthentication_failed\ninvalid_response\ntimeout\nrate_limited\nfailed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "surface",
+   "fieldtype": "Data",
+   "label": "Surface",
+   "reqd": 1
+  },
+  {
+   "fieldname": "policy",
+   "fieldtype": "Link",
+   "label": "Policy",
+   "options": "Decision Policy"
+  },
+  {
+   "fieldname": "policy_version",
+   "fieldtype": "Link",
+   "label": "Policy Version",
+   "options": "Decision Policy Version"
+  },
+  {
+   "fieldname": "policy_fingerprint",
+   "fieldtype": "Data",
+   "label": "Policy Fingerprint"
+  },
+  {
+   "fieldname": "decision_provider",
+   "fieldtype": "Link",
+   "label": "Decision Provider",
+   "options": "Decision Provider"
+  },
+  {
+   "fieldname": "decision_model",
+   "fieldtype": "Link",
+   "label": "Decision Model",
+   "options": "Decision Model"
+  },
+  {
+   "fieldname": "resolved_model",
+   "fieldtype": "Data",
+   "label": "Resolved Model"
+  },
+  {
+   "fieldname": "resolved_model_version",
+   "fieldtype": "Data",
+   "label": "Resolved Model Version"
+  },
+  {
+   "fieldname": "backend_adapter",
+   "fieldtype": "Data",
+   "label": "Backend Adapter"
+  },
+  {
+   "fieldname": "agent",
+   "fieldtype": "Link",
+   "label": "Agent",
+   "options": "Agent"
+  },
+  {
+   "fieldname": "agent_run",
+   "fieldtype": "Link",
+   "label": "Agent Run",
+   "options": "Agent Run"
+  },
+  {
+   "fieldname": "flow_run",
+   "fieldtype": "Link",
+   "label": "Flow Run",
+   "options": "Flow Run"
+  },
+  {
+   "fieldname": "flow_node_id",
+   "fieldtype": "Data",
+   "label": "Flow Node Id"
+  },
+  {
+   "fieldname": "conversation",
+   "fieldtype": "Link",
+   "label": "Conversation",
+   "options": "Agent Conversation"
+  },
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "Shadow\nEnforce",
+   "default": "Shadow"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "ended_at",
+   "fieldtype": "Datetime",
+   "label": "Ended At"
+  },
+  {
+   "fieldname": "latency_ms",
+   "fieldtype": "Float",
+   "label": "Latency Ms"
+  },
+  {
+   "fieldname": "candidate_count",
+   "fieldtype": "Int",
+   "label": "Candidate Count",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "candidate_ids_json",
+   "fieldtype": "Code",
+   "label": "Candidate Ids Json",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "answer_json",
+   "fieldtype": "Code",
+   "label": "Answer Json",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "confidence",
+   "fieldtype": "Float",
+   "label": "Confidence"
+  },
+  {
+   "fieldname": "probabilities_json",
+   "fieldtype": "Code",
+   "label": "Probabilities Json",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "state_hash",
+   "fieldtype": "Data",
+   "label": "State Hash"
+  },
+  {
+   "fieldname": "state_snapshot",
+   "fieldtype": "Code",
+   "label": "State Snapshot",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "question_snapshot",
+   "fieldtype": "Code",
+   "label": "Question Snapshot",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "input_tokens",
+   "fieldtype": "Int",
+   "label": "Input Tokens",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "output_tokens",
+   "fieldtype": "Int",
+   "label": "Output Tokens",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "cost",
+   "fieldtype": "Float",
+   "label": "Cost",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "cost_source",
+   "fieldtype": "Data",
+   "label": "Cost Source"
+  },
+  {
+   "fieldname": "gate_result",
+   "fieldtype": "Data",
+   "label": "Gate Result"
+  },
+  {
+   "fieldname": "fallback_action",
+   "fieldtype": "Data",
+   "label": "Fallback Action"
+  },
+  {
+   "fieldname": "deployment_selection_source",
+   "fieldtype": "Data",
+   "label": "Deployment Selection Source"
+  },
+  {
+   "fieldname": "deployment_fallback_chain",
+   "fieldtype": "Code",
+   "label": "Deployment Fallback Chain",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "deployment_fallback_count",
+   "fieldtype": "Int",
+   "label": "Deployment Fallback Count",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "error_code",
+   "fieldtype": "Data",
+   "label": "Error Code"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Decision Call",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf User",
+   "read": 1,
+   "select": 1,
+   "print": 1,
+   "export": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -9,6 +9,13 @@ app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
 app_url="/huf"
+
+# Decision Runtime backend adapters are declared by installed apps. Runtime
+# configuration stores only these stable adapter IDs, never import paths.
+huf_decision_backends = {
+    "fake": "huf.ai.decision.backends.fake.FakeDecisionBackend",
+}
+
 # Apps
 # ------------------
 
@@ -449,3 +456,9 @@ huf_knowledge_backends = {
 # in a later phase, so this starts empty.
 
 huf_voice_engines = {}
+
+# PR3 Jev semantic adapter; provider transport is injected by deployment resolution.
+huf_decision_backends.update({
+    "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
+    "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
+})

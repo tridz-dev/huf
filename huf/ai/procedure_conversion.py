@@ -43,7 +43,7 @@ from huf.ai.procedure_versioning import compute_fingerprint
 # The three node types PLAN.md's T-52 task card names as disqualifying for determinism.
 # A Flow containing any of these cannot be converted -- it genuinely needs an LLM or a
 # human in the loop at that point, which a Procedure (by construction, I4) cannot express.
-BLOCKING_NODE_TYPES: frozenset[str] = frozenset({"agent.run", "router.llm", "human.approval"})
+BLOCKING_NODE_TYPES: frozenset[str] = frozenset({"agent.run", "router.llm", "router.decision", "human.approval"})
 
 # Flow-only entry points (spec/graph-ir.md section 1). Not a determinism problem -- a
 # trigger is just how the Flow starts -- but the Procedure profile has no trigger nodes
