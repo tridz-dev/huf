@@ -63,7 +63,28 @@ class _IsolatedResultsDirMixin:
         for k in self._orig_env:
             os.environ.pop(k, None)
 
+        # run_cell/run_all/write_runs_jsonl bind their transcripts_dir/output-path defaults
+        # at function-definition time, so reassigning the module constants above does NOT
+        # change what a caller gets when it omits those kwargs. Patch the bound defaults
+        # too, so every caller in these tests -- not just ones that pass transcripts_dir
+        # explicitly -- is isolated from the real results/ directory.
+        self._orig_run_cell_kwdefaults = re_mod.run_cell.__kwdefaults__
+        new_run_cell_kwdefaults = dict(self._orig_run_cell_kwdefaults)
+        new_run_cell_kwdefaults["transcripts_dir"] = re_mod.RESULTS_TRANSCRIPTS_DIR
+        re_mod.run_cell.__kwdefaults__ = new_run_cell_kwdefaults
+
+        self._orig_run_all_defaults = re_mod.run_all.__defaults__
+        new_run_all_defaults = list(self._orig_run_all_defaults)
+        new_run_all_defaults[-1] = re_mod.RESULTS_TRANSCRIPTS_DIR
+        re_mod.run_all.__defaults__ = tuple(new_run_all_defaults)
+
+        self._orig_write_runs_jsonl_defaults = re_mod.write_runs_jsonl.__defaults__
+        re_mod.write_runs_jsonl.__defaults__ = (re_mod.RUNS_JSONL_PATH, re_mod.RUNS_MOCK_JSONL_PATH)
+
     def tearDown(self):
+        re_mod.run_cell.__kwdefaults__ = self._orig_run_cell_kwdefaults
+        re_mod.run_all.__defaults__ = self._orig_run_all_defaults
+        re_mod.write_runs_jsonl.__defaults__ = self._orig_write_runs_jsonl_defaults
         for name, value in self._orig.items():
             setattr(re_mod, name, value)
         for k, v in self._orig_env.items():
@@ -87,7 +108,7 @@ class TestBackwardCompatibleNoFlagsBehavior(_IsolatedResultsDirMixin, unittest.T
     def test_no_flags_matches_run_all_defaults(self):
         # "Today's known-good behavior" fixture, computed directly (bypassing the CLI) --
         # this is what run_experiment.py has always produced with no arguments.
-        expected_rows = re_mod.run_all()
+        expected_rows = re_mod.run_all(transcripts_dir=re_mod.RESULTS_TRANSCRIPTS_DIR)
 
         re_mod.main([])
 

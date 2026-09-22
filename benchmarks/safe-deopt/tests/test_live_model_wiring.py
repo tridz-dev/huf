@@ -31,10 +31,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
-
 _HERE = Path(__file__).resolve()
 _SAFE_DEOPT_DIR = _HERE.parent.parent
 if str(_SAFE_DEOPT_DIR) not in sys.path:
@@ -108,25 +109,81 @@ class TestStubbedLiveWiringEndToEnd(unittest.TestCase):
     """
 
     def setUp(self):
+        # Create isolated temp directory for this test, under re_mod.HERE so that
+        # Path.relative_to(HERE) calls in run_experiment.py don't fail.
+        self._tmp = Path(tempfile.mkdtemp(prefix="test_live_model_wiring_", dir=str(re_mod.HERE)))
+        
+        # Save and patch all results-path module constants
+        self._orig = {
+            name: getattr(re_mod, name)
+            for name in (
+                "RESULTS_DIR",
+                "RUNS_MOCK_JSONL_PATH",
+                "RUNS_JSONL_PATH",
+                "SUMMARY_CSV_PATH",
+                "PLOTS_DIR",
+                "RESULTS_TRANSCRIPTS_DIR",
+            )
+        }
+        re_mod.RESULTS_DIR = self._tmp
+        re_mod.RUNS_MOCK_JSONL_PATH = self._tmp / "runs.mock.jsonl"
+        re_mod.RUNS_JSONL_PATH = self._tmp / "runs.jsonl"
+        re_mod.SUMMARY_CSV_PATH = self._tmp / "summary.csv"
+        re_mod.PLOTS_DIR = self._tmp / "plots"
+        re_mod.RESULTS_TRANSCRIPTS_DIR = self._tmp / "transcripts"
+        
+        # Save and set up env vars for live model selection
         self._saved_env = {k: os.environ.get(k) for k in ("MODEL", "ANTHROPIC_API_KEY", "OPENAI_API_KEY")}
         os.environ["MODEL"] = "stub-model-v1"
         os.environ["ANTHROPIC_API_KEY"] = "fake-key-not-real"
+        
+        # Patch LiveAPIModel with stub
         self._orig_live_model = re_mod.LiveAPIModel
         re_mod.LiveAPIModel = _StubLiveModel
+        
+        # Save original function defaults before patching
+        self._orig_write_runs_jsonl_defaults = re_mod.write_runs_jsonl.__defaults__
+        self._orig_run_cell_kwdefaults = re_mod.run_cell.__kwdefaults__
+        
+        # Create the necessary subdirectories in temp dir
+        re_mod.PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+        re_mod.RESULTS_TRANSCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Patch write_runs_jsonl's default parameters, which were captured at import time
+        # The function signature is: write_runs_jsonl(rows, runs_jsonl_path=..., runs_mock_jsonl_path=...)
+        # So __defaults__ is a tuple of (RUNS_JSONL_PATH, RUNS_MOCK_JSONL_PATH)
+        re_mod.write_runs_jsonl.__defaults__ = (re_mod.RUNS_JSONL_PATH, re_mod.RUNS_MOCK_JSONL_PATH)
+        
+        # Patch run_cell's default parameters
+        # The function signature uses keyword-only parameters with *, so defaults go in __kwdefaults__
+        # __kwdefaults__ is a dict like {'seed': SEED, 'transcripts_dir': RESULTS_TRANSCRIPTS_DIR}
+        new_kwdefaults = dict(re_mod.run_cell.__kwdefaults__)
+        new_kwdefaults['transcripts_dir'] = re_mod.RESULTS_TRANSCRIPTS_DIR
+        re_mod.run_cell.__kwdefaults__ = new_kwdefaults
 
     def tearDown(self):
+        # Restore function defaults
+        if hasattr(self, '_orig_write_runs_jsonl_defaults'):
+            re_mod.write_runs_jsonl.__defaults__ = self._orig_write_runs_jsonl_defaults
+        if hasattr(self, '_orig_run_cell_kwdefaults'):
+            re_mod.run_cell.__kwdefaults__ = self._orig_run_cell_kwdefaults
+        
+        # Restore the original LiveAPIModel
         re_mod.LiveAPIModel = self._orig_live_model
+        
+        # Restore all results-path module constants
+        for name, value in self._orig.items():
+            setattr(re_mod, name, value)
+        
+        # Restore env vars
         for k, v in self._saved_env.items():
             if v is None:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        # Clean up any transcript this test wrote.
-        import shutil
-
-        stub_dir = re_mod.RESULTS_TRANSCRIPTS_DIR / "C4"
-        if stub_dir.exists():
-            shutil.rmtree(stub_dir, ignore_errors=True)
+        
+        # Clean up the isolated temp directory
+        shutil.rmtree(self._tmp, ignore_errors=True)
 
     def test_live_row_has_real_model_id_and_real_accounting_flag(self):
         row = re_mod.run_cell(condition="C4", workload_name="W1", fault_id="F2", guarantee_for_matrix="status_resolvable", commit_hash="test")

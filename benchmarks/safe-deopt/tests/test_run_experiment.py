@@ -9,21 +9,28 @@ modules in this directory.
 
 from __future__ import annotations
 
+import os
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 _SAFE_DEOPT_DIR = _HERE.parent.parent
+_TESTS_DIR = _HERE.parent
 if str(_SAFE_DEOPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SAFE_DEOPT_DIR))
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
 
 import run_experiment as re_mod  # noqa: E402
+from test_run_experiment_cli_flags import _IsolatedResultsDirMixin  # noqa: E402
 
 GROUND_TRUTH_STATUS_TOOL_NAMES = ("get_operation_status", "check_status", "read_operation_status")
 
 
-class TestIssue2ToolExposureGatedByGuarantee(unittest.TestCase):
+class TestIssue2ToolExposureGatedByGuarantee(_IsolatedResultsDirMixin, unittest.TestCase):
     """Issue 2: a `none`-guarantee cell's model tool list must not contain any
     ground-truth-status-reading tool, and `cancel_operation` (fenceable-only) must not
     leak into other guarantees either.
@@ -82,7 +89,7 @@ class TestIssue2ToolExposureGatedByGuarantee(unittest.TestCase):
             self.assertTrue(row["escalated"] or row["task_completed"], f"{condition}: expected a clean outcome, got {row}")
 
 
-class TestIssue1C1FullAgentBaseline(unittest.TestCase):
+class TestIssue1C1FullAgentBaseline(_IsolatedResultsDirMixin, unittest.TestCase):
     """Issue 1: C1 must perform the whole task from scratch, including write A and its own
     reads, in the SAME tool-calling loop -- not start from a pre-seeded state.
     """
@@ -102,9 +109,9 @@ class TestIssue1C1FullAgentBaseline(unittest.TestCase):
         self.assertGreater(row_c1["tool_calls"], row_c5["tool_calls"], "C1 must reflect more tool calls than C5 (it also does the reads + write A)")
 
 
-class TestComputeBreakevenStillSane(unittest.TestCase):
+class TestComputeBreakevenStillSane(_IsolatedResultsDirMixin, unittest.TestCase):
     def test_compute_breakeven_produces_finite_numbers_after_c1_cost_shape_change(self):
-        rows = re_mod.run_all()
+        rows = re_mod.run_all(transcripts_dir=re_mod.RESULTS_TRANSCRIPTS_DIR)
         breakeven = re_mod.compute_breakeven(rows)
         self.assertGreater(breakeven["per_run_full_agent_cost_seconds"], 0)
         self.assertGreaterEqual(breakeven["discovery_cost_seconds"], 0)
