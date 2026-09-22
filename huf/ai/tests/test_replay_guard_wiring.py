@@ -214,6 +214,8 @@ def _run(
 	recovery: str = RECOVERY_RETRY,
 	replay_guard_enabled: bool = False,
 	contract_limits: dict | None = None,
+	status_check_fn=None,
+	fence_fn=None,
 ):
 	graph = _graph(recovery=recovery, contract_limits=contract_limits)
 	outcome = execute_procedure(
@@ -223,6 +225,8 @@ def _run(
 		classify_tool=classify_tool,
 		procedure_name=_PROCEDURE_NAME,
 		replay_guard_enabled=replay_guard_enabled,
+		status_check_fn=status_check_fn,
+		fence_fn=fence_fn,
 	)
 	return outcome
 
@@ -475,6 +479,213 @@ class DedupDuplicateBypassUnaffectedTests(unittest.TestCase):
 		self.assertEqual(len(invoker.calls), 0)  # tool never invoked at all
 		self.assertTrue(outcome.tool_invocations[0].get("duplicate"))
 		self.assertNotIn("guard_rejected", outcome.tool_invocations[0])
+
+
+class ReplayGuardStatusCheckAndFenceHookTests(unittest.TestCase):
+	"""SafeDeoptCommittedGuardWiring, stage 4: the optional ``status_check_fn``/``fence_fn``
+	hooks are what actually let a ``status_resolvable``/``fenceable`` tool's guarded retry
+	be admitted -- see PLAN.md follow-up and ``_Runner._resolve_status_check``/
+	``_resolve_fence``. Central properties:
+
+	* a supplied hook that resolves the guard-unlocking outcome (NOT_COMMITTED / fenced)
+	  admits the retry;
+	* the same tool/hook resolving the guard-blocking outcome (COMMITTED / not fenced)
+	  still rejects (or, for COMMITTED, is a guard-level no-op-not-needed rejection, which
+	  is the guard's OWN documented rule, not a hook bug);
+	* with no hook supplied at all (the default), both guarantee levels behave exactly like
+	  ``none`` -- proving nothing broke for every existing caller.
+	"""
+
+	def setUp(self):
+		_install_fake_frappe()
+		self.addCleanup(_restore_real_stub)
+
+	# -- status_resolvable ---------------------------------------------------------------
+
+	def test_status_resolvable_with_not_committed_hook_admits_retry(self):
+		invoker = _RecordingInvoker(fail_count=1)
+		calls: list[str] = []
+
+		def status_check_fn(operation_key: str) -> str:
+			calls.append(operation_key)
+			return "NOT_COMMITTED"
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=True,
+			status_check_fn=status_check_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+		self.assertEqual(len(invoker.calls), 2)  # first attempt failed, retry admitted and succeeded
+		self.assertEqual(calls, [_OPERATION_KEY])
+		self.assertNotIn("guard_rejected", outcome.tool_invocations[0])
+
+	def test_status_resolvable_with_committed_hook_rejects_retry(self):
+		# COMMITTED + not server_idempotent -> guard's own rule 1: reject, nothing left to do.
+		invoker = _RecordingInvoker(fail_count=2)
+
+		def status_check_fn(operation_key: str) -> str:
+			return "COMMITTED"
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=True,
+			status_check_fn=status_check_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)  # retry never fired
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	def test_status_resolvable_with_unknown_hook_still_rejects(self):
+		invoker = _RecordingInvoker(fail_count=2)
+
+		def status_check_fn(operation_key: str) -> str:
+			return "UNKNOWN"
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=True,
+			status_check_fn=status_check_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	def test_status_resolvable_hook_raising_fails_closed(self):
+		invoker = _RecordingInvoker(fail_count=2)
+
+		def status_check_fn(operation_key: str) -> str:
+			raise RuntimeError("boom")
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=True,
+			status_check_fn=status_check_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	# -- fenceable ------------------------------------------------------------------------
+
+	def test_fenceable_with_true_hook_admits_retry(self):
+		invoker = _RecordingInvoker(fail_count=1)
+		calls: list[str] = []
+
+		def fence_fn(operation_key: str) -> bool:
+			calls.append(operation_key)
+			return True
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="fenceable"),
+			replay_guard_enabled=True,
+			fence_fn=fence_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+		self.assertEqual(len(invoker.calls), 2)
+		self.assertEqual(calls, [_OPERATION_KEY])
+		self.assertNotIn("guard_rejected", outcome.tool_invocations[0])
+
+	def test_fenceable_with_false_hook_rejects_retry(self):
+		invoker = _RecordingInvoker(fail_count=2)
+
+		def fence_fn(operation_key: str) -> bool:
+			return False
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="fenceable"),
+			replay_guard_enabled=True,
+			fence_fn=fence_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	def test_fenceable_hook_raising_fails_closed(self):
+		invoker = _RecordingInvoker(fail_count=2)
+
+		def fence_fn(operation_key: str) -> bool:
+			raise RuntimeError("boom")
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="fenceable"),
+			replay_guard_enabled=True,
+			fence_fn=fence_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	# -- no hooks supplied: unchanged v1 fallback ------------------------------------------
+
+	def test_status_resolvable_without_hook_still_behaves_like_none(self):
+		invoker = _RecordingInvoker(fail_count=2)
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=True,
+			status_check_fn=None,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	def test_fenceable_without_hook_still_behaves_like_none(self):
+		invoker = _RecordingInvoker(fail_count=2)
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="fenceable"),
+			replay_guard_enabled=True,
+			fence_fn=None,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertEqual(len(invoker.calls), 1)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	def test_wrong_hook_for_guarantee_does_not_leak_across(self):
+		# A fence_fn supplied for a status_resolvable tool must not be consulted -- only the
+		# matching hook for the declared guarantee is ever invoked.
+		invoker = _RecordingInvoker(fail_count=2)
+
+		def fence_fn(operation_key: str) -> bool:
+			raise AssertionError("fence_fn must never be called for a status_resolvable tool")
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=True,
+			fence_fn=fence_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertTrue(outcome.tool_invocations[0].get("guard_rejected"))
+
+	def test_hooks_supplied_but_flag_off_are_never_consulted(self):
+		# replay_guard_enabled=False -> the whole gate (including the hooks) is skipped, and
+		# the existing bounded retry heals the failure exactly as before this feature existed.
+		invoker = _RecordingInvoker(fail_count=1)
+
+		def status_check_fn(operation_key: str) -> str:
+			raise AssertionError("status_check_fn must never be called with the flag off")
+
+		def fence_fn(operation_key: str) -> bool:
+			raise AssertionError("fence_fn must never be called with the flag off")
+
+		outcome = _run(
+			invoker=invoker,
+			classify_tool=_Classifier(recovery_guarantee="status_resolvable"),
+			replay_guard_enabled=False,
+			status_check_fn=status_check_fn,
+			fence_fn=fence_fn,
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS)
+		self.assertEqual(len(invoker.calls), 2)
 
 
 if __name__ == "__main__":
