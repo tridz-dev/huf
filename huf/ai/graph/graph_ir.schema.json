@@ -898,6 +898,9 @@
           "$ref": "#/$defs/RouterLlmNode"
         },
         {
+          "$ref": "#/$defs/RouterDecisionNode"
+        },
+        {
           "$ref": "#/$defs/HumanApprovalNode"
         },
         {
@@ -997,6 +1000,64 @@
           "$ref": "#/$defs/Contract"
         }
       }
+    },
+    "RouterDecisionNode": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/NodeCommon"
+        },
+        {
+          "not": {
+            "required": [
+              "next"
+            ]
+          },
+          "properties": {
+            "type": {
+              "const": "router.decision"
+            },
+            "config": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "policy",
+                "options",
+                "default"
+              ],
+              "properties": {
+                "options": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "label",
+                      "node_id"
+                    ],
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "node_id": {
+                        "$ref": "#/$defs/NodeId"
+                      }
+                    }
+                  }
+                },
+                "default": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "policy": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
