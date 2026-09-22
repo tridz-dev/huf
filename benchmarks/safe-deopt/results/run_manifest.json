@@ -1,5 +1,5 @@
 {
-  "_description": "Provenance manifest for the real (non-mocked) Gemini rows merged into results/runs.jsonl. Allowlisted fields only -- no full environment dump, no secret-adjacent values (API keys, tokens) anywhere in this file.",
+  "_description": "Provenance manifest for the real (non-mocked) rows merged into results/runs.jsonl, across BOTH model families run to date: the primary real Gemini run (top-level fields below, 3000 rows) and the second, additional real OpenAI run (see 'second_model_family_real_openai' below, 600 rows). Allowlisted fields only -- no full environment dump, no secret-adjacent values (API keys, tokens) anywhere in this file.",
   "run_kind": "real_llm_execution",
   "huf_commit_hash": "8ba45882b9e5494ac4d584ae3fd3e8c88d99dd4b",
   "huf_commit_note": "HEAD of research/safe-deopt-experiment at the time the 5 full-10-seed workers were dispatched; all 3000 merged real rows carry this exact huf_commit_hash per-row (verified: single distinct value across results/runs.jsonl).",
@@ -53,5 +53,47 @@
   "stale_data_quarantined": {
     "note": "Before the n=2 merge (commit dfd97bf8), results/runs.jsonl had briefly contained ONE pre-existing real row (condition C4/W1/F1, seed 42) and results/transcripts/C4/W1/F1/NA/42.json had held a real transcript -- both left over from an earlier one-off smoke test (commit 644f111a) against an OLDER commit hash (4f0160cf...). That stale row/transcript was excluded from every subsequent merge (including this one) and remains backed up, untouched, at the location below.",
     "backup_location": "results/.stale_smoke_test_backup/"
+  },
+  "second_model_family_real_openai": {
+    "_description": "Provenance for the SECOND, independent real-model run merged into results/runs.jsonl alongside (not replacing) the real Gemini rows above -- OpenAI gpt-4o-mini, 2 seeds/cell, all 5 real-model LLM conditions. Distinguished from the Gemini rows purely by the existing per-row model_id field (gpt-4o-mini-2024-07-18 vs gemini-3.5-flash-lite); no new field was added, since model_id was already a real, sufficiently distinguishing column.",
+    "run_kind": "real_llm_execution",
+    "huf_commit_hash": "86f1b0ee034d42df98a690bebb342b5cc5211589",
+    "huf_commit_note": "HEAD of research/safe-deopt-experiment at the time the 5 OpenAI condition workers were dispatched (commit 86f1b0ee0, 'fix pricing lookup to match model-version prefixes, not just exact ids'); all 600 merged real OpenAI rows carry this exact huf_commit_hash per-row.",
+    "model": {
+      "model_id": "gpt-4o-mini-2024-07-18",
+      "provider": "openai",
+      "provider_reported_model_version": "gpt-4o-mini-2024-07-18",
+      "pricing_model_key": "gpt-4o-mini",
+      "note": "provider_reported_model_version is the dated snapshot id OpenAI's API returned, distinct from (more specific than) the requested model_id alias 'gpt-4o-mini' -- both are recorded per-row (model_id) and here."
+    },
+    "pricing_date": "2026-09-23",
+    "seeds": {
+      "seed_list_per_cell": [42, 43],
+      "note": "Every real (condition, workload, fault, tool_guarantee) cell that actually dispatched a model call has exactly these 2 seeds -- a smaller n than the 10-seed Gemini run, reflected in results/summary.csv's per-bucket n_runs and Wilson CI columns. Cells for fault F0 and F5 do not invoke a model and have no transcript/seed rows by design, identically to the Gemini run (60 no-model rows per condition, 12 per condition at n=2)."
+    },
+    "conditions": {
+      "real_openai": ["C1", "C4", "C4+G", "C5", "C6"],
+      "note": "Same 5 real-model-invoking conditions as the Gemini run; C2/C3 remain mocked/deterministic-only by construction and were not candidates for a real run here either."
+    },
+    "total_real_rows": 600,
+    "total_real_cost_usd": 0.133947,
+    "per_condition_cost_usd": {
+      "C1": 0.033356,
+      "C4": 0.010602,
+      "C4+G": 0.009628,
+      "C5": 0.042506,
+      "C6": 0.037855
+    },
+    "worker_output_files_merged": [
+      "results/runs.openaiC1.jsonl",
+      "results/runs.openaiC4.jsonl",
+      "results/runs.openaiC4G.jsonl",
+      "results/runs.openaiC5.jsonl",
+      "results/runs.openaiC6.jsonl"
+    ],
+    "worker_output_files_note": "These 5 per-condition worker files were merged (appended, transcript_path rewritten) into results/runs.jsonl and then deleted; they are not separately committed. The Gemini run's own worker files (runs.full10*.jsonl) were handled the same way in the earlier merge.",
+    "transcripts_location": "results/transcripts/real_openai/<condition>/<workload>/<fault>/<tool_guarantee>/<seed>.json",
+    "transcripts_location_note": "Merged from the 5 workers' results/transcripts.openai<condition>/ directories into results/transcripts/real_openai/ (mirroring the existing results/transcripts/real/ convention for the Gemini data, kept as a sibling directory rather than merged into it, since the two are different model families). Each merged real OpenAI row's transcript_path field was rewritten from results/transcripts.openai<condition>/... to results/transcripts/real_openai/... and verified to match 552 transcript files on disk (F0/F5 cells have none, by design, same as Gemini).",
+    "cross_model_comparison_note": "See results/summary.csv (grouped by data_source AND model_id, never blended) for the full per-condition breakdown. Headline finding: both guarded conditions (C4+G, C6) show ZERO unsafe_retries in BOTH model families (Gemini: 0/0; OpenAI: 0/0) -- a two-model-family confirmation that the guard eliminates unsafe retries regardless of underlying model. Separately, C5 (no guard) shows a much higher duplicate-write count for OpenAI (14/120 rows) than Gemini (1/600 rows) despite the smaller OpenAI sample -- reported as a real, striking cross-model divergence worth further investigation, not smoothed over."
   }
 }

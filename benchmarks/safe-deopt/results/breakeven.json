@@ -2,24 +2,24 @@
   "per_run_full_agent_cost_seconds": 4.9833333333333336e-05,
   "per_run_fallback_cost_seconds": 2.5841666666666667e-05,
   "per_run_procedure_cost_seconds": 1.005e-05,
-  "discovery_cost_seconds": 2.2290972992777824e-05,
+  "discovery_cost_seconds": 2.7084024623036385e-05,
   "procedure_proposal_timing_seconds": null,
   "procedure_proposal_note": "not measured -- huf/ai/procedure_proposal.py imports frappe at module scope and this sandbox has no frappe/bench installed",
   "breakeven_by_p_percent": {
     "0": {
-      "n_star": 0.56,
+      "n_star": 0.681,
       "note": "amortizes"
     },
     "5": {
-      "n_star": 0.579,
+      "n_star": 0.704,
       "note": "amortizes"
     },
     "20": {
-      "n_star": 0.644,
+      "n_star": 0.782,
       "note": "amortizes"
     },
     "50": {
-      "n_star": 0.83,
+      "n_star": 1.008,
       "note": "amortizes"
     }
   },

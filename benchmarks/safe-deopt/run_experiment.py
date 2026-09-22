@@ -1524,14 +1524,24 @@ def write_summary_csv(rows: list[dict]) -> None:
     # honesty convention that `tokens_are_real_accounting` already encodes per-row. A
     # real-C6 row and a mocked-C6 row for the same (fault, guarantee) now produce two
     # separate summary rows rather than one blended one.
+    # Second-model-family merge: real rows now come from TWO distinct model families
+    # (gemini-3.5-flash-lite and gpt-4o-mini-2024-07-18). Grouping by data_source alone
+    # would blend a real-Gemini row and a real-OpenAI row into one mean/rate, which is
+    # exactly the thing the "never averaged together" convention above forbids. model_id
+    # is already a real, per-row field (not invented for this) -- group real rows by it
+    # too, so each (condition, fault, tool_guarantee) triple with real data from both
+    # families now yields two separate summary rows, one per model_id. Mocked rows are
+    # not split by model_id (data_source=mocked stays a single MockedModel/pilot bucket).
     groups: dict[tuple, list[dict]] = {}
     for row in rows:
-        data_source = "real" if row.get("tokens_are_real_accounting") else "mocked"
-        key = (row["condition"], row["fault"], row["tool_guarantee"], data_source)
+        is_real = bool(row.get("tokens_are_real_accounting"))
+        data_source = "real" if is_real else "mocked"
+        model_key = row["model_id"] if is_real else "NA"
+        key = (row["condition"], row["fault"], row["tool_guarantee"], data_source, model_key)
         groups.setdefault(key, []).append(row)
 
     header = [
-        "condition", "fault", "tool_guarantee", "data_source", "n_runs",
+        "condition", "fault", "tool_guarantee", "data_source", "model_id", "n_runs",
         "correctness_rate", "correctness_rate_ci",
         "duplicate_write_rate", "duplicate_write_rate_ci",
         # Ground-truth outcome (from commit_log) -- kept SEPARATE from unsafe_retry_rate
@@ -1555,31 +1565,35 @@ def write_summary_csv(rows: list[dict]) -> None:
 
     with open(SUMMARY_CSV_PATH, "w", newline="") as f:
         f.write(
-            "# MIXED -- this file now contains BOTH real Gemini rows (data_source=real, "
-            "n=10/cell, gemini-3.5-flash-lite, real dollar cost -- the full 10-seed run that "
-            "supersedes the earlier n=2 pilot) AND the original mocked pilot rows "
-            "(data_source=mocked, n=1/cell, MockedModel) -- see run_manifest.json for the "
-            "real run's provenance, and results/.n2_pilot_backup/ for the superseded n=2 "
-            "pilot data. They are grouped SEPARATELY by data_source and are never averaged "
-            "together; a (condition, fault, tool_guarantee) pair with both real and mocked "
-            "data appears as two distinct rows here.\n"
+            "# MIXED -- this file now contains THREE distinct data buckets: real Gemini "
+            "rows (data_source=real, model_id=gemini-3.5-flash-lite, n=10/cell, real dollar "
+            "cost -- the full 10-seed run that superseded the earlier n=2 pilot), real "
+            "OpenAI rows (data_source=real, model_id=gpt-4o-mini-2024-07-18, n=2/cell, real "
+            "dollar cost -- the second model family run added afterwards), and the original "
+            "mocked pilot rows (data_source=mocked, n=1/cell, MockedModel). See "
+            "run_manifest.json for both real runs' provenance, and "
+            "results/.n2_pilot_backup/ for the superseded n=2 Gemini pilot data. All three "
+            "buckets are grouped SEPARATELY by (data_source, model_id) and are NEVER "
+            "averaged together; a (condition, fault, tool_guarantee) triple with data from "
+            "more than one bucket appears as that many distinct rows here -- a Gemini row "
+            "and an OpenAI row are never blended into one mean/rate.\n"
         )
         f.write(
             "# CI policy: mocked rows are still n=1/cell -- correctness_rate_ci etc. remain "
-            "the literal string \"NA\" (undefined at n=1, per PREREGISTRATION.md). Real rows "
-            "are n=10/cell (up from n=2 in the earlier pilot) -- we compute a 95% Wilson "
-            "score interval for the binary-rate columns rather than hiding behind NA; at "
-            "n=10 this is a real, if still modest, interval, so it is suffixed \"(n=10, "
-            "modest sample)\" rather than the pilot's \"(n=2, wide/unreliable)\" wording -- "
-            "see _wilson_ci_str's docstring for the exact n-dependent labeling. Non-binary "
-            "columns (mean_blocked_retries, mean_tool_calls, mean_tokens_estimated, "
-            "mean_wall_time_seconds) have no CI column at all, real or mocked, at this "
-            "sample size.\n"
+            "the literal string \"NA\" (undefined at n=1, per PREREGISTRATION.md). Real "
+            "Gemini rows are n=10/cell -- we compute a 95% Wilson score interval for the "
+            "binary-rate columns rather than hiding behind NA, suffixed \"(n=10, modest "
+            "sample)\". Real OpenAI rows are n=2/cell -- Wilson CIs are still computed but "
+            "suffixed per _wilson_ci_str's n-dependent labeling for that smaller n. See "
+            "_wilson_ci_str's docstring for the exact wording rules. Non-binary columns "
+            "(mean_blocked_retries, mean_tool_calls, mean_tokens_estimated, "
+            "mean_wall_time_seconds) have no CI column at all, for any bucket, at these "
+            "sample sizes.\n"
         )
         writer = csv.writer(f)
         writer.writerow(header)
-        for (condition, fault, guarantee, data_source) in sorted(groups.keys()):
-            group = groups[(condition, fault, guarantee, data_source)]
+        for (condition, fault, guarantee, data_source, model_key) in sorted(groups.keys()):
+            group = groups[(condition, fault, guarantee, data_source, model_key)]
             n = len(group)
 
             def _rate_and_ci(pred) -> tuple[float, str]:
@@ -1608,7 +1622,7 @@ def write_summary_csv(rows: list[dict]) -> None:
             mean_tokens = sum(r["tokens_estimated"] for r in group) / n
             mean_wall = sum(r["wall_time_seconds"] for r in group) / n
             writer.writerow([
-                condition, fault, guarantee, data_source, n,
+                condition, fault, guarantee, data_source, model_key, n,
                 round(correctness, 4), correctness_ci,
                 round(dup_rate, 4), dup_ci,
                 round(dup_occurred_rate, 4), dup_occurred_ci,
@@ -1649,14 +1663,22 @@ def plot_correctness_by_fault(rows: list[dict], path: Path) -> None:
     faults = FAULT_IDS
     real_rows = [r for r in rows if r.get("tokens_are_real_accounting")]
     mocked_rows = [r for r in rows if not r.get("tokens_are_real_accounting")]
+    # Second model family: split real_rows by model_id so Gemini and OpenAI real data get
+    # their own panels rather than being combined into one "real" bar per fault/condition.
+    real_gemini_rows = [r for r in real_rows if r.get("model_id", "").startswith("gemini")]
+    real_openai_rows = [r for r in real_rows if r.get("model_id", "").startswith("gpt")]
     has_real = bool(real_rows)
+    has_openai = bool(real_openai_rows)
 
-    img = Image.new("RGB", (1400, 1000 if has_real else 900), (255, 255, 255))
+    n_panels = 1 + (1 if real_gemini_rows else 0) + (1 if real_openai_rows else 0)
+    img = Image.new("RGB", (1400, 400 * n_panels + 200), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     draw.text((20, 10), "Correctness (useful_completion rate) by condition, grouped by fault", fill=(0, 0, 0))
     if has_real:
-        draw.text((20, 30), "TOP bars = MOCKED pilot (n=1/cell, MockedModel, illustrative only)", fill=(200, 0, 0))
-        draw.text((20, 46), "BOTTOM bars = REAL (n=2/cell, gemini-3.5-flash-lite) -- kept in a SEPARATE panel, never blended with mocked", fill=(0, 100, 0))
+        draw.text((20, 30), "TOP panel = MOCKED pilot (n=1/cell, MockedModel, illustrative only)", fill=(200, 0, 0))
+        draw.text((20, 46), "MIDDLE panel = REAL Gemini (n=10/cell, gemini-3.5-flash-lite)", fill=(0, 100, 0))
+        if has_openai:
+            draw.text((20, 62), "BOTTOM panel = REAL OpenAI (n=2/cell, gpt-4o-mini-2024-07-18) -- separate model family, never blended with Gemini", fill=(0, 70, 160))
     else:
         draw.text((20, 30), "PILOT / MOCKED -- illustrative only (n=1/cell, MockedModel, not a real LLM)", fill=(200, 0, 0))
 
@@ -1675,7 +1697,9 @@ def plot_correctness_by_fault(rows: list[dict], path: Path) -> None:
 
     if has_real:
         _panel(100, 300, mocked_rows, "mocked, n=1")
-        _panel(500, 300, real_rows, "real, n=2")
+        _panel(500, 300, real_gemini_rows, "real-gemini, n=10")
+        if has_openai:
+            _panel(900, 300, real_openai_rows, "real-openai, n=2")
     else:
         _panel(100, 650, mocked_rows, "mocked, n=1")
     img.save(path)
@@ -1686,13 +1710,19 @@ def plot_cost_vs_correctness(rows: list[dict], path: Path) -> None:
 
     real_rows = [r for r in rows if r.get("tokens_are_real_accounting")]
     mocked_rows = [r for r in rows if not r.get("tokens_are_real_accounting")]
+    real_gemini_rows = [r for r in real_rows if r.get("model_id", "").startswith("gemini")]
+    real_openai_rows = [r for r in real_rows if r.get("model_id", "").startswith("gpt")]
     has_real = bool(real_rows)
+    has_openai = bool(real_openai_rows)
 
     img = Image.new("RGB", (1000, 800), (255, 255, 255))
     draw = ImageDraw.Draw(img)
     draw.text((20, 10), "Cost (tool_calls) vs correctness (useful_completion), per condition (mean across cells)", fill=(0, 0, 0))
     if has_real:
-        draw.text((20, 30), "circles = MOCKED pilot (n=1/cell, illustrative only); squares = REAL (n=2/cell, gemini-3.5-flash-lite)", fill=(0, 0, 0))
+        legend = "circles = MOCKED pilot (n=1/cell, illustrative only); squares = REAL Gemini (n=10/cell, gemini-3.5-flash-lite)"
+        if has_openai:
+            legend += "; triangles = REAL OpenAI (n=2/cell, gpt-4o-mini-2024-07-18)"
+        draw.text((20, 30), legend, fill=(0, 0, 0))
     else:
         draw.text((20, 30), "PILOT / MOCKED -- illustrative only (n=1/cell, MockedModel, not a real LLM)", fill=(200, 0, 0))
 
@@ -1720,13 +1750,17 @@ def plot_cost_vs_correctness(rows: list[dict], path: Path) -> None:
             color = palette.get(cond, (0, 0, 0))
             if marker == "circle":
                 draw.ellipse([px - 6, py - 6, px + 6, py + 6], fill=color)
-            else:
+            elif marker == "square":
                 draw.rectangle([px - 6, py - 6, px + 6, py + 6], fill=color, outline=(0, 0, 0))
+            else:  # triangle -- distinct marker for the second (OpenAI) real model family
+                draw.polygon([(px, py - 8), (px - 7, py + 6), (px + 7, py + 6)], fill=color, outline=(0, 0, 0))
             draw.text((px + 8, py - 8), f"{cond}{label_suffix}", fill=(0, 0, 0))
 
     _plot_series(mocked_rows, "circle", "")
     if has_real:
-        _plot_series(real_rows, "square", " (real)")
+        _plot_series(real_gemini_rows, "square", " (real-gemini)")
+        if has_openai:
+            _plot_series(real_openai_rows, "triangle", " (real-openai)")
     img.save(path)
 
 
