@@ -21,7 +21,7 @@ class TestDecisionCandidates(unittest.TestCase):
 		from huf.ai.decision.tool_selection import select_authorized_tool
 		policy = DecisionPolicy(policy_id="tool", questions=(Question("tool", QuestionKind.SELECT, "Pick", (Option("refund"), Option("lookup"))),), state_bindings=(StateBinding("request", "$"),))
 		request = DecisionRequest(policy=policy, state="find a tool")
-		selected, response = select_authorized_tool(DecisionRuntime(), request, FakeDecisionBackend(), [SimpleNamespace(tool_name="refund")])
+		selected, response = select_authorized_tool(DecisionRuntime(), request, FakeDecisionBackend(), [SimpleNamespace(tool_name="refund"), SimpleNamespace(tool_name="lookup")])
 		self.assertEqual(response.status.value, "success")
 		self.assertEqual(selected, "refund")
 
