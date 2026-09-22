@@ -8,6 +8,7 @@ from dataclasses import replace
 from typing import Any
 
 from huf.ai.decision.errors import DecisionError, DecisionErrorCode
+from huf.ai.decision.deployment import DeploymentChain
 from huf.ai.decision.gating import evaluate_gate, validate_answer_integrity
 from huf.ai.decision.policy import validate_policy
 from huf.ai.decision.registry import resolve_backend
@@ -32,7 +33,13 @@ class DecisionRuntime:
 	def __init__(self, *, telemetry_sink: TelemetrySink | None = None):
 		self.telemetry_sink = telemetry_sink
 
-	def evaluate(self, request: DecisionRequest, backend: Any | str) -> DecisionResponse:
+	def evaluate(
+		self,
+		request: DecisionRequest,
+		backend: Any | str,
+		*,
+		_deployment_metadata: tuple[str, int, tuple[str, ...]] | None = None,
+	) -> DecisionResponse:
 		started = time.monotonic()
 		state_hash = None
 		adapter = None
@@ -73,6 +80,14 @@ class DecisionRuntime:
 			exc = DecisionError(DecisionErrorCode.FAILED)
 			response = self._failure_response(exc, request, adapter)
 		response = replace(response, latency_ms=(time.monotonic() - started) * 1000)
+		if _deployment_metadata is not None:
+			selection_source, fallback_count, fallback_chain = _deployment_metadata
+			response = replace(
+				response,
+				deployment_selection_source=selection_source,
+				deployment_fallback_count=fallback_count,
+				deployment_fallback_chain=fallback_chain,
+			)
 		self._emit(
 			request,
 			response,
@@ -80,6 +95,23 @@ class DecisionRuntime:
 			prepared.value if prepared is not None and policy.store_state else None,
 		)
 		return response
+
+	def evaluate_deployment_chain(self, request: DecisionRequest, chain: DeploymentChain) -> DecisionResponse:
+		"""Try eligible deployments in deterministic order without changing policy identity."""
+		if not chain.candidates:
+			return self.evaluate(request, object(), _deployment_metadata=("priority", 0, ()))
+		labels = chain.fallback_chain
+		last = None
+		for index, candidate in enumerate(chain.candidates):
+			selection = "failover" if index else chain.selection_source
+			last = self.evaluate(
+				request,
+				candidate.backend,
+				_deployment_metadata=(selection, index, labels),
+			)
+			if last.status == DecisionStatus.SUCCESS:
+				return last
+		return last
 
 	def apply_policy_fallback(
 		self,
