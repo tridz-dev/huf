@@ -769,9 +769,53 @@ def compute_breakeven(rows: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
-    rows = run_all()
-    write_runs_jsonl(rows)
+def load_existing_rows() -> list[dict]:
+    """Load already-saved per-run rows from disk without invoking any model.
+
+    Reads whichever of ``results/runs.mock.jsonl`` (MockedModel pilot runs) and
+    ``results/runs.jsonl`` (reserved for real-model runs, per module docstring) exist, in
+    that order. Used by ``--replay`` to re-score/re-aggregate already-produced results.
+    """
+    rows: list[dict] = []
+    for path in (RUNS_MOCK_JSONL_PATH, RUNS_JSONL_PATH):
+        if not path.exists():
+            continue
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+    return rows
+
+
+def main(argv: list[str] | None = None) -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--replay",
+        action="store_true",
+        help=(
+            "Re-score/re-aggregate already-saved results/runs*.jsonl (summary.csv, plots, "
+            "breakeven.json) without calling any model or re-running faults."
+        ),
+    )
+    args = parser.parse_args(argv)
+
+    if args.replay:
+        rows = load_existing_rows()
+        if not rows:
+            print(
+                "[replay] no existing rows found under results/runs.mock.jsonl or "
+                "results/runs.jsonl -- nothing to replay. Run without --replay first.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"[replay] loaded {len(rows)} existing rows from disk; no model was called")
+    else:
+        rows = run_all()
+        write_runs_jsonl(rows)
+
     write_summary_csv(rows)
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -784,7 +828,7 @@ def main() -> None:
     with open(RESULTS_DIR / "breakeven.json", "w") as f:
         json.dump({k: v for k, v in breakeven.items() if k != "sweep"}, f, indent=2)
 
-    print(f"wrote {len(rows)} rows to {RUNS_MOCK_JSONL_PATH}")
+    print(f"{'re-scored' if args.replay else 'wrote'} {len(rows)} rows ({'replay, no model calls' if args.replay else RUNS_MOCK_JSONL_PATH})")
     print(f"wrote {SUMMARY_CSV_PATH}")
     print(f"wrote plots to {PLOTS_DIR}")
     print(json.dumps({k: v for k, v in breakeven.items() if k not in ("sweep",)}, indent=2, default=str))
