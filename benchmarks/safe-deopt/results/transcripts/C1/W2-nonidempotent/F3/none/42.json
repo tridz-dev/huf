@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.2919772416353226e-06
+    "wall_time_s": 9.159557521343231e-07
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.080379873514175e-07
+    "wall_time_s": 4.998873919248581e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.080379873514175e-07
+    "wall_time_s": 6.670597940683365e-07
   },
   {
     "kind": "tool_call",
@@ -81,7 +81,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.3294782042503357e-07
+    "wall_time_s": 3.7509016692638397e-07
   },
   {
     "kind": "model_step",
@@ -91,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.830079317092896e-07
+    "wall_time_s": 6.658956408500671e-07
   },
   {
     "kind": "tool_call",
@@ -118,7 +118,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.583954483270645e-06
+    "wall_time_s": 2.125045284628868e-06
   },
   {
     "kind": "model_step",
@@ -155,7 +155,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.082925781607628e-06
+    "wall_time_s": 4.250090569257736e-06
   },
   {
     "kind": "model_step",
@@ -165,7 +165,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.4170072972774506e-06
+    "wall_time_s": 1.2079253792762756e-06
   },
   {
     "kind": "tool_call",
@@ -189,7 +189,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.920898497104645e-07
+    "wall_time_s": 1.0409858077764511e-06
   },
   {
     "kind": "model_step",
@@ -199,7 +199,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.250067725777626e-06
+    "wall_time_s": 1.4998950064182281e-06
   },
   {
     "kind": "tool_call",
@@ -226,6 +226,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.341119736433029e-07
+    "wall_time_s": 3.7509016692638397e-07
   }
 ]

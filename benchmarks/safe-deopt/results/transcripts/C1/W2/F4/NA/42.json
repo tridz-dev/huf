@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.920898497104645e-07
+    "wall_time_s": 9.580980986356735e-07
   },
   {
     "kind": "tool_call",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.00120222568512e-07
+    "wall_time_s": 5.830079317092896e-07
   },
   {
     "kind": "tool_call",
@@ -81,7 +81,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.919696271419525e-07
+    "wall_time_s": 2.9103830456733704e-07
   },
   {
     "kind": "model_step",
@@ -91,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.249174475669861e-07
+    "wall_time_s": 5.830079317092896e-07
   },
   {
     "kind": "tool_call",
@@ -118,7 +118,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.1671876311302185e-06
+    "wall_time_s": 2.4170149117708206e-06
   },
   {
     "kind": "model_step",
@@ -128,7 +128,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 9.59029421210289e-07
   },
   {
     "kind": "tool_call",
@@ -154,7 +154,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.6290927305817604e-05
+    "wall_time_s": 1.716683618724346e-05
   },
   {
     "kind": "model_step",
@@ -164,7 +164,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.125037670135498e-06
+    "wall_time_s": 1.2079253792762756e-06
   },
   {
     "kind": "tool_call",
@@ -198,7 +198,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.166015863418579e-06
+    "wall_time_s": 1.416075974702835e-06
   },
   {
     "kind": "tool_call",
@@ -225,6 +225,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.3387914299964905e-07
+    "wall_time_s": 3.3294782042503357e-07
   }
 ]

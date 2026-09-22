@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.918570190668106e-07
+    "wall_time_s": 8.752103894948959e-07
   },
   {
     "kind": "tool_call",
@@ -47,7 +47,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.41098415851593e-07
+    "wall_time_s": 4.998873919248581e-07
   },
   {
     "kind": "model_step",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.417969077825546e-07
+    "wall_time_s": 5.830079317092896e-07
   },
   {
     "kind": "tool_call",
@@ -81,7 +81,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.3387914299964905e-07
+    "wall_time_s": 3.341119736433029e-07
   },
   {
     "kind": "model_step",
@@ -91,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.83939254283905e-07
+    "wall_time_s": 5.417969077825546e-07
   },
   {
     "kind": "tool_call",
@@ -118,7 +118,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7918646335601807e-06
+    "wall_time_s": 1.8328428268432617e-06
   },
   {
     "kind": "model_step",
@@ -128,7 +128,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.580980986356735e-07
+    "wall_time_s": 1.0831281542778015e-06
   },
   {
     "kind": "tool_call",
@@ -154,7 +154,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.3707904145121574e-05
+    "wall_time_s": 1.5458092093467712e-05
   },
   {
     "kind": "model_step",
@@ -164,7 +164,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.250067725777626e-06
+    "wall_time_s": 1.375097781419754e-06
   },
   {
     "kind": "tool_call",
@@ -190,7 +190,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.4579854905605316e-06
+    "wall_time_s": 3.084074705839157e-06
   },
   {
     "kind": "model_step",
@@ -200,7 +200,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.084059476852417e-06
+    "wall_time_s": 1.0419171303510666e-06
   },
   {
     "kind": "final",

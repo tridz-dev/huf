@@ -31,7 +31,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.2079253792762756e-06
+    "wall_time_s": 1.0828953236341476e-06
   },
   {
     "kind": "tool_call",
@@ -67,7 +67,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.458038792014122e-06
+    "wall_time_s": 6.249174475669861e-07
   },
   {
     "kind": "final",

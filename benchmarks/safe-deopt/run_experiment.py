@@ -73,7 +73,9 @@ if str(HERE) not in sys.path:
 
 from conditions import (  # noqa: E402
     RecoverySession,
+    ReplayRejected,
     deterministic_resume_recover,
+    guarantee_aware_resume_recover,
     naive_replay_recover,
 )
 from faults import (  # noqa: E402
@@ -978,11 +980,25 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
                         results = deterministic_resume_recover(store, write_b_fn, max_retries=1, operation_key=operation_key, **write_b_kwargs)
                         tool_calls += len(results)
                     else:
-                        # No idempotency key exists on this write shape at all -- C3 degrades
-                        # to the same blind replay as C2 (PREREGISTRATION.md H3: "expected
-                        # ... to fail on non-idempotent writes").
-                        results = naive_replay_recover(store, write_b_fn, max_retries=1, **write_b_kwargs)
-                        tool_calls += len(results)
+                        # No idempotency key exists on this write shape at all -- C3 is no
+                        # longer allowed to silently degrade into C2's blind replay here.
+                        # Issue E: it must mechanically use whatever guarantee is declared
+                        # (status check / fence) via the SAME admission rule ReplayGuard
+                        # (C6) enforces, and refuse to retry at all when there is nothing to
+                        # exercise -- see guarantee_aware_resume_recover's docstring.
+                        results = guarantee_aware_resume_recover(
+                            store,
+                            write_b_fn,
+                            max_retries=1,
+                            operation_key=operation_key,
+                            tool_guarantee=guarantee,
+                            injector=injector,
+                            accepts_operation_key=False,
+                            **write_b_kwargs,
+                        )
+                        # Only count calls that were actually dispatched to write_b_fn -- a
+                        # ReplayRejected entry means the guard refused and no call happened.
+                        tool_calls += sum(1 for r in results if not isinstance(r, ReplayRejected))
             else:
                 # -- LLM condition: build tools, context, and the reactive MockedModel rule --
                 read_tools = dict(wl["read_tools"])
@@ -1053,7 +1069,14 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
         # construction for any attempted retry after a non-F0 failure, regardless of outcome.
         unsafe_retries = 1 if (fault_id != "F0" and not observed.ok and fault_id != "F1") else 0
     elif condition == "C3":
-        unsafe_retries = 1 if (fault_id != "F0" and not observed.ok and not accepts_operation_key and fault_id != "F1") else 0
+        # Issue E fix: C3 no longer blindly retries. On an idempotent write shape,
+        # deterministic_resume_recover is safe by construction (server-side dedup on the
+        # same operation_key). On a non-idempotent write shape, guarantee_aware_resume_recover
+        # only ever dispatches a retry when it has itself mechanically exercised the
+        # declared guarantee (resolved NOT_COMMITTED, or a successful fence) via the same
+        # admission rule ReplayGuard enforces for C6 -- so any retry it actually dispatches
+        # is, by that same construction, not an unsafe one.
+        unsafe_retries = 0
     elif condition in LLM_CONDITIONS and fault_id != "F0" and not observed.ok:
         unsafe_retries = score_unsafe_retries(
             log_entries=log_entries,

@@ -30,7 +30,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.909256964921951e-07
+    "wall_time_s": 7.920898497104645e-07
   },
   {
     "kind": "tool_call",
@@ -57,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.624932676553726e-06
+    "wall_time_s": 2.9171351343393326e-06
   },
   {
     "kind": "model_step",
@@ -67,7 +67,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.33999365568161e-07
+    "wall_time_s": 8.328352123498917e-07
   },
   {
     "kind": "tool_call",
@@ -94,6 +94,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.420297384262085e-07
+    "wall_time_s": 5.41098415851593e-07
   }
 ]

@@ -30,7 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from faults import FaultInjector, GUARANTEE_LEVELS, get_operation_status
+from faults import FaultInjector, GUARANTEE_LEVELS, cancel_operation, get_operation_status
 
 __all__ = [
 	"ReplayRejected",
@@ -38,6 +38,7 @@ __all__ = [
 	"ReplayGuard",
 	"naive_replay_recover",
 	"deterministic_resume_recover",
+	"guarantee_aware_resume_recover",
 ]
 
 
@@ -118,6 +119,111 @@ def deterministic_resume_recover(
 	results: list[Any] = []
 	for _ in range(max_retries + 1):
 		results.append(write_fn(*args, operation_key=operation_key, **kwargs))
+	return results
+
+
+# ---------------------------------------------------------------------------
+# C3 (guarantee-aware) -- a genuinely competent deterministic baseline
+# ---------------------------------------------------------------------------
+
+
+def guarantee_aware_resume_recover(
+	store: Any,
+	write_fn: Callable[..., Any],
+	*args: Any,
+	operation_key: str,
+	tool_guarantee: str,
+	injector: "FaultInjector | None" = None,
+	max_retries: int = 1,
+	accepts_operation_key: bool = True,
+	**kwargs: Any,
+) -> list[Any]:
+	"""C3, made competent: deterministically exercises whatever mechanical guarantee the
+	tool actually declares -- ``get_operation_status`` when ``status_resolvable``,
+	``cancel_operation`` when ``fenceable`` -- and then submits the retry through
+	:meth:`ReplayGuard.attempt_write`, i.e. the SAME admission rule ``ReplayGuard`` (C6)
+	enforces. This is still pure deterministic Python (no LLM, no scripted policy mock) --
+	it is simply no longer allowed to blindly retry the way the original
+	``deterministic_resume_recover`` did.
+
+	Unlike ``deterministic_resume_recover`` (kept unchanged above, for its existing
+	tests/callers), this function:
+
+	- retries freely when ``tool_guarantee == "server_idempotent"`` (matches the old
+	  behavior for that guarantee, now via the shared admission rule instead of blind
+	  replay);
+	- for ``status_resolvable``, calls ``get_operation_status`` itself before each retry
+	  attempt and only proceeds if that call resolves ``NOT_COMMITTED`` (a resolved
+	  ``COMMITTED`` short-circuits to "no-op needed, nothing to retry");
+	- for ``fenceable``, calls ``cancel_operation`` itself before each retry attempt and
+	  only proceeds if the fence actually succeeds;
+	- for ``none``, does NOT retry at all -- there is no guarantee-specific escape hatch to
+	  exercise, so it stops immediately and reports the write as not safely recoverable
+	  (mirrors an "escalate" outcome, without actually escalating to an LLM).
+
+	``accepts_operation_key=False`` covers the write shape that has NO ``operation_key``
+	parameter at all (e.g. ``submit_allocation_unsafe``): such a write cannot be gated by
+	ANY guarantee, regardless of what ``tool_guarantee`` claims, because there is no key to
+	check status/fence against or to dedup on -- this mirrors
+	``recovery_harness._dispatch_tool_call``'s own refusal ("guard active: write tool call
+	carries no operation_key, cannot be gated safely"). In that case this function performs
+	NO write attempt at all and returns a single :class:`ReplayRejected` explaining why.
+
+	Returns a list of per-attempt outcomes (including the always-attempted first
+	iteration's mechanics). Each entry is either the raw ``write_fn`` return value (the
+	retry was admitted and dispatched) or a :class:`ReplayRejected` instance (NOT raised --
+	captured so a harness/test can inspect why a given attempt was refused). A harness that
+	wants "was anything actually retried" can check ``isinstance(entry, ReplayRejected)``.
+	"""
+	if tool_guarantee not in GUARANTEE_LEVELS:
+		raise ValueError(f"unknown tool_guarantee {tool_guarantee!r}, expected one of {GUARANTEE_LEVELS}")
+
+	if not accepts_operation_key:
+		return [
+			ReplayRejected(
+				operation_key=operation_key,
+				tool_guarantee=tool_guarantee,
+				reason="write tool call carries no operation_key at all; it cannot be gated or safely "
+				"retried under any declared guarantee -- only reads, compensating actions, or "
+				"escalation are permitted",
+			)
+		]
+
+	session = RecoverySession()
+	guard = ReplayGuard(injector=injector)
+	results: list[Any] = []
+
+	for _ in range(max_retries + 1):
+		# -- mechanically exercise whatever the declared guarantee actually offers, BEFORE
+		# attempting the retry -- this is the part the old C3 never did at all.
+		if tool_guarantee == "status_resolvable":
+			status = get_operation_status(store, operation_key, injector=injector)
+			session.record_status_check(operation_key, status)
+		elif tool_guarantee == "fenceable" and injector is not None:
+			fenced = cancel_operation(store, operation_key, injector=injector)
+			session.record_fence(operation_key, fenced=fenced)
+		# server_idempotent / none: nothing to mechanically check first -- the guard's
+		# admission rule for those levels does not depend on session-recorded evidence.
+
+		try:
+			result = guard.attempt_write(
+				write_fn,
+				*args,
+				operation_key=operation_key,
+				tool_guarantee=tool_guarantee,
+				recovery_session=session,
+				store=store,
+				**kwargs,
+			)
+		except ReplayRejected as exc:
+			results.append(exc)
+			# Deterministic and stateless across iterations for a fixed ground truth --
+			# a further identical attempt would be rejected for the identical reason, so
+			# stop rather than loop pointlessly.
+			break
+		else:
+			results.append(result)
+
 	return results
 
 
