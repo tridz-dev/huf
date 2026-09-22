@@ -1,0 +1,32 @@
+"""Authoritative candidate adapters for Decision Runtime selection surfaces."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import Any
+
+from huf.ai.decision.types import Option
+
+
+def get_tool_candidates(allowed_tools: Iterable[Any]) -> tuple[Option, ...]:
+	"""Build candidates only from an already permission-filtered tool iterable.
+
+	The resolver intentionally accepts no raw Agent configuration or caller-supplied
+	candidate list. Callers must obtain ``allowed_tools`` from the permission-aware
+	registry immediately before invoking this function.
+	"""
+	result = []
+	seen = set()
+	for tool in allowed_tools:
+		name = getattr(tool, "tool_name", None)
+		if not isinstance(name, str) or not name.strip() or name in seen:
+			continue
+		seen.add(name)
+		result.append(Option(name, getattr(tool, "description", "") or name))
+	return tuple(result)
+
+
+def constrain_selected_tool(selected_id: str, allowed_tools: Iterable[Any]) -> str | None:
+	"""Return a selected tool only when it remains in the current authorized set."""
+	allowed = {getattr(tool, "tool_name", None) for tool in allowed_tools}
+	return selected_id if selected_id in allowed else None
