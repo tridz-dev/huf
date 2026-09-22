@@ -37,6 +37,24 @@ class TestDecisionSchema(unittest.TestCase):
         self.assertTrue({"supports_select", "supports_judge", "supports_score"} <= fields)
         self.assertIn("input_modalities", fields)
 
+    def test_policy_versions_and_calls_snapshot_execution_identity(self):
+        policy = self.load("decision_policy")
+        version = self.load("decision_policy_version")
+        call = self.load("decision_call")
+        policy_fields = {field["fieldname"] for field in policy["fields"]}
+        version_fields = {field["fieldname"] for field in version["fields"]}
+        call_fields = {field["fieldname"] for field in call["fields"]}
+        self.assertTrue({"definition_json", "fingerprint", "current_version"} <= policy_fields)
+        self.assertTrue({"definition_json", "fingerprint", "status"} <= version_fields)
+        self.assertTrue({"policy_fingerprint", "decision_provider", "decision_model", "resolved_model_version"} <= call_fields)
+        self.assertTrue({"deployment_fallback_chain", "fallback_action", "state_hash"} <= call_fields)
+
+    def test_binding_is_opt_in_and_surface_scoped(self):
+        binding = self.load("agent_decision_binding")
+        fields = {field["fieldname"] for field in binding["fields"]}
+        self.assertTrue({"surface", "policy", "mode", "enabled"} <= fields)
+        self.assertEqual(binding.get("istable"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
