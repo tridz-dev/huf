@@ -13,3 +13,14 @@ class TestDecisionCandidates(unittest.TestCase):
 		tools = [SimpleNamespace(tool_name="refund")]
 		self.assertEqual(constrain_selected_tool("refund", tools), "refund")
 		self.assertIsNone(constrain_selected_tool("delete", tools))
+
+	def test_runtime_selection_rechecks_authorized_set(self):
+		from huf.ai.decision.backends.fake import FakeDecisionBackend
+		from huf.ai.decision.runtime import DecisionRuntime
+		from huf.ai.decision.types import DecisionPolicy, DecisionRequest, Option, Question, QuestionKind, StateBinding
+		from huf.ai.decision.tool_selection import select_authorized_tool
+		policy = DecisionPolicy(policy_id="tool", questions=(Question("tool", QuestionKind.SELECT, "Pick", (Option("refund"), Option("lookup"))),), state_bindings=(StateBinding("request", "$"),))
+		request = DecisionRequest(policy=policy, state="find a tool")
+		selected, response = select_authorized_tool(DecisionRuntime(), request, FakeDecisionBackend(), [SimpleNamespace(tool_name="refund")])
+		self.assertEqual(response.status.value, "success")
+		self.assertEqual(selected, "refund")
