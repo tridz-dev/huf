@@ -30,7 +30,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.578652679920197e-07
+    "wall_time_s": 1.125037670135498e-06
   },
   {
     "kind": "tool_call",
@@ -52,11 +52,12 @@
     "content": {
       "tool_name": "submit_linked_record",
       "ok": false,
+      "dispatched": false,
       "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.583984941244125e-06
+    "wall_time_s": 1.337495632469654e-05
   },
   {
     "kind": "model_step",
@@ -66,7 +67,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7918646335601807e-06
+    "wall_time_s": 4.708068445324898e-06
   },
   {
     "kind": "tool_call",
@@ -85,6 +86,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
@@ -92,6 +94,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.578652679920197e-07
+    "wall_time_s": 1.00000761449337e-06
   }
 ]

@@ -72,11 +72,12 @@
     "content": {
       "tool_name": "cancel_operation",
       "ok": true,
+      "dispatched": true,
       "result": false
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0421499609947205e-06
+    "wall_time_s": 7.918570190668106e-07
   },
   {
     "kind": "model_step",
@@ -86,7 +87,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.1671800166368484e-06
+    "wall_time_s": 1.0831281542778015e-06
   },
   {
     "kind": "tool_call",
@@ -105,6 +106,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "could not fence held write"

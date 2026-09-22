@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.580980986356735e-07
+    "wall_time_s": 1.2919772416353226e-06
   },
   {
     "kind": "tool_call",
@@ -40,13 +40,14 @@
     "content": {
       "tool_name": "list_invoices",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.00120222568512e-07
+    "wall_time_s": 7.080379873514175e-07
   },
   {
     "kind": "model_step",
@@ -73,13 +74,14 @@
     "content": {
       "tool_name": "list_payments",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.9103830456733704e-07
+    "wall_time_s": 3.3294782042503357e-07
   },
   {
     "kind": "model_step",
@@ -89,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.420297384262085e-07
+    "wall_time_s": 5.830079317092896e-07
   },
   {
     "kind": "tool_call",
@@ -111,11 +113,12 @@
     "content": {
       "tool_name": "create_allocation",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='opA', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.0831357687711716e-06
+    "wall_time_s": 2.583954483270645e-06
   },
   {
     "kind": "model_step",
@@ -147,11 +150,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
+      "dispatched": true,
       "error": "timeout: no confirmation received for submit_allocation_unsafe (operation_key='<unknown>')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.37489540874958e-06
+    "wall_time_s": 5.082925781607628e-06
   },
   {
     "kind": "model_step",
@@ -161,7 +165,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.1248048394918442e-06
+    "wall_time_s": 1.4170072972774506e-06
   },
   {
     "kind": "tool_call",
@@ -180,11 +184,12 @@
     "content": {
       "tool_name": "get_operation_status",
       "ok": false,
+      "dispatched": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.580980986356735e-07
+    "wall_time_s": 7.920898497104645e-07
   },
   {
     "kind": "model_step",
@@ -194,7 +199,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.5420373529195786e-06
+    "wall_time_s": 1.250067725777626e-06
   },
   {
     "kind": "tool_call",
@@ -213,6 +218,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "operation outcome could not be resolved"
@@ -220,6 +226,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.5821070671081543e-07
+    "wall_time_s": 3.341119736433029e-07
   }
 ]

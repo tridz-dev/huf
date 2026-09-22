@@ -40,13 +40,14 @@
     "content": {
       "tool_name": "list_invoices",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=250.0, company='Huf Retail Pvt Ltd')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.5797787606716156e-07
+    "wall_time_s": 4.5890919864177704e-07
   },
   {
     "kind": "model_step",
@@ -56,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.417969077825546e-07
+    "wall_time_s": 5.83939254283905e-07
   },
   {
     "kind": "tool_call",
@@ -73,13 +74,14 @@
     "content": {
       "tool_name": "list_payments",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.50060111284256e-07
+    "wall_time_s": 2.919696271419525e-07
   },
   {
     "kind": "model_step",
@@ -89,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.420297384262085e-07
+    "wall_time_s": 5.830079317092896e-07
   },
   {
     "kind": "tool_call",
@@ -111,11 +113,12 @@
     "content": {
       "tool_name": "create_allocation",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='opA', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.666136085987091e-06
+    "wall_time_s": 1.8749851733446121e-06
   },
   {
     "kind": "model_step",
@@ -125,7 +128,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 1.0828953236341476e-06
   },
   {
     "kind": "tool_call",
@@ -147,11 +150,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
+      "dispatched": true,
       "error": "timeout: no confirmation received for submit_allocation_unsafe (operation_key='<unknown>')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.7499703466892242e-06
+    "wall_time_s": 4.209112375974655e-06
   },
   {
     "kind": "model_step",
@@ -161,7 +165,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.580980986356735e-07
+    "wall_time_s": 1.0419171303510666e-06
   },
   {
     "kind": "tool_call",
@@ -180,11 +184,12 @@
     "content": {
       "tool_name": "cancel_operation",
       "ok": true,
+      "dispatched": true,
       "result": false
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.670597940683365e-07
+    "wall_time_s": 9.580980986356735e-07
   },
   {
     "kind": "model_step",
@@ -194,7 +199,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.166015863418579e-06
+    "wall_time_s": 1.291045919060707e-06
   },
   {
     "kind": "tool_call",
@@ -213,6 +218,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "could not fence held write"
@@ -220,6 +226,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.7509016692638397e-07
+    "wall_time_s": 3.3318065106868744e-07
   }
 ]

@@ -81,11 +81,12 @@
     "content": {
       "tool_name": "cancel_operation",
       "ok": true,
+      "dispatched": true,
       "result": false
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.909256964921951e-07
+    "wall_time_s": 7.501803338527679e-07
   },
   {
     "kind": "model_step",
@@ -114,6 +115,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "could not fence held write"

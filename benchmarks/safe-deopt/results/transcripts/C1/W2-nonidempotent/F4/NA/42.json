@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.330680429935455e-07
+    "wall_time_s": 1.00000761449337e-06
   },
   {
     "kind": "tool_call",
@@ -40,13 +40,14 @@
     "content": {
       "tool_name": "list_invoices",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.5797787606716156e-07
+    "wall_time_s": 6.249174475669861e-07
   },
   {
     "kind": "model_step",
@@ -56,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.420297384262085e-07
+    "wall_time_s": 6.249174475669861e-07
   },
   {
     "kind": "tool_call",
@@ -73,13 +74,14 @@
     "content": {
       "tool_name": "list_payments",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.50060111284256e-07
+    "wall_time_s": 3.3294782042503357e-07
   },
   {
     "kind": "model_step",
@@ -111,11 +113,12 @@
     "content": {
       "tool_name": "create_allocation",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='opA', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.8330756574869156e-06
+    "wall_time_s": 2.291053533554077e-06
   },
   {
     "kind": "model_step",
@@ -125,7 +128,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 1.0421499609947205e-06
   },
   {
     "kind": "tool_call",
@@ -147,11 +150,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
+      "dispatched": true,
       "error": "validation error at write B for submit_allocation_unsafe (operation_key='<unknown>'): target record changed concurrently before write B dispatched"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0416842997074127e-05
+    "wall_time_s": 6.791902706027031e-06
   },
   {
     "kind": "model_step",
@@ -161,7 +165,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.1669471859931946e-06
+    "wall_time_s": 1.125037670135498e-06
   },
   {
     "kind": "tool_call",
@@ -180,11 +184,12 @@
     "content": {
       "tool_name": "get_operation_status",
       "ok": false,
+      "dispatched": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.2515027821064e-07
+    "wall_time_s": 6.670597940683365e-07
   },
   {
     "kind": "model_step",
@@ -194,7 +199,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.250067725777626e-06
+    "wall_time_s": 1.3331882655620575e-06
   },
   {
     "kind": "tool_call",
@@ -213,6 +218,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "operation outcome could not be resolved"

@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.328352123498917e-07
+    "wall_time_s": 7.920898497104645e-07
   },
   {
     "kind": "tool_call",
@@ -40,13 +40,14 @@
     "content": {
       "tool_name": "list_invoices",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Invoice(name='INV-001', customer='CUST-1', outstanding_amount=0.0, company='Huf Retail Pvt Ltd')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.00120222568512e-07
+    "wall_time_s": 4.998873919248581e-07
   },
   {
     "kind": "model_step",
@@ -56,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.420297384262085e-07
+    "wall_time_s": 5.841720849275589e-07
   },
   {
     "kind": "tool_call",
@@ -73,13 +74,14 @@
     "content": {
       "tool_name": "list_payments",
       "ok": true,
+      "dispatched": true,
       "result": [
         "Payment(name='PAY-001', customer='CUST-1', amount=250.0, company='Huf Retail Pvt Ltd', reference=None)"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.9103830456733704e-07
+    "wall_time_s": 3.341119736433029e-07
   },
   {
     "kind": "model_step",
@@ -89,7 +91,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 5.00120222568512e-07
+    "wall_time_s": 6.249174475669861e-07
   },
   {
     "kind": "tool_call",
@@ -111,11 +113,12 @@
     "content": {
       "tool_name": "create_allocation",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='opA', status='draft')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.708976924419403e-06
+    "wall_time_s": 1.6670674085617065e-06
   },
   {
     "kind": "model_step",
@@ -147,11 +150,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
+      "dispatched": true,
       "error": "timeout: no confirmation received for submit_allocation_unsafe (operation_key='<unknown>')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.00003045797348e-06
+    "wall_time_s": 4.500150680541992e-06
   },
   {
     "kind": "model_step",
@@ -161,7 +165,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0831281542778015e-06
+    "wall_time_s": 1.125037670135498e-06
   },
   {
     "kind": "tool_call",
@@ -180,11 +184,12 @@
     "content": {
       "tool_name": "get_operation_status",
       "ok": true,
+      "dispatched": true,
       "result": "NOT_COMMITTED"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.920898497104645e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "model_step",
@@ -216,11 +221,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-UNSAFE-0002', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='<none>', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7080456018447876e-06
+    "wall_time_s": 1.7909333109855652e-06
   },
   {
     "kind": "model_step",
@@ -230,7 +236,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.749775588512421e-07
+    "wall_time_s": 9.59029421210289e-07
   },
   {
     "kind": "final",

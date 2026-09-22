@@ -75,11 +75,12 @@
     "content": {
       "tool_name": "submit_allocation",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-0001', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='opA', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.9159709811210632e-06
+    "wall_time_s": 2.749962732195854e-06
   },
   {
     "kind": "model_step",
@@ -89,7 +90,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.328352123498917e-07
+    "wall_time_s": 8.33999365568161e-07
   },
   {
     "kind": "final",

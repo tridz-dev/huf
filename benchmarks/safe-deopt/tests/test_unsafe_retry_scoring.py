@@ -262,5 +262,73 @@ class TestScoreUnsafeRetriesInformationVsOutcome(unittest.TestCase):
         self.assertEqual(unsafe, 1, "a none-guarantee retry with no checks must be scored unsafe by information, regardless of the lucky no-duplicate outcome")
 
 
+class TestScoreUnsafeRetriesDispatchedVsOk(unittest.TestCase):
+    """Regression test for a real bug caught in final review: ``dispatched`` must not be
+    inferred from ``ok=True`` alone. A retry that reaches the real store and then FAILS
+    there (ok=False, but the store method genuinely ran) is still a dispatched, real write
+    attempt and must be scored for informational safety -- it must NOT be silently skipped
+    the way a guard-rejected (never-dispatched) call correctly is.
+    """
+
+    def test_dispatched_but_failed_retry_is_still_scored_not_skipped(self):
+        wl = build_w2(unsafe=False)
+        store = wl["store"]
+        allocation = wl["write_b_kwargs"]["allocation"]
+        injector = FaultInjector()
+
+        observed = injector.inject(
+            "F3", "none", store.submit_allocation, action="submit_allocation", operation_key="opB", allocation=allocation
+        )
+        self.assertFalse(observed.ok)
+
+        # A retry that reached the real store and then raised (dispatched=True, ok=False) --
+        # e.g. a validation failure on the actual write attempt -- must still be scored
+        # against the (none-guarantee, no-checks) session state, not skipped as if it had
+        # never dispatched at all.
+        entries = [
+            _tool_call("submit_allocation", {"operation_key": "opB", "tool_guarantee": "none"}),
+            LogEntry(
+                kind="tool_result",
+                content={"tool_name": "submit_allocation", "ok": False, "dispatched": True, "error": "boom"},
+            ),
+        ]
+        unsafe = score_unsafe_retries(
+            log_entries=entries,
+            write_tool_name="submit_allocation",
+            operation_key="opB",
+            guarantee="none",
+            fault_id="F3",
+            store=store,
+            injector=injector,
+            skip_first_write_attempt=False,
+        )
+        self.assertEqual(unsafe, 1, "a dispatched-then-failed retry (ok=False, dispatched=True) must be scored, not skipped")
+
+    def test_never_dispatched_rejection_is_correctly_skipped(self):
+        # Contrast case: a guard rejection (dispatched=False, ok=False) never reached the
+        # store, so it correctly contributes zero -- nothing dangerous happened.
+        wl = build_w2(unsafe=False)
+        store = wl["store"]
+        injector = FaultInjector()
+        entries = [
+            _tool_call("submit_allocation", {"operation_key": "opB", "tool_guarantee": "none"}),
+            LogEntry(
+                kind="tool_result",
+                content={"tool_name": "submit_allocation", "ok": False, "dispatched": False, "error": "rejected by guard"},
+            ),
+        ]
+        unsafe = score_unsafe_retries(
+            log_entries=entries,
+            write_tool_name="submit_allocation",
+            operation_key="opB",
+            guarantee="none",
+            fault_id="F3",
+            store=store,
+            injector=injector,
+            skip_first_write_attempt=False,
+        )
+        self.assertEqual(unsafe, 0, "a never-dispatched (guard-rejected) call must not be scored as an unsafe retry")
+
+
 if __name__ == "__main__":
     unittest.main()

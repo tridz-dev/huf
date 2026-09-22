@@ -31,7 +31,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0409858077764511e-06
+    "wall_time_s": 7.920898497104645e-07
   },
   {
     "kind": "tool_call",
@@ -53,11 +53,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": false,
+      "dispatched": false,
       "error": "guard active: write tool call carries no operation_key, cannot be gated safely"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.3748649507761002e-06
+    "wall_time_s": 1.125037670135498e-06
   },
   {
     "kind": "model_step",
@@ -67,7 +68,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.752103894948959e-07
+    "wall_time_s": 8.328352123498917e-07
   },
   {
     "kind": "tool_call",
@@ -86,6 +87,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "guard active: write tool call carries no operation_key, cannot be gated safely"
@@ -93,6 +95,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.249174475669861e-07
+    "wall_time_s": 5.83939254283905e-07
   }
 ]

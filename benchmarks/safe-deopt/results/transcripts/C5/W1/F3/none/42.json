@@ -52,7 +52,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.580980986356735e-07
+    "wall_time_s": 9.16188582777977e-07
   },
   {
     "kind": "tool_call",
@@ -71,11 +71,12 @@
     "content": {
       "tool_name": "get_operation_status",
       "ok": false,
+      "dispatched": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.0419171303510666e-06
+    "wall_time_s": 8.328352123498917e-07
   },
   {
     "kind": "model_step",
@@ -85,7 +86,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.125037670135498e-06
+    "wall_time_s": 1.00000761449337e-06
   },
   {
     "kind": "tool_call",
@@ -104,6 +105,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "operation outcome could not be resolved"
@@ -111,6 +113,6 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.998873919248581e-07
+    "wall_time_s": 5.00120222568512e-07
   }
 ]

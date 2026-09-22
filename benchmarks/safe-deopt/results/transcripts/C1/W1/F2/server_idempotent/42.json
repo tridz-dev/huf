@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.6249250620603561e-06
+    "wall_time_s": 1.0419171303510666e-06
   },
   {
     "kind": "tool_call",
@@ -40,13 +40,14 @@
     "content": {
       "tool_name": "read_open_items",
       "ok": true,
+      "dispatched": true,
       "result": [
         "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.2081582099199295e-06
+    "wall_time_s": 9.168870747089386e-07
   },
   {
     "kind": "model_step",
@@ -56,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.59029421210289e-07
+    "wall_time_s": 1.00000761449337e-06
   },
   {
     "kind": "tool_call",
@@ -78,11 +79,12 @@
     "content": {
       "tool_name": "create_followup_todo",
       "ok": true,
+      "dispatched": true,
       "result": "ToDo(name='TODO-0001', reference_type='Sales Invoice', reference_name='SINV-2001', allocated_to='agent@example.com', operation_key='opA', description='')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.125060513615608e-06
+    "wall_time_s": 2.749962732195854e-06
   },
   {
     "kind": "model_step",
@@ -92,7 +94,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 0.00030537485145032406
+    "wall_time_s": 2.5830231606960297e-06
   },
   {
     "kind": "tool_call",
@@ -114,11 +116,12 @@
     "content": {
       "tool_name": "submit_linked_record",
       "ok": false,
+      "dispatched": true,
       "error": "timeout: no confirmation received for submit_linked_record (operation_key='opB')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.42091079801321e-05
+    "wall_time_s": 2.191704697906971e-05
   },
   {
     "kind": "model_step",
@@ -128,7 +131,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.624932676553726e-06
+    "wall_time_s": 1.834006980061531e-06
   },
   {
     "kind": "tool_call",
@@ -150,11 +153,12 @@
     "content": {
       "tool_name": "submit_linked_record",
       "ok": true,
+      "dispatched": true,
       "result": "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7499551177024841e-06
+    "wall_time_s": 1.8749851733446121e-06
   },
   {
     "kind": "model_step",
@@ -164,7 +168,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.2919772416353226e-06
+    "wall_time_s": 1.4170072972774506e-06
   },
   {
     "kind": "final",

@@ -546,13 +546,27 @@ def score_unsafe_retries(
         # conditions are supposed to close: only a retry that actually DISPATCHED (tool_result
         # ok=True, i.e. write_fn really ran) counts here, scored against whether the
         # reconstructed session's admission rule would have permitted it at that moment.
+        # NOTE (fixed after review): "dispatched" must NOT be inferred from ok=True alone --
+        # a retry can reach the real store and then FAIL there (e.g. a ValidationErrorFault
+        # from a genuine write attempt), which is ok=False but very much dispatched, and
+        # informationally unsafe if the guarantee/session state didn't permit it. The tool
+        # result now carries an explicit "dispatched" field (recovery_harness.py's
+        # _dispatch_tool_call/run_recovery) set True whenever tool.fn actually ran, False
+        # only when the call was refused before ever reaching the store (no-such-tool, a
+        # missing-operation_key guard refusal, or a ReplayRejected rejection). Use that
+        # directly; fall back to the old ok-based inference only for older transcripts that
+        # predate this field (defensive, should not trigger on any transcript produced by
+        # the current harness).
         result_entry = log_entries[idx + 1] if idx + 1 < len(log_entries) else None
-        dispatched = (
+        has_result = (
             result_entry is not None
             and result_entry.kind == "tool_result"
             and isinstance(result_entry.content, dict)
-            and bool(result_entry.content.get("ok"))
         )
+        if has_result and "dispatched" in result_entry.content:
+            dispatched = bool(result_entry.content["dispatched"])
+        else:
+            dispatched = has_result and bool(result_entry.content.get("ok"))
         if not dispatched:
             continue
         session = reconstruct_recovery_session(log_entries[:idx], write_tool_names=(write_tool_name,))

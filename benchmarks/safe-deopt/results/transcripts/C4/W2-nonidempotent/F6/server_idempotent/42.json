@@ -32,7 +32,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.749775588512421e-07
+    "wall_time_s": 7.918570190668106e-07
   },
   {
     "kind": "tool_call",
@@ -54,11 +54,12 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-UNSAFE-0003', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='<none>', status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.6249250620603561e-06
+    "wall_time_s": 1.416075974702835e-06
   },
   {
     "kind": "model_step",
@@ -68,7 +69,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.249174475669861e-07
+    "wall_time_s": 5.420297384262085e-07
   },
   {
     "kind": "final",

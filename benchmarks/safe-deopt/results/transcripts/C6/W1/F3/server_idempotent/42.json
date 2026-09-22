@@ -53,7 +53,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 9.59029421210289e-07
+    "wall_time_s": 1.0409858077764511e-06
   },
   {
     "kind": "tool_call",
@@ -75,11 +75,12 @@
     "content": {
       "tool_name": "submit_linked_record",
       "ok": true,
+      "dispatched": true,
       "result": "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='submitted')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.7921050786972046e-06
+    "wall_time_s": 3.00002284348011e-06
   },
   {
     "kind": "model_step",
@@ -89,7 +90,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 7.918570190668106e-07
+    "wall_time_s": 8.33999365568161e-07
   },
   {
     "kind": "final",

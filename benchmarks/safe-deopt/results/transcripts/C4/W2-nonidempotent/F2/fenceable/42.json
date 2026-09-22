@@ -54,6 +54,7 @@
     "content": {
       "tool_name": "submit_allocation_unsafe",
       "ok": true,
+      "dispatched": true,
       "result": "Allocation(name='ALLOC-UNSAFE-0003', payment='PAY-001', invoice='INV-001', amount=250.0, operation_key='<none>', status='submitted')"
     },
     "prompt_tokens": 0,
@@ -68,7 +69,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.2515027821064e-07
+    "wall_time_s": 5.408655852079391e-07
   },
   {
     "kind": "final",

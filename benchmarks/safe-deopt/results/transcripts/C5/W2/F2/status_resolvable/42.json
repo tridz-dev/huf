@@ -81,11 +81,12 @@
     "content": {
       "tool_name": "get_operation_status",
       "ok": true,
+      "dispatched": true,
       "result": "COMMITTED"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 6.249174475669861e-07
+    "wall_time_s": 7.499475032091141e-07
   },
   {
     "kind": "model_step",

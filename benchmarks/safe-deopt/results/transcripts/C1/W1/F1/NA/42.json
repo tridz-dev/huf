@@ -23,7 +23,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.5830155462026596e-06
+    "wall_time_s": 1.4170072972774506e-06
   },
   {
     "kind": "tool_call",
@@ -40,13 +40,14 @@
     "content": {
       "tool_name": "read_open_items",
       "ok": true,
+      "dispatched": true,
       "result": [
         "OpenItem(reference_type='Sales Invoice', reference_name='SINV-2001', customer_id='CUST-1', outstanding_amount=100.0, status='open')"
       ]
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.2079253792762756e-06
+    "wall_time_s": 1.3331882655620575e-06
   },
   {
     "kind": "model_step",
@@ -56,7 +57,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 9.171199053525925e-07
   },
   {
     "kind": "tool_call",
@@ -78,11 +79,12 @@
     "content": {
       "tool_name": "create_followup_todo",
       "ok": true,
+      "dispatched": true,
       "result": "ToDo(name='TODO-0001', reference_type='Sales Invoice', reference_name='SINV-2001', allocated_to='agent@example.com', operation_key='opA', description='')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 4.084082320332527e-06
+    "wall_time_s": 3.875000402331352e-06
   },
   {
     "kind": "model_step",
@@ -92,7 +94,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7080456018447876e-06
+    "wall_time_s": 1.4582183212041855e-06
   },
   {
     "kind": "tool_call",
@@ -114,11 +116,12 @@
     "content": {
       "tool_name": "submit_linked_record",
       "ok": false,
+      "dispatched": true,
       "error": "rejected before dispatch: submit_linked_record (operation_key='opB')"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 2.6790890842676163e-05
+    "wall_time_s": 2.3250002413988113e-05
   },
   {
     "kind": "model_step",
@@ -128,7 +131,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.7080456018447876e-06
+    "wall_time_s": 1.7499551177024841e-06
   },
   {
     "kind": "tool_call",
@@ -147,11 +150,12 @@
     "content": {
       "tool_name": "get_operation_status",
       "ok": false,
+      "dispatched": false,
       "error": "no such tool 'get_operation_status'"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.00000761449337e-06
+    "wall_time_s": 1.0838266462087631e-06
   },
   {
     "kind": "model_step",
@@ -161,7 +165,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 1.6249250620603561e-06
+    "wall_time_s": 2.1669548004865646e-06
   },
   {
     "kind": "tool_call",
@@ -180,6 +184,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "operation outcome could not be resolved"

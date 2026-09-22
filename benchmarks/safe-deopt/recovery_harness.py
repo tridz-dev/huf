@@ -144,9 +144,18 @@ class ToolInvocationError(RuntimeError):
 	record, ...) so the loop can always hand the model a string, never a raw traceback.
 	"""
 
-	def __init__(self, *, tool_name: str, detail: str) -> None:
+	def __init__(self, *, tool_name: str, detail: str, dispatched: bool = False) -> None:
 		self.tool_name = tool_name
 		self.detail = detail
+		# ``dispatched`` distinguishes "the underlying store method actually ran and then
+		# raised" (True -- a real write attempt reached the store, e.g. a ValidationErrorFault
+		# or any other exception from tool.fn itself) from "the call was refused before ever
+		# reaching the store" (False -- no such tool, a missing operation_key refusal, or a
+		# ReplayRejected guard rejection). ``ok=False`` alone conflates both cases; scoring
+		# code (``score_unsafe_retries``) needs this distinction to avoid treating "the guard
+		# correctly blocked it" the same as "it reached the store and blew up" -- only the
+		# latter is a real write attempt worth scoring for informational safety.
+		self.dispatched = dispatched
 		super().__init__(f"tool '{tool_name}' failed: {detail}")
 
 
@@ -524,7 +533,12 @@ def _dispatch_tool_call(
 	except ToolInvocationError:
 		raise
 	except Exception as exc:  # noqa: BLE001 -- convert every failure into a tool result the model can see
-		raise ToolInvocationError(tool_name=tool.name, detail=str(exc)) from exc
+		# Reaching here means tool.fn (the real store method) actually ran and raised --
+		# e.g. a ValidationErrorFault from a real write attempt -- as opposed to being
+		# refused before dispatch (no-such-tool, missing operation_key, ReplayRejected,
+		# all raised as ToolInvocationError above and caught by the branch just above this
+		# one, which does not set dispatched=True). This is a real dispatched attempt.
+		raise ToolInvocationError(tool_name=tool.name, detail=str(exc), dispatched=True) from exc
 
 
 def run_recovery(
@@ -601,7 +615,11 @@ def run_recovery(
 				injector=injector,
 			)
 			call_wall = time.monotonic() - call_start
-			log.log("tool_result", {"tool_name": call.tool_name, "ok": True, "result": result}, wall_time_s=call_wall)
+			log.log(
+				"tool_result",
+				{"tool_name": call.tool_name, "ok": True, "dispatched": True, "result": result},
+				wall_time_s=call_wall,
+			)
 			transcript.append({"role": "tool", "tool_name": call.tool_name, "content": result})
 
 			if call.tool_name == "escalate":
@@ -609,7 +627,11 @@ def run_recovery(
 				break
 		except ToolInvocationError as exc:
 			call_wall = time.monotonic() - call_start
-			log.log("tool_result", {"tool_name": call.tool_name, "ok": False, "error": exc.detail}, wall_time_s=call_wall)
+			log.log(
+				"tool_result",
+				{"tool_name": call.tool_name, "ok": False, "dispatched": exc.dispatched, "error": exc.detail},
+				wall_time_s=call_wall,
+			)
 			transcript.append({"role": "tool", "tool_name": call.tool_name, "content": {"error": exc.detail}})
 	else:
 		log.outcome = "tool_call_cap_reached"

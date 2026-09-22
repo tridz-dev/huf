@@ -52,11 +52,12 @@
     "content": {
       "tool_name": "submit_allocation",
       "ok": false,
+      "dispatched": false,
       "error": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 3.2919924706220627e-06
+    "wall_time_s": 3.0410010367631912e-06
   },
   {
     "kind": "model_step",
@@ -66,7 +67,7 @@
     },
     "prompt_tokens": 0,
     "completion_tokens": 0,
-    "wall_time_s": 8.749775588512421e-07
+    "wall_time_s": 9.168870747089386e-07
   },
   {
     "kind": "tool_call",
@@ -85,6 +86,7 @@
     "content": {
       "tool_name": "escalate",
       "ok": true,
+      "dispatched": true,
       "result": {
         "escalated": true,
         "reason": "replay rejected for operation_key='opB' (tool_guarantee='none'): tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted"
