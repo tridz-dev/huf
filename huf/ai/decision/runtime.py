@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -39,7 +40,7 @@ class DecisionRuntime:
 		prepared = None
 		try:
 			policy = validate_policy(request.policy)
-			request = replace(request, policy=policy)
+			request = replace(request, policy=policy, identity=_sanitize_identity(request.identity))
 			backend = resolve_backend(backend) if isinstance(backend, str) else backend
 			adapter = backend.adapter_id() if callable(getattr(backend, "adapter_id", None)) else None
 			capabilities: DecisionCapabilities = backend.capabilities()
@@ -81,8 +82,8 @@ class DecisionRuntime:
 
 	def apply_policy_fallback(
 		self,
+		request: DecisionRequest,
 		response: DecisionResponse,
-		policy,
 		*,
 		deployments_exhausted: bool,
 	) -> DecisionResponse:
@@ -91,7 +92,11 @@ class DecisionRuntime:
 			raise ValueError("Policy fallback cannot run before deployment options are exhausted")
 		if response.status == DecisionStatus.SUCCESS:
 			raise ValueError("Policy fallback applies only after decision execution failure")
-		return replace(response, policy_fallback_action=policy.fallback_action)
+		policy = validate_policy(request.policy)
+		request = replace(request, policy=policy, identity=_sanitize_identity(request.identity))
+		fallback_response = replace(response, policy_fallback_action=policy.fallback_action)
+		self._emit(request, fallback_response, None, None)
+		return fallback_response
 
 	def _validate_capabilities(self, request: DecisionRequest, capabilities: DecisionCapabilities) -> None:
 		unsupported = {question.kind for question in request.policy.questions} - capabilities.primitives
@@ -99,6 +104,8 @@ class DecisionRuntime:
 			raise DecisionError(DecisionErrorCode.UNSUPPORTED_CAPABILITY)
 		if len(request.policy.questions) > 1 and not capabilities.parallel_questions:
 			# Runtime deliberately does not fan out: a single DecisionRequest is one unit of work.
+			raise DecisionError(DecisionErrorCode.UNSUPPORTED_CAPABILITY)
+		if request.policy.minimum_confidence is not None and not capabilities.confidence:
 			raise DecisionError(DecisionErrorCode.UNSUPPORTED_CAPABILITY)
 		if capabilities.max_candidates_per_select is not None:
 			if len({candidate.id for candidate in request.candidates}) > capabilities.max_candidates_per_select:
@@ -139,6 +146,7 @@ class DecisionRuntime:
 		if response.status != DecisionStatus.SUCCESS:
 			error_code = {
 				DecisionStatus.UNAVAILABLE: DecisionErrorCode.PROVIDER_UNAVAILABLE,
+				DecisionStatus.AUTHENTICATION_FAILED: DecisionErrorCode.AUTHENTICATION_FAILED,
 				DecisionStatus.TIMEOUT: DecisionErrorCode.TIMEOUT,
 				DecisionStatus.RATE_LIMITED: DecisionErrorCode.RATE_LIMITED,
 				DecisionStatus.UNSUPPORTED: DecisionErrorCode.UNSUPPORTED_CAPABILITY,
@@ -150,7 +158,7 @@ class DecisionRuntime:
 				answers={},
 				identity=_merge_identity(request.identity, response.identity),
 				requested_identity=request.identity,
-				backend_adapter=adapter or response.backend_adapter,
+				backend_adapter=_safe_label(adapter or response.backend_adapter),
 				error_code=error_code.value,
 				policy_fallback_action=None,
 				usage=replace(
@@ -164,15 +172,16 @@ class DecisionRuntime:
 					if response.deployment_selection_source in {"explicit", "primary", "health", "priority", "failover"}
 					else None
 				),
-				deployment_fallback_chain=tuple(
-					item[:128] for item in response.deployment_fallback_chain
-					if isinstance(item, str) and item and len(item) <= 128 and item.isprintable()
-				)[:16],
+				deployment_fallback_chain=_safe_fallback_chain(response.deployment_fallback_chain),
 			)
+		if not isinstance(response.answers, Mapping):
+			raise DecisionError(DecisionErrorCode.INVALID_RESPONSE)
 		if set(response.answers) != {question.id for question in request.policy.questions}:
 			raise DecisionError(DecisionErrorCode.INVALID_RESPONSE)
 		normalized_answers = {}
-		for answer_key, answer in response.answers.items():
+		for question in request.policy.questions:
+			answer_key = question.id
+			answer = response.answers[answer_key]
 			if not isinstance(answer, DecisionAnswer):
 				raise DecisionError(DecisionErrorCode.INVALID_RESPONSE)
 			if answer_key != answer.question_id:
@@ -189,9 +198,9 @@ class DecisionRuntime:
 			answers=normalized_answers,
 			identity=_merge_identity(request.identity, response.identity),
 			requested_identity=request.identity,
-			backend_adapter=adapter or response.backend_adapter,
-			requested_model=response.requested_model or request.identity.canonical_model,
-			resolved_model=response.resolved_model or request.identity.canonical_model,
+			backend_adapter=_safe_label(adapter or response.backend_adapter),
+			requested_model=request.identity.canonical_model,
+			resolved_model=request.identity.canonical_model,
 			usage=replace(
 				response.usage,
 				cost_source=response.usage.cost_source if response.usage.cost_source in {"provider_reported", "estimated"} else None,
@@ -201,16 +210,14 @@ class DecisionRuntime:
 				if response.deployment_selection_source in {"explicit", "primary", "health", "priority", "failover"}
 				else None
 			),
-			deployment_fallback_chain=tuple(
-				item[:128] for item in response.deployment_fallback_chain
-				if isinstance(item, str) and item and len(item) <= 128 and item.isprintable()
-			)[:16],
+			deployment_fallback_chain=_safe_fallback_chain(response.deployment_fallback_chain),
 		)
 
 	def _failure_response(self, error: DecisionError, request: DecisionRequest, adapter: str | None) -> DecisionResponse:
 		status = {
 			DecisionErrorCode.BACKEND_NOT_REGISTERED: DecisionStatus.UNAVAILABLE,
 			DecisionErrorCode.PROVIDER_UNAVAILABLE: DecisionStatus.UNAVAILABLE,
+			DecisionErrorCode.AUTHENTICATION_FAILED: DecisionStatus.AUTHENTICATION_FAILED,
 			DecisionErrorCode.TIMEOUT: DecisionStatus.TIMEOUT,
 			DecisionErrorCode.RATE_LIMITED: DecisionStatus.RATE_LIMITED,
 			DecisionErrorCode.UNSUPPORTED_CAPABILITY: DecisionStatus.UNSUPPORTED,
@@ -220,7 +227,7 @@ class DecisionRuntime:
 			status=status,
 			identity=request.identity,
 			requested_identity=request.identity,
-			backend_adapter=adapter,
+			backend_adapter=_safe_label(adapter),
 			requested_model=request.identity.canonical_model,
 			error_code=error.code.value,
 		)
@@ -251,11 +258,40 @@ class DecisionRuntime:
 def _merge_identity(requested: DecisionIdentity, resolved: DecisionIdentity) -> DecisionIdentity:
 	"""Preserve canonical request identity while taking resolved serving metadata from backend."""
 	return DecisionIdentity(
-		model_class=requested.model_class or resolved.model_class,
-		model_family=requested.model_family or resolved.model_family,
-		canonical_model=requested.canonical_model or resolved.canonical_model,
-		canonical_version=requested.canonical_version or resolved.canonical_version,
-		provider=resolved.provider or requested.provider,
-		deployment=resolved.deployment or requested.deployment,
-		provider_model_id=resolved.provider_model_id or requested.provider_model_id,
+		model_class=_safe_label(requested.model_class or resolved.model_class),
+		model_family=_safe_label(requested.model_family or resolved.model_family),
+		canonical_model=_safe_label(requested.canonical_model or resolved.canonical_model),
+		canonical_version=_safe_label(requested.canonical_version or resolved.canonical_version),
+		provider=_safe_label(resolved.provider or requested.provider),
+		deployment=_safe_label(resolved.deployment or requested.deployment),
+		provider_model_id=_safe_label(resolved.provider_model_id or requested.provider_model_id),
 	)
+
+
+def _sanitize_identity(identity: DecisionIdentity) -> DecisionIdentity:
+	"""Keep bounded identity labels while preventing diagnostic credential fields leaking."""
+	return DecisionIdentity(**{
+		field_name: _safe_label(getattr(identity, field_name))
+		for field_name in (
+			"model_class", "model_family", "canonical_model", "canonical_version",
+			"provider", "deployment", "provider_model_id",
+		)
+	})
+
+
+def _safe_fallback_chain(chain: tuple[str, ...]) -> tuple[str, ...]:
+	return tuple(label for item in chain if (label := _safe_label(item)) is not None)[:16]
+
+
+def _safe_label(value: Any) -> str | None:
+	if value is None:
+		return None
+	allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ._:/@+-"
+	if not isinstance(value, str) or not value or len(value) > 128 or not value.isascii() or not value.isprintable():
+		return None
+	if any(char not in allowed for char in value):
+		return None
+	words = set(value.lower().replace("-", " ").replace("_", " ").split())
+	if words & {"token", "secret", "password", "credential", "authorization", "bearer", "apikey"}:
+		return None
+	return value

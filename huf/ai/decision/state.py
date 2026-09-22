@@ -34,7 +34,7 @@ def prepare_state(
 		raise DecisionError(DecisionErrorCode.UNSUPPORTED_MODALITY)
 	if not policy.state_bindings:
 		raise DecisionError(DecisionErrorCode.POLICY_INVALID, "Policy must explicitly bind provider-visible state")
-	projected_state = _project_state(request.state, policy)
+	projected_state = _redact_secret_fields(_project_state(_redact_secret_fields(request.state), policy))
 	try:
 		canonical = json.dumps(
 			projected_state, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
@@ -68,6 +68,22 @@ def _project_state(state: Any, policy: DecisionPolicy) -> dict[str, Any]:
 	return projected
 
 
+def _redact_secret_fields(value: Any) -> Any:
+	"""Replace structured credential fields before state reaches a backend or audit sink."""
+	if isinstance(value, dict):
+		redacted = {}
+		for key, child in value.items():
+			normalized_key = "".join(char for char in str(key).lower() if char.isalnum())
+			if any(marker in normalized_key for marker in ("apikey", "token", "secret", "password", "credential", "authorization")):
+				redacted[key] = "[REDACTED]"
+			else:
+				redacted[key] = _redact_secret_fields(child)
+		return redacted
+	if isinstance(value, (list, tuple)):
+		return [_redact_secret_fields(item) for item in value]
+	return value
+
+
 def _detect_modalities(value: Any, key: str = "") -> frozenset[str]:
 	"""Detect common structured media payloads even when callers mislabel modality."""
 	if isinstance(value, (bytes, bytearray, memoryview)):
@@ -80,7 +96,7 @@ def _detect_modalities(value: Any, key: str = "") -> frozenset[str]:
 	}:
 		if key_lower.startswith("image"):
 			modalities.add("image")
-		elif key_lower.startswith("audio"):
+		elif key_lower.startswith("audio") or key_lower == "input_audio":
 			modalities.add("audio")
 		else:
 			modalities.add("video")
@@ -88,7 +104,16 @@ def _detect_modalities(value: Any, key: str = "") -> frozenset[str]:
 		media_type = value[5:].split("/", 1)[0].lower()
 		modalities.add(media_type)
 	if isinstance(value, dict):
-		mime_type = value.get("mime_type") or value.get("mimeType")
+		block_type = value.get("type")
+		if isinstance(block_type, str):
+			block_type = block_type.lower()
+			if block_type in {"image", "image_url", "input_image"}:
+				modalities.add("image")
+			elif block_type in {"audio", "input_audio", "audio_url"}:
+				modalities.add("audio")
+			elif block_type in {"video", "video_url", "video_frame"}:
+				modalities.add("video")
+		mime_type = value.get("mime_type") or value.get("mimeType") or value.get("media_type")
 		if isinstance(mime_type, str):
 			media_type = mime_type.split("/", 1)[0].lower()
 			if media_type in {"image", "audio", "video"}:

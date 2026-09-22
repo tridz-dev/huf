@@ -135,6 +135,14 @@ class TestStatePreparation(unittest.TestCase):
 		multimodal_states = (
 			{"content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}}]},
 			{"content": [{"type": "input_audio", "input_audio": {"data": "AA==", "format": "wav"}}]},
+			{
+				"content": [{
+					"type": "image",
+					"source": {"type": "base64", "media_type": "image/png", "data": "AA=="},
+				}]
+			},
+			{"content": [{"type": "audio", "media_type": "audio/wav", "data": "AA=="}]},
+			{"content": [{"type": "video_frame", "data": "AA=="}]},
 		)
 
 		for state in multimodal_states:
@@ -146,7 +154,27 @@ class TestStatePreparation(unittest.TestCase):
 						policy,
 						DecisionCapabilities(primitives=frozenset({QuestionKind.SELECT})),
 					)
-				self.assertEqual(raised.exception.code, DecisionErrorCode.UNSUPPORTED_MODALITY)
+					self.assertEqual(raised.exception.code, DecisionErrorCode.UNSUPPORTED_MODALITY)
+
+	def test_input_audio_is_classified_as_audio_when_explicitly_supported(self):
+		policy = _policy(
+			required_modalities=frozenset({"audio"}),
+			state_bindings=(StateBinding("request", "$"),),
+		)
+		request = DecisionRequest(
+			policy=policy,
+			state={"input_audio": {"data": "AA==", "format": "wav"}},
+			modalities=frozenset({"audio"}),
+		)
+		prepared = prepare_state(
+			request,
+			policy,
+			DecisionCapabilities(
+				primitives=frozenset({QuestionKind.SELECT}),
+				input_modalities=frozenset({"audio"}),
+			),
+		)
+		self.assertIn("input_audio", prepared.value["request"])
 
 
 if __name__ == "__main__":

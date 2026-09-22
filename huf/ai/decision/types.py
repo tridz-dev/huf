@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping
@@ -17,6 +18,7 @@ class DecisionStatus(str, Enum):
 	SUCCESS = "success"
 	UNSUPPORTED = "unsupported"
 	UNAVAILABLE = "unavailable"
+	AUTHENTICATION_FAILED = "authentication_failed"
 	INVALID_RESPONSE = "invalid_response"
 	TIMEOUT = "timeout"
 	RATE_LIMITED = "rate_limited"
@@ -105,8 +107,8 @@ class DecisionUsage:
 			value = getattr(self, field_name)
 			if value is not None and value < 0:
 				raise ValueError(f"{field_name} cannot be negative")
-		if self.measured_cost is not None and self.measured_cost < 0:
-			raise ValueError("measured_cost cannot be negative")
+		if self.measured_cost is not None and (not math.isfinite(self.measured_cost) or self.measured_cost < 0):
+			raise ValueError("measured_cost must be finite and non-negative")
 
 
 @dataclass(frozen=True, slots=True)
