@@ -177,7 +177,7 @@ def opencode_zen_transport_from_env(*, api_key: str | None = None, endpoint: str
 	request_opener = opener or urlopen
 
 	def transport(payload: Mapping[str, Any]) -> tuple[int, Mapping[str, Any]]:
-		request = Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
+		request = Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "HUF-Decision-Runtime/1.0"}, method="POST")
 		try:
 			with request_opener(request, timeout=timeout) as response:
 				return int(response.status), json.loads(response.read().decode("utf-8"))
