@@ -45,6 +45,11 @@ class JevSystemOneBackend:
 		)
 
 	@classmethod
+	def from_environment(cls, **kwargs):
+		"""Construct the configured OpenCode Zen deployment from local environment secrets."""
+		return cls(transport=opencode_zen_transport_from_env(), **kwargs)
+
+	@classmethod
 	def adapter_id(cls) -> str:
 		return "jev_system_one"
 
