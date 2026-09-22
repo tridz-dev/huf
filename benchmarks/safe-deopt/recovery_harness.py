@@ -85,8 +85,12 @@ Every run is capped at :data:`MAX_TOOL_CALLS` (20) tool calls and produces one
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import os
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Protocol
 
@@ -110,6 +114,11 @@ __all__ = [
 	"RecoveryModel",
 	"MockedModel",
 	"LiveAPIModel",
+	"GeminiHTTPProvider",
+	"TOOL_PARAM_SCHEMAS",
+	"CANCEL_OPERATION_SCHEMA",
+	"GET_OPERATION_STATUS_SCHEMA",
+	"ESCALATE_SCHEMA",
 	"LogEntry",
 	"RunLog",
 	"ToolInvocationError",
@@ -187,6 +196,55 @@ class AtomicTool:
 	fn: Callable[..., Any]
 	is_write: bool = False
 	description: str = ""
+	# JSON-Schema-like (OpenAPI-subset) parameter schema for this tool, e.g.
+	# ``{"type": "object", "properties": {"operation_key": {"type": "string"}},
+	# "required": ["operation_key"]}``. Empty dict means "no parameters". This is the field
+	# a real function-calling provider (Gemini's ``FunctionDeclaration.parameters``, or an
+	# OpenAI/Anthropic tool schema later) is built from -- see
+	# :func:`_json_schema_to_gemini_schema` in the ``LiveAPIModel`` section below for the
+	# Gemini-specific translation. Defaults to "no parameters" so existing call sites that
+	# don't pass one keep working; every real tool assembled by
+	# :func:`make_tools_for_workload` (and the two ad-hoc tools ``run_experiment.py``
+	# constructs directly -- ``get_operation_status``/``cancel_operation``) gets a real one.
+	parameters: dict = field(default_factory=dict)
+
+
+def _schema(properties: dict[str, str], required: list[str] | None = None) -> dict:
+	"""Build a small JSON-Schema-like parameter dict: ``properties`` maps a kwarg name to a
+	JSON-Schema primitive type name (``"string"``/``"number"``/``"boolean"``). Every key in
+	``properties`` is required unless ``required`` is passed explicitly.
+	"""
+	return {
+		"type": "object",
+		"properties": {name: {"type": ptype} for name, ptype in properties.items()},
+		"required": list(properties.keys()) if required is None else list(required),
+	}
+
+
+#: Parameter schemas for every real tool a workload assembles in this benchmark (Issue A,
+#: PLAN_V3): keyed by the tool NAME the model sees (matches ``read_tools``/``write_tools``
+#: keys in ``run_experiment.py``'s workload builders). Tools not listed here (there are
+#: none left un-covered as of this table) fall back to "no parameters" in
+#: :func:`make_tools_for_workload` -- that fallback exists for safety, not because any real
+#: tool is expected to hit it.
+TOOL_PARAM_SCHEMAS: dict[str, dict] = {
+	# W1 (CrmStore)
+	"read_open_items": _schema({}),
+	"create_followup_todo": _schema({"reference_type": "string", "reference_name": "string", "allocated_to": "string", "operation_key": "string"}),
+	"submit_linked_record": _schema({"reference_type": "string", "reference_name": "string", "operation_key": "string"}),
+	# W2 / W2-nonidempotent (PaymentAllocationStore)
+	"list_invoices": _schema({}),
+	"list_payments": _schema({}),
+	"create_allocation": _schema({"payment": "string", "invoice": "string", "amount": "number", "operation_key": "string"}),
+	"submit_allocation": _schema({"allocation": "string", "operation_key": "string"}),
+	"submit_allocation_unsafe": _schema({"payment": "string", "invoice": "string", "amount": "number"}),
+}
+
+#: Schema for the ``cancel_operation``/``get_operation_status``/``escalate`` tools this
+#: module (and ``run_experiment.py``'s ``_gate_ground_truth_tools``) construct directly.
+CANCEL_OPERATION_SCHEMA = _schema({"operation_key": "string"})
+GET_OPERATION_STATUS_SCHEMA = _schema({"operation_key": "string"})
+ESCALATE_SCHEMA = _schema({"reason": "string"})
 
 
 def make_tools_for_workload(
@@ -203,23 +261,28 @@ def make_tools_for_workload(
 	method. ``escalate`` is added automatically and is never part of either input dict.
 	A ``cancel_operation`` tool is added automatically iff ``injector`` is supplied (only
 	relevant to fenceable-guarantee scenarios, e.g. an F7 fault).
+
+	Every tool's ``parameters`` schema is looked up by name in :data:`TOOL_PARAM_SCHEMAS`
+	(falling back to "no parameters" for any name not listed there) -- see Issue A: this is
+	what a real function-calling provider (``LiveAPIModel``) needs to build a
+	``FunctionDeclaration`` per tool.
 	"""
 	tools: dict[str, AtomicTool] = {}
 	for name, fn in read_tools.items():
-		tools[name] = AtomicTool(name=name, fn=fn, is_write=False, description=f"read-only: {name}")
+		tools[name] = AtomicTool(name=name, fn=fn, is_write=False, description=f"read-only: {name}", parameters=TOOL_PARAM_SCHEMAS.get(name, _schema({})))
 	for name, fn in write_tools.items():
-		tools[name] = AtomicTool(name=name, fn=fn, is_write=True, description=f"write: {name}")
+		tools[name] = AtomicTool(name=name, fn=fn, is_write=True, description=f"write: {name}", parameters=TOOL_PARAM_SCHEMAS.get(name, _schema({})))
 
 	if injector is not None:
 		def _cancel(*, operation_key: str) -> bool:
 			return cancel_operation(store, operation_key, injector=injector)
 
-		tools["cancel_operation"] = AtomicTool(name="cancel_operation", fn=_cancel, is_write=False, description="fence a held write")
+		tools["cancel_operation"] = AtomicTool(name="cancel_operation", fn=_cancel, is_write=False, description="fence a held write", parameters=CANCEL_OPERATION_SCHEMA)
 
 	def _escalate(*, reason: str) -> dict:
 		return {"escalated": True, "reason": reason}
 
-	tools["escalate"] = AtomicTool(name="escalate", fn=_escalate, is_write=False, description="hand off to a human; ends the run")
+	tools["escalate"] = AtomicTool(name="escalate", fn=_escalate, is_write=False, description="hand off to a human; ends the run", parameters=ESCALATE_SCHEMA)
 
 	return tools
 
@@ -306,28 +369,334 @@ class MockedModel:
 		return self._rule(transcript, available_tools)
 
 
-class LiveAPIModel:
-	"""Real-API-backed implementation -- STUB. Not exercised in this task.
+def _to_jsonable(value: Any) -> Any:
+	"""Best-effort conversion of arbitrary Python values (dataclass records returned by a
+	workload store, plain dicts/lists/primitives, exceptions, ...) into something
+	``json.dumps``-safe, for embedding in a Gemini ``functionResponse``/user-turn part.
+	Never raises -- worst case it falls back to ``str(value)``.
+	"""
+	if value is None or isinstance(value, (str, int, float, bool)):
+		return value
+	if dataclasses.is_dataclass(value) and not isinstance(value, type):
+		return {k: _to_jsonable(v) for k, v in dataclasses.asdict(value).items()}
+	if isinstance(value, dict):
+		return {str(k): _to_jsonable(v) for k, v in value.items()}
+	if isinstance(value, (list, tuple, set)):
+		return [_to_jsonable(v) for v in value]
+	if isinstance(value, BaseException):
+		return str(value)
+	try:
+		json.dumps(value)
+		return value
+	except TypeError:
+		return str(value)
 
-	Structured so a real model CAN be swapped in later once an API key is available:
-	``model_id`` is read from the ``MODEL`` env var (falls back to a placeholder), and a
-	real implementation would construct an API client here and translate ``next_step``
-	into an actual request/response cycle plus tool-use parsing.
 
-	This class deliberately does NOT attempt any network call, does NOT fabricate a
-	response, and raises :class:`NotImplementedError` from :meth:`next_step` -- silently
-    returning a fake step would be indistinguishable from a real model call in the logs,
-    which is exactly what this task's constraint says not to do.
+# ---------------------------------------------------------------------------
+# LiveAPIModel: real, provider-backed implementation (Issue A, PLAN_V3)
+# ---------------------------------------------------------------------------
+#
+# Design: LiveAPIModel itself knows nothing about any one provider's wire format. It talks
+# to a small ``_Provider`` protocol (one ``generate()`` call in, one ``_ProviderResponse``
+# out) and does the transcript<->contents bookkeeping and ModelStep translation that is the
+# SAME regardless of which provider answers. Only ``_GeminiProvider`` below knows about
+# Gemini's specific REST shape (systemInstruction / contents / functionCall /
+# functionResponse / usageMetadata). Adding an Anthropic or OpenAI backend later means
+# writing one more ``_Provider`` implementation and extending ``_make_provider`` below --
+# ``LiveAPIModel.next_step`` itself does not change.
+
+
+@dataclass
+class _ProviderResponse:
+	"""What any ``_Provider.generate()`` call returns, translated into a provider-neutral
+	shape. Exactly one of ``text`` / ``function_call`` is populated for a well-formed
+	response (a provider that returns neither is treated as "final empty text").
 	"""
 
-	def __init__(self, *, model_id: str | None = None) -> None:
+	text: str | None = None
+	function_call: dict | None = None  # {"name": str, "args": dict}
+	prompt_tokens: int = 0
+	completion_tokens: int = 0
+	cached_tokens: int = 0
+	# The exact model version string the provider's response reported it actually served
+	# (e.g. Gemini's top-level ``modelVersion``), NOT the nominal ``MODEL`` env var value --
+	# see Issue A's "record model version string exactly as returned by the API". ``None``
+	# when the provider's response shape does not surface one at all (documented, not
+	# silently substituted with the nominal id).
+	model_version: str | None = None
+
+
+class _Provider(Protocol):
+	"""One real-API backend's request/response translation. ``LiveAPIModel`` drives this;
+	it never talks HTTP/SDK details itself.
+	"""
+
+	def generate(self, *, system_instruction: str | None, contents: list[dict], tool_declarations: list[dict]) -> _ProviderResponse:
+		...
+
+
+# -- Gemini-specific wire format --------------------------------------------------------
+
+#: JSON-Schema (lowercase) primitive type names -> Gemini's OpenAPI-subset (uppercase) type
+#: names, per Gemini's documented ``FunctionDeclaration.parameters`` shape (confirmed via
+#: current API docs: "type": "OBJECT"/"STRING"/... -- see
+#: https://ai.google.dev/gemini-api/docs/migrate-to-interactions "Call functions with
+#: generateContent in REST").
+_JSON_SCHEMA_TYPE_TO_GEMINI = {
+	"string": "STRING",
+	"number": "NUMBER",
+	"integer": "INTEGER",
+	"boolean": "BOOLEAN",
+	"object": "OBJECT",
+	"array": "ARRAY",
+}
+
+
+def _json_schema_to_gemini_schema(schema: dict) -> dict:
+	"""Translate one :data:`AtomicTool.parameters` (lowercase JSON-Schema-like dict) into
+	Gemini's ``FunctionDeclaration.parameters`` shape (uppercase OpenAPI-subset types).
+	"""
+	if not schema:
+		return {"type": "OBJECT", "properties": {}}
+	properties = {}
+	for name, spec in (schema.get("properties") or {}).items():
+		ptype = _JSON_SCHEMA_TYPE_TO_GEMINI.get(str(spec.get("type", "string")).lower(), "STRING")
+		prop: dict = {"type": ptype}
+		if spec.get("description"):
+			prop["description"] = spec["description"]
+		properties[name] = prop
+	out: dict = {"type": "OBJECT", "properties": properties}
+	required = schema.get("required")
+	if required:
+		out["required"] = list(required)
+	return out
+
+
+def _atomic_tools_to_gemini_declarations(tools: dict[str, "AtomicTool"], available_tools: list[str]) -> list[dict]:
+	"""Build the ``functionDeclarations`` list Gemini's ``tools`` field expects, for
+	whichever tool names are currently available (a run's available tool set changes
+	per-guarantee -- see ``run_experiment.py``'s ``_gate_ground_truth_tools``).
+	"""
+	declarations = []
+	for name in available_tools:
+		tool = tools.get(name)
+		if tool is None:
+			continue
+		declarations.append(
+			{
+				"name": tool.name,
+				"description": tool.description or tool.name,
+				"parameters": _json_schema_to_gemini_schema(tool.parameters),
+			}
+		)
+	return declarations
+
+
+class GeminiHTTPProvider:
+	"""Raw-HTTP Gemini provider: no SDK is installed in this environment (neither
+	``google-generativeai`` nor ``google-genai`` -- verified directly), so this speaks the
+	documented ``v1beta`` REST ``generateContent`` endpoint directly via :mod:`urllib`
+	(stdlib only, no new dependency).
+
+	The API key is read from ``api_key`` (or, if not given, from ``GOOGLE_API_KEY`` /
+	``GEMINI_API_KEY`` at call time -- never cached to a file, never logged) and sent ONLY
+	in the ``x-goog-api-key`` request header, never in the URL (a URL is far more likely to
+	end up in a log line, proxy record, or exception traceback than a header value handled
+	entirely inside :mod:`urllib`).
+	"""
+
+	_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+	def __init__(self, *, model_id: str, api_key: str | None = None, timeout: float = 60.0) -> None:
+		self.model_id = model_id
+		self._api_key = api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+		if not self._api_key:
+			raise RuntimeError(
+				"GeminiHTTPProvider needs an API key: pass api_key= explicitly, or set "
+				"GOOGLE_API_KEY / GEMINI_API_KEY in the environment before constructing it."
+			)
+		self.timeout = timeout
+
+	def generate(self, *, system_instruction: str | None, contents: list[dict], tool_declarations: list[dict]) -> _ProviderResponse:
+		body: dict = {"contents": contents}
+		if system_instruction:
+			body["system_instruction"] = {"parts": [{"text": system_instruction}]}
+		if tool_declarations:
+			body["tools"] = [{"functionDeclarations": tool_declarations}]
+
+		url = self._ENDPOINT.format(model=self.model_id)
+		data = json.dumps(body).encode("utf-8")
+		request = urllib.request.Request(
+			url,
+			data=data,
+			method="POST",
+			headers={"Content-Type": "application/json", "x-goog-api-key": self._api_key},
+		)
+		try:
+			with urllib.request.urlopen(request, timeout=self.timeout) as response:
+				payload = json.loads(response.read().decode("utf-8"))
+		except urllib.error.HTTPError as exc:
+			# Read and surface the body for debuggability -- this is Gemini's OWN error
+			# JSON, never anything containing the API key (the key is only ever sent in a
+			# request header, never echoed back by the API in an error body).
+			try:
+				detail = exc.read().decode("utf-8", errors="replace")
+			except Exception:  # noqa: BLE001
+				detail = str(exc)
+			raise RuntimeError(f"Gemini generateContent HTTP {exc.code}: {detail}") from None
+		except urllib.error.URLError as exc:
+			raise RuntimeError(f"Gemini generateContent request failed: {exc.reason}") from None
+
+		return _parse_gemini_response(payload)
+
+
+def _parse_gemini_response(payload: dict) -> _ProviderResponse:
+	"""Parse one Gemini ``generateContent`` JSON response body into a provider-neutral
+	:class:`_ProviderResponse`. Only reads documented fields (``candidates[0].content.parts``,
+	``usageMetadata.{promptTokenCount,candidatesTokenCount,cachedContentTokenCount}``,
+	top-level ``modelVersion``); never estimates/fabricates a field that isn't present.
+	"""
+	usage = payload.get("usageMetadata") or {}
+	model_version = payload.get("modelVersion")
+
+	text: str | None = None
+	function_call: dict | None = None
+	candidates = payload.get("candidates") or []
+	if candidates:
+		content = candidates[0].get("content") or {}
+		for part in content.get("parts") or []:
+			if "functionCall" in part and function_call is None:
+				fc = part["functionCall"] or {}
+				function_call = {"name": fc.get("name"), "args": dict(fc.get("args") or {})}
+			elif "text" in part and text is None:
+				text = part["text"]
+
+	return _ProviderResponse(
+		text=text,
+		function_call=function_call,
+		prompt_tokens=int(usage.get("promptTokenCount", 0) or 0),
+		completion_tokens=int(usage.get("candidatesTokenCount", 0) or 0),
+		cached_tokens=int(usage.get("cachedContentTokenCount", 0) or 0),
+		model_version=model_version,
+	)
+
+
+def _make_provider(model_id: str) -> _Provider:
+	"""Provider inference from ``model_id`` (Issue A / PLAN_V3 "Key situation"): a
+	``gemini-`` prefix routes to :class:`GeminiHTTPProvider`. No other provider is
+	implemented yet -- adding one is a new ``_Provider`` implementation plus one more
+	``elif`` branch here, never a change to ``LiveAPIModel`` itself.
+	"""
+	if model_id.startswith("gemini-"):
+		return GeminiHTTPProvider(model_id=model_id)
+	raise NotImplementedError(
+		f"LiveAPIModel has no provider implementation for model_id={model_id!r} yet -- only "
+		"a 'gemini-' prefix is currently routed (to GeminiHTTPProvider). Add a new "
+		"_Provider implementation and extend _make_provider() to support this model family."
+	)
+
+
+class LiveAPIModel:
+	"""Real-API-backed :class:`RecoveryModel` implementation (Issue A, PLAN_V3).
+
+	``model_id`` is read from the ``MODEL`` env var if not given explicitly. ``tools`` is
+	the SAME ``dict[str, AtomicTool]`` the caller builds via :func:`make_tools_for_workload`
+	(plus any ad-hoc tools it adds, e.g. ``get_operation_status``) -- ``next_step`` only
+	ever receives tool NAMES from :func:`run_recovery`, so this class needs the full
+	:class:`AtomicTool` objects (descriptions + parameter schemas) supplied up front, at
+	construction time, to build each turn's function declarations.
+
+	Transcript bookkeeping: the harness's own shared ``transcript`` list (see
+	:func:`run_recovery`) does NOT append an entry for the model's own prior tool-call turns
+	(only tool RESULTS get appended) -- so this class keeps its OWN provider-native
+	conversation state (``self._contents``, Gemini's ``contents`` array) across calls, and
+	on each ``next_step`` call only ingests whatever NEW entries were appended to the shared
+	transcript since the last call (tracked via ``self._last_transcript_len``), translating
+	each one into the provider's turn format before asking the provider for the next step.
+	"""
+
+	def __init__(
+		self,
+		*,
+		model_id: str | None = None,
+		tools: dict[str, "AtomicTool"] | None = None,
+		provider: _Provider | None = None,
+	) -> None:
 		self.model_id = model_id or os.environ.get("MODEL", "unset")
+		self._tools = dict(tools or {})
+		self.provider = provider if provider is not None else _make_provider(self.model_id)
+		self._contents: list[dict] = []
+		self._system_instruction: str | None = None
+		self._last_transcript_len = 0
+		#: The exact model version string the API itself reported for the most recent call
+		#: (Issue A: "record model version string exactly as returned by the API"). Stays
+		#: ``None`` if the provider never surfaced one -- callers must not fall back to
+		#: ``model_id`` silently; that fallback, if wanted, is the CALLER's decision.
+		self.last_model_version: str | None = None
+
+	def _ingest_transcript_entry(self, entry: dict) -> None:
+		role = entry.get("role")
+		content = entry.get("content")
+		if role == "system":
+			self._system_instruction = str(content)
+			return
+		if role == "user":
+			text = content if isinstance(content, str) else json.dumps(_to_jsonable(content))
+			self._contents.append({"role": "user", "parts": [{"text": text}]})
+			return
+		if role == "tool":
+			tool_name = entry.get("tool_name") or (content.get("tool_name") if isinstance(content, dict) else None) or "unknown_tool"
+			response_payload = _to_jsonable(content)
+			if not isinstance(response_payload, dict):
+				response_payload = {"result": response_payload}
+			self._contents.append({"role": "user", "parts": [{"functionResponse": {"name": tool_name, "response": response_payload}}]})
+			return
+		if role == "assistant":
+			# Only ever appended by run_recovery right as the loop ends (final_text) -- no
+			# further next_step call will observe it, but ingest it anyway for completeness/
+			# testability rather than special-casing it away.
+			self._contents.append({"role": "model", "parts": [{"text": str(content or "")}]})
+			return
+		# Unknown role: represent it as a user-turn text block rather than silently dropping
+		# information the model should have seen.
+		self._contents.append({"role": "user", "parts": [{"text": json.dumps(_to_jsonable(entry))}]})
 
 	def next_step(self, *, transcript: list[dict], available_tools: list[str]) -> ModelStep:
-		raise NotImplementedError(
-			"LiveAPIModel is a documented stub: no model API key is available in this "
-			f"environment, so no real call can be made (model_id={self.model_id!r}). Swap in "
-			"a real client implementation here once credentials exist."
+		new_entries = transcript[self._last_transcript_len :]
+		self._last_transcript_len = len(transcript)
+		for entry in new_entries:
+			self._ingest_transcript_entry(entry)
+
+		tool_declarations = _atomic_tools_to_gemini_declarations(self._tools, available_tools)
+		response = self.provider.generate(
+			system_instruction=self._system_instruction,
+			contents=list(self._contents),
+			tool_declarations=tool_declarations,
+		)
+
+		if response.model_version:
+			self.last_model_version = response.model_version
+
+		if response.function_call is not None and response.function_call.get("name"):
+			name = response.function_call["name"]
+			args = dict(response.function_call.get("args") or {})
+			# Record the model's OWN turn in our provider-native state so the NEXT call (once
+			# run_recovery appends the tool's result to the shared transcript) sees the
+			# functionCall this result answers -- see the class docstring's "Transcript
+			# bookkeeping" section for why the shared transcript alone can't provide this.
+			self._contents.append({"role": "model", "parts": [{"functionCall": {"name": name, "args": args}}]})
+			return ModelStep(
+				tool_call=ToolCallRequest(name, args),
+				estimated_prompt_tokens=response.prompt_tokens,
+				estimated_completion_tokens=response.completion_tokens,
+			)
+
+		text = response.text or ""
+		self._contents.append({"role": "model", "parts": [{"text": text}]})
+		return ModelStep(
+			final_text=text,
+			estimated_prompt_tokens=response.prompt_tokens,
+			estimated_completion_tokens=response.completion_tokens,
 		)
 
 

@@ -407,15 +407,25 @@ class TestGuardMarginalSafetyValue(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# LiveAPIModel is a documented, non-fabricating stub
+# LiveAPIModel: real Gemini-backed implementation -- provider inference only, no fabrication
 # ---------------------------------------------------------------------------
+#
+# Real request/response translation and token-accounting tests for LiveAPIModel/
+# GeminiHTTPProvider live in test_live_api_model_gemini.py (hand-constructed fake Gemini
+# response shapes -- no real network call). These tests here only cover the "no provider
+# implemented for this model family" boundary, which is still a real, non-fabricating
+# NotImplementedError today.
 
 
 class TestLiveAPIModelStub(unittest.TestCase):
-	def test_live_api_model_raises_rather_than_fabricating_a_response(self):
-		model = LiveAPIModel(model_id="placeholder-model")
+	def test_live_api_model_raises_for_an_unrecognized_model_family_rather_than_fabricating(self):
 		with self.assertRaises(NotImplementedError):
-			model.next_step(transcript=[], available_tools=[])
+			LiveAPIModel(model_id="placeholder-model")
+
+	def test_live_api_model_constructs_a_real_gemini_provider_for_a_gemini_model_id(self):
+		model = LiveAPIModel(model_id="gemini-1.5-flash", tools={}, provider=object())
+		self.assertEqual(model.model_id, "gemini-1.5-flash")
+		self.assertIsNone(model.last_model_version)
 
 
 if __name__ == "__main__":

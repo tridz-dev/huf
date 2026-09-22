@@ -99,6 +99,7 @@ from recovery_harness import (  # noqa: E402
     ModelStep,
     MockedModel,
     LiveAPIModel,
+    GET_OPERATION_STATUS_SCHEMA,
     ToolCallRequest,
     build_condition4_context,
     build_condition5_payload,
@@ -135,10 +136,15 @@ ALL_CONDITIONS = ("C1", "C2", "C3", "C4", "C4+G", "C5", "C6")
 RESULTS_TRANSCRIPTS_DIR = RESULTS_DIR / "transcripts"
 
 # API key env vars this harness recognizes as "a key is present" -- mirrors run_all.sh's
-# own check (ANTHROPIC_API_KEY or OPENAI_API_KEY). Neither is read for its VALUE beyond
-# "is it set" -- the key itself is only ever handed to a real API client inside
-# LiveAPIModel, never logged or embedded in any result row.
-_API_KEY_ENV_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY")
+# own check (ANTHROPIC_API_KEY or OPENAI_API_KEY), extended (Issue A / PLAN_V3 "Key
+# situation") to also recognize a Gemini key under either of its two common env var names.
+# None of these is ever read for its VALUE beyond "is it set" here -- the key itself is
+# only ever handed to a real API client inside LiveAPIModel/GeminiHTTPProvider, never
+# logged or embedded in any result row. Which PROVIDER a live run actually uses is inferred
+# separately, from the `MODEL` env var's own value (a "gemini-" prefix routes to the Gemini
+# provider -- see recovery_harness._make_provider) -- not from which key var happened to be
+# set.
+_API_KEY_ENV_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY")
 
 
 def select_model_backend() -> tuple[bool, str | None]:
@@ -160,7 +166,13 @@ def select_model_backend() -> tuple[bool, str | None]:
     return use_live, (model_id if use_live else None)
 
 
-def _make_llm_model(*, rule: Callable[[list[dict], list[str]], ModelStep], use_live: bool, live_model_id: str | None):
+def _make_llm_model(
+    *,
+    rule: Callable[[list[dict], list[str]], ModelStep] | None,
+    use_live: bool,
+    live_model_id: str | None,
+    tools: dict | None = None,
+):
     """Construct the model implementation for an LLM-condition cell.
 
     When a live backend is selected, returns a bare :class:`LiveAPIModel` -- NOT wrapped in
@@ -168,9 +180,15 @@ def _make_llm_model(*, rule: Callable[[list[dict], list[str]], ModelStep], use_l
     system prompt, the per-condition context payload, and the guard (C4+G/C6); the scripted
     policies (``_naive_rule``/``_smart_rule``/``_c1_full_agent_rule``) exist purely to script
     :class:`MockedModel` and must never be consulted when a real model is in the loop.
+
+    ``tools`` (the cell's own ``dict[str, AtomicTool]``, built by
+    ``make_tools_for_workload``/``_gate_ground_truth_tools``) is required when
+    ``use_live=True`` -- ``LiveAPIModel`` needs the full ``AtomicTool`` objects (parameter
+    schemas included) to build each turn's function declarations; ``next_step`` itself only
+    ever receives tool NAMES from ``run_recovery``.
     """
     if use_live:
-        return LiveAPIModel(model_id=live_model_id)
+        return LiveAPIModel(model_id=live_model_id, tools=tools)
     return MockedModel(rule=rule)
 
 # F2/F3/F6/F7 are the "in-doubt" faults crossed with all four tool-guarantee levels, per
@@ -836,6 +854,7 @@ def _gate_ground_truth_tools(tools: dict, *, guarantee: str, operation_key: str,
             fn=lambda operation_key=operation_key: get_operation_status(store, operation_key, injector=injector),
             is_write=False,
             description="ground-truth commit status",
+            parameters=GET_OPERATION_STATUS_SCHEMA,
         )
     else:
         tools.pop("get_operation_status", None)
@@ -885,7 +904,7 @@ def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector:
         # Issue 3: the scripted policy must never be built (let alone consulted) when a
         # real model is selected -- a live run is steered only by the system prompt, the
         # context payload below, and the guard (not applicable to C1). See _make_llm_model.
-        model = _make_llm_model(rule=None, use_live=True, live_model_id=live_model_id)
+        model = _make_llm_model(rule=None, use_live=True, live_model_id=live_model_id, tools=tools)
     else:
         rule = _c1_full_agent_rule(
             read_tool_names=sorted(read_tools.keys()),
@@ -1072,7 +1091,7 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
                 # Issue 3: scripted policies (rule) are only ever used to construct
                 # MockedModel; a live run is steered solely by the system prompt, the
                 # context payload above, and the guard (C4+G/C6) -- see _make_llm_model.
-                model = _make_llm_model(rule=rule, use_live=use_live, live_model_id=live_model_id)
+                model = _make_llm_model(rule=rule, use_live=use_live, live_model_id=live_model_id, tools=tools)
                 log = run_recovery(condition=condition, model=model, tools=tools, context=context, store=store, injector=injector)
                 run_log = log
                 active_model = model
@@ -1150,7 +1169,13 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
     # (keeps going to runs.mock.jsonl exactly as before, unaffected).
     is_live_row = condition in LLM_CONDITIONS and use_live
     if is_live_row:
-        row_model_id = live_model_id
+        # Issue A: record the EXACT model version string the API itself reported (e.g.
+        # Gemini's top-level `modelVersion`) wherever this row's model_id is logged, not
+        # just the nominal `MODEL` env var value -- covers aliasing/version drift. Falls
+        # back to the nominal live_model_id only when the provider's response never
+        # surfaced a version at all (LiveAPIModel.last_model_version stays None in that
+        # case; this is documented, not silently substituted elsewhere).
+        row_model_id = getattr(active_model, "last_model_version", None) or live_model_id
         # Real temperature if obtainable from the model's own config; otherwise honestly
         # None -- never the mocked-case placeholder string "NA", which specifically means
         # "no model was involved at all".

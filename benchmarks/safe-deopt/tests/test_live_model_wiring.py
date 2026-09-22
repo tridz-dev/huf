@@ -51,8 +51,9 @@ class _StubLiveModel:
     path would work correctly if a real client populated these numbers instead.
     """
 
-    def __init__(self, *, model_id: str | None = None) -> None:
+    def __init__(self, *, model_id: str | None = None, tools: dict | None = None) -> None:
         self.model_id = model_id
+        self.tools = tools
         self.temperature = 0.0  # a real client's config would set this for real
 
     def next_step(self, *, transcript: list[dict], available_tools: list[str]) -> ModelStep:
