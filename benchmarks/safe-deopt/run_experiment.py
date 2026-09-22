@@ -944,7 +944,7 @@ def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector:
     }
 
 
-def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for_matrix: str, commit_hash: str) -> dict:
+def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for_matrix: str, commit_hash: str, seed: int = SEED, transcripts_dir: Path = RESULTS_TRANSCRIPTS_DIR) -> dict:
     injector = FaultInjector()
     guarantee = guarantee_for_matrix if fault_id in GUARANTEE_CROSSED_FAULTS else "none"
     operation_key = "opB"
@@ -1242,8 +1242,9 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
             workload_name=workload_name,
             fault_id=fault_id,
             guarantee_field=guarantee_field,
-            seed=SEED,
+            seed=seed,
             log_entries=run_log.entries,
+            transcripts_dir=transcripts_dir,
         )
     else:
         transcript_path = None
@@ -1253,7 +1254,7 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
         "workload": workload_name,
         "fault": fault_id,
         "tool_guarantee": guarantee if fault_id in GUARANTEE_CROSSED_FAULTS else "NA",
-        "seed": SEED,
+        "seed": seed,
         "model_id": row_model_id,
         "run_date": time.strftime("%Y-%m-%d"),
         "temperature": row_temperature,
@@ -1305,20 +1306,33 @@ def _committed_counts(commit_log, action: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def build_matrix() -> list[tuple[str, str, str, str]]:
+def build_matrix(
+    conditions: tuple[str, ...] = ALL_CONDITIONS,
+    seeds: tuple[int, ...] = (SEED,),
+) -> list[tuple[str, str, str, str, int]]:
+    """``conditions`` restricts the matrix to a subset of ``ALL_CONDITIONS`` (CLI:
+    ``--condition``); ``seeds`` repeats every cell once per seed value (CLI: ``--seeds``).
+    Defaults reproduce the original single-seed, all-conditions matrix byte-for-byte.
+    """
     cells = []
-    for condition in ALL_CONDITIONS:
+    for condition in conditions:
         for workload_name in WORKLOAD_BUILDERS:
             for fault_id in FAULT_IDS:
                 if fault_id in GUARANTEE_CROSSED_FAULTS:
                     for guarantee in GUARANTEE_LEVELS:
-                        cells.append((condition, workload_name, fault_id, guarantee))
+                        for seed in seeds:
+                            cells.append((condition, workload_name, fault_id, guarantee, seed))
                 else:
-                    cells.append((condition, workload_name, fault_id, "none"))
+                    for seed in seeds:
+                        cells.append((condition, workload_name, fault_id, "none", seed))
     return cells
 
 
-def run_all() -> list[dict]:
+def run_all(
+    conditions: tuple[str, ...] = ALL_CONDITIONS,
+    seeds: tuple[int, ...] = (SEED,),
+    transcripts_dir: Path = RESULTS_TRANSCRIPTS_DIR,
+) -> list[dict]:
     commit_hash = huf_commit_hash()
 
     use_live, live_model_id = select_model_backend()
@@ -1346,8 +1360,16 @@ def run_all() -> list[dict]:
         )
 
     rows = []
-    for condition, workload_name, fault_id, guarantee in build_matrix():
-        row = run_cell(condition=condition, workload_name=workload_name, fault_id=fault_id, guarantee_for_matrix=guarantee, commit_hash=commit_hash)
+    for condition, workload_name, fault_id, guarantee, seed in build_matrix(conditions=conditions, seeds=seeds):
+        row = run_cell(
+            condition=condition,
+            workload_name=workload_name,
+            fault_id=fault_id,
+            guarantee_for_matrix=guarantee,
+            commit_hash=commit_hash,
+            seed=seed,
+            transcripts_dir=transcripts_dir,
+        )
         rows.append(row)
     return rows
 
@@ -1383,6 +1405,7 @@ def persist_transcript(
     guarantee_field: str,
     seed: int,
     log_entries: list[Any],
+    transcripts_dir: Path = RESULTS_TRANSCRIPTS_DIR,
 ) -> Path:
     """Issue 3: persist a full RunLog transcript (every message, tool call, tool result) for
     an LLM-condition cell, per PREREGISTRATION.md's "All raw transcripts and per-run
@@ -1390,9 +1413,12 @@ def persist_transcript(
     commitment says "every LLM conversation transcript", not "every real one"; retaining
     mocked transcripts too costs nothing extra and keeps the audit trail complete).
 
-    Path: ``results/transcripts/<condition>/<workload>/<fault>/<guarantee_or_NA>/<seed>.json``.
+    Path: ``<transcripts_dir>/<condition>/<workload>/<fault>/<guarantee_or_NA>/<seed>.json``.
+    ``transcripts_dir`` defaults to ``results/transcripts`` (module constant) but callers
+    doing a parallel real run pass ``results/transcripts.<suffix>`` instead (Issue B-prep:
+    ``--output-suffix``), so N concurrent processes never write into the same directory tree.
     """
-    out_dir = RESULTS_TRANSCRIPTS_DIR / condition / workload_name / fault_id / str(guarantee_field)
+    out_dir = transcripts_dir / condition / workload_name / fault_id / str(guarantee_field)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{seed}.json"
     with open(out_path, "w") as f:
@@ -1400,27 +1426,38 @@ def persist_transcript(
     return out_path
 
 
-def write_runs_jsonl(rows: list[dict]) -> None:
-    """Issue 3: un-gated. Mocked rows (``tokens_are_real_accounting`` False) always go to
-    ``results/runs.mock.jsonl``, exactly as before. Rows actually produced by a live model
-    (``tokens_are_real_accounting`` True) go to ``results/runs.jsonl`` instead -- that file
-    is still never written, and any stale copy is removed, when no live rows exist in this
-    run (i.e. every normal mocked run, since no API key is available in this environment).
+def write_runs_jsonl(
+    rows: list[dict],
+    runs_jsonl_path: Path = RUNS_JSONL_PATH,
+    runs_mock_jsonl_path: Path = RUNS_MOCK_JSONL_PATH,
+) -> None:
+    """Issue 3 / Issue B-prep: un-gated. Mocked rows (``tokens_are_real_accounting`` False)
+    go to ``runs_mock_jsonl_path`` (default ``results/runs.mock.jsonl``). Rows actually
+    produced by a live model (``tokens_are_real_accounting`` True) go to ``runs_jsonl_path``
+    instead (default ``results/runs.jsonl``) -- that file is still never written, and any
+    stale copy at that same path is removed, when no live rows exist in this run (i.e. every
+    normal mocked run, since no API key is available in this environment).
+
+    ``--output-suffix NAME`` (see ``main``) points BOTH of these at
+    ``results/runs.NAME.jsonl`` / ``results/runs.mock.NAME.jsonl`` respectively, so N
+    parallel worker processes -- real or mocked -- each own distinct files and never race on
+    a shared one. With no ``--output-suffix``, both defaults are unchanged from before this
+    flag existed.
     """
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     mocked_rows = [row for row in rows if not row.get("tokens_are_real_accounting")]
     live_rows = [row for row in rows if row.get("tokens_are_real_accounting")]
 
-    with open(RUNS_MOCK_JSONL_PATH, "w") as f:
+    with open(runs_mock_jsonl_path, "w") as f:
         for row in mocked_rows:
             f.write(json.dumps(row) + "\n")
 
     if live_rows:
-        with open(RUNS_JSONL_PATH, "w") as f:
+        with open(runs_jsonl_path, "w") as f:
             for row in live_rows:
                 f.write(json.dumps(row) + "\n")
-    elif RUNS_JSONL_PATH.exists():
-        RUNS_JSONL_PATH.unlink()
+    elif runs_jsonl_path.exists():
+        runs_jsonl_path.unlink()
 
 
 def write_summary_csv(rows: list[dict]) -> None:
@@ -1550,6 +1587,11 @@ def plot_cost_vs_correctness(rows: list[dict], path: Path) -> None:
     palette = {"C1": (70, 130, 180), "C2": (60, 179, 113), "C3": (218, 165, 32), "C4": (205, 92, 92), "C4+G": (255, 99, 71), "C5": (147, 112, 219), "C6": (100, 149, 237)}
     for cond in ALL_CONDITIONS:
         cell_rows = [r for r in rows if r["condition"] == cond]
+        if not cell_rows:
+            # --condition can now restrict a run to a subset of ALL_CONDITIONS, so a given
+            # condition may simply have no rows this run -- skip it rather than divide by
+            # zero (mirrors plot_correctness_by_fault's existing `if cell_rows else 0.0`).
+            continue
         mean_calls = sum(r["tool_calls"] for r in cell_rows) / len(cell_rows)
         mean_correct = sum(1 for r in cell_rows if r["useful_completion"]) / len(cell_rows)
         px = x0 + (mean_calls / max_calls) * w
@@ -1613,9 +1655,19 @@ def compute_breakeven(rows: list[dict]) -> dict:
     c2_rows = [r for r in rows if r["condition"] == "C2"]
     c3_rows = [r for r in rows if r["condition"] == "C3"]
 
-    per_run_full_agent_cost = sum(r["wall_time_seconds"] for r in c1_rows) / len(c1_rows)
-    per_run_fallback_cost = sum(r["wall_time_seconds"] for r in (c5_rows + c6_rows)) / len(c5_rows + c6_rows)
-    per_run_procedure_cost = sum(r["wall_time_seconds"] for r in (c2_rows + c3_rows)) / len(c2_rows + c3_rows)
+    # --condition (added for parallel real-run dispatch) can now restrict a single run to a
+    # subset of ALL_CONDITIONS, so any of these groups may be empty -- fall back to 0.0
+    # rather than dividing by zero. This breakeven analysis is illustrative even in the
+    # normal all-conditions case; a partial-condition run's breakeven numbers are not
+    # meaningful on their own and callers dispatching --condition workers in parallel should
+    # merge the resulting runs*.jsonl files and re-run with --replay for a real breakeven
+    # computation, exactly as --replay already exists to do.
+    def _mean_wall_time(group: list[dict]) -> float:
+        return (sum(r["wall_time_seconds"] for r in group) / len(group)) if group else 0.0
+
+    per_run_full_agent_cost = _mean_wall_time(c1_rows)
+    per_run_fallback_cost = _mean_wall_time(c5_rows + c6_rows)
+    per_run_procedure_cost = _mean_wall_time(c2_rows + c3_rows)
 
     # "One measured full-agent discovery run" -- run C1 fresh, once, on W1 F0 (no fault),
     # timed directly, labeled illustrative/mocked per the task brief.
@@ -1695,6 +1747,29 @@ def load_existing_rows() -> list[dict]:
     return rows
 
 
+def _parse_conditions_arg(raw: list[str] | None) -> tuple[str, ...]:
+    """Turn ``--condition``'s raw ``argparse`` value (a list of possibly comma-separated,
+    possibly repeated strings, or ``None`` if never passed) into an order-preserving,
+    de-duplicated tuple of valid condition names. ``None``/empty means "all conditions",
+    matching the pre-flag default.
+    """
+    if not raw:
+        return ALL_CONDITIONS
+    names: list[str] = []
+    for item in raw:
+        names.extend(part.strip() for part in item.split(",") if part.strip())
+    unknown = [n for n in names if n not in ALL_CONDITIONS]
+    if unknown:
+        raise SystemExit(f"--condition: unknown condition(s) {unknown!r}; valid values are {ALL_CONDITIONS!r}")
+    seen: set[str] = set()
+    result: list[str] = []
+    for n in names:
+        if n not in seen:
+            seen.add(n)
+            result.append(n)
+    return tuple(result)
+
+
 def main(argv: list[str] | None = None) -> None:
     import argparse
 
@@ -1707,7 +1782,66 @@ def main(argv: list[str] | None = None) -> None:
             "breakeven.json) without calling any model or re-running faults."
         ),
     )
+    parser.add_argument(
+        "--condition",
+        action="append",
+        default=None,
+        metavar="NAME[,NAME...]",
+        help=(
+            "Restrict the run to only these condition(s), e.g. '--condition C1' or "
+            "'--condition C4,C4+G'. Repeatable and/or comma-separated; may be combined. "
+            f"Valid values: {', '.join(ALL_CONDITIONS)}. Works for both the LiveAPIModel/"
+            "MockedModel LLM conditions (C1/C4/C4+G/C5/C6) and the deterministic C2/C3. "
+            "Default (omitted): run all conditions, exactly as before."
+        ),
+    )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        default=1,
+        metavar="N",
+        help=(
+            "Number of seeds per cell (default: 1, byte-for-byte identical to today's "
+            "single-seed behavior). Seeds are the integers SEED, SEED+1, ..., SEED+N-1 "
+            "(SEED=%d). NOTE on what 'seed' means here: none of this harness's workloads or "
+            "fault injection consume any RNG, and a real Gemini call is not seeded "
+            "deterministically by us either -- so for a real model, --seeds N does NOT vary "
+            "any local random choice. It means 'independently repeat the same real API call "
+            "N times', with each repeat's transcript and row tagged with a distinct seed "
+            "label purely to keep them from colliding on disk (results/transcripts/.../"
+            "<seed>.json) and to let you compute a real N-sample variance/pass-rate for that "
+            "cell. For MockedModel cells the repeats are literally identical (the mock is a "
+            "deterministic function of its inputs, not of the seed label)." % SEED
+        ),
+    )
+    parser.add_argument(
+        "--output-suffix",
+        default=None,
+        metavar="SUFFIX",
+        help=(
+            "Write rows to suffixed files instead of the defaults, so N parallel worker "
+            "processes (e.g. one per --condition) each own distinct output and never race on "
+            "a shared file: real rows (tokens_are_real_accounting=True) go to "
+            "results/runs.<SUFFIX>.jsonl instead of results/runs.jsonl; mocked rows go to "
+            "results/runs.mock.<SUFFIX>.jsonl instead of results/runs.mock.jsonl; transcripts "
+            "are persisted under results/transcripts.<SUFFIX>/... instead of "
+            "results/transcripts/... . Default (omitted): unsuffixed paths, exactly as "
+            "before -- this flag changes nothing when absent."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    conditions = _parse_conditions_arg(args.condition)
+    seeds = tuple(SEED + i for i in range(args.seeds))
+
+    if args.output_suffix:
+        runs_jsonl_path = RESULTS_DIR / f"runs.{args.output_suffix}.jsonl"
+        runs_mock_jsonl_path = RESULTS_DIR / f"runs.mock.{args.output_suffix}.jsonl"
+        transcripts_dir = RESULTS_DIR / f"transcripts.{args.output_suffix}"
+    else:
+        runs_jsonl_path = RUNS_JSONL_PATH
+        runs_mock_jsonl_path = RUNS_MOCK_JSONL_PATH
+        transcripts_dir = RESULTS_TRANSCRIPTS_DIR
 
     if args.replay:
         rows = load_existing_rows()
@@ -1720,8 +1854,8 @@ def main(argv: list[str] | None = None) -> None:
             sys.exit(1)
         print(f"[replay] loaded {len(rows)} existing rows from disk; no model was called")
     else:
-        rows = run_all()
-        write_runs_jsonl(rows)
+        rows = run_all(conditions=conditions, seeds=seeds, transcripts_dir=transcripts_dir)
+        write_runs_jsonl(rows, runs_jsonl_path=runs_jsonl_path, runs_mock_jsonl_path=runs_mock_jsonl_path)
 
     write_summary_csv(rows)
 
@@ -1735,7 +1869,7 @@ def main(argv: list[str] | None = None) -> None:
     with open(RESULTS_DIR / "breakeven.json", "w") as f:
         json.dump({k: v for k, v in breakeven.items() if k != "sweep"}, f, indent=2)
 
-    print(f"{'re-scored' if args.replay else 'wrote'} {len(rows)} rows ({'replay, no model calls' if args.replay else RUNS_MOCK_JSONL_PATH})")
+    print(f"{'re-scored' if args.replay else 'wrote'} {len(rows)} rows ({'replay, no model calls' if args.replay else runs_mock_jsonl_path})")
     print(f"wrote {SUMMARY_CSV_PATH}")
     print(f"wrote plots to {PLOTS_DIR}")
     print(json.dumps({k: v for k, v in breakeven.items() if k not in ("sweep",)}, indent=2, default=str))
