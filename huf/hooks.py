@@ -460,4 +460,5 @@ huf_voice_engines = {}
 # PR3 Jev semantic adapter; provider transport is injected by deployment resolution.
 huf_decision_backends.update({
     "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
+    "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
 })
