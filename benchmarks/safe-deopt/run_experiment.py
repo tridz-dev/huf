@@ -100,7 +100,7 @@ from recovery_harness import (  # noqa: E402
     MockedModel,
     LiveAPIModel,
     GET_OPERATION_STATUS_SCHEMA,
-    GEMINI_PRICING_USD_PER_MILLION_TOKENS,
+    MODEL_PRICING_USD_PER_MILLION_TOKENS,
     ToolCallRequest,
     build_condition4_context,
     build_condition5_payload,
@@ -139,14 +139,16 @@ RESULTS_TRANSCRIPTS_DIR = RESULTS_DIR / "transcripts"
 
 # API key env vars this harness recognizes as "a key is present" -- mirrors run_all.sh's
 # own check (ANTHROPIC_API_KEY or OPENAI_API_KEY), extended (Issue A / PLAN_V3 "Key
-# situation") to also recognize a Gemini key under either of its two common env var names.
+# situation") to also recognize a Gemini key under either of its two common env var names,
+# and (second model family) an OpenAI key under either ``OPENAI_API_KEY`` or the
+# ``OPENAI_KEY`` name this environment's own shell profile happens to use.
 # None of these is ever read for its VALUE beyond "is it set" here -- the key itself is
-# only ever handed to a real API client inside LiveAPIModel/GeminiHTTPProvider, never
-# logged or embedded in any result row. Which PROVIDER a live run actually uses is inferred
-# separately, from the `MODEL` env var's own value (a "gemini-" prefix routes to the Gemini
-# provider -- see recovery_harness._make_provider) -- not from which key var happened to be
-# set.
-_API_KEY_ENV_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY")
+# only ever handed to a real API client inside LiveAPIModel/GeminiHTTPProvider/
+# OpenAIHTTPProvider, never logged or embedded in any result row. Which PROVIDER a live run
+# actually uses is inferred separately, from the `MODEL` env var's own value (a "gemini-"
+# prefix routes to the Gemini provider, a "gpt-" prefix to the OpenAI provider -- see
+# recovery_harness._make_provider) -- not from which key var happened to be set.
+_API_KEY_ENV_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENAI_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY")
 
 
 def select_model_backend() -> tuple[bool, str | None]:
@@ -1204,7 +1206,7 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
     # Issue A (PLAN_V3): real dollar cost, ONLY for real (non-mocked) LLM rows. Summed
     # across EVERY model_step entry -- including calls that were part of a failed,
     # escalated, or recovery-phase interaction, not just a "final" one -- via
-    # compute_model_step_cost_usd, which is exactly what GEMINI_PRICING_USD_PER_MILLION_TOKENS
+    # compute_model_step_cost_usd, which is exactly what MODEL_PRICING_USD_PER_MILLION_TOKENS
     # + row_model_id resolve to below. A mocked row (tokens_are_real_accounting False) never
     # made a real API call, so it gets cost_usd=0.0 and no pricing key/date -- 0.0, not None,
     # to keep the field numeric/summable across a mixed CSV, but it must never be read as a
@@ -1213,9 +1215,9 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
     pricing_date = None
     pricing_model_key = None
     if is_live_row:
-        pricing_model_key = row_model_id if row_model_id in GEMINI_PRICING_USD_PER_MILLION_TOKENS else None
+        pricing_model_key = row_model_id if row_model_id in MODEL_PRICING_USD_PER_MILLION_TOKENS else None
         if pricing_model_key is not None:
-            pricing = GEMINI_PRICING_USD_PER_MILLION_TOKENS[pricing_model_key]
+            pricing = MODEL_PRICING_USD_PER_MILLION_TOKENS[pricing_model_key]
             pricing_date = pricing["pricing_date"]
             cost_usd = sum(
                 compute_model_step_cost_usd(

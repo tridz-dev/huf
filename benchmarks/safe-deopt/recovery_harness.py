@@ -594,18 +594,189 @@ def _parse_gemini_response(payload: dict) -> _ProviderResponse:
 	)
 
 
+#: JSON-Schema (lowercase) type names OpenAI's tool schema wants -- OpenAI's ``parameters``
+#: field on a function tool IS standard JSON Schema (see
+#: https://platform.openai.com/docs/guides/function-calling), so unlike Gemini's OpenAPI
+#: subset this is a near-identity translation: no case-uppercasing, just carrying the type
+#: string through as-is (defaulting to "string" when unspecified, same as the Gemini path).
+def _json_schema_to_openai_schema(schema: dict) -> dict:
+	"""Translate one :data:`AtomicTool.parameters` dict into the JSON-Schema object OpenAI's
+	``function.parameters`` field expects. Because ``AtomicTool.parameters`` is already a
+	lowercase JSON-Schema-like dict, this is mostly a pass-through (kept as an explicit
+	function, not a bare reference, so the two providers' translations stay independently
+	testable and one can evolve without touching the other).
+	"""
+	if not schema:
+		return {"type": "object", "properties": {}}
+	properties = {}
+	for name, spec in (schema.get("properties") or {}).items():
+		ptype = str(spec.get("type", "string")).lower()
+		prop: dict = {"type": ptype}
+		if spec.get("description"):
+			prop["description"] = spec["description"]
+		properties[name] = prop
+	out: dict = {"type": "object", "properties": properties}
+	required = schema.get("required")
+	if required:
+		out["required"] = list(required)
+	return out
+
+
+def _atomic_tools_to_openai_declarations(tools: dict[str, "AtomicTool"], available_tools: list[str]) -> list[dict]:
+	"""Build the ``tools`` list OpenAI's Chat Completions ``tools`` field expects (the
+	current ``{"type": "function", "function": {...}}`` shape -- NOT the deprecated
+	``functions``/``function_call`` format), for whichever tool names are currently
+	available. Mirrors :func:`_atomic_tools_to_gemini_declarations` in structure.
+	"""
+	declarations = []
+	for name in available_tools:
+		tool = tools.get(name)
+		if tool is None:
+			continue
+		declarations.append(
+			{
+				"type": "function",
+				"function": {
+					"name": tool.name,
+					"description": tool.description or tool.name,
+					"parameters": _json_schema_to_openai_schema(tool.parameters),
+				},
+			}
+		)
+	return declarations
+
+
+class OpenAIHTTPProvider:
+	"""Raw-HTTP OpenAI provider: speaks the documented ``/v1/chat/completions`` REST endpoint
+	directly via :mod:`urllib` (stdlib only, no ``openai`` SDK dependency), using the current
+	tool-calling shape (``tools``/``tool_calls``), never the deprecated ``functions`` format.
+
+	The API key is read from ``api_key`` (or, if not given, from ``OPENAI_API_KEY`` /
+	``OPENAI_KEY`` at call time -- never cached to a file, never logged) and sent ONLY in the
+	``Authorization: Bearer`` request header, never in the URL or query string.
+
+	``wire_format = "openai"`` is a marker :class:`LiveAPIModel` reads (via ``getattr``,
+	defaulting to ``"gemini"`` for any provider that doesn't set it -- including every
+	existing Gemini test's fake provider, so this is purely additive) to decide whether to
+	build OpenAI-native ``messages``/``tools`` or Gemini-native ``contents``/
+	``functionDeclarations`` for a given call.
+	"""
+
+	wire_format = "openai"
+
+	_ENDPOINT = "https://api.openai.com/v1/chat/completions"
+
+	def __init__(self, *, model_id: str, api_key: str | None = None, timeout: float = 60.0) -> None:
+		self.model_id = model_id
+		self._api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_KEY")
+		if not self._api_key:
+			raise RuntimeError(
+				"OpenAIHTTPProvider needs an API key: pass api_key= explicitly, or set "
+				"OPENAI_API_KEY / OPENAI_KEY in the environment before constructing it."
+			)
+		self.timeout = timeout
+
+	def generate(self, *, system_instruction: str | None, contents: list[dict], tool_declarations: list[dict]) -> _ProviderResponse:
+		messages: list[dict] = []
+		if system_instruction:
+			messages.append({"role": "system", "content": system_instruction})
+		messages.extend(contents)
+
+		body: dict = {"model": self.model_id, "messages": messages}
+		if tool_declarations:
+			body["tools"] = tool_declarations
+
+		data = json.dumps(body).encode("utf-8")
+		request = urllib.request.Request(
+			self._ENDPOINT,
+			data=data,
+			method="POST",
+			headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._api_key}"},
+		)
+		try:
+			with urllib.request.urlopen(request, timeout=self.timeout) as response:
+				payload = json.loads(response.read().decode("utf-8"))
+		except urllib.error.HTTPError as exc:
+			# Read and surface the body for debuggability -- this is OpenAI's OWN error JSON,
+			# never anything containing the API key (the key is only ever sent in a request
+			# header, never echoed back by the API in an error body).
+			try:
+				detail = exc.read().decode("utf-8", errors="replace")
+			except Exception:  # noqa: BLE001
+				detail = str(exc)
+			raise RuntimeError(f"OpenAI chat/completions HTTP {exc.code}: {detail}") from None
+		except urllib.error.URLError as exc:
+			raise RuntimeError(f"OpenAI chat/completions request failed: {exc.reason}") from None
+
+		return _parse_openai_response(payload)
+
+
+def _parse_openai_response(payload: dict) -> _ProviderResponse:
+	"""Parse one OpenAI ``chat/completions`` JSON response body into a provider-neutral
+	:class:`_ProviderResponse`. Only reads documented fields (``choices[0].message``,
+	``usage.{prompt_tokens,completion_tokens}``, ``usage.prompt_tokens_details.cached_tokens``,
+	top-level ``model``); never estimates/fabricates a field that isn't present.
+	"""
+	usage = payload.get("usage") or {}
+	model_version = payload.get("model")
+
+	text: str | None = None
+	function_call: dict | None = None
+	choices = payload.get("choices") or []
+	if choices:
+		message = choices[0].get("message") or {}
+		tool_calls = message.get("tool_calls") or []
+		if tool_calls:
+			tc = tool_calls[0]
+			fn = tc.get("function") or {}
+			raw_args = fn.get("arguments")
+			args: dict = {}
+			if isinstance(raw_args, str) and raw_args:
+				try:
+					parsed = json.loads(raw_args)
+					if isinstance(parsed, dict):
+						args = parsed
+				except json.JSONDecodeError:
+					args = {}
+			elif isinstance(raw_args, dict):
+				args = raw_args
+			function_call = {"name": fn.get("name"), "args": args, "id": tc.get("id")}
+		elif message.get("content"):
+			text = message["content"]
+
+	cached_tokens = 0
+	prompt_tokens_details = usage.get("prompt_tokens_details") or {}
+	if "cached_tokens" in prompt_tokens_details:
+		cached_tokens = int(prompt_tokens_details.get("cached_tokens") or 0)
+
+	return _ProviderResponse(
+		text=text,
+		function_call=function_call,
+		prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
+		completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+		cached_tokens=cached_tokens,
+		model_version=model_version,
+	)
+
+
 def _make_provider(model_id: str) -> _Provider:
 	"""Provider inference from ``model_id`` (Issue A / PLAN_V3 "Key situation"): a
-	``gemini-`` prefix routes to :class:`GeminiHTTPProvider`. No other provider is
-	implemented yet -- adding one is a new ``_Provider`` implementation plus one more
-	``elif`` branch here, never a change to ``LiveAPIModel`` itself.
+	``gemini-`` prefix routes to :class:`GeminiHTTPProvider`, a ``gpt-`` prefix routes to
+	:class:`OpenAIHTTPProvider`. Adding another provider is a new ``_Provider``
+	implementation plus one more ``elif`` branch here, never a change to
+	``LiveAPIModel.next_step``'s control flow itself (only its ``wire_format`` dispatch,
+	which reads the provider's own ``wire_format`` attribute rather than growing an
+	``isinstance`` check per provider).
 	"""
 	if model_id.startswith("gemini-"):
 		return GeminiHTTPProvider(model_id=model_id)
+	if model_id.startswith("gpt-"):
+		return OpenAIHTTPProvider(model_id=model_id)
 	raise NotImplementedError(
 		f"LiveAPIModel has no provider implementation for model_id={model_id!r} yet -- only "
-		"a 'gemini-' prefix is currently routed (to GeminiHTTPProvider). Add a new "
-		"_Provider implementation and extend _make_provider() to support this model family."
+		"'gemini-' (GeminiHTTPProvider) and 'gpt-' (OpenAIHTTPProvider) prefixes are "
+		"currently routed. Add a new _Provider implementation and extend _make_provider() to "
+		"support this model family."
 	)
 
 
@@ -638,7 +809,20 @@ class LiveAPIModel:
 		self.model_id = model_id or os.environ.get("MODEL", "unset")
 		self._tools = dict(tools or {})
 		self.provider = provider if provider is not None else _make_provider(self.model_id)
+		#: Which wire format to build for ``provider.generate()`` -- read from the provider's
+		#: own ``wire_format`` attribute (``"openai"`` for :class:`OpenAIHTTPProvider`),
+		#: defaulting to ``"gemini"`` for any provider that doesn't set one (every existing
+		#: Gemini test's fake provider included, so this dispatch is purely additive and
+		#: changes no existing behavior).
+		self._wire_format = getattr(self.provider, "wire_format", "gemini")
 		self._contents: list[dict] = []
+		# OpenAI-native running conversation state (parallel to ``self._contents`` above),
+		# only ever populated/read when ``self._wire_format == "openai"``.
+		self._openai_messages: list[dict] = []
+		#: The ``tool_calls[0].id`` OpenAI returned for the most recent function-call turn --
+		#: must be echoed back verbatim as the following tool message's ``tool_call_id`` (the
+		#: OpenAI-format analogue of Gemini's ``thought_signature`` bookkeeping below).
+		self._pending_openai_tool_call_id: str | None = None
 		self._system_instruction: str | None = None
 		self._last_transcript_len = 0
 		#: The exact model version string the API itself reported for the most recent call
@@ -674,18 +858,57 @@ class LiveAPIModel:
 		# information the model should have seen.
 		self._contents.append({"role": "user", "parts": [{"text": json.dumps(_to_jsonable(entry))}]})
 
+	def _ingest_transcript_entry_openai(self, entry: dict) -> None:
+		"""OpenAI-wire-format analogue of :meth:`_ingest_transcript_entry` -- same transcript
+		roles, translated into OpenAI's ``messages`` shape (plain ``{"role", "content"}``
+		dicts, no Gemini-style ``parts``) instead.
+		"""
+		role = entry.get("role")
+		content = entry.get("content")
+		if role == "system":
+			self._system_instruction = str(content)
+			return
+		if role == "user":
+			text = content if isinstance(content, str) else json.dumps(_to_jsonable(content))
+			self._openai_messages.append({"role": "user", "content": text})
+			return
+		if role == "tool":
+			tool_name = entry.get("tool_name") or (content.get("tool_name") if isinstance(content, dict) else None) or "unknown_tool"
+			response_payload = _to_jsonable(content)
+			if not isinstance(response_payload, dict):
+				response_payload = {"result": response_payload}
+			tool_call_id = self._pending_openai_tool_call_id or f"call_{tool_name}"
+			self._openai_messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(response_payload)})
+			return
+		if role == "assistant":
+			self._openai_messages.append({"role": "assistant", "content": str(content or "")})
+			return
+		self._openai_messages.append({"role": "user", "content": json.dumps(_to_jsonable(entry))})
+
 	def next_step(self, *, transcript: list[dict], available_tools: list[str]) -> ModelStep:
 		new_entries = transcript[self._last_transcript_len :]
 		self._last_transcript_len = len(transcript)
+		is_openai = self._wire_format == "openai"
 		for entry in new_entries:
-			self._ingest_transcript_entry(entry)
+			if is_openai:
+				self._ingest_transcript_entry_openai(entry)
+			else:
+				self._ingest_transcript_entry(entry)
 
-		tool_declarations = _atomic_tools_to_gemini_declarations(self._tools, available_tools)
-		response = self.provider.generate(
-			system_instruction=self._system_instruction,
-			contents=list(self._contents),
-			tool_declarations=tool_declarations,
-		)
+		if is_openai:
+			tool_declarations = _atomic_tools_to_openai_declarations(self._tools, available_tools)
+			response = self.provider.generate(
+				system_instruction=self._system_instruction,
+				contents=list(self._openai_messages),
+				tool_declarations=tool_declarations,
+			)
+		else:
+			tool_declarations = _atomic_tools_to_gemini_declarations(self._tools, available_tools)
+			response = self.provider.generate(
+				system_instruction=self._system_instruction,
+				contents=list(self._contents),
+				tool_declarations=tool_declarations,
+			)
 
 		if response.model_version:
 			self.last_model_version = response.model_version
@@ -693,19 +916,31 @@ class LiveAPIModel:
 		if response.function_call is not None and response.function_call.get("name"):
 			name = response.function_call["name"]
 			args = dict(response.function_call.get("args") or {})
-			thought_signature = response.function_call.get("thought_signature")
-			# Record the model's OWN turn in our provider-native state so the NEXT call (once
-			# run_recovery appends the tool's result to the shared transcript) sees the
-			# functionCall this result answers -- see the class docstring's "Transcript
-			# bookkeeping" section for why the shared transcript alone can't provide this.
-			# The 3.x Gemini model family requires the exact `thoughtSignature` opaque token
-			# to be echoed back verbatim on this same part in the replayed history, or the
-			# next call 400s with "Function call is missing a thought_signature" -- carry it
-			# through unchanged when the API provided one (older/2.x models don't emit it).
-			part: dict = {"functionCall": {"name": name, "args": args}}
-			if thought_signature:
-				part["thoughtSignature"] = thought_signature
-			self._contents.append({"role": "model", "parts": [part]})
+			if is_openai:
+				tool_call_id = response.function_call.get("id") or f"call_{name}"
+				self._pending_openai_tool_call_id = tool_call_id
+				self._openai_messages.append(
+					{
+						"role": "assistant",
+						"content": None,
+						"tool_calls": [{"id": tool_call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}],
+					}
+				)
+			else:
+				thought_signature = response.function_call.get("thought_signature")
+				# Record the model's OWN turn in our provider-native state so the NEXT call
+				# (once run_recovery appends the tool's result to the shared transcript) sees
+				# the functionCall this result answers -- see the class docstring's
+				# "Transcript bookkeeping" section for why the shared transcript alone can't
+				# provide this. The 3.x Gemini model family requires the exact
+				# `thoughtSignature` opaque token to be echoed back verbatim on this same part
+				# in the replayed history, or the next call 400s with "Function call is
+				# missing a thought_signature" -- carry it through unchanged when the API
+				# provided one (older/2.x models don't emit it).
+				part: dict = {"functionCall": {"name": name, "args": args}}
+				if thought_signature:
+					part["thoughtSignature"] = thought_signature
+				self._contents.append({"role": "model", "parts": [part]})
 			return ModelStep(
 				tool_call=ToolCallRequest(name, args),
 				estimated_prompt_tokens=response.prompt_tokens,
@@ -714,7 +949,10 @@ class LiveAPIModel:
 			)
 
 		text = response.text or ""
-		self._contents.append({"role": "model", "parts": [{"text": text}]})
+		if is_openai:
+			self._openai_messages.append({"role": "assistant", "content": text})
+		else:
+			self._contents.append({"role": "model", "parts": [{"text": text}]})
 		return ModelStep(
 			final_text=text,
 			estimated_prompt_tokens=response.prompt_tokens,
@@ -729,7 +967,7 @@ class LiveAPIModel:
 # and recovery-phase calls.")
 # ---------------------------------------------------------------------------
 #
-# Source/confidence: fetched live from Google's official pricing page
+# Source/confidence, Gemini: fetched live from Google's official pricing page
 # (https://ai.google.dev/gemini-api/docs/pricing, Standard/Paid tier) on 2026-09-22 -- the
 # same day this table was added -- via WebFetch, and cross-checked against a WebSearch
 # summary (artificialanalysis.ai / openrouter.ai / cloudzero.com all reported the same
@@ -738,7 +976,19 @@ class LiveAPIModel:
 # 2026-09-22, re-fetch and bump ``pricing_date`` before trusting a cost figure computed with
 # this table for a later run. Cached-input rate is Google's documented "10% of standard
 # input" context-caching rate, not separately confirmed against a second source.
-GEMINI_PRICING_USD_PER_MILLION_TOKENS: dict[str, dict[str, Any]] = {
+#
+# Source/confidence, OpenAI (gpt-4o-mini): fetched live from OpenAI's official pricing page
+# (https://platform.openai.com/docs/pricing, which redirected to
+# https://developers.openai.com/api/docs/pricing) on 2026-09-23 via WebFetch: $0.15 / $0.075
+# (cached) / $0.60 per million input / cached-input / output tokens, Standard processing
+# tier. Not independently cross-checked against a second source (unlike the Gemini figures
+# above) -- treat as a single-source, same-day lookup rather than corroborated.
+#
+# Table renamed from the Gemini-only ``GEMINI_PRICING_USD_PER_MILLION_TOKENS`` now that it
+# covers more than one provider; the old name is kept below as an alias so existing imports
+# (this module's own ``compute_model_step_cost_usd`` docstring, ``run_experiment.py``) don't
+# need to change.
+MODEL_PRICING_USD_PER_MILLION_TOKENS: dict[str, dict[str, Any]] = {
 	"gemini-3.5-flash-lite": {
 		"input": 0.30,
 		"output": 2.50,
@@ -746,7 +996,17 @@ GEMINI_PRICING_USD_PER_MILLION_TOKENS: dict[str, dict[str, Any]] = {
 		"pricing_date": "2026-09-22",
 		"source": "https://ai.google.dev/gemini-api/docs/pricing (Standard/Paid tier)",
 	},
+	"gpt-4o-mini": {
+		"input": 0.15,
+		"output": 0.60,
+		"cached_input": 0.075,
+		"pricing_date": "2026-09-23",
+		"source": "https://platform.openai.com/docs/pricing -> https://developers.openai.com/api/docs/pricing (Standard tier)",
+	},
 }
+
+#: Backward-compatible alias -- see the rename note above.
+GEMINI_PRICING_USD_PER_MILLION_TOKENS = MODEL_PRICING_USD_PER_MILLION_TOKENS
 
 
 def compute_model_step_cost_usd(*, prompt_tokens: int, completion_tokens: int, cached_tokens: int, pricing: dict) -> float:
