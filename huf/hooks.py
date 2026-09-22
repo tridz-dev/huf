@@ -462,4 +462,5 @@ huf_decision_backends.update({
     "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
     "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
     "local_rules": "huf.ai.decision.backends.local.LocalRulesBackend",
+    "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
 })
