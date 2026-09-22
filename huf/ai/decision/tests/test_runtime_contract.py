@@ -106,6 +106,15 @@ class TestDecisionRuntimeContract(unittest.TestCase):
 		self.assertEqual(response.error_code, "DECISION_CANDIDATE_LIMIT_EXCEEDED")
 		self.assertEqual(backend.call_count, 0)
 
+	def test_candidate_source_must_be_a_closed_enum(self):
+		request = _request(_select_question(), candidate_source="raw_agent_config")
+		backend = FakeDecisionBackend()
+
+		response = DecisionRuntime().evaluate(request, backend)
+
+		self.assertEqual(response.error_code, "DECISION_CANDIDATE_INVALID")
+		self.assertEqual(backend.call_count, 0)
+
 	def test_confidence_threshold_requires_confidence_capability_before_dispatch(self):
 		request = _request(_select_question(), minimum_confidence=0.7)
 		backend = FakeDecisionBackend(
@@ -258,6 +267,27 @@ class TestDecisionRuntimeContract(unittest.TestCase):
 		self.assertEqual(response.status, DecisionStatus.SUCCESS)
 		self.assertFalse(hasattr(backend.last_request, "execution_context"))
 		self.assertEqual(backend.last_request.state, {"request": {"message": "please help"}})
+
+	def test_telemetry_request_labels_are_bounded_and_redacted(self):
+		events = []
+		request = _request(
+			_select_question(),
+			execution_context={},
+		)
+		request = DecisionRequest(
+			policy=DecisionPolicy(
+				policy_id="api_key=leaked",
+				questions=request.policy.questions,
+				state_bindings=request.policy.state_bindings,
+			),
+			state=request.state,
+			surface="token=also-leaked",
+			candidate_source=CandidateSource.POLICY_OPTIONS,
+		)
+		DecisionRuntime(telemetry_sink=events.append).evaluate(request, FakeDecisionBackend())
+		self.assertEqual(events[0].policy_id, "unknown")
+		self.assertEqual(events[0].surface, "generic")
+		self.assertNotIn("leaked", repr(events[0]))
 
 	def test_structured_credentials_are_redacted_before_dispatch_and_audit(self):
 		policy = _policy(_select_question(), store_state=True)
