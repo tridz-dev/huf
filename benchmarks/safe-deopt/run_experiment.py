@@ -1215,7 +1215,16 @@ def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for
     pricing_date = None
     pricing_model_key = None
     if is_live_row:
-        pricing_model_key = row_model_id if row_model_id in MODEL_PRICING_USD_PER_MILLION_TOKENS else None
+        # Exact match first (covers Gemini, whose reported modelVersion happens to equal
+        # the nominal pricing-table key); fall back to longest-matching-prefix for
+        # providers (e.g. OpenAI) whose reported version string is more specific than the
+        # nominal id used as a pricing key (e.g. "gpt-4o-mini-2024-07-18" vs "gpt-4o-mini")
+        # -- never the reverse (a pricing key must not be a prefix of some UNRELATED model).
+        if row_model_id in MODEL_PRICING_USD_PER_MILLION_TOKENS:
+            pricing_model_key = row_model_id
+        else:
+            candidates = [k for k in MODEL_PRICING_USD_PER_MILLION_TOKENS if row_model_id and row_model_id.startswith(k)]
+            pricing_model_key = max(candidates, key=len) if candidates else None
         if pricing_model_key is not None:
             pricing = MODEL_PRICING_USD_PER_MILLION_TOKENS[pricing_model_key]
             pricing_date = pricing["pricing_date"]
