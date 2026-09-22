@@ -158,3 +158,27 @@ class JevSystemOneBackend:
 
 	def _failure(self, request: DecisionBackendRequest, status: DecisionStatus) -> DecisionResponse:
 		return DecisionResponse(status=status, identity=self.identity, backend_adapter=self.adapter_id())
+
+
+def opencode_zen_transport_from_env(*, api_key: str | None = None, endpoint: str = "https://opencode.ai/zen/v1/systemone", timeout: float = 30.0, opener=None) -> JevTransport:
+	"""Build an environment-gated OpenCode Zen transport without exposing credentials."""
+	import os
+	from urllib.error import HTTPError, URLError
+	from urllib.request import Request, urlopen
+
+	key = api_key or os.environ.get("OPENCODE_API_KEY")
+	if not key:
+		raise RuntimeError("OPENCODE_API_KEY is required for the live Jev deployment")
+	request_opener = opener or urlopen
+
+	def transport(payload: Mapping[str, Any]) -> tuple[int, Mapping[str, Any]]:
+		request = Request(endpoint, data=json.dumps(payload).encode("utf-8"), headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
+		try:
+			with request_opener(request, timeout=timeout) as response:
+				return int(response.status), json.loads(response.read().decode("utf-8"))
+		except HTTPError as exc:
+			return int(exc.code), {}
+		except URLError as exc:
+			raise ConnectionError("OpenCode Zen transport unavailable") from exc
+
+	return transport
