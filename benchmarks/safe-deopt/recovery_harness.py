@@ -467,6 +467,15 @@ def _json_schema_to_gemini_schema(schema: dict) -> dict:
 		prop: dict = {"type": ptype}
 		if spec.get("description"):
 			prop["description"] = spec["description"]
+		if ptype == "ARRAY":
+			# Gemini's FunctionDeclaration.parameters requires "items" on every ARRAY-typed
+			# property (a bare {"type": "ARRAY"} 400s: "...items: missing field") -- no
+			# existing AtomicTool schema in this benchmark used an array-typed parameter
+			# before this experiment, so this path was previously untested against a real
+			# API call. Default to STRING items when the caller's schema doesn't specify.
+			item_spec = spec.get("items") or {"type": "string"}
+			item_type = _JSON_SCHEMA_TYPE_TO_GEMINI.get(str(item_spec.get("type", "string")).lower(), "STRING")
+			prop["items"] = {"type": item_type}
 		properties[name] = prop
 	out: dict = {"type": "OBJECT", "properties": properties}
 	required = schema.get("required")
