@@ -1,5 +1,7 @@
 import json
+import os
 import unittest
+from unittest.mock import patch
 from types import SimpleNamespace
 
 from huf.ai.decision.backends.jev import opencode_zen_transport_from_env
@@ -7,7 +9,7 @@ from huf.ai.decision.backends.jev import opencode_zen_transport_from_env
 
 class TestOpenCodeTransport(unittest.TestCase):
 	def test_requires_key_without_network_call(self):
-		with self.assertRaises(RuntimeError):
+		with patch.dict(os.environ, {"OPENCODE_API_KEY": ""}, clear=False), self.assertRaises(RuntimeError):
 			opencode_zen_transport_from_env(api_key="")
 
 	def test_sends_bearer_key_and_decodes_response(self):
