@@ -122,6 +122,7 @@ FLOW_ONLY_NODE_TYPES: frozenset[str] = frozenset(
 	{
 		"agent.run",
 		"router.llm",
+		"router.decision",
 		"human.approval",
 		"trigger.webhook",
 		"trigger.schedule",
@@ -432,7 +433,7 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 	if ntype == "condition":
 		targets.append(("config.on_true", config.get("on_true")))
 		targets.append(("config.on_false", config.get("on_false")))
-	elif ntype == "router.llm":
+	elif ntype in {"router.llm", "router.decision"}:
 		for i, option in enumerate(config.get("options", []) or []):
 			if isinstance(option, dict):
 				targets.append((f"config.options[{i}].node_id", option.get("node_id")))
