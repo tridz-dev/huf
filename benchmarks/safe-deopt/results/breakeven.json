@@ -5,6 +5,8 @@
   "discovery_cost_seconds": 1.650000922381878e-05,
   "procedure_proposal_timing_seconds": null,
   "procedure_proposal_note": "not measured -- huf/ai/procedure_proposal.py imports frappe at module scope and this sandbox has no frappe/bench installed",
+  "w3_bench_measured_discovery_timing_seconds": 3.8962525714887306,
+  "w3_bench_measured_discovery_note": "Real (non-mocked) wall-clock cost, measured on the safe-deopt-verify bench (safe-deopt-verify.local), of W3's compiled/procedural path: read account -> read prior orders -> check_eligibility (pure) -> create_draft_order (real ToDo insert) -> compute_pricing (pure) -> submit_order (real ToDo save+commit) -> update_fulfillment_status (real ToDo save+commit) -> fetch-to-verify, all against real Frappe DocType operations, 7 real DB/tool calls, averaged over 2 runs (3.9695196410175413s, 3.82298550195992s). This is intentionally kept as its OWN field rather than overwriting procedure_proposal_timing_seconds: that field names the cost of huf.ai.procedure_proposal.py's discovery/proposal step specifically, which was never run here (it still cannot run standalone in this sandbox -- see procedure_proposal_note); this field is a real-bench-measured substitute discovery-cost proxy for a DIFFERENT thing -- the cost of a compiled procedure's write-path replay on real infrastructure -- and conflating the two would misrepresent what was actually measured. See benchmarks/safe-deopt/results/w3_bench_report.md for full method, the full-agent comparison run, and caveats (most of this wall time is bench-console/IPython per-statement round-trip overhead, not pure DB-call latency -- disclosed there in detail).",
   "breakeven_by_p_percent": {
     "0": {
       "n_star": 0.269,

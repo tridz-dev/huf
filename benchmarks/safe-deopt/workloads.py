@@ -44,6 +44,14 @@ __all__ = [
 	"Allocation",
 	"PaymentAllocationStore",
 	"classify_payment",
+	# W3
+	"Account",
+	"PriorOrder",
+	"DraftOrder",
+	"OrderProcessingStore",
+	"EligibilityDenied",
+	"check_eligibility",
+	"compute_pricing",
 ]
 
 
@@ -471,3 +479,233 @@ class PaymentAllocationStore(_CommitLogMixin):
 		``commit_log``, task completion never depends on this landing.
 		"""
 		self.pending_followup_updates.append({"payment": payment, "status": status})
+
+
+# ---------------------------------------------------------------------------
+# W3 -- realistic order-onboarding flow (Issue 5: 5-8 step workload)
+# ---------------------------------------------------------------------------
+#
+# W1/W2 are deliberately small (2 writes each) to keep the in-memory fault-injection matrix
+# tractable. W3 is sized 5-8 steps, mixing reads, pure logic, and writes, to look like a
+# plausible end-to-end "onboard a new order" Procedure -- the kind of task where a full
+# agent replaying it from scratch would need meaningfully more tool calls/tokens than
+# replaying a compiled Procedure. Steps (see ``run_in_memory`` below for the exact sequence
+# this module runs):
+#
+#   1. read_account            (read)
+#   2. read_prior_orders       (read)
+#   3. check_eligibility       (pure logic, no I/O)
+#   4. create_draft_order      (write A)
+#   5. compute_pricing         (pure logic, no I/O)
+#   6. submit_order            (write B)
+#   7. update_fulfillment_status (pending / non-critical, mirrors W1/W2's "pending" step)
+#   8. notify                  (pending / non-critical)
+#
+# This in-memory version mirrors W1/W2's style (dataclasses + ``_CommitLogMixin`` +
+# ``Authorizer`` hook) so it is importable and testable under plain pytest with no bench.
+# The REAL-bench counterpart (real HUF/Frappe DocType operations) is documented and driven
+# separately from ``benchmarks/safe-deopt/results/w3_bench_report.md`` -- see that file for
+# what actually ran against ``safe-deopt-verify.local``; this module intentionally does not
+# import frappe anywhere, matching W1/W2's own "frappe-free" design requirement.
+
+
+class EligibilityDenied(RuntimeError):
+	"""Raised by ``check_eligibility`` when an account fails the eligibility check (pure
+	logic -- no store mutation, no I/O; this exists to prove step 3 can short-circuit the
+	whole flow before any write is attempted).
+	"""
+
+
+@dataclass
+class Account:
+	account_id: str
+	name: str
+	credit_hold: bool = False
+	loyalty_tier: str = "standard"  # "standard" | "silver" | "gold"
+
+
+@dataclass
+class PriorOrder:
+	order_id: str
+	account_id: str
+	amount: float
+	status: str = "fulfilled"  # "fulfilled" | "cancelled" | "disputed"
+
+
+@dataclass
+class DraftOrder:
+	name: str
+	account_id: str
+	items_subtotal: float
+	operation_key: str
+	discount_percent: float = 0.0
+	total: float = 0.0
+	status: str = "draft"  # "draft" | "submitted"
+	fulfillment_status: str = "pending"  # "pending" | "in_progress" | "shipped"
+
+
+def check_eligibility(account: Account, prior_orders: list[PriorOrder]) -> dict:
+	"""Pure logic, no I/O (step 3): an account on credit hold, or with more disputed prior
+	orders than fulfilled ones, is not eligible for a new order. Returns
+	``{"eligible": bool, "reason": str | None}``; never mutates anything.
+	"""
+	if account.credit_hold:
+		return {"eligible": False, "reason": "account_on_credit_hold"}
+
+	disputed = sum(1 for o in prior_orders if o.status == "disputed")
+	fulfilled = sum(1 for o in prior_orders if o.status == "fulfilled")
+	if disputed > fulfilled:
+		return {"eligible": False, "reason": "too_many_disputed_prior_orders"}
+
+	return {"eligible": True, "reason": None}
+
+
+def compute_pricing(account: Account, items_subtotal: float) -> dict:
+	"""Pure logic, no I/O (step 5): a loyalty-tier discount applied to the draft order's
+	subtotal. Returns ``{"discount_percent": float, "total": float}``; never mutates
+	anything (the caller is responsible for writing the result onto the draft order).
+	"""
+	tier_discount = {"standard": 0.0, "silver": 0.05, "gold": 0.10}.get(account.loyalty_tier, 0.0)
+	total = round(items_subtotal * (1 - tier_discount), 2)
+	return {"discount_percent": tier_discount * 100, "total": total}
+
+
+class OrderProcessingStore(_CommitLogMixin):
+	"""In-memory stand-in for a real HUF/Frappe "new order onboarding" world.
+
+	Reads
+	-----
+	``read_account`` / ``read_prior_orders`` never write and are never logged.
+
+	Pure logic
+	----------
+	``check_eligibility`` / ``compute_pricing`` (module-level functions above) never touch
+	the store at all -- they are pure functions over the data the reads already returned.
+
+	Writes
+	------
+	- ``create_draft_order`` (write A): creates a draft order. Idempotent by an explicit
+	  ``operation_key`` (same convention as W1/W2): a duplicate call returns the existing
+	  draft rather than creating a second one.
+	- ``submit_order`` (write B): submits a draft order (``draft`` -> ``submitted``).
+	  Idempotent by ``operation_key``, distinct namespace from write A's keys, same as
+	  W2's ``submit_allocation``: a duplicate call is a logged no-op, never double-submits.
+
+	Pending / non-critical
+	-----------------------
+	- ``update_fulfillment_status`` and ``notify`` are both side channels: logged in
+	  ``self.pending_fulfillment_updates`` / ``self.pending_notifications`` respectively,
+	  never in ``commit_log``, and a task is allowed to be graded "complete" whether or not
+	  either of them ever fires -- exactly W1/W2's treatment of their own pending steps.
+	"""
+
+	def __init__(self, *, authorizer: Authorizer = allow_all):
+		self._init_log()
+		self.authorizer = authorizer
+		self.accounts: dict[str, Account] = {}
+		self.prior_orders: dict[str, list[PriorOrder]] = {}
+		self.draft_orders: dict[str, DraftOrder] = {}
+		self._drafts_by_operation_key: dict[str, str] = {}
+		self._submitted_operation_keys: set[str] = set()
+		self._order_counter = itertools.count(1)
+		self.pending_fulfillment_updates: list[dict] = []
+		self.pending_notifications: list[dict] = []
+
+	# -- seeding -----------------------------------------------------------
+
+	def seed_account(self, account: Account) -> None:
+		self.accounts[account.account_id] = account
+
+	def seed_prior_order(self, order: PriorOrder) -> None:
+		self.prior_orders.setdefault(order.account_id, []).append(order)
+
+	# -- reads ---------------------------------------------------------------
+
+	def read_account(self, account_id: str) -> Account | None:
+		return self.accounts.get(account_id)
+
+	def read_prior_orders(self, account_id: str) -> list[PriorOrder]:
+		return list(self.prior_orders.get(account_id, []))
+
+	# -- write A ---------------------------------------------------------------
+
+	def create_draft_order(self, *, account_id: str, items_subtotal: float, operation_key: str) -> DraftOrder:
+		"""Idempotent by ``operation_key``: a duplicate call returns the same draft."""
+		existing_name = self._drafts_by_operation_key.get(operation_key)
+		if existing_name is not None:
+			self._record(
+				action="create_draft_order", operation_key=operation_key, committed=False, record_key=existing_name, reason="duplicate_operation_key"
+			)
+			return self.draft_orders[existing_name]
+
+		if not self.authorizer("create_draft_order", {"account_id": account_id, "items_subtotal": items_subtotal}):
+			self._record(action="create_draft_order", operation_key=operation_key, committed=False, record_key=None, reason="permission_denied")
+			raise PermissionDenied(f"create_draft_order denied for {account_id}")
+
+		name = f"ORDER-{next(self._order_counter):04d}"
+		draft = DraftOrder(name=name, account_id=account_id, items_subtotal=items_subtotal, operation_key=operation_key)
+		self.draft_orders[name] = draft
+		self._drafts_by_operation_key[operation_key] = name
+		self._record(action="create_draft_order", operation_key=operation_key, committed=True, record_key=name)
+		return draft
+
+	# -- pure logic result applied onto the draft (not a commit-logged write itself) --------
+
+	def apply_pricing(self, *, order: str, discount_percent: float, total: float) -> DraftOrder:
+		"""Writes the result of ``compute_pricing`` onto the draft order. Deliberately NOT
+		commit-logged: this mirrors "annotate a not-yet-submitted record with a computed
+		field" -- a mutation, but not one whose ground truth a fault-injection wrapper needs
+		to reason about, since it is always re-derivable from ``compute_pricing`` and never
+		idempotency-sensitive (recomputing and re-applying the same inputs is always safe).
+		"""
+		draft = self.draft_orders[order]
+		draft.discount_percent = discount_percent
+		draft.total = total
+		return draft
+
+	# -- write B ---------------------------------------------------------------
+
+	def submit_order(self, *, order: str, operation_key: str) -> DraftOrder:
+		"""Idempotent submit: a duplicate call with the same ``operation_key`` (distinct
+		namespace from write A's keys) is a logged no-op; submitting an already-submitted
+		order via a different-but-equivalent key is also a no-op, never double-submits.
+		"""
+		draft = self.draft_orders.get(order)
+		if draft is None:
+			self._record(action="submit_order", operation_key=operation_key, committed=False, record_key=None, reason="not_found")
+			raise KeyError(f"no such draft order {order}")
+
+		if operation_key in self._submitted_operation_keys:
+			self._record(action="submit_order", operation_key=operation_key, committed=False, record_key=order, reason="duplicate_operation_key")
+			return draft
+
+		if draft.status == "submitted":
+			self._record(action="submit_order", operation_key=operation_key, committed=False, record_key=order, reason="already_submitted")
+			return draft
+
+		if not self.authorizer("submit_order", {"order": order}):
+			self._record(action="submit_order", operation_key=operation_key, committed=False, record_key=None, reason="permission_denied")
+			raise PermissionDenied(f"submit_order denied for {order}")
+
+		draft.status = "submitted"
+		self._submitted_operation_keys.add(operation_key)
+		self._record(action="submit_order", operation_key=operation_key, committed=True, record_key=order)
+		return draft
+
+	# -- pending / non-critical -----------------------------------------------
+
+	def update_fulfillment_status(self, *, order: str, status: str) -> None:
+		"""Non-critical side channel, same treatment as W1's ``notify`` / W2's
+		``update_followup_status``: never appended to ``commit_log``, task completion never
+		depends on this landing. Still updates the in-memory record's field directly (a real
+		bench version would be a plain ``.save()`` field update) so a test can observe it
+		happened, but no ground-truth commit-log entry backs it.
+		"""
+		draft = self.draft_orders.get(order)
+		if draft is not None:
+			draft.fulfillment_status = status
+		self.pending_fulfillment_updates.append({"order": order, "status": status})
+
+	def notify(self, *, channel: str, message: str) -> None:
+		"""Non-critical side channel. Never appended to ``commit_log``."""
+		self.pending_notifications.append({"channel": channel, "message": message})
