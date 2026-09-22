@@ -9,6 +9,13 @@ app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
 app_url="/huf"
+
+# Decision Runtime backend adapters are declared by installed apps. Runtime
+# configuration stores only these stable adapter IDs, never import paths.
+huf_decision_backends = {
+    "fake": "huf.ai.decision.backends.fake.FakeDecisionBackend",
+}
+
 # Apps
 # ------------------
 
