@@ -52,6 +52,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any, Callable
 
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
@@ -65,6 +66,7 @@ from faults import (  # noqa: E402
     FAULT_IDS,
     GUARANTEE_LEVELS,
     FaultInjector,
+    ObservedResult,
     get_operation_status,
 )
 from invariants_safedeopt import (  # noqa: E402
@@ -131,14 +133,28 @@ def huf_commit_hash() -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_w1():
+def build_w1(*, seed_write_a: bool = True):
+    """``seed_write_a=False`` builds W1 WITHOUT pre-seeding write A (``create_followup_todo``)
+    -- used exclusively by C1's from-scratch execution path (Issue 1), which must perform
+    write A itself as a real tool call rather than starting from a pre-seeded state.
+    """
     store = CrmStore(authorizer=allow_all)
     store.seed_customer(Customer(customer_id="CUST-1", name="Ada", company="Acme"))
     store.seed_open_item(OpenItem(reference_type="Sales Invoice", reference_name="SINV-2001", customer_id="CUST-1", outstanding_amount=100.0))
-    store.create_followup_todo(reference_type="Sales Invoice", reference_name="SINV-2001", allocated_to="agent@example.com", operation_key="opA")
+    write_a_kwargs = {"reference_type": "Sales Invoice", "reference_name": "SINV-2001", "allocated_to": "agent@example.com"}
+    if seed_write_a:
+        store.create_followup_todo(operation_key="opA", **write_a_kwargs)
     return {
         "name": "W1",
         "store": store,
+        "write_a_name": "create_followup_todo",
+        "write_a_fn": store.create_followup_todo,
+        "write_a_kwargs": write_a_kwargs,
+        # write B's kwargs never actually depend on write A's return value for W1 -- the
+        # linked record is addressed directly by reference_type/reference_name -- but this
+        # is still a callable for symmetry with W2 (whose idempotent variant DOES depend on
+        # write A's return value).
+        "write_b_kwargs_from_write_a": lambda _write_a_result: {"reference_type": "Sales Invoice", "reference_name": "SINV-2001"},
         "write_b_name": "submit_linked_record",
         "write_b_fn": store.submit_linked_record,
         "write_b_kwargs": {"reference_type": "Sales Invoice", "reference_name": "SINV-2001"},
@@ -150,18 +166,33 @@ def build_w1():
     }
 
 
-def build_w2(*, unsafe: bool):
+def build_w2(*, unsafe: bool, seed_write_a: bool = True):
+    """``seed_write_a=False`` builds W2 WITHOUT pre-seeding write A (``create_allocation``)
+    -- used exclusively by C1's from-scratch execution path (Issue 1). For the idempotent
+    write-B variant, write B's kwargs (``allocation=<name>``) genuinely depend on write A's
+    OWN return value, so they cannot be pre-computed when ``seed_write_a`` is False -- see
+    ``write_b_kwargs_from_write_a`` below, which C1's rule calls with write A's actual result.
+    """
     store = PaymentAllocationStore(authorizer=allow_all)
     store.seed_invoice(Invoice(name="INV-001", customer="CUST-1", outstanding_amount=250.0))
     store.seed_payment(Payment(name="PAY-001", customer="CUST-1", amount=250.0))
-    alloc = store.create_allocation(payment="PAY-001", invoice="INV-001", amount=250.0, operation_key="opA")
+    write_a_kwargs = {"payment": "PAY-001", "invoice": "INV-001", "amount": 250.0}
+    alloc = store.create_allocation(operation_key="opA", **write_a_kwargs) if seed_write_a else None
     if unsafe:
+        static_write_b_kwargs = {"payment": "PAY-001", "invoice": "INV-001", "amount": 250.0}
         return {
             "name": "W2-nonidempotent",
             "store": store,
+            "write_a_name": "create_allocation",
+            "write_a_fn": store.create_allocation,
+            "write_a_kwargs": write_a_kwargs,
+            # submit_allocation_unsafe's kwargs are static -- it takes no operation_key and
+            # does not reference write A's allocation name at all (that is exactly why it is
+            # unsafe: it never looks up what write A did).
+            "write_b_kwargs_from_write_a": lambda _write_a_result: dict(static_write_b_kwargs),
             "write_b_name": "submit_allocation_unsafe",
             "write_b_fn": store.submit_allocation_unsafe,
-            "write_b_kwargs": {"payment": "PAY-001", "invoice": "INV-001", "amount": 250.0},
+            "write_b_kwargs": static_write_b_kwargs,
             "accepts_operation_key": False,
             "read_tools": {"list_invoices": store.list_invoices, "list_payments": store.list_payments},
             "required_actions": ["create_allocation", "submit_allocation_unsafe"],
@@ -171,9 +202,13 @@ def build_w2(*, unsafe: bool):
     return {
         "name": "W2",
         "store": store,
+        "write_a_name": "create_allocation",
+        "write_a_fn": store.create_allocation,
+        "write_a_kwargs": write_a_kwargs,
+        "write_b_kwargs_from_write_a": lambda write_a_result: {"allocation": write_a_result.name},
         "write_b_name": "submit_allocation",
         "write_b_fn": store.submit_allocation,
-        "write_b_kwargs": {"allocation": alloc.name},
+        "write_b_kwargs": {"allocation": alloc.name} if alloc is not None else {},
         "accepts_operation_key": True,
         "read_tools": {"list_invoices": store.list_invoices, "list_payments": store.list_payments},
         "required_actions": ["create_allocation", "submit_allocation"],
@@ -186,6 +221,16 @@ WORKLOAD_BUILDERS = {
     "W1": build_w1,
     "W2": lambda: build_w2(unsafe=False),
     "W2-nonidempotent": lambda: build_w2(unsafe=True),
+}
+
+# No-seed variants, used exclusively by C1's from-scratch execution path (Issue 1): write A
+# is NOT pre-seeded here -- C1's own tool-calling loop must perform it as a real tool call,
+# and write B's kwargs (for W2's idempotent variant) are resolved from what that call
+# actually returns, not pre-computed. See ``build_w1``/``build_w2``'s docstrings.
+WORKLOAD_BUILDERS_NOSEED = {
+    "W1": lambda: build_w1(seed_write_a=False),
+    "W2": lambda: build_w2(unsafe=False, seed_write_a=False),
+    "W2-nonidempotent": lambda: build_w2(unsafe=True, seed_write_a=False),
 }
 
 
@@ -252,55 +297,173 @@ def _naive_rule(*, write_tool_name: str, operation_key: str, guarantee: str, acc
     return rule
 
 
+def _post_write_recovery_step(
+    *,
+    recovery_results: list[dict],
+    write_tool_name: str,
+    operation_key: str,
+    guarantee: str,
+    accepts_operation_key: bool,
+    trust_resolved_none: bool,
+    write_b_kwargs: dict,
+) -> "ModelStep":
+    """The "smart" reactive recovery decision (Issue 1/2 shared core): given the tool-result
+    entries that occurred SINCE the first write-B attempt (``recovery_results`` -- empty
+    means "the write just failed, nothing done yet"), decide the next step.
+
+    Factored out of ``_smart_rule`` so C1's full-agent rule (which must additionally perform
+    its own reads + write A + the FIRST write-B attempt before this logic even applies) can
+    share the exact same recovery decision as C5/C6 without duplicating it. Behavior is
+    UNCHANGED from the pre-refactor ``_smart_rule`` body for C5/C6/C1's post-fault phase.
+
+    Issue 2 fallout: when ``guarantee == "none"`` (or "fenceable" without the right tool),
+    the corresponding verification tool (``get_operation_status``/``cancel_operation``) may
+    no longer be present in the model's tool list at all (see Issue 2's tool-exposure gate in
+    ``run_cell``). This function still ASKS for it via a ``ToolCallRequest`` -- the shared
+    ``run_recovery`` loop then reports back a "no such tool" tool-result error, which this
+    function must resolve on its NEXT call. That next call hits the
+    ``last_tool_name in ("get_operation_status", "cancel_operation")`` branch with
+    ``content == {"error": ...}`` -- which is neither ``"COMMITTED"`` nor ``"NOT_COMMITTED"``
+    (and, for fenceable, falsy) -- so it falls through to the existing safe escalate path
+    below, exactly like a genuine UNKNOWN outcome. No crash, no silent misbehavior.
+    """
+    if not recovery_results:
+        if guarantee == "fenceable":
+            return ModelStep(tool_call=ToolCallRequest("cancel_operation", {"operation_key": operation_key}))
+        if guarantee in ("status_resolvable", "none"):
+            return ModelStep(tool_call=ToolCallRequest("get_operation_status", {"operation_key": operation_key}))
+        # server_idempotent: no verification needed, retry directly.
+        kwargs = {"tool_guarantee": guarantee, **write_b_kwargs}
+        if accepts_operation_key:
+            kwargs["operation_key"] = operation_key
+        return ModelStep(tool_call=ToolCallRequest(write_tool_name, kwargs))
+
+    last_tool_name = recovery_results[-1].get("tool_name")
+    if last_tool_name == write_tool_name:
+        # After the write attempt (accepted or rejected) -- always the final step.
+        last = recovery_results[-1]["content"]
+        if isinstance(last, dict) and last.get("error"):
+            return ModelStep(final_text="blocked", tool_call=ToolCallRequest("escalate", {"reason": str(last["error"])}))
+        return ModelStep(final_text="done")
+
+    if last_tool_name in ("get_operation_status", "cancel_operation"):
+        content = recovery_results[-1]["content"]
+        if guarantee == "fenceable":
+            fenced = bool(content)
+            if fenced:
+                kwargs = {"tool_guarantee": guarantee, **write_b_kwargs}
+                if accepts_operation_key:
+                    kwargs["operation_key"] = operation_key
+                return ModelStep(tool_call=ToolCallRequest(write_tool_name, kwargs))
+            return ModelStep(final_text="could not fence", tool_call=ToolCallRequest("escalate", {"reason": "could not fence held write"}))
+
+        status = content
+        if status == "COMMITTED":
+            return ModelStep(final_text="already committed; no retry needed")
+        if status == "NOT_COMMITTED":
+            if guarantee == "status_resolvable" or trust_resolved_none:
+                kwargs = {"tool_guarantee": guarantee, **write_b_kwargs}
+                if accepts_operation_key:
+                    kwargs["operation_key"] = operation_key
+                return ModelStep(tool_call=ToolCallRequest(write_tool_name, kwargs))
+            return ModelStep(final_text="no permitted guarantee", tool_call=ToolCallRequest("escalate", {"reason": "no declared guarantee permits a retry"}))
+        # UNKNOWN -- OR a tool-invocation error such as "no such tool" (Issue 2: the status
+        # tool is gone for a none-guarantee cell). Either way: escalate safely.
+        return ModelStep(final_text="outcome unresolved", tool_call=ToolCallRequest("escalate", {"reason": "operation outcome could not be resolved"}))
+
+    # Unreachable in practice (only get_operation_status/cancel_operation/write/escalate
+    # are ever called by this rule), kept as a safe fallback.
+    return ModelStep(final_text="done", tool_call=ToolCallRequest("escalate", {"reason": "unexpected transcript state"}))
+
+
 def _smart_rule(*, write_tool_name: str, operation_key: str, guarantee: str, accepts_operation_key: bool, trust_resolved_none: bool, write_b_kwargs: dict):
     def rule(transcript, available_tools):
         tool_results = [t for t in transcript if t.get("role") == "tool"]
-        if not tool_results:
-            if guarantee == "fenceable":
-                return ModelStep(tool_call=ToolCallRequest("cancel_operation", {"operation_key": operation_key}))
-            if guarantee in ("status_resolvable", "none"):
-                return ModelStep(tool_call=ToolCallRequest("get_operation_status", {"operation_key": operation_key}))
-            # server_idempotent: no verification needed, retry directly.
+        return _post_write_recovery_step(
+            recovery_results=tool_results,
+            write_tool_name=write_tool_name,
+            operation_key=operation_key,
+            guarantee=guarantee,
+            accepts_operation_key=accepts_operation_key,
+            trust_resolved_none=trust_resolved_none,
+            write_b_kwargs=write_b_kwargs,
+        )
+
+    return rule
+
+
+def _extract_write_a_result(tool_results: list[dict], n_reads: int) -> Any:
+    """Pull write A's own return value out of the transcript's tool-result entries (index
+    ``n_reads``, i.e. the entry right after the reads and right before write B) -- ``None``
+    if write A hasn't happened yet or itself failed. Never a pre-computed value: this is
+    what C1's OWN write-A tool call actually returned (Issue 1's "write B's args resolved
+    from what C1's own write-A call actually returns, not pre-computed" requirement).
+    """
+    if len(tool_results) <= n_reads:
+        return None
+    content = tool_results[n_reads].get("content")
+    if isinstance(content, dict) and "error" in content:
+        return None
+    return content
+
+
+def _c1_full_agent_rule(
+    *,
+    read_tool_names: list[str],
+    write_a_name: str,
+    write_a_kwargs: dict,
+    write_b_name: str,
+    write_b_kwargs_from_write_a: Callable[[Any], dict],
+    operation_key_b: str,
+    guarantee: str,
+    accepts_operation_key: bool,
+    trust_resolved_none: bool = True,
+) -> Callable[[list[dict], list[str]], "ModelStep"]:
+    """C1's from-scratch rule (Issue 1): the model performs its OWN reads, its OWN write A,
+    and its OWN (first, fault-exposed) write-B attempt, in that order, before falling into
+    the exact same "smart" recovery decision C5/C6 use (:func:`_post_write_recovery_step`)
+    for whatever happens after that first write-B attempt.
+
+    This is a genuinely different cost shape than C4/C5/C6 (more tool calls, since C1 also
+    does the reads and write A itself) -- that is the whole point of Issue 1, not a bug to
+    normalize away.
+    """
+    n_reads = len(read_tool_names)
+
+    def rule(transcript, available_tools):
+        tool_results = [t for t in transcript if t.get("role") == "tool"]
+
+        if len(tool_results) < n_reads:
+            next_read = read_tool_names[len(tool_results)]
+            return ModelStep(tool_call=ToolCallRequest(next_read, {}))
+
+        if len(tool_results) == n_reads:
+            return ModelStep(tool_call=ToolCallRequest(write_a_name, dict(write_a_kwargs)))
+
+        write_a_result = _extract_write_a_result(tool_results, n_reads)
+        write_b_kwargs = write_b_kwargs_from_write_a(write_a_result)
+
+        if len(tool_results) == n_reads + 1:
+            # First (fault-exposed) write-B attempt.
             kwargs = {"tool_guarantee": guarantee, **write_b_kwargs}
             if accepts_operation_key:
-                kwargs["operation_key"] = operation_key
-            return ModelStep(tool_call=ToolCallRequest(write_tool_name, kwargs))
+                kwargs["operation_key"] = operation_key_b
+            return ModelStep(tool_call=ToolCallRequest(write_b_name, kwargs))
 
-        last_tool_name = tool_results[-1].get("tool_name")
-        if last_tool_name == write_tool_name:
-            # After the write attempt (accepted or rejected) -- always the final step.
-            last = tool_results[-1]["content"]
-            if isinstance(last, dict) and last.get("error"):
-                return ModelStep(final_text="blocked", tool_call=ToolCallRequest("escalate", {"reason": str(last["error"])}))
-            return ModelStep(final_text="done")
-
-        if last_tool_name in ("get_operation_status", "cancel_operation"):
-            content = tool_results[-1]["content"]
-            if guarantee == "fenceable":
-                fenced = bool(content)
-                if fenced:
-                    kwargs = {"tool_guarantee": guarantee, **write_b_kwargs}
-                    if accepts_operation_key:
-                        kwargs["operation_key"] = operation_key
-                    return ModelStep(tool_call=ToolCallRequest(write_tool_name, kwargs))
-                return ModelStep(final_text="could not fence", tool_call=ToolCallRequest("escalate", {"reason": "could not fence held write"}))
-
-            status = content
-            if status == "COMMITTED":
-                return ModelStep(final_text="already committed; no retry needed")
-            if status == "NOT_COMMITTED":
-                if guarantee == "status_resolvable" or trust_resolved_none:
-                    kwargs = {"tool_guarantee": guarantee, **write_b_kwargs}
-                    if accepts_operation_key:
-                        kwargs["operation_key"] = operation_key
-                    return ModelStep(tool_call=ToolCallRequest(write_tool_name, kwargs))
-                return ModelStep(final_text="no permitted guarantee", tool_call=ToolCallRequest("escalate", {"reason": "no declared guarantee permits a retry"}))
-            # UNKNOWN
-            return ModelStep(final_text="outcome unresolved", tool_call=ToolCallRequest("escalate", {"reason": "operation outcome could not be resolved"}))
-
-        # Unreachable in practice (only get_operation_status/cancel_operation/write/escalate
-        # are ever called by this rule), kept as a safe fallback.
-        return ModelStep(final_text="done", tool_call=ToolCallRequest("escalate", {"reason": "unexpected transcript state"}))
+        # Exclude the write-B attempt's OWN result entry (index n_reads + 1) -- an empty
+        # ``recovery_results`` here must mean "decide the FIRST recovery action" (matching
+        # _smart_rule's contract for C5/C6, where the write-B attempt happened OUTSIDE the
+        # loop entirely), not "the write attempt itself is still pending".
+        recovery_results = tool_results[n_reads + 2 :]
+        return _post_write_recovery_step(
+            recovery_results=recovery_results,
+            write_tool_name=write_b_name,
+            operation_key=operation_key_b,
+            guarantee=guarantee,
+            accepts_operation_key=accepts_operation_key,
+            trust_resolved_none=trust_resolved_none,
+            write_b_kwargs=write_b_kwargs,
+        )
 
     return rule
 
@@ -310,104 +473,218 @@ def _smart_rule(*, write_tool_name: str, operation_key: str, guarantee: str, acc
 # ---------------------------------------------------------------------------
 
 
-def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for_matrix: str, commit_hash: str) -> dict:
-    wl = WORKLOAD_BUILDERS[workload_name]()
+def _gate_ground_truth_tools(tools: dict, *, guarantee: str, operation_key: str, store: Any, injector: FaultInjector) -> None:
+    """Issue 2: only expose a ground-truth-reading tool to the model when the declared
+    guarantee actually entitles it to that information.
+
+    - ``get_operation_status`` (reads ``store.commit_log`` -- ground truth) is added ONLY for
+      ``status_resolvable`` (the tool explicitly offers a status query) and
+      ``server_idempotent`` (moot -- the store's own dedup makes status irrelevant, but
+      exposing it does no harm since the scripted rules never call it for that guarantee).
+      For ``none`` and ``fenceable`` it must NOT appear at all.
+    - ``cancel_operation`` is exposed ONLY for ``fenceable`` -- ``make_tools_for_workload``
+      adds it unconditionally whenever an injector is supplied, which is broader than the
+      guarantee model allows, so it is removed here for every other guarantee.
+    """
+    if guarantee in ("status_resolvable", "server_idempotent"):
+        tools["get_operation_status"] = AtomicTool(
+            name="get_operation_status",
+            fn=lambda operation_key=operation_key: get_operation_status(store, operation_key, injector=injector),
+            is_write=False,
+            description="ground-truth commit status",
+        )
+    else:
+        tools.pop("get_operation_status", None)
+
+    if guarantee != "fenceable":
+        tools.pop("cancel_operation", None)
+
+
+def _run_c1_cell(*, workload_name: str, fault_id: str, guarantee: str, injector: FaultInjector, operation_key: str) -> dict:
+    """Issue 1: C1's from-scratch execution path.
+
+    Builds the workload WITHOUT pre-seeding write A, exposes BOTH write-A and write-B tools
+    (plus reads) to the model, and injects the fault via a fire-once wrapper around write B
+    so it fires at the point C1's OWN loop actually attempts write B -- not before the loop
+    starts. Returns everything ``run_cell`` needs to finish scoring the cell: the workload
+    dict actually used (``wl``), the store, the ``ObservedResult`` the fault produced at
+    fire-time, and the recovery log's bookkeeping.
+    """
+    wl = WORKLOAD_BUILDERS_NOSEED[workload_name]()
     store = wl["store"]
     write_b_name = wl["write_b_name"]
     write_b_fn = wl["write_b_fn"]
-    write_b_kwargs = dict(wl["write_b_kwargs"])
     accepts_operation_key = wl["accepts_operation_key"]
-    operation_key = "opB"
 
+    fired: dict[str, Any] = {}
+
+    def _write_b_fireonce(**kwargs):
+        if "observed" not in fired:
+            observed_result = injector.inject(fault_id, guarantee, write_b_fn, action=write_b_name, **kwargs)
+            fired["observed"] = observed_result
+            if not observed_result.ok:
+                raise observed_result.error
+            return observed_result.value
+        # The fault only fires on C1's OWN first attempt; any subsequent retry the model
+        # itself performs is a normal, un-faulted call straight to the real store method.
+        return write_b_fn(**kwargs)
+
+    read_tools = dict(wl["read_tools"])
+    write_a_name = wl["write_a_name"]
+    write_a_fn = wl["write_a_fn"]
+    write_tools = {write_a_name: write_a_fn, write_b_name: _write_b_fireonce}
+    tools = make_tools_for_workload(store=store, read_tools=read_tools, write_tools=write_tools, injector=injector)
+    _gate_ground_truth_tools(tools, guarantee=guarantee, operation_key=operation_key, store=store, injector=injector)
+
+    write_a_kwargs = {**wl["write_a_kwargs"], "operation_key": "opA"}
+    rule = _c1_full_agent_rule(
+        read_tool_names=sorted(read_tools.keys()),
+        write_a_name=write_a_name,
+        write_a_kwargs=write_a_kwargs,
+        write_b_name=write_b_name,
+        write_b_kwargs_from_write_a=wl["write_b_kwargs_from_write_a"],
+        operation_key_b=operation_key,
+        guarantee=guarantee,
+        accepts_operation_key=accepts_operation_key,
+        trust_resolved_none=True,
+    )
+    model = MockedModel(rule=rule)
+    context = {"original_request": f"Complete the {workload_name} task from scratch."}
+    log = run_recovery(condition="C1", model=model, tools=tools, context=context, store=store, injector=injector)
+
+    observed = fired.get("observed")
+    if observed is None:
+        # The tool-call cap was hit (or the model never got there) before C1's own loop ever
+        # attempted write B at all -- there is genuinely no fault outcome to report. Treat as
+        # an unresolved, caller-visible non-success so downstream scoring doesn't silently
+        # assume success.
+        observed = ObservedResult(ok=False, value=None, error=RuntimeError("write B was never attempted within the tool-call cap"), fault_id=fault_id)
+
+    return {
+        "wl": wl,
+        "store": store,
+        "observed": observed,
+        "log_entries": log.entries,
+        "tool_calls": log.tool_call_count,
+        "escalated": log.outcome == "escalated",
+        "tokens_estimated": sum(e.prompt_tokens + e.completion_tokens for e in log.entries),
+    }
+
+
+def run_cell(*, condition: str, workload_name: str, fault_id: str, guarantee_for_matrix: str, commit_hash: str) -> dict:
     injector = FaultInjector()
     guarantee = guarantee_for_matrix if fault_id in GUARANTEE_CROSSED_FAULTS else "none"
+    operation_key = "opB"
 
     wall_start = time.perf_counter()
-    tool_calls = 1  # the initial (faulted) write-B attempt
 
-    observed = injector.inject(
-        fault_id,
-        guarantee,
-        write_b_fn,
-        action=write_b_name,
-        operation_key=operation_key if accepts_operation_key else None,
-        **write_b_kwargs,
-    )
+    if condition == "C1":
+        # -- Issue 1: C1 gets its own from-scratch execution path, entirely separate from
+        # the "pre-faulted, hand it to a recovery condition" framing every other condition
+        # uses below. See _run_c1_cell.
+        c1 = _run_c1_cell(workload_name=workload_name, fault_id=fault_id, guarantee=guarantee, injector=injector, operation_key=operation_key)
+        wl = c1["wl"]
+        store = c1["store"]
+        observed = c1["observed"]
+        log_entries = c1["log_entries"]
+        tool_calls = c1["tool_calls"]
+        escalated = c1["escalated"]
+        tokens_estimated = c1["tokens_estimated"]
+        write_b_name = wl["write_b_name"]
+        accepts_operation_key = wl["accepts_operation_key"]
 
-    escalated = False
-    tokens_estimated = 0
-    log_entries = []
-
-    if fault_id == "F0" or observed.ok:
-        # Control, or F5's fake-success: nothing to recover from at the model layer.
-        pass
-    else:
-        # -- ground-truth snapshot, taken immediately, before any recovery mutates state ----
-        status_gt = get_operation_status(store, operation_key, injector=injector)
-        could_fence_gt = False
-        held = injector._held_writes.get(operation_key)  # noqa: SLF001 -- read-only ground-truth peek
-        if held is not None and not held.committed and not held.cancelled:
-            could_fence_gt = True
-        could_retry_safely_gt = _could_retry_safely_ground_truth(guarantee=guarantee, status=status_gt, could_fence=could_fence_gt)
-
-        if condition in DETERMINISTIC_CONDITIONS:
-            if condition == "C2":
-                # Blind replay, deliberately defeating any idempotency key by minting a fresh
-                # one on every attempt (see naive_replay_recover's docstring).
-                if accepts_operation_key:
-                    results = naive_replay_recover(store, write_b_fn, max_retries=1, operation_key=operation_key, **write_b_kwargs)
-                else:
-                    results = naive_replay_recover(store, write_b_fn, max_retries=1, **write_b_kwargs)
-                tool_calls += len(results)
-            else:  # C3
-                if accepts_operation_key:
-                    results = deterministic_resume_recover(store, write_b_fn, max_retries=1, operation_key=operation_key, **write_b_kwargs)
-                    tool_calls += len(results)
-                else:
-                    # No idempotency key exists on this write shape at all -- C3 degrades to
-                    # the same blind replay as C2 (PREREGISTRATION.md H3: "expected ... to
-                    # fail on non-idempotent writes").
-                    results = naive_replay_recover(store, write_b_fn, max_retries=1, **write_b_kwargs)
-                    tool_calls += len(results)
+        if fault_id == "F0" or observed.ok:
+            could_retry_safely_gt = True
         else:
-            # -- LLM condition: build tools, context, and the reactive MockedModel rule -----
-            read_tools = dict(wl["read_tools"])
-            write_tools = {write_b_name: write_b_fn}
-            tools = make_tools_for_workload(store=store, read_tools=read_tools, write_tools=write_tools, injector=injector)
-            tools["get_operation_status"] = AtomicTool(
-                name="get_operation_status",
-                fn=lambda operation_key=operation_key: get_operation_status(store, operation_key, injector=injector),
-                is_write=False,
-                description="ground-truth commit status",
-            )
+            status_gt = get_operation_status(store, operation_key, injector=injector)
+            held = injector._held_writes.get(operation_key)  # noqa: SLF001 -- read-only ground-truth peek
+            could_fence_gt = held is not None and not held.committed and not held.cancelled
+            could_retry_safely_gt = _could_retry_safely_ground_truth(guarantee=guarantee, status=status_gt, could_fence=could_fence_gt)
+    else:
+        wl = WORKLOAD_BUILDERS[workload_name]()
+        store = wl["store"]
+        write_b_name = wl["write_b_name"]
+        write_b_fn = wl["write_b_fn"]
+        write_b_kwargs = dict(wl["write_b_kwargs"])
+        accepts_operation_key = wl["accepts_operation_key"]
 
-            if condition == "C1":
-                context = {"original_request": f"Complete the {workload_name} task from scratch.", "error": str(observed.error)}
-                rule = _smart_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, trust_resolved_none=True, write_b_kwargs=write_b_kwargs)
-            elif condition in ("C4", "C4+G"):
-                context = build_condition4_context(original_request=f"Complete the {workload_name} task.", error=observed.error, tool_names=sorted(tools.keys()))
-                rule = _naive_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, write_b_kwargs=write_b_kwargs)
-            else:  # C5 / C6
-                context = build_condition5_payload(
-                    procedure_id=f"safe-deopt-{workload_name}",
-                    version="v1",
-                    run=None,
-                    store=store,
-                    action=write_b_name,
-                    operation_key=operation_key,
-                    error=observed.error,
-                    completed_steps=[{"action": "write_a"}],
-                    pending_writes=[{"action": write_b_name, "tool_guarantee": guarantee}],
-                    available_atomic_tools=sorted(tools.keys()),
-                )
-                rule = _smart_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, trust_resolved_none=(condition == "C5"), write_b_kwargs=write_b_kwargs)
+        tool_calls = 1  # the initial (faulted) write-B attempt
 
-            model = MockedModel(rule=rule)
-            log = run_recovery(condition=condition, model=model, tools=tools, context=context, store=store, injector=injector)
-            log_entries = log.entries
-            tool_calls += log.tool_call_count
-            escalated = log.outcome == "escalated"
-            tokens_estimated = sum(e.prompt_tokens + e.completion_tokens for e in log.entries)
+        observed = injector.inject(
+            fault_id,
+            guarantee,
+            write_b_fn,
+            action=write_b_name,
+            operation_key=operation_key if accepts_operation_key else None,
+            **write_b_kwargs,
+        )
+
+        escalated = False
+        tokens_estimated = 0
+        log_entries = []
+
+        if fault_id == "F0" or observed.ok:
+            # Control, or F5's fake-success: nothing to recover from at the model layer.
+            could_retry_safely_gt = True
+        else:
+            # -- ground-truth snapshot, taken immediately, before any recovery mutates state --
+            status_gt = get_operation_status(store, operation_key, injector=injector)
+            could_fence_gt = False
+            held = injector._held_writes.get(operation_key)  # noqa: SLF001 -- read-only ground-truth peek
+            if held is not None and not held.committed and not held.cancelled:
+                could_fence_gt = True
+            could_retry_safely_gt = _could_retry_safely_ground_truth(guarantee=guarantee, status=status_gt, could_fence=could_fence_gt)
+
+            if condition in DETERMINISTIC_CONDITIONS:
+                if condition == "C2":
+                    # Blind replay, deliberately defeating any idempotency key by minting a
+                    # fresh one on every attempt (see naive_replay_recover's docstring).
+                    if accepts_operation_key:
+                        results = naive_replay_recover(store, write_b_fn, max_retries=1, operation_key=operation_key, **write_b_kwargs)
+                    else:
+                        results = naive_replay_recover(store, write_b_fn, max_retries=1, **write_b_kwargs)
+                    tool_calls += len(results)
+                else:  # C3
+                    if accepts_operation_key:
+                        results = deterministic_resume_recover(store, write_b_fn, max_retries=1, operation_key=operation_key, **write_b_kwargs)
+                        tool_calls += len(results)
+                    else:
+                        # No idempotency key exists on this write shape at all -- C3 degrades
+                        # to the same blind replay as C2 (PREREGISTRATION.md H3: "expected
+                        # ... to fail on non-idempotent writes").
+                        results = naive_replay_recover(store, write_b_fn, max_retries=1, **write_b_kwargs)
+                        tool_calls += len(results)
+            else:
+                # -- LLM condition: build tools, context, and the reactive MockedModel rule --
+                read_tools = dict(wl["read_tools"])
+                write_tools = {write_b_name: write_b_fn}
+                tools = make_tools_for_workload(store=store, read_tools=read_tools, write_tools=write_tools, injector=injector)
+                _gate_ground_truth_tools(tools, guarantee=guarantee, operation_key=operation_key, store=store, injector=injector)
+
+                if condition in ("C4", "C4+G"):
+                    context = build_condition4_context(original_request=f"Complete the {workload_name} task.", error=observed.error, tool_names=sorted(tools.keys()))
+                    rule = _naive_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, write_b_kwargs=write_b_kwargs)
+                else:  # C5 / C6
+                    context = build_condition5_payload(
+                        procedure_id=f"safe-deopt-{workload_name}",
+                        version="v1",
+                        run=None,
+                        store=store,
+                        action=write_b_name,
+                        operation_key=operation_key,
+                        error=observed.error,
+                        completed_steps=[{"action": "write_a"}],
+                        pending_writes=[{"action": write_b_name, "tool_guarantee": guarantee}],
+                        available_atomic_tools=sorted(tools.keys()),
+                    )
+                    rule = _smart_rule(write_tool_name=write_b_name, operation_key=operation_key, guarantee=guarantee, accepts_operation_key=accepts_operation_key, trust_resolved_none=(condition == "C5"), write_b_kwargs=write_b_kwargs)
+
+                model = MockedModel(rule=rule)
+                log = run_recovery(condition=condition, model=model, tools=tools, context=context, store=store, injector=injector)
+                log_entries = log.entries
+                tool_calls += log.tool_call_count
+                escalated = log.outcome == "escalated"
+                tokens_estimated = sum(e.prompt_tokens + e.completion_tokens for e in log.entries)
 
     wall_time = time.perf_counter() - wall_start
 
