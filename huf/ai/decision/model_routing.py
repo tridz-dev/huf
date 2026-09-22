@@ -46,3 +46,20 @@ def get_routeable_models(
 		seen.add(model)
 		result.append(RouteableModel(model=model, provider=getattr(item, "provider", None), canonical_model=getattr(item, "canonical_model", None), canonical_version=getattr(item, "canonical_version", None)))
 	return tuple(result)
+
+
+def select_routeable_model(runtime, request, backend, models: Iterable[RouteableModel]):
+	"""Run a bounded model-selection policy over authoritative candidates."""
+	from dataclasses import replace
+	from huf.ai.decision.types import CandidateSource, DecisionStatus, Option, QuestionKind
+
+	candidates = tuple(models)
+	if not candidates:
+		return None, runtime.evaluate(request, backend)
+	request = replace(request, candidates=tuple(Option(item.model, item.model) for item in candidates), candidate_source=CandidateSource.ROUTEABLE_MODELS, candidate_resolver_id="get_routeable_models")
+	response = runtime.evaluate(request, backend)
+	if response.status != DecisionStatus.SUCCESS:
+		return None, response
+	answer = next((item for item in response.answers.values() if item.kind == QuestionKind.SELECT), None)
+	selected = answer.value if answer and isinstance(answer.value, str) else None
+	return next((item for item in candidates if item.model == selected), None), response
