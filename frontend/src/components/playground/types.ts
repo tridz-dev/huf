@@ -1,6 +1,6 @@
 import type { EvaluateRunResult } from '@/services/consoleApi';
 
-export type PlaygroundMode = 'playground' | 'compare';
+export type PlaygroundMode = 'playground' | 'compare' | 'decision';
 
 /**
  * One bench configuration. Temperature / max tokens are kept as raw input
