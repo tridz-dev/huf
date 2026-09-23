@@ -1,5 +1,24 @@
 # Final Adversarial Review v2 (T9, ACCEPTANCE_PLAN_V2.md)
 
+> **HISTORICAL VERDICT — SUPERSEDED, 2026-09-23.** The "NOT ready for final human review"
+> verdict below was correct at the time it was written (branch HEAD `0e20f6204`), but it
+> predates the fixes it called for. All three blockers this review raised (C1's prefilled
+> status dictionary, the "0 of 14" duplicate miscount, and PR #750's missing v2 artifacts)
+> were subsequently fixed: T4 was corrected and its 10 rows rerun against a real status
+> check (Fix-A), the OpenAI C5 duplicate reassessment was corrected to 4 genuine / 8
+> no-guard-expected / 2 F4-confounded (Fix-B), the F4 injector bug was fixed and its 180
+> affected rows rerun against live models (Fix-C / the "F4 rerun 2026-09-23"), and PR #771
+> (superseding #750) was verified to point at the current HEAD (`64cf627f9`) with its
+> reports accessible. A subsequent external review (Opus 5.5 low) confirmed those three
+> blockers resolved. **Do not cite this file's verdict, or the raw numbers in its body
+> (e.g. duplicate counts, matched-cell counts, live-model row counts), as the current
+> status of this track.** The findings below remain useful as a record of what was found
+> and fixed, but for current, accurate figures see `CLAIM_TO_EVIDENCE_TABLE.md` (the
+> reconciled claim ledger), `RECOVERY_RESULTS_RECONCILED.md`, `analysis_c4g_vs_c6_v2.md`,
+> `EXCLUSIONS_AND_FAILURES.md`, and `results/scored_v2/summary.json` /
+> `per_condition_family.csv` / `end_to_end_per_condition_family.csv`, all as of
+> commit `64cf627f9` on `research/safe-deopt-v2-integration`.
+
 Reviewer scope: T1-T8 deliverables in this track, plus the branch diff
 `research/safe-deopt-experiment..research/safe-deopt-v2-integration` in
 `worktrees/safe-deopt-v2-integration/huf` (HEAD `0e20f6204`), and PR #750's live body.
