@@ -15,6 +15,8 @@ from huf.ai.graph.procedure_binding import (
     get_bound_procedures_for_agent,
     _tool_name_for as _procedure_tool_name,
 )
+from huf.ai.decision.agent_surfaces import decide_for_surface
+from huf.ai.decision.types import DecisionOrigin, Option, CandidateSource
 
 logger = frappe.logger("huf")
 
@@ -86,6 +88,131 @@ def _procedure_group_entry(agent):
     }
 
 
+def _build_origin(kwargs: dict) -> DecisionOrigin:
+    """Build a DecisionOrigin for Tool Selection from the run context in kwargs.
+
+    Expects agent_run_id and conversation_id from the huf run context (PLAN.md §3.6).
+    """
+    return DecisionOrigin(
+        origin_type="Agent Run",
+        agent_run=kwargs.get("agent_run_id"),
+        conversation=kwargs.get("conversation_id"),
+        owner_user=frappe.session.user,
+    )
+
+
+def _apply_tool_selection_decision(agent, result: list, kwargs: dict) -> list | None:
+    """Apply Tool Selection decision binding if present: reorder/narrow groups or append hint.
+
+    Returns a modified result list (Enforce mode), a result list with hint appended (Advise),
+    or None (Off/Shadow/error) to keep the original result unchanged.
+    """
+    if not result:
+        return None
+
+    # Build Option objects for each group (the group id is the "service" field)
+    candidates = tuple(Option(entry["service"], entry.get("summary", "")) for entry in result)
+    if not candidates:
+        return None
+
+    origin = _build_origin(kwargs)
+    state = {"query": None}  # No query context for list_tool_groups
+
+    decision = decide_for_surface(
+        agent,
+        "Tool Selection",
+        candidates,
+        state,
+        origin,
+        candidate_source=CandidateSource.PERMISSION_FILTERED_TOOLS,
+        candidate_resolver_id="tools.eligibility",
+        top_n=None,  # No limit unless the binding specifies one
+        hint_kind="tools",
+    )
+
+    if decision is None:
+        return None
+
+    if decision.hint:
+        # Advise mode: append hint to the result
+        result_copy = result.copy()
+        result_copy.append({
+            "service": "_decision_hint",
+            "tool_count": 0,
+            "summary": decision.hint,
+        })
+        return result_copy
+
+    if decision.selected_ids:
+        # Enforce mode: filter and reorder by selected_ids
+        selected_set = set(decision.selected_ids)
+        # Keep only entries whose service is in selected_ids, in the order of selected_ids
+        result_by_service = {entry["service"]: entry for entry in result}
+        reordered = []
+        for service_id in decision.selected_ids:
+            if service_id in result_by_service:
+                reordered.append(result_by_service[service_id])
+        return reordered if reordered else None
+
+    return None
+
+
+def _apply_tool_search_decision(agent, matches: list, kwargs: dict) -> list | None:
+    """Apply Tool Selection decision binding if present: reorder/narrow tools or append hint.
+
+    Returns a modified matches list (Enforce mode), a matches list with hint appended (Advise),
+    or None (Off/Shadow/error) to keep the original matches unchanged.
+    """
+    if not matches:
+        return None
+
+    # Build Option objects for each tool match (the tool id is the "tool_name" field)
+    candidates = tuple(Option(match["tool_name"], match.get("description", "")) for match in matches)
+    if not candidates:
+        return None
+
+    origin = _build_origin(kwargs)
+    state = {"query": kwargs.get("query", "")}
+
+    decision = decide_for_surface(
+        agent,
+        "Tool Selection",
+        candidates,
+        state,
+        origin,
+        candidate_source=CandidateSource.PERMISSION_FILTERED_TOOLS,
+        candidate_resolver_id="tools.eligibility",
+        top_n=None,  # No limit unless the binding specifies one
+        hint_kind="tools",
+    )
+
+    if decision is None:
+        return None
+
+    if decision.hint:
+        # Advise mode: append hint to the matches
+        matches_copy = matches.copy()
+        matches_copy.append({
+            "tool_name": "_decision_hint",
+            "service": "_decision",
+            "description": decision.hint,
+        })
+        return matches_copy
+
+    if decision.selected_ids:
+        # Enforce mode: filter and reorder by selected_ids
+        selected_set = set(decision.selected_ids)
+        # Keep only matches whose tool_name is in selected_ids, in the order of selected_ids
+        matches_by_name = {match["tool_name"]: match for match in matches}
+        reordered = []
+        for tool_name in decision.selected_ids:
+            if tool_name in matches_by_name:
+                reordered.append(matches_by_name[tool_name])
+        return reordered if reordered else None
+
+    return None
+
+
 def handle_list_tool_groups(**kwargs):
     """Group the calling agent's allowed tools by service (or provider_app/"General").
 
@@ -93,6 +220,10 @@ def handle_list_tool_groups(**kwargs):
     ``PROCEDURE_GROUP_NAME`` -- only the group name/summary/count, never the individual
     procedures' ``input_schema``, which is the entire point of lazy discovery: the full
     schema loads only via ``describe_tool_group``/``load_tools`` on demand.
+
+    Tool Selection decision (T4.02): after permission filtering, consults any Tool Selection
+    binding on the Agent in Shadow/Advise/Enforce mode. Enforce reranks/narrows the groups;
+    Advise appends a labelled hint; Off/Shadow/errors return the full list unchanged.
     """
     agent = _resolve_agent_doc(kwargs)
     if not agent:
@@ -127,11 +258,21 @@ def handle_list_tool_groups(**kwargs):
     if procedure_entry:
         result.append(procedure_entry)
 
+    # Tool Selection decision binding (T4.02, PLAN.md §3.6)
+    decision = _apply_tool_selection_decision(agent, result, kwargs)
+    if decision:
+        result = decision
+
     return json.dumps(result)
 
 
 def handle_search_tools(query, limit=10, **kwargs):
-    """Search discoverable tools, filtered to what the calling agent is permitted to use."""
+    """Search discoverable tools, filtered to what the calling agent is permitted to use.
+
+    Tool Selection decision (T4.02): after permission filtering and search, consults any
+    Tool Selection binding on the Agent in Shadow/Advise/Enforce mode. Enforce reranks/narrows
+    the results; Advise appends a labelled hint; Off/Shadow/errors return the full list unchanged.
+    """
     agent = _resolve_agent_doc(kwargs)
     if not agent:
         return json.dumps([])
@@ -176,7 +317,7 @@ def handle_search_tools(query, limit=10, **kwargs):
                 "description": descriptor.get("description") or "",
             })
             if len(matches) >= limit:
-                return json.dumps(matches[:limit])
+                break
 
     if len(matches) < limit:
         query_lower = (query or "").lower()
@@ -192,7 +333,14 @@ def handle_search_tools(query, limit=10, **kwargs):
                 "description": _procedure_description(bound),
             })
 
-    return json.dumps(matches[:limit])
+    matches = matches[:limit]
+
+    # Tool Selection decision binding (T4.02, PLAN.md §3.6)
+    decision = _apply_tool_search_decision(agent, matches, kwargs)
+    if decision:
+        matches = decision
+
+    return json.dumps(matches)
 
 
 def handle_describe_tool_group(service, **kwargs):
