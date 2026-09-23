@@ -2564,6 +2564,7 @@ export function AgentFormPage() {
                   loadingMemoryPolicies={loadingMemoryPolicies}
                   agentName={form.watch('agent_name') || id || ''}
                   decisionBindings={decisionBindings}
+                  onUpdateDecisionBindings={setDecisionBindings}
                 />
               </TabsContent>
             </Tabs>

@@ -18,6 +18,7 @@ import { FormSettingsSection } from './FormSettingsSection';
 import { useState, useEffect } from 'react';
 import { getBindingStats, type BindingStats } from '@/services/decisionApi';
 import type { AgentDecisionBindingRow } from '@/components/decision/DecisionBindingControl';
+import { DecisionBindingControl } from '@/components/decision/DecisionBindingControl';
 import {
 	MODEL_MODALITY_IMAGE,
 	IMAGE_MODEL_LABEL,
@@ -52,6 +53,7 @@ interface AdvancedTabProps {
 	loadingMemoryPolicies?: boolean;
 	agentName?: string;
 	decisionBindings?: AgentDecisionBindingRow[];
+	onUpdateDecisionBindings?: (bindings: AgentDecisionBindingRow[]) => void;
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
@@ -184,7 +186,8 @@ export function AdvancedTab({
 	memoryPolicyOptions = [],
 	loadingMemoryPolicies = false,
 	agentName,
-	decisionBindings,
+	decisionBindings = [],
+	onUpdateDecisionBindings,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const isVoiceOnly = form.watch('agent_modality') === 'Voice';
@@ -194,6 +197,30 @@ export function AdvancedTab({
 	const enableMemory = form.watch('enable_memory');
 	const navigate = useNavigate();
 	const location = useLocation();
+
+	// Helper function to find a binding by surface
+	const findBindingBySurface = (surface: string) => {
+		return decisionBindings.find((b) => b.surface === surface);
+	};
+
+	// Helper function to update a binding
+	const updateBinding = (surface: string, newBinding: AgentDecisionBindingRow | undefined) => {
+		if (!onUpdateDecisionBindings) return;
+
+		if (newBinding === undefined) {
+			// Delete the binding
+			onUpdateDecisionBindings(decisionBindings.filter((b) => b.surface !== surface));
+		} else {
+			const index = decisionBindings.findIndex((b) => b.surface === surface);
+			if (index >= 0) {
+				// Update existing binding
+				onUpdateDecisionBindings(decisionBindings.map((b, i) => (i === index ? newBinding : b)));
+			} else {
+				// Add new binding
+				onUpdateDecisionBindings([...decisionBindings, newBinding]);
+			}
+		}
+	};
 	const selectedSummaryPrompt = summaryPromptOptions.find(
 		(option) => option.value === form.watch('summary_prompt_template'),
 	);
@@ -239,6 +266,13 @@ export function AdvancedTab({
 					)}
 				/>
 
+				<div className="pt-6">
+					<DecisionBindingControl
+						surface="Context Relevance"
+						value={findBindingBySurface('Context Relevance')}
+						onChange={(newBinding) => updateBinding('Context Relevance', newBinding)}
+					/>
+				</div>
 
 				<FormField
 					control={form.control}
@@ -828,6 +862,31 @@ export function AdvancedTab({
 				)}
 			</FormSettingsSection>
 			</>)}
+
+			<FormSettingsSection
+				title="Decision controls"
+				description="Configure decision policies for input validation, output verification, and context relevance filtering."
+			>
+				<div className="space-y-6">
+					<DecisionBindingControl
+						surface="Input Guardrail"
+						value={findBindingBySurface('Input Guardrail')}
+						onChange={(newBinding) => updateBinding('Input Guardrail', newBinding)}
+					/>
+
+					<DecisionBindingControl
+						surface="Output Guardrail"
+						value={findBindingBySurface('Output Guardrail')}
+						onChange={(newBinding) => updateBinding('Output Guardrail', newBinding)}
+					/>
+
+					<DecisionBindingControl
+						surface="Output Verification"
+						value={findBindingBySurface('Output Verification')}
+						onChange={(newBinding) => updateBinding('Output Verification', newBinding)}
+					/>
+				</div>
+			</FormSettingsSection>
 
 			<FormSettingsSection
 				title="Decisions"
