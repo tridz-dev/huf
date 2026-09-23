@@ -16,6 +16,7 @@ MODEL_MODALITY_OPTIONS = {
 	"Vision",
 	"OCR",
 	"Speech-to-Speech",
+	"Decision",
 }
 
 
