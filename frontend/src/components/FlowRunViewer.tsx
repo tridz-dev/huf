@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
 import { flowService } from '../services/flowService';
 import type { FlowRunDetail } from '../services/flowApi';
-import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play } from 'lucide-react';
+import { Loader2, Box, CheckCircle2, XCircle, Clock, Check, X, Play, Info } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { toast } from 'sonner';
+import { RunDecisionsSection } from './decision/RunDecisionsSection';
 
 interface FlowRunViewerProps {
     runId: string | null;
@@ -100,27 +102,59 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                     <div className="text-center p-8 text-muted-foreground">Run not found</div>
                 ) : (
                     <div className="space-y-6">
-                        <div className="flex items-center gap-4 border p-4 rounded-lg bg-muted/20">
-                            <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Status</div>
-                                <Badge variant={
-                                    run.status === 'Success' ? 'default' :
-                                        run.status === 'Failed' ? 'destructive' : 'secondary'
-                                }>
-                                    {run.status === 'Success' && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                                    {run.status === 'Failed' && <XCircle className="w-3 h-3 mr-1" />}
-                                    {run.status === 'Waiting Approval' && <Clock className="w-3 h-3 mr-1" />}
-                                    {run.status}
-                                </Badge>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4 border p-4 rounded-lg bg-muted/20">
+                                <div className="flex-1">
+                                    <div className="text-xs text-muted-foreground mb-1">Status</div>
+                                    <Badge variant={
+                                        run.status === 'Success' ? 'default' :
+                                            run.status === 'Failed' ? 'destructive' : 'secondary'
+                                    }>
+                                        {run.status === 'Success' && <CheckCircle2 className="w-3 h-3 mr-1" />}
+                                        {run.status === 'Failed' && <XCircle className="w-3 h-3 mr-1" />}
+                                        {run.status === 'Waiting Approval' && <Clock className="w-3 h-3 mr-1" />}
+                                        {run.status}
+                                    </Badge>
+                                </div>
+                                <div className="flex-1">
+                                    <div className="text-xs text-muted-foreground mb-1">Current/Last Node</div>
+                                    <div className="font-medium text-sm">{run.current_node_id || 'N/A'}</div>
+                                </div>
+                                <div className="flex-1">
+                                    <div className="text-xs text-muted-foreground mb-1">Hops</div>
+                                    <div className="font-medium text-sm">{run.hop_count}</div>
+                                </div>
                             </div>
-                            <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Current/Last Node</div>
-                                <div className="font-medium text-sm">{run.current_node_id || 'N/A'}</div>
-                            </div>
-                            <div className="flex-1">
-                                <div className="text-xs text-muted-foreground mb-1">Hops</div>
-                                <div className="font-medium text-sm">{run.hop_count}</div>
-                            </div>
+
+                            {/* Decision totals */}
+                            {typeof run.decision_cost === 'number' && run.decision_cost > 0 && (
+                                <div className="grid grid-cols-4 gap-2 border p-4 rounded-lg bg-muted/20">
+                                    <div>
+                                        <div className="text-xs text-muted-foreground mb-1 font-mono">Calls</div>
+                                        <div className="font-medium text-sm">
+                                            {run.decision_call_count || 0}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-muted-foreground mb-1 font-mono">Input tokens</div>
+                                        <div className="font-medium text-sm font-mono">
+                                            {(run.decision_input_tokens || 0).toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-muted-foreground mb-1 font-mono">Output tokens</div>
+                                        <div className="font-medium text-sm font-mono">
+                                            {(run.decision_output_tokens || 0).toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-muted-foreground mb-1 font-mono">Cost</div>
+                                        <div className="font-medium text-sm font-mono">
+                                            ${(run.decision_cost || 0).toFixed(6)}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {run.status === 'Failed' && run.last_error && (
@@ -143,6 +177,30 @@ export function FlowRunViewer({ runId, onClose }: FlowRunViewerProps) {
                                 {JSON.stringify(run.context_json, null, 2)}
                             </div>
                         </div>
+
+                        {/* Decision calls section */}
+                        {typeof run.decision_call_count === 'number' && run.decision_call_count > 0 && (
+                            <div className="border rounded-lg p-4 bg-panel">
+                                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                                    Decisions
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Info className="h-4 w-4 text-muted-foreground hover:text-ink cursor-help" />
+                                            </TooltipTrigger>
+                                            <TooltipContent side="right" className="max-w-xs">
+                                                <p>Decision policies applied during this flow run.</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </h3>
+                                <RunDecisionsSection
+                                    flowRunName={run.flow_run_id}
+                                    title=""
+                                    description=""
+                                />
+                            </div>
+                        )}
 
                         {run.status?.startsWith('Waiting') && run.waiting && Object.keys(run.waiting).length > 0 && (
                             <div>

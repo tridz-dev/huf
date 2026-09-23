@@ -296,6 +296,23 @@ function ExecutionsRunsTab() {
         header: 'Cost',
         cell: ({ row }) => {
           const cost = row.original.cost;
+          const decisionCost = row.original.decision_cost as number | undefined;
+          const decisionCount = row.original.decision_call_count as number | undefined;
+
+          // If there are decisions, show a badge with decision count and cost
+          if (typeof decisionCount === 'number' && decisionCount > 0) {
+            return (
+              <div className="flex flex-col items-end gap-1">
+                <div className="text-right font-mono text-[12px] tabular-nums text-steel">
+                  {typeof cost === 'number' ? `$${cost.toFixed(6)}` : 'Not available'}
+                </div>
+                <div className="text-right font-mono text-[11px] tabular-nums px-2 py-0.5 rounded bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                  {decisionCount} decision{decisionCount !== 1 ? 's' : ''} · ${typeof decisionCost === 'number' ? decisionCost.toFixed(6) : '0.000000'}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div className="text-right font-mono text-[12px] tabular-nums text-steel">
               {typeof cost === 'number' ? `$${cost.toFixed(6)}` : 'Not available'}

@@ -20,6 +20,10 @@ export interface AgentRunDoc {
   cost?: number | null;
   cost_source?: string | null;
   is_child?: number | boolean;
+  decision_call_count?: number | null;
+  decision_input_tokens?: number | null;
+  decision_output_tokens?: number | null;
+  decision_cost?: number | null;
 }
 
 /**
