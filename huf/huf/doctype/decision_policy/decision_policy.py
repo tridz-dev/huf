@@ -82,6 +82,6 @@ class DecisionPolicy(Document):
 		# Update current_version on self
 		self.current_version = version_key
 		self.fingerprint = fingerprint
-		self.db_update({"current_version": version_key, "fingerprint": fingerprint})
+		self.db_update()
 
 		return version_key
