@@ -71,7 +71,8 @@ export function RunDecisionsSection({
   }
 
   // Calculate totals
-  const totals = data?.rows.reduce(
+  type RunDecisionTotals = { callCount: number; inputTokens: number; outputTokens: number; cost: number };
+  const totals: RunDecisionTotals = data?.rows.reduce<RunDecisionTotals>(
     (acc, row) => {
       const call = row as Record<string, unknown>;
       return {
