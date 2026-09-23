@@ -17,6 +17,7 @@ Automation runs get identical Agent Run bookkeeping, provider/model
 resolution, and queue-vs-direct execution semantics as every other caller.
 """
 
+import json
 from uuid import uuid4
 
 import frappe
@@ -108,7 +109,7 @@ def run_automation(
 			frappe.ValidationError,
 		)
 
-	if not automation.agent:
+	if automation.action_type != "Decision" and not automation.agent:
 		frappe.throw(
 			_("Automation '{0}' has no agent configured.").format(automation_name),
 			frappe.ValidationError,
@@ -179,6 +180,9 @@ def _check_run_as_user_permission(automation):
 
 
 def _execute(automation, trigger_name, trigger_context, now, commit=True, parent_run_id=None):
+	if automation.action_type == "Decision":
+		return _execute_decision(automation, trigger_name, trigger_context, commit=commit)
+
 	instruction = _resolve_instruction(automation, trigger_context)
 
 	conversation_id, channel_id, external_id, skip_user_message = _resolve_conversation_routing(
@@ -269,6 +273,244 @@ def _execute(automation, trigger_name, trigger_context, now, commit=True, parent
 	return result
 
 
+def _execute_decision(automation, trigger_name, trigger_context, commit=True):
+	"""Execute an ``action_type = "Decision"`` Automation (PLAN.md §3.7, T6.02).
+
+	Unlike the Agent Run path above, a Decision action produces no Agent Run of
+	its own: it renders state from the triggering document, asks
+	``huf.ai.decision.service.run_policy`` for one answer, maps that answer to
+	a value via ``decision_output_map``, and writes it onto the triggering
+	document's ``decision_output_field``. The write is permission-checked as
+	the run's resolved identity -- ``run_automation`` has already switched
+	``frappe.session.user`` to ``run_as_user``/``initiating_user`` by the time
+	``_execute`` (and therefore this function) runs; see that function's
+	docstring.
+
+	Only a Doc Event trigger supplies a reference document
+	(``trigger_context["reference_doctype"/"reference_name"]``, set by
+	``automation_hooks.run_automation_for_doc``). Manual/Schedule/Webhook/App
+	Event triggers have no triggering document to write a classification onto,
+	so a Decision Automation configured on one of those fails clearly (Error
+	bookkeeping, not a silent no-op) rather than pretending to run.
+	"""
+	from huf.ai.decision import service
+	from huf.ai.decision.types import CandidateSource, DecisionOrigin, DecisionStatus
+
+	error_message = None
+	decision_call_id = None
+	status = None
+	wrote = False
+
+	try:
+		ref_doctype = trigger_context.get("reference_doctype")
+		ref_name = trigger_context.get("reference_name")
+		if not ref_doctype or not ref_name:
+			frappe.throw(
+				_(
+					"Automation '{0}' is a Decision action, which requires a reference "
+					"document supplied by a Doc Event trigger. It cannot run from a "
+					"Manual, Schedule, Webhook, or App Event trigger."
+				).format(automation.name),
+				frappe.ValidationError,
+			)
+
+		ref_doc = frappe.get_doc(ref_doctype, ref_name)
+		state = _render_decision_state(automation, ref_doc)
+
+		origin = DecisionOrigin(
+			# "Automation" (capitalized) -- must match Decision Call.origin_type's
+			# exact Select option (huf/huf/doctype/decision_call/decision_call.json);
+			# a mismatched value fails doc.insert() validation, which
+			# DecisionRuntime._emit swallows (a persistence failure must never
+			# rewrite the decision result), silently leaving
+			# ServiceResult.decision_call as None instead of raising here.
+			origin_type="Automation",
+			automation=automation.name,
+			owner_user=frappe.session.user,
+		)
+
+		result = service.run_policy(
+			automation.decision_policy,
+			state=state,
+			mode="Enforce",
+			surface="automation",
+			# Automation Decide's classification question(s) are a closed set
+			# declared on the policy itself, never a runtime candidate list
+			# (unlike Tool/Skill/Procedure Selection) -- POLICY_OPTIONS with no
+			# `candidates` tells DecisionRuntime to trust the policy's own
+			# question.options as the eligible set (huf/ai/decision/runtime.py
+			# `_validate_request_candidates`: a `select` question requires
+			# `candidate_source` to be set, and POLICY_OPTIONS specifically
+			# requires `candidates` to stay empty).
+			candidate_source=CandidateSource.POLICY_OPTIONS,
+			origin=origin,
+		)
+		decision_call_id = result.decision_call
+		status = result.status
+
+		answer = None
+		if status == DecisionStatus.SUCCESS and result.response is not None:
+			answer = next(iter(result.response.answers.values()), None)
+
+		write_value = _map_decision_answer(automation, answer) if answer is not None else None
+		on_failure = automation.decision_on_failure or "Skip"
+
+		if write_value is not None:
+			_write_decision_output_field(automation, ref_doc, write_value)
+			wrote = True
+		elif on_failure == "Mark Error":
+			error_message = _(
+				"Decision policy '{0}' did not produce a usable answer for Automation "
+				"'{1}' (status: {2})."
+			).format(automation.decision_policy, automation.name, getattr(status, "value", status))
+		elif on_failure == "Set Fallback Value":
+			_write_decision_output_field(automation, ref_doc, automation.decision_fallback_value)
+			wrote = True
+		# else: "Skip" (the field default) -- no write, no error. Covers both an
+		# unmapped/missing answer and PLAN.md §3.7's "uncertain means Skip" (the
+		# Decision Policy's own low-confidence gating already turns an uncertain
+		# call into a non-SUCCESS status before this function sees it).
+	except Exception:
+		error_message = frappe.get_traceback()
+		frappe.log_error(
+			title=f"Automation decision failed: {automation.name}",
+			message=error_message,
+		)
+
+	_update_automation_bookkeeping(automation, error_message=error_message, decision_call_id=decision_call_id)
+	if trigger_name:
+		_update_trigger_bookkeeping(trigger_name, error_message)
+
+	if commit:
+		frappe.db.commit()
+
+	return {
+		"success": error_message is None,
+		"status": getattr(status, "value", status),
+		"decision_call": decision_call_id,
+		"wrote": wrote,
+	}
+
+
+def _map_decision_answer(automation, answer):
+	"""Map one ``DecisionAnswer`` to the value written to ``decision_output_field``.
+
+	``decision_output_map`` (JSON ``{"answer_id": "output_value"}``) is
+	optional. When blank, the raw answer value is written as-is. When set but
+	the answer's value isn't one of its keys, this returns ``None`` so the
+	caller falls through to ``decision_on_failure`` -- writing an
+	unrecognized/unmapped classification is worse than not writing at all.
+	"""
+	raw_map = automation.decision_output_map
+	if not raw_map:
+		return answer.value
+
+	try:
+		output_map = raw_map if isinstance(raw_map, dict) else json.loads(raw_map)
+	except (TypeError, ValueError):
+		frappe.log_error(
+			title=f"Automation decision_output_map invalid JSON: {automation.name}",
+			message=frappe.get_traceback(),
+		)
+		return None
+
+	key = str(answer.value)
+	if key not in output_map:
+		return None
+	return output_map[key]
+
+
+# Bookkeeping/private-data keys never sent to a Decision provider by the default
+# (template-less) state below -- mirrors the denylist automation_hooks.py's
+# clean_doc already applies when building LLM prompt context for the same kind
+# of document dump, plus every Password-fieldtype field (checked dynamically
+# against the doctype's meta, not by name) and any leading-underscore key.
+_DECISION_STATE_EXCLUDED_KEYS = {"_user_tags", "_comments", "_assign", "_liked_by", "docstatus"}
+
+
+def _render_decision_state(automation, ref_doc):
+	"""Build the state sent to the Decision Policy for ``ref_doc``.
+
+	If ``decision_state_template`` is set, it is rendered the same way
+	``_resolve_instruction`` (below) renders ``input_template`` -- Jinja via
+	``frappe.render_template``, exposing ``doc`` (the triggering document) and
+	``automation``. A JSON-parseable render becomes structured state; a
+	non-JSON render is passed through as opaque text (the policy's own
+	``state_bindings`` are what actually project fields to a provider either
+	way -- this is only what is *available* to bind).
+
+	With no template, the default is the document's fields minus private/
+	system bookkeeping keys and any ``Password`` field -- the "whitelisted
+	fields JSON" PLAN.md §3.7 describes -- so a misconfigured Automation never
+	leaks a password field to a Decision provider by default.
+	"""
+	if automation.decision_state_template:
+		context = {"doc": ref_doc, "automation": automation}
+		try:
+			rendered = frappe.render_template(automation.decision_state_template, context, is_path=False)
+		except Exception:
+			frappe.log_error(
+				title=f"Automation decision_state_template render failed: {automation.name}",
+				message=frappe.get_traceback(),
+			)
+		else:
+			if rendered and rendered.strip():
+				try:
+					return frappe.parse_json(rendered)
+				except Exception:
+					return rendered
+
+	return _default_decision_state(ref_doc)
+
+
+def _default_decision_state(ref_doc):
+	password_fields = {df.fieldname for df in ref_doc.meta.fields if df.fieldtype == "Password"}
+	state = {}
+	for key, value in ref_doc.as_dict().items():
+		if key.startswith("_") or key in _DECISION_STATE_EXCLUDED_KEYS or key in password_fields:
+			continue
+		state[key] = value
+	# Decision Runtime requires JSON-serializable state (huf/ai/decision/state.py
+	# prepare_state); as_dict() leaves date/datetime/Decimal objects as native
+	# Python types, so round-trip through frappe's own JSON encoder (which
+	# already knows how to stringify those) rather than passing them through raw.
+	return frappe.parse_json(frappe.as_json(state))
+
+
+def _write_decision_output_field(automation, ref_doc, value):
+	"""Write ``value`` to ``automation.decision_output_field`` on ``ref_doc``.
+
+	Permission-checked as the current session user (the run's resolved
+	identity -- see ``_execute_decision``'s docstring). Uses ``db_set`` rather
+	than ``save()`` so no validate/before_save/on_update hook chain runs for
+	this single-field write. That matters for recursion: this app's ``hooks.py``
+	registers ``huf.ai.automation_hooks.run_hooked_automations`` against
+	``before_insert``/``validate``/``before_save``/``after_save``/`` on_update``/etc,
+	never against the ``before_change``/``on_change`` methods ``db_set`` actually
+	runs -- so this write cannot organically re-fire a Doc Event automation
+	(the same one or a different one) the way a full ``save()`` could.
+	``huf_decision_write_refs`` below is defense in depth against a future
+	write path that does go through the full save pipeline; it is what
+	``automation_hooks.run_hooked_automations`` checks to skip a doc it is
+	currently in the middle of a Decision write for.
+	"""
+	if not frappe.has_permission(doctype=ref_doc.doctype, ptype="write", doc=ref_doc):
+		frappe.throw(
+			_(
+				"Automation '{0}' does not have permission to write field '{1}' on {2} '{3}'."
+			).format(automation.name, automation.decision_output_field, ref_doc.doctype, ref_doc.name),
+			frappe.PermissionError,
+		)
+
+	guard_key = f"{ref_doc.doctype}::{ref_doc.name}"
+	previous_refs = frappe.flags.get("huf_decision_write_refs") or set()
+	frappe.flags.huf_decision_write_refs = previous_refs | {guard_key}
+	try:
+		ref_doc.db_set(automation.decision_output_field, value, update_modified=True)
+	finally:
+		frappe.flags.huf_decision_write_refs = previous_refs
+
+
 def _resolve_instruction(automation, trigger_context):
 	"""Build the final instruction text sent to the agent.
 
@@ -351,7 +593,15 @@ def _resolve_conversation_routing(automation):
 	return None, channel_id, f"automation-new:{automation.name}:{run_uuid}", False
 
 
-def _update_automation_bookkeeping(automation, agent_run_id, error_message):
+def _update_automation_bookkeeping(automation, agent_run_id=None, error_message=None, decision_call_id=None):
+	"""Shared run bookkeeping for both the Agent Run and Decision branches.
+
+	``decision_call_id`` only sets ``last_decision_call`` (existing
+	``last_execution``/``total_runs``/``last_status``/``last_error`` fields,
+	unchanged). ``total_decision_calls``/``total_decision_cost`` are
+	deliberately NOT updated here -- that's spend accounting (D15, T2A.17),
+	out of scope for this function; see PLAN.md §3.7 / §4.10.
+	"""
 	automation.reload()
 	updates = {
 		"last_execution": frappe.utils.now_datetime(),
@@ -361,6 +611,8 @@ def _update_automation_bookkeeping(automation, agent_run_id, error_message):
 	}
 	if agent_run_id:
 		updates["last_run"] = agent_run_id
+	if decision_call_id:
+		updates["last_decision_call"] = decision_call_id
 	for fieldname, value in updates.items():
 		automation.db_set(fieldname, value, update_modified=False)
 

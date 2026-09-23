@@ -124,6 +124,18 @@ def run_hooked_automations(doc, method=None, *args, **kwargs):
 	if frappe.flags.in_import or frappe.flags.in_patch or frappe.flags.in_install:
 		return
 
+	# Recursion guard (T6.02 / PLAN.md §3.7): never let a Decision action's own
+	# output-field write re-queue an automation for this exact document while
+	# that write is in flight. huf.ai.automation_runner._write_decision_output_field
+	# sets this flag around its db_set() call. db_set() does not itself run this
+	# module's doc_events hooks (it only runs the before_change/on_change
+	# controller methods, which hooks.py never registers this function against),
+	# so this guard is defense in depth against a future write path that does go
+	# through the full save()/notify_update() pipeline.
+	guard_key = f"{doc.doctype}::{doc.name}"
+	if guard_key in (frappe.flags.get("huf_decision_write_refs") or ()):
+		return
+
 	if method not in SUPPORTED_DOC_EVENTS:
 		return
 

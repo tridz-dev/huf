@@ -44,6 +44,13 @@ _CREATABLE_FIELDS = (
     "conversation",
     "notify_user",
     "disabled",
+    "action_type",
+    "decision_policy",
+    "decision_state_template",
+    "decision_output_field",
+    "decision_output_map",
+    "decision_on_failure",
+    "decision_fallback_value",
 )
 
 # Fields an existing Automation may be updated through. Deliberately
@@ -67,6 +74,13 @@ _UPDATABLE_FIELDS = (
     "conversation",
     "notify_user",
     "disabled",
+    "action_type",
+    "decision_policy",
+    "decision_state_template",
+    "decision_output_field",
+    "decision_output_map",
+    "decision_on_failure",
+    "decision_fallback_value",
 )
 
 _LIST_FIELDS = [
