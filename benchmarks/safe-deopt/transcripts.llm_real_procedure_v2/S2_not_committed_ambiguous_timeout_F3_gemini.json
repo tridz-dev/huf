@@ -10,7 +10,7 @@
       "procedure_failure": {
         "status": "PROCEDURE_FAILED_MID_RUN",
         "procedure": "llm-v2-s2",
-        "version": "4cc70add8e32edbd05c6b7228e4393bc984de232351504997f86331085178aa7",
+        "version": "d31ea88e48519f90f1cbf75ffc3a419e04e624e5dbc39c17ebfcc1093effab3a",
         "run": null,
         "completed_steps": [
           {
@@ -28,9 +28,9 @@
             "node_id": "write_a",
             "tool_id": "write_a_create_todo",
             "args": {
-              "idempotency_key": "llm-v2-s2:write_a:gemini-s2-1790151723",
-              "operation_key": "llm-v2-s2:write_a:gemini-s2-1790151723",
-              "target_identity": "gemini-s2-1790151723"
+              "idempotency_key": "llm-v2-s2:write_a:gemini-s2-1790153425",
+              "operation_key": "llm-v2-s2:write_a:gemini-s2-1790153425",
+              "target_identity": "gemini-s2-1790153425"
             },
             "success": true
           },
@@ -38,9 +38,9 @@
             "node_id": "write_b",
             "tool_id": "write_b_update_status",
             "args": {
-              "idempotency_key": "llm-v2-s2:write_b:gemini-s2-1790151723",
-              "operation_key": "llm-v2-s2:write_b:gemini-s2-1790151723",
-              "target_identity": "gemini-s2-1790151723"
+              "idempotency_key": "llm-v2-s2:write_b:gemini-s2-1790153425",
+              "operation_key": "llm-v2-s2:write_b:gemini-s2-1790153425",
+              "target_identity": "gemini-s2-1790153425"
             },
             "success": false
           }
@@ -62,7 +62,7 @@
               "node_id": "write_a",
               "node_type": "tool.call",
               "output": {
-                "name": "uf2mcbique"
+                "name": "f33sb9o1d5"
               }
             },
             {
@@ -79,7 +79,7 @@
           },
           "dataset_handle": null
         },
-        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s2:write_b:gemini-s2-1790151723')",
+        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s2:write_b:gemini-s2-1790153425')",
         "safe_recovery_actions": [
           "Do not blindly retry: the failed tool.call may have partially committed its write.",
           "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
@@ -100,7 +100,7 @@
       "success": true,
       "result": {
         "exists": true,
-        "name": "uf2mcbique",
+        "name": "f33sb9o1d5",
         "status": "Open"
       },
       "error": null
@@ -108,10 +108,25 @@
   },
   {
     "role": "tool",
+    "tool_name": "retry_write_b",
+    "content": {
+      "guard_rejected": false,
+      "guard_reason": null,
+      "execute_procedure_called": true,
+      "outcome_status": "success",
+      "outcome_error": null,
+      "operation_key": "llm-v2-s2:write_b:gemini-s2-1790153425",
+      "write_b_dispatch_count": 2,
+      "write_b_committed": true,
+      "write_b_dispatched": true
+    }
+  },
+  {
+    "role": "tool",
     "tool_name": "escalate",
     "content": {
       "escalated": true,
-      "reason": "The target record exists and already has status 'Open' (or was successfully updated/created by write_a/write_b). Since write_b failed due to a timeout, but the target record already reflects the expected state (exists=true, name='uf2mcbique', status='Open'), no further write is necessary or safe to blindly retry. Escalating to avoid duplicate or conflicting updates."
+      "reason": "The failed step 'write_b' has been successfully retried and completed (write_b_committed: true). The target record state is verified and updated."
     }
   }
 ]

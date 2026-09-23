@@ -10,7 +10,7 @@
       "procedure_failure": {
         "status": "PROCEDURE_FAILED_MID_RUN",
         "procedure": "llm-v2-s2",
-        "version": "7c048072a8834ce9790341d54aa94bbd88d1ec18cf88277a1a53be5b17d21b09",
+        "version": "0b50cb40b8d5d1e120c561ab7392d28633d20a67e4ba032d8b5da0753188d461",
         "run": null,
         "completed_steps": [
           {
@@ -28,9 +28,9 @@
             "node_id": "write_a",
             "tool_id": "write_a_create_todo",
             "args": {
-              "idempotency_key": "llm-v2-s2:write_a:openai-s2-1790151738",
-              "operation_key": "llm-v2-s2:write_a:openai-s2-1790151738",
-              "target_identity": "openai-s2-1790151738"
+              "idempotency_key": "llm-v2-s2:write_a:openai-s2-1790153442",
+              "operation_key": "llm-v2-s2:write_a:openai-s2-1790153442",
+              "target_identity": "openai-s2-1790153442"
             },
             "success": true
           },
@@ -38,9 +38,9 @@
             "node_id": "write_b",
             "tool_id": "write_b_update_status",
             "args": {
-              "idempotency_key": "llm-v2-s2:write_b:openai-s2-1790151738",
-              "operation_key": "llm-v2-s2:write_b:openai-s2-1790151738",
-              "target_identity": "openai-s2-1790151738"
+              "idempotency_key": "llm-v2-s2:write_b:openai-s2-1790153442",
+              "operation_key": "llm-v2-s2:write_b:openai-s2-1790153442",
+              "target_identity": "openai-s2-1790153442"
             },
             "success": false
           }
@@ -62,7 +62,7 @@
               "node_id": "write_a",
               "node_type": "tool.call",
               "output": {
-                "name": "uk0hi7bi6t"
+                "name": "f8eh64850j"
               }
             },
             {
@@ -79,7 +79,7 @@
           },
           "dataset_handle": null
         },
-        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s2:write_b:openai-s2-1790151738')",
+        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s2:write_b:openai-s2-1790153442')",
         "safe_recovery_actions": [
           "Do not blindly retry: the failed tool.call may have partially committed its write.",
           "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
@@ -100,7 +100,7 @@
       "success": true,
       "result": {
         "exists": true,
-        "name": "uk0hi7bi6t",
+        "name": "f8eh64850j",
         "status": "Open"
       },
       "error": null
@@ -115,7 +115,7 @@
       "execute_procedure_called": true,
       "outcome_status": "success",
       "outcome_error": null,
-      "operation_key": "llm-v2-s2:write_b:openai-s2-1790151738",
+      "operation_key": "llm-v2-s2:write_b:openai-s2-1790153442",
       "write_b_dispatch_count": 2,
       "write_b_committed": true,
       "write_b_dispatched": true
@@ -123,6 +123,6 @@
   },
   {
     "role": "assistant",
-    "content": "The recovery from the failed step in the procedure 'llm-v2-s2' was successful. The target record was verified and confirmed to exist with the status \"Open.\" The retry for the write operation `write_b_update_status` was executed and successfully committed. \n\nIf you need any further assistance or actions, please let me know!"
+    "content": "The recovery from the failed step in the procedure 'llm-v2-s2' was successful. Here are the details:\n\n1. The target record was verified and found to exist with the following details:\n   - Name: f8eh64850j\n   - Status: Open\n\n2. The retry for the `write_b_update_status` operation was executed successfully. The write has now been committed.\n\nIf you need any further assistance or actions, please let me know!"
   }
 ]

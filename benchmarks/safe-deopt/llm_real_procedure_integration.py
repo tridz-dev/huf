@@ -560,8 +560,40 @@ def run_llm_recovery_case(
         return {"success": invocation.success, "result": invocation.result, "error": invocation.error}
 
     def _check_status(*, operation_key: str | None = None) -> dict:
+        """Real status resolution (ACCEPTANCE_PLAN_V2.md §3: "no prefilled status
+        dictionary -- status tools must query persisted records or operation state").
+
+        Queries the SAME real target read the model's `read_target` tool uses
+        (`real_invoker(TOOL_READ_TARGET, ...)`, which for the fault scenarios is
+        `make_todo_invoker`'s `frappe.db.get_value("ToDo", name, "status")` -- a live read
+        of the persisted record, not a value handed to this function in advance) and derives
+        COMMITTED / NOT_COMMITTED / UNKNOWN from what is actually there right now:
+
+        - the record does not exist yet, or the read itself failed -> UNKNOWN (genuinely
+          pending/inconclusive, per §3's "anything pending/missing/inconclusive is UNKNOWN").
+        - the record exists and its `status` field is exactly the value `write_b` sets
+          (`"Closed"`, from `make_todo_invoker`'s `TOOL_WRITE_B` branch) -> COMMITTED.
+        - the record exists with any other status (`write_a` ran, `write_b` never landed)
+          -> NOT_COMMITTED.
+
+        This runs AFTER the fault has already fired (it is only ever called from a model
+        turn that happens after `run_fault_case_exposing_injector`'s FAILED original
+        outcome), so it observes real post-fault state, never a value set in advance of the
+        fault. No module-level dict is read here.
+        """
+
         real_key = f"{procedure_name}:write_b:{target_identity}"
-        status = _GROUND_TRUTH_STATUS.get(id(real_invoker), {}).get("write_b", "UNKNOWN")
+        invocation = real_invoker(TOOL_READ_TARGET, {"target_identity": target_identity})
+        if not invocation.success or not isinstance(invocation.result, dict):
+            status = "UNKNOWN"
+        elif not invocation.result.get("exists"):
+            status = "UNKNOWN"
+        elif invocation.result.get("status") == "Closed":
+            status = "COMMITTED"
+        elif invocation.result.get("status") is not None:
+            status = "NOT_COMMITTED"
+        else:
+            status = "UNKNOWN"
         known_status["write_b"] = status
         return {"operation_key": real_key, "status": status}
 
@@ -716,21 +748,23 @@ def run_llm_recovery_case(
     }
 
 
-# Ground-truth status bookkeeping populated by the bench script per real_invoker instance
-# (keyed by id() of the invoker so multiple scenarios in one process don't collide) --
-# see `_check_status` above. The bench script sets `_GROUND_TRUTH_STATUS[id(real_invoker)]
-# = {"write_b": "COMMITTED" | "NOT_COMMITTED"}` right after calling `run_fault_case`, using
-# the REAL `tool_invocations`/fault semantics of the case it just ran (F5/F7 commit,
-# F1 does not) -- never a hardcoded per-scenario guess baked into this module.
-_GROUND_TRUTH_STATUS: dict[int, dict[str, str]] = {}
+# REMOVED (post FINAL_ADVERSARIAL_REVIEW_V2.md C1): this module used to keep a
+# `_GROUND_TRUTH_STATUS` dict, populated by the bench script via `set_ground_truth_status`
+# BEFORE the fault even ran for S1, and never populated at all for S2-S5 (so `_check_status`
+# unconditionally returned "UNKNOWN" there). `_check_status` above now queries the real
+# persisted `ToDo`/target state through `real_invoker(TOOL_READ_TARGET, ...)` instead, so
+# there is nothing left for a bench script to prefill. `set_ground_truth_status` is kept as
+# a deprecated no-op only so any external caller that still imports it does not hard-crash;
+# it does not affect `_check_status`, which never reads it.
 
 
-def set_ground_truth_status(real_invoker, *, write_b: str) -> None:
-    """Record the REAL commit status of `write_b` for this `real_invoker`'s most recent
-    fault-injected run, so `_check_status` can answer the model truthfully. `write_b` must
-    be one of `"COMMITTED"` / `"NOT_COMMITTED"`.
+def set_ground_truth_status(real_invoker, *, write_b: str) -> None:  # noqa: ARG001
+    """Deprecated no-op. `_check_status` now queries real persisted state directly and
+    never consults a prefilled dict -- see the module note above and
+    `Tracks/SafeDeoptExperiment/FINAL_ADVERSARIAL_REVIEW_V2.md` C1. Kept only to avoid
+    breaking an existing import; callers should stop calling it.
     """
 
     if write_b not in ("COMMITTED", "NOT_COMMITTED"):
         raise ValueError(f"write_b status must be COMMITTED or NOT_COMMITTED, got {write_b!r}")
-    _GROUND_TRUTH_STATUS[id(real_invoker)] = {"write_b": write_b}
+    # Intentionally discarded: nothing reads this any more.

@@ -10,7 +10,7 @@
       "procedure_failure": {
         "status": "PROCEDURE_FAILED_MID_RUN",
         "procedure": "llm-v2-s1",
-        "version": "f9fd669cce09139ccf34a41eec61d6b560d9ab9593cb3fc46a9c6319aa9369ba",
+        "version": "914e5c9b51d676e8f819f9fcdb511acf2f1cf6671d62f3bcfb8c0ba57b23edc1",
         "run": null,
         "completed_steps": [
           {
@@ -28,9 +28,9 @@
             "node_id": "write_a",
             "tool_id": "write_a_create_todo",
             "args": {
-              "idempotency_key": "llm-v2-s1:write_a:openai-s1-1790151738",
-              "operation_key": "llm-v2-s1:write_a:openai-s1-1790151738",
-              "target_identity": "openai-s1-1790151738"
+              "idempotency_key": "llm-v2-s1:write_a:openai-s1-1790153442",
+              "operation_key": "llm-v2-s1:write_a:openai-s1-1790153442",
+              "target_identity": "openai-s1-1790153442"
             },
             "success": true
           },
@@ -38,9 +38,9 @@
             "node_id": "write_b",
             "tool_id": "write_b_update_status",
             "args": {
-              "idempotency_key": "llm-v2-s1:write_b:openai-s1-1790151738",
-              "operation_key": "llm-v2-s1:write_b:openai-s1-1790151738",
-              "target_identity": "openai-s1-1790151738"
+              "idempotency_key": "llm-v2-s1:write_b:openai-s1-1790153442",
+              "operation_key": "llm-v2-s1:write_b:openai-s1-1790153442",
+              "target_identity": "openai-s1-1790153442"
             },
             "success": false
           }
@@ -62,7 +62,7 @@
               "node_id": "write_a",
               "node_type": "tool.call",
               "output": {
-                "name": "ui6cleomk5"
+                "name": "f6kkve9cpk"
               }
             },
             {
@@ -79,7 +79,7 @@
           },
           "dataset_handle": null
         },
-        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s1:write_b:openai-s1-1790151738')",
+        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s1:write_b:openai-s1-1790153442')",
         "safe_recovery_actions": [
           "Do not blindly retry: the failed tool.call may have partially committed its write.",
           "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
@@ -97,7 +97,7 @@
     "role": "tool",
     "tool_name": "check_status",
     "content": {
-      "operation_key": "llm-v2-s1:write_b:openai-s1-1790151738",
+      "operation_key": "llm-v2-s1:write_b:openai-s1-1790153442",
       "status": "COMMITTED"
     }
   },
@@ -108,7 +108,7 @@
       "success": true,
       "result": {
         "exists": true,
-        "name": "ui6cleomk5",
+        "name": "f6kkve9cpk",
         "status": "Closed"
       },
       "error": null
@@ -122,8 +122,8 @@
       "guard_reason": "operation_key is already known COMMITTED and the tool is not server_idempotent; no further retry is needed or permitted",
       "execute_procedure_called": true,
       "outcome_status": "failed",
-      "outcome_error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s1:write_b:openai-s1-1790151738')",
-      "operation_key": "llm-v2-s1:write_b:openai-s1-1790151738",
+      "outcome_error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s1:write_b:openai-s1-1790153442')",
+      "operation_key": "llm-v2-s1:write_b:openai-s1-1790153442",
       "write_b_dispatch_count": 1,
       "write_b_committed": false,
       "write_b_dispatched": true
@@ -134,7 +134,7 @@
     "tool_name": "escalate",
     "content": {
       "escalated": true,
-      "reason": "The write operation for 'write_b' has already been committed, and further retries are not permitted. The target record's status is 'Closed', indicating a potential inconsistency."
+      "reason": "The write operation for 'write_b' has already committed, and further retries are not permitted. The procedure cannot safely continue."
     }
   }
 ]

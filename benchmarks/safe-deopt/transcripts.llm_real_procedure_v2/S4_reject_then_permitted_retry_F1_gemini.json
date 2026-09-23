@@ -10,7 +10,7 @@
       "procedure_failure": {
         "status": "PROCEDURE_FAILED_MID_RUN",
         "procedure": "llm-v2-s4",
-        "version": "cfb21eb47f180dd66fdfa069ce35177c3a1dcb027fa489398abbe19ad4c72d1c",
+        "version": "e80da1b50c0484a7f9a144ba569e2563109042621f92819feb59d1266f1b5021",
         "run": null,
         "completed_steps": [
           {
@@ -28,9 +28,9 @@
             "node_id": "write_a",
             "tool_id": "write_a_create_todo",
             "args": {
-              "idempotency_key": "llm-v2-s4:write_a:gemini-s4-1790151723",
-              "operation_key": "llm-v2-s4:write_a:gemini-s4-1790151723",
-              "target_identity": "gemini-s4-1790151723"
+              "idempotency_key": "llm-v2-s4:write_a:gemini-s4-1790153425",
+              "operation_key": "llm-v2-s4:write_a:gemini-s4-1790153425",
+              "target_identity": "gemini-s4-1790153425"
             },
             "success": true
           },
@@ -38,9 +38,9 @@
             "node_id": "write_b",
             "tool_id": "write_b_update_status",
             "args": {
-              "idempotency_key": "llm-v2-s4:write_b:gemini-s4-1790151723",
-              "operation_key": "llm-v2-s4:write_b:gemini-s4-1790151723",
-              "target_identity": "gemini-s4-1790151723"
+              "idempotency_key": "llm-v2-s4:write_b:gemini-s4-1790153425",
+              "operation_key": "llm-v2-s4:write_b:gemini-s4-1790153425",
+              "target_identity": "gemini-s4-1790153425"
             },
             "success": false
           }
@@ -62,7 +62,7 @@
               "node_id": "write_a",
               "node_type": "tool.call",
               "output": {
-                "name": "ugkf11m2mp"
+                "name": "f4vumopve2"
               }
             },
             {
@@ -79,7 +79,7 @@
           },
           "dataset_handle": null
         },
-        "error": "rejected before dispatch: write_b_update_status (operation_key='llm-v2-s4:write_b:gemini-s4-1790151723')",
+        "error": "rejected before dispatch: write_b_update_status (operation_key='llm-v2-s4:write_b:gemini-s4-1790153425')",
         "safe_recovery_actions": [
           "Do not blindly retry: the failed tool.call may have partially committed its write.",
           "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
@@ -100,7 +100,7 @@
       "success": true,
       "result": {
         "exists": true,
-        "name": "ugkf11m2mp",
+        "name": "f4vumopve2",
         "status": "Open"
       },
       "error": null
@@ -115,7 +115,7 @@
       "execute_procedure_called": true,
       "outcome_status": "success",
       "outcome_error": null,
-      "operation_key": "llm-v2-s4:write_b:gemini-s4-1790151723",
+      "operation_key": "llm-v2-s4:write_b:gemini-s4-1790153425",
       "write_b_dispatch_count": 2,
       "write_b_committed": true,
       "write_b_dispatched": true
@@ -123,10 +123,23 @@
   },
   {
     "role": "tool",
+    "tool_name": "read_target",
+    "content": {
+      "success": true,
+      "result": {
+        "exists": true,
+        "name": "f4vumopve2",
+        "status": "Closed"
+      },
+      "error": null
+    }
+  },
+  {
+    "role": "tool",
     "tool_name": "escalate",
     "content": {
       "escalated": true,
-      "reason": "Procedure 'llm-v2-s4' successfully recovered by verifying target state and retrying write_b. Task completed successfully."
+      "reason": "The failed step write_b has been successfully retried and committed after verifying the target record's current state. The task is fully recovered."
     }
   }
 ]

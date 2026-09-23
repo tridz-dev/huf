@@ -174,7 +174,13 @@ def run_scenario_s1(model_id: str, target_identity: str) -> dict:
 
     invoker, _state = make_todo_invoker(target_identity)
     counted_invoker = _count_calls(invoker)
-    set_ground_truth_status(counted_invoker, write_b="COMMITTED")
+    # NOTE (FINAL_ADVERSARIAL_REVIEW_V2.md C1): this used to call
+    # `set_ground_truth_status(counted_invoker, write_b="COMMITTED")` here, BEFORE the fault
+    # even ran -- i.e. it told `_check_status` the answer in advance instead of letting it
+    # query real state. `_check_status` now reads the real `ToDo` status via
+    # `real_invoker(TOOL_READ_TARGET, ...)` itself, after the fault has fired, so no prefill
+    # is needed or performed. `set_ground_truth_status` is a deprecated no-op kept only for
+    # import compatibility.
     result = run_llm_recovery_case(
         fault_id_or_authority="F2",
         guarantee_level="status_resolvable",

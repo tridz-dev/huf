@@ -10,7 +10,7 @@
       "procedure_failure": {
         "status": "PROCEDURE_FAILED_MID_RUN",
         "procedure": "llm-v2-s1",
-        "version": "a6e1bc079e66c290ff0a084c3f8859b3e56b0f91516d8069b19d3a5c9aad228a",
+        "version": "4262498042c4d755579e2846f94cd18512abc5db513284d25fbfbaed29c8fcd7",
         "run": null,
         "completed_steps": [
           {
@@ -28,9 +28,9 @@
             "node_id": "write_a",
             "tool_id": "write_a_create_todo",
             "args": {
-              "idempotency_key": "llm-v2-s1:write_a:gemini-s1-1790151723",
-              "operation_key": "llm-v2-s1:write_a:gemini-s1-1790151723",
-              "target_identity": "gemini-s1-1790151723"
+              "idempotency_key": "llm-v2-s1:write_a:gemini-s1-1790153425",
+              "operation_key": "llm-v2-s1:write_a:gemini-s1-1790153425",
+              "target_identity": "gemini-s1-1790153425"
             },
             "success": true
           },
@@ -38,9 +38,9 @@
             "node_id": "write_b",
             "tool_id": "write_b_update_status",
             "args": {
-              "idempotency_key": "llm-v2-s1:write_b:gemini-s1-1790151723",
-              "operation_key": "llm-v2-s1:write_b:gemini-s1-1790151723",
-              "target_identity": "gemini-s1-1790151723"
+              "idempotency_key": "llm-v2-s1:write_b:gemini-s1-1790153425",
+              "operation_key": "llm-v2-s1:write_b:gemini-s1-1790153425",
+              "target_identity": "gemini-s1-1790153425"
             },
             "success": false
           }
@@ -62,7 +62,7 @@
               "node_id": "write_a",
               "node_type": "tool.call",
               "output": {
-                "name": "ue7eg4fbe0"
+                "name": "f28aja17pl"
               }
             },
             {
@@ -79,7 +79,7 @@
           },
           "dataset_handle": null
         },
-        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s1:write_b:gemini-s1-1790151723')",
+        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s1:write_b:gemini-s1-1790153425')",
         "safe_recovery_actions": [
           "Do not blindly retry: the failed tool.call may have partially committed its write.",
           "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
@@ -97,7 +97,7 @@
     "role": "tool",
     "tool_name": "check_status",
     "content": {
-      "operation_key": "llm-v2-s1:write_b:gemini-s1-1790151723",
+      "operation_key": "llm-v2-s1:write_b:gemini-s1-1790153425",
       "status": "COMMITTED"
     }
   },
@@ -108,7 +108,7 @@
       "success": true,
       "result": {
         "exists": true,
-        "name": "ue7eg4fbe0",
+        "name": "f28aja17pl",
         "status": "Closed"
       },
       "error": null
@@ -119,7 +119,7 @@
     "tool_name": "escalate",
     "content": {
       "escalated": true,
-      "reason": "The failed write step 'write_b' actually committed successfully on checking its status, and the target record is now fully updated and verified. No further writes are needed."
+      "reason": "The failed write step write_b has already been verified as COMMITTED via check_status, and the target record's current state confirms it was successfully updated. Therefore, recovery is complete and no further writes are needed."
     }
   }
 ]

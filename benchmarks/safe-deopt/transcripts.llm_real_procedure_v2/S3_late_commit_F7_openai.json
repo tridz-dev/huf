@@ -10,7 +10,7 @@
       "procedure_failure": {
         "status": "PROCEDURE_FAILED_MID_RUN",
         "procedure": "llm-v2-s3",
-        "version": "456d445f82f3a8368b651f8d4f3351401eb88238d82d6bec67f748e2a75d2ef7",
+        "version": "f1c46b20ea2007a73be30f577c5fde3ff9a0dfb1107d1b5b8781843919fce30e",
         "run": null,
         "completed_steps": [
           {
@@ -28,9 +28,9 @@
             "node_id": "write_a",
             "tool_id": "write_a_create_todo",
             "args": {
-              "idempotency_key": "llm-v2-s3:write_a:openai-s3-1790151738",
-              "operation_key": "llm-v2-s3:write_a:openai-s3-1790151738",
-              "target_identity": "openai-s3-1790151738"
+              "idempotency_key": "llm-v2-s3:write_a:openai-s3-1790153442",
+              "operation_key": "llm-v2-s3:write_a:openai-s3-1790153442",
+              "target_identity": "openai-s3-1790153442"
             },
             "success": true
           },
@@ -38,9 +38,9 @@
             "node_id": "write_b",
             "tool_id": "write_b_update_status",
             "args": {
-              "idempotency_key": "llm-v2-s3:write_b:openai-s3-1790151738",
-              "operation_key": "llm-v2-s3:write_b:openai-s3-1790151738",
-              "target_identity": "openai-s3-1790151738"
+              "idempotency_key": "llm-v2-s3:write_b:openai-s3-1790153442",
+              "operation_key": "llm-v2-s3:write_b:openai-s3-1790153442",
+              "target_identity": "openai-s3-1790153442"
             },
             "success": false
           }
@@ -62,7 +62,7 @@
               "node_id": "write_a",
               "node_type": "tool.call",
               "output": {
-                "name": "uktdrnfjmp"
+                "name": "f9ijougdmc"
               }
             },
             {
@@ -79,7 +79,7 @@
           },
           "dataset_handle": null
         },
-        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s3:write_b:openai-s3-1790151738')",
+        "error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s3:write_b:openai-s3-1790153442')",
         "safe_recovery_actions": [
           "Do not blindly retry: the failed tool.call may have partially committed its write.",
           "Verify the target record's current state with a read before retrying or choosing a different atomic action.",
@@ -100,7 +100,7 @@
       "success": true,
       "result": {
         "exists": true,
-        "name": "uktdrnfjmp",
+        "name": "f9ijougdmc",
         "status": "Open"
       },
       "error": null
@@ -114,8 +114,8 @@
       "guard_reason": "tool declares no recovery guarantee; an unresolved-outcome write may never be retried -- only reads, compensating actions, or escalation are permitted",
       "execute_procedure_called": true,
       "outcome_status": "failed",
-      "outcome_error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s3:write_b:openai-s3-1790151738')",
-      "operation_key": "llm-v2-s3:write_b:openai-s3-1790151738",
+      "outcome_error": "timeout: no confirmation received for write_b_update_status (operation_key='llm-v2-s3:write_b:openai-s3-1790153442')",
+      "operation_key": "llm-v2-s3:write_b:openai-s3-1790153442",
       "write_b_dispatch_count": 1,
       "write_b_committed": false,
       "write_b_dispatched": true
@@ -126,7 +126,7 @@
     "tool_name": "escalate",
     "content": {
       "escalated": true,
-      "reason": "The write_b_update_status operation failed and cannot be retried due to unresolved outcomes."
+      "reason": "The write_b operation failed and cannot be retried due to unresolved outcomes. Further action is needed to determine the next steps."
     }
   }
 ]
