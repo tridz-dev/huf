@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Star, Loader2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { PageFrame } from '@/layouts/PageFrame';
 import { ProviderModelTabs } from '@/components/settings/ProviderModelTabs';
 import { DecisionEmptyState } from '@/components/decision/DecisionEmptyState';
+import { SetupSystemOneModal } from '@/components/decision/SetupSystemOneModal';
 import { toast } from 'sonner';
 import {
   listDecisionModels,
@@ -37,15 +38,22 @@ export function DecisionModelsPage() {
   const navigate = useNavigate();
   const { hasCapability } = usePermissions();
   const isAdmin = hasCapability('decision.admin');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [models, setModels] = useState<DecisionModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [testingDeployment, setTestingDeployment] = useState<string | null>(null);
   const [deploymentUpdating, setDeploymentUpdating] = useState<string | null>(null);
+  const [setupModalOpen, setSetupModalOpen] = useState(searchParams.get('setup') === '1');
 
   useEffect(() => {
     loadModels();
   }, []);
+
+  useEffect(() => {
+    // Sync modal state with query param
+    setSetupModalOpen(searchParams.get('setup') === '1');
+  }, [searchParams]);
 
   const loadModels = async () => {
     setLoading(true);
@@ -118,7 +126,26 @@ export function DecisionModelsPage() {
   };
 
   const handleSetupSystemOne = () => {
-    navigate('/decision-models?setup=1');
+    setSetupModalOpen(true);
+    setSearchParams((params) => {
+      params.set('setup', '1');
+      return params;
+    });
+  };
+
+  const handleSetupModalOpenChange = (open: boolean) => {
+    setSetupModalOpen(open);
+    if (!open) {
+      setSearchParams((params) => {
+        const newParams = new URLSearchParams(params);
+        newParams.delete('setup');
+        return newParams;
+      });
+    }
+  };
+
+  const handleSetupComplete = () => {
+    loadModels();
   };
 
   const groupedModels = groupModelsByClassFamily(models);
@@ -128,17 +155,23 @@ export function DecisionModelsPage() {
   );
 
   return (
-    <PageFrame
-      title="AI providers & models"
-      actions={
-        isAdmin && (
-          <Button onClick={handleSetupSystemOne} size="sm">
-            Set up System One
-          </Button>
-        )
-      }
-      filters={<ProviderModelTabs />}
-    >
+    <>
+      <SetupSystemOneModal
+        open={setupModalOpen}
+        onOpenChange={handleSetupModalOpenChange}
+        onSetup={handleSetupComplete}
+      />
+      <PageFrame
+        title="AI providers & models"
+        actions={
+          isAdmin && (
+            <Button onClick={handleSetupSystemOne} size="sm">
+              Set up System One
+            </Button>
+          )
+        }
+        filters={<ProviderModelTabs />}
+      >
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-6 w-6 animate-spin text-steel" />
@@ -311,7 +344,8 @@ export function DecisionModelsPage() {
           ))}
         </div>
       )}
-    </PageFrame>
+      </PageFrame>
+    </>
   );
 }
 
