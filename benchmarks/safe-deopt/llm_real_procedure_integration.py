@@ -13,18 +13,76 @@ style. It runs inside a bench console script (the real Frappe write functions --
 
 Reused, unmodified: `LiveAPIModel`, `AtomicTool`, `ModelStep`, `ToolCallRequest`,
 `SYSTEM_PROMPT`, `_to_jsonable`, `MODEL_PRICING_USD_PER_MILLION_TOKENS`,
-`compute_model_step_cost_usd` (from `recovery_harness.py`); `run_fault_case`,
-`run_authority_denial_case`, `wrap_tool_invoker_with_fault`,
-`build_two_write_procedure_graph[_with_authority_gate]`,
+`compute_model_step_cost_usd` (from `recovery_harness.py`); `run_authority_denial_case`,
+`wrap_tool_invoker_with_fault`, `build_two_write_procedure_graph[_with_authority_gate]`,
 `make_classifier[_with_privileged_write_b]`, `TOOL_READ_TARGET`, `TOOL_WRITE_A`,
 `TOOL_WRITE_B` (from `real_procedure_integration.py`).
 
 New (this module): `fallback_payload_to_transcript`, `build_recovery_atomic_tools`,
-`resume_via_retry_write_b`, `run_llm_recovery_case`, plus the small hand-written turn loop
-inside `run_llm_recovery_case`.
+`resume_via_retry_write_b`, `run_llm_recovery_case`, `run_fault_case_exposing_injector`,
+plus the small hand-written turn loop inside `run_llm_recovery_case`.
 
-Corrections applied after initial plan review (see
-`Tracks/SafeDeoptExperiment/REPORT_LLM_RECOVERY_INTEGRATION.md` for the full writeup):
+=== V2 (T4, ACCEPTANCE_PLAN_V2.md §3) -- real wired guard, 5 scenarios =====================
+
+This is a REWRITE of the retry path from the prior round
+(`Tracks/SafeDeoptExperiment/REPORT_LLM_RECOVERY_INTEGRATION.md`), which is superseded per
+`ACCEPTANCE_PLAN_V2.md`'s supersession table. The prior round imported
+`huf/ai/graph/replay_guard.py` STANDALONE (`_replay_guard_standalone.py`, a byte-for-byte
+copy) and called `ReplayGuard.check()` itself, BEFORE ever calling `execute_procedure` a
+second time -- i.e. the guard decision never actually ran inside the real runtime. In THIS
+checkout (`89918b2`), the guard IS wired into `procedure_runtime.py`'s own
+`RECOVERY_RETRY` branch (`execute_procedure(..., replay_guard_enabled=True)`,
+`_Runner._handle_tool_call`). `resume_via_retry_write_b` below now calls `execute_procedure`
+exactly once per retry attempt, with `replay_guard_enabled=True`, a `write_b` node
+config of `"recovery": "retry"`, and a `classify_tool` that reports a real
+`recovery_guarantee` (via `huf.ai.graph.permissions.ToolPermission`, not the plain
+`ptype`-only `SimpleToolPermission` `real_procedure_integration.make_classifier()` uses --
+that classifier reports no `recovery_guarantee` at all, which `_recovery_guarantee`
+defaults to `"none"`, silently defeating every non-`none` guarantee level). The
+tool_invoker given to that call fails ONLY on its first call for `write_b` (fault applied
+via `wrap_tool_invoker_with_fault`, exactly as the original run) and, if the runtime's own
+guard-gated internal retry-once fires, succeeds cleanly on the second call -- so the whole
+fail -> guard-check -> (maybe) retry -> (maybe) commit sequence happens inside ONE real
+`execute_procedure` invocation, gated by the REAL wired guard, never a standalone copy.
+`_replay_guard_standalone.py` has been deleted; nothing in this module (or elsewhere in
+`benchmarks/safe-deopt/`) imports it any more (verified by grep before finalizing).
+
+Fault/scenario mapping used by `run_llm_recovery_case` (see `SCENARIO_MAX_TURNS` and the
+tool-menu `if/elif` below for the authoritative mapping, cross-checked directly against
+`faults.py`'s own docstrings rather than assumed from names):
+
+- **S1 committed, response lost** -> `F2` (`_inject_f2`: "Timeout after dispatch, store
+  DOES commit. Caller told 'timeout' regardless.") / `status_resolvable`. Unchanged from
+  the prior round.
+- **S2 did NOT commit, ambiguous timeout** -> `F3` (`_inject_f3`: "Timeout after dispatch,
+  store does NOT commit. Caller-visible result identical to F2.") / `server_idempotent`.
+  **Correction from the prior round**: the prior round's "2_non_commit" scenario actually
+  used fault id `F1`, not `F3` -- `F1` is `_inject_f1`, "clean rejection before dispatch",
+  a different fault shape (nothing is ever attempted, not "attempted then timed out
+  ambiguously"). `F3` is the fault whose docstring actually matches "did not commit, but
+  caller received an ambiguous timeout" verbatim.
+- **S3 late commit after inconclusive read** -> `F7` (unchanged). The held write is
+  drained via `FaultInjector.flush_held_write` (see `run_fault_case_exposing_injector`)
+  before any final-state check, per §3's requirement.
+- **S4 clean pre-dispatch rejection, then a PERMITTED successful retry** -> `F1`
+  (`_inject_f1`: "clean rejection before dispatch") / `server_idempotent`. **Correction**:
+  this module's own prior `SCENARIO_MAX_TURNS` comment named fault id `F4` for this
+  scenario shape, but `faults.py`'s actual `F4` (`_inject_f4`) is "concurrent actor drift"
+  -- a DIFFERENT fault with a known commit-then-fabricate gap, marked
+  `@pytest.mark.robustness_only` in `tests/test_guarantee_contracts.py` and explicitly
+  excluded from valid-guarantee conclusions per `ACCEPTANCE_PLAN_V2.md` §2. `F4` is
+  therefore NOT used anywhere in this module's 5 scenarios; `F1` (whose docstring says
+  "clean rejection before dispatch: wrapper refuses to call through at all", the literal
+  scenario description) is used instead, with `server_idempotent` so the wired guard
+  actually PERMITS the retry and the second, unfaulted, real `execute_procedure` attempt
+  commits for real.
+- **S5 permission denial, incl. a recovery write under the SAME restricted identity** ->
+  `authority` (unchanged). `run_authority_denial_case` and its `attempt_action` retry both
+  close over the SAME `real_invoker` (and therefore the same `lowpriv_user` identity
+  baked into that closure by the bench script) -- never a different identity.
+
+Corrections retained from the prior round's own review (see
+`Tracks/SafeDeoptExperiment/REPORT_LLM_RECOVERY_INTEGRATION.md` for the original writeup):
 
 1. Scenario 1 (committed-but-response-lost) offers the model a REAL `check_status` tool
    backed by ground truth captured during the original fault-injected run (whether
@@ -32,20 +90,23 @@ Corrections applied after initial plan review (see
    way. The model is expected to check status itself, see COMMITTED, and choose NOT to
    retry -- producing a safe final answer without ever re-attempting the write. The
    guard-REJECTS-a-retry-anyway path is still covered, but as a separate, explicit,
-   deterministic sub-case (`resume_via_retry_write_b` called directly against the SAME
-   persisted `RecoverySession`) rather than forced onto the model as its only option.
-2. `RecoverySession` is constructed ONCE per `run_llm_recovery_case` call and threaded
-   through every tool dispatch in that run (status checks, fences, retries) so guard state
-   genuinely accumulates turn over turn, matching how a real multi-turn recovery works.
-3. Scenario 4 (permission denial) offers the model a real `attempt_action` tool that
-   dispatches a SECOND real `execute_procedure` call through the authority-gated graph and
-   the SAME denying `real_invoker` -- the model must actually try the action and receive a
-   genuine runtime-level denial, not simply have the tool withheld.
+   deterministic sub-case (`resume_via_retry_write_b` called directly with `known_status`
+   set) rather than forced onto the model as its only option.
+2. `RecoverySession` state for `status_resolvable`/`fenceable` is now supplied to the REAL
+   runtime via its own `status_check_fn`/`fence_fn` hooks (ground truth learned across the
+   model's own earlier turns), so the runtime's own internally-scoped `RecoverySession`
+   (constructed fresh, once per `execute_procedure` call, inside `_Runner.__init__`) sees
+   the same facts a persisted cross-turn session would have.
+3. Scenario 5/authority (permission denial) offers the model a real `attempt_action` tool
+   that dispatches a SECOND real `execute_procedure` call through the authority-gated graph
+   and the SAME denying `real_invoker` -- the model must actually try the action and
+   receive a genuine runtime-level denial, not simply have the tool withheld.
 """
 
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -70,44 +131,76 @@ from real_procedure_integration import (  # noqa: E402
     make_classifier,
     make_classifier_with_privileged_write_b,
     run_authority_denial_case,
-    run_fault_case,
     wrap_tool_invoker_with_fault,
 )
-
-# huf.ai.graph.replay_guard.py is not wired into this worktree's procedure_runtime.py
-# (confirmed by grep before writing this module: no `replay_guard` reference in
-# procedure_runtime.py here). Per the plan's own §1 point 3 / open item 2, this module
-# imports it STANDALONE -- constructing real ReplayGuard/RecoverySession objects directly
-# and calling `.check()` itself in `resume_via_retry_write_b`, below, BEFORE deciding
-# whether to even attempt a second `execute_procedure` call. This does not require any
-# runtime dispatch wiring and does not merge `feat/procedure-replay-guard`.
-sys.path.insert(
-    0,
-    str(Path(__file__).resolve().parent.parent.parent / "huf" / "ai" / "graph"),
-)
+from faults import FaultInjector  # noqa: E402
 
 
-def _import_replay_guard():
-    """Lazy import of the standalone replay_guard module (copied from the
-    `safe-deopt-guard-wiring` worktree's `huf/ai/graph/replay_guard.py`, READ-ONLY --
-    never modified, never merged). See module docstring.
+def run_fault_case_exposing_injector(
+    *,
+    procedure_name: str,
+    target_identity: str,
+    real_invoker,
+    fault_id: str,
+    guarantee_level: str = "none",
+) -> tuple[dict, FaultInjector]:
+    """Near-identical copy of `real_procedure_integration.run_fault_case`, except it
+    returns the `FaultInjector` instance it used (that function builds one internally and
+    discards it). Needed so scenario 3 (F7, late commit) can later drain the SAME held
+    write via `injector.flush_held_write(operation_key)` before the final-state check --
+    `run_fault_case`'s own injector is otherwise unreachable. Never mutates
+    `real_procedure_integration.py`; this is additive, read-only reuse of its exported
+    graph/classifier builders.
     """
 
-    if "_replay_guard_standalone" in sys.modules:
-        return sys.modules["_replay_guard_standalone"]
+    from huf.ai.graph.executor import PinnedVersion
+    from huf.ai.graph.fallback import build_mid_run_fallback
+    from huf.ai.graph.procedure_runtime import ProcedureOutcome, execute_procedure
 
-    import importlib.util
+    graph = build_two_write_procedure_graph(procedure_name=procedure_name, target_identity=target_identity)
+    version = PinnedVersion.pin(graph)
+    classify_tool = make_classifier()
 
-    guard_path = Path(__file__).resolve().parent / "_replay_guard_standalone.py"
-    spec = importlib.util.spec_from_file_location("_replay_guard_standalone", guard_path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    # Register BEFORE exec_module: dataclasses.dataclass(frozen=True) resolves
-    # `cls.__module__` via `sys.modules.get(...)`, which is None (and crashes) for a
-    # module executed via importlib.util without ever being registered.
-    sys.modules["_replay_guard_standalone"] = module
-    spec.loader.exec_module(module)
-    return module
+    injector = FaultInjector()
+    wrapped_invoker = wrap_tool_invoker_with_fault(
+        real_invoker,
+        target_tool_id=TOOL_WRITE_B,
+        injector=injector,
+        fault_id=fault_id,
+        guarantee_level=guarantee_level,
+    )
+
+    outcome: ProcedureOutcome = execute_procedure(
+        version,
+        {"target_identity": target_identity},
+        tool_invoker=wrapped_invoker,
+        run_id=f"{procedure_name}-{fault_id}",
+        classify_tool=classify_tool,
+        procedure_name=procedure_name,
+    )
+
+    summary: dict[str, Any] = {
+        "fault_id": fault_id,
+        "guarantee_level": guarantee_level,
+        "outcome_status": outcome.status,
+        "outcome_error": outcome.error,
+        "node_visits": outcome.node_visits,
+        "tool_invocations": outcome.tool_invocations,
+    }
+
+    if outcome.status == ProcedureOutcome.FAILED:
+        summary["fallback_payload"] = build_mid_run_fallback(
+            procedure_id=procedure_name,
+            version=version.fingerprint,
+            run=None,
+            graph=graph,
+            outcome=outcome,
+            classify_tool=classify_tool,
+        )
+    else:
+        summary["fallback_payload"] = None
+
+    return summary, injector
 
 
 # ---------------------------------------------------------------------------
@@ -220,51 +313,74 @@ def build_recovery_atomic_tools(
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class _GuardAwarePermission:
+    """Duck-typed `ToolPermission`-shaped object that ALSO carries a real
+    `recovery_guarantee`, unlike `real_procedure_integration.SimpleToolPermission` (which
+    only has `.ptype`, so `procedure_runtime._Runner._recovery_guarantee` always resolves
+    it to `"none"` -- silently defeating `server_idempotent`/`status_resolvable` in the
+    real wired guard). Mirrors the shape `huf.ai.graph.permissions.ToolPermission` uses
+    (`.ptype`, `.recovery_guarantee`), without importing that frappe-adjacent module.
+    """
+
+    ptype: str
+    recovery_guarantee: str | None = None
+
+
+def _classifier_with_guarantee(guarantee_level: str) -> Callable[[str], _GuardAwarePermission]:
+    mapping = {
+        TOOL_READ_TARGET: "read",
+        TOOL_WRITE_A: "create",
+        TOOL_WRITE_B: "write",
+    }
+
+    def _classify(tool_id: str) -> _GuardAwarePermission:
+        if tool_id == TOOL_WRITE_B:
+            return _GuardAwarePermission(ptype="write", recovery_guarantee=guarantee_level)
+        return _GuardAwarePermission(ptype=mapping.get(tool_id, "read"), recovery_guarantee=None)
+
+    return _classify
+
+
 def resume_via_retry_write_b(
     *,
     procedure_name: str,
     target_identity: str,
     real_invoker,
     guarantee_level: str,
-    recovery_session,
-    replay_guard,
+    known_status: str | None = None,
+    known_fenced: bool = False,
     inject_fault: bool = True,
     fault_id: str | None = None,
     call_counter: list[int] | None = None,
 ) -> dict:
     """What `retry_write_b`'s tool-execution handler actually calls.
 
-    First consults the REAL, standalone `ReplayGuard.check(...)` against the SAME
-    (persisted, cross-turn) `recovery_session` -- this worktree's `procedure_runtime.py`
-    does not wire the guard into its own `RECOVERY_RETRY` branch, so this function gates
-    the retry itself, exactly as the plan's open item 2 anticipated, before ever touching
-    `execute_procedure` again.
+    T4 rewrite (ACCEPTANCE_PLAN_V2.md §3): this now drives exactly ONE real
+    `execute_procedure` call, through the REAL, wired runtime replay guard
+    (`replay_guard_enabled=True` -- `huf.ai.graph.procedure_runtime._Runner`'s own
+    `RECOVERY_RETRY` branch, never a standalone copy). The `write_b` node is configured
+    `"recovery": "retry"`; its tool_invoker fails ONLY on the first call within this
+    invocation (the SAME fault the original run hit, re-applied once, representing "the
+    model has decided to retry after the original failure") and, if and only if the real
+    guard's `.check(...)` call inside the runtime ALLOWS a retry, the runtime's own
+    bounded (exactly-once) internal retry mechanism re-invokes the tool a second time,
+    unfaulted -- a genuinely new attempt that either commits for real or fails on its own
+    merits, never a synthetic "guard said yes so mark it success".
 
-    Only when the guard ALLOWS the retry does this function actually build a fresh graph
-    (`write_a` stubbed to a trivial always-succeeding no-op -- it already committed in the
-    original run and must not be re-attempted for real) and drive a SECOND real
-    `execute_procedure` call for `write_b` (`recovery` switched to `"retry"`).
+    `known_status` / `known_fenced` carry ground truth the model learned in EARLIER turns
+    (e.g. a real `check_status` tool call) into the runtime's own `status_check_fn`/
+    `fence_fn` hooks, so `status_resolvable`/`fenceable` guarantees are resolved from the
+    same facts a persisted cross-turn `RecoverySession` would have held, even though the
+    real runtime constructs its own `RecoverySession` fresh, once per `execute_procedure`
+    call (by design -- see `procedure_runtime.py`'s own "run-scoped, not persisted, not
+    shared cross-worker" comment).
 
     Returns `{"guard_rejected", "guard_reason", "execute_procedure_called",
-    "outcome_status", "outcome_error", "write_b_dispatched"}`.
+    "outcome_status", "outcome_error", "write_b_dispatch_count", "write_b_committed"}` --
+    dispatch count and committed-effect are two SEPARATE counters (never conflated), per
+    §3's "dispatches counted separately from committed effects".
     """
-
-    operation_key = f"{procedure_name}:write_b:{target_identity}"
-    decision = replay_guard.check(
-        operation_key=operation_key,
-        tool_guarantee=guarantee_level,
-        recovery_session=recovery_session,
-    )
-
-    if not decision.allowed:
-        return {
-            "guard_rejected": True,
-            "guard_reason": decision.reason,
-            "execute_procedure_called": False,
-            "outcome_status": None,
-            "outcome_error": None,
-            "write_b_dispatched": False,
-        }
 
     from huf.ai.graph.executor import PinnedVersion
     from huf.ai.graph.procedure_runtime import ProcedureOutcome, ToolInvocation, execute_procedure
@@ -274,9 +390,10 @@ def resume_via_retry_write_b(
         if node["id"] == "write_b":
             node["config"]["recovery"] = "retry"
     version = PinnedVersion.pin(graph)
-    classify_tool = make_classifier()
+    classify_tool = _classifier_with_guarantee(guarantee_level)
 
-    dispatched = {"write_b": False}
+    dispatch_count = [0]
+    call_number = [0]
 
     def _stub_invoker(tool_id: str, args: dict) -> ToolInvocation:
         if tool_id == TOOL_WRITE_A:
@@ -284,12 +401,15 @@ def resume_via_retry_write_b(
             # real -- return a trivial stubbed success so execute_procedure proceeds.
             return ToolInvocation(tool_id=tool_id, args=args, success=True, result={"stubbed": "already_committed"}, error=None)
         if tool_id == TOOL_WRITE_B:
-            dispatched["write_b"] = True
+            dispatch_count[0] += 1
+            call_number[0] += 1
             if call_counter is not None:
                 call_counter[0] += 1
-            if inject_fault and fault_id:
-                from faults import FaultInjector
-
+            if inject_fault and fault_id and call_number[0] == 1:
+                # Re-apply the SAME fault that produced the original failure, but ONLY
+                # on this call's first attempt at write_b -- the runtime's own guarded
+                # retry-once mechanism (below) is what gets a genuine, unfaulted second
+                # attempt if and only if the real guard allows it.
                 wrapped = wrap_tool_invoker_with_fault(
                     real_invoker,
                     target_tool_id=TOOL_WRITE_B,
@@ -301,6 +421,14 @@ def resume_via_retry_write_b(
             return real_invoker(tool_id, args)
         return real_invoker(tool_id, args)
 
+    operation_key = f"{procedure_name}:write_b:{target_identity}"
+
+    def _status_check_fn(_operation_key: str) -> str:
+        return known_status or "UNKNOWN"
+
+    def _fence_fn(_operation_key: str) -> bool:
+        return bool(known_fenced)
+
     outcome: ProcedureOutcome = execute_procedure(
         version,
         {"target_identity": target_identity},
@@ -308,15 +436,27 @@ def resume_via_retry_write_b(
         run_id=f"{procedure_name}-retry",
         classify_tool=classify_tool,
         procedure_name=procedure_name,
+        replay_guard_enabled=True,
+        status_check_fn=_status_check_fn,
+        fence_fn=_fence_fn,
     )
 
+    write_b_entries = [e for e in outcome.tool_invocations if e.get("tool_id") == TOOL_WRITE_B]
+    guard_rejected = any(e.get("guard_rejected") for e in write_b_entries)
+    guard_reason = next((e.get("guard_rejection_reason") for e in write_b_entries if e.get("guard_rejected")), None)
+    write_b_committed = bool(write_b_entries) and bool(write_b_entries[-1].get("success"))
+
     return {
-        "guard_rejected": False,
-        "guard_reason": decision.reason,
+        "guard_rejected": guard_rejected,
+        "guard_reason": guard_reason,
         "execute_procedure_called": True,
         "outcome_status": outcome.status,
         "outcome_error": outcome.error,
-        "write_b_dispatched": dispatched["write_b"],
+        "operation_key": operation_key,
+        "write_b_dispatch_count": dispatch_count[0],
+        "write_b_committed": write_b_committed,
+        # kept for backward-compatible callers/tests that read the old singular field:
+        "write_b_dispatched": dispatch_count[0] > 0,
     }
 
 
@@ -328,18 +468,20 @@ def resume_via_retry_write_b(
 #: Per-scenario model-turn budgets (TEST_AGENT_SETTINGS.md Sec.4(b) -- "roughly 2x the
 #: minimum safe path, rounded up, so escalating or avoiding is always affordable"),
 #: replacing the previous flat ``max_turns=4`` cap for every scenario alike (gap G5). Keyed
-#: by this module's own fault/authority identifiers, mapped onto the acceptance plan's S1-S5
-#: scenario names:
-#:   F1 -> S1 committed, response lost                          (min 2-3 turns) -> 6
-#:   F2 -> S2 did-not-commit, ambiguous timeout                  (min 4 turns)   -> 8
-#:   F7 -> S3 late commit after initially inconclusive read      (min 4-5 turns) -> 10
-#:   F4 -> S4 clean pre-dispatch rejection, then permitted retry (min 4 turns)   -> 8
-#:   authority -> S5 permission denial, incl. recovery write     (min 3 turns)   -> 6
+#: by this module's own fault/authority identifiers, mapped onto ACCEPTANCE_PLAN_V2.md §3's
+#: S1-S5 scenario names -- see the module docstring's "Fault/scenario mapping" section for
+#: the corrected fault-id assignments (S2 -> F3, not F1; S4 -> F1, not F4; F4 itself is
+#: excluded from every scenario per the robustness_only gap):
+#:   F2 -> S1 committed, response lost                           (min 2-3 turns) -> 6
+#:   F3 -> S2 did-not-commit, ambiguous timeout                   (min 4 turns)   -> 8
+#:   F7 -> S3 late commit after initially inconclusive read       (min 4-5 turns) -> 10
+#:   F1 -> S4 clean pre-dispatch rejection, then permitted retry  (min 4 turns)   -> 8
+#:   authority -> S5 permission denial, incl. recovery write      (min 3 turns)   -> 6
 SCENARIO_MAX_TURNS: dict[str, int] = {
-    "F1": 6,  # S1_committed_lost
-    "F2": 8,  # S2_not_committed
+    "F2": 6,  # S1_committed_lost
+    "F3": 8,  # S2_not_committed
     "F7": 10,  # S3_late_commit
-    "F4": 8,  # S4_reject_then_retry
+    "F1": 8,  # S4_reject_then_retry
     "authority": 6,  # S5_permission_denied
 }
 
@@ -377,27 +519,26 @@ def run_llm_recovery_case(
     Returns a dict recording every turn plus enough bookkeeping for the scenario's own
     asserts: `{"original_outcome", "fallback_payload", "transcript", "turns",
     "final_action", "model_version", "total_prompt_tokens", "total_completion_tokens",
-    "real_execute_procedure_calls", "recovery_session_snapshot", "resume_result"}`.
+    "real_execute_procedure_calls", "known_status_snapshot", "resume_result"}`.
     """
 
-    replay_guard_mod = _import_replay_guard()
-    recovery_session = replay_guard_mod.RecoverySession()
-    replay_guard = replay_guard_mod.ReplayGuard()
-
     real_execute_procedure_calls = [1]  # the original run_fault_case/run_authority_denial_case call
+    known_status = {"write_b": None}  # ground truth learned via the model's own check_status turns
+    injector_holder: dict[str, FaultInjector] = {}
 
     if scenario_kind == "authority":
         original = run_authority_denial_case(
             procedure_name=procedure_name, target_identity=target_identity, real_invoker=real_invoker
         )
     else:
-        original = run_fault_case(
+        original, injector = run_fault_case_exposing_injector(
             procedure_name=procedure_name,
             target_identity=target_identity,
             real_invoker=real_invoker,
             fault_id=fault_id_or_authority,
             guarantee_level=guarantee_level,
         )
+        injector_holder["injector"] = injector
 
     from huf.ai.graph.procedure_runtime import ProcedureOutcome
 
@@ -421,7 +562,7 @@ def run_llm_recovery_case(
     def _check_status(*, operation_key: str | None = None) -> dict:
         real_key = f"{procedure_name}:write_b:{target_identity}"
         status = _GROUND_TRUTH_STATUS.get(id(real_invoker), {}).get("write_b", "UNKNOWN")
-        recovery_session.record_status_check(real_key, status)
+        known_status["write_b"] = status
         return {"operation_key": real_key, "status": status}
 
     def _retry_write_b(**_ignored: Any) -> dict:
@@ -430,9 +571,8 @@ def run_llm_recovery_case(
             target_identity=target_identity,
             real_invoker=real_invoker,
             guarantee_level=guarantee_level,
-            recovery_session=recovery_session,
-            replay_guard=replay_guard,
-            inject_fault=(fault_id_or_authority not in ("F1",)),  # allow F1's retry to run clean
+            known_status=known_status["write_b"],
+            inject_fault=True,
             fault_id=fault_id_or_authority,
             call_counter=None,
         )
@@ -456,7 +596,7 @@ def run_llm_recovery_case(
             allow_privileged_attempt=True,
             privileged_attempt_fn=_attempt_action,
         )
-    elif fault_id_or_authority == "F2":
+    elif fault_id_or_authority == "F2":  # S1: committed, response lost -- status_resolvable
         tools = build_recovery_atomic_tools(
             read_target_fn=_read_target,
             allow_status_check=True,
@@ -464,13 +604,19 @@ def run_llm_recovery_case(
             allow_retry_write_b=True,
             retry_write_b_fn=_retry_write_b,
         )
-    elif fault_id_or_authority == "F1":
+    elif fault_id_or_authority == "F3":  # S2: did NOT commit, ambiguous timeout -- server_idempotent
         tools = build_recovery_atomic_tools(
             read_target_fn=_read_target,
             allow_retry_write_b=True,
             retry_write_b_fn=_retry_write_b,
         )
-    elif fault_id_or_authority == "F7":
+    elif fault_id_or_authority == "F1":  # S4: clean pre-dispatch rejection, then permitted retry
+        tools = build_recovery_atomic_tools(
+            read_target_fn=_read_target,
+            allow_retry_write_b=True,
+            retry_write_b_fn=_retry_write_b,
+        )
+    elif fault_id_or_authority == "F7":  # S3: late commit -- guard rejects unconditionally ("none")
         tools = build_recovery_atomic_tools(
             read_target_fn=_read_target,
             allow_retry_write_b=True,
@@ -532,6 +678,27 @@ def run_llm_recovery_case(
     else:
         final_action = "max_turns_exhausted"
 
+    # ACCEPTANCE_PLAN_V2.md §3: "late-commit scenarios must drain/release pending
+    # operations before checking final state, so a duplicate can't stay hidden." This does
+    # NOT count against the model's turn/tool-call budget (it is harness bookkeeping, not
+    # a model action). Only F7 (S3) ever has a held write to drain; every other scenario's
+    # original run either committed immediately or never dispatched at all, so there is
+    # nothing pending to hide a duplicate behind.
+    drain_result: dict | None = None
+    if scenario_kind == "fault" and fault_id_or_authority == "F7" and "injector" in injector_holder:
+        real_key = f"{procedure_name}:write_b:{target_identity}"
+        injector = injector_holder["injector"]
+        flushed = injector.flush_held_write(real_key)
+        final_read = real_invoker(TOOL_READ_TARGET, {"target_identity": target_identity})
+        drain_result = {
+            "flushed_now": flushed,  # False means it had already landed or was fenced -- not "nothing happened"
+            "final_state_after_drain": {
+                "success": final_read.success,
+                "result": final_read.result,
+                "error": final_read.error,
+            },
+        }
+
     return {
         "original_outcome": original,
         "fallback_payload": fallback_payload,
@@ -543,12 +710,9 @@ def run_llm_recovery_case(
         "total_prompt_tokens": total_prompt,
         "total_completion_tokens": total_completion,
         "real_execute_procedure_calls": real_execute_procedure_calls[0],
-        "recovery_session_snapshot": {
-            "reads_done": sorted(recovery_session.reads_done),
-            "status_resolved": dict(recovery_session.status_resolved),
-            "fenced": sorted(recovery_session.fenced),
-        },
+        "known_status_snapshot": dict(known_status),
         "resume_result": last_resume_result,
+        "drain_result": drain_result,
     }
 
 
