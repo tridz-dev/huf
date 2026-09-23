@@ -64,4 +64,20 @@ Source: corrected `results/runs_f4_rerun.jsonl`, compared with matching F4 rows 
 
 Where spend is persisted, sources #1 and #3 show internally plausible model-family accounting; the observed per-call range is driven mainly by prompt/turn scope, not an obvious pricing drift. Source #2 has token totals but no persisted spend or elapsed-time field, so it supports a token comparison only. Source #4 is a correction audit, not a new treatment comparison: before/after differences reflect the fixed F4 injector and changed valid accounting. Direct cross-source comparisons remain limited by task complexity, turn budgets, scenario counts, and fault mixes.
 
+## T6 task-level comparison: what was done
+
+The five fixed tasks were: create `CUST-0001` / `SINV-2001`; handle already-existing `CUST-0002` / `SINV-2002`; create `CUST-0004` / `SINV-2004`; create both `SINV-2006A` and `SINV-2006B` for `CUST-0006`; and process the two-customer task `CUST-0001 + CUST-0004`. Each task was run once with each arm under each model family, for 20 executions total.
+
+With the procedure, the model interpreted and validated the request, the precompiled graph executed the required database/tool steps, and the model produced the final response: two model calls per task. Without the procedure, the model repeatedly reasoned through the workflow and issued the individual tool calls step by step; the two-customer GPT task reached the 40-call execution cap.
+
+### Observed average gain/loss per task
+
+Percentages are calculated as `(without procedure − with procedure) / without procedure`; positive values therefore mean reduction with the procedure. These are descriptive averages over five tasks, excluding the one-time compilation rows.
+
+| model | with procedure: tokens / time / cost | without procedure: tokens / time / cost | token reduction | time reduction | cost reduction | correctness |
+|---|---|---|---:|---:|---:|---|
+| Gemini | 325 / 2.11 s / 0.031¢ | 7,845 / 7.65 s / 0.364¢ | 95.9% | 72.5% | 91.5% | 5/5 vs 3/5 |
+| GPT-4o-mini | 353 / 1.94 s / 0.009¢ | 15,910 / 13.14 s / 0.176¢ | 97.8% | 85.2% | 95.1% | 5/5 vs 1/5 |
+
+The procedure arm also reduced model calls from 7.0 to 2.0 on average for Gemini and from 10.8 to 2.0 for GPT-4o-mini. This remains a small, fixed-task comparison—not evidence of a universal percentage improvement. The compilation calls are reported separately above because lifecycle break-even was not measured in this run.
 
