@@ -9,6 +9,7 @@
   "surface",
   "policy",
   "mode",
+  "latency_budget_ms",
   "priority",
   "enabled"
  ],
@@ -17,7 +18,8 @@
    "fieldname": "surface",
    "fieldtype": "Select",
    "label": "Surface",
-   "options": "Model Routing\nTool Selection\nSkill Selection\nProcedure Selection\nContext Relevance\nInput Guardrail\nOutput Guardrail\nOutput Verification",
+   "options": "Model Routing\nTool Selection\nSkill Selection\nProcedure Selection\nContext Relevance\nInput Guardrail\nOutput Guardrail\nOutput Verification\nRAG Filter\nAgent Routing\nAgent Tool",
+   "description": "The decision surface where this policy applies.",
    "reqd": 1
   },
   {
@@ -25,34 +27,45 @@
    "fieldtype": "Link",
    "label": "Policy",
    "options": "Decision Policy",
+   "description": "The policy to apply on this surface.",
    "reqd": 1
   },
   {
    "fieldname": "mode",
    "fieldtype": "Select",
    "label": "Mode",
-   "options": "Off\nShadow\nEnforce",
+   "options": "Off\nShadow\nAdvise\nEnforce",
    "default": "Off",
+   "description": "Off: disabled. Shadow: run in background, log results, never apply. Advise: show decision hint to LLM, LLM retains choice. Enforce: apply decision, ignore LLM output for this choice.",
    "reqd": 1
+  },
+  {
+   "fieldname": "latency_budget_ms",
+   "fieldtype": "Int",
+   "label": "Latency Budget (ms)",
+   "description": "Optional override of the surface default latency budget in milliseconds.",
+   "non_negative": 1
   },
   {
    "fieldname": "priority",
    "fieldtype": "Int",
    "label": "Priority",
    "default": "100",
+   "description": "Lower numbers have higher priority when multiple bindings match the same surface.",
    "non_negative": 1
   },
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled",
-   "default": "1"
+   "default": "1",
+   "description": "Uncheck to temporarily disable this binding without deleting it."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 13:14:10.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Decision Binding",
