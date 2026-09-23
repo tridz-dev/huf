@@ -96,13 +96,41 @@ class DecisionRuntime:
 		)
 		return response
 
-	def evaluate_deployment_chain(self, request: DecisionRequest, chain: DeploymentChain) -> DecisionResponse:
-		"""Try eligible deployments in deterministic order without changing policy identity."""
+	def evaluate_deployment_chain(self, request: DecisionRequest, chain: DeploymentChain, deadline: float | None = None) -> DecisionResponse:
+		"""Try eligible deployments in deterministic order without changing policy identity.
+
+		Args:
+			request: The decision request.
+			chain: The ordered deployment chain.
+			deadline: Monotonic timestamp (seconds); stops trying candidates after this time, returns TIMEOUT.
+		"""
 		if not chain.candidates:
 			return self.evaluate(request, object(), _deployment_metadata=("priority", 0, ()))
 		labels = chain.fallback_chain
 		last = None
 		for index, candidate in enumerate(chain.candidates):
+			# Check deadline before attempting this candidate
+			if deadline is not None and time.monotonic() >= deadline:
+				# Return TIMEOUT with partial fallback chain
+				if last is not None:
+					# Use the last response as base, update status to TIMEOUT
+					return replace(
+						last,
+						status=DecisionStatus.TIMEOUT,
+						error_code=DecisionErrorCode.TIMEOUT.value,
+					)
+				else:
+					# No candidates evaluated yet; create TIMEOUT response
+					return DecisionResponse(
+						status=DecisionStatus.TIMEOUT,
+						identity=request.identity,
+						requested_identity=request.identity,
+						requested_model=request.identity.canonical_model,
+						requested_model_version=request.identity.canonical_version,
+						error_code=DecisionErrorCode.TIMEOUT.value,
+						deployment_fallback_count=index,
+						deployment_fallback_chain=labels[:index],
+					)
 			selection = "failover" if index else chain.selection_source
 			last = self.evaluate(
 				request,
