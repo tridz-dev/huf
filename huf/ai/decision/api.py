@@ -26,15 +26,26 @@ hook) marking exactly where the opt-in check and the rate-limit decorator belong
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 import frappe
 from frappe import _
 
 from huf.ai.decision import service
+from huf.ai.decision.deployment_loader import load_chain, invalidate_deployment_chain_cache
 from huf.ai.decision.errors import DecisionError
-from huf.ai.decision.policy import validate_policy_data
-from huf.ai.decision.types import CandidateSource, DecisionOrigin, Option
+from huf.ai.decision.policy import DecisionPolicy, validate_policy_data
+from huf.ai.decision.runtime import DecisionRuntime
+from huf.ai.decision.types import (
+	CandidateSource,
+	DecisionIdentity,
+	DecisionOrigin,
+	DecisionRequest,
+	DecisionStatus,
+	Option,
+	QuestionKind,
+)
 from huf.permissions import has_capability
 
 # -- Shared helpers ------------------------------------------------------------------------
@@ -518,3 +529,286 @@ def publish_policy_version(policy: str) -> dict:
 	version_name = doc.publish_version()
 
 	return {"policy": doc.name, "version": version_name}
+
+
+# -- Setup wizard & deployment health -------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_setup_catalog() -> list[dict]:
+	"""List catalog entries available for the setup wizard (PLAN.md §3.1).
+
+	Requires ``decision.admin``. Returns only entries for providers that either:
+	- Have a key configured on their ``AI Provider`` row, or
+	- Use a local backend (no provider authentication required).
+
+	Returns:
+		List of dicts, one per available catalog entry:
+		``provider_brand, model_name, canonical_model, model_family, model_class,
+		wire_protocol, endpoint_path, base_url, provider_ready`` (True if the provider
+		has a key, False if local).
+	"""
+	from huf.ai.decision import catalog
+
+	_require("decision.admin")
+
+	result = []
+	seen = set()
+
+	# Iterate through all catalog entries
+	for entry in catalog._CATALOG.values():
+		# Avoid duplicates (same brand/model pair)
+		if (entry.provider_brand, entry.model_name) in seen:
+			continue
+		seen.add((entry.provider_brand, entry.model_name))
+
+		# Check if the provider exists and has a key
+		provider_rows = frappe.get_list(
+			"AI Provider",
+			filters={"provider_brand": entry.provider_brand},
+			fields=["name", "api_key"],
+			limit_page_length=1,
+		)
+
+		provider_ready = False
+		if provider_rows:
+			# Provider exists. Check if it has a key by looking at api_key field
+			# (PLAN.md §3.1 "Providers with a key show Ready; without, Add key")
+			provider_ready = bool(provider_rows[0].get("api_key"))
+
+		result.append({
+			"provider_brand": entry.provider_brand,
+			"model_name": entry.model_name,
+			"canonical_model": entry.canonical_model,
+			"model_family": entry.model_family,
+			"model_class": entry.model_class,
+			"wire_protocol": entry.wire_protocol,
+			"endpoint_path": entry.endpoint_path,
+			"base_url": entry.base_url,
+			"provider_ready": provider_ready,
+		})
+
+	return sorted(result, key=lambda x: (x["provider_brand"], x["model_name"]))
+
+
+@frappe.whitelist()
+def setup_deployment(
+	provider: str,
+	model_name: str,
+	**kwargs: Any,
+) -> dict:
+	"""Set up a Decision Deployment idempotently (PLAN.md §3.1 step 3).
+
+	Creates (or reuses) an ``AI Model`` (modality Decision) and the Class/Family/Model
+	hierarchy from the catalog entry, creates a ``Decision Deployment``, and runs a test
+	probe. If the probe passes, the deployment is enabled; if it fails, it is saved
+	disabled with the error.
+
+	Requires ``decision.admin``.
+
+	Args:
+		provider: ``AI Provider`` docname.
+		model_name: Catalog model name (e.g. ``"jev-1.13-free"``).
+		**kwargs: Reserved for future parameters (ignored for now).
+
+	Returns:
+		``{
+			"deployment": <Decision Deployment docname>,
+			"ai_model": <AI Model docname>,
+			"probe": {"status", "latency_ms", "error_code"}
+		}``.
+
+	Raises:
+		frappe.PermissionError: missing ``decision.admin``.
+		frappe.ValidationError: unresolvable provider or catalog entry, missing provider key.
+	"""
+	from huf.ai.decision import catalog
+	from huf.patches.v1.seed_decision_system_one import (
+		_seed_classes,
+		_seed_families,
+		_seed_model,
+		_seed_ai_model,
+		_seed_deployment,
+	)
+
+	_require("decision.admin")
+
+	# Get the provider row
+	provider_doc = frappe.get_doc("AI Provider", provider)
+	provider_brand = provider_doc.provider_brand
+	if not provider_brand:
+		frappe.throw(_("Provider {0} has no brand configured").format(provider))
+
+	# Look up the catalog entry
+	entry = catalog.get_entry(provider_brand, model_name)
+	if entry is None:
+		frappe.throw(
+			_("No catalog entry for provider {0} / model {1}").format(provider_brand, model_name)
+		)
+
+	# Check that the provider has a key
+	if not provider_doc.api_key:
+		frappe.throw(_("Provider {0} has no API key. Add one first.").format(provider))
+
+	# Idempotently create/reuse the Class/Family/Model hierarchy
+	class_names = _seed_classes()
+	family_names = _seed_families(class_names)
+	decision_model_name = _seed_model(family_names)
+
+	# Idempotently create/reuse the AI Model row
+	ai_model_name = _seed_ai_model(provider)
+
+	# Idempotently create the Deployment row
+	deployment_name = _seed_deployment(decision_model_name, ai_model_name, provider)
+
+	# Run a test probe on the deployment
+	probe_result = test_deployment(deployment_name)
+
+	# Update the deployment's enabled status based on the probe
+	deployment_doc = frappe.get_doc("Decision Deployment", deployment_name)
+	if probe_result["status"] == "success":
+		deployment_doc.enabled = 1
+	else:
+		deployment_doc.enabled = 0
+	deployment_doc.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	return {
+		"deployment": deployment_name,
+		"ai_model": ai_model_name,
+		"probe": probe_result,
+	}
+
+
+@frappe.whitelist()
+def test_deployment(deployment: str) -> dict:
+	"""Test a Decision Deployment with one tiny judge probe (PLAN.md §3.3 step 4).
+
+	Sends a minimal judge question through the resolved backend and records the result
+	in the deployment's ``health_status`` and ``last_healthcheck`` fields. Requires
+	``decision.admin``.
+
+	Args:
+		deployment: ``Decision Deployment`` docname (``deployment_key``).
+
+	Returns:
+		``{"status", "latency_ms", "error_code"}``:
+		- status: "success" or "failed"
+		- latency_ms: wall-clock time in milliseconds
+		- error_code: ``None`` on success, or a ``DecisionErrorCode.value`` string on failure.
+			Never includes the raw provider error or any key material.
+
+	Raises:
+		frappe.PermissionError: missing ``decision.admin``.
+		frappe.ValidationError: deployment not found.
+	"""
+	_require("decision.admin")
+
+	# Get the deployment to find its model
+	deployment_doc = frappe.get_doc("Decision Deployment", deployment)
+	decision_model = deployment_doc.decision_model
+
+	started = time.monotonic()
+
+	try:
+		# Invalidate the cache to ensure fresh chain load
+		invalidate_deployment_chain_cache()
+
+		# Load the deployment chain, pinned to just this deployment
+		chain = load_chain(
+			decision_model=decision_model,
+			pinned_deployment=deployment,
+			deadline=time.monotonic() + 5.0,  # 5s timeout for the probe
+		)
+
+		if not chain.candidates:
+			# No valid deployment candidate (e.g., no key, transport error)
+			error_code = "DEPLOYMENT_UNAVAILABLE"
+			status = "failed"
+			latency_ms = (time.monotonic() - started) * 1000
+		else:
+			# Build a minimal judge question for probing
+			probe_policy = DecisionPolicy(
+				policy_id="__probe__",
+				questions=[
+					{
+						"id": "probe",
+						"kind": QuestionKind.JUDGE,
+						"instructions": "This is a probe question. Return true.",
+						"positive_criteria": "Always true.",
+						"negative_criteria": "Never applies.",
+					}
+				],
+				default_model=None,
+				store_state=False,
+			)
+
+			request = DecisionRequest(
+				policy=probe_policy,
+				identity=chain.requested_identity,
+				surface="admin_test",
+				state=None,
+				candidates=(),
+				candidate_source=None,
+				candidate_resolver_id=None,
+				modalities=None,
+			)
+
+			# Run through the runtime
+			runtime = DecisionRuntime()
+			response = runtime.evaluate_deployment_chain(
+				request,
+				chain,
+				deadline=time.monotonic() + 5.0,
+			)
+
+			latency_ms = (time.monotonic() - started) * 1000
+
+			if response.status == DecisionStatus.SUCCESS:
+				status = "success"
+				error_code = None
+			else:
+				status = "failed"
+				error_code = response.error_code
+
+		# Update the deployment's health status
+		health_status = "healthy" if status == "success" else "unhealthy"
+		frappe.db.set_value(
+			"Decision Deployment",
+			deployment,
+			{
+				"health_status": health_status,
+				"last_healthcheck": frappe.utils.now_datetime(),
+			},
+			update_modified=True,
+		)
+		frappe.db.commit()
+
+		return {
+			"status": status,
+			"latency_ms": int(latency_ms),
+			"error_code": error_code,
+		}
+
+	except Exception as exc:
+		# Log the error but don't leak it to the caller
+		frappe.logger("huf").exception(f"Decision deployment {deployment} test failed")
+		latency_ms = (time.monotonic() - started) * 1000
+
+		# Mark as unhealthy
+		frappe.db.set_value(
+			"Decision Deployment",
+			deployment,
+			{
+				"health_status": "unhealthy",
+				"last_healthcheck": frappe.utils.now_datetime(),
+			},
+			update_modified=True,
+		)
+		frappe.db.commit()
+
+		return {
+			"status": "failed",
+			"latency_ms": int(latency_ms),
+			"error_code": "INTERNAL_ERROR",
+		}
