@@ -183,6 +183,7 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_decision_bindings()
         self._validate_skills()
         self._validate_starter_prompts()
         self._validate_allowed_users_and_roles()
@@ -464,6 +465,24 @@ class Agent(Document):
                 frappe.throw(
                     _("OCR is enabled but the agent's model does not support modality: OCR"),
                     title=_("Invalid Model Capability"),
+                )
+
+    def _validate_decision_bindings(self):
+        """Validate that Advise mode is only used on surfaces that support it.
+
+        Advise mode can only be applied to specific decision surfaces.
+        Reject any binding with mode=Advise on an unsupported surface.
+        """
+        from huf.ai.decision.binding import ADVISE_SURFACES
+
+        for row in self.get("decision_bindings", []):
+            if row.mode == "Advise" and row.surface not in ADVISE_SURFACES:
+                allowed_modes = ", ".join(sorted(ADVISE_SURFACES))
+                frappe.throw(
+                    _("Advise mode is not supported on surface '{0}'. Supported surfaces are: {1}").format(
+                        row.surface, allowed_modes
+                    ),
+                    title=_("Invalid Decision Surface for Advise Mode"),
                 )
 
     def _validate_prompt_caching(self):
