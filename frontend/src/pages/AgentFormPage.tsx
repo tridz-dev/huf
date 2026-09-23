@@ -2469,6 +2469,8 @@ export function AgentFormPage() {
                   onToggleMCP={handleToggleMCPServer}
                   onSyncMCP={handleSyncMCPServer}
                   mcpLoading={mcpLoading}
+                  decisionBindings={decisionBindings}
+                  onUpdateDecisionBindings={setDecisionBindings}
                 />
               </TabsContent>
 
@@ -2486,11 +2488,47 @@ export function AgentFormPage() {
                   skills={agentSkills as any}
                   skillOptions={skillOptions}
                   onChange={setAgentSkills}
+                  decisionBinding={decisionBindings.find((b) => b.surface === 'Skill Selection')}
+                  onDecisionBindingChange={(binding) => {
+                    const skillSelectionIndex = decisionBindings.findIndex((b) => b.surface === 'Skill Selection');
+                    if (binding === undefined) {
+                      // Remove the binding
+                      if (skillSelectionIndex >= 0) {
+                        setDecisionBindings(decisionBindings.filter((_, i) => i !== skillSelectionIndex));
+                      }
+                    } else {
+                      // Add or update the binding
+                      if (skillSelectionIndex >= 0) {
+                        setDecisionBindings(decisionBindings.map((b, i) => (i === skillSelectionIndex ? binding : b)));
+                      } else {
+                        setDecisionBindings([...decisionBindings, binding]);
+                      }
+                    }
+                  }}
                 />
               </TabsContent>
 
               <TabsContent value="procedures" className="space-y-4">
-                <ProcedureBindingsTab agentId={isNew ? undefined : id} />
+                <ProcedureBindingsTab
+                  agentId={isNew ? undefined : id}
+                  decisionBinding={decisionBindings.find((b) => b.surface === 'Procedure Selection')}
+                  onDecisionBindingChange={(binding) => {
+                    const procedureSelectionIndex = decisionBindings.findIndex((b) => b.surface === 'Procedure Selection');
+                    if (binding === undefined) {
+                      // Remove the binding
+                      if (procedureSelectionIndex >= 0) {
+                        setDecisionBindings(decisionBindings.filter((_, i) => i !== procedureSelectionIndex));
+                      }
+                    } else {
+                      // Add or update the binding
+                      if (procedureSelectionIndex >= 0) {
+                        setDecisionBindings(decisionBindings.map((b, i) => (i === procedureSelectionIndex ? binding : b)));
+                      } else {
+                        setDecisionBindings([...decisionBindings, binding]);
+                      }
+                    }
+                  }}
+                />
               </TabsContent>
 
               <TabsContent value="permissions" className="space-y-4">
@@ -2512,6 +2550,8 @@ export function AgentFormPage() {
                   loadingSummaryPrompts={loadingSummaryPrompts}
                   memoryPolicyOptions={memoryPolicyOptions}
                   loadingMemoryPolicies={loadingMemoryPolicies}
+                  agentName={form.watch('agent_name') || id || ''}
+                  decisionBindings={decisionBindings}
                 />
               </TabsContent>
             </Tabs>
