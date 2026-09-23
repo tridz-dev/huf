@@ -72,13 +72,14 @@ class DecisionPolicyVersion(Document):
 			if prev.name != self.name:
 				frappe.db.set_value("Decision Policy Version", prev.name, "status", "Retired")
 
-		# Update Decision Policy.current_version and published_at
+		# Update Decision Policy.current_version and fingerprint. `published_at` is
+		# tracked on this Decision Policy Version (not on Decision Policy, which has
+		# no such field) -- see the `published_at` field above.
 		frappe.db.set_value(
 			"Decision Policy",
 			self.policy,
 			{
 				"current_version": self.name,
 				"fingerprint": self.fingerprint,
-				"published_at": frappe.utils.now_datetime(),
 			}
 		)
