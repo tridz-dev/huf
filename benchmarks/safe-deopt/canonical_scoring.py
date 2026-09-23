@@ -12,14 +12,32 @@ What this does, and why each part exists
 1. **Classifies every row** as exactly one of ``live-model`` / ``legitimate-no-model`` /
 ``mock`` / ``invalid`` (Sec.4). A row's classification is never inferred from its
 condition alone -- see :func:`classify_row`.
-2. **Handles the 48 zero-token gpt-4o-mini rows** (``analysis_percondition_costs.md``)
-explicitly: they carry an LLM condition (C4/C4+G/C5/C6, never C2/C3's legitimate
-zero-LLM design), a bare ``model_id`` with no version suffix, a ``run_date`` one day
-later than the rest of the dataset, a ``null`` transcript, and zero tokens/cost while
-still claiming ``tokens_are_real_accounting: true`` and ``useful_completion: true``.
-That combination is never a legitimate no-model execution (only C2/C3 are), so it is
-QUARANTINED here -- retained in the output for visibility, excluded from every
-live-model aggregate, and never silently pooled or relabeled as a real API execution.
+2. **Handles two different zero-token populations explicitly, and does NOT conflate them**
+(reconciled in full in ``RECOVERY_RESULTS_RECONCILED.md`` Sec.1-2 and
+``EXCLUSIONS_AND_FAILURES.md`` Sec.1-2):
+   - **288 zero-token rows** (``analysis_percondition_costs.md``): an LLM condition
+     (C4/C4+G/C5/C6, never C2/C3's legitimate zero-LLM design), fault F0 or F5 (i.e. NO
+     fault fired -- nothing should have short-circuited the model call), a ``null``
+     transcript, and zero tokens/cost while still claiming
+     ``tokens_are_real_accounting: true`` and ``useful_completion: true``. There is no
+     persisted-state evidence and no defensible reason a no-fault LLM-condition cell would
+     ever need zero model calls, so this population is QUARANTINED (``invalid``) --
+     retained in the output for visibility, excluded from every live-model AND
+     legitimate-no-model aggregate, never silently pooled or relabeled as a real execution.
+   - **48 zero-token rows from the 2026-09-23 F4 rerun** (commit ``0986fc438``, fixed
+     ``_inject_f4``): fault F4, workload ``W2-nonidempotent``, ``duplicate_write_occurred:
+     true`` (a REAL competing write the store actually recorded) and ``task_completed:
+     true``. Here the fault genuinely fires and the fixed injector detects the real
+     conflict and deterministically rejects the attempt before any model dispatch is
+     needed -- that is persisted-state evidence plus a defensible zero-call reason, so
+     these 48 are classified ``legitimate-no-model`` (see
+     ``_is_legitimate_f4_short_circuit``), not pooled into the API-call-cost table but
+     included in the end-to-end task view (:func:`aggregate_end_to_end_per_condition_family`),
+     per ACCEPTANCE_PLAN_V2.md Sec.4's required live/legitimate split.
+   Total zero-token population is therefore 288 (quarantined) + 48 (legitimate) = 336,
+   which is also the 2026-09-23 F4-rerun explanation for the "quarantine count 288 -> 336"
+   figure quoted in earlier reports -- BEFORE this fix, all 336 were lumped into
+   ``invalid``; after this fix, only the original 288 remain ``invalid``.
 3. **Reconciles token totals honestly**: ``cached_tokens`` is asserted to be a SUBSET of
 ``input_tokens`` (``cached <= input``), never summed as an extra column. Reasoning/
 thinking tokens are kept in their own column, never folded into input/output.
@@ -54,10 +72,33 @@ from typing import Any, Iterable, Literal
 RowClass = Literal["live-model", "legitimate-no-model", "mock", "invalid"]
 
 #: Conditions whose entire design is "no LLM call at all" (deterministic replay/resume).
-#: ONLY these conditions may ever be classified ``legitimate-no-model`` for a zero-token
-#: row -- a zero-token row under any OTHER condition (C1/C4/C4+G/C5/C6, all of which are
-#: defined as LLM conditions) is never legitimate no matter what it claims about itself.
+#: A zero-token row under these conditions is legitimate regardless of its other fields.
 ZERO_LLM_CONDITIONS = ("C2", "C3")
+
+#: The one OTHER shape a zero-token row under an LLM condition (C1/C4/C4+G/C5/C6) can
+#: legitimately take: the 2026-09-23 F4 rerun (commit 0986fc438, see
+#: EXCLUSIONS_AND_FAILURES.md Sec.1 "What changed once F4 was honest") produced 48 rows,
+#: all `workload == "W2-nonidempotent"`, where the FIXED fault injector detects a genuine
+#: competing write already committed in the store (`duplicate_write_occurred: true`) and
+#: deterministically rejects the attempt BEFORE any model dispatch is needed -- the run
+#: still completes (`task_completed: true`), just not usefully, and with zero tokens
+#: because no LLM call ever happened. That is real persisted-state evidence (the detected
+#: duplicate commit) and a defensible reason for zero model calls (deterministic rejection
+#: pre-dispatch), which is exactly the distinction Sec.4 asks for -- unlike the ORIGINAL
+#: 288-row zero-token population (F0/F5, i.e. no fault fired at all), which has no such
+#: evidence or reason and stays quarantined. Kept as an explicit signature, not a blanket
+#: "any F4 row can be legitimate" rule, so a differently-shaped F4 row is still quarantined
+#: as unexplained.
+_LEGITIMATE_F4_SHORT_CIRCUIT_WORKLOAD = "W2-nonidempotent"
+
+
+def _is_legitimate_f4_short_circuit(row: dict) -> bool:
+	return (
+		row.get("fault") == "F4"
+		and row.get("workload") == _LEGITIMATE_F4_SHORT_CIRCUIT_WORKLOAD
+		and bool(row.get("duplicate_write_occurred"))
+		and bool(row.get("task_completed"))
+	)
 
 #: Model ids this dataset has ever used for a REAL provider call (recovery_harness.py's own
 #: pricing table -- the one canonical list of "known real model ids" this repo has). A model
@@ -179,6 +220,13 @@ def classify_row(row: dict) -> ClassifiedRow:
 	# a real API execution (nothing was actually billed) -- quarantine it, visible in the
 	# output, excluded from every live-model/legitimate aggregate.
 	if is_known_model_prefix and is_zero_token:
+		# -- the one legitimate exception: the fixed F4 injector's genuine pre-dispatch
+		# rejection (see `_is_legitimate_f4_short_circuit`'s docstring). Checked BEFORE the
+		# quarantine branch below so it is never silently pooled as a live-model row either
+		# -- it gets its own class.
+		if _is_legitimate_f4_short_circuit(row):
+			return ClassifiedRow(row, "legitimate-no-model", reconciliation_errors=reconciliation_errors)
+
 		reasons = ["llm-condition row with zero tokens/cost claiming real accounting"]
 		if row.get("transcript_path") is None:
 			reasons.append("transcript_path is null")
@@ -388,6 +436,47 @@ def aggregate_per_condition_family(scored: list[dict]) -> list[dict]:
 	return out
 
 
+def aggregate_end_to_end_per_condition_family(scored: list[dict]) -> list[dict]:
+	"""End-to-end task cost/completion view (ACCEPTANCE_PLAN_V2.md Sec.4: "keep a separate
+	API-call-only analysis view, but INCLUDE verified legitimate no-model executions in
+	end-to-end task cost/completion measurements"). Pools ``live-model`` AND
+	``legitimate-no-model`` rows -- ``mock``/``invalid`` stay excluded either way. This is
+	the table to read for "did the task complete", never for "what did the API calls cost"
+	(use :func:`aggregate_per_condition_family` for that -- a legitimate-no-model row
+	correctly contributes 0 tokens/cost here, which would silently understate
+	per-attempt API cost if it were pooled into the API-only table instead).
+	"""
+	groups: dict[tuple, list[dict]] = defaultdict(list)
+	for r in scored:
+		if r["row_class"] not in ("live-model", "legitimate-no-model"):
+			continue
+		groups[(r["condition"], r["model_id"])].append(r)
+
+	out = []
+	for (condition, model_id), group in sorted(groups.items()):
+		n = len(group)
+		successes = sum(1 for r in group if r["useful_completion"])
+		legitimate_no_model_n = sum(1 for r in group if r["row_class"] == "legitimate-no-model")
+		total_cost = sum(r["cost_usd"] or 0.0 for r in group)
+		total_tokens = sum(r["input_tokens"] + r["output_billed_tokens"] for r in group)
+		total_wall = sum(r["wall_time_seconds"] or 0.0 for r in group)
+		out.append(
+			{
+				"condition": condition,
+				"model_id": model_id,
+				"n": n,
+				"legitimate_no_model_n": legitimate_no_model_n,
+				"successes": successes,
+				"success_rate": successes / n if n else None,
+				"mean_cost_per_attempt_usd": total_cost / n if n else None,
+				"mean_tokens_per_attempt": total_tokens / n if n else None,
+				"mean_latency_per_attempt_s": total_wall / n if n else None,
+				"duplicate_committed_effects_total": sum(r["duplicate_committed_effects"] for r in group),
+			}
+		)
+	return out
+
+
 # ---------------------------------------------------------------------------
 # 7. Matched-cases comparison: C4+G vs C6 (Sec.4)
 # ---------------------------------------------------------------------------
@@ -492,11 +581,13 @@ def run(*, input_paths: list[Path], output_dir: Path) -> dict:
 	reconciliation_failures = [r for r in scored if r["reconciliation_errors"]]
 
 	per_condition_family = aggregate_per_condition_family(scored)
+	end_to_end_per_condition_family = aggregate_end_to_end_per_condition_family(scored)
 	matched = matched_cases_c4g_vs_c6(scored)
 
 	_write_jsonl(output_dir / "scored_rows.jsonl", scored)
 	_write_jsonl(output_dir / "quarantined_rows.jsonl", quarantined)
 	_write_csv(output_dir / "per_condition_family.csv", per_condition_family)
+	_write_csv(output_dir / "end_to_end_per_condition_family.csv", end_to_end_per_condition_family)
 	(output_dir / "matched_c4g_vs_c6.json").write_text(json.dumps(matched, indent=2, sort_keys=True), encoding="utf-8")
 
 	summary = {
@@ -512,6 +603,7 @@ def run(*, input_paths: list[Path], output_dir: Path) -> dict:
 			"scored_rows": str(output_dir / "scored_rows.jsonl"),
 			"quarantined_rows": str(output_dir / "quarantined_rows.jsonl"),
 			"per_condition_family": str(output_dir / "per_condition_family.csv"),
+			"end_to_end_per_condition_family": str(output_dir / "end_to_end_per_condition_family.csv"),
 			"matched_c4g_vs_c6": str(output_dir / "matched_c4g_vs_c6.json"),
 		},
 	}

@@ -124,6 +124,83 @@ class TestZeroTokenRowClassification(unittest.TestCase):
 		self.assertEqual(classified.row_class, "invalid")
 		self.assertIn("zero", classified.quarantine_reason)
 
+	def test_f4_w2_nonidempotent_genuine_rejection_is_legitimate_no_model(self):
+		# Mirrors the 48-row shape from the 2026-09-23 F4 rerun (commit 0986fc438): fault
+		# F4, workload W2-nonidempotent, a REAL competing write detected
+		# (duplicate_write_occurred=True) and the attempt completes deterministically with
+		# zero model calls. Real evidence + defensible reason -> legitimate, not quarantined.
+		row = _base_row(
+			condition="C5",
+			model_id="gpt-4o-mini",
+			fault="F4",
+			workload="W2-nonidempotent",
+			input_tokens=0,
+			output_tokens=0,
+			tokens_estimated=0,
+			transcript_path=None,
+			cost_usd=0,
+			tokens_are_real_accounting=True,
+			useful_completion=False,
+			duplicate_writes=1,
+			duplicate_write_occurred=True,
+			task_completed=True,
+		)
+		classified = classify_row(row)
+		self.assertEqual(classified.row_class, "legitimate-no-model")
+		self.assertIsNone(classified.quarantine_reason)
+
+	def test_f4_row_without_real_duplicate_evidence_is_still_quarantined(self):
+		# Same fault/workload label, but no genuine duplicate-write evidence recorded --
+		# must NOT be waved through just because fault == "F4".
+		row = _base_row(
+			condition="C5",
+			model_id="gpt-4o-mini",
+			fault="F4",
+			workload="W2-nonidempotent",
+			input_tokens=0,
+			output_tokens=0,
+			tokens_estimated=0,
+			transcript_path=None,
+			cost_usd=0,
+			tokens_are_real_accounting=True,
+			useful_completion=False,
+			duplicate_writes=0,
+			duplicate_write_occurred=False,
+			task_completed=True,
+		)
+		classified = classify_row(row)
+		self.assertEqual(classified.row_class, "invalid")
+
+	def test_legitimate_no_model_rows_are_excluded_from_api_cost_aggregate_but_included_end_to_end(self):
+		rows = [
+			_base_row(condition="C5", model_id="gpt-4o-mini", seed=42),
+			_base_row(
+				condition="C5",
+				model_id="gpt-4o-mini",
+				seed=43,
+				fault="F4",
+				workload="W2-nonidempotent",
+				input_tokens=0,
+				output_tokens=0,
+				tokens_estimated=0,
+				transcript_path=None,
+				cost_usd=0,
+				useful_completion=False,
+				duplicate_writes=1,
+				duplicate_write_occurred=True,
+				task_completed=True,
+			),
+		]
+		scored = score_all(rows)
+		from canonical_scoring import aggregate_end_to_end_per_condition_family, aggregate_per_condition_family
+
+		api_only = aggregate_per_condition_family(scored)
+		self.assertEqual(api_only[0]["n"], 1)  # only the live-model row
+
+		end_to_end = aggregate_end_to_end_per_condition_family(scored)
+		self.assertEqual(end_to_end[0]["n"], 2)  # live-model + legitimate-no-model
+		self.assertEqual(end_to_end[0]["legitimate_no_model_n"], 1)
+
 	def test_quarantined_rows_are_excluded_from_aggregates(self):
 		rows = [
 			_base_row(condition="C4", input_tokens=0, output_tokens=0, tokens_estimated=0, transcript_path=None, cost_usd=0),
