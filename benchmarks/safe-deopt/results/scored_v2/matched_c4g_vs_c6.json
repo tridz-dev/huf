@@ -1,0 +1,40 @@
+{
+  "metrics": {
+    "cost_usd": {
+      "bootstrap_ci95_hi": -0.00021448603395061744,
+      "bootstrap_ci95_lo": -0.00028277746913580237,
+      "c4g_mean": 0.000541704012345679,
+      "c6_mean": 0.0007901976080246913,
+      "observed_diff_c4g_minus_c6": -0.0002484935956790123
+    },
+    "escalated": {
+      "bootstrap_ci95_hi": 0.04629629629629628,
+      "bootstrap_ci95_lo": -0.02777777777777779,
+      "c4g_mean": 0.8765432098765432,
+      "c6_mean": 0.8672839506172839,
+      "observed_diff_c4g_minus_c6": 0.0092592592592593
+    },
+    "total_tokens": {
+      "bootstrap_ci95_hi": -802.9475308641977,
+      "bootstrap_ci95_lo": -952.8734567901236,
+      "c4g_mean": 1223.719135802469,
+      "c6_mean": 2102.266975308642,
+      "observed_diff_c4g_minus_c6": -878.547839506173
+    },
+    "useful_completion": {
+      "bootstrap_ci95_hi": 0.055555555555555525,
+      "bootstrap_ci95_lo": -0.05401234567901231,
+      "c4g_mean": 0.5,
+      "c6_mean": 0.5,
+      "observed_diff_c4g_minus_c6": 0.0
+    },
+    "wall_time_seconds": {
+      "bootstrap_ci95_hi": -0.54184374691358,
+      "bootstrap_ci95_lo": -1.0754669691358023,
+      "c4g_mean": 4.5224875015432096,
+      "c6_mean": 5.323336219135802,
+      "observed_diff_c4g_minus_c6": -0.8008487175925927
+    }
+  },
+  "n_matched_cells": 648
+}
