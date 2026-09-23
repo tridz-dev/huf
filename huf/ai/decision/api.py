@@ -33,6 +33,7 @@ from typing import Any
 
 import frappe
 from frappe import _
+from frappe.rate_limiter import rate_limit
 
 from huf.ai.decision import service
 from huf.ai.decision.deployment_loader import load_chain, invalidate_deployment_chain_cache
@@ -63,6 +64,63 @@ def _is_admin(user: str | None = None) -> bool:
 	return has_capability(user or frappe.session.user, "decision.admin")
 
 
+def _is_external_api_caller(origin_type: str) -> bool:
+	"""Determine if the caller is an external API caller based on origin_type and request context.
+
+	A caller is external if:
+	1. origin_type == 'API' (caller declares it's an API call)
+	2. AND the request uses API-key/token authentication (Authorization header present)
+	   OR is not authenticated via a valid Desk session cookie.
+
+	This prevents a caller from claiming origin_type='API' while using a Desk session,
+	which would allow bypassing API-access checks.
+	"""
+	if origin_type != "API":
+		return False
+
+	# Check if Authorization header is present (API-key or Bearer token auth)
+	# In test context with no request object, frappe.get_request_header() raises RuntimeError;
+	# catch that and treat as Desk session (request context is available, so if we're in
+	# a test without request context, it's likely a Desk-style direct call).
+	try:
+		auth_header = frappe.get_request_header("Authorization", "")
+		if auth_header:
+			return True
+	except RuntimeError:
+		# No request context; check session instead
+		pass
+
+	# Check if this is NOT a valid Desk session (session cookie auth)
+	# If there's no Authorization header and no valid session, treat as external
+	if not frappe.session.get("user"):
+		return True
+
+	# If we have a valid session user but still claiming origin_type='API',
+	# be conservative and treat as potential external call
+	# The authoritative check is: if Authorization header is absent and we have a session,
+	# it's a Desk caller, otherwise it's external
+	return not hasattr(frappe.session, "sid") or not frappe.session.sid
+
+
+def _check_external_api_access(policy: str | None) -> None:
+	"""Check if the caller has API access for the policy when making an external API call.
+
+	Requires:
+	1. The policy (if specified) has allow_api_access enabled
+
+	Raises frappe.PermissionError if the policy does not allow API access.
+	"""
+	if not policy:
+		return
+
+	allow_api_access = frappe.db.get_value("Decision Policy", policy, "allow_api_access")
+	if not allow_api_access:
+		frappe.throw(
+			_("Policy {0} does not allow API access. Contact the policy owner to enable it.").format(policy),
+			frappe.PermissionError
+		)
+
+
 def _json_arg(value: Any) -> Any:
 	"""Decode a JSON-string argument (how dict/list kwargs usually arrive over HTTP).
 
@@ -82,6 +140,7 @@ def _json_arg(value: Any) -> Any:
 
 
 @frappe.whitelist()
+@rate_limit(key="policy", limit=60, seconds=60)
 def run_decision(
 	policy: str | None = None,
 	definition: Any = None,
@@ -159,20 +218,40 @@ def run_decision(
 	Raises:
 		frappe.PermissionError: missing ``decision.run`` (always required), missing
 			``decision.author`` (ad-hoc ``definition``), or missing ``decision.admin``
-			(``pinned_deployment``).
-		frappe.ValidationError: bad ``origin_type``.
+			(``pinned_deployment``), missing policy ``allow_api_access`` for external API
+			callers, or ad-hoc definitions not allowed over external API.
+		frappe.ValidationError: bad ``origin_type``, or kill switch is off for external API.
+		frappe.RateLimitExceededError: external API rate limit exceeded (60 requests per 60s
+			per policy).
 		ValueError: bad call shape, propagated from ``run_policy`` (both/neither of
 			``policy``/``definition``, missing ``decision_model`` for ad-hoc, unresolvable
 			policy/version/model, bad ``candidates``/``candidate_source`` shape).
 	"""
-	# NOTE(PR 9 hook): when the caller is not a Desk session (external API, Authorization
-	# header) this is the point to check `Decision Policy.allow_api_access` on the resolved
-	# `policy` (403 if unset) and to apply `@rate_limit(key="policy", limit=60,
-	# seconds=60)` (PLAN.md §3.12) -- neither is implemented in PR 2A.
 	_require("decision.run")
+
+	# Check kill switch for external API calls (PLAN.md D17, D12, §3.12)
+	is_external = _is_external_api_caller(origin_type)
+	if is_external:
+		kill_switch_enabled = frappe.db.get_single_value("Agent Settings", "decision_runtime_enabled")
+		if not kill_switch_enabled:
+			frappe.local.response["http_status_code"] = 503
+			frappe.throw(
+				_("Decision runtime is currently disabled. Please contact your administrator."),
+				frappe.ValidationError
+			)
 
 	if origin_type not in ("Playground", "API"):
 		frappe.throw(_("origin_type must be Playground or API"))
+
+	# External API calls: check policy allow_api_access and refuse ad-hoc definitions
+	# (PLAN.md §3.12: "external callers ... refuse ad-hoc definitions")
+	if is_external:
+		_check_external_api_access(policy)
+		if definition is not None:
+			frappe.throw(
+				_("Ad-hoc policy definitions are not allowed over the external API. Use a published policy instead."),
+				frappe.PermissionError
+			)
 
 	decoded_definition = _json_arg(definition)
 	if decoded_definition is not None:
