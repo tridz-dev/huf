@@ -64,11 +64,13 @@ from typing import Any
 import frappe
 
 from huf.ai.decision.binding import ADVISE_SURFACES
+from huf.ai.decision.deployment import DeploymentChain
 from huf.ai.decision.deployment_loader import load_chain
 from huf.ai.decision.persistence import make_frappe_telemetry_sink
 from huf.ai.decision.policy import validate_policy_data
 from huf.ai.decision.runtime import DecisionRuntime
 from huf.ai.decision.telemetry import DecisionCall
+from huf.ai.decision.throughput import check_throughput_bucket, mark_deployment_cooldown
 from huf.ai.decision.types import (
 	CandidateSource,
 	DecisionOrigin,
@@ -371,6 +373,43 @@ def _execute_inline(
 		deadline=deadline,
 	)
 
+	# T2A.11: Check throughput bucket for each deployment in the chain. Filter out deployments
+	# that are exhausted, and return THROUGHPUT_BUDGET_EXHAUSTED if none are available.
+	# Skip throughput check if deadline has already passed; let the runtime return TIMEOUT instead.
+	if chain.candidates and (deadline is None or time.monotonic() < deadline):
+		available_candidates = []
+		for candidate in chain.candidates:
+			# Get the deployment row to check throughput. We need to query it since candidate
+			# doesn't carry rate limit info. For efficiency, we could batch this, but for now
+			# we check each one.
+			try:
+				deployment_doc = frappe.db.get_value(
+					"Decision Deployment",
+					candidate.identity.deployment,
+					["name", "provider_rate_limits_json"],
+					as_dict=True,
+				)
+				if deployment_doc and check_throughput_bucket(
+					deployment_doc=deployment_doc,
+					deadline=deadline,
+				):
+					available_candidates.append(candidate)
+			except Exception:
+				# On error, assume the deployment is available (fail open).
+				available_candidates.append(candidate)
+
+		if not available_candidates:
+			# All deployments are exhausted; return THROUGHPUT_BUDGET_EXHAUSTED without
+			# calling any provider.
+			return ServiceResult(status=DecisionStatus.THROUGHPUT_BUDGET_EXHAUSTED)
+
+		# Update chain to only include available candidates.
+		chain = DeploymentChain(
+			requested_identity=chain.requested_identity,
+			candidates=tuple(available_candidates),
+			selection_source=chain.selection_source,
+		)
+
 	request = DecisionRequest(
 		policy=resolved.policy,
 		state=state,
@@ -457,6 +496,11 @@ def _capturing_sink(
 			resolved_deployment=call.resolved_identity.deployment,
 			resolved_provider=call.resolved_identity.provider,
 		)
+
+		# Mark deployment as degraded (60s cool-down) on RATE_LIMITED (429) response (T2A.11).
+		if call.status == DecisionStatus.RATE_LIMITED.value and call.resolved_identity.deployment:
+			mark_deployment_cooldown(deployment_name=call.resolved_identity.deployment)
+
 		box[0] = base_persist(enriched)
 
 	return sink
@@ -488,7 +532,18 @@ def _enqueue_shadow(
 	adds the rate cap, it drops/counts *before* this enqueue (or wraps this function) rather
 	than after -- enqueuing and then dropping would already have paid the enqueue cost this
 	step exists to avoid.
+
+	T2A.11: Check the site's shadow rate cap before enqueuing. Drop and count if exceeded.
 	"""
+	# Check shadow rate cap from Agent Settings.decision_shadow_rate_per_minute (T2A.11).
+	shadow_rate_per_minute = frappe.db.get_single_value(
+		"Agent Settings", "decision_shadow_rate_per_minute"
+	) or 0
+	if shadow_rate_per_minute > 0 and not _check_shadow_rate_cap(shadow_rate_per_minute):
+		# Rate cap exceeded; drop the call and count it.
+		_increment_shadow_drop_counter()
+		return ServiceResult(status=SHADOW_ENQUEUED)
+
 	payload: dict[str, Any] = {
 		"policy": resolved.policy_name,
 		"policy_version": resolved.policy_version_name,
@@ -539,3 +594,147 @@ def _policy_definition(policy: DecisionPolicy) -> dict[str, Any]:
 			for question in policy.questions
 		],
 	}
+
+# -- Shadow job and rate capping (T2A.11) -----------------------------------------------
+
+
+def run_shadow_job(
+	*,
+	policy: str | None = None,
+	policy_version: str | None = None,
+	definition: dict[str, Any] | None = None,
+	decision_model: str | None = None,
+	state: Any = None,
+	candidates: Sequence[dict[str, str]] = (),
+	candidate_source: str | None = None,
+	candidate_resolver_id: str | None = None,
+	surface: str | None = None,
+	origin: dict[str, Any] | None = None,
+	pinned_deployment: str | None = None,
+) -> None:
+	"""Execute a shadow decision call enqueued by ``run_policy(mode="Shadow")``.
+
+	This job is fired asynchronously by ``frappe.enqueue`` from ``_enqueue_shadow``, which
+	already serialized the decision request (policy, state, candidates) into job arguments
+	(PLAN.md §4.7 step 3 / D6). This function deserializes them, calls the shared
+	``_execute_inline`` core with ``deadline=None`` (no wall-clock budget beyond provider
+	timeouts, PLAN.md §4.7 step 3), and persists the result with ``shadow_of`` set to the
+	production outcome reference (T2A.11).
+
+	Args:
+		All args come from ``_enqueue_shadow``'s payload: policy name or ad-hoc definition,
+		decision model, state, candidates as serialized dicts, surface, origin as dict, etc.
+	"""
+	# Deserialize origin back into a DecisionOrigin dataclass.
+	origin_dict = origin or {}
+	origin_obj = DecisionOrigin(
+		origin_type=origin_dict.get("origin_type", "Playground"),
+		agent=origin_dict.get("agent"),
+		agent_run=origin_dict.get("agent_run"),
+		conversation=origin_dict.get("conversation"),
+		flow_run=origin_dict.get("flow_run"),
+		flow_node_id=origin_dict.get("flow_node_id"),
+		automation=origin_dict.get("automation"),
+		owner_user=origin_dict.get("owner_user"),
+		shadow_of=origin_dict.get("shadow_of"),
+	)
+
+	# Deserialize candidates back into Option objects.
+	candidate_objects = [Option(id=item["id"], description=item.get("description", "")) for item in candidates]
+
+	# Deserialize candidate_source back into CandidateSource enum if present.
+	candidate_source_enum = None
+	if candidate_source:
+		try:
+			candidate_source_enum = CandidateSource(candidate_source)
+		except (ValueError, KeyError):
+			pass
+
+	# Call the shared inline execution core with no deadline (T2A.11 / PLAN.md §4.7 step 3).
+	_execute_inline(
+		resolved=_resolve_policy(
+			policy=policy,
+			definition=definition,
+			decision_model=decision_model,
+			policy_version=policy_version,
+		),
+		state=state,
+		candidates=candidate_objects,
+		candidate_source=candidate_source_enum,
+		candidate_resolver_id=candidate_resolver_id,
+		surface=surface or "Playground",
+		mode=MODE_SHADOW,
+		origin=origin_obj,
+		pinned_deployment=pinned_deployment,
+		deadline=None,
+	)
+
+
+def _check_shadow_rate_cap(shadow_rate_per_minute: int) -> bool:
+	"""Check if a shadow call fits within the site's per-minute rate cap.
+
+	Uses a Redis-backed sliding-window counter stored in ``frappe.cache()``. Returns
+	``True`` if a call may proceed (a token was consumed from the bucket); ``False`` if
+	the cap is exhausted and this call should be dropped.
+
+	Args:
+		shadow_rate_per_minute: The configured limit from ``Agent Settings``.
+
+	Returns:
+		``True`` if the call may proceed; ``False`` if dropped.
+	"""
+	if shadow_rate_per_minute <= 0:
+		return True  # No limit; all calls proceed.
+
+	cache_key = "huf_decision_shadow_rate_limit"
+	window_key = f"{cache_key}:window"
+	cache = frappe.cache()
+
+	try:
+		current = cache.get_value(cache_key)
+		window_str = cache.get_value(window_key)
+	except Exception:
+		# Cache read failure: fail open.
+		return True
+
+	now = time.time()
+	window_start = float(window_str) if window_str else now
+
+	# Reset the bucket every minute.
+	if now - window_start >= 60:
+		try:
+			cache.set_value(cache_key, shadow_rate_per_minute - 1, expires_in_sec=60)
+			cache.set_value(window_key, str(now), expires_in_sec=60)
+		except Exception:
+			# Cache write failure: fail open.
+			pass
+		return True
+
+	# Within the current minute window: check and decrement the count.
+	current_int = int(current) if current else shadow_rate_per_minute
+	if current_int <= 0:
+		# Cap exhausted.
+		return False
+
+	# Consume one token.
+	try:
+		cache.set_value(cache_key, current_int - 1, expires_in_sec=60)
+	except Exception:
+		# Cache write failure: fail open.
+		pass
+
+	return True
+
+
+def _increment_shadow_drop_counter() -> None:
+	"""Increment the counter of shadow calls dropped due to rate capping.
+
+	Best-effort: failures are logged but do not raise.
+	"""
+	try:
+		cache_key = "huf_decision_shadow_dropped_count"
+		cache = frappe.cache()
+		current = int(cache.get_value(cache_key) or 0)
+		cache.set_value(cache_key, current + 1, expires_in_sec=3600)  # Keep for 1 hour.
+	except Exception as exc:
+		frappe.logger("huf").debug(f"Failed to increment shadow drop counter: {exc!s}")

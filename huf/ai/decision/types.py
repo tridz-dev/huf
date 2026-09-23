@@ -22,6 +22,7 @@ class DecisionStatus(str, Enum):
 	INVALID_RESPONSE = "invalid_response"
 	TIMEOUT = "timeout"
 	RATE_LIMITED = "rate_limited"
+	THROUGHPUT_BUDGET_EXHAUSTED = "throughput_budget_exhausted"
 	FAILED = "failed"
 
 
