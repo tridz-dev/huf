@@ -9,6 +9,18 @@ import type { MCPServerRef } from '@/services/mcpApi';
 import { getToolIconForType } from '../tools/toolIconMap';
 import { getAgentsUsingTool } from '@/services/toolApi';
 import { useEffect, useState } from 'react';
+import { DecisionBindingControl } from '../decision/DecisionBindingControl';
+
+// Decision Binding Row type (matches AgentFormPage and DecisionBindingControl)
+type AgentDecisionBindingRow = {
+  name?: string;
+  surface: string;
+  policy: string;
+  mode: 'Off' | 'Shadow' | 'Advise' | 'Enforce';
+  latency_budget_ms?: number;
+  priority?: number;
+  enabled?: 0 | 1;
+};
 
 interface ToolsTabProps {
   selectedTools: AgentToolFunctionRef[];
@@ -25,6 +37,9 @@ interface ToolsTabProps {
   mcpLoading?: boolean;
   /** True when tool attach/detach must be read-only (system agent + non-admin). */
   locked?: boolean;
+  // Decision bindings props
+  decisionBindings?: AgentDecisionBindingRow[];
+  onUpdateDecisionBindings?: (bindings: AgentDecisionBindingRow[]) => void;
 }
 
 export function ToolsTab({
@@ -39,6 +54,8 @@ export function ToolsTab({
   onSyncMCP,
   mcpLoading = false,
   locked = false,
+  decisionBindings = [],
+  onUpdateDecisionBindings,
 }: ToolsTabProps) {
   const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
 
@@ -102,6 +119,21 @@ export function ToolsTab({
     if (value === undefined) return true; // Default to enabled if not specified
     return value === true || value === 1;
   };
+
+  // Handle Decision Binding updates
+  const handleUpdateDecisionBinding = (surface: string, newBinding: AgentDecisionBindingRow | undefined) => {
+    if (!onUpdateDecisionBindings) return;
+
+    const updated = decisionBindings.filter((b) => b.surface !== surface);
+    if (newBinding) {
+      updated.push(newBinding);
+    }
+    onUpdateDecisionBindings(updated);
+  };
+
+  // Find bindings for this tab's surfaces
+  const toolSelectionBinding = decisionBindings.find((b) => b.surface === 'Tool Selection');
+  const agentToolBinding = decisionBindings.find((b) => b.surface === 'Agent Tool');
 
   const getStatusBadge = (server: MCPServerRef) => {
     const agentEnabled = isEnabled(server.enabled);
@@ -329,6 +361,33 @@ export function ToolsTab({
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Decision Bindings Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Decision Runtime</CardTitle>
+          <CardDescription>
+            Control how decisions are made for tool selection and the decide tool. Shadow mode logs decisions for testing; Enforce applies them.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-0">
+          {/* Tool Selection Binding */}
+          <DecisionBindingControl
+            surface="Tool Selection"
+            value={toolSelectionBinding}
+            onChange={(newBinding) => handleUpdateDecisionBinding('Tool Selection', newBinding)}
+            disabled={locked}
+          />
+
+          {/* Agent Tool (decide) Binding */}
+          <DecisionBindingControl
+            surface="Agent Tool"
+            value={agentToolBinding}
+            onChange={(newBinding) => handleUpdateDecisionBinding('Agent Tool', newBinding)}
+            disabled={locked}
+          />
         </CardContent>
       </Card>
     </>
