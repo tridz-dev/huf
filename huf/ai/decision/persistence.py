@@ -9,23 +9,29 @@ from typing import Any
 from huf.ai.decision.telemetry import DecisionCall
 
 
-def make_frappe_telemetry_sink(*, frappe_module: Any | None = None, ignore_permissions: bool = True) -> Callable[[DecisionCall], None]:
+def make_frappe_telemetry_sink(*, frappe_module: Any | None = None, ignore_permissions: bool = True) -> Callable[[DecisionCall], str]:
     """Return a sink that persists only normalized, redacted Decision Call fields.
 
     Frappe is resolved lazily so the provider-neutral runtime remains usable in unit tests
     and non-Frappe workers. Sink failures are intentionally left to the runtime boundary.
+
+    Returns the inserted ``Decision Call`` docname (its ``call_id``) so a caller wrapping
+    this sink (e.g. ``huf.ai.decision.service.run_policy``, T2A.10) can report which row
+    corresponds to a given ``ServiceResult`` -- ``DecisionRuntime._emit`` itself discards
+    the return value, so this is opt-in for callers that invoke the sink directly.
     """
     frappe = frappe_module
 
-    def persist(call: DecisionCall) -> None:
+    def persist(call: DecisionCall) -> str:
         nonlocal frappe
         if frappe is None:
             import frappe as frappe_runtime
             frappe = frappe_runtime
         identity = call.resolved_identity
-        doc = frappe.get_doc({
+        call_id = _call_id(call)
+        values = {
             "doctype": "Decision Call",
-            "call_id": _call_id(call),
+            "call_id": call_id,
             "status": call.status,
             "surface": call.surface,
             "policy": call.policy_id,
@@ -65,15 +71,28 @@ def make_frappe_telemetry_sink(*, frappe_module: Any | None = None, ignore_permi
             "deployment_fallback_chain": _json(call.deployment_fallback_chain),
             "deployment_fallback_count": call.deployment_fallback_count,
             "error_code": call.error_code,
-        })
+        }
+        doc = frappe.get_doc(values)
         doc.insert(ignore_permissions=ignore_permissions)
+        # autoname is `field:call_id` (decision_call.json), so the docname is always exactly
+        # this -- returning it directly rather than reading `doc.name` also keeps this
+        # working against the fake `frappe.get_doc` stub the existing tests in this module
+        # use (SimpleNamespace(insert=...), no `.name`).
+        return call_id
 
     return persist
 
 
 def _call_id(call: DecisionCall) -> str:
+    # autoname is `field:call_id` and the field is `unique=1` (decision_call.json), so the
+    # id must be unique per row, not just per (policy, status) -- two Decision Runtime calls
+    # for the same policy with the same outcome (the common case: repeated Enforce success)
+    # would otherwise collide on insert. The fingerprint/status prefix stays for readability;
+    # frappe.generate_hash makes each row's name unique.
     fingerprint = call.policy_fingerprint[:12] or "unknown"
-    return f"decision-{fingerprint}-{call.status}"
+    import frappe
+
+    return f"decision-{fingerprint}-{call.status}-{frappe.generate_hash(length=8)}"
 
 
 def _json(value: Any) -> str:
