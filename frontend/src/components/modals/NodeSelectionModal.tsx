@@ -49,6 +49,7 @@ import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
 import { Combobox } from '../ui/combobox';
 import { toast } from 'sonner';
+import { listDecisionModels } from '../../services/decisionApi';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -125,6 +126,7 @@ export function NodeSelectionModal({
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+  const [hasEnabledDeployments, setHasEnabledDeployments] = useState(false);
 
   // The modal stays mounted between openings, so its tab has to follow the
   // `mode` prop each time it is (re)opened — otherwise an "add action" request
@@ -164,17 +166,41 @@ export function NodeSelectionModal({
     }
   }, [open, triggerSubTab]);
 
+  // Check if Decision Deployments exist for the decision-router action
+  useEffect(() => {
+    if (open) {
+      listDecisionModels()
+        .then((models) => {
+          const hasDeployments = (models || []).some((m: any) => m.enabled && m.deployments && m.deployments.length > 0);
+          setHasEnabledDeployments(hasDeployments);
+        })
+        .catch(() => setHasEnabledDeployments(false));
+    }
+  }, [open]);
+
   const filteredTriggers = triggerOptions.filter(
     (trigger) =>
       trigger.tab === triggerSubTab &&
       trigger.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredActions = actionOptions.filter(
-    (action) =>
-      (!actionCategory || action.category === actionCategory) &&
-      action.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredActions = actionOptions
+    .filter(
+      (action) =>
+        (!actionCategory || action.category === actionCategory) &&
+        action.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .map((action) => {
+      // Disable decision-router if no enabled Decision Deployments exist
+      if (action.id === 'decision-router' && !hasEnabledDeployments) {
+        return {
+          ...action,
+          disabled: true,
+          disabledReason: 'Set up a decision model first',
+        };
+      }
+      return action;
+    });
 
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');
   const popularTriggers = filteredTriggers.filter((t) => t.category === 'popular');

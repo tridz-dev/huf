@@ -117,8 +117,18 @@ export interface RouterActionConfig {
 export interface RouterDecisionActionConfig {
   type: 'decision-router';
   policy?: string;
+  /** Pinned version name (optional); if not set, uses policy's current_version */
+  policy_version?: string;
+  /** Bindings from flow context keys to decision state parameters */
+  state_bindings?: Record<string, string>;
   options?: Array<{ label: string; node_id: string }>;
   default?: string;
+  /** Minimum confidence threshold (0.0-1.0, default 0.80) */
+  min_confidence?: number;
+  /** Node ID to route to when model is uncertain or fails (required) */
+  uncertain_path?: string;
+  /** Context key to save the decision answer */
+  save_answer_to?: string;
 }
 
 export interface HumanApprovalActionConfig {

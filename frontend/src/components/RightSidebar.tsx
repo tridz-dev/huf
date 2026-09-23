@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
-import { X, Settings, Edit, Trash2, Clock } from 'lucide-react';
+import { X, Settings, Edit, Trash2, Clock, Info } from 'lucide-react';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from './ui/label';
 import { Combobox } from './ui/combobox';
 import { Checkbox } from './ui/checkbox';
+import { FormDescription } from './ui/form';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { linkRoutes } from '@/lib/link-routes';
 import { cn } from '@/lib/utils';
 import {
@@ -102,6 +104,8 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
   const [loadingToolDetails, setLoadingToolDetails] = useState(false);
   const [roles, setRoles] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
+  const [policies, setPolicies] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
 
   // Load agents when agent-run or router node selected
   useEffect(() => {
@@ -234,6 +238,37 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
       })
       .catch(() => setRoles([]))
       .finally(() => setLoadingRoles(false));
+  }, [selectedNode?.id, selectedNode?.data.actionConfig]);
+
+  // Load decision policies when decision-router node selected
+  useEffect(() => {
+    const actionType = selectedNode?.data.actionConfig?.type;
+    if (!selectedNode?.data.actionConfig || actionType !== 'decision-router') return;
+
+    // Load Decision Policies
+    setLoadingPolicies(true);
+    const frappe = (window as any).frappe;
+    if (frappe?.call) {
+      frappe.call({
+        method: 'frappe.client.get_list',
+        args: {
+          doctype: 'Decision Policy',
+          filters: { enabled: 1, docstatus: 1 },
+          fields: ['name', 'policy_name'],
+          limit_page_length: 500,
+        },
+      }).then((result: any) => {
+        const items = result.message || [];
+        setPolicies(
+          items.map((p: { name: string; policy_name?: string }) => ({
+            value: p.name,
+            label: p.policy_name || p.name,
+          }))
+        );
+      }).catch(() => setPolicies([])).finally(() => setLoadingPolicies(false));
+    } else {
+      setLoadingPolicies(false);
+    }
   }, [selectedNode?.id, selectedNode?.data.actionConfig]);
 
   const handleUpdateLabel = (label: string) => {
@@ -978,6 +1013,116 @@ export function RightSidebar({ onToggle, variant = 'panel' }: RightSidebarProps)
                           </>
                         );
                       })()}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (config.type === 'decision-router') {
+                const stateBindings = (config.state_bindings || {}) as Record<string, string>;
+
+                return (
+                  <div className="space-y-3">
+                    <Label weight="semibold" className="mb-2 block">Decision router configuration</Label>
+                    <div className="text-xs text-muted-foreground p-2 bg-muted/30 rounded-md mb-2">
+                      Route using a Decision Policy (deterministic decisions based on configured rules).
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="policy-select" size="sm">Policy</Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent>Published Decision Policy to apply</TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Combobox
+                        id="policy-select"
+                        options={policies}
+                        value={config.policy || ''}
+                        onValueChange={(v) => handleUpdateActionConfig('policy', v)}
+                        placeholder={loadingPolicies ? 'Loading...' : 'Select policy...'}
+                        disabled={loadingPolicies}
+                        searchPlaceholder="Search policies..."
+                        emptyText="No policy found."
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor="version-pin" size="sm">Version pin</Label>
+                        <Input
+                          id="version-pin"
+                          value={config.policy_version || ''}
+                          onChange={(e) => handleUpdateActionConfig('policy_version', e.target.value || undefined)}
+                          placeholder="e.g., v1.2"
+                          className="text-xs"
+                        />
+                        <FormDescription>Optional; uses current_version if blank</FormDescription>
+                      </div>
+                      <div>
+                        <Label htmlFor="min-confidence" size="sm">Min confidence</Label>
+                        <Input
+                          id="min-confidence"
+                          type="number"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={config.min_confidence ?? 0.80}
+                          onChange={(e) => handleUpdateActionConfig('min_confidence', parseFloat(e.target.value))}
+                          placeholder="0.80"
+                          className="text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label className="text-xs font-semibold mb-2 block">State bindings</Label>
+                      <div className="space-y-1 text-xs">
+                        {Object.entries(stateBindings).map(([field, contextKey]) => (
+                          <div key={field} className="flex items-center justify-between p-1.5 bg-muted/30 rounded text-muted-foreground">
+                            <span className="font-mono">{contextKey} → {field}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => {
+                                const updated = { ...stateBindings };
+                                delete updated[field];
+                                handleUpdateActionConfig('state_bindings', Object.keys(updated).length > 0 ? updated : undefined);
+                              }}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <FormDescription>Maps flow context to policy state parameters</FormDescription>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="uncertain-path" size="sm">Uncertain path (required)</Label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>Path taken when the model is unsure or fails</TooltipContent>
+                      </Tooltip>
+                      {renderNodeIdSelect('uncertain-path', config.uncertain_path, (v) => handleUpdateActionConfig('uncertain_path', v), 'Select fallback node...')}
+                    </div>
+
+                    <div>
+                      <Label htmlFor="save-answer" size="sm">Save answer to (optional)</Label>
+                      <Input
+                        id="save-answer"
+                        value={config.save_answer_to || ''}
+                        onChange={(e) => handleUpdateActionConfig('save_answer_to', e.target.value || undefined)}
+                        placeholder="e.g., route_decision"
+                        className="text-xs font-mono"
+                      />
+                      <FormDescription>Context key to store the decision result</FormDescription>
                     </div>
                   </div>
                 );
