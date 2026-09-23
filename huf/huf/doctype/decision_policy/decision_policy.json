@@ -23,6 +23,7 @@
    "fieldname": "policy_name",
    "fieldtype": "Data",
    "label": "Policy Name",
+   "description": "Unique identifier for this policy. Used to reference the policy in bindings, flows, and API calls.",
    "reqd": 1,
    "unique": 1
   },
@@ -30,6 +31,7 @@
    "fieldname": "purpose",
    "fieldtype": "Select",
    "label": "Purpose",
+   "description": "The primary use case for this policy (e.g., Flow Routing, Model Routing, Tool Selection). Used for filtering in UI surfaces.",
    "options": "Generic\nFlow Routing\nModel Routing\nAgent Routing\nTool Selection\nSkill Selection\nProcedure Selection\nRAG Filtering\nContext Relevance\nInput Guardrail\nOutput Guardrail\nOutput Verification",
    "reqd": 1
   },
@@ -37,40 +39,47 @@
    "fieldname": "default_model",
    "fieldtype": "Link",
    "label": "Default Model",
+   "description": "Default Decision Model to use when running this policy. Can be overridden at runtime or in specific policy versions.",
    "options": "Decision Model"
   },
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
-   "label": "Description"
+   "label": "Description",
+   "description": "Brief description of what this policy does and when to use it."
   },
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled",
+   "description": "When disabled, this policy and all its versions are hidden from UI surfaces and cannot be invoked.",
    "default": "1"
   },
   {
    "fieldname": "current_version",
    "fieldtype": "Link",
    "label": "Current Version",
+   "description": "The currently active (Published) version of this policy. Set automatically on publish. Read-only.",
    "options": "Decision Policy Version"
   },
   {
    "fieldname": "definition_json",
    "fieldtype": "Code",
    "label": "Definition",
+   "description": "The policy definition (questions, rules, fallback logic) as JSON. Validated on save. Create a new version to publish changes.",
    "options": "JSON"
   },
   {
    "fieldname": "schema_version",
    "fieldtype": "Data",
-   "label": "Schema Version"
+   "label": "Schema Version",
+   "description": "Schema version of the policy definition (e.g., '1.0'). Used for forward/backward compatibility."
   },
   {
    "fieldname": "fingerprint",
    "fieldtype": "Data",
-   "label": "Fingerprint"
+   "label": "Fingerprint",
+   "description": "SHA256 fingerprint of the current published version. Auto-computed server-side. Read-only."
   },
   {
    "fieldname": "allow_api_access",
@@ -89,7 +98,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 14:00:00.000000",
+ "modified": "2026-09-23 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Policy",

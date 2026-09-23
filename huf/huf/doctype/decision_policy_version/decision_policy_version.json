@@ -22,6 +22,7 @@
    "fieldname": "version_key",
    "fieldtype": "Data",
    "label": "Version Key",
+   "description": "Unique identifier for this policy version (policy name + version number). Auto-generated.",
    "reqd": 1,
    "unique": 1
   },
@@ -29,6 +30,7 @@
    "fieldname": "policy",
    "fieldtype": "Link",
    "label": "Policy",
+   "description": "The Decision Policy this version belongs to.",
    "options": "Decision Policy",
    "reqd": 1
   },
@@ -36,6 +38,7 @@
    "fieldname": "version_number",
    "fieldtype": "Int",
    "label": "Version Number",
+   "description": "Sequential version number (0, 1, 2, ...). Incremented on each version created.",
    "reqd": 1,
    "non_negative": 1
   },
@@ -43,6 +46,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
+   "description": "Draft: editable, unpublished. Published: immutable, active version. Retired: replaced by a newer Published version.",
    "options": "Draft\nPublished\nRetired",
    "default": "Draft",
    "reqd": 1
@@ -51,6 +55,7 @@
    "fieldname": "definition_json",
    "fieldtype": "Code",
    "label": "Definition Json",
+   "description": "The policy definition (questions, rules, fallback logic). Validated on save. Immutable once published.",
    "options": "JSON",
    "reqd": 1
   },
@@ -58,36 +63,41 @@
    "fieldname": "schema_version",
    "fieldtype": "Data",
    "label": "Schema Version",
+   "description": "Schema version of the policy definition (e.g., '1.0'). Used for forward/backward compatibility.",
    "reqd": 1
   },
   {
    "fieldname": "fingerprint",
    "fieldtype": "Data",
    "label": "Fingerprint",
+   "description": "SHA256 fingerprint of the policy definition (computed server-side, excludes deployment identity). Used for immutability and version pinning.",
    "reqd": 1
   },
   {
    "fieldname": "default_model",
    "fieldtype": "Link",
    "label": "Default Model",
+   "description": "Default Decision Model to use when running this policy version. Can be overridden at runtime.",
    "options": "Decision Model"
   },
   {
    "fieldname": "published_at",
    "fieldtype": "Datetime",
-   "label": "Published At"
+   "label": "Published At",
+   "description": "Timestamp when this version was published. Set automatically on publish; empty for Draft/Retired versions."
   },
   {
    "fieldname": "metadata_json",
    "fieldtype": "Code",
    "label": "Metadata Json",
+   "description": "Additional metadata about this version (e.g., changelog, tags). Optional.",
    "options": "JSON"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 15:30:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Policy Version",
