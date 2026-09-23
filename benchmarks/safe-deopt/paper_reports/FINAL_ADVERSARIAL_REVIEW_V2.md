@@ -18,6 +18,8 @@
 > `EXCLUSIONS_AND_FAILURES.md`, and `results/scored_v2/summary.json` /
 > `per_condition_family.csv` / `end_to_end_per_condition_family.csv`, all as of
 > commit `64cf627f9` on `research/safe-deopt-v2-integration`.
+>
+> See [`FINAL_CLOSURE_REVIEW.md`](FINAL_CLOSURE_REVIEW.md) for the current closure status.
 
 Reviewer scope: T1-T8 deliverables in this track, plus the branch diff
 `research/safe-deopt-experiment..research/safe-deopt-v2-integration` in

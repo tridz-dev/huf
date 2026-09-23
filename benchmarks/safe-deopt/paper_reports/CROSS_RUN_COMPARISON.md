@@ -91,7 +91,11 @@ The procedure arm also reduced model calls from 7.0 to 2.0 on average for Gemini
 
 ## Illustrative scale example: 10,000 invoices per month
 
-The following is a planning illustration, not an additional experiment. It applies the measured five-task averages from T6 unchanged to 10,000 repeated invoice workflows. It assumes each invoice follows a repeatable 3-8 tool-call sequence such as: read the customer and invoice context, validate line items and tax rules, create or update the invoice, record the payment/status transition, and send or schedule a confirmation. Actual production totals would depend on model choice, prompt size, batching, caching, retries, concurrency, and the exact HUF graph.
+The following is a planning illustration, not an additional experiment. Its basis is the
+T6 Procedure-vs-naive dataset (n=5 tasks per arm per model family, no confidence
+intervals) — the per-invoice cost/time/token figures below are those five-task averages
+applied unchanged to a hypothetical volume, not a new or larger measurement. It applies the
+measured five-task averages from T6 unchanged to 10,000 repeated invoice workflows. It assumes each invoice follows a repeatable 3-8 tool-call sequence such as: read the customer and invoice context, validate line items and tax rules, create or update the invoice, record the payment/status transition, and send or schedule a confirmation. Actual production totals would depend on model choice, prompt size, batching, caching, retries, concurrency, and the exact HUF graph.
 
 | Model | Arm | Cost / invoice | Monthly cost | Annual cost | Aggregate model time / month* | Monthly tokens |
 |---|---|---:|---:|---:|---:|---:|

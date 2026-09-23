@@ -83,7 +83,12 @@ not any of the flag names speculated in the task brief (reconciliation_errors,
 matched_cases_c4g_vs_c6 etc. are real output *fields*, not CLI flags -- confirmed by
 reading canonical_scoring.py directly and by --help).
 
-Raw summary the script printed:
+**SUPERSEDED by the update above.** The raw summary and table immediately below reflect the
+pre-F4-fix, pre-classifier-fix state of the pipeline and are kept only as the original audit
+trail. Current, authoritative counts are `{"invalid": 288, "legitimate-no-model": 48,
+"live-model": 3264}` per the update block at the top of this document.
+
+Raw summary the script printed (SUPERSEDED, pre-fix):
 ```
 class_counts: {"invalid": 288, "live-model": 3312}
 quarantined_count: 288
@@ -92,6 +97,9 @@ total_rows: 3600
 ```
 
 ## 1. Row classification breakdown
+
+**SUPERSEDED by the update above -- see current counts (3264 live-model / 48
+legitimate-no-model / 288 invalid) at the top of this document.**
 
 | class | count |
 |---|---|
@@ -102,7 +110,9 @@ total_rows: 3600
 | **total** | **3600** |
 
 No legitimate-no-model rows exist in runs.jsonl because C2/C3 (the only conditions the
-script treats as zero-LLM-by-design) never appear in this file -- see item 9.
+script treats as zero-LLM-by-design) never appear in this file -- see item 9. (This
+paragraph too predates the F4 rerun and classifier fix that introduced the 48
+legitimate-no-model rows; see the update block at the top.)
 
 ## 2. Zero-token row handling
 
@@ -122,6 +132,13 @@ row in this dataset (no reasoning-token-billing model was used); it is never fol
 input/output tokens.
 
 ## 4. Distinct attempt/effect columns (per_condition_family.csv, live-model rows only)
+
+**SUPERSEDED by the update above for the live-model row-count context** (this table's
+`live-model`-only framing predates the 3312 -> 3264 correction); the per-cell
+attempt/effect figures themselves (e.g. C5/gpt-4o-mini duplicate_committed_effects_total
+= 14, unfiltered by the F4 legitimate-no-model split) are unaffected by that correction --
+see `CLAIM_TO_EVIDENCE_TABLE.md` sec 4 for the "14 vs 12" reconciliation of this same
+figure.
 
 | condition | model | unsafe_attempts_total | blocked_attempts_total | dispatched_unsafe_retries_total | duplicate_committed_effects_total |
 |---|---|---|---|---|---|
@@ -152,6 +169,14 @@ gpt-4o-mini) to 211 (C4 gemini), confirming this is a common, legitimate combina
 the dataset, not scored as either a pure completion or a pure escalation.
 
 ## 6. OpenAI C5 duplicate reassessment (full detail in analysis_openai_c5_duplicates_v2.md)
+
+**Note on "14" below:** this section's headline "14 duplicate-committed-effect rows" is the
+unfiltered count and remains correct and current (see `CLAIM_TO_EVIDENCE_TABLE.md` sec 4);
+it is **not** superseded. What is superseded is only the row-classification framing in
+sec 0/1 above (3312/0 vs. the current 3264/48) -- 2 of these same 14 rows are exactly the
+F4 rows that moved from `invalid` to `legitimate-no-model`, which is why a `row_class ==
+"live-model"` filter over this same population reads 12, not 14 (see "OpenAI C5
+duplicate-committed-effect count, 14 -> 12, reconciled" in the update block at the top).
 
 **Corrected 2026-09-23 per FINAL_ADVERSARIAL_REVIEW_V2.md C2: the prior "0 of 14 survive"
 verdict below this line was wrong for 4 rows and is withdrawn.**

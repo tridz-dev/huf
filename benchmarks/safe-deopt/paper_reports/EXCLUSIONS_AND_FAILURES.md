@@ -29,12 +29,14 @@ source citations. No editorializing.
   `RECOVERY_RESULTS_RECONCILED.md` sec 6 (corrected 2026-09-23) and
   `analysis_openai_c5_duplicates_v2.md`.
 - **Scope in the matched C4+G-vs-C6 comparison (added 2026-09-23, per
-  `FINAL_ADVERSARIAL_REVIEW_V2.md` H1/C3):** `results/scored_v2/matched_c4g_vs_c6.json`'s
-  648-cell matched set included 72 F4 rows (36 per condition) despite F4's robustness_only
-  status everywhere else in this project -- an inconsistency, now resolved: **F4 is
-  excluded from the matched C4+G-vs-C6 comparison.** See `analysis_c4g_vs_c6_v2.md`
-  "F4 inclusion" for the re-derived 612-vs-612-row table; every metric is materially
-  unchanged (same direction/magnitude) with F4 removed.
+  `FINAL_ADVERSARIAL_REVIEW_V2.md` H1/C3):** the matched set previously included 72 F4 rows
+  (36 per condition) produced by the broken F4 injector -- an inconsistency, since fixed:
+  F4 was repaired (commit `8c5466504`) and the affected cells were rerun against live
+  models. **F4 is now included in the matched C4+G-vs-C6 comparison**, since it reflects
+  the fixed injector rather than a known-broken one: `results/scored_v2/matched_c4g_vs_c6.json`
+  reports **636 matched cells**, with every metric materially unchanged in
+  direction/magnitude from the earlier F4-excluded figures. See `analysis_c4g_vs_c6_v2.md`
+  "F4 rerun 2026-09-23" for the full recomputed table.
 - **F4 rerun status (H1): fix landed 2026-09-23, rerun COMPLETED 2026-09-23.**
   `faults.py`'s `_inject_f4` previously always called the real write function and then
   unconditionally fabricated a `ValidationErrorFault` regardless of what the real write
@@ -104,9 +106,9 @@ reason for zero model calls, so it stays quarantined. Full reconciliation of the
   matched-cell table produced by `canonical_scoring.py`. Deterministic successes within
   this population may be retained per plan Sec.4 language, but are not labeled as API
   executions; malformed/unexplained rows are quarantined outright.
-- Total dataset size: 3600 rows in `results/runs.jsonl`; 3312 classified `live-model`; 288
-  classified `invalid` (quarantined); 0 `legitimate-no-model`; 0 `mock`
-  (`RECOVERY_RESULTS_RECONCILED.md`, raw script summary).
+- Total dataset size: 3600 rows in `results/runs.jsonl`; 3264 classified `live-model`; 288
+  classified `invalid` (quarantined); 48 `legitimate-no-model`; 0 `mock`
+  (`RECOVERY_RESULTS_RECONCILED.md`, raw script summary, post F4-fix and classifier fix).
 
 ## 3. C2 and C3: no real data
 
