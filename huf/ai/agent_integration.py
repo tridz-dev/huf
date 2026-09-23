@@ -310,6 +310,71 @@ class AgentManager:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
             self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
 
+        # Add the `decide` tool (D9, Agent Tool surface, PLAN.md §3.6) -- registered only
+        # when the Agent has at least one enabled Agent Tool binding (Enforce or Shadow)
+        # AND the site kill switch is on, so an agent with no such binding (the overwhelming
+        # majority today) pays no import/query cost and its tool list is byte-identical to
+        # before this surface existed.
+        try:
+            from typing import Literal
+
+            from huf.ai.decision.decide_tool import decide_tool_enabled, get_agent_tool_bindings, run_decide
+            from huf.ai.decision.types import DecisionOrigin
+
+            if decide_tool_enabled(self.agent_doc):
+                bound_policies = tuple(sorted(get_agent_tool_bindings(self.agent_doc).keys()))
+                # Restrict the JSON schema to the bound policy names (not just documented in
+                # prose) so the model cannot name a policy that was never bound (D9).
+                PolicyName = Literal[bound_policies]
+                origin = DecisionOrigin(
+                    origin_type="Agent Run",
+                    agent=self.agent_doc.name,
+                    conversation=self.conversation_id,
+                    owner_user=getattr(frappe.session, "user", None),
+                )
+                decide_doc = (
+                    "Ask a bound Decision Policy an advisory question. Never grants "
+                    "permission and has no side effects -- use your own judgement about "
+                    "the result. state is the text describing what you want a decision "
+                    "about. candidates is an optional JSON array string of "
+                    "{\"id\": str, \"description\": str} objects; required only for "
+                    "policies that ask you to choose among options, ignored otherwise."
+                )
+
+                @function_tool
+                def decide(policy: PolicyName, state: str, candidates: str | None = None) -> str:
+                    parsed_candidates = None
+                    if candidates:
+                        try:
+                            parsed_candidates = json.loads(candidates)
+                        except (TypeError, ValueError):
+                            return json.dumps(
+                                {
+                                    "status": "error",
+                                    "answer": None,
+                                    "confidence": None,
+                                    "error": "candidates must be a JSON array of {id, description} objects",
+                                }
+                            )
+                    result = run_decide(
+                        self.agent_doc,
+                        policy=policy,
+                        state=state,
+                        candidates=parsed_candidates,
+                        origin=origin,
+                    )
+                    return json.dumps(result)
+
+                decide.description = decide_doc
+
+                existing_names = {tool.name for tool in self.tools}
+                if decide.name not in existing_names:
+                    self.tools.append(decide)
+                    self.tool_sources[decide.name] = "internal_capability"
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
+            logger.warning(f"Failed to load decide tool: {e!s}")
+            self.tool_setup_warnings.append(f"decide tool: {e!s}")
+
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
         api_key = self.settings.get_password("api_key")
