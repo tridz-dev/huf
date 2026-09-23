@@ -36,11 +36,27 @@ def discover_backends() -> dict[str, str]:
 	return registered
 
 
-def resolve_backend(adapter_id: str, *, registry: dict[str, str] | None = None) -> Any:
+def resolve_backend(adapter_id: str, *, registry: dict[str, str] | None = None, deployment: Any = None, transport: Any = None) -> Any:
 	"""Instantiate an adapter by ID from the installed-app registry.
 
 	The import path is accepted only after resolving it from the hook registry; no
 	caller or database value is ever imported directly.
+
+	Args:
+		adapter_id: The registered stable adapter ID (e.g., "fake", "jev_system_one").
+		registry: Optional dict mapping adapter IDs to import paths. If None, uses discover_backends().
+		deployment: Optional DeploymentSpec for backends that support deployment-driven instantiation.
+			If provided and the backend class defines from_deployment, it will be called instead
+			of the zero-argument constructor.
+		transport: Optional callable or transport object to pass to from_deployment. Ignored if
+			deployment is None or the backend does not define from_deployment.
+
+	Returns:
+		An instantiated backend object.
+
+	Raises:
+		DecisionError: If the adapter is not registered, cannot be loaded, or does not
+			implement the required backend contract.
 	"""
 	path = (registry if registry is not None else discover_backends()).get(adapter_id)
 	if not path:
@@ -48,7 +64,11 @@ def resolve_backend(adapter_id: str, *, registry: dict[str, str] | None = None) 
 	try:
 		module_path, attribute = path.rsplit(".", 1)
 		backend_class = getattr(importlib.import_module(module_path), attribute)
-		instance = backend_class()
+		# Call from_deployment if deployment is provided and the class defines it
+		if deployment is not None and hasattr(backend_class, "from_deployment"):
+			instance = backend_class.from_deployment(deployment, transport)
+		else:
+			instance = backend_class()
 	except Exception as exc:
 		raise DecisionError(DecisionErrorCode.BACKEND_NOT_REGISTERED, "Registered decision backend could not be loaded") from exc
 	if not callable(getattr(instance, "evaluate", None)) or not callable(getattr(instance, "capabilities", None)):
