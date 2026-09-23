@@ -882,6 +882,9 @@ def get_binding_stats(agent: str) -> dict:
 
 	bindings_stats = []
 
+	# Import evaluation module for shadow_agreement/advise_followed_rate metrics (T10.01)
+	from huf.ai.decision import evaluation
+
 	# Iterate through each binding and compute its stats
 	for binding in agent_doc.decision_bindings or []:
 		# Query Decision Call records for this binding's surface/policy combo
@@ -912,6 +915,48 @@ def get_binding_stats(agent: str) -> dict:
 				p95_idx = min(len(latencies) - 1, math.ceil(0.95 * len(latencies)) - 1)
 				p95_latency_ms = latencies[p95_idx]
 
+		# Get shadow_agreement rate for Shadow/Enforce modes on measurable surfaces (T10.01)
+		shadow_agreement = None
+		if binding.surface in evaluation.MEASURABLE_SURFACES:
+			try:
+				shadow_result = evaluation.get_shadow_agreement(
+					policy=binding.policy,
+					agent=agent,
+					surface=binding.surface,
+					from_date=cutoff_dt,
+					to_date=now_dt,
+				)
+				# Extract the agreement rate for this surface from by_surface
+				if shadow_result.get("by_surface"):
+					for surface_data in shadow_result["by_surface"]:
+						if surface_data.get("surface") == binding.surface:
+							shadow_agreement = surface_data.get("matched")
+							break
+			except (frappe.ValidationError, ValueError, KeyError):
+				# If evaluation fails, leave as None with reason below
+				pass
+
+		# Get advise_followed_rate for Advise mode on measurable surfaces (T10.01)
+		advise_followed_rate = None
+		if binding.mode == "Advise" and binding.surface in evaluation.MEASURABLE_SURFACES:
+			try:
+				advise_result = evaluation.get_followed_advice(
+					policy=binding.policy,
+					agent=agent,
+					surface=binding.surface,
+					from_date=cutoff_dt,
+					to_date=now_dt,
+				)
+				# Extract the followed-advice rate for this surface from by_surface
+				if advise_result.get("by_surface"):
+					for surface_data in advise_result["by_surface"]:
+						if surface_data.get("surface") == binding.surface:
+							advise_followed_rate = surface_data.get("matched")
+							break
+			except (frappe.ValidationError, ValueError, KeyError):
+				# If evaluation fails, leave as None
+				pass
+
 		binding_stat = {
 			"binding_id": binding.name,
 			"surface": binding.surface,
@@ -922,8 +967,8 @@ def get_binding_stats(agent: str) -> dict:
 				"calls": call_count,
 				"fallback_rate": fallback_rate,
 				"p95_latency_ms": p95_latency_ms,
-				"shadow_agreement": None,  # PR 10
-				"advise_followed_rate": None,  # PR 10
+				"shadow_agreement": shadow_agreement if binding.surface in evaluation.MEASURABLE_SURFACES else None,
+				"advise_followed_rate": advise_followed_rate if binding.mode == "Advise" and binding.surface in evaluation.MEASURABLE_SURFACES else None,
 			},
 		}
 		bindings_stats.append(binding_stat)
