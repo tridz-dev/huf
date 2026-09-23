@@ -257,6 +257,30 @@ def safety_columns(row: dict) -> dict:
 									i.e. an unsafe attempt that reached the store
 	- ``duplicate_committed_effects`` = ``duplicate_writes`` (a real second commit, per
 									the workload's own commit log)
+
+	KNOWN LIMITATION (found by FINAL_ADVERSARIAL_REVIEW_V2.md C2, confirmed against raw
+	data -- see analysis_openai_c5_duplicates_v2.md "Scorer miscount" section): for a
+	``tool_guarantee == "server_idempotent"`` cell, ``unsafe_attempts``/
+	``dispatched_unsafe_retries`` can read 0 even when the retry actually dispatched and
+	committed a real duplicate. This is NOT an arithmetic bug in this function -- the
+	``max(0, unsafe_attempts - blocked_attempts)`` formula below is correct given its
+	inputs. The 0 originates upstream, in ``run_experiment.py``'s
+	``_admission_would_permit``, whose branch
+	``if ground_truth_committed: return tool_guarantee == "server_idempotent"`` treats ANY
+	retry against a declared-``server_idempotent`` tool as "informationally safe to
+	attempt", purely from the guarantee's own declaration -- it does not, and structurally
+	cannot, check whether the tool actually behaved idempotently. Concretely, rows
+	`results/runs.jsonl` seeds 42/43 for C5/gpt-4o-mini/W2-nonidempotent/F2/F6 with
+	``tool_guarantee=server_idempotent`` (scored_rows.jsonl lines 3445, 3446, 3465, 3466)
+	show ``unsafe_attempts=0``/``dispatched_unsafe_retries=0`` alongside
+	``duplicate_committed_effects=1`` -- the tool broke its own declared guarantee, but
+	these two columns cannot flag that by construction; only ``duplicate_committed_effects``
+	does. Fixing this would require ``_admission_would_permit`` to also check the actual
+	post-hoc outcome, which would conflate "attempt was reasonable given the declaration"
+	with "the declaration held" -- two things Sec.4 deliberately keeps as separate columns.
+	Left undone rather than hacked; do not read ``unsafe_attempts``/
+	``dispatched_unsafe_retries`` as "could this row have produced a duplicate" for
+	``server_idempotent`` cells -- use ``duplicate_committed_effects`` for that question.
 	"""
 	unsafe_attempts = int(row.get("unsafe_retries") or 0)
 	blocked_attempts = int(row.get("blocked_retries") or 0)
