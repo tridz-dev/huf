@@ -38,7 +38,10 @@
   "last_error",
   "seeding_metadata_section",
   "source_app",
-  "source_file"
+  "source_file",
+  "total_decision_calls",
+  "total_decision_cost",
+  "last_decision_call"
  ],
  "fields": [
   {
@@ -239,12 +242,34 @@
    "hidden": 1,
    "label": "Source File",
    "read_only": 1
+  },
+  {
+   "description": "Total number of decision calls made by this automation across all executions.",
+   "fieldname": "total_decision_calls",
+   "fieldtype": "Int",
+   "label": "Total Decision Calls",
+   "read_only": 1
+  },
+  {
+   "description": "Total cost in USD of all decision calls made by this automation.",
+   "fieldname": "total_decision_cost",
+   "fieldtype": "Float",
+   "label": "Total Decision Cost",
+   "read_only": 1
+  },
+  {
+   "description": "Link to the most recent decision call made by this automation.",
+   "fieldname": "last_decision_call",
+   "fieldtype": "Link",
+   "label": "Last Decision Call",
+   "options": "Decision Call",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-09 00:00:00.000000",
+ "modified": "2026-09-23 13:15:06.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Automation",
