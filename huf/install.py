@@ -344,6 +344,7 @@ def create_demo_ai_models():
     TTS = "Text-to-Speech"
     STT = "Transcription"
     EMB = "Embeddings"
+    DECISION = "Decision"
 
     def _x(model_name, provider, *modalities):
         entry = {"model_name": model_name, "provider": provider}
@@ -435,6 +436,8 @@ def create_demo_ai_models():
         _x("inclusionai/ling-3.0-flash:free", "OpenRouter", TEXT),
         _x("tencent/hy3:free", "OpenRouter", TEXT),
         _x("gpt-oss-20b", "OpenAI", TEXT),
+        # Decision modality model seeded by decision system patch; provider created by seed
+        _x("jev-1.13-free", "OpenCodeZen", DECISION),
     ]
 
     deprecated_set = set(deprecated_models)
@@ -478,6 +481,11 @@ def create_demo_ai_models():
         # whole EXTRA_MODELS tail and the bare-name backfill) silently
         # skipped. Skip the offending row and carry on instead.
         try:
+            # Skip models whose provider does not yet exist (e.g. Decision models
+            # seeded by a later patch). The provider seed will create the model itself.
+            if m.get("provider") and not frappe.db.exists("AI Provider", m["provider"]):
+                continue
+
             if not frappe.db.exists("AI Model", m["model_name"]):
                 doc = frappe.get_doc(dict(m, doctype="AI Model"))
                 doc.flags.ignore_mandatory = True
