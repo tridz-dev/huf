@@ -36,7 +36,7 @@
    "label": "Mode",
    "options": "Off\nShadow\nAdvise\nEnforce",
    "default": "Off",
-   "description": "Off: disabled. Shadow: run in background, log results, never apply. Advise: show decision hint to LLM, LLM retains choice. Enforce: apply decision, ignore LLM output for this choice.",
+   "description": "Off: disabled. Shadow: run in background, log results, never apply. Advise: show decision hint to LLM on LLM-choice surfaces only, LLM retains final choice. Enforce: apply decision, ignore LLM output for this choice.",
    "reqd": 1
   },
   {
@@ -65,7 +65,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 13:14:10.000000",
+ "modified": "2026-09-23 13:26:58.731",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Decision Binding",

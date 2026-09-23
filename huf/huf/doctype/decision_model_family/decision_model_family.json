@@ -23,13 +23,15 @@
    "fieldtype": "Data",
    "label": "Family Key",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "description": "Unique identifier for this model family."
   },
   {
    "fieldname": "family_name",
    "fieldtype": "Data",
    "label": "Family Name",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Human-readable name for this model family."
   },
   {
    "fieldname": "adapter_id",
@@ -43,46 +45,53 @@
    "fieldtype": "Link",
    "label": "Model Class",
    "options": "Decision Model Class",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The model class this family belongs to."
   },
   {
    "fieldname": "developer",
    "fieldtype": "Data",
-   "label": "Developer"
+   "label": "Developer",
+   "description": "The organization that develops this model family."
   },
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
-   "label": "Description"
+   "label": "Description",
+   "description": "What this model family is and what capabilities it provides."
   },
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this model family is available for use."
   },
   {
    "fieldname": "default_capabilities_json",
    "fieldtype": "Code",
    "label": "Default Capabilities",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON describing the default capabilities provided by models in this family."
   },
   {
    "fieldname": "documentation_url",
    "fieldtype": "Data",
-   "label": "Documentation URL"
+   "label": "Documentation URL",
+   "description": "Link to documentation for this model family."
   },
   {
    "fieldname": "metadata_json",
    "fieldtype": "Code",
    "label": "Metadata",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "Additional structured metadata about this model family."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 13:15:00.000000",
+ "modified": "2026-09-23 13:26:16.817",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Model Family",

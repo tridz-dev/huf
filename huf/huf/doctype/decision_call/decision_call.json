@@ -59,37 +59,43 @@
    "fieldtype": "Data",
    "label": "Call Id",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "description": "Unique identifier for this decision call execution."
   },
   {
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
    "options": "success\nunsupported\nunavailable\nauthentication_failed\ninvalid_response\ntimeout\nrate_limited\nfailed",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Current status of this decision call (pending, completed, failed, etc.)."
   },
   {
    "fieldname": "surface",
    "fieldtype": "Data",
    "label": "Surface",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Where this decision was invoked from (tool, skill, flow, etc.)."
   },
   {
    "fieldname": "policy",
    "fieldtype": "Link",
    "label": "Policy",
-   "options": "Decision Policy"
+   "options": "Decision Policy",
+   "description": "The decision policy that was invoked."
   },
   {
    "fieldname": "policy_version",
    "fieldtype": "Link",
    "label": "Policy Version",
-   "options": "Decision Policy Version"
+   "options": "Decision Policy Version",
+   "description": "The version of the decision policy that was used."
   },
   {
    "fieldname": "policy_fingerprint",
    "fieldtype": "Data",
-   "label": "Policy Fingerprint"
+   "label": "Policy Fingerprint",
+   "description": "Hash of the policy definition used, for audit tracking."
   },
   {
    "fieldname": "resolved_provider",
@@ -122,51 +128,60 @@
    "fieldname": "decision_model",
    "fieldtype": "Link",
    "label": "Decision Model",
-   "options": "Decision Model"
+   "options": "Decision Model",
+   "description": "The decision model used for this call."
   },
   {
    "fieldname": "resolved_model",
    "fieldtype": "Data",
-   "label": "Resolved Model"
+   "label": "Resolved Model",
+   "description": "The specific model version that was resolved and used."
   },
   {
    "fieldname": "resolved_model_version",
    "fieldtype": "Data",
-   "label": "Resolved Model Version"
+   "label": "Resolved Model Version",
+   "description": "The version of the resolved model."
   },
   {
    "fieldname": "backend_adapter",
    "fieldtype": "Data",
-   "label": "Backend Adapter"
+   "label": "Backend Adapter",
+   "description": "The adapter that translated the policy to the backend (e.g., System One)."
   },
   {
    "fieldname": "agent",
    "fieldtype": "Link",
    "label": "Agent",
-   "options": "Agent"
+   "options": "Agent",
+   "description": "The Agent this decision call was associated with, if any."
   },
   {
    "fieldname": "agent_run",
    "fieldtype": "Link",
    "label": "Agent Run",
-   "options": "Agent Run"
+   "options": "Agent Run",
+   "description": "The Agent Run this decision call was associated with, if any."
   },
   {
    "fieldname": "flow_run",
    "fieldtype": "Link",
    "label": "Flow Run",
-   "options": "Flow Run"
+   "options": "Flow Run",
+   "description": "The Flow Run this decision call was associated with, if any."
   },
   {
    "fieldname": "flow_node_id",
    "fieldtype": "Data",
-   "label": "Flow Node Id"
+   "label": "Flow Node Id",
+   "description": "The Flow node ID this decision call was associated with, if any."
   },
   {
    "fieldname": "conversation",
    "fieldtype": "Link",
    "label": "Conversation",
-   "options": "Agent Conversation"
+   "options": "Agent Conversation",
+   "description": "The Conversation this decision call was associated with, if any."
   },
   {
    "fieldname": "automation",
@@ -206,129 +221,151 @@
   {
    "fieldname": "started_at",
    "fieldtype": "Datetime",
-   "label": "Started At"
+   "label": "Started At",
+   "description": "When this decision call began execution."
   },
   {
    "fieldname": "ended_at",
    "fieldtype": "Datetime",
-   "label": "Ended At"
+   "label": "Ended At",
+   "description": "When this decision call completed or failed."
   },
   {
    "fieldname": "latency_ms",
    "fieldtype": "Float",
-   "label": "Latency Ms"
+   "label": "Latency Ms",
+   "description": "How long this decision call took to execute, in milliseconds."
   },
   {
    "fieldname": "candidate_count",
    "fieldtype": "Int",
    "label": "Candidate Count",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "How many candidates were returned by this decision call."
   },
   {
    "fieldname": "candidate_ids_json",
    "fieldtype": "Code",
    "label": "Candidate Ids Json",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON array of candidate IDs returned by this decision call."
   },
   {
    "fieldname": "answer_json",
    "fieldtype": "Code",
    "label": "Answer Json",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON containing the full answer or result from this decision call."
   },
   {
    "fieldname": "confidence",
    "fieldtype": "Float",
-   "label": "Confidence"
+   "label": "Confidence",
+   "description": "Confidence score of the decision, never treated as permission (always permission-filtered first)."
   },
   {
    "fieldname": "probabilities_json",
    "fieldtype": "Code",
    "label": "Probabilities Json",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON with probability scores for each candidate."
   },
   {
    "fieldname": "state_hash",
    "fieldtype": "Data",
-   "label": "State Hash"
+   "label": "State Hash",
+   "description": "Hash of the state snapshot used in this decision call."
   },
   {
    "fieldname": "state_snapshot",
    "fieldtype": "Code",
    "label": "State Snapshot",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON snapshot of the state provided to the decision call."
   },
   {
    "fieldname": "question_snapshot",
    "fieldtype": "Code",
    "label": "Question Snapshot",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON snapshot of the question or criteria provided to the decision call."
   },
   {
    "fieldname": "input_tokens",
    "fieldtype": "Int",
    "label": "Input Tokens",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Number of input tokens used by this decision call."
   },
   {
    "fieldname": "output_tokens",
    "fieldtype": "Int",
    "label": "Output Tokens",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Number of output tokens used by this decision call."
   },
   {
    "fieldname": "cost",
    "fieldtype": "Float",
    "label": "Cost",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Cost of this decision call in USD."
   },
   {
    "fieldname": "cost_source",
    "fieldtype": "Data",
-   "label": "Cost Source"
+   "label": "Cost Source",
+   "description": "How the cost was calculated (quoted, metered, etc.)."
   },
   {
    "fieldname": "gate_result",
    "fieldtype": "Data",
-   "label": "Gate Result"
+   "label": "Gate Result",
+   "description": "Result of the chat guard check (allowed, denied, etc.)."
   },
   {
    "fieldname": "fallback_action",
    "fieldtype": "Data",
-   "label": "Fallback Action"
+   "label": "Fallback Action",
+   "description": "Action taken if the deployment failed (next deployment, error, etc.)."
   },
   {
    "fieldname": "deployment_selection_source",
    "fieldtype": "Data",
-   "label": "Deployment Selection Source"
+   "label": "Deployment Selection Source",
+   "description": "How the deployment was selected (default, routing, etc.)."
   },
   {
    "fieldname": "deployment_fallback_chain",
    "fieldtype": "Code",
    "label": "Deployment Fallback Chain",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON array of deployments tried in fallback order."
   },
   {
    "fieldname": "deployment_fallback_count",
    "fieldtype": "Int",
    "label": "Deployment Fallback Count",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "How many times the fallback to another deployment occurred."
   },
   {
    "fieldname": "error_code",
    "fieldtype": "Data",
-   "label": "Error Code"
+   "label": "Error Code",
+   "description": "If failed, the error code from the backend."
   },
   {
    "fieldname": "error_message",
    "fieldtype": "Small Text",
-   "label": "Error Message"
+   "label": "Error Message",
+   "description": "If failed, a human-readable error message."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 14:30:00.000000",
+ "modified": "2026-09-23 13:26:16.818",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Call",
