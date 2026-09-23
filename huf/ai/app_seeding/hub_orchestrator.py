@@ -151,7 +151,13 @@ def _find_keyed_provider():
 
 
 def _default_model_for_provider(provider_name):
-    """Sensible default chat model for a provider from existing AI Model records."""
+    """Sensible default chat model for a provider from existing AI Model records.
+
+    Excludes Decision-only models (where modalities == "Decision" exactly) by modality,
+    not just by name marker matching.
+    """
+    from huf.huf.doctype.ai_model.ai_model import is_decision_only_model
+
     models = frappe.get_all(
         "AI Model",
         filters={"provider": provider_name},
@@ -160,10 +166,14 @@ def _default_model_for_provider(provider_name):
     )
     if not models:
         return None
+
+    # Filter out Decision-only models
+    chat_models = [m for m in models if not is_decision_only_model(m)]
+
     for preferred in PREFERRED_MODELS:
-        if preferred in models:
+        if preferred in chat_models:
             return preferred
-    for model in models:
+    for model in chat_models:
         if not any(marker in model.lower() for marker in _NON_CHAT_MARKERS):
             return model
     return None
