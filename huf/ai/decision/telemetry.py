@@ -38,6 +38,13 @@ class DecisionCall:
 	policy_fallback_action: str | None = None
 	error_code: str | None = None
 	deployment_fallback_chain: tuple[str, ...] = ()
+	mode: str | None = None
+	origin_type: str | None = None
+	resolved_deployment: str | None = None
+	resolved_provider: str | None = None
+	automation: str | None = None
+	owner_user: str | None = None
+	shadow_of: str | None = None
 
 
 TelemetrySink = Callable[[DecisionCall], None]

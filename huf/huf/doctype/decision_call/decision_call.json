@@ -12,17 +12,24 @@
   "policy",
   "policy_version",
   "policy_fingerprint",
-  "decision_provider",
+  "resolved_provider",
+  "resolved_deployment",
+  "requested_model",
+  "resolved_provider_model_id",
   "decision_model",
   "resolved_model",
   "resolved_model_version",
   "backend_adapter",
+  "mode",
+  "origin_type",
   "agent",
   "agent_run",
   "flow_run",
   "flow_node_id",
   "conversation",
-  "mode",
+  "automation",
+  "owner_user",
+  "shadow_of",
   "started_at",
   "ended_at",
   "latency_ms",
@@ -85,10 +92,31 @@
    "label": "Policy Fingerprint"
   },
   {
-   "fieldname": "decision_provider",
+   "fieldname": "resolved_provider",
    "fieldtype": "Link",
-   "label": "Decision Provider",
-   "options": "Decision Provider"
+   "label": "Resolved Provider",
+   "options": "AI Provider",
+   "description": "AI Provider that resolved and ran this decision call."
+  },
+  {
+   "fieldname": "resolved_deployment",
+   "fieldtype": "Link",
+   "label": "Resolved Deployment",
+   "options": "Decision Deployment",
+   "description": "Decision Deployment that was selected and used to run this call."
+  },
+  {
+   "fieldname": "requested_model",
+   "fieldtype": "Link",
+   "label": "Requested Model",
+   "options": "Decision Model",
+   "description": "Decision Model initially requested for this call."
+  },
+  {
+   "fieldname": "resolved_provider_model_id",
+   "fieldtype": "Data",
+   "label": "Resolved Provider Model Id",
+   "description": "The model identifier as it is known to the provider (e.g., jev-1.13-free)."
   },
   {
    "fieldname": "decision_model",
@@ -141,11 +169,39 @@
    "options": "Agent Conversation"
   },
   {
+   "fieldname": "automation",
+   "fieldtype": "Link",
+   "label": "Automation",
+   "options": "Automation",
+   "description": "Automation that triggered this decision call, if any."
+  },
+  {
+   "fieldname": "owner_user",
+   "fieldtype": "Link",
+   "label": "Owner User",
+   "options": "User",
+   "description": "User who owns this decision call (for visibility permissions)."
+  },
+  {
+   "fieldname": "shadow_of",
+   "fieldtype": "Data",
+   "label": "Shadow Of",
+   "description": "Reference to the production outcome this shadow call was comparing against (for agreement reports)."
+  },
+  {
    "fieldname": "mode",
    "fieldtype": "Select",
    "label": "Mode",
-   "options": "Shadow\nEnforce",
-   "default": "Shadow"
+   "options": "Manual\nShadow\nAdvise\nEnforce",
+   "default": "Shadow",
+   "description": "The mode this decision call ran in: Manual (Playground/API), Shadow (logged without effect), Advise (hint only), or Enforce (applied)."
+  },
+  {
+   "fieldname": "origin_type",
+   "fieldtype": "Select",
+   "label": "Origin Type",
+   "options": "Playground\nAPI\nAgent\nFlow\nAutomation\nHub\nGateway\nKnowledge",
+   "description": "The surface or component that originated this decision call."
   },
   {
    "fieldname": "started_at",
@@ -272,7 +328,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 14:30:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Call",
