@@ -267,7 +267,19 @@ doc_events = {
         "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
     },
     "AI Provider": {
-        "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
+        "on_update": [
+            "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
+            "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+        ],
+        "on_trash": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+    },
+    "AI Model": {
+        "on_update": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+        "on_trash": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+    },
+    "Decision Deployment": {
+        "on_update": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+        "on_trash": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
     },
     "Knowledge Source": {
         "after_insert": "huf.ai.knowledge.hooks.on_knowledge_source_created",
