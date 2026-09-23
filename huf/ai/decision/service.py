@@ -43,13 +43,14 @@ Dispatch, in order:
 7. On any non-``SUCCESS`` result, :meth:`DecisionRuntime.apply_policy_fallback` records the
    policy's ``fallback_action`` and persists a second row for it (existing, tested runtime
    behavior -- one row per deployment attempt plus one for the fallback wrap).
-8. Spend accounting (D15, T2A.17) is **not implemented here**. The hook point is the comment
-   in :func:`_execute_inline` marked ``NOTE(T2A.17 hook)``: a pre-check
-   (``RunBudget.check_spend``) belongs immediately after step 2 (policy resolved, before
-   ``load_chain``) for an Enforce/Manual call whose ``origin.agent_run`` is set, returning
-   :data:`BUDGET_EXCEEDED` with zero network when it would exceed the cap; an after-persist
-   hook (``accounting.record_call``) belongs right after step 7, for every completed call
-   (Enforce, Manual or Shadow, success or billed failure).
+8. Spend accounting (D15), :mod:`huf.ai.decision.accounting`. Before the runtime evaluates
+   the chain, :func:`~huf.ai.decision.accounting.precheck_spend` checks ``origin.agent_run``'s
+   :class:`~huf.ai.run_budget.RunBudget`, returning :data:`BUDGET_EXCEEDED` with zero network
+   when the call would exceed ``Agent Settings.spend_cap_usd``; origins without an
+   ``agent_run`` (Flow Run, Automation, Playground, API) have no budget to check and always
+   proceed. After every completed call (Enforce, Manual or Shadow, success or billed
+   failure), :func:`~huf.ai.decision.accounting.record_call` atomically adds usage/cost to the
+   origin's Agent Run / Flow Run / Automation totals.
 9. Returns :class:`~huf.ai.decision.types.ServiceResult`.
 """
 
@@ -63,6 +64,7 @@ from typing import Any
 
 import frappe
 
+from huf.ai.decision import accounting
 from huf.ai.decision.binding import ADVISE_SURFACES
 from huf.ai.decision.deployment import DeploymentChain
 from huf.ai.decision.deployment_loader import load_chain
@@ -94,8 +96,9 @@ from huf.ai.decision.types import (
 #   - DISABLED: kill switch is off (D12). Zero network, nothing built, nothing persisted.
 #   - SHADOW_ENQUEUED: the job (T2A.11) has not run yet; its own success/failure is recorded
 #     against `shadow_of` by that job, not by this ServiceResult.
-#   - BUDGET_EXCEEDED: reserved for T2A.17 (RunBudget spend-cap pre-check). Not returned by
-#     this module yet; see the NOTE(T2A.17 hook) comment in `_execute_inline`.
+#   - BUDGET_EXCEEDED: the RunBudget spend-cap pre-check (huf.ai.decision.accounting,
+#     PLAN.md §4.7 step 8 / D15) would exceed `Agent Settings.spend_cap_usd`; the provider
+#     was never called.
 DISABLED = "disabled"
 SHADOW_ENQUEUED = "shadow_enqueued"
 BUDGET_EXCEEDED = "budget_exceeded"
@@ -420,10 +423,12 @@ def _execute_inline(
 		candidate_resolver_id=candidate_resolver_id,
 	)
 
-	# NOTE(T2A.17 hook): the spend-cap pre-check belongs here, before load_chain/evaluate --
-	# `RunBudget.check_spend(estimate)` for an Enforce/Manual call whose `origin.agent_run`
-	# is set, returning ServiceResult(status=BUDGET_EXCEEDED) with zero network when it would
-	# exceed `Agent Settings.spend_cap_usd`. Not implemented here (T2A.10/T2A.11 scope).
+	# Spend-cap pre-check (D15): an origin with an agent_run counts against that chain's
+	# RunBudget (huf/ai/run_budget.py); everything else (Flow Run, Automation, Playground,
+	# API) has no RunBudget and always proceeds. This runs before the runtime evaluates the
+	# chain, so a call that would exceed the cap never reaches the provider.
+	if not accounting.precheck_spend(origin):
+		return ServiceResult(status=BUDGET_EXCEEDED)
 
 	persisted: list[str | None] = [None]
 	runtime = DecisionRuntime(
@@ -434,10 +439,16 @@ def _execute_inline(
 	if response.status != DecisionStatus.SUCCESS:
 		response = runtime.apply_policy_fallback(request, response, deployments_exhausted=True)
 
-	# NOTE(T2A.17 hook): `accounting.record_call(origin, response.usage, ...)` belongs here,
-	# after every completed call (Enforce/Manual or Shadow, success or billed failure) --
-	# atomically incrementing decision totals on the origin's Agent Run / Flow Run /
-	# Automation and `RunBudget.spend_so_far_usd`. Not implemented here.
+	# Spend accounting (D15): record usage/cost totals for this completed call (success or
+	# billed failure) against its origin -- Agent Run / Flow Run decision totals, Agent Run
+	# budget_spend_usd and the in-process RunBudget.spend_so_far_usd, and Automation totals
+	# plus last_decision_call.
+	accounting.record_call(
+		origin=origin,
+		usage=response.usage,
+		cost=response.usage.measured_cost or 0.0,
+		decision_call=persisted[0],
+	)
 
 	return ServiceResult(
 		status=response.status,
