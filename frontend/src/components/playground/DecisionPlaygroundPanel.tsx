@@ -24,6 +24,7 @@ import {
   type DecisionAnswer,
 } from '@/services/decisionApi';
 import { QuestionBuilder, type PolicyDefinition } from '@/components/decision/QuestionBuilder';
+import { DecisionCompareView } from '@/components/playground/DecisionCompareView';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { db } from '@/lib/frappe-sdk';
@@ -95,6 +96,7 @@ interface DecisionPlaygroundPanelProps {
 }
 
 type PolicyMode = 'published' | 'adhoc';
+type PanelMode = 'decision' | 'compare';
 
 interface DecisionCandidate {
   id: string;
@@ -104,6 +106,9 @@ interface DecisionCandidate {
 export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPanelProps) {
   const { hasCapability } = usePermissions();
   const isAdmin = hasCapability('decision.admin');
+
+  // Panel mode (decision vs compare)
+  const [panelMode, setPanelMode] = useState<PanelMode>('decision');
 
   // Models and deployments
   const [models, setModels] = useState<DecisionModel[]>([]);
@@ -259,6 +264,18 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-paper">
+      {/* Mode Tabs */}
+      <div className="border-b border-line px-5 pt-4">
+        <Tabs value={panelMode} onValueChange={(value) => setPanelMode(value as PanelMode)}>
+          <TabsList className="grid w-full grid-cols-2 max-w-xs">
+            <TabsTrigger value="decision">Decision</TabsTrigger>
+            <TabsTrigger value="compare">Compare</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* Decision Mode */}
+      {panelMode === 'decision' && (
       <div className="grid flex-1 grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_1fr]">
         {/* Input Panel */}
         <div className="flex flex-col gap-4 overflow-y-auto">
@@ -621,6 +638,12 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
           )}
         </div>
       </div>
+      )}
+
+      {/* Compare Mode */}
+      {panelMode === 'compare' && (
+        <DecisionCompareView running={running} />
+      )}
     </div>
   );
 }
