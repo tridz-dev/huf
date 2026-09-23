@@ -114,6 +114,13 @@ export interface RouterActionConfig {
   conversation_mode?: 'flow_shared' | 'isolated';
 }
 
+export interface RouterDecisionActionConfig {
+  type: 'decision-router';
+  policy?: string;
+  options?: Array<{ label: string; node_id: string }>;
+  default?: string;
+}
+
 export interface HumanApprovalActionConfig {
   type: 'human.approval';
   title?: string;
@@ -181,6 +188,7 @@ export type ActionConfig =
   | AgentRunActionConfig
   | ToolCallActionConfig
   | RouterActionConfig
+  | RouterDecisionActionConfig
   | HumanApprovalActionConfig
   | ConditionActionConfig
   | HttpRequestActionConfig

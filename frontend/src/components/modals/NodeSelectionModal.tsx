@@ -225,6 +225,8 @@ export function NodeSelectionModal({
       config = { type: 'condition', expression: '', true_node: '', false_node: '' };
     } else if (actionId === 'router') {
       config = { type: 'router', router_agent_name: '', conversation_mode: 'flow_shared' };
+    } else if (actionId === 'decision-router') {
+      config = { type: 'decision-router', policy: '', options: [], default: '' };
     } else if (actionId === 'loop') {
       config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
     } else if (actionId === 'human.approval') {

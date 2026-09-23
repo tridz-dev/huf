@@ -124,11 +124,11 @@ function serializeNode(node: FlowNode, outgoing: FlowEdge[]): BackendNode {
         _icon: node.data?.icon,
     };
 
-    // condition/router.llm/human.approval carry their branch targets inside their own
+    // condition/router.llm/router.decision/human.approval carry their branch targets inside their own
     // config (on_true/on_false, options/default, approve_next/reject_next) rather than
     // a single linear `next` -- see extractNodeConfig. Every other node type routes
     // through `next` (its "always"/"on_success" outgoing edge, if any).
-    if (backendType !== 'condition' && backendType !== 'router.llm' && backendType !== 'human.approval') {
+    if (backendType !== 'condition' && backendType !== 'router.llm' && backendType !== 'router.decision' && backendType !== 'human.approval') {
         base.next = successEdge?.target ?? null;
     }
     if (failureEdge) {
@@ -158,6 +158,7 @@ function mapFrontendNodeTypeToBackend(node: FlowNode): BackendNodeType {
         case 'agent-run': return 'agent.run';
         case 'tool-call': return 'tool.call';
         case 'router': return 'router.llm';
+        case 'decision-router': return 'router.decision';
         case 'human.approval': return 'human.approval';
         case 'condition': return 'condition';
         case 'http-request': return 'http_request';
@@ -196,6 +197,11 @@ function extractNodeConfig(
         config.on_true = (config.on_true as string | undefined) ?? trueEdge?.target;
         config.on_false = (config.on_false as string | undefined) ?? falseEdge?.target;
     } else if (backendType === 'router.llm') {
+        const options = (config.options as Array<{ label: string; node_id: string }> | undefined)
+            ?? outgoing.map((e) => ({ label: (e.label as string) || e.target, node_id: e.target }));
+        config.options = options;
+        config.default = (config.default as string | undefined) ?? outgoing[0]?.target;
+    } else if (backendType === 'router.decision') {
         const options = (config.options as Array<{ label: string; node_id: string }> | undefined)
             ?? outgoing.map((e) => ({ label: (e.label as string) || e.target, node_id: e.target }));
         config.options = options;
@@ -301,6 +307,7 @@ function getDefaultLabel(backendType: string): string {
         'agent.run': 'Run agent',
         'tool.call': 'Call tool',
         'router.llm': 'LLM router',
+        'router.decision': 'Decision router',
         'human.approval': 'Human approval',
         'condition': 'Condition (IF)',
         'http_request': 'HTTP request',
@@ -319,6 +326,7 @@ function getDefaultIcon(backendType: string): string {
         'agent.run': 'Bot',
         'tool.call': 'Play',
         'router.llm': 'GitBranch',
+        'router.decision': 'GitBranch',
         'human.approval': 'UserCheck',
         'condition': 'GitBranch',
         'http_request': 'Globe',
@@ -334,6 +342,7 @@ function mapBackendActionType(backendType: string): string {
         'agent.run': 'agent-run',
         'tool.call': 'tool-call',
         'router.llm': 'router',
+        'router.decision': 'decision-router',
         'human.approval': 'human.approval',
         'condition': 'condition',
         'http_request': 'http-request',
@@ -374,6 +383,11 @@ function deserializeEdgesForNode(node: BackendNode): FlowEdge[] {
         push(cfg.on_true, 'expression', 'true');
         push(cfg.on_false, 'expression', 'false');
     } else if (node.type === 'router.llm') {
+        const cfg = node.config as { options?: Array<{ label: string; node_id: string }> };
+        for (const option of cfg.options ?? []) {
+            push(option.node_id, 'expression', option.label);
+        }
+    } else if (node.type === 'router.decision') {
         const cfg = node.config as { options?: Array<{ label: string; node_id: string }> };
         for (const option of cfg.options ?? []) {
             push(option.node_id, 'expression', option.label);
