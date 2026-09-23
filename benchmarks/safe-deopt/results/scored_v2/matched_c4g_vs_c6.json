@@ -1,40 +1,40 @@
 {
   "metrics": {
     "cost_usd": {
-      "bootstrap_ci95_hi": -0.00021448603395061744,
-      "bootstrap_ci95_lo": -0.00028277746913580237,
-      "c4g_mean": 0.000541704012345679,
-      "c6_mean": 0.0007901976080246913,
-      "observed_diff_c4g_minus_c6": -0.0002484935956790123
+      "bootstrap_ci95_hi": -0.0002105811320754717,
+      "bootstrap_ci95_lo": -0.00028112602201257853,
+      "c4g_mean": 0.0005449599056603774,
+      "c6_mean": 0.0007903870283018869,
+      "observed_diff_c4g_minus_c6": -0.00024542712264150946
     },
     "escalated": {
-      "bootstrap_ci95_hi": 0.04629629629629628,
-      "bootstrap_ci95_lo": -0.02777777777777779,
-      "c4g_mean": 0.8765432098765432,
-      "c6_mean": 0.8672839506172839,
-      "observed_diff_c4g_minus_c6": 0.0092592592592593
+      "bootstrap_ci95_hi": 0.047169811320754707,
+      "bootstrap_ci95_lo": -0.028301886792452824,
+      "c4g_mean": 0.8742138364779874,
+      "c6_mean": 0.8647798742138365,
+      "observed_diff_c4g_minus_c6": 0.009433962264150941
     },
     "total_tokens": {
-      "bootstrap_ci95_hi": -802.9475308641977,
-      "bootstrap_ci95_lo": -952.8734567901236,
-      "c4g_mean": 1223.719135802469,
-      "c6_mean": 2102.266975308642,
-      "observed_diff_c4g_minus_c6": -878.547839506173
+      "bootstrap_ci95_hi": -794.2201257861634,
+      "bootstrap_ci95_lo": -947.7468553459121,
+      "c4g_mean": 1231.7169811320755,
+      "c6_mean": 2102.4040880503144,
+      "observed_diff_c4g_minus_c6": -870.6871069182389
     },
     "useful_completion": {
-      "bootstrap_ci95_hi": 0.055555555555555525,
-      "bootstrap_ci95_lo": -0.05401234567901231,
-      "c4g_mean": 0.5,
-      "c6_mean": 0.5,
+      "bootstrap_ci95_hi": 0.05503144654088049,
+      "bootstrap_ci95_lo": -0.055031446540880546,
+      "c4g_mean": 0.49056603773584906,
+      "c6_mean": 0.49056603773584906,
       "observed_diff_c4g_minus_c6": 0.0
     },
     "wall_time_seconds": {
-      "bootstrap_ci95_hi": -0.54184374691358,
-      "bootstrap_ci95_lo": -1.0754669691358023,
-      "c4g_mean": 4.5224875015432096,
-      "c6_mean": 5.323336219135802,
-      "observed_diff_c4g_minus_c6": -0.8008487175925927
+      "bootstrap_ci95_hi": -0.5056754449685528,
+      "bootstrap_ci95_lo": -1.0593901823899365,
+      "c4g_mean": 4.5301683286163525,
+      "c6_mean": 5.303881779874214,
+      "observed_diff_c4g_minus_c6": -0.7737134512578612
     }
   },
-  "n_matched_cells": 648
+  "n_matched_cells": 636
 }
