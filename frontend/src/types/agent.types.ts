@@ -349,4 +349,15 @@ export interface AgentDoc {
     username?: string;
     enabled?: 0 | 1 | boolean;
   }>;
+
+  // Decision Runtime bindings
+  decision_bindings?: Array<{
+    name?: string;
+    surface: string;
+    policy: string;
+    mode: 'Off' | 'Shadow' | 'Advise' | 'Enforce';
+    latency_budget_ms?: number;
+    priority?: number;
+    enabled?: 0 | 1;
+  }>;
 }

@@ -76,6 +76,16 @@ type AgentToolRow = {
   tool?: string | null;
 };
 
+type AgentDecisionBindingRow = {
+  name?: string;
+  surface: string;
+  policy: string;
+  mode: 'Off' | 'Shadow' | 'Advise' | 'Enforce';
+  latency_budget_ms?: number;
+  priority?: number;
+  enabled?: 0 | 1;
+};
+
 type AgentMcpServerRow = {
   name?: string | null;
   mcp_server: string;
@@ -380,6 +390,8 @@ export function AgentFormPage() {
   const [agentSkills, setAgentSkills] = useState<AgentSkillRow[]>([]);
   const [initialAgentSkills, setInitialAgentSkills] = useState<AgentSkillRow[]>([]);
   const [skillOptions, setSkillOptions] = useState<{ value: string; label: string; subtitle?: string }[]>([]);
+  const [decisionBindings, setDecisionBindings] = useState<AgentDecisionBindingRow[]>([]);
+  const [initialDecisionBindings, setInitialDecisionBindings] = useState<AgentDecisionBindingRow[]>([]);
   const [agentStats, setAgentStats] = useState<{ last_run?: string | null; total_run?: number | null }>({});
   const [agentOwner, setAgentOwner] = useState<string | null>(null);
   const [sectionRevisions, setSectionRevisions] = useState<Partial<Record<AgentConfigSection, string>>>({});
@@ -575,11 +587,36 @@ export function AgentFormPage() {
     });
   }, [agentSkills, initialAgentSkills, isNew]);
 
-  const showSaveButton = canManageAgent && (isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged);
+  const [bindingsChanged, setBindingsChanged] = useState(false);
+  useEffect(() => {
+    if (isNew) return;
+    if (decisionBindings.length !== initialDecisionBindings.length) {
+      setBindingsChanged(true);
+      return;
+    }
+    for (let i = 0; i < decisionBindings.length; i++) {
+      const curr = decisionBindings[i];
+      const init = initialDecisionBindings[i];
+      if (
+        curr.surface !== init.surface ||
+        curr.policy !== init.policy ||
+        curr.mode !== init.mode ||
+        (curr.latency_budget_ms ?? undefined) !== (init.latency_budget_ms ?? undefined) ||
+        (curr.priority ?? 100) !== (init.priority ?? 100) ||
+        (curr.enabled ?? 1) !== (init.enabled ?? 1)
+      ) {
+        setBindingsChanged(true);
+        return;
+      }
+    }
+    setBindingsChanged(false);
+  }, [decisionBindings, initialDecisionBindings, isNew]);
+
+  const showSaveButton = canManageAgent && (isNew || isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged || bindingsChanged);
 
   // Deliberately excludes `isNew` (unlike showSaveButton) - a blank new-agent form
   // has nothing to lose, so it shouldn't block navigation until the user actually changes something.
-  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged;
+  const hasUnsavedChanges = isDirty || toolsChanged || disabledChanged || mcpServersChanged || knowledgeChanged || skillsChanged || bindingsChanged;
 
   const shouldBlock = useCallback(
     ({ currentLocation, nextLocation }: { currentLocation: Location; nextLocation: Location }) => {
@@ -1299,6 +1336,23 @@ export function AgentFormPage() {
           setAgentSkills([]);
           setInitialAgentSkills([]);
         }
+        // Load decision bindings from decision_bindings child table
+        if (data.decision_bindings && Array.isArray(data.decision_bindings) && data.decision_bindings.length > 0) {
+          const bindingRows: AgentDecisionBindingRow[] = data.decision_bindings.map((item) => ({
+            name: item.name,
+            surface: item.surface,
+            policy: item.policy,
+            mode: item.mode || 'Off',
+            latency_budget_ms: item.latency_budget_ms,
+            priority: item.priority,
+            enabled: item.enabled === 1 ? 1 : 0,
+          }));
+          setDecisionBindings(bindingRows);
+          setInitialDecisionBindings(bindingRows);
+        } else {
+          setDecisionBindings([]);
+          setInitialDecisionBindings([]);
+        }
         // Load MCP servers from agent_mcp_server child table (already in agent document)
         if (data.agent_mcp_server && Array.isArray(data.agent_mcp_server) && data.agent_mcp_server.length > 0) {
           // First, map child table data to MCPServerRef format
@@ -1374,6 +1428,8 @@ export function AgentFormPage() {
       setInitialMcpServers([]);
       setKnowledgeSources([]);
       setInitialKnowledgeSources([]);
+      setDecisionBindings([]);
+      setInitialDecisionBindings([]);
       setAgentStats({});
       setAgentOwner(null);
       setLoading(false);
@@ -1596,7 +1652,16 @@ export function AgentFormPage() {
           priority: skill.priority ?? 0,
           description: skill.description || '',
         })),
-      } as AgentUpdatePayload;
+        decision_bindings: decisionBindings.map((binding) => ({
+          ...(binding.name ? { name: binding.name } : {}),
+          surface: binding.surface,
+          policy: binding.policy,
+          mode: binding.mode,
+          latency_budget_ms: binding.latency_budget_ms,
+          priority: binding.priority ?? 100,
+          enabled: normalizeFlag(binding.enabled),
+        })),
+      } as AgentUpdatePayload & { decision_bindings: Array<Record<string, any>> };
 
       if (!isNew && id && activeTab !== 'triggers') {
         const section = activeTab as AgentConfigSection;

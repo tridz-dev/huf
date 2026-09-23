@@ -374,3 +374,47 @@ export async function testDeployment(deployment: string): Promise<TestDeployment
     throw error;
   }
 }
+
+/**
+ * Stats for a single binding (last 7 days)
+ */
+export interface BindingStats {
+  binding_id: string;
+  surface: string;
+  policy: string;
+  mode: string;
+  enabled: number;
+  stats: {
+    calls: number;
+    fallback_rate: number;
+    p95_latency_ms: number;
+    shadow_agreement: number | null;
+    advise_followed_rate: number | null;
+  };
+}
+
+/**
+ * Response from get_binding_stats
+ */
+export interface GetBindingStatsResult {
+  agent: string;
+  bindings: BindingStats[];
+}
+
+/**
+ * Get binding statistics for an agent (last 7 days).
+ *
+ * Stats include call counts, fallback rates, latency, and mode-specific metrics.
+ * Requires `decision.run` capability.
+ */
+export async function getBindingStats(agent: string): Promise<GetBindingStatsResult> {
+  try {
+    const result = await call.get('huf.ai.decision.api.get_binding_stats', {
+      agent,
+    });
+    return result.message as GetBindingStatsResult;
+  } catch (error) {
+    handleFrappeError(error, `Error fetching binding stats for agent ${agent}`);
+    return { agent, bindings: [] };
+  }
+}
