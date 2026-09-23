@@ -61,14 +61,16 @@ class DecisionPolicyVersion(Document):
 
 	def _publish_policy_version(self):
 		"""On publish: mark previous Published as Retired, update Decision Policy.current_version."""
-		# Retire any previous Published version for this policy
-		prev_published = frappe.db.get_value(
+		# Retire all previous Published versions for this policy (keep only the newest Published)
+		prev_published_versions = frappe.db.get_list(
 			"Decision Policy Version",
-			{"policy": self.policy, "status": "Published"},
-			"name"
+			filters={"policy": self.policy, "status": "Published"},
+			fields=["name"],
+			order_by="version_number desc"
 		)
-		if prev_published and prev_published != self.name:
-			frappe.db.set_value("Decision Policy Version", prev_published, "status", "Retired")
+		for prev in prev_published_versions:
+			if prev.name != self.name:
+				frappe.db.set_value("Decision Policy Version", prev.name, "status", "Retired")
 
 		# Update Decision Policy.current_version and published_at
 		frappe.db.set_value(

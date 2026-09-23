@@ -68,14 +68,16 @@ class DecisionPolicy(Document):
 		})
 		version_doc.insert()
 
-		# Retire previous Published version
-		prev_published = frappe.db.get_value(
+		# Retire all previous Published versions (keep only the newest Published)
+		prev_published_versions = frappe.db.get_list(
 			"Decision Policy Version",
-			{"policy": self.name, "status": "Published"},
-			"name"
+			filters={"policy": self.name, "status": "Published"},
+			fields=["name"],
+			order_by="version_number desc"
 		)
-		if prev_published and prev_published != version_key:
-			frappe.db.set_value("Decision Policy Version", prev_published, "status", "Retired")
+		for prev in prev_published_versions:
+			if prev.name != version_key:
+				frappe.db.set_value("Decision Policy Version", prev.name, "status", "Retired")
 
 		# Update current_version on self
 		self.current_version = version_key
