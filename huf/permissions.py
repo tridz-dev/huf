@@ -81,6 +81,10 @@ CAPABILITIES: dict[str, str] = {
 	# --- Developer Platform ---
 	"developer.access": "Access Developer Platform",
 	"developer.keys.manage": "Manage Developer API Keys",
+	# --- Decision Runtime ---
+	"decision.admin": "Administer Decision Runtime",
+	"decision.author": "Author Decision Policies",
+	"decision.run": "Run Decisions",
 }
 
 # Capabilities granted to each default Huf Role.
@@ -119,6 +123,9 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"docker.run",
 		"developer.access",
 		"developer.keys.manage",
+		"decision.admin",
+		"decision.author",
+		"decision.run",
 	],
 	"Huf User": [
 		"agent.use",
@@ -134,6 +141,7 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"ssh.run",
 		"developer.access",
 		"developer.keys.manage",
+		"decision.run",
 	],
 	"Huf Viewer": [
 		"agent.use",
