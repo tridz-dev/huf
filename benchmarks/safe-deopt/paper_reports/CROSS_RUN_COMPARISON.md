@@ -2,6 +2,14 @@
 
 > Descriptive internal QA/sanity-checking only. This is not a fifth experiment and does not add a paper claim. Sources remain separate because they differ in scope, task complexity, turn budgets, and fault mix.
 
+## What this document is about
+
+[HUF](https://github.com/tridz-dev/huf) is open-source, self-hosted AI infrastructure for any application: a multi-agent and multi-modal platform with provider routing, local-model support, knowledge grounding, tool/code execution, skills and apps, multi-channel gateways, MCP integrations, visual flows, human-in-the-loop controls, and observability. It can connect cloud providers such as OpenAI, Anthropic, and Google Gemini alongside local or OpenAI-compatible endpoints, so teams can keep their data and deployment under their control rather than depending on a single hosted assistant platform.
+
+An **Agent Procedure** is one HUF capability for turning a known, repeatable agent workflow into a validated executable graph. In this evaluation, the model interprets the request and reports the result, while the Procedure graph carries out the known intermediate tool steps without asking the model to rediscover each step interactively.
+
+The comparison therefore tests a feature/implementation inside HUF, not a separate model or a new standalone agent framework. The “naive” arm is the same task performed through an ordinary model-driven loop that repeatedly reasons, selects tools, observes results, and continues. The Procedure idea is most useful when a business operation has a repeatable sequence of roughly 3-8 tool calls, especially when that sequence is executed many times and must be recoverable after a partial failure.
+
 ## 1. Main dataset — per condition × model family
 
 Source: `results/scored_v2/per_condition_family.csv`.
@@ -81,3 +89,17 @@ Percentages are calculated as `(without procedure − with procedure) / without 
 
 The procedure arm also reduced model calls from 7.0 to 2.0 on average for Gemini and from 10.8 to 2.0 for GPT-4o-mini. This remains a small, fixed-task comparison—not evidence of a universal percentage improvement. The compilation calls are reported separately above because lifecycle break-even was not measured in this run.
 
+## Illustrative scale example: 10,000 invoices per month
+
+The following is a planning illustration, not an additional experiment. It applies the measured five-task averages from T6 unchanged to 10,000 repeated invoice workflows. It assumes each invoice follows a repeatable 3-8 tool-call sequence such as: read the customer and invoice context, validate line items and tax rules, create or update the invoice, record the payment/status transition, and send or schedule a confirmation. Actual production totals would depend on model choice, prompt size, batching, caching, retries, concurrency, and the exact HUF graph.
+
+| Model | Arm | Cost / invoice | Monthly cost | Annual cost | Aggregate model time / month* | Monthly tokens |
+|---|---|---:|---:|---:|---:|---:|
+| Gemini | Procedure | $0.000309 | $3.09 | $37.08 | 5.85 h | 3.25M |
+| Gemini | Naive | $0.003640 | $36.40 | $436.80 | 21.24 h | 78.45M |
+| GPT-4o-mini | Procedure | $0.000086 | $0.86 | $10.32 | 5.39 h | 3.53M |
+| GPT-4o-mini | Naive | $0.001763 | $17.63 | $211.56 | 36.51 h | 159.10M |
+
+Under this illustrative scaling, the Procedure arm reduces direct model spend by about **$33.31/month ($399.72/year)** for Gemini or **$16.77/month ($201.24/year)** for GPT-4o-mini, relative to the measured naive-arm averages. Aggregate model execution time falls by about **15.39 hours/month** for Gemini or **31.12 hours/month** for GPT-4o-mini. These are summed model-seconds, not a promise that a production queue would take that long on the calendar: parallel workers could reduce elapsed wall-clock duration, while rate limits or serialized dependencies could increase it.
+
+The projection also illustrates why repeated, structured work is the natural use case: a small per-invoice reduction compounds across 10,000 invoices. It does **not** establish production correctness, capacity, lifecycle break-even, or universal savings; those require workload-specific operational measurements.
