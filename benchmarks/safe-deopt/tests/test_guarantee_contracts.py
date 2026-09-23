@@ -133,34 +133,32 @@ class TestUncommittedTimeout(unittest.TestCase):
 
 class TestF4ValidationRejection(unittest.TestCase):
 	"""Concurrent state change causes the store to reject the write; assert NO committed
-	mutation results.
+	mutation results whenever F4 tells the caller validation failed.
 
-	KNOWN BUG, documented per ACCEPTANCE_PLAN_V2.md ss2's explicit instruction to check for
-	it: ``FaultInjector._inject_f4`` (benchmarks/safe-deopt/faults.py) calls
-	``real_write_fn(*args, **kwargs)`` and only synthesizes a caller-visible
-	``ValidationErrorFault`` if that call raises OR returns normally -- it does NOT check
-	whether the real write actually committed before deciding what to tell the caller. For
-	``PaymentAllocationStore.submit_allocation`` specifically, the store performs NO
-	validation against invoice-level drift at all (it only checks the allocation's own
-	``operation_key``/``status``/permission state) -- so when a "concurrent actor" mutates a
-	SIBLING record (e.g. the invoice's ``outstanding_amount``) rather than the allocation
-	being submitted, ``real_write_fn`` neither raises NOR fails to commit: it commits
-	normally, and the injector STILL fabricates a validation error on top of that real
-	commit. This is exactly the "commit, then fabricate a validation error" shape the task
-	explicitly asks us to check for, and it is present.
+	FIXED (was a confirmed bug, see CONTRACT_TEST_RESULTS.md #3): ``FaultInjector._inject_f4``
+	(benchmarks/safe-deopt/faults.py) used to call ``real_write_fn(*args, **kwargs)`` and
+	synthesize a caller-visible ``ValidationErrorFault`` regardless of whether that call
+	actually committed -- for ``PaymentAllocationStore.submit_allocation`` specifically, the
+	store performs NO validation against invoice-level drift at all (it only checks the
+	allocation's own ``operation_key``/``status``/permission state), so a "concurrent actor"
+	mutating a SIBLING record (e.g. the invoice's ``outstanding_amount``) let the real write
+	commit normally while the injector still fabricated a validation error on top of that
+	real commit -- a "commit, then fabricate a validation error" shape.
 
-	This test asserts the CURRENT (broken) behavior explicitly so the suite stays green,
-	with `robustness_only` as the loud flag that this is a known gap, not a held guarantee.
-	Per instructions, this is NOT fixed here: `faults.py` is a shared harness module also
-	being read/exercised by other in-flight work in this same worktree (recovery_harness.py,
-	procedure_vs_naive.py, llm_real_procedure_integration.py per a concurrent task on this
-	branch), so changing F4's semantics now is out of scope for this task and risks
-	interacting badly with that concurrent work. See CONTRACT_TEST_RESULTS.md for the
-	tracked-gap writeup.
+	``_inject_f4`` now checks the store's own ``commit_log`` (ground truth) after dispatch: it
+	only reports a validation rejection when write B genuinely produced no new committed
+	effect, and reports the truth (``ok=True``) when it did commit despite the drift. It also
+	synthesizes a REAL competing write (not a fabricated error) as the default drift when no
+	``concurrent_mutation`` is supplied, so F4 still produces genuine rejections for stores
+	that validate nothing beyond their own idempotency checks.
 	"""
 
-	@pytest.mark.robustness_only
-	def test_f4_commit_then_fabricate_bug_is_present(self):
+	def test_f4_does_not_fabricate_when_the_real_write_actually_commits(self):
+		"""A concurrent mutation that only touches a SIBLING record (something
+		submit_allocation never validates against) lets the real write commit for real --
+		F4 must then tell the caller the truth (ok=True), not fabricate a rejection on top
+		of that real commit.
+		"""
 		store, alloc = _new_store()
 		injector = FaultInjector()
 
@@ -178,26 +176,25 @@ class TestF4ValidationRejection(unittest.TestCase):
 			concurrent_mutation=concurrent_drift,
 		)
 
-		# Caller is told validation failed.
-		self.assertFalse(observed.ok)
-		self.assertIsInstance(observed.error, ValidationErrorFault)
+		# The write actually committed, so the caller must be told the truth, not a
+		# fabricated validation error.
+		self.assertTrue(observed.ok)
+		self.assertIsNone(observed.error)
 
-		# BUG: despite being told "validation error", the real write silently committed.
 		committed = _committed_entries(store, "submit-op-f4")
 		self.assertEqual(
 			len(committed),
 			1,
-			"expected the documented commit-then-fabricate bug: the real write commits "
-			"even though F4 tells the caller it failed validation",
+			"the real write committed and F4 correctly reported that instead of fabricating "
+			"a validation error on top of it",
 		)
 		self.assertEqual(store.allocations[alloc.name].status, "submitted")
 
 	def test_f4_does_not_fabricate_when_store_naturally_rejects(self):
-		"""Contrast case: when the concurrent mutation DOES collide with something
-		submit_allocation actually checks (its own status), the store's own natural
-		rejection means no committed mutation results -- this shape of F4 is safe. This
-		demonstrates the bug above is about the *synthesized* fallback path specifically,
-		not about F4 universally violating the contract.
+		"""When the concurrent mutation DOES collide with something submit_allocation
+		actually checks (its own status), the store's own natural rejection means no
+		committed mutation results for this operation_key -- F4 reports a genuine
+		rejection, and no committed mutation results.
 		"""
 		store, alloc = _new_store()
 		injector = FaultInjector()
@@ -223,6 +220,34 @@ class TestF4ValidationRejection(unittest.TestCase):
 		# No COMMITTED entry was produced for THIS operation_key specifically (the earlier
 		# concurrent submit committed under its own, different operation_key).
 		self.assertEqual(_committed_entries(store, "submit-op-f4b"), [])
+
+	def test_f4_synthesizes_a_genuine_rejection_when_no_concurrent_mutation_is_given(self):
+		"""With no caller-supplied ``concurrent_mutation`` at all (the shape every real
+		``run_experiment.py`` cell uses today), F4 must still be capable of a genuine
+		rejection: it synthesizes its own real competing write rather than fabricating an
+		error, so the reported rejection always matches ground truth -- exactly one commit
+		lands (the synthesized concurrent actor's), and the caller's own attempt produces
+		none.
+		"""
+		store, alloc = _new_store()
+		injector = FaultInjector()
+
+		observed = injector.inject(
+			"F4",
+			"none",
+			store.submit_allocation,
+			allocation=alloc.name,
+			operation_key="submit-op-f4c",
+		)
+
+		self.assertFalse(observed.ok)
+		self.assertIsInstance(observed.error, ValidationErrorFault)
+		# Exactly one commit landed overall (the synthesized concurrent actor's own
+		# successful submit, dispatched before this attempt) -- the caller's own attempt,
+		# which is what the injector actually reports on, produced no additional commit.
+		committed_actions = [e for e in store.commit_log if e.action == "submit_allocation" and e.committed]
+		self.assertEqual(len(committed_actions), 1)
+		self.assertEqual(store.allocations[alloc.name].status, "submitted")
 
 
 # ---------------------------------------------------------------------------

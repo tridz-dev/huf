@@ -232,19 +232,55 @@ class FaultInjector:
 		return ObservedResult(ok=False, value=None, error=error, fault_id="F3")
 
 	def _inject_f4(self, real_write_fn, args, kwargs, *, action, operation_key, concurrent_mutation, **_ignored) -> ObservedResult:
-		"""Concurrent actor drift: mutate the target out from under the write, then attempt it."""
+		"""Concurrent actor drift: a concurrent actor's competing write lands first, then this
+		attempt dispatches into a store that has already moved on.
+
+		F4 must only ever report a validation rejection to the caller when write B's own
+		dispatch genuinely did not produce a new committed effect. It must never commit for
+		real and then tell the caller validation failed -- that "commit-then-fabricate" shape
+		was a confirmed bug (see CONTRACT_TEST_RESULTS.md #3) that this method now avoids by
+		checking the store's own ``commit_log`` (ground truth) after dispatch, rather than
+		deciding purely from whether the call raised.
+
+		``concurrent_mutation``, if supplied, models the drift explicitly (e.g. mutate a
+		sibling field, or submit the same record under a different key) and is used as-is.
+		If omitted, this method synthesizes a REAL concurrent actor itself: it performs the
+		exact same write once before the actual attempt, so the second (real) attempt collides
+		with the store's own idempotency/already-submitted checks -- not a fabricated error --
+		giving F4 a genuine rejection to report without needing every call site to hand-craft
+		a drift callable for each workload's store.
+		"""
+		store = getattr(real_write_fn, "__self__", None)
+
 		if concurrent_mutation is not None:
 			concurrent_mutation()
+		else:
+			try:
+				real_write_fn(*args, **kwargs)
+			except Exception:
+				pass  # the concurrent actor's own attempt failing is not this fault's concern
+
+		pre_len = len(getattr(store, "commit_log", []) or []) if store is not None else 0
 		try:
-			real_write_fn(*args, **kwargs)
+			value = real_write_fn(*args, **kwargs)
 		except Exception as exc:  # the store's own natural validation error, if it raises one
 			self._fault_history[operation_key] = "F4"
 			error = ValidationErrorFault(operation_key=operation_key, action=action, detail=str(exc))
 			return ObservedResult(ok=False, value=None, error=error, fault_id="F4")
-		# Store didn't validate on its own (e.g. idempotent no-op or silent success) --
-		# surface a synthesized validation error ourselves, since F4's whole point is that
-		# the caller must be told write B failed validation due to drift.
+
+		# Ground truth: did THIS dispatch (not the synthesized concurrent actor's own earlier
+		# one) actually produce a new committed effect? Single-threaded/synchronous here, so
+		# any commit_log entries appended since `pre_len` belong to this call.
+		committed_now = False
+		if store is not None:
+			committed_now = any(entry.committed for entry in getattr(store, "commit_log", [])[pre_len:])
+
 		self._fault_history[operation_key] = "F4"
+		if committed_now:
+			# The write actually landed despite the drift -- tell the truth instead of
+			# fabricating a rejection on top of a real commit.
+			return ObservedResult(ok=True, value=value, error=None, fault_id="F4")
+
 		error = ValidationErrorFault(operation_key=operation_key, action=action, detail="target record changed concurrently before write B dispatched")
 		return ObservedResult(ok=False, value=None, error=error, fault_id="F4")
 
