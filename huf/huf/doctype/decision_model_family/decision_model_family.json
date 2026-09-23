@@ -8,6 +8,7 @@
  "field_order": [
   "family_key",
   "family_name",
+  "adapter_id",
   "model_class",
   "developer",
   "description",
@@ -29,6 +30,13 @@
    "fieldtype": "Data",
    "label": "Family Name",
    "reqd": 1
+  },
+  {
+   "fieldname": "adapter_id",
+   "fieldtype": "Data",
+   "label": "Adapter ID",
+   "reqd": 1,
+   "description": "Stable installed-app hook ID; validated against registry.discover_backends()."
   },
   {
    "fieldname": "model_class",
@@ -74,7 +82,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 13:15:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Model Family",
