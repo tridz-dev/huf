@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 
-from huf.ai.decision.persistence import make_frappe_telemetry_sink
+import pytest
+
+from huf.ai.decision.persistence import make_frappe_telemetry_sink, normalize_origin_type
 from huf.ai.decision.telemetry import DecisionCall
 from huf.ai.decision.types import DecisionIdentity, DecisionOrigin, DecisionUsage
 
@@ -161,3 +163,124 @@ def test_frappe_sink_state_snapshot_stored_only_when_policy_opts_in():
     values2, _ = calls[0]
     assert values2["state_hash"] == "hash456"
     assert values2["state_snapshot"] is None  # not stored
+
+
+# -- normalize_origin_type -------------------------------------------------------------------
+# Decision Call.origin_type (huf/huf/doctype/decision_call/decision_call.json) is a Select with
+# options exactly Playground/API/Agent/Flow/Automation/Hub/Gateway/Knowledge. Callers across the
+# codebase use looser strings ("Agent Run", "Hub Triage", "knowledge_ingestion", ...); an
+# unrecognized Select value fails the Decision Call insert outright, so this mapping is what
+# keeps every caller's telemetry landing in the doctype without each caller knowing the enum.
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("Playground", "Playground"),
+        ("playground", "Playground"),
+        ("API", "API"),
+        ("api", "API"),
+        ("Agent", "Agent"),
+        ("agent", "Agent"),
+        ("Agent Run", "Agent"),
+        ("agent run", "Agent"),
+        ("agent_run", "Agent"),
+        ("Agent Tool", "Agent"),
+        ("Flow", "Flow"),
+        ("flow", "Flow"),
+        ("Flow Run", "Flow"),
+        ("flow_run", "Flow"),
+        ("Flow Decision Router", "Flow"),
+        ("Automation", "Automation"),
+        ("automation", "Automation"),
+        ("Hub", "Hub"),
+        ("hub", "Hub"),
+        ("Hub Triage", "Hub"),
+        ("hub_triage", "Hub"),
+        ("Hub Routing", "Hub"),
+        ("Gateway", "Gateway"),
+        ("gateway", "Gateway"),
+        ("Knowledge", "Knowledge"),
+        ("knowledge", "Knowledge"),
+        ("knowledge_ingestion", "Knowledge"),
+        ("Knowledge Ingestion", "Knowledge"),
+        ("rag", "Knowledge"),
+        ("RAG", "Knowledge"),
+        ("  Agent  ", "Agent"),
+    ],
+)
+def test_normalize_origin_type_maps_known_aliases(value, expected):
+    assert normalize_origin_type(value) == expected
+
+
+@pytest.mark.parametrize("value", [None, "", "not-a-real-origin", "something else entirely", 123, object()])
+def test_normalize_origin_type_returns_none_for_unmapped(value):
+    assert normalize_origin_type(value) is None
+
+
+def test_normalize_origin_type_unmapped_does_not_raise_without_frappe():
+    # No frappe module is importable/configured in this pure test process; logging must be a
+    # no-op, never propagate, and the function must still return None.
+    assert normalize_origin_type("totally-unknown-origin") is None
+
+
+def test_frappe_sink_normalizes_loose_origin_type_before_insert():
+    calls = []
+    frappe = SimpleNamespace(get_doc=lambda values: SimpleNamespace(insert=lambda **kwargs: calls.append((values, kwargs))))
+    call = DecisionCall(
+        status="success", policy_id="test_policy", policy_version="v1", policy_fingerprint="abc123",
+        surface="agent", backend_adapter=None,
+        requested_identity=DecisionIdentity(),
+        resolved_identity=DecisionIdentity(),
+        requested_model=None, requested_model_version=None, resolved_model=None, resolved_model_version=None,
+        candidate_ids=(), candidate_source=None, candidate_resolver_id=None,
+        answers={}, usage=DecisionUsage(),
+        origin_type="Agent Run",
+    )
+    make_frappe_telemetry_sink(frappe_module=frappe)(call)
+    values, _ = calls[0]
+    assert values["origin_type"] == "Agent"
+
+
+def test_frappe_sink_leaves_origin_type_blank_when_unmapped():
+    calls = []
+    frappe = SimpleNamespace(get_doc=lambda values: SimpleNamespace(insert=lambda **kwargs: calls.append((values, kwargs))))
+    call = DecisionCall(
+        status="success", policy_id="test_policy", policy_version="v1", policy_fingerprint="abc123",
+        surface="agent", backend_adapter=None,
+        requested_identity=DecisionIdentity(),
+        resolved_identity=DecisionIdentity(),
+        requested_model=None, requested_model_version=None, resolved_model=None, resolved_model_version=None,
+        candidate_ids=(), candidate_source=None, candidate_resolver_id=None,
+        answers={}, usage=DecisionUsage(),
+        origin_type="totally-unrecognized",
+    )
+    make_frappe_telemetry_sink(frappe_module=frappe)(call)
+    values, _ = calls[0]
+    assert values["origin_type"] is None
+
+
+def test_frappe_sink_logs_and_reraises_on_insert_failure():
+    class _FailingDoc:
+        def insert(self, **kwargs):
+            raise ValueError("origin_type must be one of Playground, API, Agent, ...")
+
+    logged = []
+    frappe = SimpleNamespace(
+        get_doc=lambda values: _FailingDoc(),
+        log_error=lambda title=None, message=None: logged.append((title, message)),
+    )
+    call = DecisionCall(
+        status="success", policy_id="test_policy", policy_version="v1", policy_fingerprint="abc123",
+        surface="agent", backend_adapter=None,
+        requested_identity=DecisionIdentity(),
+        resolved_identity=DecisionIdentity(),
+        requested_model=None, requested_model_version=None, resolved_model=None, resolved_model_version=None,
+        candidate_ids=(), candidate_source=None, candidate_resolver_id=None,
+        answers={}, usage=DecisionUsage(),
+    )
+    with pytest.raises(ValueError):
+        make_frappe_telemetry_sink(frappe_module=frappe)(call)
+    # The failure is surfaced via the same frappe module's log_error before re-raising, since
+    # DecisionRuntime._emit swallows this exception -- without this, the failure is invisible.
+    assert logged
+    assert logged[0][0] == "Decision Call persistence failed"

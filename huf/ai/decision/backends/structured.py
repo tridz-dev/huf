@@ -13,7 +13,16 @@ from huf.ai.decision.types import (
 	DecisionResponse,
 	DecisionStatus,
 	DecisionUsage,
+	DeploymentSpec,
 	QuestionKind,
+)
+
+_DEFAULT_CAPABILITIES = DecisionCapabilities(
+	primitives=frozenset(QuestionKind),
+	parallel_questions=True,
+	probabilities=True,
+	confidence=True,
+	input_modalities=frozenset({"text", "json"}),
 )
 
 
@@ -28,12 +37,14 @@ class StructuredLLMBackend:
 		self,
 		*,
 		transport: StructuredTransport | None = None,
+		identity: DecisionIdentity | None = None,
+		capabilities: DecisionCapabilities | None = None,
 		provider: str = "structured-provider",
 		deployment: str = "structured-llm-default",
 		provider_model_id: str = "structured-llm",
 	):
 		self.transport = transport or self._unconfigured_transport
-		self.identity = DecisionIdentity(
+		self.identity = identity or DecisionIdentity(
 			model_class="Structured LLM",
 			model_family="Structured LLM",
 			canonical_model="Structured LLM",
@@ -42,19 +53,26 @@ class StructuredLLMBackend:
 			deployment=deployment,
 			provider_model_id=provider_model_id,
 		)
+		self._capabilities = capabilities or _DEFAULT_CAPABILITIES
 
 	@classmethod
 	def adapter_id(cls) -> str:
 		return "structured_llm"
 
+	@classmethod
+	def from_deployment(cls, spec: DeploymentSpec, transport: StructuredTransport) -> "StructuredLLMBackend":
+		"""Build a deployment-configured instance (mirrors ``SystemOneBackend.from_deployment``
+		in ``jev.py``). ``spec.identity`` supplies provider/deployment/model identity instead of
+		the "structured-provider" / "structured-llm-default" hardcoded defaults, so persistence
+		(``Decision Call.decision_model`` / ``resolved_provider`` / ``resolved_deployment``)
+		resolves against the real ``Decision Model`` / ``AI Provider`` rows backing this
+		deployment. Unlike Local/Classifier/Similarity, this backend does make a real call, so
+		``transport`` is used, not ignored.
+		"""
+		return cls(transport=transport, identity=spec.identity, capabilities=spec.effective_capabilities)
+
 	def capabilities(self) -> DecisionCapabilities:
-		return DecisionCapabilities(
-			primitives=frozenset(QuestionKind),
-			parallel_questions=True,
-			probabilities=True,
-			confidence=True,
-			input_modalities=frozenset({"text", "json"}),
-		)
+		return self._capabilities
 
 	def evaluate(self, request: DecisionBackendRequest) -> DecisionResponse:
 		payload = {
