@@ -41,6 +41,10 @@ import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { call } from '@/lib/frappe-sdk';
+import { usePermissions } from '@/contexts/PermissionsContext';
+import { getAgentSettings } from '@/services/agentSettingsApi';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
 
 interface ChannelTabProps {
   /** Name of the Integration Settings record this channel's credentials live on. */
@@ -51,6 +55,7 @@ interface ChannelTabProps {
 
 export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const navigate = useNavigate();
+  const { hasCapability } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [gateway, setGateway] = useState<GatewayDoc | null>(null);
@@ -61,6 +66,8 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const [deleting, setDeleting] = useState(false);
   const [serverReadiness, setReadiness] = useState<GatewayReadinessPreview | null>(null);
   const [readinessLoading, setReadinessLoading] = useState(false);
+  const [isDecisionRuntimeEnabled, setIsDecisionRuntimeEnabled] = useState(false);
+  const [decisionPolicies, setDecisionPolicies] = useState<{ name: string; title: string }[]>([]);
   // CL-04: Telegram used to have its own separate tab (TelegramTab.tsx) duplicating
   // most of this tab with different field names (telegram_agent instead of
   // default_agent/default_flow) and its own webhook flow. That tab is now removed;
@@ -76,6 +83,31 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   const [testRecipientId, setTestRecipientId] = useState('');
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const loadDecisionSettings = useCallback(async () => {
+    try {
+      const settings = await getAgentSettings();
+      setIsDecisionRuntimeEnabled(Boolean(settings?.decision_runtime_enabled));
+
+      if (hasCapability('decision.run')) {
+        const response = await call.get('frappe.client.get_list', {
+          doctype: 'Decision Policy',
+          fields: ['name', 'title'],
+          filters: [['disabled', '=', 0]],
+          limit_page_length: 999,
+        });
+        setDecisionPolicies(
+          (response?.message || []).map((p: any) => ({
+            name: p.name,
+            title: p.title,
+          }))
+        );
+      }
+    } catch (error) {
+      // Silently fail to load decision settings - not critical
+      console.error('Failed to load decision settings:', error);
+    }
+  }, [hasCapability]);
 
   const load = useCallback(async () => {
     if (!settingId) return;
@@ -148,6 +180,10 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
   }, [isNew, load]);
 
   useEffect(() => {
+    loadDecisionSettings();
+  }, [loadDecisionSettings]);
+
+  useEffect(() => {
     if (gateway?.name) {
       loadReadiness(gateway.name);
     }
@@ -173,6 +209,9 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
         default_target_type: gateway.default_target_type,
         default_agent: gateway.default_agent || '',
         default_flow: gateway.default_flow || '',
+        pre_filter_policy: gateway.pre_filter_policy || '',
+        pre_filter_mode: gateway.pre_filter_mode || 'Off',
+        pre_filter_no_agent_reply: gateway.pre_filter_no_agent_reply || '',
       });
       setGateway((prev) => (prev ? { ...prev, ...updated } : updated));
       loadReadiness(updated.name);
@@ -494,6 +533,111 @@ export function ChannelTab({ settingId, isNew }: ChannelTabProps) {
           </div>
         </div>
       </div>
+
+      {isDecisionRuntimeEnabled && hasCapability('decision.run') && (
+        <div className="grid gap-3 rounded-lg border p-4">
+          <p className="text-sm font-medium">Decision pre-filter</p>
+          <p className="text-xs text-muted-foreground">
+            Classify each inbound message using a Decision Policy before it reaches the target agent or flow.
+          </p>
+
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Pre-filter policy</label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground/60" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-xs">
+                    <p>Optional Decision Policy that classifies messages. Its select question must use option ids "spam" and "no_agent_needed"; any other answer is treated as "continue normally". Leave blank to skip pre-filtering.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Select
+              value={gateway.pre_filter_policy || '__none'}
+              onValueChange={(v) =>
+                handleFieldChange({
+                  pre_filter_policy: v === '__none' ? '' : v,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none">None</SelectItem>
+                {decisionPolicies.map((policy) => (
+                  <SelectItem key={policy.name} value={policy.name}>
+                    {policy.title || policy.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {gateway.pre_filter_policy && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Pre-filter mode</label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p><strong>Off:</strong> Pre-filter never runs. <strong>Shadow:</strong> Runs in background for review only; never drops or delays messages. <strong>Enforce:</strong> "spam" rejects the event; "no_agent_needed" sends the canned reply below. Any error or timeout falls back to normal routing.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <Select
+                value={gateway.pre_filter_mode || 'Off'}
+                onValueChange={(v) =>
+                  handleFieldChange({
+                    pre_filter_mode: v as 'Off' | 'Shadow' | 'Enforce',
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Off">Off</SelectItem>
+                  <SelectItem value="Shadow">Shadow</SelectItem>
+                  <SelectItem value="Enforce">Enforce</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {gateway.pre_filter_policy && gateway.pre_filter_mode === 'Enforce' && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1">
+                <label className="text-xs font-medium text-muted-foreground">"No agent needed" reply</label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="max-w-xs">
+                      <p>Sent to the sender when the policy classifies the message as "no_agent_needed". Leave blank to route the message through normally instead of replying.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <Input
+                value={gateway.pre_filter_no_agent_reply || ''}
+                onChange={(e) =>
+                  handleFieldChange({ pre_filter_no_agent_reply: e.target.value })
+                }
+                placeholder="e.g. Thanks for reaching out. We'll get back to you soon."
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2 rounded-lg border p-4">
         <p className="text-sm font-medium">Test message</p>
