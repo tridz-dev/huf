@@ -332,6 +332,116 @@ class TestResolveTimeout(unittest.TestCase):
 		self.assertEqual(seen["timeout"], 2.0)
 
 
+class TestDeadlineConstraintRetry(unittest.TestCase):
+	def _transport(self, opener, deadline=None, **deployment_kwargs):
+		provider = _provider()
+		deployment = _deployment(**deployment_kwargs)
+		with patch("frappe.get_doc", return_value=provider):
+			return build_transport(deployment, timeout=10.0, deadline=deadline, opener=opener)
+
+	def test_no_retry_when_deadline_expired(self):
+		"""When deadline has passed, no retry should occur."""
+		calls = []
+
+		def opener(request, timeout):
+			calls.append(1)
+			from urllib.error import HTTPError
+
+			raise HTTPError(request.full_url, 500, "Server Error", None, None)
+
+		import time
+		past_deadline = time.monotonic() - 1.0  # Already expired
+		with patch("time.sleep") as mock_sleep:
+			transport = self._transport(opener, deadline=past_deadline)
+			status, body = transport({"model": "x"})
+
+		self.assertEqual(status, 500)
+		self.assertEqual(len(calls), 1, "Should not retry when deadline is in the past")
+		self.assertEqual(mock_sleep.call_count, 0, "Should not sleep when deadline is expired")
+
+	def test_no_retry_when_remaining_time_less_than_backoff(self):
+		"""When remaining time is less than the backoff duration, no retry should occur."""
+		calls = []
+
+		def opener(request, timeout):
+			calls.append(1)
+			from urllib.error import HTTPError
+
+			raise HTTPError(request.full_url, 500, "Server Error", None, None)
+
+		import time
+		# Set deadline 0.1s in future, first backoff is 0.5s, so not enough time
+		deadline = time.monotonic() + 0.1
+		with patch("time.sleep") as mock_sleep:
+			transport = self._transport(opener, deadline=deadline)
+			status, body = transport({"model": "x"})
+
+		self.assertEqual(status, 500)
+		self.assertEqual(len(calls), 1, "Should not retry when insufficient time for backoff")
+		self.assertEqual(mock_sleep.call_count, 0, "Should not sleep when time is insufficient")
+
+	def test_retries_when_deadline_allows_sufficient_time(self):
+		"""When deadline allows sufficient time, retry should proceed."""
+		calls = []
+
+		def opener(request, timeout):
+			calls.append(1)
+			if len(calls) < 2:
+				from urllib.error import HTTPError
+
+				raise HTTPError(request.full_url, 500, "Server Error", None, None)
+			return _Response(200, {"answers": {}})
+
+		import time
+		# Set deadline 2s in future, first backoff is 0.5s, so enough time
+		deadline = time.monotonic() + 2.0
+		with patch("time.sleep"):
+			transport = self._transport(opener, deadline=deadline)
+			status, body = transport({"model": "x"})
+
+		self.assertEqual(status, 200)
+		self.assertEqual(len(calls), 2, "Should retry when sufficient time before deadline")
+
+	def test_timeout_clipped_to_remaining_time(self):
+		"""Each attempt's timeout should be clipped to the remaining time before deadline."""
+		provider = _provider(timeout_seconds=30)
+		deployment = _deployment()
+		seen = {}
+
+		def opener(request, timeout):
+			seen["timeout"] = timeout
+			return _Response(200, {"answers": {}})
+
+		import time
+		# Set deadline 2s in future
+		deadline = time.monotonic() + 2.0
+		with patch("frappe.get_doc", return_value=provider):
+			transport = build_transport(deployment, timeout=30.0, deadline=deadline, opener=opener)
+		transport({"model": "x"})
+		# Timeout should be clipped to remaining time (less than 2.0, but we allow some margin)
+		self.assertLess(seen["timeout"], 30, "Timeout should be clipped to remaining time")
+		self.assertGreater(seen["timeout"], 0, "Timeout should be positive")
+
+	def test_deadline_none_allows_original_retry_behavior(self):
+		"""When deadline is None, original retry behavior should be preserved."""
+		calls = []
+
+		def opener(request, timeout):
+			calls.append(1)
+			if len(calls) < 2:
+				from urllib.error import HTTPError
+
+				raise HTTPError(request.full_url, 500, "Server Error", None, None)
+			return _Response(200, {"answers": {}})
+
+		with patch("time.sleep"):
+			transport = self._transport(opener, deadline=None)
+			status, body = transport({"model": "x"})
+
+		self.assertEqual(status, 200)
+		self.assertEqual(len(calls), 2, "Should retry normally when deadline is None")
+
+
 class TestDispatchBuildTransport(unittest.TestCase):
 	"""huf.ai.decision.transports.build_transport dispatch on wire_protocol."""
 

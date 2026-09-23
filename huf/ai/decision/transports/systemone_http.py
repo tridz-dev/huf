@@ -37,7 +37,7 @@ _BACKOFF_MAX_SECONDS = 8.0
 _USER_AGENT = "HUF-Decision-Runtime/1.0"
 
 
-def build_transport(deployment_doc, *, timeout: float, opener=None):
+def build_transport(deployment_doc, *, timeout: float, deadline: float | None = None, opener=None):
 	"""Build a systemone-wire HTTP transport for one Decision Deployment.
 
 	Args:
@@ -48,6 +48,10 @@ def build_transport(deployment_doc, *, timeout: float, opener=None):
 		timeout: Caller's remaining budget in seconds (e.g. the enforce deadline). The request
 			timeout actually used is ``min(timeout, latency_budget_ms/1000, provider.timeout_seconds)``
 			over whichever of those are set (PLAN.md §4.4).
+		deadline: Monotonic timestamp (``time.monotonic()`` seconds) representing an absolute
+			deadline. When set, the transport will not start retries that would end after the
+			deadline, and each attempt's socket timeout is clipped to the remaining time.
+			``None`` (default) means no deadline constraint; retries proceed normally.
 		opener: Test seam — replaces ``urllib.request.urlopen``. Signature
 			``opener(request, timeout) -> response`` (context-manager with ``.status``/``.read()``).
 
@@ -77,6 +81,10 @@ def build_transport(deployment_doc, *, timeout: float, opener=None):
 	def transport(payload: Mapping[str, Any]) -> "tuple[int, Mapping[str, Any]]":
 		attempt = 0
 		while True:
+			# Calculate remaining time budget for this attempt
+			remaining_time = _remaining_time(deadline, effective_timeout)
+			attempt_timeout = remaining_time if deadline is not None else effective_timeout
+
 			request = Request(
 				full_url,
 				data=json.dumps(payload).encode("utf-8"),
@@ -88,18 +96,20 @@ def build_transport(deployment_doc, *, timeout: float, opener=None):
 				method="POST",
 			)
 			try:
-				with request_opener(request, timeout=effective_timeout) as response:
+				with request_opener(request, timeout=attempt_timeout) as response:
 					status = int(response.status)
 					raw_body = response.read()
 			except HTTPError as exc:
 				status = int(exc.code)
 				if status >= 500 and attempt < max_retries:
-					attempt += 1
-					time.sleep(_backoff_delay(attempt))
-					continue
-				# 4xx (including 429) and exhausted 5xx retries: return as-is, never retried
-				# further here — 429 backoff/cool-down is the deployment loader's job
-				# (PLAN.md §3.19), not this transport's.
+					backoff = _backoff_delay(attempt + 1)
+					# Only proceed with retry if there's time remaining (including the backoff)
+					if deadline is None or _remaining_time(deadline) > backoff:
+						attempt += 1
+						time.sleep(backoff)
+						continue
+				# 4xx (including 429), exhausted 5xx retries, or no time for backoff: return as-is
+				# 429 backoff/cool-down is the deployment loader's job (PLAN.md §3.19), not this transport's.
 				return status, {}
 			except TimeoutError as exc:
 				raise TimeoutError("systemone transport timed out") from exc
@@ -148,6 +158,23 @@ def _resolve_timeout(provider_doc, deployment_doc, timeout: float) -> float:
 	if not positive:
 		return _FALLBACK_TIMEOUT_SECONDS
 	return min(positive)
+
+
+def _remaining_time(deadline: float | None, fallback: float | None = None) -> float:
+	"""Calculate remaining time from a deadline (``time.monotonic()`` seconds).
+
+	Args:
+		deadline: Monotonic timestamp representing an absolute deadline, or ``None``.
+		fallback: Value to return if ``deadline`` is ``None`` (default: ``None``).
+
+	Returns:
+		Remaining seconds until the deadline, or ``fallback`` if deadline is ``None``.
+		Never returns a negative value; clamps to 0 if the deadline has passed.
+	"""
+	if deadline is None:
+		return fallback if fallback is not None else float('inf')
+	remaining = deadline - time.monotonic()
+	return max(0.0, remaining)
 
 
 def _resolve_max_retries(deployment_doc) -> int:

@@ -20,7 +20,7 @@ WIRE_PROTOCOL_SYSTEMONE = "systemone"
 WIRE_PROTOCOL_OPENAI_CHAT_JSON = "openai_chat_json"
 
 
-def build_transport(deployment_doc, *, timeout: float) -> Transport:
+def build_transport(deployment_doc, *, timeout: float, deadline: float | None = None) -> Transport:
 	"""Build the provider transport for a Decision Deployment, dispatched on ``wire_protocol``.
 
 	Args:
@@ -30,6 +30,10 @@ def build_transport(deployment_doc, *, timeout: float) -> Transport:
 		timeout: Caller's remaining budget in seconds (e.g. from the enforce deadline). The
 			systemone transport narrows this further against the deployment's
 			``latency_budget_ms`` and the provider's ``timeout_seconds``.
+		deadline: Monotonic timestamp (``time.monotonic()`` seconds) representing an absolute
+			deadline. When set, the transport will not start retries that would end after the
+			deadline, and each attempt's socket timeout is clipped to remaining time. ``None``
+			(default) means no deadline constraint.
 
 	Returns:
 		A ``Transport`` callable: ``(payload) -> (status_code, response_body)``. Never logs or
@@ -47,7 +51,7 @@ def build_transport(deployment_doc, *, timeout: float) -> Transport:
 	if wire_protocol == WIRE_PROTOCOL_SYSTEMONE:
 		from huf.ai.decision.transports import systemone_http
 
-		return systemone_http.build_transport(deployment_doc, timeout=timeout)
+		return systemone_http.build_transport(deployment_doc, timeout=timeout, deadline=deadline)
 
 	if wire_protocol == WIRE_PROTOCOL_OPENAI_CHAT_JSON:
 		raise NotImplementedError(

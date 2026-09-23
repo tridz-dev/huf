@@ -416,7 +416,7 @@ def _build_candidate(
 	)
 
 	try:
-		transport = build_transport(frappe._dict(row), timeout=_resolve_timeout(deadline))
+		transport = build_transport(frappe._dict(row), timeout=_resolve_timeout(deadline), deadline=deadline)
 	except (ValueError, NotImplementedError) as exc:
 		frappe.logger("huf").debug(f"Decision deployment {row.get('deployment_key')!r} transport unavailable: {exc!s}")
 		return None
