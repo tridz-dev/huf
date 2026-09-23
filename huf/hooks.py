@@ -463,4 +463,5 @@ huf_decision_backends.update({
     "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
     "local_rules": "huf.ai.decision.backends.local.LocalRulesBackend",
     "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
+    "similarity": "huf.ai.decision.backends.similarity.SimilarityBackend",
 })
