@@ -409,6 +409,8 @@ class Agent(Document):
                 row.tool_count = 0
 
     def _validate_advanced_models(self):
+        from huf.huf.doctype.ai_model.ai_model import is_decision_only_model
+
         def _has_modality(model_docname: str, required: str) -> bool:
             if not model_docname:
                 return True
@@ -416,6 +418,21 @@ class Agent(Document):
             # MultiSelect is stored as CSV
             items = {m.strip() for m in modalities.split(",") if m and m.strip()}
             return required in items
+
+        def _reject_decision_only(model_docname: str, field_label: str):
+            if model_docname and is_decision_only_model(model_docname):
+                frappe.throw(
+                    _(
+                        "AI Model '{0}' only supports the Decision modality and cannot be used as the {1}."
+                    ).format(model_docname, field_label),
+                    title=_("Invalid Model Capability"),
+                )
+
+        # Primary model
+        _reject_decision_only(getattr(self, "model", None), _("Model"))
+
+        # Summary model
+        _reject_decision_only(getattr(self, "summary_model", None), _("Summary Model"))
 
         # Image generation model
         if getattr(self, "image_generation_model", None):

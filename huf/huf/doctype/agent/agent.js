@@ -43,6 +43,19 @@ function check_caching_support(frm) {
 
 
 
+function set_model_query(frm) {
+	// Primary model picker: chat-capable (Text modality) models only, optionally
+	// scoped to the selected provider. Decision-only models are never chat models.
+	const filters = { modality: "Text" };
+	if (frm.doc.provider) {
+		filters.provider = frm.doc.provider;
+	}
+	frm.set_query("model", () => ({
+		query: "huf.huf.doctype.ai_model.ai_model.get_models_by_modality",
+		filters,
+	}));
+}
+
 function toggle_starter_prompt_add(frm) {
 	const grid = frm.fields_dict['starter_prompts']?.grid;
 	if (!grid) return;
@@ -70,16 +83,12 @@ frappe.ui.form.on("Agent", {
 	},
 	provider(frm) {
 		frm.set_value("model", "");
-
-		if (frm.doc.provider) {
-			frm.set_query("model", () => ({
-				filters: { provider: frm.doc.provider }
-			}));
-		} else {
-			frm.set_query("model", () => ({}));
-		}
+		set_model_query(frm);
 	},
 	onload(frm) {
+		// Filter primary model picker to chat-capable (Text) models
+		set_model_query(frm);
+
 		// Filter advanced model pickers by modality/task capability
 		frm.set_query("image_generation_model", () => ({
 			query: "huf.huf.doctype.ai_model.ai_model.get_models_by_modality",
