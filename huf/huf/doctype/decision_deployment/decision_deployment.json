@@ -9,8 +9,13 @@
   "deployment_key",
   "deployment_name",
   "decision_model",
+  "ai_model",
   "provider",
   "provider_model_id",
+  "wire_protocol",
+  "endpoint_path",
+  "adapter_override",
+  "latency_budget_ms",
   "enabled",
   "is_default_for_model",
   "priority",
@@ -37,152 +42,212 @@
    "fieldtype": "Data",
    "label": "Deployment Key",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "description": "A unique identifier for this deployment, used as the document name."
   },
   {
    "fieldname": "deployment_name",
    "fieldtype": "Data",
    "label": "Deployment Name",
-   "reqd": 1
+   "reqd": 1,
+   "description": "A human-readable name for this deployment (e.g., 'Jev 1.13 @ OpenCode Zen')."
   },
   {
    "fieldname": "decision_model",
    "fieldtype": "Link",
    "label": "Canonical Decision Model",
    "options": "Decision Model",
-   "reqd": 1
+   "reqd": 1,
+   "description": "The canonical decision model this deployment realizes."
+  },
+  {
+   "fieldname": "ai_model",
+   "fieldtype": "Link",
+   "label": "AI Model",
+   "options": "AI Model",
+   "reqd": 1,
+   "description": "The AI Model row for this provider and model. Must have modality 'Decision'.",
+   "filters": [["AI Model", "modalities", "like", "Decision"]]
   },
   {
    "fieldname": "provider",
    "fieldtype": "Link",
-   "label": "Decision Provider",
-   "options": "Decision Provider",
-   "reqd": 1
+   "label": "Provider",
+   "options": "AI Provider",
+   "fetch_from": "ai_model.provider",
+   "read_only": 1,
+   "description": "The AI Provider for this deployment, automatically populated from the selected AI Model."
   },
   {
    "fieldname": "provider_model_id",
    "fieldtype": "Data",
    "label": "Provider Model ID",
-   "reqd": 1
+   "fetch_from": "ai_model.model_name",
+   "read_only": 1,
+   "description": "The model identifier at the provider, automatically populated from the selected AI Model."
+  },
+  {
+   "fieldname": "wire_protocol",
+   "fieldtype": "Select",
+   "label": "Wire Protocol",
+   "options": "systemone\nopenai_chat_json",
+   "default": "systemone",
+   "description": "The transport protocol used to communicate with this deployment. 'systemone' for System One protocol, 'openai_chat_json' for OpenAI-compatible chat format."
+  },
+  {
+   "fieldname": "endpoint_path",
+   "fieldtype": "Data",
+   "label": "Endpoint Path",
+   "description": "The API endpoint path relative to the provider's base URL (e.g., '/v1/systemone'). Must start with '/'."
+  },
+  {
+   "fieldname": "adapter_override",
+   "fieldtype": "Data",
+   "label": "Adapter Override",
+   "description": "Override the backend adapter ID from the model family. If empty, uses the family's adapter_id. Must be registered in the decision backend registry."
+  },
+  {
+   "fieldname": "latency_budget_ms",
+   "fieldtype": "Int",
+   "label": "Latency Budget (ms)",
+   "description": "Optional timeout in milliseconds for decision calls using this deployment. Overrides surface-level defaults when specified."
   },
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this deployment is available for use. Disabled deployments are excluded from resolution chains."
   },
   {
    "fieldname": "is_default_for_model",
    "fieldtype": "Check",
    "label": "Default for Model",
-   "default": "0"
+   "default": "0",
+   "description": "Mark this deployment as the default for its decision model. Only one deployment per model should be marked as default."
   },
   {
    "fieldname": "priority",
    "fieldtype": "Int",
    "label": "Priority",
    "default": "100",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Priority order for failover (lower values = higher priority). Used when the default deployment is unavailable."
   },
   {
    "fieldname": "supports_select",
    "fieldtype": "Check",
    "label": "Supports Select",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this deployment supports 'select' question type (choose one from options)."
   },
   {
    "fieldname": "supports_judge",
    "fieldtype": "Check",
    "label": "Supports Judge",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this deployment supports 'judge' question type (yes/no decisions)."
   },
   {
    "fieldname": "supports_score",
    "fieldtype": "Check",
    "label": "Supports Score",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this deployment supports 'score' question type (ranked scoring)."
   },
   {
    "fieldname": "supports_parallel_questions",
    "fieldtype": "Check",
    "label": "Supports Parallel Questions",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this deployment can process multiple questions in parallel."
   },
   {
    "fieldname": "supports_probabilities",
    "fieldtype": "Check",
    "label": "Supports Probabilities",
-   "default": "0"
+   "default": "0",
+   "description": "Whether this deployment returns probability distributions for answers."
   },
   {
    "fieldname": "supports_confidence",
    "fieldtype": "Check",
    "label": "Supports Confidence",
-   "default": "0"
+   "default": "0",
+   "description": "Whether this deployment returns confidence scores."
   },
   {
    "fieldname": "input_modalities",
    "fieldtype": "Data",
    "label": "Input Modalities",
-   "description": "JSON array of modality keys."
+   "description": "JSON array of modality keys supported by this deployment."
   },
   {
    "fieldname": "context_limit_override",
    "fieldtype": "Int",
    "label": "Context Limit Override",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Override the context limit (in tokens) for this deployment. Empty = use model family default."
   },
   {
    "fieldname": "state_limit_override",
    "fieldtype": "Int",
    "label": "State Limit Override",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Override the state limit (in tokens) for this deployment. Empty = use model family default."
   },
   {
    "fieldname": "pricing_override",
    "fieldtype": "Code",
    "label": "Pricing Override",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON object overriding pricing for this deployment (keys: input_per_million, output_per_million). Empty = use model family defaults."
   },
   {
    "fieldname": "input_price_per_million",
    "fieldtype": "Float",
    "label": "Input Price / Million",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Cost per million input tokens for this deployment (USD). Populated from pricing_override or model family."
   },
   {
    "fieldname": "output_price_per_million",
    "fieldtype": "Float",
    "label": "Output Price / Million",
-   "non_negative": 1
+   "non_negative": 1,
+   "description": "Cost per million output tokens for this deployment (USD). Populated from pricing_override or model family."
   },
   {
    "fieldname": "provider_rate_limits_json",
    "fieldtype": "Code",
    "label": "Provider Rate Limits",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON object with provider rate limits (e.g., requests_per_minute, tokens_per_minute). Used for backoff and budget checks."
   },
   {
    "fieldname": "provider_metadata_json",
    "fieldtype": "Code",
    "label": "Provider Metadata",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "Additional provider-specific metadata (e.g., max_retries, custom headers). For future extensibility."
   },
   {
    "fieldname": "health_status",
    "fieldtype": "Data",
-   "label": "Health Status"
+   "label": "Health Status",
+   "description": "Last known health status of this deployment (healthy, unhealthy, degraded). Updated by health checks."
   },
   {
    "fieldname": "last_healthcheck",
    "fieldtype": "Data",
-   "label": "Last Healthcheck"
+   "label": "Last Healthcheck",
+   "description": "Timestamp of the last health check performed on this deployment."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 14:30:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Deployment",
