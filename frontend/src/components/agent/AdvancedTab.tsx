@@ -15,6 +15,9 @@ import { Plus } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { AgentPromptOption } from './PromptTemplateSection';
 import { FormSettingsSection } from './FormSettingsSection';
+import { useState, useEffect } from 'react';
+import { getBindingStats, type BindingStats } from '@/services/decisionApi';
+import type { AgentDecisionBindingRow } from '@/components/decision/DecisionBindingControl';
 import {
 	MODEL_MODALITY_IMAGE,
 	IMAGE_MODEL_LABEL,
@@ -47,6 +50,8 @@ interface AdvancedTabProps {
 	loadingSummaryPrompts?: boolean;
 	memoryPolicyOptions?: MemoryPolicyOption[];
 	loadingMemoryPolicies?: boolean;
+	agentName?: string;
+	decisionBindings?: AgentDecisionBindingRow[];
 }
 
 function modelSupports(model: AIModel, required: string): boolean {
@@ -70,6 +75,107 @@ export function parseOptionalNumber(
 	return Number.isNaN(numValue) ? undefined : numValue;
 }
 
+function getTabAnchorForBinding(surface: string): string {
+	const surfaceMap: Record<string, string> = {
+		tools: '#tools',
+		skills: '#skills',
+		procedures: '#procedures',
+		knowledge: '#knowledge',
+		general: '#general',
+	};
+	return surfaceMap[surface.toLowerCase()] || '#advanced';
+}
+
+function formatStats(stats: BindingStats['stats']): string {
+	const parts = [];
+	if (stats.calls !== undefined) {
+		parts.push(`${stats.calls} calls`);
+	}
+	if (stats.fallback_rate !== undefined && stats.fallback_rate > 0) {
+		parts.push(`${(stats.fallback_rate * 100).toFixed(1)}% fallback`);
+	}
+	if (stats.shadow_agreement !== undefined && stats.shadow_agreement !== null) {
+		parts.push(`${(stats.shadow_agreement * 100).toFixed(1)}% agreement`);
+	}
+	if (stats.advise_followed_rate !== undefined && stats.advise_followed_rate !== null) {
+		parts.push(`${(stats.advise_followed_rate * 100).toFixed(1)}% followed`);
+	}
+	return parts.length > 0 ? parts.join(' • ') : 'No data';
+}
+
+function DecisionsSection({ agentName, bindings }: { agentName?: string; bindings?: AgentDecisionBindingRow[] }) {
+	const [stats, setStats] = useState<Record<string, BindingStats['stats']>>({});
+
+	useEffect(() => {
+		if (!agentName || !bindings || bindings.length === 0) {
+			setStats({});
+			return;
+		}
+
+		const fetchStats = async () => {
+			try {
+				const result = await getBindingStats(agentName);
+				const statsMap: Record<string, BindingStats['stats']> = {};
+				result.bindings.forEach((binding) => {
+					statsMap[binding.policy] = binding.stats;
+				});
+				setStats(statsMap);
+			} catch {
+				// Silently handle error and show no data
+				setStats({});
+			}
+		};
+
+		fetchStats();
+	}, [agentName, bindings]);
+
+	if (!bindings || bindings.length === 0) {
+		return (
+			<div className="rounded-lg border border-dashed bg-paper-deep/20 p-6 text-center">
+				<p className="text-sm text-steel">No decision bindings configured for this agent.</p>
+				<p className="text-xs text-steel-soft mt-1">
+					Add decision bindings on the Tools, Skills, Procedures, or Knowledge tabs to enable Decision Runtime for this agent.
+				</p>
+			</div>
+		);
+	}
+
+	return (
+		<div className="space-y-3">
+			{bindings.map((binding) => {
+				const tabAnchor = getTabAnchorForBinding(binding.surface);
+				const bindingStats = stats[binding.policy];
+				const statsText = bindingStats ? formatStats(bindingStats) : 'Loading...';
+
+				return (
+					<div
+						key={binding.name}
+						className="rounded-lg border bg-paper-deep/40 p-4 space-y-2"
+					>
+						<div className="flex items-center justify-between gap-2">
+							<div className="flex items-center gap-2 flex-wrap">
+								<Badge variant="outline">{binding.surface}</Badge>
+								<code className="text-sm font-mono text-steel">{binding.policy}</code>
+								<Badge variant={binding.mode === 'Off' ? 'secondary' : 'default'}>
+									{binding.mode || 'Off'}
+								</Badge>
+							</div>
+							<a
+								href={tabAnchor}
+								className="text-xs text-primary hover:underline"
+								title={`View on ${binding.surface} tab`}
+							>
+								Configure
+							</a>
+						</div>
+						<p className="text-xs text-steel">{statsText}</p>
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
 export function AdvancedTab({
 	form,
 	allModels,
@@ -77,6 +183,8 @@ export function AdvancedTab({
 	loadingSummaryPrompts = false,
 	memoryPolicyOptions = [],
 	loadingMemoryPolicies = false,
+	agentName,
+	decisionBindings,
 }: AdvancedTabProps) {
 	const imageModels = allModels.filter((m) => modelSupports(m, MODEL_MODALITY_IMAGE));
 	const isVoiceOnly = form.watch('agent_modality') === 'Voice';
@@ -720,6 +828,13 @@ export function AdvancedTab({
 				)}
 			</FormSettingsSection>
 			</>)}
+
+			<FormSettingsSection
+				title="Decisions"
+				description="Overview of Decision Runtime bindings and their performance metrics. Configure bindings on the Tools, Skills, Procedures, and Knowledge tabs."
+			>
+				<DecisionsSection agentName={agentName} bindings={decisionBindings} />
+			</FormSettingsSection>
 
 			<FormSettingsSection
 				title="Huf UI"
