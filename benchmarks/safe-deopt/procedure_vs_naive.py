@@ -842,6 +842,12 @@ def run_naive_instance(model_id: str, customers: list[str], ceiling: RunningCost
 		tools=tools,
 		context=task_text(customers),
 		store=store,
+		# TEST_AGENT_SETTINGS.md Sec.4(a): naive arm gets 40 tool calls (not the harness
+		# default of 20) so a careful-but-slower model on the 2-customer instance isn't
+		# turned into a budget failure. Each while-loop iteration in run_recovery is one
+		# model call, so this also bounds model calls well under the 25-model-call budget
+		# for a task this size (at most ~a dozen invoices/tool ops across both customers).
+		max_tool_calls=40,
 	)
 	wall = time.monotonic() - start
 
@@ -861,6 +867,24 @@ def run_naive_instance(model_id: str, customers: list[str], ceiling: RunningCost
 		ceiling.add(c.cost_usd())
 
 	correctness = score_correctness(store_before, store, customers)
+
+	# Sec.5 hard requirement / G2 evidence: record, per model turn, how many tool calls the
+	# provider actually returned vs how many the harness dispatched, so a batched turn (>1
+	# call in one response) is visible in the dataset rather than only in code inspection.
+	per_turn_dispatch: list[dict] = []
+	last_returned = None
+	for e in log.entries:
+		if e.kind == "model_step":
+			last_returned = (e.content or {}).get("tool_calls_returned")
+		elif e.kind == "tool_calls_dispatched":
+			per_turn_dispatch.append(
+				{
+					"tool_calls_returned": last_returned,
+					"tool_calls_dispatched": (e.content or {}).get("count"),
+				}
+			)
+	max_calls_in_one_turn = max((d["tool_calls_returned"] or 0) for d in per_turn_dispatch) if per_turn_dispatch else 0
+
 	return InstanceResult(
 		arm="naive",
 		model_id=model_id,
@@ -875,7 +899,12 @@ def run_naive_instance(model_id: str, customers: list[str], ceiling: RunningCost
 		# only RecoveryModel implementation in this codebase that ever calls a real
 		# provider; MockedModel always reports zero tokens (see its own docstring).
 		real_accounting=isinstance(model, LiveAPIModel),
-		extra={"outcome": log.outcome, "tool_call_count": log.tool_call_count},
+		extra={
+			"outcome": log.outcome,
+			"tool_call_count": log.tool_call_count,
+			"per_turn_dispatch": per_turn_dispatch,
+			"max_tool_calls_in_one_turn": max_calls_in_one_turn,
+		},
 	)
 
 

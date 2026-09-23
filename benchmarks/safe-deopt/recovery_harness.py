@@ -208,7 +208,30 @@ ROLE_SAMPLING: dict[str, dict[str, SamplingConfig]] = {
 			top_p=1.0,
 			seed=20260923,
 			max_output_tokens=2048,
-			response_format={"type": "json_schema"},
+			# Minimal fix (found during T6 execution): OpenAI's Chat Completions API
+			# requires a full `json_schema` object (name + schema) when `type` is
+			# `json_schema` -- `{"type": "json_schema"}` alone 400s with "Missing required
+			# parameter: 'response_format.json_schema'". This does not change what the
+			# procedure_interpretation_s5 role is asked to bind (still
+			# selected_customers/company/allocated_to, same fields _validate_binding checks),
+			# it only supplies the schema object the wire format actually requires.
+			response_format={
+				"type": "json_schema",
+				"json_schema": {
+					"name": "procedure_binding",
+					"strict": True,
+					"schema": {
+						"type": "object",
+						"properties": {
+							"selected_customers": {"type": "array", "items": {"type": "string"}},
+							"company": {"type": "string"},
+							"allocated_to": {"type": "string"},
+						},
+						"required": ["selected_customers", "company", "allocated_to"],
+						"additionalProperties": False,
+					},
+				},
+			},
 		),
 	},
 	"recovery_decision_s3": {
