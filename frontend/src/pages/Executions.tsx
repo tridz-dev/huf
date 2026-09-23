@@ -31,6 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
+import { DecisionCallsList } from '@/components/executions/DecisionCallsList';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AnalyticsPage from '@/pages/AnalyticsPage';
 
@@ -38,7 +39,7 @@ const DEFAULT_RANGE = '24h';
 
 /** Sub-tabs hosted on this page — kept in the URL so a link like
  * `/executions?tab=analytics` opens directly on the Analytics tab. */
-const EXECUTIONS_TABS = ['runs', 'analytics'] as const;
+const EXECUTIONS_TABS = ['runs', 'analytics', 'decisions'] as const;
 type ExecutionsTab = (typeof EXECUTIONS_TABS)[number];
 const DEFAULT_TAB: ExecutionsTab = 'runs';
 
@@ -544,12 +545,20 @@ function ExecutionsRunsTab() {
   );
 }
 
+/** The "Decisions" tab — shows Decision Call list with pagination. */
+function ExecutionsDecisionsTab() {
+  return (
+    <PageFrame title={null} actions={null}>
+      <DecisionCallsList />
+    </PageFrame>
+  );
+}
+
 /**
  * Merges the former `/executions` and `/analytics` routes into one page with
- * two sub-tabs, following the same URL-synced Tabs pattern used by
+ * three sub-tabs (Runs, Analytics, Decisions), following the same URL-synced Tabs pattern used by
  * SkillFormPage's prompts/summary tabs. Tab state lives in `?tab=` so a link
- * like `/executions?tab=analytics` opens directly on the Analytics tab —
- * this is what lets a future task deep-link breakdown rows there.
+ * like `/executions?tab=decisions` opens directly on the Decisions tab.
  */
 export default function Executions() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -580,12 +589,16 @@ export default function Executions() {
       <TabsList className="mx-6 mt-4 w-fit shrink-0">
         <TabsTrigger value="runs">Runs</TabsTrigger>
         <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsTrigger value="decisions">Decisions</TabsTrigger>
       </TabsList>
       <TabsContent value="runs" className="flex-1 min-h-0">
         <ExecutionsRunsTab />
       </TabsContent>
       <TabsContent value="analytics" className="flex-1 min-h-0">
         <AnalyticsPage />
+      </TabsContent>
+      <TabsContent value="decisions" className="flex-1 min-h-0">
+        <ExecutionsDecisionsTab />
       </TabsContent>
     </Tabs>
   );
