@@ -17,6 +17,11 @@ import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../ui/tooltip';
+import {
   Search,
   Webhook,
   Clock,
@@ -479,13 +484,15 @@ export function NodeSelectionModal({
             const Icon = iconMap[action.icon || 'FileText'];
             // Super safe check to prevent React Error 130 (object without $$typeof)
             const isValidComponent = Icon && (typeof Icon === 'function' || (typeof Icon === 'object' && '$$typeof' in Icon));
+            const isDisabled = action.disabled ?? false;
 
-            return (
+            const button = (
               <Button
                 key={action.id}
                 type="button"
                 variant="ghost"
-                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep"
+                disabled={isDisabled}
+                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep disabled:opacity-60 disabled:cursor-not-allowed"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -501,6 +508,24 @@ export function NodeSelectionModal({
                 </div>
               </Button>
             );
+
+            // Wrap with Tooltip if disabled with a reason
+            if (isDisabled && action.disabledReason) {
+              return (
+                <div key={action.id}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {button}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      {action.disabledReason}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              );
+            }
+
+            return button;
           })}
         </div>
       </div>

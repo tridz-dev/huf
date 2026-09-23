@@ -30,7 +30,7 @@ export const actionOptions: ActionOption[] = [
   {
     id: 'decision-router',
     name: 'Decision Router',
-    description: 'Route based on a Decision Policy',
+    description: 'Route using a Decision Policy (fast, deterministic decisions vs LLM analysis)',
     icon: 'GitBranch',
     category: 'control'
   },
