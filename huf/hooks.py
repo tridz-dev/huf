@@ -458,8 +458,11 @@ huf_knowledge_backends = {
 huf_voice_engines = {}
 
 # PR3 Jev semantic adapter; provider transport is injected by deployment resolution.
+# "jev_system_one" is the canonical adapter_id seeded on the Jev family (T1.12); "system_one"
+# is a provider-neutral alias to the same class for future non-Jev deployments.
 huf_decision_backends.update({
-    "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
+    "jev_system_one": "huf.ai.decision.backends.jev.SystemOneBackend",
+    "system_one": "huf.ai.decision.backends.jev.SystemOneBackend",
     "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
     "local_rules": "huf.ai.decision.backends.local.LocalRulesBackend",
     "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
