@@ -57,7 +57,7 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
       return;
     }
     let cancelled = false;
-    getModels(config.provider)
+    getModels({ provider: config.provider, modality: 'Text' })
       .then((fetched) => {
         if (!cancelled) {
           setModels(Array.isArray(fetched) ? fetched : (fetched as PaginatedModelsResponse).items);
