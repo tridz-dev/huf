@@ -108,6 +108,12 @@ const GatewaysPage = lazy(() => import('./pages/GatewaysPage'));
 const AgentSettingsPage = lazy(() => import('./pages/AgentSettingsPage'));
 const GeneralSettingsPage = lazy(() => import('./pages/GeneralSettingsPage'));
 const DeveloperSettingsPage = lazy(() => import('./pages/DeveloperSettingsPage'));
+const DecisionModelsPage = lazy(() =>
+  import('./pages/DecisionModelsPage').then((m) => ({ default: m.DecisionModelsPage }))
+);
+const DecisionPoliciesPage = lazy(() => import('./pages/decision/DecisionPoliciesPage'));
+const DecisionPolicyEditor = lazy(() => import('./pages/decision/DecisionPolicyEditor'));
+const DecisionCallDetail = lazy(() => import('./pages/decision/DecisionCallDetail'));
 
 import { useEffect } from 'react';
 import { RouteErrorBoundary, clearChunkReloadFlag } from './components/RouteErrorBoundary';
@@ -635,6 +641,66 @@ function AppShell() {
             }
           />
           <Route path="/procedures/*" element={<Navigate to="/procedures" replace />} />
+          <Route
+            path="/decision-models"
+            element={
+              <ProtectedRoute requiredCapability="decision.admin">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DecisionModelsPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/decisions"
+            element={
+              <ProtectedRoute requiredCapability="decision.author">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DecisionPoliciesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/decisions/new"
+            element={
+              <ProtectedRoute requiredCapability="decision.author">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DecisionPolicyEditor />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/decisions/:name"
+            element={
+              <ProtectedRoute requiredCapability="decision.author">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DecisionPolicyEditor />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/executions/decisions/:name"
+            element={
+              <ProtectedRoute requiredCapability="decision.run">
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <DecisionCallDetail />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/batch-jobs"
             element={
