@@ -27,13 +27,10 @@ implementation constraints):
    the existing, real, already-tested naive-agent-loop driver. It is NOT forced into
    one-model-call-per-tool; ``run_recovery`` already lets ``LiveAPIModel`` decide when to
    call a tool vs. emit final text, once per loop iteration, exactly as it does for every
-   other condition already tested in this benchmark. (Caveat, stated plainly rather than
-   hidden: ``LiveAPIModel.next_step`` -- pre-existing code, unchanged by this module --
-   surfaces at most one tool call per provider response. Some providers CAN return several
-   tool calls in one turn; this harness was not built to parse that, for any of its five
-   existing conditions, and extending it was out of scope for this bounded experiment. This
-   module does not add a call-count restriction beyond what already existed; it also does
-   not claim to have exercised true multi-call batching.)
+   other condition already tested in this benchmark. ``LiveAPIModel.next_step`` now parses
+   and dispatches EVERY tool call a provider response returns, in order (ACCEPTANCE_PLAN_V2.md
+   Sec.5 hard requirement) -- a multi-tool-call response is no longer silently truncated to
+   its first call, so this arm's call counts reflect what the model actually asked for.
 5. The Procedure arm reports TWO separate numbers, never blended: (a) one-time COMPILATION
    cost -- one real model call that is shown the task description and the six tool schemas
    and asked to produce the ordered call plan a human would review before pinning a
@@ -69,9 +66,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from recovery_harness import (  # noqa: E402
 	MODEL_PRICING_USD_PER_MILLION_TOKENS,
+	ROLE_SAMPLING,
 	AtomicTool,
 	LiveAPIModel,
 	RunLog,
+	SamplingConfig,
 	ToolCallRequest,
 	compute_model_step_cost_usd,
 	run_recovery,
@@ -617,11 +616,35 @@ class RunningCostCeiling:
 			raise RuntimeError(f"cost ceiling exceeded: spent ${self.spent_usd:.4f} > limit ${self.limit_usd:.2f}")
 
 
-def _one_shot_model_call(model_id: str, system: str, user_text: str, label: str, ceiling: RunningCostCeiling) -> tuple[str, ModelCallRecord]:
-	"""One real model call with no tools -- used for the Procedure arm's compile /
-	interpret / final-response steps. Returns (response_text, record).
+def _family_for_model_id(model_id: str) -> str:
+	if model_id.startswith("gemini"):
+		return "gemini"
+	if model_id.startswith("gpt") or model_id.startswith("o1") or model_id.startswith("o3"):
+		return "openai"
+	raise ValueError(f"unknown model family for model_id={model_id!r}")
+
+
+def _sampling_for(role: str, model_id: str) -> SamplingConfig | None:
+	"""Look up TEST_AGENT_SETTINGS.md's ``sampling:`` block for ``role``/``model_id``'s
+	family. Returns ``None`` (send nothing, provider default) for a role that sheet
+	deliberately leaves unset (e.g. one-off compilation calls it doesn't name a role for).
 	"""
-	model = LiveAPIModel(model_id=model_id, tools={})
+	per_family = ROLE_SAMPLING.get(role)
+	if per_family is None:
+		return None
+	return per_family.get(_family_for_model_id(model_id))
+
+
+def _one_shot_model_call(
+	model_id: str, system: str, user_text: str, label: str, ceiling: RunningCostCeiling, *, role: str | None = None
+) -> tuple[str, ModelCallRecord]:
+	"""One real model call with no tools -- used for the Procedure arm's compile /
+	interpret / final-response steps. Returns (response_text, record). ``role`` selects the
+	named :class:`SamplingConfig` (``ROLE_SAMPLING``) sent explicitly on the request; omitted
+	(``None``) sends nothing, matching provider defaults.
+	"""
+	sampling = _sampling_for(role, model_id) if role else None
+	model = LiveAPIModel(model_id=model_id, tools={}, sampling=sampling)
 	transcript = [{"role": "system", "content": system}, {"role": "user", "content": user_text}]
 	start = time.monotonic()
 	step = model.next_step(transcript=transcript, available_tools=[])
@@ -661,27 +684,96 @@ def compile_procedure(model_id: str, ceiling: RunningCostCeiling) -> tuple[dict,
 	return {"raw_text": text}, record
 
 
-def interpret_request(model_id: str, customers: list[str], ceiling: RunningCostCeiling) -> tuple[dict, ModelCallRecord]:
-	system = (
-		"You bind a user's natural-language request to the fixed input schema of an "
-		"already-approved, pinned Procedure. Output ONLY a JSON object with keys "
-		"selected_customers (array of strings), company (string), allocated_to (string). "
-		"No prose."
-	)
+_INTERPRET_SYSTEM = (
+	"You bind a user's natural-language request to the fixed input schema of an "
+	"already-approved, pinned Procedure. Output ONLY a JSON object with keys "
+	"selected_customers (array of strings), company (string), allocated_to (string). "
+	"No prose."
+)
+
+
+def _validate_binding(parsed: dict, *, customers: list[str]) -> list[str]:
+	"""Validate EVERY task-relevant input the interpretation step is supposed to bind, not
+	just ``selected_customers`` (ACCEPTANCE_PLAN_V2.md Sec.5: "validate every task-relevant
+	input, not just IDs"). Returns a list of problem strings; empty means the binding is
+	usable as-is.
+	"""
+	problems: list[str] = []
+	selected = parsed.get("selected_customers")
+	if not isinstance(selected, list) or not all(isinstance(c, str) for c in selected):
+		problems.append("selected_customers missing or not a list of strings")
+	elif sorted(selected) != sorted(customers):
+		problems.append(f"selected_customers {selected!r} != expected {customers!r}")
+	company = parsed.get("company")
+	if not isinstance(company, str) or not company.strip():
+		problems.append("company missing or not a non-empty string")
+	elif company != COMPANY:
+		problems.append(f"company {company!r} != expected {COMPANY!r}")
+	allocated_to = parsed.get("allocated_to")
+	if not isinstance(allocated_to, str) or not allocated_to.strip():
+		problems.append("allocated_to missing or not a non-empty string")
+	elif allocated_to != ALLOCATED_TO:
+		problems.append(f"allocated_to {allocated_to!r} != expected {ALLOCATED_TO!r}")
+	return problems
+
+
+def interpret_request(
+	model_id: str, customers: list[str], ceiling: RunningCostCeiling
+) -> tuple[dict, list[ModelCallRecord], list[str]]:
+	"""Bind the NL request to the Procedure's input schema. NEVER substitutes ground-truth
+	values on a parse/validation failure (ACCEPTANCE_PLAN_V2.md Sec.5 hard requirement,
+	closing gap G6): a malformed or invalid binding gets exactly ONE logged, cost-included
+	repair call (feeding the model the validation problems as feedback -- TEST_AGENT_SETTINGS.md
+	Sec.4 "one logged, cost-included re-ask on a malformed binding"); if the repair also fails
+	validation, the caller must treat this instance as a failure, never fall back silently.
+
+	Returns ``(parsed_or_empty, [model_call_records], problems)``: ``problems`` is empty iff
+	the (possibly repaired) binding is usable; every model call made -- including the repair
+	attempt -- is in the returned list so its cost is always counted.
+	"""
 	user = task_text(customers)
-	text, record = _one_shot_model_call(model_id, system, user, "interpret", ceiling)
-	parsed: dict = {}
+	text, record = _one_shot_model_call(model_id, _INTERPRET_SYSTEM, user, "interpret", ceiling, role="procedure_interpretation_s5")
+	records = [record]
 	try:
 		parsed = json.loads(text)
+		if not isinstance(parsed, dict):
+			parsed = {}
 	except (json.JSONDecodeError, TypeError):
-		pass
-	return parsed, record
+		parsed = {}
+
+	problems = _validate_binding(parsed, customers=customers)
+	if problems:
+		# One logged, cost-included repair attempt -- never a ground-truth substitution.
+		repair_user = (
+			f"{user}\n\nYour previous JSON binding was invalid: {problems}. "
+			"Re-emit ONLY a corrected JSON object with the same three keys."
+		)
+		repair_text, repair_record = _one_shot_model_call(
+			model_id, _INTERPRET_SYSTEM, repair_user, "interpret_repair", ceiling, role="procedure_interpretation_s5"
+		)
+		records.append(repair_record)
+		try:
+			repaired = json.loads(repair_text)
+			if not isinstance(repaired, dict):
+				repaired = {}
+		except (json.JSONDecodeError, TypeError):
+			repaired = {}
+		repair_problems = _validate_binding(repaired, customers=customers)
+		if not repair_problems:
+			return repaired, records, []
+		# Repair also failed validation -- this instance is a failure, per Sec.5. The
+		# original problems are returned (not the repair's -- the caller logs both via
+		# ``extra``), and the parsed dict returned is whatever the repair attempt produced,
+		# for forensic visibility only; the caller must NOT execute the Procedure against it.
+		return repaired, records, problems + [f"repair also failed: {repair_problems}"]
+
+	return parsed, records, []
 
 
 def final_response(model_id: str, procedure_output: dict, ceiling: RunningCostCeiling) -> tuple[str, ModelCallRecord]:
 	system = "You summarize a completed backend operation's structured result for the user, in 2-3 sentences. No JSON in your reply."
 	user = f"Result: {json.dumps(procedure_output)}"
-	text, record = _one_shot_model_call(model_id, system, user, "final_response", ceiling)
+	text, record = _one_shot_model_call(model_id, system, user, "final_response", ceiling, role="final_report_s5")
 	return text, record
 
 
@@ -741,7 +833,7 @@ def run_naive_instance(model_id: str, customers: list[str], ceiling: RunningCost
 	store = FollowupStore()
 	store_before = copy.deepcopy(store)
 	tools = make_atomic_tools(store, customers)
-	model = LiveAPIModel(model_id=model_id, tools=tools)
+	model = LiveAPIModel(model_id=model_id, tools=tools, sampling=_sampling_for("naive_agent_loop_s5", model_id))
 
 	start = time.monotonic()
 	log: RunLog = run_recovery(
@@ -792,32 +884,56 @@ def run_procedure_instance(model_id: str, customers: list[str], ceiling: Running
 	store_before = copy.deepcopy(store)
 
 	start = time.monotonic()
-	_bound, interp_record = interpret_request(model_id, customers, ceiling)
-	# Fall back to the ground-truth customers if the model's JSON binding didn't parse --
-	# recorded as a correctness problem below, not silently substituted without a trace.
-	bound_customers = _bound.get("selected_customers") if isinstance(_bound.get("selected_customers"), list) else None
+	bound, interp_records, problems = interpret_request(model_id, customers, ceiling)
 
-	exec_result = run_real_procedure(bound_customers or customers, store)
+	if problems:
+		# Sec.5 hard requirement (G6): a parse/validation failure that survives the one
+		# logged repair call is a TASK FAILURE -- never a silent substitution of the
+		# ground-truth customer set. The Procedure is never executed against an unvalidated
+		# binding; only the interpretation (+ repair) calls' real cost is counted.
+		wall = time.monotonic() - start
+		correctness = {"correct": False, "problems": [f"interpretation binding failed validation: {problems}"]}
+		return InstanceResult(
+			arm="procedure",
+			model_id=model_id,
+			customers=customers,
+			model_calls=list(interp_records),
+			wall_time_s=wall,
+			correctness=correctness,
+			real_accounting=True,
+			extra={
+				"procedure_status": "NOT_EXECUTED_INVALID_BINDING",
+				"procedure_error": None,
+				"graph_provenance": "hand-authored",
+			},
+		)
+
+	bound_customers = bound["selected_customers"]
+	exec_result = run_real_procedure(bound_customers, store)
 	_summary_text, final_record = final_response(model_id, exec_result.get("output") or {}, ceiling)
 	wall = time.monotonic() - start
 
 	correctness = score_correctness(store_before, store, customers)
-	if bound_customers is not None and sorted(bound_customers) != sorted(customers):
-		correctness = dict(correctness)
-		correctness["correct"] = False
-		correctness["problems"] = list(correctness["problems"]) + [
-			f"interpretation step bound wrong customer set: {bound_customers} != {customers}"
-		]
 
 	return InstanceResult(
 		arm="procedure",
 		model_id=model_id,
 		customers=customers,
-		model_calls=[interp_record, final_record],
+		model_calls=[*interp_records, final_record],
 		wall_time_s=wall,
 		correctness=correctness,
 		real_accounting=True,
-		extra={"procedure_status": exec_result["status"], "procedure_error": exec_result["error"]},
+		extra={
+			"procedure_status": exec_result["status"],
+			"procedure_error": exec_result["error"],
+			# §5: "honestly label the graph as hand-authored or compiler-produced" -- the
+			# pinned graph this instance actually executed comes from
+			# build_followup_procedure_graph(), which is hand-authored, never the discarded
+			# compile_procedure() model output (that call, when it runs at all, is logged
+			# separately as one-time "compilation"/plan-generation cost -- see run_experiment).
+			"graph_provenance": "hand-authored",
+			"repair_call_used": len(interp_records) > 1,
+		},
 	)
 
 
@@ -857,9 +973,16 @@ def run_experiment(*, families: list[str], budget_usd: float = 5.0, out_path: Pa
 		_compile_plan, compile_record = compile_procedure(model_id, ceiling)
 		compilation_records[model_id] = compile_record
 
-		for customers in TASK_INSTANCES:
-			all_results.append(run_procedure_instance(model_id, customers, ceiling))
-			all_results.append(run_naive_instance(model_id, customers, ceiling))
+		for idx, customers in enumerate(TASK_INSTANCES, start=1):
+			# §5 ordering requirement: alternate which arm goes first per instance (odd
+			# instances Procedure first, even instances naive first) to reduce timing bias --
+			# this driver previously always ran Procedure first for every instance.
+			if idx % 2 == 1:
+				all_results.append(run_procedure_instance(model_id, customers, ceiling))
+				all_results.append(run_naive_instance(model_id, customers, ceiling))
+			else:
+				all_results.append(run_naive_instance(model_id, customers, ceiling))
+				all_results.append(run_procedure_instance(model_id, customers, ceiling))
 
 	out_path = out_path or (RESULTS_DIR / "procedure_vs_naive_runs.jsonl")
 	out_path.parent.mkdir(parents=True, exist_ok=True)

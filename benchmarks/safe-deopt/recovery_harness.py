@@ -145,6 +145,79 @@ CONDITIONS = ("C1", "C4", "C4+G", "C5", "C6")
 ConditionId = Literal["C1", "C4", "C4+G", "C5", "C6"]
 
 
+@dataclass
+class SamplingConfig:
+	"""Explicit, named, per-role sampling settings -- mirrors the ``sampling:`` YAML block in
+	``TEST_AGENT_SETTINGS.md`` exactly, so a run's request params trace back to one named
+	object instead of scattered magic numbers spread across call sites.
+
+	``None`` on any field means "send nothing, use the provider default", which is recorded
+	as ``provider-default (unset)`` rather than silently guessed at -- this is the required
+	behavior for ``s4_reruns`` (original-condition reruns must not diverge from what the
+	original runs actually sent). A non-``None`` value is sent to the provider explicitly AND
+	recorded in the run log, never assumed.
+	"""
+
+	temperature: float | None = None
+	top_p: float | None = None
+	seed: int | None = None
+	max_output_tokens: int | None = None
+	# Gemini-only structured-output knobs (procedure-interpretation role); ignored by the
+	# OpenAI wire format, which uses ``response_format`` instead (see
+	# ``response_format`` below).
+	response_mime_type: str | None = None
+	response_schema: dict | None = None
+	# OpenAI-only structured-output knob (JSON-schema ``response_format``); ignored by the
+	# Gemini wire format.
+	response_format: dict | None = None
+	# Sent as-is when not None; OpenAI's Chat Completions API defaults this to true when
+	# ``tools`` is non-empty, so ``True`` here is "send it explicitly" not "turn it on".
+	parallel_tool_calls: bool | None = None
+
+	def as_request_dict(self) -> dict:
+		"""Only the fields that are actually set (not ``None``), for logging the exact
+		request params sent on a call (ACCEPTANCE_PLAN_V2.md Sec.1 "record exact ...
+		settings"). Never includes a key whose value wasn't actually sent.
+		"""
+		return {k: v for k, v in dataclasses.asdict(self).items() if v is not None}
+
+
+#: The settings sheet's per-role sampling blocks (TEST_AGENT_SETTINGS.md Sec.2), keyed the
+#: same way as the YAML: role name -> family -> :class:`SamplingConfig`. Callers building a
+#: provider for a given role/family look this dict up rather than hand-writing the numbers a
+#: second time. ``s4_reruns``/``affected_cell_reruns_s4`` deliberately has NO entry here --
+#: that role sends ``None`` (no ``sampling=`` argument at all) to match original-run behavior.
+ROLE_SAMPLING: dict[str, dict[str, SamplingConfig]] = {
+	"naive_agent_loop_s5": {
+		"gemini": SamplingConfig(temperature=1.0, seed=20260923, max_output_tokens=8192),
+		"openai": SamplingConfig(temperature=1.0, top_p=1.0, seed=20260923, max_output_tokens=2048, parallel_tool_calls=True),
+	},
+	"final_report_s5": {
+		"gemini": SamplingConfig(temperature=1.0, seed=20260923, max_output_tokens=8192),
+		"openai": SamplingConfig(temperature=1.0, top_p=1.0, seed=20260923, max_output_tokens=2048, parallel_tool_calls=True),
+	},
+	"procedure_interpretation_s5": {
+		"gemini": SamplingConfig(
+			temperature=1.0,
+			seed=20260923,
+			max_output_tokens=8192,
+			response_mime_type="application/json",
+		),
+		"openai": SamplingConfig(
+			temperature=0.0,
+			top_p=1.0,
+			seed=20260923,
+			max_output_tokens=2048,
+			response_format={"type": "json_schema"},
+		),
+	},
+	"recovery_decision_s3": {
+		"gemini": SamplingConfig(temperature=1.0, seed=20260923, max_output_tokens=8192),
+		"openai": SamplingConfig(temperature=0.2, top_p=1.0, seed=20260923, max_output_tokens=2048, parallel_tool_calls=True),
+	},
+}
+
+
 class ToolInvocationError(RuntimeError):
 	"""Raised back into the model's tool-result stream when a tool call fails.
 
@@ -308,6 +381,14 @@ class ModelStep:
 	"""
 
 	tool_call: ToolCallRequest | None = None
+	# Every tool call the model actually requested this turn, in the order the provider
+	# returned them (ACCEPTANCE_PLAN_V2.md Sec.5 hard requirement: no silent dropping, no
+	# forced one-call-per-response). Empty when the step is a final-text step, or (for
+	# backward compatibility with any caller that only ever set ``tool_call``) when only the
+	# legacy singular field was populated. ``run_recovery`` treats ``tool_calls`` as
+	# authoritative when non-empty and falls back to ``[tool_call]`` otherwise, so existing
+	# ``RecoveryModel`` implementations that only set ``tool_call`` keep working unchanged.
+	tool_calls: list[ToolCallRequest] = field(default_factory=list)
 	final_text: str | None = None
 	# Honest, non-fabricated token accounting -- see RunLog docstring for what this means
 	# for MockedModel vs. a real model.
@@ -316,6 +397,17 @@ class ModelStep:
 	# Cached-content portion of estimated_prompt_tokens (a subset of it, not additional to
 	# it -- see _ProviderResponse.cached_tokens). Always 0 for MockedModel.
 	estimated_cached_tokens: int = 0
+	# Gemini's ``usageMetadata.thoughtsTokenCount`` (reasoning/thinking tokens), billed as
+	# part of output tokens but reported HERE as a distinct, clearly-labeled field -- never
+	# silently merged into ``estimated_completion_tokens`` (ACCEPTANCE_PLAN_V2.md Sec.4 "handle
+	# provider reasoning-token fields explicitly"). 0 for MockedModel and for any provider that
+	# doesn't report reasoning tokens (e.g. gpt-4o-mini, which always reports 0 here too).
+	estimated_reasoning_tokens: int = 0
+	# ``finishReason`` (Gemini) / ``finish_reason`` (OpenAI), recorded verbatim so a
+	# ``MAX_TOKENS``/``length`` truncation can be bucketed as a harness/budget failure, never
+	# as a model-correctness failure (ACCEPTANCE_PLAN_V2.md Sec.5). ``None`` for MockedModel
+	# and for any provider response that didn't report one.
+	finish_reason: str | None = None
 
 
 class RecoveryModel(Protocol):
@@ -418,21 +510,45 @@ class _ProviderResponse:
 
 	text: str | None = None
 	function_call: dict | None = None  # {"name": str, "args": dict, "thought_signature": str | None}
+	# ALL function/tool calls the response actually returned, in order (ACCEPTANCE_PLAN_V2.md
+	# Sec.5 hard requirement: "no silent dropping, no forced one-call-per-response"). Always
+	# has the same first element as ``function_call`` when both are populated -- ``function_call``
+	# is kept as a convenience/back-compat alias for "the first call", never a second source of
+	# truth. Empty when the response is a final-text response.
+	function_calls: list[dict] = field(default_factory=list)
 	prompt_tokens: int = 0
 	completion_tokens: int = 0
 	cached_tokens: int = 0
+	# Reasoning/thinking tokens (Gemini's ``usageMetadata.thoughtsTokenCount``, OpenAI's
+	# ``usage.completion_tokens_details.reasoning_tokens``) -- billed as part of output tokens
+	# by the provider, but recorded here as an explicit, DISTINCT field, never merged into
+	# ``completion_tokens`` (ACCEPTANCE_PLAN_V2.md Sec.4).
+	reasoning_tokens: int = 0
+	# ``finishReason`` / ``finish_reason`` exactly as the provider reported it (e.g.
+	# ``"STOP"``/``"MAX_TOKENS"`` for Gemini, ``"stop"``/``"length"``/``"tool_calls"`` for
+	# OpenAI). ``None`` when the provider response didn't surface one.
+	finish_reason: str | None = None
 	# The exact model version string the provider's response reported it actually served
 	# (e.g. Gemini's top-level ``modelVersion``), NOT the nominal ``MODEL`` env var value --
 	# see Issue A's "record model version string exactly as returned by the API". ``None``
 	# when the provider's response shape does not surface one at all (documented, not
 	# silently substituted with the nominal id).
 	model_version: str | None = None
+	# OpenAI's ``system_fingerprint`` (G8: "record system_fingerprint (OpenAI)"). ``None``
+	# for Gemini (which has no equivalent field; ``modelVersion`` already covers pinning
+	# there) and for any OpenAI response that omitted it.
+	system_fingerprint: str | None = None
 
 
 class _Provider(Protocol):
 	"""One real-API backend's request/response translation. ``LiveAPIModel`` drives this;
 	it never talks HTTP/SDK details itself.
 	"""
+
+	#: The exact request params dict most recently sent to the provider (G1: "Store the exact
+	#: request params in every model_step log entry"). ``{}`` before the first call, or when
+	#: ``sampling`` is ``None`` (nothing beyond the base body was sent).
+	last_request_params: dict
 
 	def generate(self, *, system_instruction: str | None, contents: list[dict], tool_declarations: list[dict]) -> _ProviderResponse:
 		...
@@ -519,7 +635,14 @@ class GeminiHTTPProvider:
 
 	_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-	def __init__(self, *, model_id: str, api_key: str | None = None, timeout: float = 60.0) -> None:
+	def __init__(
+		self,
+		*,
+		model_id: str,
+		api_key: str | None = None,
+		timeout: float = 60.0,
+		sampling: "SamplingConfig | None" = None,
+	) -> None:
 		self.model_id = model_id
 		self._api_key = api_key or os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
 		if not self._api_key:
@@ -528,6 +651,11 @@ class GeminiHTTPProvider:
 				"GOOGLE_API_KEY / GEMINI_API_KEY in the environment before constructing it."
 			)
 		self.timeout = timeout
+		# When ``None`` (the default), NOTHING sampling-related is sent -- this matches every
+		# past live run's actual behavior (G1) and is required for §4's original-condition
+		# reruns.
+		self.sampling = sampling
+		self.last_request_params: dict = {}
 
 	def generate(self, *, system_instruction: str | None, contents: list[dict], tool_declarations: list[dict]) -> _ProviderResponse:
 		body: dict = {"contents": contents}
@@ -535,6 +663,25 @@ class GeminiHTTPProvider:
 			body["system_instruction"] = {"parts": [{"text": system_instruction}]}
 		if tool_declarations:
 			body["tools"] = [{"functionDeclarations": tool_declarations}]
+
+		generation_config: dict = {}
+		if self.sampling is not None:
+			s = self.sampling
+			if s.temperature is not None:
+				generation_config["temperature"] = s.temperature
+			if s.top_p is not None:
+				generation_config["topP"] = s.top_p
+			if s.seed is not None:
+				generation_config["seed"] = s.seed
+			if s.max_output_tokens is not None:
+				generation_config["maxOutputTokens"] = s.max_output_tokens
+			if s.response_mime_type is not None:
+				generation_config["responseMimeType"] = s.response_mime_type
+			if s.response_schema is not None:
+				generation_config["responseSchema"] = s.response_schema
+		if generation_config:
+			body["generationConfig"] = generation_config
+		self.last_request_params = {"generationConfig": dict(generation_config)} if generation_config else {}
 
 		url = self._ENDPOINT.format(model=self.model_id)
 		data = json.dumps(body).encode("utf-8")
@@ -572,33 +719,45 @@ def _parse_gemini_response(payload: dict) -> _ProviderResponse:
 	model_version = payload.get("modelVersion")
 
 	text: str | None = None
-	function_call: dict | None = None
+	function_calls: list[dict] = []
+	finish_reason: str | None = None
 	candidates = payload.get("candidates") or []
 	if candidates:
+		finish_reason = candidates[0].get("finishReason")
 		content = candidates[0].get("content") or {}
 		for part in content.get("parts") or []:
-			if "functionCall" in part and function_call is None:
+			if "functionCall" in part:
 				fc = part["functionCall"] or {}
 				# Newer Gemini models (the 3.x family) require the exact ``thoughtSignature``
 				# opaque token that accompanied this functionCall part to be echoed back
 				# verbatim on the SAME part when it's replayed into a later turn's history --
 				# a 400 INVALID_ARGUMENT ("Function call is missing a thought_signature")
 				# results otherwise. Captured here, threaded through unchanged, never
-				# inspected/decoded.
-				function_call = {
-					"name": fc.get("name"),
-					"args": dict(fc.get("args") or {}),
-					"thought_signature": part.get("thoughtSignature"),
-				}
+				# inspected/decoded. A response can carry MULTIPLE functionCall parts (native
+				# parallel tool calls) -- every one is collected, in order, never just the
+				# first (ACCEPTANCE_PLAN_V2.md Sec.5 hard requirement).
+				function_calls.append(
+					{
+						"name": fc.get("name"),
+						"args": dict(fc.get("args") or {}),
+						"thought_signature": part.get("thoughtSignature"),
+					}
+				)
 			elif "text" in part and text is None:
 				text = part["text"]
 
 	return _ProviderResponse(
 		text=text,
-		function_call=function_call,
+		function_call=function_calls[0] if function_calls else None,
+		function_calls=function_calls,
 		prompt_tokens=int(usage.get("promptTokenCount", 0) or 0),
 		completion_tokens=int(usage.get("candidatesTokenCount", 0) or 0),
 		cached_tokens=int(usage.get("cachedContentTokenCount", 0) or 0),
+		# Gemini 3.x bills thinking/reasoning tokens as part of output, but reports them
+		# separately in ``usageMetadata.thoughtsTokenCount`` -- read and kept DISTINCT here
+		# (ACCEPTANCE_PLAN_V2.md Sec.4), never folded into ``completion_tokens`` above.
+		reasoning_tokens=int(usage.get("thoughtsTokenCount", 0) or 0),
+		finish_reason=finish_reason,
 		model_version=model_version,
 	)
 
@@ -675,7 +834,14 @@ class OpenAIHTTPProvider:
 
 	_ENDPOINT = "https://api.openai.com/v1/chat/completions"
 
-	def __init__(self, *, model_id: str, api_key: str | None = None, timeout: float = 60.0) -> None:
+	def __init__(
+		self,
+		*,
+		model_id: str,
+		api_key: str | None = None,
+		timeout: float = 60.0,
+		sampling: "SamplingConfig | None" = None,
+	) -> None:
 		self.model_id = model_id
 		self._api_key = api_key or os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_KEY")
 		if not self._api_key:
@@ -684,6 +850,10 @@ class OpenAIHTTPProvider:
 				"OPENAI_API_KEY / OPENAI_KEY in the environment before constructing it."
 			)
 		self.timeout = timeout
+		# ``None`` (the default) sends nothing sampling-related -- matches every past live
+		# run's actual behavior (G1) and is required for §4's original-condition reruns.
+		self.sampling = sampling
+		self.last_request_params: dict = {}
 
 	def generate(self, *, system_instruction: str | None, contents: list[dict], tool_declarations: list[dict]) -> _ProviderResponse:
 		messages: list[dict] = []
@@ -694,6 +864,29 @@ class OpenAIHTTPProvider:
 		body: dict = {"model": self.model_id, "messages": messages}
 		if tool_declarations:
 			body["tools"] = tool_declarations
+
+		request_params: dict = {}
+		if self.sampling is not None:
+			s = self.sampling
+			if s.temperature is not None:
+				body["temperature"] = s.temperature
+				request_params["temperature"] = s.temperature
+			if s.top_p is not None:
+				body["top_p"] = s.top_p
+				request_params["top_p"] = s.top_p
+			if s.seed is not None:
+				body["seed"] = s.seed
+				request_params["seed"] = s.seed
+			if s.max_output_tokens is not None:
+				body["max_tokens"] = s.max_output_tokens
+				request_params["max_tokens"] = s.max_output_tokens
+			if s.response_format is not None:
+				body["response_format"] = s.response_format
+				request_params["response_format"] = s.response_format
+			if s.parallel_tool_calls is not None and tool_declarations:
+				body["parallel_tool_calls"] = s.parallel_tool_calls
+				request_params["parallel_tool_calls"] = s.parallel_tool_calls
+		self.last_request_params = request_params
 
 		data = json.dumps(body).encode("utf-8")
 		request = urllib.request.Request(
@@ -730,13 +923,18 @@ def _parse_openai_response(payload: dict) -> _ProviderResponse:
 	model_version = payload.get("model")
 
 	text: str | None = None
-	function_call: dict | None = None
+	function_calls: list[dict] = []
+	finish_reason: str | None = None
 	choices = payload.get("choices") or []
 	if choices:
+		finish_reason = choices[0].get("finish_reason")
 		message = choices[0].get("message") or {}
 		tool_calls = message.get("tool_calls") or []
-		if tool_calls:
-			tc = tool_calls[0]
+		# Every tool call the response returned is parsed, in order -- never just
+		# ``tool_calls[0]`` (ACCEPTANCE_PLAN_V2.md Sec.5 hard requirement: OpenAI natively
+		# supports parallel tool calls, and dropping any of them silently would also leave
+		# their ``tool_call_id``s unanswered, which OpenAI rejects on the next turn).
+		for tc in tool_calls:
 			fn = tc.get("function") or {}
 			raw_args = fn.get("arguments")
 			args: dict = {}
@@ -749,8 +947,8 @@ def _parse_openai_response(payload: dict) -> _ProviderResponse:
 					args = {}
 			elif isinstance(raw_args, dict):
 				args = raw_args
-			function_call = {"name": fn.get("name"), "args": args, "id": tc.get("id")}
-		elif message.get("content"):
+			function_calls.append({"name": fn.get("name"), "args": args, "id": tc.get("id")})
+		if not tool_calls and message.get("content"):
 			text = message["content"]
 
 	cached_tokens = 0
@@ -758,17 +956,28 @@ def _parse_openai_response(payload: dict) -> _ProviderResponse:
 	if "cached_tokens" in prompt_tokens_details:
 		cached_tokens = int(prompt_tokens_details.get("cached_tokens") or 0)
 
+	reasoning_tokens = 0
+	completion_tokens_details = usage.get("completion_tokens_details") or {}
+	if "reasoning_tokens" in completion_tokens_details:
+		reasoning_tokens = int(completion_tokens_details.get("reasoning_tokens") or 0)
+
 	return _ProviderResponse(
 		text=text,
-		function_call=function_call,
+		function_call=function_calls[0] if function_calls else None,
+		function_calls=function_calls,
 		prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
 		completion_tokens=int(usage.get("completion_tokens", 0) or 0),
 		cached_tokens=cached_tokens,
+		# Recorded distinctly, never merged into completion_tokens (0 for gpt-4o-mini today,
+		# but read honestly rather than assumed -- ACCEPTANCE_PLAN_V2.md Sec.4).
+		reasoning_tokens=reasoning_tokens,
+		finish_reason=finish_reason,
 		model_version=model_version,
+		system_fingerprint=payload.get("system_fingerprint"),
 	)
 
 
-def _make_provider(model_id: str) -> _Provider:
+def _make_provider(model_id: str, *, sampling: "SamplingConfig | None" = None) -> _Provider:
 	"""Provider inference from ``model_id`` (Issue A / PLAN_V3 "Key situation"): a
 	``gemini-`` prefix routes to :class:`GeminiHTTPProvider`, a ``gpt-`` prefix routes to
 	:class:`OpenAIHTTPProvider`. Adding another provider is a new ``_Provider``
@@ -778,9 +987,9 @@ def _make_provider(model_id: str) -> _Provider:
 	``isinstance`` check per provider).
 	"""
 	if model_id.startswith("gemini-"):
-		return GeminiHTTPProvider(model_id=model_id)
+		return GeminiHTTPProvider(model_id=model_id, sampling=sampling)
 	if model_id.startswith("gpt-"):
-		return OpenAIHTTPProvider(model_id=model_id)
+		return OpenAIHTTPProvider(model_id=model_id, sampling=sampling)
 	raise NotImplementedError(
 		f"LiveAPIModel has no provider implementation for model_id={model_id!r} yet -- only "
 		"'gemini-' (GeminiHTTPProvider) and 'gpt-' (OpenAIHTTPProvider) prefixes are "
@@ -814,10 +1023,14 @@ class LiveAPIModel:
 		model_id: str | None = None,
 		tools: dict[str, "AtomicTool"] | None = None,
 		provider: _Provider | None = None,
+		sampling: "SamplingConfig | None" = None,
 	) -> None:
 		self.model_id = model_id or os.environ.get("MODEL", "unset")
 		self._tools = dict(tools or {})
-		self.provider = provider if provider is not None else _make_provider(self.model_id)
+		# Only used when this caller doesn't already supply a constructed ``provider`` --
+		# a caller-supplied provider's own sampling was already fixed at ITS construction
+		# time (see ``_make_provider``/``GeminiHTTPProvider``/``OpenAIHTTPProvider``).
+		self.provider = provider if provider is not None else _make_provider(self.model_id, sampling=sampling)
 		#: Which wire format to build for ``provider.generate()`` -- read from the provider's
 		#: own ``wire_format`` attribute (``"openai"`` for :class:`OpenAIHTTPProvider`),
 		#: defaulting to ``"gemini"`` for any provider that doesn't set one (every existing
@@ -828,10 +1041,19 @@ class LiveAPIModel:
 		# OpenAI-native running conversation state (parallel to ``self._contents`` above),
 		# only ever populated/read when ``self._wire_format == "openai"``.
 		self._openai_messages: list[dict] = []
-		#: The ``tool_calls[0].id`` OpenAI returned for the most recent function-call turn --
-		#: must be echoed back verbatim as the following tool message's ``tool_call_id`` (the
-		#: OpenAI-format analogue of Gemini's ``thought_signature`` bookkeeping below).
-		self._pending_openai_tool_call_id: str | None = None
+		#: The OpenAI ``tool_calls[*].id`` values returned for the most recent function-call
+		#: turn, in the SAME order the calls were returned/dispatched -- popped FIFO as each
+		#: matching tool result is ingested, so a multi-tool-call turn (G2) gets each result
+		#: matched to the right ``tool_call_id`` instead of every result reusing the first
+		#: call's id (which would leave later ``tool_call_id``s unanswered and OpenAI would
+		#: reject the next turn).
+		self._pending_openai_tool_call_ids: list[str] = []
+		#: True iff the immediately-preceding ingested transcript entry was itself a "tool"
+		#: role entry -- used ONLY by the Gemini path to merge a run of consecutive tool
+		#: results (all answering the SAME multi-function-call model turn) into ONE
+		#: ``functionResponse``-only content turn, matching what a real multi-call Gemini
+		#: turn's reply looks like, instead of one content entry per result.
+		self._last_ingested_was_tool = False
 		self._system_instruction: str | None = None
 		self._last_transcript_len = 0
 		#: The exact model version string the API itself reported for the most recent call
@@ -839,33 +1061,49 @@ class LiveAPIModel:
 		#: ``None`` if the provider never surfaced one -- callers must not fall back to
 		#: ``model_id`` silently; that fallback, if wanted, is the CALLER's decision.
 		self.last_model_version: str | None = None
+		#: OpenAI's ``system_fingerprint`` for the most recent call (G8). ``None`` for Gemini
+		#: and for any OpenAI response that omitted it.
+		self.last_system_fingerprint: str | None = None
 
 	def _ingest_transcript_entry(self, entry: dict) -> None:
 		role = entry.get("role")
 		content = entry.get("content")
 		if role == "system":
 			self._system_instruction = str(content)
+			self._last_ingested_was_tool = False
 			return
 		if role == "user":
 			text = content if isinstance(content, str) else json.dumps(_to_jsonable(content))
 			self._contents.append({"role": "user", "parts": [{"text": text}]})
+			self._last_ingested_was_tool = False
 			return
 		if role == "tool":
 			tool_name = entry.get("tool_name") or (content.get("tool_name") if isinstance(content, dict) else None) or "unknown_tool"
 			response_payload = _to_jsonable(content)
 			if not isinstance(response_payload, dict):
 				response_payload = {"result": response_payload}
-			self._contents.append({"role": "user", "parts": [{"functionResponse": {"name": tool_name, "response": response_payload}}]})
+			part = {"functionResponse": {"name": tool_name, "response": response_payload}}
+			# Merge a run of consecutive tool results into the SAME content turn (multiple
+			# functionResponse parts), matching how Gemini expects the reply to a multi
+			# functionCall turn to look -- rather than one separate "user" content entry per
+			# result, which is what every prior single-call-only version of this method did.
+			if self._last_ingested_was_tool and self._contents and self._contents[-1].get("role") == "user":
+				self._contents[-1]["parts"].append(part)
+			else:
+				self._contents.append({"role": "user", "parts": [part]})
+			self._last_ingested_was_tool = True
 			return
 		if role == "assistant":
 			# Only ever appended by run_recovery right as the loop ends (final_text) -- no
 			# further next_step call will observe it, but ingest it anyway for completeness/
 			# testability rather than special-casing it away.
 			self._contents.append({"role": "model", "parts": [{"text": str(content or "")}]})
+			self._last_ingested_was_tool = False
 			return
 		# Unknown role: represent it as a user-turn text block rather than silently dropping
 		# information the model should have seen.
 		self._contents.append({"role": "user", "parts": [{"text": json.dumps(_to_jsonable(entry))}]})
+		self._last_ingested_was_tool = False
 
 	def _ingest_transcript_entry_openai(self, entry: dict) -> None:
 		"""OpenAI-wire-format analogue of :meth:`_ingest_transcript_entry` -- same transcript
@@ -886,7 +1124,14 @@ class LiveAPIModel:
 			response_payload = _to_jsonable(content)
 			if not isinstance(response_payload, dict):
 				response_payload = {"result": response_payload}
-			tool_call_id = self._pending_openai_tool_call_id or f"call_{tool_name}"
+			# Pop the NEXT pending id in order (G2): a multi-tool-call turn queued every
+			# call's id when it was made, and results are ingested in the same dispatch
+			# order, so FIFO popping matches each result to its own originating call --
+			# never reusing one id for every result in the turn.
+			if self._pending_openai_tool_call_ids:
+				tool_call_id = self._pending_openai_tool_call_ids.pop(0)
+			else:
+				tool_call_id = f"call_{tool_name}"
 			self._openai_messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(response_payload)})
 			return
 		if role == "assistant":
@@ -921,41 +1166,66 @@ class LiveAPIModel:
 
 		if response.model_version:
 			self.last_model_version = response.model_version
+		if response.system_fingerprint:
+			self.last_system_fingerprint = response.system_fingerprint
 
-		if response.function_call is not None and response.function_call.get("name"):
-			name = response.function_call["name"]
-			args = dict(response.function_call.get("args") or {})
+		# ALL calls the response returned, in order -- never just the first (G2 / Sec.5 hard
+		# requirement). ``function_calls`` is authoritative; ``function_call`` alone (no
+		# ``function_calls``) is tolerated for any hand-built ``_ProviderResponse`` a test
+		# constructs directly with only the singular field set.
+		calls = [fc for fc in (response.function_calls or ([response.function_call] if response.function_call else [])) if fc and fc.get("name")]
+
+		if calls:
+			tool_call_requests = [ToolCallRequest(fc["name"], dict(fc.get("args") or {})) for fc in calls]
 			if is_openai:
-				tool_call_id = response.function_call.get("id") or f"call_{name}"
-				self._pending_openai_tool_call_id = tool_call_id
-				self._openai_messages.append(
-					{
-						"role": "assistant",
-						"content": None,
-						"tool_calls": [{"id": tool_call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}}],
-					}
-				)
+				tool_calls_wire = []
+				pending_ids: list[str] = []
+				for fc in calls:
+					name = fc["name"]
+					args = dict(fc.get("args") or {})
+					tool_call_id = fc.get("id") or f"call_{name}_{len(tool_calls_wire)}"
+					pending_ids.append(tool_call_id)
+					tool_calls_wire.append({"id": tool_call_id, "type": "function", "function": {"name": name, "arguments": json.dumps(args)}})
+				# Queued in dispatch order (G2): run_recovery dispatches ``tool_calls`` in
+				# the same order and appends one "tool" transcript entry per call, so FIFO
+				# popping in ``_ingest_transcript_entry_openai`` matches each result to the
+				# call it actually answers.
+				self._pending_openai_tool_call_ids = list(pending_ids)
+				self._openai_messages.append({"role": "assistant", "content": None, "tool_calls": tool_calls_wire})
 			else:
-				thought_signature = response.function_call.get("thought_signature")
 				# Record the model's OWN turn in our provider-native state so the NEXT call
-				# (once run_recovery appends the tool's result to the shared transcript) sees
-				# the functionCall this result answers -- see the class docstring's
+				# (once run_recovery appends the tool results to the shared transcript) sees
+				# the functionCall(s) those results answer -- see the class docstring's
 				# "Transcript bookkeeping" section for why the shared transcript alone can't
-				# provide this. The 3.x Gemini model family requires the exact
-				# `thoughtSignature` opaque token to be echoed back verbatim on this same part
-				# in the replayed history, or the next call 400s with "Function call is
-				# missing a thought_signature" -- carry it through unchanged when the API
-				# provided one (older/2.x models don't emit it).
-				part: dict = {"functionCall": {"name": name, "args": args}}
-				if thought_signature:
-					part["thoughtSignature"] = thought_signature
-				self._contents.append({"role": "model", "parts": [part]})
-			return ModelStep(
-				tool_call=ToolCallRequest(name, args),
+				# provide this. ALL calls from ONE response go into ONE "model" content turn
+				# with one functionCall part each (this is what a real multi-call Gemini turn
+				# looks like), not one content entry per call. The 3.x Gemini model family
+				# requires the exact `thoughtSignature` opaque token to be echoed back
+				# verbatim on the part it accompanied when replayed into history, or the next
+				# call 400s with "Function call is missing a thought_signature" -- carried
+				# through unchanged per-part, never dropped or borrowed from another part.
+				parts: list[dict] = []
+				for fc in calls:
+					part: dict = {"functionCall": {"name": fc["name"], "args": dict(fc.get("args") or {})}}
+					thought_signature = fc.get("thought_signature")
+					if thought_signature:
+						part["thoughtSignature"] = thought_signature
+					parts.append(part)
+				self._contents.append({"role": "model", "parts": parts})
+			# The turn just appended above starts a fresh model turn -- the NEXT ingested
+			# transcript entries (this call's tool results) must start a new merged
+			# functionResponse turn, not be appended onto anything left over from before.
+			self._last_ingested_was_tool = False
+			step = ModelStep(
+				tool_call=tool_call_requests[0],
+				tool_calls=tool_call_requests,
 				estimated_prompt_tokens=response.prompt_tokens,
 				estimated_completion_tokens=response.completion_tokens,
 				estimated_cached_tokens=response.cached_tokens,
+				estimated_reasoning_tokens=response.reasoning_tokens,
+				finish_reason=response.finish_reason,
 			)
+			return step
 
 		text = response.text or ""
 		if is_openai:
@@ -967,6 +1237,8 @@ class LiveAPIModel:
 			estimated_prompt_tokens=response.prompt_tokens,
 			estimated_completion_tokens=response.completion_tokens,
 			estimated_cached_tokens=response.cached_tokens,
+			estimated_reasoning_tokens=response.reasoning_tokens,
+			finish_reason=response.finish_reason,
 		)
 
 
@@ -1044,7 +1316,7 @@ def compute_model_step_cost_usd(*, prompt_tokens: int, completion_tokens: int, c
 class LogEntry:
 	"""One entry in a :class:`RunLog`: either a model step or a tool call/result."""
 
-	kind: Literal["system_prompt", "context", "model_step", "tool_call", "tool_result", "final"]
+	kind: Literal["system_prompt", "context", "model_step", "tool_call", "tool_result", "tool_calls_dispatched", "final"]
 	content: Any
 	# Token counts are 0 for every MockedModel-driven entry -- this harness performs NO
 	# real tokenization and NEVER estimates against a real tokenizer; a caller must not
@@ -1055,6 +1327,13 @@ class LogEntry:
 	# Cached-content subset of prompt_tokens (see ModelStep.estimated_cached_tokens). 0 for
 	# every MockedModel-driven entry, same caveat as prompt_tokens/completion_tokens above.
 	cached_tokens: int = 0
+	# Reasoning/thinking tokens (see ModelStep.estimated_reasoning_tokens) -- a DISTINCT
+	# field, never folded into completion_tokens (ACCEPTANCE_PLAN_V2.md Sec.4). 0 for
+	# MockedModel and for any provider response that didn't report one.
+	reasoning_tokens: int = 0
+	# ``finish_reason``/``finishReason`` exactly as the provider reported it (see
+	# ModelStep.finish_reason). ``None`` for MockedModel.
+	finish_reason: str | None = None
 	wall_time_s: float = 0.0
 
 
@@ -1103,6 +1382,8 @@ class RunLog:
 		prompt_tokens: int = 0,
 		completion_tokens: int = 0,
 		cached_tokens: int = 0,
+		reasoning_tokens: int = 0,
+		finish_reason: str | None = None,
 		wall_time_s: float = 0.0,
 	) -> None:
 		self.entries.append(
@@ -1112,6 +1393,8 @@ class RunLog:
 				prompt_tokens=prompt_tokens,
 				completion_tokens=completion_tokens,
 				cached_tokens=cached_tokens,
+				reasoning_tokens=reasoning_tokens,
+				finish_reason=finish_reason,
 				wall_time_s=wall_time_s,
 			)
 		)
@@ -1333,64 +1616,100 @@ def run_recovery(
 	]
 	available_tools = sorted(tools.keys())
 
-	while log.tool_call_count < max_tool_calls:
+	outer_break = False
+	while log.tool_call_count < max_tool_calls and not outer_break:
 		step_start = time.monotonic()
 		step = model.next_step(transcript=transcript, available_tools=available_tools)
 		step_wall = time.monotonic() - step_start
+		# ``tool_calls`` is authoritative when the model/provider populated it (G2: every
+		# call the provider returned, in order); a ``RecoveryModel`` that only ever sets the
+		# legacy singular ``tool_call`` (MockedModel, and any hand-written test double) keeps
+		# working unchanged via this fallback -- never a behavior change for a single-call
+		# step, only additive support for a multi-call one.
+		calls = step.tool_calls if step.tool_calls else ([step.tool_call] if step.tool_call is not None else [])
 		log.log(
 			"model_step",
-			{"tool_call": step.tool_call, "final_text": step.final_text},
+			{
+				"tool_call": step.tool_call,
+				"tool_calls": calls,
+				"final_text": step.final_text,
+				# G2: recorded so a mismatch between what the provider returned and what the
+				# harness actually dispatched would be visible in the log rather than silent.
+				"tool_calls_returned": len(calls),
+			},
 			prompt_tokens=step.estimated_prompt_tokens,
 			completion_tokens=step.estimated_completion_tokens,
 			cached_tokens=step.estimated_cached_tokens,
+			reasoning_tokens=step.estimated_reasoning_tokens,
+			finish_reason=step.finish_reason,
 			wall_time_s=step_wall,
 		)
 
-		if step.tool_call is None:
+		if not calls:
 			transcript.append({"role": "assistant", "content": step.final_text or ""})
 			log.log("final", step.final_text or "")
 			log.outcome = "final_text"
 			break
 
-		call = step.tool_call
-		log.log("tool_call", {"tool_name": call.tool_name, "kwargs": call.kwargs})
-		log.tool_call_count += 1
-
-		call_start = time.monotonic()
-		try:
-			result = _dispatch_tool_call(
-				call=call,
-				tools=tools,
-				guard=guard,
-				recovery_session=recovery_session,
-				store=store,
-				injector=injector,
-			)
-			call_wall = time.monotonic() - call_start
-			log.log(
-				"tool_result",
-				{"tool_name": call.tool_name, "ok": True, "dispatched": True, "result": result},
-				wall_time_s=call_wall,
-			)
-			transcript.append({"role": "tool", "tool_name": call.tool_name, "content": result})
-
-			if call.tool_name == "escalate":
-				log.outcome = "escalated"
+		# Dispatch EVERY call the provider returned, in order, preserving any dependency the
+		# model expressed by that order (Sec.5 hard requirement: "no silent dropping, no
+		# forced one-call-per-response, dependencies/order preserved"). Each call still
+		# counts individually toward ``max_tool_calls`` -- a batch that would exceed the cap
+		# stops dispatching mid-batch (never dispatches more than the cap allows), and the
+		# calls actually dispatched vs. returned are both recorded.
+		tool_calls_dispatched = 0
+		for call in calls:
+			if log.tool_call_count >= max_tool_calls:
 				break
-		except ToolInvocationError as exc:
-			call_wall = time.monotonic() - call_start
-			log.log(
-				"tool_result",
-				{
-					"tool_name": call.tool_name,
-					"ok": False,
-					"dispatched": exc.dispatched,
-					"guard_rejected": exc.guard_rejected,
-					"error": exc.detail,
-				},
-				wall_time_s=call_wall,
-			)
-			transcript.append({"role": "tool", "tool_name": call.tool_name, "content": {"error": exc.detail}})
+			log.log("tool_call", {"tool_name": call.tool_name, "kwargs": call.kwargs})
+			log.tool_call_count += 1
+			tool_calls_dispatched += 1
+
+			call_start = time.monotonic()
+			try:
+				result = _dispatch_tool_call(
+					call=call,
+					tools=tools,
+					guard=guard,
+					recovery_session=recovery_session,
+					store=store,
+					injector=injector,
+				)
+				call_wall = time.monotonic() - call_start
+				log.log(
+					"tool_result",
+					{"tool_name": call.tool_name, "ok": True, "dispatched": True, "result": result},
+					wall_time_s=call_wall,
+				)
+				transcript.append({"role": "tool", "tool_name": call.tool_name, "content": result})
+
+				if call.tool_name == "escalate":
+					log.outcome = "escalated"
+					outer_break = True
+					break
+			except ToolInvocationError as exc:
+				call_wall = time.monotonic() - call_start
+				log.log(
+					"tool_result",
+					{
+						"tool_name": call.tool_name,
+						"ok": False,
+						"dispatched": exc.dispatched,
+						"guard_rejected": exc.guard_rejected,
+						"error": exc.detail,
+					},
+					wall_time_s=call_wall,
+				)
+				transcript.append({"role": "tool", "tool_name": call.tool_name, "content": {"error": exc.detail}})
+		# ``tool_calls_returned`` was logged on the model_step entry above; recording the
+		# dispatched count alongside it here lets a reader confirm they're equal (G2: "assert
+		# they are equal") except in the one legitimate case where the cap was hit mid-batch.
+		log.log("tool_calls_dispatched", {"count": tool_calls_dispatched, "returned": len(calls)})
+		if outer_break:
+			# Explicit ``break`` (not just the ``while`` condition going false) -- otherwise
+			# Python's ``while...else`` would run the ``else`` below and overwrite the
+			# "escalated" outcome the inner loop just set with "tool_call_cap_reached".
+			break
 	else:
 		log.outcome = "tool_call_cap_reached"
 
