@@ -37,12 +37,15 @@ import {
 } from '@/services/automationApi';
 import { getAgents, getAIModels, type AIModelItem } from '@/services/agentApi';
 import { listProjects } from '@/services/projectApi';
+import { getAgentSettings } from '@/services/agentSettingsApi';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
 import { automationStatusBadgeVariant, automationStatusToggleAction } from '@/utils/automationDisplay';
+import { FormDescription } from '@/components/ui/form';
 import type {
   Automation,
   AutomationConversationMode,
+  AutomationActionType,
   AutomationTrigger as AutomationTriggerDoc,
 } from '@/types/automation.types';
 import type { AgentDoc } from '@/types/agent.types';
@@ -143,6 +146,17 @@ export function AutomationFormPage() {
   const [instruction, setInstruction] = useState('');
   const [modelOverride, setModelOverride] = useState('');
   const [conversationMode, setConversationMode] = useState<AutomationConversationMode>('New');
+  const [actionType, setActionType] = useState<string>('Agent Run');
+  const [decisionPolicy, setDecisionPolicy] = useState('');
+  const [decisionStateTemplate, setDecisionStateTemplate] = useState('');
+  const [decisionOutputField, setDecisionOutputField] = useState('');
+  const [decisionOutputMap, setDecisionOutputMap] = useState<Record<string, string>>({});
+  const [decisionOnFailure, setDecisionOnFailure] = useState<string>('Skip');
+  const [decisionFallbackValue, setDecisionFallbackValue] = useState('');
+  const [runtimeEnabled, setRuntimeEnabled] = useState(true);
+  const [decisionPolicyOptions, setDecisionPolicyOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   // Execution
   const [runAsUser, setRunAsUser] = useState('');
@@ -168,6 +182,11 @@ export function AutomationFormPage() {
         filters: [['enabled', '=', 1]],
         limit: 500,
       }),
+      getAgentSettings().then((settings) => {
+        setRuntimeEnabled(!!settings?.decision_runtime_enabled);
+      }).catch(() => {
+        setRuntimeEnabled(false);
+      }),
     ]).then(([agentList, projectList, modelList, userList]) => {
       setAgents(agentList || []);
       setProjects(projectList || []);
@@ -175,6 +194,27 @@ export function AutomationFormPage() {
       setUsers((userList as UserOption[]) || []);
     });
   }, []);
+
+  useEffect(() => {
+    if (!runtimeEnabled) {
+      setDecisionPolicyOptions([]);
+      return;
+    }
+    db.getDocList(doctype['Decision Policy'], {
+      fields: ['name', 'policy_name'],
+      filters: [['enabled', '=', 1]],
+      limit: 500,
+    })
+      .then((rows) => {
+        setDecisionPolicyOptions(
+          ((rows as { name: string; policy_name?: string }[]) || []).map((p) => ({
+            value: p.name,
+            label: p.policy_name || p.name,
+          }))
+        );
+      })
+      .catch(() => setDecisionPolicyOptions([]));
+  }, [runtimeEnabled]);
 
   const loadExisting = useCallback(async (name: string) => {
     setLoading(true);
@@ -188,11 +228,22 @@ export function AutomationFormPage() {
       setAutomation(automationDoc);
       setAutomationName(automationDoc.automation_name);
       setDescription(automationDoc.description || '');
-      setAgent(automationDoc.agent);
+      setActionType(automationDoc.action_type || 'Agent Run');
+      setAgent(automationDoc.agent || '');
       setProject(automationDoc.project || '');
       setInstruction(automationDoc.instruction || '');
       setModelOverride(automationDoc.model_override || '');
       setConversationMode(automationDoc.conversation_mode || 'New');
+      setDecisionPolicy(automationDoc.decision_policy || '');
+      setDecisionStateTemplate(automationDoc.decision_state_template || '');
+      setDecisionOutputField(automationDoc.decision_output_field || '');
+      setDecisionOutputMap(
+        typeof automationDoc.decision_output_map === 'string'
+          ? (JSON.parse(automationDoc.decision_output_map || '{}') as Record<string, string>)
+          : automationDoc.decision_output_map || {}
+      );
+      setDecisionOnFailure(automationDoc.decision_on_failure || 'Skip');
+      setDecisionFallbackValue(automationDoc.decision_fallback_value || '');
       setRunAsUser(automationDoc.run_as_user || '');
       setNotifyUser(automationDoc.notify_user ? 1 : 0);
       setTriggerRows((triggers as unknown as AutomationTriggerDoc[]).map(toTriggerRow));
@@ -278,8 +329,15 @@ export function AutomationFormPage() {
 
   const validate = (): string | null => {
     if (!automationName.trim()) return 'Name is required.';
-    if (!agent) return 'Select an Agent.';
-    if (!instruction.trim()) return 'Task instruction is required.';
+
+    if (actionType === 'Agent Run') {
+      if (!agent) return 'Select an Agent.';
+      if (!instruction.trim()) return 'Task instruction is required.';
+    } else if (actionType === 'Decision') {
+      if (!decisionPolicy) return 'Select a Decision Policy.';
+      if (!decisionOutputField.trim()) return 'Output Field is required.';
+    }
+
     for (const row of triggerRows) {
       if (row.trigger_type === 'Schedule' && (!row.scheduled_interval || !row.interval_count)) {
         return 'Every Schedule trigger needs an interval and a count.';
@@ -308,13 +366,20 @@ export function AutomationFormPage() {
       if (isNew) {
         const created = await createAutomation({
           automation_name: automationName.trim(),
-          agent,
-          instruction: instruction.trim(),
+          action_type: actionType as AutomationActionType || 'Agent Run',
+          agent: actionType === 'Agent Run' ? agent : undefined,
+          instruction: actionType === 'Agent Run' ? instruction.trim() : undefined,
+          decision_policy: actionType === 'Decision' && decisionPolicy ? decisionPolicy : undefined,
+          decision_state_template: actionType === 'Decision' && decisionStateTemplate ? decisionStateTemplate : undefined,
+          decision_output_field: actionType === 'Decision' && decisionOutputField ? decisionOutputField : undefined,
+          decision_output_map: actionType === 'Decision' ? decisionOutputMap : undefined,
+          decision_on_failure: actionType === 'Decision' ? (decisionOnFailure as any) : undefined,
+          decision_fallback_value: actionType === 'Decision' && decisionOnFailure === 'Set Fallback Value' && decisionFallbackValue ? decisionFallbackValue : undefined,
           description: description.trim() || undefined,
           project: project || undefined,
           model_override: modelOverride || undefined,
           run_as_user: runAsUser || undefined,
-          conversation_mode: conversationMode,
+          conversation_mode: conversationMode || undefined,
           notify_user: notifyUser,
         });
         automationName_ = created.name;
@@ -323,13 +388,20 @@ export function AutomationFormPage() {
         const updated = await updateAutomation({
           automation: automationId as string,
           automation_name: automationName.trim(),
-          description: description.trim(),
-          agent,
+          description: description.trim() || undefined,
+          action_type: actionType as AutomationActionType || 'Agent Run',
+          agent: actionType === 'Agent Run' ? agent : undefined,
+          instruction: actionType === 'Agent Run' ? instruction.trim() : undefined,
+          decision_policy: actionType === 'Decision' && decisionPolicy ? decisionPolicy : undefined,
+          decision_state_template: actionType === 'Decision' && decisionStateTemplate ? decisionStateTemplate : undefined,
+          decision_output_field: actionType === 'Decision' && decisionOutputField ? decisionOutputField : undefined,
+          decision_output_map: actionType === 'Decision' ? decisionOutputMap : undefined,
+          decision_on_failure: actionType === 'Decision' ? (decisionOnFailure as any) : undefined,
+          decision_fallback_value: actionType === 'Decision' && decisionOnFailure === 'Set Fallback Value' && decisionFallbackValue ? decisionFallbackValue : undefined,
           project: project || undefined,
           model_override: modelOverride || undefined,
           run_as_user: runAsUser || undefined,
-          instruction: instruction.trim(),
-          conversation_mode: conversationMode,
+          conversation_mode: conversationMode || undefined,
           notify_user: notifyUser,
         });
         automationName_ = updated.name;
@@ -441,7 +513,7 @@ export function AutomationFormPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="task">Task</TabsTrigger>
+          <TabsTrigger value="task">Action</TabsTrigger>
           <TabsTrigger value="trigger">
             Trigger{triggerRows.length > 0 ? ` (${triggerRows.length})` : ''}
           </TabsTrigger>
@@ -540,55 +612,212 @@ export function AutomationFormPage() {
       <TabsContent value="task" className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Task</CardTitle>
+          <CardTitle>Action</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Instruction</Label>
-            <Textarea
-              className="min-h-[120px]"
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="What should the agent do when this automation runs?"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label>Model override (optional)</Label>
-              <Combobox
-                options={modelOptions}
-                value={modelOverride}
-                onValueChange={setModelOverride}
-                placeholder="Agent default"
-                searchPlaceholder="Search models..."
-                emptyText="No model found."
-              />
+            <Label>Action Type</Label>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  id="action-run-agent"
+                  value="Agent Run"
+                  checked={actionType === 'Agent Run'}
+                  onChange={(e) => setActionType(e.target.value)}
+                  className="cursor-pointer"
+                />
+                <label htmlFor="action-run-agent" className="cursor-pointer font-medium">
+                  Run an agent
+                </label>
+              </div>
+              {runtimeEnabled && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    id="action-decide"
+                    value="Decision"
+                    checked={actionType === 'Decision'}
+                    onChange={(e) => setActionType(e.target.value)}
+                    className="cursor-pointer"
+                  />
+                  <label htmlFor="action-decide" className="cursor-pointer font-medium">
+                    Decide
+                  </label>
+                </div>
+              )}
             </div>
-            <div className="space-y-1.5">
-              <Label>Conversation mode</Label>
-              <Select
-                onValueChange={(v) => setConversationMode(v as AutomationConversationMode)}
-                value={conversationMode}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CONVERSATION_MODES.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-steel-soft">
-                New starts a fresh conversation each run; Dedicated reuses one conversation across runs;
-                No-UI runs without creating a visible conversation.
-              </p>
-            </div>
+            <FormDescription>
+              Run an agent to handle this automation, or use a Decision Policy to determine behavior.
+            </FormDescription>
           </div>
         </CardContent>
       </Card>
+
+      {/* Agent Run Section */}
+      {actionType === 'Agent Run' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Agent Setup</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Agent</Label>
+              <Combobox
+                options={agentOptions}
+                value={agent}
+                onValueChange={setAgent}
+                placeholder="Select agent"
+                searchPlaceholder="Search agents..."
+                emptyText="No agent found."
+              />
+              <FormDescription>
+                The agent this automation runs as. Its default model will be used unless overridden below.
+              </FormDescription>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Instruction</Label>
+              <Textarea
+                className="min-h-[120px]"
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                placeholder="What should the agent do when this automation runs?"
+              />
+              <FormDescription>
+                The task instruction sent to the agent. Jinja templates are supported.
+              </FormDescription>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Model override (optional)</Label>
+                <Combobox
+                  options={modelOptions}
+                  value={modelOverride}
+                  onValueChange={setModelOverride}
+                  placeholder="Agent default"
+                  searchPlaceholder="Search models..."
+                  emptyText="No model found."
+                />
+                <FormDescription>
+                  Optional AI Model to use instead of the agent's default.
+                </FormDescription>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Conversation mode</Label>
+                <Select
+                  onValueChange={(v) => setConversationMode(v as AutomationConversationMode)}
+                  value={conversationMode}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONVERSATION_MODES.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  New: fresh conversation each run; Dedicated: reuse one; No-UI: no visible conversation.
+                </FormDescription>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Decision Section */}
+      {actionType === 'Decision' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Decision Setup</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Policy</Label>
+              <Combobox
+                options={decisionPolicyOptions}
+                value={decisionPolicy}
+                onValueChange={setDecisionPolicy}
+                placeholder="Select policy"
+                searchPlaceholder="Search policies..."
+                emptyText="No policy found."
+              />
+              <FormDescription>
+                The Decision Policy to run for determining automation behavior.
+              </FormDescription>
+            </div>
+            <div className="space-y-1.5">
+              <Label>State (optional)</Label>
+              <Textarea
+                className="min-h-[100px]"
+                value={decisionStateTemplate}
+                onChange={(e) => setDecisionStateTemplate(e.target.value)}
+                placeholder='{{ doc.subject }} {{ doc.description }}'
+              />
+              <FormDescription>
+                Optional Jinja template that renders state for the policy, using fields from the triggering document. Defaults to whitelisted fields JSON.
+              </FormDescription>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Output Field</Label>
+                <Input
+                  value={decisionOutputField}
+                  onChange={(e) => setDecisionOutputField(e.target.value)}
+                  placeholder="e.g. priority"
+                />
+                <FormDescription>
+                  The field name on the document to write the decision result to.
+                </FormDescription>
+              </div>
+              <div className="space-y-1.5">
+                <Label>On Failure</Label>
+                <Select value={decisionOnFailure} onValueChange={setDecisionOnFailure}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Skip">Skip</SelectItem>
+                    <SelectItem value="Mark Error">Mark Error</SelectItem>
+                    <SelectItem value="Set Fallback Value">Set Fallback Value</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormDescription>
+                  Skip leaves the field unchanged; Mark Error records failure; Set Fallback writes a specific value.
+                </FormDescription>
+              </div>
+            </div>
+            {decisionOnFailure === 'Set Fallback Value' && (
+              <div className="space-y-1.5">
+                <Label>Fallback Value</Label>
+                <Input
+                  value={decisionFallbackValue}
+                  onChange={(e) => setDecisionFallbackValue(e.target.value)}
+                  placeholder="e.g. low"
+                />
+                <FormDescription>
+                  The value to write to the output field if the decision fails or has insufficient confidence.
+                </FormDescription>
+              </div>
+            )}
+            {automation && (
+              <div className="rounded-lg bg-surface-secondary p-3 space-y-1 text-sm">
+                <div className="font-medium text-foreground">
+                  Decisions so far: {automation.total_decision_calls || 0} calls, ${(automation.total_decision_cost || 0).toFixed(4)}
+                </div>
+                {automation.last_decision_call && (
+                  <div className="text-steel-soft">
+                    Last: <a href={`/app/decision-call/${automation.last_decision_call}`} className="text-primary hover:underline">{automation.last_decision_call}</a>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       </TabsContent>
 
       {/* Trigger */}
@@ -686,14 +915,16 @@ export function AutomationFormPage() {
                 {automation.last_error}
               </div>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(`/executions?agents=${encodeURIComponent(automation.agent)}`)}
-            >
-              View this agent&apos;s runs
-            </Button>
+            {automation.agent && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => navigate(`/executions?agents=${encodeURIComponent(automation.agent || '')}`)}
+              >
+                View this agent&apos;s runs
+              </Button>
+            )}
           </CardContent>
         </Card>
         </TabsContent>

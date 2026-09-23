@@ -8,6 +8,10 @@ export type AutomationStatus = 'Draft' | 'Active' | 'Paused' | 'Error' | 'Archiv
 
 export type AutomationConversationMode = 'New' | 'Dedicated' | 'No-UI';
 
+export type AutomationActionType = 'Agent Run' | 'Decision';
+
+export type AutomationDecisionOnFailure = 'Skip' | 'Mark Error' | 'Set Fallback Value';
+
 export type AutomationTriggerType = 'Schedule' | 'Doc Event' | 'Webhook' | 'App Event' | 'Manual';
 
 export type AutomationTriggerStatus = 'Draft' | 'Active' | 'Disabled' | 'Error';
@@ -53,11 +57,12 @@ export interface Automation {
   status: AutomationStatus;
   disabled?: 0 | 1;
   description?: string;
-  agent: string;
+  action_type?: AutomationActionType;
+  agent?: string;
   model_override?: string;
   project?: string;
   run_as_user?: string;
-  instruction: string;
+  instruction?: string;
   input_template?: string;
   source_system?: string;
   is_virtual?: 0 | 1;
@@ -65,12 +70,21 @@ export interface Automation {
   conversation_mode?: AutomationConversationMode;
   conversation?: string;
   notify_user?: 0 | 1;
+  decision_policy?: string;
+  decision_state_template?: string;
+  decision_output_field?: string;
+  decision_output_map?: string | Record<string, string>;
+  decision_on_failure?: AutomationDecisionOnFailure;
+  decision_fallback_value?: string;
   last_run?: string;
   last_execution?: string;
   last_status?: AutomationStatus | '';
   next_execution?: string;
   total_runs?: number;
   last_error?: string;
+  total_decision_calls?: number;
+  total_decision_cost?: number;
+  last_decision_call?: string;
   source_app?: string;
   source_file?: string;
   owner?: string;
