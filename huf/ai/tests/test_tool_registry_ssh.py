@@ -62,7 +62,11 @@ class TestToolRegistrySSH(unittest.TestCase):
 		return provider.name
 
 	def _ensure_model(self, provider):
-		existing = frappe.db.get_value("AI Model", {"provider": provider}, "name")
+		existing = frappe.db.get_value(
+			"AI Model",
+			{"provider": provider, "modalities": ["not in", ["Decision"]]},
+			"name",
+		)
 		if existing:
 			return existing
 		model = frappe.get_doc(
