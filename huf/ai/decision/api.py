@@ -932,3 +932,196 @@ def get_binding_stats(agent: str) -> dict:
 		"agent": agent,
 		"bindings": bindings_stats,
 	}
+
+
+# -- Evaluation (T10.01, huf.ai.decision.evaluation) ----------------------------------------
+#
+# All four gated by decision.run (same as every other read here) plus D5 row-level filtering,
+# inherited automatically because huf.ai.decision.evaluation reads Decision Call exclusively
+# through frappe.get_list/frappe.get_doc (get_permission_query_conditions / has_permission from
+# huf.huf.doctype.decision_call.decision_call), never a raw SQL query. See
+# huf.ai.decision.evaluation's module docstring for what "agreement" and "followed_advice" can
+# and cannot measure today (shadow_of is never populated by any caller; only Model Routing and
+# Tool Selection have a correlatable actual-outcome field) -- that limitation is load-bearing
+# for any UI (T10.03) or later PR built on top of these endpoints.
+
+
+@frappe.whitelist()
+def get_policy_metrics(
+	policy: str,
+	policy_version: str | None = None,
+	surface: str | None = None,
+	from_date: Any = None,
+	to_date: Any = None,
+) -> dict:
+	"""Per-policy/version reliability and usage metrics for a time window (IP §19.3, PLAN.md §3.13).
+
+	Requires ``decision.run``. Thin, capability-checked wrapper around
+	``huf.ai.decision.evaluation.get_policy_metrics`` -- see that function's docstring for the
+	exact metric list, grouping-by-version behavior, and the null-vs-zero convention for rate
+	fields with no denominator.
+
+	Args:
+		policy: ``Decision Policy`` docname (required).
+		policy_version: Narrow to one ``Decision Policy Version``; omit to get every version in
+			the window, grouped, plus an ``overall`` aggregate.
+		surface: Narrow to one ``Decision Call.surface``.
+		from_date / to_date: Window bounds (anything ``frappe.utils.get_datetime`` accepts).
+			Defaults to the last 7 days.
+
+	Returns:
+		``{policy, policy_version, surface, from_date, to_date, sample_size, sample_capped,
+		overall, by_version}`` -- see ``evaluation.get_policy_metrics``.
+	"""
+	_require("decision.run")
+
+	from huf.ai.decision import evaluation
+
+	return evaluation.get_policy_metrics(
+		policy,
+		policy_version=policy_version,
+		surface=surface,
+		from_date=from_date,
+		to_date=to_date,
+	)
+
+
+@frappe.whitelist()
+def get_shadow_agreement(
+	policy: str | None = None,
+	agent: str | None = None,
+	agent_run: str | None = None,
+	surface: str | None = None,
+	from_date: Any = None,
+	to_date: Any = None,
+) -> dict:
+	"""Shadow agreement per surface: Shadow Decision Call top candidate vs actual outcome
+	(PLAN.md §3.13, IP §19.3). Information only -- never affects live behavior (Shadow mode
+	itself already guarantees that; this only reads history).
+
+	Requires ``decision.run``. "Per binding" is expressed as filtering by
+	``policy``/``agent``/``agent_run``/``surface`` (a binding is the tuple (agent, surface,
+	policy); see ``evaluation.get_shadow_agreement`` for why). All filters are optional and
+	combine as AND; passing none aggregates across every Shadow call the caller can see (D5).
+
+	Returns:
+		``{mode, policy, agent, agent_run, surface, from_date, to_date, sample_size,
+		sample_capped, measurable_surfaces, by_surface, not_measurable}`` -- see
+		``evaluation.get_shadow_agreement`` / its module docstring for the exact meaning of
+		``measurable_surfaces`` and why some surfaces always land in ``not_measurable``.
+	"""
+	_require("decision.run")
+
+	from huf.ai.decision import evaluation
+
+	return evaluation.get_shadow_agreement(
+		policy=policy,
+		agent=agent,
+		agent_run=agent_run,
+		surface=surface,
+		from_date=from_date,
+		to_date=to_date,
+	)
+
+
+@frappe.whitelist()
+def get_followed_advice(
+	policy: str | None = None,
+	agent: str | None = None,
+	agent_run: str | None = None,
+	surface: str | None = None,
+	from_date: Any = None,
+	to_date: Any = None,
+) -> dict:
+	"""Followed-advice rate per surface: Advise Decision Call top-suggested candidate vs what was
+	actually used afterward (PLAN.md §3.13, IP §19.3). Information only.
+
+	Requires ``decision.run``. Same filter/aggregation shape as ``get_shadow_agreement`` (see
+	above), but for ``mode="Advise"`` calls. See ``evaluation.get_followed_advice`` for which
+	surfaces are Advise-eligible (``binding.ADVISE_SURFACES``) versus actually measurable
+	(``evaluation.MEASURABLE_SURFACES``) -- today only Tool Selection is both.
+
+	Returns:
+		Same shape as ``get_shadow_agreement``, with ``mode="Advise"``.
+	"""
+	_require("decision.run")
+
+	from huf.ai.decision import evaluation
+
+	return evaluation.get_followed_advice(
+		policy=policy,
+		agent=agent,
+		agent_run=agent_run,
+		surface=surface,
+		from_date=from_date,
+		to_date=to_date,
+	)
+
+
+@frappe.whitelist()
+def replay_policy(
+	decision_call: str,
+	target_policy_version: str,
+	candidate_source: str | None = None,
+	candidate_resolver_id: str | None = None,
+	candidates: Any = None,
+) -> dict:
+	"""Rerun a stored Decision Call's request against a different (newer) published policy
+	version (PLAN.md §3.13, IP §19.2 "Replay harness"). Thin, capability-checked wrapper around
+	``huf.ai.decision.evaluation.replay_policy`` -- see that function's docstring for exactly
+	what is reconstructed from the stored call (state_snapshot, candidate_ids_json) versus what
+	is lost (candidate descriptions, candidate_source, question_snapshot) and how the replay is
+	marked in Decision Call history (``surface="Replay:<original surface>"``, ``origin_type=
+	"Playground"``) rather than counted as a new production call for the real binding.
+
+	Requires ``decision.run`` (this runs ``service.run_policy`` -- the normal gate for running
+	any decision) plus D5 read access to the original ``decision_call`` (enforced inside
+	``evaluation.replay_policy`` via ``doc.check_permission("read")``).
+
+	Args:
+		decision_call: The stored ``Decision Call`` docname to replay.
+		target_policy_version: ``Decision Policy Version`` docname to run against (must belong
+			to the same ``Decision Policy`` as the original call, Published or Retired).
+		candidate_source: Optional override for the request's declared candidate provenance
+			(a ``huf.ai.decision.types.CandidateSource`` value) -- not persisted on the original
+			call, so required here whenever the target version has a ``select`` question.
+		candidate_resolver_id: Optional, passed straight through to ``service.run_policy``
+			alongside ``candidate_source`` -- required whenever ``candidate_source`` is given
+			and is not ``"policy_options"``.
+		candidates: Optional override for the candidate/option list (JSON string or list of
+			``{"id", "description"}`` mappings) -- defaults to the original call's
+			``candidate_ids_json`` with empty descriptions.
+
+	Returns:
+		``{original_decision_call, original_policy_version, target_policy_version,
+		replay_decision_call, result, limitations}`` where ``result`` mirrors ``run_decision``'s
+		``{status, decision_call, fallback_action, response}`` shape (serialized through the
+		same ``_serialize_service_result`` helper, so raw backend metadata stays
+		``decision.admin``-gated exactly as it is for ``run_decision``).
+
+	Raises:
+		frappe.DoesNotExistError: unknown ``decision_call`` or ``target_policy_version``.
+		frappe.PermissionError: missing ``decision.run``, or caller cannot read the original
+			``Decision Call`` (D5).
+		frappe.ValidationError: no ``state_snapshot`` to replay, or ``target_policy_version``
+			does not belong to the same policy / is not Published/Retired.
+		ValueError: propagated from ``service.run_policy`` for any other bad call shape.
+	"""
+	_require("decision.run")
+
+	from huf.ai.decision import evaluation
+
+	decoded_candidates = _json_arg(candidates)
+
+	outcome = evaluation.replay_policy(
+		decision_call,
+		target_policy_version,
+		candidate_source=candidate_source,
+		candidate_resolver_id=candidate_resolver_id,
+		candidates=decoded_candidates,
+	)
+
+	service_result = outcome.pop("service_result")
+	outcome["replay_decision_call"] = service_result.decision_call
+	outcome["result"] = _serialize_service_result(service_result, include_raw=_is_admin())
+	return outcome
