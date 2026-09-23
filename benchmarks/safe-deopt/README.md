@@ -105,6 +105,28 @@ scoring code, caught by a follow-up review and fixed with regression tests). A n
 W3 (an 8-step realistic flow), was also added and measured for real on a live bench — see
 `results/w3_bench_report.md`.
 
+## v3 update (Acceptance Plan v2, T1-T8 complete)
+
+**SUPERSEDED below: items (b) and (c) of "Known limitations" describe the mocked-only state
+of an earlier pass and are no longer accurate.** Real LLM runs against `gemini-3.5-flash-lite`
+and `gpt-4o-mini-2024-07-18` were executed for the full C1/C4/C4+G/C5/C6 matrix
+(`results/runs.jsonl`, 3600 rows, 3312 classified live-model, 288 quarantined
+zero-token/no-transcript rows — see `results/scored_v2/`), for a real 5-scenario x 2-model-family
+HUF/Frappe integration through the actual `execute_procedure` and real wired runtime replay
+guard (`results/llm_recovery_integration_v2.jsonl`), and for a real 20-execution
+Procedure-vs-naive-agent comparison (`results/procedure_vs_naive_runs.jsonl`). `LiveAPIModel`
+(or an equivalent real-model path) is therefore implemented and was used, not a stub, as of
+this update. C2 and C3 still have zero real rows anywhere (see item (b) below, which is
+**not** superseded). Full reconciled results, exclusions, and the claim-to-evidence table are
+at `Tracks/SafeDeoptExperiment/RECOVERY_RESULTS_RECONCILED.md`,
+`Tracks/SafeDeoptExperiment/EXCLUSIONS_AND_FAILURES.md`, and
+`Tracks/SafeDeoptExperiment/CLAIM_TO_EVIDENCE_TABLE.md`. See also
+`Tracks/SafeDeoptExperiment/REPORT.md`'s "v7 — Acceptance Plan v2 complete" section for the
+full summary. Item (e)'s lifecycle/break-even limitation is unchanged and not superseded:
+`propose_procedure_from_run` still has never been run against a live bench, and no numerical
+break-even claim is made anywhere in the current reports
+(`Tracks/SafeDeoptExperiment/LIFECYCLE_CLAIM_AUDIT.md`).
+
 ## Known limitations
 
 - **(a) W1/W2 are simulated in-memory stores, not a real ERPNext bench.** `workloads.py`'s
@@ -119,7 +141,11 @@ W3 (an 8-step realistic flow), was also added and measured for real on a live be
   exists to check this benchmark's claims against a real bench; see
   `Tracks/SafeDeoptExperiment/BENCH_VERIFICATION.md` if that file exists in your checkout —
   this benchmark does not depend on it and does not block on its existence.
-- **(b) All current results are from a `MockedModel`, not a real LLM.** Every row in
+- **(b) [SUPERSEDED, see "v3 update" above] All current results are from a `MockedModel`, not a real LLM.** This described the state of `results/runs.mock.jsonl` at the time it was
+  written; the real-model dataset (`results/runs.jsonl`, 3312 live-model rows) documented in
+  the v3 update above did not exist yet. The mocked matrix described below is retained as a
+  separate, still-valid methodology-demonstration artifact — it was not deleted or replaced by
+  the real run, the two datasets coexist. Every row in
   `results/runs.mock.jsonl` and every number in `results/summary.csv` comes from a
   deterministic, scripted/rule-based stand-in for a language model (see
   `recovery_harness.MockedModel` and `run_experiment.py`'s module docstring), run at n=1
@@ -136,7 +162,10 @@ W3 (an 8-step realistic flow), was also added and measured for real on a live be
   predict when a model behaves the scripted way — it is proof the machinery works, not
   evidence about how a real model actually behaves under these conditions. Only a real
   `LiveAPIModel` run can supply that evidence.
-- **(c) `LiveAPIModel` is a stub, not implemented.** `recovery_harness.LiveAPIModel` reads
+- **(c) [SUPERSEDED, see "v3 update" above] `LiveAPIModel` is a stub, not implemented.** This
+  was true when written; a real-model path was subsequently implemented and used to produce
+  `results/runs.jsonl` (3312 live-model rows) and the T4/T6 integration/comparison datasets.
+  Original text, kept for history: `recovery_harness.LiveAPIModel` reads
   `MODEL` from the environment but its `next_step()` deliberately raises
   `NotImplementedError` rather than fabricating a response or silently no-op-ing. Real LLM
   runs (C1/C4/C4+G/C5/C6 against an actual model) are not possible today without
