@@ -1,4 +1,4 @@
-"""Schema-level checks for the PR2 canonical identity data model."""
+"""Schema-level checks for the PR1 decision runtime activation data model."""
 from __future__ import annotations
 
 import json
@@ -20,40 +20,54 @@ class TestDecisionSchema(unittest.TestCase):
         deployment_fields = {field["fieldname"] for field in deployment["fields"]}
         self.assertIn("canonical_version", model_fields)
         self.assertIn("decision_model", deployment_fields)
+        self.assertIn("ai_model", deployment_fields)
         self.assertIn("provider", deployment_fields)
         self.assertIn("provider_model_id", deployment_fields)
         self.assertNotIn("provider_model_id", model_fields)
 
-    def test_provider_credentials_and_adapter_boundary(self):
-        provider = self.load("decision_provider")
-        fields = {field["fieldname"]: field for field in provider["fields"]}
-        self.assertEqual(fields["api_key"]["fieldtype"], "Password")
+    def test_model_family_has_adapter_id(self):
+        family = self.load("decision_model_family")
+        fields = {field["fieldname"]: field for field in family["fields"]}
         self.assertIn("adapter_id", fields)
-        self.assertNotIn("import_path", fields)
+        self.assertEqual(fields["adapter_id"]["fieldtype"], "Data")
 
-    def test_deployment_capabilities_are_explicit(self):
+    def test_deployment_capabilities_and_wire_protocol(self):
         deployment = self.load("decision_deployment")
         fields = {field["fieldname"] for field in deployment["fields"]}
         self.assertTrue({"supports_select", "supports_judge", "supports_score"} <= fields)
         self.assertIn("input_modalities", fields)
+        self.assertIn("ai_model", fields)
+        self.assertIn("wire_protocol", fields)
+        self.assertIn("endpoint_path", fields)
 
-    def test_policy_versions_and_calls_snapshot_execution_identity(self):
-        policy = self.load("decision_policy")
-        version = self.load("decision_policy_version")
+    def test_call_has_resolved_provider_and_origin_metadata(self):
         call = self.load("decision_call")
-        policy_fields = {field["fieldname"] for field in policy["fields"]}
-        version_fields = {field["fieldname"] for field in version["fields"]}
         call_fields = {field["fieldname"] for field in call["fields"]}
-        self.assertTrue({"definition_json", "fingerprint", "current_version"} <= policy_fields)
-        self.assertTrue({"definition_json", "fingerprint", "status"} <= version_fields)
-        self.assertTrue({"policy_fingerprint", "decision_provider", "decision_model", "resolved_model_version"} <= call_fields)
-        self.assertTrue({"deployment_fallback_chain", "fallback_action", "state_hash"} <= call_fields)
+        # resolved_provider replaces decision_provider
+        self.assertIn("resolved_provider", call_fields)
+        self.assertNotIn("decision_provider", call_fields)
+        # origin metadata fields
+        self.assertIn("origin_type", call_fields)
+        self.assertIn("automation", call_fields)
+        self.assertIn("shadow_of", call_fields)
+        self.assertIn("decision_model", call_fields)
+        self.assertIn("resolved_model_version", call_fields)
+        self.assertIn("deployment_fallback_chain", call_fields)
+        self.assertIn("fallback_action", call_fields)
+        self.assertIn("state_hash", call_fields)
 
-    def test_binding_is_opt_in_and_surface_scoped(self):
-        binding = self.load("agent_decision_binding")
-        fields = {field["fieldname"] for field in binding["fields"]}
-        self.assertTrue({"surface", "policy", "mode", "enabled"} <= fields)
-        self.assertEqual(binding.get("istable"), 1)
+    def test_policy_has_api_access_control(self):
+        policy = self.load("decision_policy")
+        policy_fields = {field["fieldname"] for field in policy["fields"]}
+        self.assertIn("allow_api_access", policy_fields)
+        self.assertIn("definition_json", policy_fields)
+        self.assertIn("fingerprint", policy_fields)
+        self.assertIn("current_version", policy_fields)
+
+    def test_agent_has_decision_bindings(self):
+        agent = self.load("agent")
+        fields = {field["fieldname"] for field in agent["fields"]}
+        self.assertIn("decision_bindings", fields)
 
 
 if __name__ == "__main__":
