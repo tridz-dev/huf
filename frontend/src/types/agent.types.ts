@@ -350,6 +350,16 @@ export interface AgentDoc {
     enabled?: 0 | 1 | boolean;
   }>;
 
+  // Allowed model overrides for routing
+  allowed_models?: Array<{
+    name?: string;
+    provider?: string;
+    model?: string;
+    enable_auto_routing?: 0 | 1;
+    routing_description?: string | null;
+    priority?: number | null;
+  }>;
+
   // Decision Runtime bindings
   decision_bindings?: Array<{
     name?: string;

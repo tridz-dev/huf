@@ -190,6 +190,14 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     allow_ask_user: agent.allow_ask_user === 1,
     allow_rich_elements: agent.allow_rich_elements === 1,
     allow_document_artifacts: agent.allow_document_artifacts === 1,
+    allowed_models: (agent.allowed_models || []).map((row: any) => ({
+      name: row.name,
+      provider: row.provider,
+      model: row.model,
+      enable_auto_routing: row.enable_auto_routing === 1,
+      routing_description: row.routing_description || '',
+      priority: row.priority !== undefined ? row.priority : undefined,
+    })),
   };
 }
 
@@ -2440,6 +2448,8 @@ export function AgentFormPage() {
                   loadingPrompts={loadingPrompts}
                   showAddNewPrompt
                   locked={systemLocked}
+                  decisionBindings={decisionBindings}
+                  onUpdateDecisionBindings={setDecisionBindings}
                 />
               </TabsContent>
 
@@ -2471,6 +2481,7 @@ export function AgentFormPage() {
                   mcpLoading={mcpLoading}
                   decisionBindings={decisionBindings}
                   onUpdateDecisionBindings={setDecisionBindings}
+                  agentName={form.watch('agent_name') || id || ''}
                 />
               </TabsContent>
 
@@ -2480,6 +2491,8 @@ export function AgentFormPage() {
                   onAdd={handleAddKnowledge}
                   onEdit={handleEditKnowledge}
                   onRemove={handleRemoveKnowledge}
+                  decisionBindings={decisionBindings}
+                  onUpdateDecisionBindings={setDecisionBindings}
                 />
               </TabsContent>
 
