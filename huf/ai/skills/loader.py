@@ -383,35 +383,28 @@ def _skill_selection_origin(agent_name: str, conversation_id: Optional[str], age
     )
 
 
-def _latest_user_message_text(conversation_id: str, limit_chars: int = 2000) -> str:
-    """Best-effort last user turn, for the gate/rank questions to judge relevance against.
+def _skill_selection_state(
+    agent_name: str,
+    conversation_id: Optional[str],
+    *,
+    agent_run_id: Optional[str] = None,
+    request_text: Optional[str] = None,
+) -> dict:
+    """State for the Skill Selection gate/rank questions.
 
-    Never raises: an unavailable/mistyped conversation just means the decision runs with
-    less context, not that skill discovery breaks.
+    T4.13: delegates the run-context part (conversation_id / agent_run_id / the current
+    user request, keyed ``"request"``) to ``agent_surfaces.build_surface_state`` -- same
+    helper Tool Selection and Procedure Selection now use -- instead of this module's own
+    conversation-lookup. ``request_text`` is normally the current turn's prompt, threaded
+    in from ``AgentManager`` (see ``create_list_skills_tool``); when a caller has only a
+    ``conversation_id`` (or omits ``request_text`` entirely), ``build_surface_state`` falls
+    back to the same best-effort "latest user message" DB lookup this function used to do
+    itself, so behavior for existing callers is unchanged.
     """
-    try:
-        content = frappe.db.get_value(
-            "Agent Message",
-            {"conversation": conversation_id, "role": "user"},
-            "content",
-            order_by="conversation_index desc",
-        )
-    except Exception:
-        return ""
+    from huf.ai.decision.agent_surfaces import build_surface_state
 
-    if not content:
-        return ""
-    return content[:limit_chars]
-
-
-def _skill_selection_state(agent_name: str, conversation_id: Optional[str]) -> dict:
-    state = {"agent_name": agent_name}
-    if conversation_id:
-        state["conversation_id"] = conversation_id
-        task_text = _latest_user_message_text(conversation_id)
-        if task_text:
-            state["task"] = task_text
-    return state
+    kwargs = {"conversation_id": conversation_id, "agent_run_id": agent_run_id, "request_text": request_text}
+    return build_surface_state(kwargs, extra={"agent_name": agent_name})
 
 
 def _wide_skill_option(skill):
@@ -479,7 +472,7 @@ def _configured_latency_budget_ms(agent_doc, resolved) -> int:
     return _DEFAULT_LATENCY_BUDGET_MS
 
 
-def _decide_skill_selection(agent_doc, skills, *, conversation_id=None, agent_run_id=None):
+def _decide_skill_selection(agent_doc, skills, *, conversation_id=None, agent_run_id=None, request_text=None):
     """Run the Skill Selection two-request pattern (IP §10.4) for ``skills``.
 
     Returns ``None`` when there is nothing to do differently (Off, Shadow, disabled, any
@@ -497,7 +490,9 @@ def _decide_skill_selection(agent_doc, skills, *, conversation_id=None, agent_ru
 
     agent_name = getattr(agent_doc, "agent_name", None) or getattr(agent_doc, "name", None)
     origin = _skill_selection_origin(agent_name, conversation_id, agent_run_id)
-    state = _skill_selection_state(agent_name, conversation_id)
+    state = _skill_selection_state(
+        agent_name, conversation_id, agent_run_id=agent_run_id, request_text=request_text
+    )
 
     wide_candidates = tuple(_wide_skill_option(skill) for skill in skills)
 
@@ -631,6 +626,7 @@ def create_list_skills_tool(
     *,
     conversation_id: Optional[str] = None,
     agent_run_id: Optional[str] = None,
+    request_text: Optional[str] = None,
 ) -> Optional[FunctionTool]:
     """Build a runtime list_skills tool for the given agent.
 
@@ -638,10 +634,13 @@ def create_list_skills_tool(
     two-request rank+gate / shortlist-rerank decision runs once here, at tool-build time,
     and its result (narrowed ids for Enforce, or a hint for Advise) is baked into the
     tool's ``extra_args`` so ``handle_list_skills`` needs no further decision calls at
-    invocation time. ``conversation_id`` / ``agent_run_id`` are optional -- passing them
-    lets the decision's state include the current task and its origin link to the run;
-    without them the decision still runs (agent-level state only), and with no binding at
-    all this is a no-op (Off, identical output).
+    invocation time. ``conversation_id`` / ``agent_run_id`` / ``request_text`` are all
+    optional -- passing them lets the decision's state include the current turn's request
+    text (T4.13; see ``agent_surfaces.build_surface_state``) and its origin link to the
+    run; without them the decision still runs (agent-level state, and -- if
+    ``conversation_id`` is given without ``request_text`` -- a best-effort DB fallback for
+    the latest user message), and with no binding at all this is a no-op (Off, identical
+    output).
     """
     if not _skill_doctypes_exist():
         return None
@@ -658,7 +657,11 @@ def create_list_skills_tool(
     try:
         agent_doc = frappe.get_cached_doc("Agent", agent_name)
         decision = _decide_skill_selection(
-            agent_doc, skills, conversation_id=conversation_id, agent_run_id=agent_run_id
+            agent_doc,
+            skills,
+            conversation_id=conversation_id,
+            agent_run_id=agent_run_id,
+            request_text=request_text,
         )
     except Exception as e:
         # Never let a decision-layer failure block skill discovery -- keep the full list.

@@ -370,6 +370,54 @@ class TestToolSelectionDecision(unittest.TestCase):
         # Byte-identical JSON output
         self.assertEqual(result_off, result_no_binding)
 
+    def test_search_tools_state_carries_request_text(self):
+        """T4.13: the current user request (threaded in as request_text via the run
+        context) reaches the Tool Selection decision's state, not just query/candidates."""
+        agent_mock = SimpleNamespace(
+            name=self.agent_name,
+            decision_bindings=[SimpleNamespace(**self._make_binding("enforce-policy", mode="Enforce"))],
+        )
+
+        response = DecisionResponse(
+            status=DecisionStatus.SUCCESS,
+            answers={
+                "pick": DecisionAnswer("pick", QuestionKind.SELECT, value="create_invoice"),
+            },
+        )
+
+        captured_kwargs = {}
+
+        def _capture_run_policy(policy, **kwargs):
+            captured_kwargs.update(kwargs)
+            return ServiceResult(status=DecisionStatus.SUCCESS, response=response)
+
+        with mock.patch(
+            "huf.ai.tools.lazy_discovery._resolve_agent_doc",
+            return_value=agent_mock,
+        ), mock.patch(
+            "huf.ai.tools.lazy_discovery.PermissionAwareToolRegistry.get_allowed_tools",
+            return_value=self._mock_allowed_tools(),
+        ), mock.patch(
+            "huf.ai.capability_discovery.actions.search_app_actions",
+            return_value=[{"title": "create_invoice", "description": "Create an invoice"}],
+        ), mock.patch(
+            "huf.ai.decision.agent_surfaces.service.run_policy",
+            side_effect=_capture_run_policy,
+        ):
+            handle_search_tools(
+                query="invoice",
+                agent_name=self.agent_name,
+                agent_run_id="ar-123",
+                conversation_id="conv-123",
+                request_text="Please create an invoice for customer Acme",
+            )
+
+        self.assertIn("state", captured_kwargs)
+        state = captured_kwargs["state"]
+        self.assertEqual(state.get("request"), "Please create an invoice for customer Acme")
+        self.assertEqual(state.get("conversation_id"), "conv-123")
+        self.assertEqual(state.get("agent_run_id"), "ar-123")
+
 
 if __name__ == "__main__":
     unittest.main()

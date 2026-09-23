@@ -50,9 +50,15 @@ def _frappe_run_context_dict(ctx) -> dict:
 def _merge_run_context(args_dict: dict, ctx) -> dict:
     """Inject run-context values into tool args without clobbering the LLM's.
 
-    conversation_id / agent_run_id / agent_name from the huf run context are
+    conversation_id / agent_run_id / agent_name / request_text from the huf run context are
     only injected when the key is NOT already present in args_dict — the
     LLM's explicit arguments always win (setdefault semantics).
+
+    ``request_text`` (T4.13) is the current turn's prompt, set on the ``context`` dict by
+    ``huf.ai.agent_integration``'s run functions. It is not a declared parameter of any
+    lazy-discovery handler, so it always lands in that handler's ``**kwargs`` -- read from
+    there by ``huf.ai.decision.agent_surfaces.build_surface_state`` for the Tool Selection
+    decision surface's state.
 
     ``call_id`` is the Agents SDK's own tool_call_id (``ctx.tool_call_id``,
     e.g. ``call_xyz``) rather than anything from the huf run context dict —
@@ -61,7 +67,7 @@ def _merge_run_context(args_dict: dict, ctx) -> dict:
     need in order to correlate a later result back to this call.
     """
     huf_ctx = _frappe_run_context_dict(ctx)
-    for key in ("conversation_id", "agent_run_id", "agent_name"):
+    for key in ("conversation_id", "agent_run_id", "agent_name", "request_text"):
         if key not in huf_ctx:
             continue
 

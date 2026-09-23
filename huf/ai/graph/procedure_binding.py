@@ -183,7 +183,7 @@ def _apply_procedure_decision(agent, bound_procedures: list[BoundProcedure], kwa
 	this function never raises or returns an exceptional status.
 	"""
 	try:
-		from huf.ai.decision.agent_surfaces import decide_for_surface
+		from huf.ai.decision.agent_surfaces import build_surface_state, decide_for_surface
 		from huf.ai.decision.types import DecisionOrigin, Option
 
 		# Build candidates from procedures
@@ -202,12 +202,17 @@ def _apply_procedure_decision(agent, bound_procedures: list[BoundProcedure], kwa
 			agent_run=agent_run_id,
 		)
 
+		# T4.13: conversation_id/agent_run_id/request_text (the current user turn) from the
+		# run context -- Procedure Selection previously always ran with state={} (the biggest
+		# gap this task closes). No domain-specific keys of its own beyond that.
+		state = build_surface_state(kwargs)
+
 		# Call the decision surface
 		decision = decide_for_surface(
 			agent,
 			surface="Procedure Selection",
 			candidates=candidates,
-			state={},  # Procedure selection has no domain-specific state
+			state=state,
 			origin=origin,
 			hint_kind="procedures",
 		)

@@ -87,6 +87,96 @@ class SurfaceDecision:
 	decision_call: str | None
 
 
+#: ``state["request"]`` truncation length -- matches
+#: ``huf.ai.decision.model_routing.route_agent_model``'s existing convention for the same field.
+_REQUEST_TEXT_MAX_CHARS = 2000
+
+
+def _fallback_request_text(conversation_id: str | None, limit_chars: int = _REQUEST_TEXT_MAX_CHARS) -> str:
+	"""Best-effort last user turn for ``conversation_id``, when no explicit request text
+	was threaded through.
+
+	Mirrors ``huf.ai.skills.loader._latest_user_message_text`` (same query, same reasoning)
+	rather than importing it, to avoid a decision<->skills import cycle. Never raises: an
+	unavailable/mistyped conversation just means the surface runs with less context, not
+	that discovery/selection breaks (T4.13).
+	"""
+	if not conversation_id:
+		return ""
+	try:
+		content = frappe.db.get_value(
+			"Agent Message",
+			{"conversation": conversation_id, "role": "user"},
+			"content",
+			order_by="conversation_index desc",
+		)
+	except Exception:  # noqa: BLE001 - best-effort only
+		return ""
+	if not content:
+		return ""
+	return content[:limit_chars]
+
+
+def build_surface_state(kwargs: dict, *, extra: dict | None = None) -> dict:
+	"""Build the run-context part of ``state`` every agent-facing decision surface should
+	include, so Tool/Skill/Procedure Selection see the same current-turn context Model
+	Routing already gets (T4.13 -- these surfaces previously ran with agent-level state
+	only, never the text of what the user actually asked).
+
+	``kwargs`` is read, never mutated -- the same run-context dict callers already have on
+	hand at either of the two points a surface builds its decision:
+
+	- **Tool call time** (``huf.ai.tools.lazy_discovery``): ``**kwargs`` on a handler is
+	  populated by ``huf.ai.sdk_tools._merge_run_context`` from the Agents SDK run context
+	  (``conversation_id`` / ``agent_run_id`` / ``agent_name`` / ``request_text``, the last
+	  threaded in from ``AgentManager``'s ``context`` dict -- see
+	  ``huf.ai.agent_integration.AgentManager._setup_tools``).
+	- **Tool build time** (``huf.ai.skills.loader.create_list_skills_tool``,
+	  ``huf.ai.graph.procedure_binding.build_procedure_binding_tools``): the same three keys
+	  are passed straight through from ``AgentManager._setup_tools`` -> ``create_agent_tools``
+	  as plain keyword arguments.
+
+	Recognized keys, all optional:
+
+	- ``conversation_id`` -> ``state["conversation_id"]``
+	- ``agent_run_id`` -> ``state["agent_run_id"]``
+	- ``request_text`` -> ``state["request"]`` (truncated to 2000 chars, matching
+	  ``huf.ai.decision.model_routing.route_agent_model``'s existing state key for the same
+	  field). When absent but ``conversation_id`` is present, falls back to a best-effort DB
+	  lookup of the conversation's latest user message (see :func:`_fallback_request_text`)
+	  so a caller that only has a conversation id still gets *something* to judge relevance
+	  against, rather than nothing.
+
+	``extra`` is merged on top (added, never removing the run-context keys above unless
+	``extra`` itself sets the same key) -- callers use it for their own surface-specific
+	state (e.g. Tool Selection's ``"query"``) so ``build_surface_state`` can return one
+	ready-to-use ``state`` dict instead of every call site hand-merging two dicts.
+
+	Never raises. Returns ``{}`` for an empty/missing ``kwargs`` and no ``extra``.
+	"""
+	kwargs = kwargs or {}
+	state: dict[str, Any] = {}
+
+	conversation_id = kwargs.get("conversation_id")
+	if conversation_id:
+		state["conversation_id"] = conversation_id
+
+	agent_run_id = kwargs.get("agent_run_id")
+	if agent_run_id:
+		state["agent_run_id"] = agent_run_id
+
+	request_text = kwargs.get("request_text")
+	if not request_text:
+		request_text = _fallback_request_text(conversation_id)
+	if request_text:
+		state["request"] = str(request_text)[:_REQUEST_TEXT_MAX_CHARS]
+
+	if extra:
+		state.update(extra)
+
+	return state
+
+
 #: How long (seconds) to suppress a repeat ``frappe.log_error`` for the same surface after one
 #: was written. PLAN.md §3.6 "Errors" gives this same cadence ("one error log per hour") for a
 #: binding pointing at a disabled/deleted policy; the same reasoning applies to any other

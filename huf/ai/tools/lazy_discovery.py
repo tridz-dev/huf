@@ -15,7 +15,7 @@ from huf.ai.graph.procedure_binding import (
     get_bound_procedures_for_agent,
     _tool_name_for as _procedure_tool_name,
 )
-from huf.ai.decision.agent_surfaces import decide_for_surface
+from huf.ai.decision.agent_surfaces import build_surface_state, decide_for_surface
 from huf.ai.decision.types import DecisionOrigin, Option, CandidateSource
 
 logger = frappe.logger("huf")
@@ -116,7 +116,9 @@ def _apply_tool_selection_decision(agent, result: list, kwargs: dict) -> list | 
         return None
 
     origin = _build_origin(kwargs)
-    state = {"query": None}  # No query context for list_tool_groups
+    # T4.13: conversation_id/agent_run_id/request_text (the current user turn) from the run
+    # context, plus this handler's own "query" key -- list_tool_groups has none.
+    state = build_surface_state(kwargs, extra={"query": None})
 
     decision = decide_for_surface(
         agent,
@@ -172,7 +174,9 @@ def _apply_tool_search_decision(agent, matches: list, kwargs: dict) -> list | No
         return None
 
     origin = _build_origin(kwargs)
-    state = {"query": kwargs.get("query", "")}
+    # T4.13: conversation_id/agent_run_id/request_text (the current user turn) from the run
+    # context, plus this handler's own "query" key.
+    state = build_surface_state(kwargs, extra={"query": kwargs.get("query", "")})
 
     decision = decide_for_surface(
         agent,
