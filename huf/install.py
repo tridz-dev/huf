@@ -103,6 +103,15 @@ def after_install():
     create_huf_roles()
     create_demo_ai_providers()
     create_demo_ai_models()
+    try:
+        from huf.patches.v1.seed_decision_system_one import seed_decision_system_one
+
+        seed_decision_system_one()
+    except Exception:
+        frappe.log_error(
+            title="seed_decision_system_one failed during after_install",
+            message=frappe.get_traceback(),
+        )
     create_hub_orchestrator_agent()
     create_design_system_skill()
     create_meeting_summary_agent()
