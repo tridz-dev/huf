@@ -445,6 +445,8 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 			if isinstance(option, dict):
 				targets.append((f"config.options[{i}].node_id", option.get("node_id")))
 		targets.append(("config.default", config.get("default")))
+		if ntype == "router.decision":
+			targets.append(("config.uncertain_next", config.get("uncertain_next")))
 	elif ntype == "human.approval":
 		targets.append(("config.approve_next", config.get("approve_next")))
 		targets.append(("config.reject_next", config.get("reject_next")))

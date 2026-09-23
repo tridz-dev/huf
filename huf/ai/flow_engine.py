@@ -92,6 +92,12 @@ ADVANCEABLE_STATUSES = ("Running", "Queued")
 NODE_ROUTING = {
 	"condition": RoutingMode.SELF_ROUTED,
 	"router.llm": RoutingMode.SELF_ROUTED,
+	# SELF_ROUTED_OPTIONAL (not plain SELF_ROUTED, unlike router.llm): a router.decision node
+	# can legitimately return {"status": "failed", "error": ...} with no next_node_id -- the
+	# switch-off-with-no-uncertain_next and no-candidates cases in _exec_router_decision. With
+	# plain SELF_ROUTED, Router.resolve would raise its own generic RoutingError before the
+	# executor's fail-closed on_error handling ever saw the node's specific error message.
+	"router.decision": RoutingMode.SELF_ROUTED_OPTIONAL,
 	"loop": RoutingMode.SELF_ROUTED_OPTIONAL,
 	"end": RoutingMode.TERMINAL,
 	# "output" is always terminal per spec/graph-ir.md section 2 ("next must be
@@ -273,7 +279,16 @@ def _acquire_run_lock(flow_run_name: str) -> bool:
 
 def _release_run_lock(flow_run_name: str) -> None:
 	try:
-		frappe.cache().delete_value(_run_lock_key(flow_run_name))
+		# Must match _acquire_run_lock's key exactly: that call goes through the raw
+		# redis-py `.set(key, ..., nx=True)` (RedisWrapper subclasses redis.Redis, and
+		# only its own set_value/get_value/delete_value wrappers apply frappe's
+		# db_name key prefix -- see frappe.utils.redis_wrapper.RedisWrapper.make_key).
+		# Releasing through the prefixed `.delete_value(...)` instead deletes a
+		# different key and never actually frees the lock this run took -- every run
+		# after the first pause on a given Flow Run would then find the run
+		# permanently un-advanceable (_acquire_run_lock returns False forever, until
+		# the TTL expires). Use the same raw key here.
+		frappe.cache().delete(_run_lock_key(flow_run_name))
 	except Exception:
 		pass
 
@@ -411,12 +426,30 @@ def _build_run_context(flow_run, version: PinnedVersion) -> FlowRunContext:
 			"fingerprint": version.fingerprint,
 		},
 	)
-	return FlowRunContext(
+	run_ctx = FlowRunContext(
 		version.graph.get("settings", {}),
 		flow_run=flow_run,
 		version=version,
 		context=context,
 	)
+
+	if _has_decision_router_node(version.graph) and frappe.db.get_single_value(
+		"Agent Settings", "decision_runtime_enabled"
+	):
+		# Local import: nothing under huf.ai.decision loads for a run whose graph has no
+		# router.decision node, or on a site with the kill switch off (Harness principle:
+		# no behavior change for existing Flows unless a user opted in).
+		from huf.ai.decision.flow_adapter import make_flow_decision_router
+
+		run_ctx["decision_router"] = make_flow_decision_router(flow_run, version)
+
+	return run_ctx
+
+
+def _has_decision_router_node(graph: dict) -> bool:
+	"""True if the pinned graph contains at least one ``router.decision`` node."""
+	nodes = (graph or {}).get("nodes") or []
+	return any(isinstance(node, dict) and node.get("type") == "router.decision" for node in nodes)
 
 
 def resume_flow_run(flow_run_name: str, user_input: dict | None = None):
@@ -1104,7 +1137,14 @@ def _exec_router_decision(flow_run, node: dict, config: dict, settings: dict) ->
 	"""
 	decision_router = (settings or {}).get("decision_router")
 	if not callable(decision_router):
-		return {"status": "failed", "error": "router.decision is not enabled for this Flow run"}
+		# _build_run_context never injects decision_router when Agent Settings.decision_runtime_enabled
+		# is off (the site kill switch), so this is the switch-off path, not a config error -- follow
+		# uncertain_next like any other uncertain outcome when the node declares one.
+		message = "Decision Runtime is off for this site"
+		uncertain_next = (config or {}).get("uncertain_next")
+		if uncertain_next:
+			return {"status": "uncertain", "next_node_id": uncertain_next, "reason": message}
+		return {"status": "failed", "error": message}
 	run_ctx = _run_context(settings)
 	ctx = _context_of(flow_run, settings)
 	edges_list = run_ctx.edges if run_ctx is not None else effective_edges(load_definition(flow_run.flow_id))
@@ -1418,7 +1458,7 @@ def _run_sub_chain(flow_run, settings: dict, node_ids: list) -> dict:
 			cursor = on_error
 			continue
 
-		if NODE_ROUTING.get(node.get("type")) == RoutingMode.SELF_ROUTED:
+		if NODE_ROUTING.get(node.get("type")) == RoutingMode.SELF_ROUTED or node.get("type") == "router.decision":
 			cursor = last_result.get("next_node_id")
 		else:
 			cursor = node.get("next")
@@ -1673,7 +1713,7 @@ def edges_from_nodes(nodes: list) -> list[dict]:
 				)
 			if on_false:
 				edges.append({"from": node_id, "to": on_false, "type": "always"})
-		elif node_type == "router.llm":
+		elif node_type in ("router.llm", "router.decision"):
 			for option in config.get("options") or []:
 				to = (option or {}).get("node_id")
 				if to:
