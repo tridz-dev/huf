@@ -420,7 +420,7 @@ export function ChatMessage({
                         )}
                         {/* Actions for user messages */}
                         {message.from === 'user' && message.versions[0]?.content && (
-                            <div className="opacity-0 transition-opacity group-hover:opacity-100 flex items-center gap-2 text-muted-foreground">
+                            <div className="opacity-0 transition-opacity group-hover:opacity-100 flex items-center gap-2 text-muted-foreground self-end">
                                 <CopyButton content={message.versions[0].content} />
                                 {message.injected_memories && message.injected_memories.length > 0 && (
                                     <MemoryContextBadge memoryRecordNames={message.injected_memories} />

@@ -1,8 +1,10 @@
 """URL content extractor using requests and BeautifulSoup."""
 
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
 import os
 import tempfile
+
 
 import requests
 from bs4 import BeautifulSoup

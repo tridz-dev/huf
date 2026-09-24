@@ -579,8 +579,29 @@ We generally recommend altering this or temperature but not both.`}
                       <Textarea
                         placeholder="Enter a starter prompt"
                         className="min-h-[60px] resize-y"
+                        data-starter-prompt-index={index}
                         {...field}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab') {
+                            e.preventDefault();
+                            const focusable = Array.from(
+                              document.querySelectorAll<HTMLElement>(
+                                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                              )
+                            ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+                            const currentIndex = focusable.indexOf(e.currentTarget);
+                            if (currentIndex === -1) return;
+                            const nextIndex = e.shiftKey ? currentIndex - 1 : currentIndex + 1;
+                            focusable[nextIndex]?.focus();
+                          }
+                        }}
                       />
+
+                     
+
+
+
+
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -603,11 +624,29 @@ We generally recommend altering this or temperature but not both.`}
               variant="outline"
               size="sm"
               onClick={() => appendStarterPrompt({ prompt_text: '' }, { shouldFocus: true })}
-            >
+              onKeyDown={(e) => {
+                if (e.key === 'Tab' && !e.shiftKey) {
+                  if (starterPromptFields.length >= 3) return;
+                  e.preventDefault();
+                  const newIndex = starterPromptFields.length;
+                  appendStarterPrompt({ prompt_text: '' });
+                  requestAnimationFrame(() => {
+                    document
+                      .querySelector<HTMLElement>(
+                        `[data-starter-prompt-index="${newIndex}"]`
+                      )
+                      ?.focus();
+                  });
+                }
+              }}
+              
               <Plus className="h-4 w-4 mr-1" />
               Add starter prompt
             </Button>
           )}
+
+        
+
         </CardContent>
       </Card>
       )}

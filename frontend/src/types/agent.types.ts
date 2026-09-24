@@ -329,6 +329,9 @@ export interface AgentDoc {
   tts_model?: string | null;
   tts_voice?: string | null;
   stt_model?: string | null;
+  embed_enabled?: 0 | 1;
+  publishable_key?: string | null;
+  allowed_origins?: string | null;
   allow_file_upload?: 0 | 1;
   enable_ocr?: 0 | 1;
   max_upload_size_mb?: number | null;

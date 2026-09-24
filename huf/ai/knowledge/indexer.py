@@ -290,10 +290,9 @@ def _extract_text(doc) -> ExtractedText:
 		return extractor.extract(file_path)
 
 	elif doc.input_type == "URL":
-		# URLExtractor handles fetching HTML and delegates supported documents.
-		extractor = TextExtractor.get_extractor("url")
-		return extractor.extract(doc.url)
+elif doc.input_type == "URL":
 
+	from .extractors.url import normalize_google_sheets_url
 	else:
 		frappe.throw(_("Unsupported input type: {0}").format(doc.input_type))
 
