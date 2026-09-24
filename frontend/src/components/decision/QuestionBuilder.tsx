@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, type ReactNode } from 'react';
 import { HelperText } from '@/components/ui/helper-text';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Trash2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { validatePolicyDefinition } from '@/services/decisionApi';
+import { cn } from '@/lib/utils';
 
 type QuestionKind = 'select' | 'judge' | 'score';
 
@@ -50,11 +51,95 @@ export interface PolicyDefinition {
   state_bindings: StateBinding[];
 }
 
+/**
+ * `fallback_action` is the label the runtime records on a call (`policy_fallback_action`)
+ * once every deployment has failed -- it is the policy's answer to "if the model fails".
+ * It is NOT consulted for low confidence: a below-threshold answer always gates to
+ * `uncertain` (huf/ai/decision/gating.py), so there is no separate low-confidence action.
+ */
+export const FALLBACK_ACTIONS: { value: string; label: string }[] = [
+  { value: 'fail_closed', label: 'Fail closed' },
+  { value: 'uncertain', label: 'Return uncertain' },
+  { value: 'review', label: 'Flag for review' },
+];
+
+export const DEFAULT_FALLBACK_ACTION = 'fail_closed';
+
+function uniqueQuestionId(questions: Question[]): string {
+  const taken = new Set(questions.map((q) => q.id));
+  let n = questions.length + 1;
+  while (taken.has(`question_${n}`)) n += 1;
+  return `question_${n}`;
+}
+
+function newQuestion(existing: Question[]): Question {
+  return {
+    id: uniqueQuestionId(existing),
+    kind: 'judge',
+    instructions: '',
+    options: [],
+    positive_criteria: '',
+    negative_criteria: '',
+  };
+}
+
+/**
+ * Starting definition for a new policy or ad-hoc run. Every behaviour field that has a
+ * meaningful default is set explicitly, so what the form shows is what gets submitted.
+ *
+ * `minimum_confidence` is deliberately left unset (gate off): setting it makes the runtime
+ * reject any deployment without `supports_confidence` (DECISION_UNSUPPORTED_CAPABILITY,
+ * runtime._validate_capabilities), and that flag defaults to off on Decision Deployment.
+ * The field renders "Off" for this state rather than an ambiguous blank.
+ */
+export function newPolicyDefinition(policyId: string): PolicyDefinition {
+  return {
+    policy_id: policyId,
+    questions: [{ ...newQuestion([]), instructions: 'Describe what this question should decide.' }],
+    state_bindings: [{ name: 'request', path: 'request' }],
+    fallback_action: DEFAULT_FALLBACK_ACTION,
+    store_state: false,
+  };
+}
+
 interface QuestionBuilderProps {
   value: PolicyDefinition;
   onChange: (value: PolicyDefinition) => void;
   readOnly?: boolean;
 }
+
+/** Compact field label: small text with the explanation as a native tooltip. */
+function FieldLabel({ children, hint, className }: { children: ReactNode; hint?: string; className?: string }) {
+  return (
+    <label
+      className={cn(
+        'mb-1 block text-xs font-medium text-steel',
+        hint && 'cursor-help underline decoration-dotted decoration-line underline-offset-2',
+        className,
+      )}
+      title={hint}
+    >
+      {children}
+    </label>
+  );
+}
+
+function SectionHeader({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      {/* Plain concatenation, not cn(): tailwind-merge drops the custom text-eyebrow size. */}
+      <span
+        className={`font-mono text-eyebrow font-medium uppercase text-steel${hint ? ' cursor-help underline decoration-dotted decoration-line underline-offset-2' : ''}`}
+        title={hint}
+      >
+        {title}
+      </span>
+      {action}
+    </div>
+  );
+}
+
+const compactTextarea = 'min-h-0 resize-y px-2.5 py-1.5 text-xs';
 
 export function QuestionBuilder({
   value,
@@ -104,322 +189,223 @@ export function QuestionBuilder({
     }
   }, [onChange]);
 
+  /** Every builder edit goes through here so the Raw JSON tab stays in sync. */
+  const commit = useCallback(
+    (updated: PolicyDefinition) => {
+      onChange(updated);
+      setJsonText(JSON.stringify(updated, null, 2));
+    },
+    [onChange]
+  );
+
   const handleQuestionChange = useCallback(
     (index: number, updatedQuestion: Question) => {
       const newQuestions = [...value.questions];
       newQuestions[index] = updatedQuestion;
-      const updated = { ...value, questions: newQuestions };
-      onChange(updated);
-      setJsonText(JSON.stringify(updated, null, 2));
+      commit({ ...value, questions: newQuestions });
     },
-    [value, onChange]
+    [value, commit]
   );
 
   const handleAddQuestion = useCallback(() => {
-    const newQuestion: Question = {
-      id: `q${value.questions.length + 1}`,
-      kind: 'select',
-      instructions: '',
-      options: [
-        { id: 'option1', description: '' },
-        { id: 'option2', description: '' },
-      ],
-      allow_none: false,
-      positive_criteria: '',
-      negative_criteria: '',
-    };
-    const updated = {
-      ...value,
-      questions: [...value.questions, newQuestion],
-    };
-    onChange(updated);
-    setJsonText(JSON.stringify(updated, null, 2));
-  }, [value, onChange]);
+    commit({ ...value, questions: [...value.questions, newQuestion(value.questions)] });
+  }, [value, commit]);
 
   const handleRemoveQuestion = useCallback(
     (index: number) => {
-      const updated = {
-        ...value,
-        questions: value.questions.filter((_, i) => i !== index),
-      };
-      onChange(updated);
-      setJsonText(JSON.stringify(updated, null, 2));
+      commit({ ...value, questions: value.questions.filter((_, i) => i !== index) });
     },
-    [value, onChange]
+    [value, commit]
   );
 
   const handleAddStateBinding = useCallback(() => {
-    const newBinding: StateBinding = { name: '', path: '' };
-    const updated = {
-      ...value,
-      state_bindings: [...(value.state_bindings || []), newBinding],
-    };
-    onChange(updated);
-    setJsonText(JSON.stringify(updated, null, 2));
-  }, [value, onChange]);
+    commit({ ...value, state_bindings: [...(value.state_bindings || []), { name: '', path: '' }] });
+  }, [value, commit]);
 
   const handleUpdateStateBinding = useCallback(
     (index: number, updatedBinding: StateBinding) => {
-      const updated = {
-        ...value,
-        state_bindings: [
-          ...(value.state_bindings || []).slice(0, index),
-          updatedBinding,
-          ...(value.state_bindings || []).slice(index + 1),
-        ],
-      };
-      onChange(updated);
-      setJsonText(JSON.stringify(updated, null, 2));
+      const bindings = [...(value.state_bindings || [])];
+      bindings[index] = updatedBinding;
+      commit({ ...value, state_bindings: bindings });
     },
-    [value, onChange]
+    [value, commit]
   );
 
   const handleRemoveStateBinding = useCallback(
     (index: number) => {
-      const updated = {
-        ...value,
-        state_bindings: (value.state_bindings || []).filter((_, i) => i !== index),
-      };
-      onChange(updated);
-      setJsonText(JSON.stringify(updated, null, 2));
+      commit({ ...value, state_bindings: (value.state_bindings || []).filter((_, i) => i !== index) });
     },
-    [value, onChange]
+    [value, commit]
   );
 
   if (readOnly) {
     return (
-      <div className="space-y-6">
-        <div className="rounded-lg border p-4">
-          <pre className="overflow-auto text-sm">
-            {JSON.stringify(value, null, 2)}
-          </pre>
-        </div>
+      <div className="rounded border border-line p-3">
+        <pre className="overflow-auto font-mono text-xs">{JSON.stringify(value, null, 2)}</pre>
       </div>
     );
   }
 
+  const bindings = value.state_bindings || [];
+
   return (
     <Tabs defaultValue="builder" className="w-full">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="builder">Builder</TabsTrigger>
-        <TabsTrigger value="json">Raw JSON</TabsTrigger>
+      <TabsList variant="pill" size="compact" className="mb-3">
+        <TabsTrigger value="builder" size="compact">Builder</TabsTrigger>
+        <TabsTrigger value="json" size="compact">Raw JSON</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="builder" className="space-y-6">
-        {/* Questions Section */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Questions</h3>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddQuestion}
-              disabled={readOnly}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add question
-            </Button>
-          </div>
-          <HelperText>
-            Add select (pick one option), judge (yes/no decision), or score (rate on a scale)
-            questions. The model will answer each.
-          </HelperText>
+      <TabsContent value="builder" className="mt-0 space-y-4">
+        {/* Questions */}
+        <div className="space-y-2">
+          <SectionHeader
+            title={`Questions · ${value.questions.length}`}
+            hint="Select picks one option, Judge answers yes/no, Score rates on a scale. The model answers every question in one call."
+            action={
+              <Button type="button" variant="ghost" size="sm" onClick={handleAddQuestion} className="gap-1">
+                <Plus className="h-3.5 w-3.5" />
+                Add question
+              </Button>
+            }
+          />
 
           {value.questions.length === 0 ? (
             <Alert>
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                At least one question is required. Click "Add question" to start.
-              </AlertDescription>
+              <AlertDescription>At least one question is required.</AlertDescription>
             </Alert>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {value.questions.map((question, index) => (
                 <QuestionCard
                   key={index}
                   question={question}
                   onUpdate={(updated) => handleQuestionChange(index, updated)}
                   onRemove={() => handleRemoveQuestion(index)}
-                  readOnly={readOnly}
                 />
               ))}
             </div>
           )}
         </div>
 
-        {/* Confidence and Fallback Section */}
-        <div className="space-y-4 border-t pt-6">
-          <h3 className="font-semibold">Behavior</h3>
-
-          <div className="grid gap-4 md:grid-cols-2">
+        {/* Behavior */}
+        <div className="space-y-2 border-t border-line pt-3">
+          <SectionHeader title="Behavior" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <div>
-              <label className="text-sm font-medium">Minimum confidence</label>
+              <FieldLabel hint="0-1. Below this, the call gates to 'uncertain'. Off = no gate. Needs a deployment with Supports Confidence on, or the run fails with an unsupported-capability error.">
+                Min confidence
+              </FieldLabel>
               <Input
+                size="sm"
                 type="number"
                 min="0"
                 max="1"
-                step="0.01"
+                step="0.05"
+                placeholder="Off"
                 value={value.minimum_confidence ?? ''}
                 onChange={(e) => {
                   const val = e.target.value ? parseFloat(e.target.value) : undefined;
-                  onChange({ ...value, minimum_confidence: val });
+                  commit({ ...value, minimum_confidence: val });
                 }}
-                disabled={readOnly}
-                className="mt-2"
               />
-              <HelperText className="mt-2">
-                If the model's confidence falls below this threshold, apply the low-confidence
-                action (0-1 scale).
-              </HelperText>
             </div>
 
             <div>
-              <label className="text-sm font-medium">Low confidence action</label>
+              <FieldLabel hint="Recorded on the call as the fallback action once every deployment in the failover chain has failed.">
+                If the model fails
+              </FieldLabel>
               <Select
-                value={value.fallback_action || 'uncertain'}
-                onValueChange={(val) =>
-                  onChange({ ...value, fallback_action: val })
-                }
-                disabled={readOnly}
+                value={value.fallback_action || undefined}
+                onValueChange={(val) => commit({ ...value, fallback_action: val })}
               >
-                <SelectTrigger className="mt-2">
-                  <SelectValue />
+                <SelectTrigger size="sm">
+                  <SelectValue placeholder="Not set" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="uncertain">Treat as uncertain</SelectItem>
-                  <SelectItem value="fallback">Use fallback</SelectItem>
-                  <SelectItem value="review">Request review</SelectItem>
+                  {FALLBACK_ACTIONS.map((a) => (
+                    <SelectItem key={a.value} value={a.value}>
+                      {a.label}
+                    </SelectItem>
+                  ))}
+                  {value.fallback_action &&
+                    !FALLBACK_ACTIONS.some((a) => a.value === value.fallback_action) && (
+                      <SelectItem value={value.fallback_action}>{value.fallback_action}</SelectItem>
+                    )}
                 </SelectContent>
               </Select>
-              <HelperText className="mt-2">
-                What to do when low confidence is detected.
-              </HelperText>
             </div>
-          </div>
 
-          <div>
-            <label className="text-sm font-medium">If the model fails</label>
-            <Select
-              value={value.store_state ? 'store' : 'fail_closed'}
-              onValueChange={(val) => {
-                // This will be expanded in future versions
-                onChange({ ...value, store_state: val === 'store' });
-              }}
-              disabled={readOnly}
+            <label
+              className="flex h-control-sm cursor-pointer items-center gap-2 text-xs text-ink"
+              title="Keep the provider-visible state on the Decision Call record. Off by default."
             >
-              <SelectTrigger className="mt-2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fail_closed">Fail closed</SelectItem>
-                <SelectItem value="fallback">Use fallback</SelectItem>
-                <SelectItem value="review">Request review</SelectItem>
-              </SelectContent>
-            </Select>
-            <HelperText className="mt-2">
-              The policy's failure action determines what happens when the model errors.
-            </HelperText>
-          </div>
-        </div>
-
-        {/* State Bindings Section */}
-        <div className="space-y-4 border-t pt-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-semibold">State bindings</h3>
-              <HelperText className="mt-1">
-                Declare which fields from your state will be sent to the model.
-              </HelperText>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddStateBinding}
-              disabled={readOnly}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add binding
-            </Button>
-          </div>
-
-          {(!value.state_bindings || value.state_bindings.length === 0) && (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                At least one state binding is required to specify what data the policy needs.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-3">
-            {(value.state_bindings || []).map((binding, index) => (
-              <div key={index} className="flex gap-2">
-                <div className="flex-1 space-y-2">
-                  <Input
-                    placeholder="Binding name (e.g., 'request')"
-                    value={binding.name}
-                    onChange={(e) =>
-                      handleUpdateStateBinding(index, {
-                        ...binding,
-                        name: e.target.value,
-                      })
-                    }
-                    disabled={readOnly}
-                  />
-                  <Input
-                    placeholder="JSON path (e.g., 'input.request')"
-                    value={binding.path}
-                    onChange={(e) =>
-                      handleUpdateStateBinding(index, {
-                        ...binding,
-                        path: e.target.value,
-                      })
-                    }
-                    disabled={readOnly}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleRemoveStateBinding(index)}
-                  disabled={readOnly}
-                  className="self-start mt-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* API Access */}
-        <div className="space-y-4 border-t pt-6">
-          <div>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={false} // Placeholder for future use
-                onChange={() => {
-                  // Will be implemented in future versions
-                }}
-                disabled={readOnly}
+              <Checkbox
+                checked={Boolean(value.store_state)}
+                onCheckedChange={(checked) => commit({ ...value, store_state: checked === true })}
               />
-              <span className="text-sm font-medium">Allow external API calls</span>
+              Store state
             </label>
-            <HelperText className="mt-2 ml-6">
-              When enabled, this policy can be called via the public Decision API.
-            </HelperText>
           </div>
+        </div>
+
+        {/* State bindings */}
+        <div className="space-y-2 border-t border-line pt-3">
+          <SectionHeader
+            title="State bindings"
+            hint="Which fields of the state are sent to the model: a name the model sees, and the JSON path it is read from."
+            action={
+              <Button type="button" variant="ghost" size="sm" onClick={handleAddStateBinding} className="gap-1">
+                <Plus className="h-3.5 w-3.5" />
+                Add binding
+              </Button>
+            }
+          />
+
+          {bindings.length === 0 ? (
+            <HelperText tone="destructive">At least one state binding is required.</HelperText>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-[1fr_1fr_28px] gap-2 text-xs text-steel-soft">
+                <span>Name</span>
+                <span>Path</span>
+                <span />
+              </div>
+              {bindings.map((binding, index) => (
+                <div key={index} className="grid grid-cols-[1fr_1fr_28px] items-center gap-2">
+                  <Input
+                    size="sm"
+                    placeholder="request"
+                    aria-label="Binding name"
+                    value={binding.name}
+                    onChange={(e) => handleUpdateStateBinding(index, { ...binding, name: e.target.value })}
+                  />
+                  <Input
+                    size="sm"
+                    placeholder="input.request"
+                    aria-label="JSON path"
+                    className="font-mono"
+                    value={binding.path}
+                    onChange={(e) => handleUpdateStateBinding(index, { ...binding, path: e.target.value })}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => handleRemoveStateBinding(index)}
+                    aria-label="Remove binding"
+                    className="text-steel hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </TabsContent>
 
-      <TabsContent value="json" className="space-y-4">
-        <HelperText>
-          Edit the policy definition as JSON. The builder above updates as you type.
-        </HelperText>
+      <TabsContent value="json" className="mt-0 space-y-2">
         {validationError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -429,13 +415,13 @@ export function QuestionBuilder({
         <Textarea
           value={jsonText}
           onChange={(e) => handleJsonChange(e.target.value)}
-          className="font-mono text-sm"
-          rows={20}
-          disabled={readOnly || isValidating}
+          className="font-mono text-xs"
+          rows={18}
+          disabled={isValidating}
         />
-        {isValidating && (
-          <div className="text-sm text-muted-foreground">Validating...</div>
-        )}
+        <HelperText>
+          {isValidating ? 'Validating…' : 'Edits here update the builder as you type.'}
+        </HelperText>
       </TabsContent>
     </Tabs>
   );
@@ -445,231 +431,174 @@ interface QuestionCardProps {
   question: Question;
   onUpdate: (updated: Question) => void;
   onRemove: () => void;
-  readOnly?: boolean;
 }
 
-function QuestionCard({
-  question,
-  onUpdate,
-  onRemove,
-  readOnly = false,
-}: QuestionCardProps) {
+const KIND_HINT =
+  'Select: choose one of the options. Judge: binary yes/no. Score: pick a level on the scale defined by the options.';
+
+function QuestionCard({ question, onUpdate, onRemove }: QuestionCardProps) {
   return (
-    <div className="rounded-lg border p-4 space-y-4">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 space-y-3">
-          {/* Question Kind and ID */}
-          <div className="grid gap-3 md:grid-cols-3">
-            <div>
-              <label className="text-sm font-medium">Type</label>
-              <Select
-                value={question.kind}
-                onValueChange={(val) =>
-                  onUpdate({
-                    ...question,
-                    kind: val as QuestionKind,
-                    options:
-                      val === 'judge'
-                        ? []
-                        : question.options.length === 0
-                        ? [
-                            { id: 'option1', description: '' },
-                            { id: 'option2', description: '' },
-                          ]
-                        : question.options,
-                  })
-                }
-                disabled={readOnly}
-              >
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="select">Select (pick one)</SelectItem>
-                  <SelectItem value="judge">Judge (yes/no)</SelectItem>
-                  <SelectItem value="score">Score (rate on scale)</SelectItem>
-                </SelectContent>
-              </Select>
-              <HelperText className="mt-1">
-                select: choose from options; judge: binary yes/no; score: numeric rating.
-              </HelperText>
-            </div>
+    <div className="space-y-2 rounded border border-line bg-panel p-2.5">
+      {/* Type · ID · remove */}
+      <div className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_28px] items-end gap-2">
+        <div>
+          <FieldLabel hint={KIND_HINT}>Type</FieldLabel>
+          <Select
+            value={question.kind}
+            onValueChange={(val) =>
+              onUpdate({
+                ...question,
+                kind: val as QuestionKind,
+                options:
+                  val === 'judge'
+                    ? []
+                    : question.options.length === 0
+                    ? [
+                        { id: 'option1', description: '' },
+                        { id: 'option2', description: '' },
+                      ]
+                    : question.options,
+              })
+            }
+          >
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="select">Select</SelectItem>
+              <SelectItem value="judge">Judge (yes/no)</SelectItem>
+              <SelectItem value="score">Score</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-            <div>
-              <label className="text-sm font-medium">Question ID</label>
-              <Input
-                value={question.id}
-                onChange={(e) =>
-                  onUpdate({ ...question, id: e.target.value })
-                }
-                disabled={readOnly}
-                className="mt-1"
-              />
-              <HelperText className="mt-1">
-                Unique identifier for this question.
-              </HelperText>
-            </div>
-          </div>
+        <div>
+          <FieldLabel hint="Unique within the policy; answers are keyed by it.">ID</FieldLabel>
+          <Input
+            size="sm"
+            className="font-mono"
+            value={question.id}
+            onChange={(e) => onUpdate({ ...question, id: e.target.value })}
+          />
+        </div>
 
-          {/* Instructions */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onRemove}
+          aria-label="Remove question"
+          title="Remove question"
+          className="text-steel hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <div>
+        <FieldLabel>Instructions</FieldLabel>
+        <Textarea
+          value={question.instructions}
+          onChange={(e) => onUpdate({ ...question, instructions: e.target.value })}
+          className={compactTextarea}
+          rows={2}
+          placeholder="What should the model decide?"
+        />
+      </div>
+
+      {question.kind === 'judge' && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
-            <label className="text-sm font-medium">Instructions</label>
+            <FieldLabel hint="What must be true for a yes answer.">Yes when</FieldLabel>
             <Textarea
-              value={question.instructions}
-              onChange={(e) =>
-                onUpdate({ ...question, instructions: e.target.value })
-              }
-              disabled={readOnly}
-              className="mt-1"
+              value={question.positive_criteria || ''}
+              onChange={(e) => onUpdate({ ...question, positive_criteria: e.target.value })}
+              className={compactTextarea}
               rows={2}
-              placeholder="What should the model decide about?"
+              placeholder="What makes this true?"
             />
-            <HelperText className="mt-1">
-              Clear question or instruction for the model to answer.
-            </HelperText>
+          </div>
+          <div>
+            <FieldLabel hint="What makes a no answer correct.">No when</FieldLabel>
+            <Textarea
+              value={question.negative_criteria || ''}
+              onChange={(e) => onUpdate({ ...question, negative_criteria: e.target.value })}
+              className={compactTextarea}
+              rows={2}
+              placeholder="What makes this false?"
+            />
+          </div>
+        </div>
+      )}
+
+      {(question.kind === 'select' || question.kind === 'score') && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <FieldLabel className="mb-0">
+              {question.kind === 'score' ? 'Scale levels' : 'Options'} · {question.options.length}
+            </FieldLabel>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={() =>
+                onUpdate({
+                  ...question,
+                  options: [
+                    ...question.options,
+                    { id: `option${question.options.length + 1}`, description: '' },
+                  ],
+                })
+              }
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </Button>
           </div>
 
-          {/* Judge-specific fields */}
-          {question.kind === 'judge' && (
-            <div className="space-y-3 border-t pt-3">
-              <div>
-                <label className="text-sm font-medium">Positive criteria</label>
-                <Textarea
-                  value={question.positive_criteria || ''}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...question,
-                      positive_criteria: e.target.value,
-                    })
-                  }
-                  disabled={readOnly}
-                  className="mt-1"
-                  rows={2}
-                  placeholder="What makes this true?"
-                />
-                <HelperText className="mt-1">
-                  Precise criteria that must be met for a yes answer.
-                </HelperText>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Negative criteria</label>
-                <Textarea
-                  value={question.negative_criteria || ''}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...question,
-                      negative_criteria: e.target.value,
-                    })
-                  }
-                  disabled={readOnly}
-                  className="mt-1"
-                  rows={2}
-                  placeholder="What makes this false?"
-                />
-                <HelperText className="mt-1">
-                  Criteria that make a no answer correct.
-                </HelperText>
-              </div>
-            </div>
-          )}
-
-          {/* Options for select and score */}
-          {(question.kind === 'select' || question.kind === 'score') && (
-            <div className="space-y-3 border-t pt-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Options</label>
-                <Badge variant="outline">{question.options.length} options</Badge>
-              </div>
-
-              <div className="space-y-2">
-                {question.options.map((option, optIndex) => (
-                  <div key={optIndex} className="flex gap-2">
-                    <Input
-                      placeholder="Option ID"
-                      value={option.id}
-                      onChange={(e) => {
-                        const updated = [...question.options];
-                        updated[optIndex] = {
-                          ...option,
-                          id: e.target.value,
-                        };
-                        onUpdate({ ...question, options: updated });
-                      }}
-                      disabled={readOnly}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="Description"
-                      value={option.description}
-                      onChange={(e) => {
-                        const updated = [...question.options];
-                        updated[optIndex] = {
-                          ...option,
-                          description: e.target.value,
-                        };
-                        onUpdate({ ...question, options: updated });
-                      }}
-                      disabled={readOnly}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const updated = question.options.filter(
-                          (_, i) => i !== optIndex
-                        );
-                        onUpdate({ ...question, options: updated });
-                      }}
-                      disabled={readOnly || question.options.length <= 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
+          {question.options.map((option, optIndex) => (
+            <div key={optIndex} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_28px] items-center gap-2">
+              <Input
+                size="sm"
+                placeholder="Option ID"
+                aria-label="Option ID"
+                className="font-mono"
+                value={option.id}
+                onChange={(e) => {
+                  const updated = [...question.options];
+                  updated[optIndex] = { ...option, id: e.target.value };
+                  onUpdate({ ...question, options: updated });
+                }}
+              />
+              <Input
+                size="sm"
+                placeholder="Description"
+                aria-label="Option description"
+                value={option.description}
+                onChange={(e) => {
+                  const updated = [...question.options];
+                  updated[optIndex] = { ...option, description: e.target.value };
+                  onUpdate({ ...question, options: updated });
+                }}
+              />
               <Button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const newOption = {
-                    id: `option${question.options.length + 1}`,
-                    description: '',
-                  };
-                  onUpdate({
-                    ...question,
-                    options: [...question.options, newOption],
-                  });
-                }}
-                disabled={readOnly}
-                className="w-full"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Remove option"
+                className="text-steel hover:text-destructive"
+                onClick={() =>
+                  onUpdate({ ...question, options: question.options.filter((_, i) => i !== optIndex) })
+                }
+                disabled={question.options.length <= 1}
               >
-                <Plus className="mr-2 h-4 w-4" />
-                Add option
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-          )}
+          ))}
         </div>
-
-        {/* Remove button */}
-        <div className="pt-2 border-t">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onRemove}
-            disabled={readOnly}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Remove question
-          </Button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

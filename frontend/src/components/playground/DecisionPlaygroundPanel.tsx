@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, ExternalLink, Info } from 'lucide-react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { Loader2, AlertCircle, ArrowUpRight, ChevronDown, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Select,
@@ -11,11 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { HelperText } from '@/components/ui/helper-text';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { StatusDot } from '@/components/dashboard';
 import {
   listDecisionModels,
   runDecision,
@@ -23,26 +19,19 @@ import {
   type RunDecisionResult,
   type DecisionAnswer,
 } from '@/services/decisionApi';
-import { QuestionBuilder, type PolicyDefinition } from '@/components/decision/QuestionBuilder';
+import {
+  QuestionBuilder,
+  newPolicyDefinition,
+  type PolicyDefinition,
+} from '@/components/decision/QuestionBuilder';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { db } from '@/lib/frappe-sdk';
 import { doctype } from '@/data/doctypes';
+import { cn } from '@/lib/utils';
+import { ConfigStripCell, flushTriggerClass } from './ConfigStrip';
 
-const STARTER_AD_HOC_DEFINITION: PolicyDefinition = {
-  policy_id: 'playground_ad_hoc',
-  questions: [
-    {
-      id: 'question_1',
-      kind: 'judge',
-      instructions: 'Describe what this question should decide.',
-      options: [],
-      positive_criteria: '',
-      negative_criteria: '',
-    },
-  ],
-  state_bindings: [{ name: 'request', path: 'request' }],
-};
+const AUTO_DEPLOYMENT = 'auto';
 
 /**
  * Plain-language description for a `huf.ai.decision.errors.DecisionErrorCode` value, so a
@@ -90,8 +79,9 @@ function describeDecisionErrorCode(code: string): string {
 }
 
 interface DecisionPlaygroundPanelProps {
-  running: boolean;
-  onRun: (result: RunDecisionResult) => void;
+  /** Incremented by the Playground header's Run button; each change triggers one run. */
+  runRequest: number;
+  onRunningChange?: (running: boolean) => void;
 }
 
 type PolicyMode = 'published' | 'adhoc';
@@ -101,21 +91,78 @@ interface DecisionCandidate {
   description: string;
 }
 
-export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPanelProps) {
+const chevron = <ChevronDown className="h-3.5 w-3.5 text-steel" strokeWidth={1.8} />;
+
+/** Bordered panel with the same eyebrow header as the Prompt / Response panels. */
+function Panel({
+  title,
+  aside,
+  className,
+  children,
+}: {
+  title: string;
+  aside?: ReactNode;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cn('flex min-h-[260px] min-w-0 flex-col rounded border border-line bg-panel', className)}>
+      <div className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
+        <span className="flex-none font-mono text-eyebrow font-medium uppercase text-steel">{title}</span>
+        {aside}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Eyebrow({ children }: { children: ReactNode }) {
+  return <div className="mb-1 font-mono text-[11px] uppercase text-steel-soft">{children}</div>;
+}
+
+function ResultReadout({ running, result }: { running: boolean; result: RunDecisionResult | null }) {
+  if (running) {
+    return (
+      <span className="flex items-center gap-1.5 font-mono text-[11.5px] text-steel">
+        <StatusDot variant="run" />
+        running
+      </span>
+    );
+  }
+  if (!result) return null;
+  const ok = result.status === 'success';
+  const segments: string[] = [result.status];
+  const response = result.response;
+  if (response?.latency_ms !== undefined && response?.latency_ms !== null) {
+    segments.push(`${Math.round(response.latency_ms)}ms`);
+  }
+  const tokens = (response?.usage?.input_tokens || 0) + (response?.usage?.output_tokens || 0);
+  if (tokens > 0) segments.push(`${tokens} tok`);
+  if (response?.usage?.cost) segments.push(`$${response.usage.cost.toFixed(6)}`);
+  return (
+    <span className="flex min-w-0 items-center gap-1.5 font-mono text-[11.5px]">
+      <StatusDot variant={ok ? 'ok' : 'fail'} />
+      <span className={cn('truncate', ok ? 'text-steel' : 'text-signal-ink')}>{segments.join(' · ')}</span>
+    </span>
+  );
+}
+
+export function DecisionPlaygroundPanel({ runRequest, onRunningChange }: DecisionPlaygroundPanelProps) {
   const { hasCapability } = usePermissions();
   const isAdmin = hasCapability('decision.admin');
+  const canAuthor = hasCapability('decision.author');
 
   // Models and deployments
   const [models, setModels] = useState<DecisionModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>('');
-  const [selectedDeployment, setSelectedDeployment] = useState<string>('auto');
+  const [selectedDeployment, setSelectedDeployment] = useState<string>(AUTO_DEPLOYMENT);
 
   // Policy vs ad-hoc mode
   const [policyMode, setPolicyMode] = useState<PolicyMode>('published');
   const [selectedPolicy, setSelectedPolicy] = useState<string>('');
-  const [adHocDefinition, setAdHocDefinition] = useState<PolicyDefinition | null>(
-    STARTER_AD_HOC_DEFINITION
+  const [adHocDefinition, setAdHocDefinition] = useState<PolicyDefinition | null>(() =>
+    newPolicyDefinition('playground_ad_hoc')
   );
   const [policies, setPolicies] = useState<{ name: string; policy_name?: string }[]>([]);
   const [policiesLoading, setPoliciesLoading] = useState(true);
@@ -130,6 +177,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
   const [resultLoading, setResultLoading] = useState(false);
 
   const currentModel = models.find((m) => m.name === selectedModel);
+  const deployments = currentModel?.deployments ?? [];
   const stateBytes = new TextEncoder().encode(state).length;
   // 0/undefined means the model has no declared limit -- treat it as "not enforced
   // client-side" rather than silently turning it into a false "0 bytes allowed" ceiling
@@ -137,6 +185,11 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
   const stateLimit = currentModel?.state_limit && currentModel.state_limit > 0
     ? currentModel.state_limit
     : null;
+  const stateTooLarge = stateLimit !== null && stateBytes > stateLimit;
+
+  useEffect(() => {
+    onRunningChange?.(resultLoading);
+  }, [resultLoading, onRunningChange]);
 
   // Load models on mount
   useEffect(() => {
@@ -179,6 +232,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
   }, []);
 
   const handleRun = async () => {
+    if (resultLoading) return;
     if (!selectedModel) {
       toast.error('Select a model');
       return;
@@ -202,7 +256,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
         origin_type: 'Playground',
       };
 
-      if (selectedDeployment !== 'auto') {
+      if (selectedDeployment !== AUTO_DEPLOYMENT) {
         runParams.pinned_deployment = selectedDeployment;
       }
 
@@ -216,9 +270,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
         runParams.definition = adHocDefinition as unknown as Record<string, unknown>;
       }
 
-      const runResult = await runDecision(runParams);
-      setResult(runResult);
-      onRun(runResult);
+      setResult(await runDecision(runParams));
     } catch (error) {
       toast.error(`Failed to run decision: ${getFrappeErrorMessage(error)}`);
     } finally {
@@ -226,12 +278,24 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
     }
   };
 
+  // The header Run button lives in PlaygroundShell; it signals here via runRequest.
+  // Only a change after mount is a click: the counter outlives this panel (it lives on
+  // PlaygroundPage), so switching tabs back to Decision must not replay the last run.
+  const handleRunRef = useRef(handleRun);
+  handleRunRef.current = handleRun;
+  const handledRunRequest = useRef(runRequest);
+  useEffect(() => {
+    if (runRequest === handledRunRequest.current) return;
+    handledRunRequest.current = runRequest;
+    void handleRunRef.current();
+  }, [runRequest]);
+
   const handleAddCandidate = () => {
     if (!candidateInput.trim()) {
       toast.error('Enter a candidate ID');
       return;
     }
-    setCandidates([...candidates, { id: candidateInput, description: '' }]);
+    setCandidates([...candidates, { id: candidateInput.trim(), description: '' }]);
     setCandidateInput('');
   };
 
@@ -257,369 +321,322 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
     );
   }
 
+  // A provider can host more than one deployment of the same model; only then is the
+  // provider model id needed to tell them apart.
+  const providerCounts = deployments.reduce<Record<string, number>>((acc, d) => {
+    acc[d.provider] = (acc[d.provider] || 0) + 1;
+    return acc;
+  }, {});
+
+  const isAdHoc = policyMode === 'adhoc';
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-paper">
-      <div className="grid flex-1 grid-cols-1 gap-4 p-5 lg:grid-cols-[1fr_1fr]">
-        {/* Input Panel */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          <div className="rounded border border-line bg-panel p-4">
-            <h3 className="mb-4 font-medium text-ink">Configuration</h3>
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+      {/* Config strip -- same cell pattern as the Playground tab's ConfigStrip */}
+      <div className="px-5 pt-[18px]">
+        <div
+          className={cn(
+            'grid rounded border border-line bg-panel max-lg:grid-cols-2',
+            isAdHoc ? 'grid-cols-3' : 'grid-cols-4',
+            '[&>div:not(:last-child)]:border-r [&>div]:border-line'
+          )}
+        >
+          <ConfigStripCell label="Model" hint="Canonical decision model for this run">
+            <Select
+              value={selectedModel}
+              onValueChange={(v) => {
+                setSelectedModel(v);
+                setSelectedDeployment(AUTO_DEPLOYMENT);
+              }}
+            >
+              <SelectTrigger className={flushTriggerClass} icon={chevron}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map((model) => (
+                  <SelectItem key={model.name} value={model.name}>
+                    {model.display_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </ConfigStripCell>
 
-            {/* Model picker */}
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-ink">Model</label>
-              <Select value={selectedModel} onValueChange={setSelectedModel}>
-                <SelectTrigger>
-                  <SelectValue />
+          <ConfigStripCell
+            label="Provider"
+            hint="Which provider serves the model. Auto follows the deployment priority and fails over down the chain; picking one pins the run to it, with no failover."
+          >
+            <Select
+              value={selectedDeployment}
+              onValueChange={setSelectedDeployment}
+              disabled={deployments.length === 0}
+            >
+              <SelectTrigger className={flushTriggerClass} icon={chevron}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={AUTO_DEPLOYMENT}>Auto (failover)</SelectItem>
+                {deployments.map((dep) => (
+                  <SelectItem key={dep.name} value={dep.name}>
+                    {dep.provider || dep.deployment_name || dep.name}
+                    {providerCounts[dep.provider] > 1 && dep.provider_model_id
+                      ? ` · ${dep.provider_model_id}`
+                      : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </ConfigStripCell>
+
+          <ConfigStripCell
+            label="Mode"
+            hint={canAuthor ? 'Run a published policy, or define questions ad hoc' : 'Ad hoc needs decision.author'}
+          >
+            <Select value={policyMode} onValueChange={(v) => setPolicyMode(v as PolicyMode)}>
+              <SelectTrigger className={flushTriggerClass} icon={chevron}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="published">Published policy</SelectItem>
+                <SelectItem value="adhoc" disabled={!canAuthor}>
+                  Ad hoc
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </ConfigStripCell>
+
+          {!isAdHoc && (
+            <ConfigStripCell label="Policy">
+              <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
+                <SelectTrigger className={flushTriggerClass} icon={chevron}>
+                  <SelectValue placeholder={policiesLoading ? 'Loading…' : 'Select a policy'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {models.map((model) => (
-                    <SelectItem key={model.name} value={model.name}>
-                      {model.display_name}
+                  {!policiesLoading && policies.length === 0 && (
+                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                      No published policies yet.
+                    </div>
+                  )}
+                  {policies.map((p) => (
+                    <SelectItem key={p.name} value={p.name}>
+                      {p.policy_name || p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <HelperText>Decision model for this run</HelperText>
+            </ConfigStripCell>
+          )}
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          'grid min-h-[340px] flex-1 grid-cols-1 gap-4 p-5',
+          isAdHoc ? 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]' : 'lg:grid-cols-2'
+        )}
+      >
+        {isAdHoc && adHocDefinition && (
+          <Panel title="Definition" className="h-full">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3.5 py-3">
+              <QuestionBuilder value={adHocDefinition} onChange={setAdHocDefinition} />
             </div>
+          </Panel>
+        )}
 
-            {/* Deployment selector */}
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-ink">Deployment</label>
-              <Select value={selectedDeployment} onValueChange={setSelectedDeployment}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto (default)</SelectItem>
-                  {currentModel?.deployments?.map((dep) => (
-                    <SelectItem key={dep.name} value={dep.name}>
-                      {dep.deployment_name || dep.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <HelperText>Auto uses the default deployment and failover chain</HelperText>
+        {/* Input: state + candidates */}
+        <Panel
+          title="State"
+          className="h-full"
+          aside={
+            <span
+              className={cn('font-mono text-[11.5px]', stateTooLarge ? 'text-status-critical' : 'text-steel-soft')}
+              title={stateTooLarge ? `Exceeds the model limit by ${stateBytes - (stateLimit ?? 0)} bytes` : undefined}
+            >
+              {stateLimit !== null ? `${stateBytes} / ${stateLimit} B` : `${stateBytes} B`}
+            </span>
+          }
+        >
+          <Textarea
+            value={state}
+            onChange={(e) => setState(e.target.value)}
+            placeholder={'{"request": "..."}\n\nJSON the state bindings read from.'}
+            aria-label="State JSON"
+            className="min-h-[180px] flex-1 resize-none rounded-none border-0 px-3.5 py-3 font-mono text-xs leading-relaxed shadow-none placeholder:text-steel focus-visible:ring-0"
+          />
+
+          <div className="space-y-2 border-t border-line px-3.5 py-2.5">
+            <div
+              className="cursor-help font-mono text-[11px] uppercase text-steel-soft underline decoration-dotted decoration-line underline-offset-2"
+              title="Runtime options for select questions, sent alongside the state"
+            >
+              Candidates · {candidates.length}
             </div>
-
-            {/* Policy mode toggle */}
-            <div className="mb-4">
-              <label className="mb-2 block text-sm font-medium text-ink">Mode</label>
-              <Tabs value={policyMode} onValueChange={(value) => setPolicyMode(value as PolicyMode)}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="published">Policy</TabsTrigger>
-                  <TabsTrigger value="adhoc" disabled={!hasCapability('decision.author')}>
-                    Ad hoc
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-              <HelperText>
-                {policyMode === 'published'
-                  ? 'Run a published policy'
-                  : 'Define questions on the fly (requires decision.author)'}
-              </HelperText>
-            </div>
-
-            {policyMode === 'published' && (
-              <div className="mb-4">
-                <label className="mb-2 block text-sm font-medium text-ink">Policy</label>
-                <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={policiesLoading ? 'Loading policies…' : 'Select a policy…'}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!policiesLoading && policies.length === 0 && (
-                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                        No published policies yet.
-                      </div>
-                    )}
-                    {policies.map((p) => (
-                      <SelectItem key={p.name} value={p.name}>
-                        {p.policy_name || p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <HelperText>Published Decision Policies</HelperText>
-              </div>
-            )}
-
-            {policyMode === 'adhoc' && (
-              <div className="mb-4 border-t border-line pt-4">
-                {adHocDefinition && (
-                  <QuestionBuilder
-                    value={adHocDefinition}
-                    onChange={setAdHocDefinition}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* State editor */}
-          <div className="rounded border border-line bg-panel p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm font-medium text-ink">State</label>
-              <div
-                className={`font-mono text-xs ${
-                  stateLimit !== null && stateBytes > stateLimit
-                    ? 'text-status-critical'
-                    : 'text-steel-soft'
-                }`}
-              >
-                {stateLimit !== null ? `${stateBytes} / ${stateLimit} bytes` : `${stateBytes} bytes`}
-              </div>
-            </div>
-            <Textarea
-              value={state}
-              onChange={(e) => setState(e.target.value)}
-              placeholder='{"request": "..."}'
-              className="mb-2 font-mono text-xs"
-              rows={6}
-            />
-            <HelperText>Context as JSON</HelperText>
-            {stateLimit !== null && stateBytes > stateLimit && (
-              <Alert variant="destructive" className="mt-2">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>State exceeds model limit by {stateBytes - stateLimit} bytes</AlertDescription>
-              </Alert>
-            )}
-          </div>
-
-          {/* Candidates */}
-          <div className="rounded border border-line bg-panel p-4">
-            <label className="mb-2 block text-sm font-medium text-ink">Candidates</label>
-            <div className="mb-2 flex gap-2">
+            <div className="flex gap-2">
               <Input
+                size="sm"
                 value={candidateInput}
                 onChange={(e) => setCandidateInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddCandidate();
+                  }
+                }}
                 placeholder="Candidate ID"
+                className="font-mono"
               />
-              <Button onClick={handleAddCandidate} variant="outline" size="sm">
+              <Button onClick={handleAddCandidate} variant="outline" size="sm" className="gap-1">
+                <Plus className="h-3.5 w-3.5" />
                 Add
               </Button>
             </div>
             {candidates.length > 0 && (
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
                 {candidates.map((candidate, index) => (
-                  <div key={index} className="flex items-center justify-between rounded bg-canvas p-2">
-                    <code className="text-xs text-ink">{candidate.id}</code>
-                    <Button
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1 rounded border border-line bg-canvas py-0.5 pl-2 pr-1 font-mono text-xs text-ink"
+                  >
+                    {candidate.id}
+                    <button
+                      type="button"
                       onClick={() => handleRemoveCandidate(index)}
-                      variant="ghost"
-                      size="sm"
-                      className="h-auto px-2 py-1"
+                      aria-label={`Remove ${candidate.id}`}
+                      className="rounded p-0.5 text-steel hover:text-ink"
                     >
-                      Remove
-                    </Button>
-                  </div>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
                 ))}
               </div>
             )}
-            <HelperText>Options for select/score questions</HelperText>
           </div>
+        </Panel>
 
-          {/* Run button */}
-          <Button onClick={handleRun} disabled={running || resultLoading || !selectedModel} className="w-full">
-            {running || resultLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Running
-              </>
+        {/* Result */}
+        <Panel title="Result" className="h-full" aside={<ResultReadout running={resultLoading} result={result} />}>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {!result ? (
+              <p className="px-3.5 py-3 text-[13.5px] text-steel-soft">
+                {resultLoading ? 'Running…' : 'Run a decision to see the answers here.'}
+              </p>
             ) : (
-              'Run'
-            )}
-          </Button>
-        </div>
-
-        {/* Result Panel */}
-        <div className="flex flex-col gap-4 overflow-y-auto">
-          {result ? (
-            <div className="rounded border border-line bg-panel p-4">
-              <h3 className="mb-4 font-medium text-ink">Result</h3>
-
-              {/* Status */}
-              <div className="mb-4">
-                <label className="mb-1 block text-xs font-medium uppercase text-steel-soft">Status</label>
-                <Badge variant={result.status === 'success' ? 'default' : 'destructive'}>
-                  {result.status}
-                </Badge>
-              </div>
-
-              {result.response && (
-                <>
-                  {/* Answers */}
-                  <div className="mb-4">
-                    <label className="mb-2 block text-xs font-medium uppercase text-steel-soft">Answers</label>
-                    {Object.entries(result.response.answers).map(([qid, answer]: [string, DecisionAnswer]) => (
-                      <div key={qid} className="mb-3 rounded bg-canvas p-3">
-                        <div className="mb-1 font-mono text-xs font-medium text-ink">{qid}</div>
-                        <div className="mb-2 flex items-center gap-2">
-                          <code className="text-sm text-ink">{String(answer.value)}</code>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Info className="h-3.5 w-3.5 text-steel-soft" />
-                            </TooltipTrigger>
-                            <TooltipContent>Confidence: {(answer.confidence * 100).toFixed(0)}%</TooltipContent>
-                          </Tooltip>
-                        </div>
-
-                        {/* Probabilities */}
-                        {answer.probabilities && Object.entries(answer.probabilities).length > 0 && (
-                          <div className="mb-2">
-                            <div className="mb-1 text-xs text-steel-soft">Probabilities</div>
-                            <div className="space-y-1">
-                              {Object.entries(answer.probabilities).map(([option, prob]) => (
-                                <div key={option} className="flex items-center justify-between text-xs">
-                                  <span className="text-steel">{option}</span>
-                                  <div className="flex items-center gap-1">
-                                    <div className="h-2 w-20 overflow-hidden rounded bg-line">
-                                      <div
-                                        className="h-full bg-accent-default"
-                                        style={{ width: `${(prob as number) * 100}%` }}
-                                      />
-                                    </div>
-                                    <span className="font-mono text-steel-soft">{((prob as number) * 100).toFixed(0)}%</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Identity and resolution */}
-                  <div className="mb-4 space-y-2 border-t border-line pt-4">
-                    <div>
-                      <label className="block text-xs font-medium uppercase text-steel-soft">Provider</label>
-                      <div className="font-mono text-sm text-ink">{result.response.identity?.provider}</div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium uppercase text-steel-soft">Deployment</label>
-                      <div className="font-mono text-sm text-ink">{result.response.identity?.deployment}</div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium uppercase text-steel-soft">Provider Model ID</label>
-                      <Badge variant="secondary" className="font-mono text-xs">
-                        {result.response.identity?.provider_model_id}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  {/* Failover chain */}
-                  {result.response.deployment_fallback_chain?.length > 0 && (
-                    <div className="mb-4">
-                      <label className="mb-1 block text-xs font-medium uppercase text-steel-soft">
-                        Failover chain ({result.response.deployment_fallback_count} fallbacks)
-                      </label>
-                      <div className="space-y-1">
-                        {result.response.deployment_fallback_chain.map((dep, idx) => (
-                          <div key={idx} className="font-mono text-xs text-steel-soft">
-                            {idx + 1}. {dep}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Metrics */}
-                  <div className="mb-4 grid grid-cols-3 gap-2 border-t border-line pt-4">
-                    <div>
-                      <div className="text-xs font-medium uppercase text-steel-soft">Latency</div>
-                      <div className="font-mono text-sm text-ink">
-                        {result.response.latency_ms}
-                        <span className="text-xs text-steel-soft"> ms</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase text-steel-soft">Tokens</div>
-                      <div className="font-mono text-sm text-ink">
-                        {(result.response.usage?.input_tokens || 0) + (result.response.usage?.output_tokens || 0)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-xs font-medium uppercase text-steel-soft">Cost</div>
-                      <div className="font-mono text-sm text-ink">
-                        ${(result.response.usage?.cost || 0).toFixed(6)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Call link */}
-                  {result.decision_call && (
-                    <div className="mb-4">
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-between"
-                      >
-                        <a href={`/executions/decisions/${result.decision_call}`}>
-                          Decision Call {result.decision_call}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Gate result */}
-                  {result.response.gate_result && (
-                    <div className="mb-4">
-                      <label className="mb-1 block text-xs font-medium uppercase text-steel-soft">Gate Result</label>
-                      <Badge>{result.response.gate_result}</Badge>
-                    </div>
-                  )}
-
-                  {/* Raw response (admin only) */}
-                  {isAdmin && (
-                    <details className="border-t border-line pt-4">
-                      <summary className="cursor-pointer text-xs font-medium uppercase text-steel-soft hover:text-steel">
-                        Raw response (admin)
-                      </summary>
-                      <pre className="mt-2 overflow-x-auto rounded bg-canvas p-2 font-mono text-xs text-steel-soft">
-                        {JSON.stringify(result.response, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                </>
-              )}
-
-              {result.status !== 'success' && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
+              <div className="divide-y divide-line">
+                {result.status !== 'success' && (
+                  <div className="px-3.5 py-3 text-[12.5px] text-signal-ink">
                     <div className="font-medium">
                       {result.response?.error_code
                         ? describeDecisionErrorCode(result.response.error_code)
                         : `The decision did not complete (status: ${result.status}).`}
                     </div>
                     {result.response?.error_code && (
-                      <div className="mt-1 font-mono text-xs opacity-80">
-                        {result.response.error_code}
-                      </div>
+                      <div className="mt-1 font-mono text-xs opacity-80">{result.response.error_code}</div>
                     )}
                     {result.fallback_action && (
                       <div className="mt-1 text-xs">Fallback applied: {result.fallback_action}</div>
                     )}
-                    <div className="mt-1 text-xs">
-                      See the Decision Call above for the full trace.
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded border border-line border-dashed bg-canvas">
-              <div className="text-center">
-                <p className="text-sm text-steel-soft">Run a decision to see results here</p>
+                  </div>
+                )}
+
+                {result.response && (
+                  <>
+                    {Object.keys(result.response.answers || {}).length > 0 && (
+                      <div className="space-y-2 px-3.5 py-3">
+                        <Eyebrow>Answers</Eyebrow>
+                        {Object.entries(result.response.answers).map(([qid, answer]: [string, DecisionAnswer]) => (
+                          <div key={qid} className="rounded bg-canvas px-2.5 py-2">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="truncate font-mono text-xs text-steel">{qid}</span>
+                              {answer.confidence !== null && answer.confidence !== undefined && (
+                                <span className="flex-none font-mono text-[11px] text-steel-soft">
+                                  conf {(answer.confidence * 100).toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
+                            <code className="text-sm text-ink">{String(answer.value)}</code>
+
+                            {answer.probabilities && Object.entries(answer.probabilities).length > 0 && (
+                              <div className="mt-1.5 space-y-1">
+                                {Object.entries(answer.probabilities).map(([option, prob]) => (
+                                  <div key={option} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="truncate text-steel">{option}</span>
+                                    <div className="flex flex-none items-center gap-1">
+                                      <div className="h-1.5 w-20 overflow-hidden rounded bg-line">
+                                        <div
+                                          className="h-full bg-accent-default"
+                                          style={{ width: `${(prob as number) * 100}%` }}
+                                        />
+                                      </div>
+                                      <span className="w-8 text-right font-mono text-steel-soft">
+                                        {((prob as number) * 100).toFixed(0)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 px-3.5 py-3 text-xs">
+                      {result.response.gate_result && (
+                        <>
+                          <dt className="text-steel-soft">Gate</dt>
+                          <dd className="font-mono text-ink">{result.response.gate_result}</dd>
+                        </>
+                      )}
+                      <dt className="text-steel-soft">Provider</dt>
+                      <dd className="truncate font-mono text-ink">{result.response.identity?.provider || '-'}</dd>
+                      <dt className="text-steel-soft">Deployment</dt>
+                      <dd className="truncate font-mono text-ink">{result.response.identity?.deployment || '-'}</dd>
+                      <dt className="text-steel-soft">Provider model</dt>
+                      <dd className="truncate font-mono text-ink">
+                        {result.response.identity?.provider_model_id || '-'}
+                      </dd>
+                      {result.response.deployment_fallback_chain?.length > 0 && (
+                        <>
+                          <dt className="text-steel-soft">Failover</dt>
+                          <dd className="font-mono text-steel">
+                            {result.response.deployment_fallback_chain.join(' → ')}
+                            <span className="text-steel-soft">
+                              {' '}({result.response.deployment_fallback_count} fallbacks)
+                            </span>
+                          </dd>
+                        </>
+                      )}
+                    </dl>
+                  </>
+                )}
+
+                {(result.decision_call || (isAdmin && result.response)) && (
+                  <div className="space-y-2 px-3.5 py-2.5">
+                    {result.decision_call && (
+                      <a
+                        href={`/executions/decisions/${result.decision_call}`}
+                        className="inline-flex items-center gap-1 font-mono text-xs text-steel hover:text-ink"
+                      >
+                        Decision Call {result.decision_call}
+                        <ArrowUpRight className="h-3 w-3" />
+                      </a>
+                    )}
+                    {isAdmin && result.response && (
+                      <details>
+                        <summary className="cursor-pointer font-mono text-[11px] uppercase text-steel-soft hover:text-steel">
+                          Raw response
+                        </summary>
+                        <pre className="mt-2 overflow-x-auto rounded bg-canvas p-2 font-mono text-xs text-steel-soft">
+                          {JSON.stringify(result.response, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Panel>
       </div>
     </div>
   );
