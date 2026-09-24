@@ -18,6 +18,8 @@
   { "id": "meta", "label": "Meta" },
   { "id": "ollama", "label": "Ollama" },
   { "id": "lmstudio", "label": "LM Studio" },
+  { "id": "mlx", "label": "MLX" },
+  { "id": "laya", "label": "Laya" },
   { "id": "fireworks-ai", "label": "Fireworks AI" },
   { "id": "cerebras", "label": "Cerebras" },
   { "id": "deepinfra", "label": "DeepInfra" },

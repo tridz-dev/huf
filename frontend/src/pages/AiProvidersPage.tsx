@@ -727,11 +727,23 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1">
                               <span className="font-medium">{model.name}</span>
-                              {model.capabilities?.map((cap) => (
-                                <Badge key={cap} variant="secondary" size="sm">
-                                  {cap}
+                              {model.capabilities?.length ? (
+                                model.capabilities.map((cap) => (
+                                  <Badge key={cap} variant="secondary" size="sm">
+                                    {cap}
+                                  </Badge>
+                                ))
+                              ) : model.ok && selectedProvider?.provider_brand === 'mlx' ? (
+                                // An MLX server exposes no per-model capability metadata (no
+                                // /api/show equivalent), so an empty list here means "cannot be
+                                // determined", not "supports nothing". Say so rather than
+                                // rendering silence that reads as a definite negative. Other
+                                // brands (Ollama) do report capabilities on a successful probe,
+                                // so their empty list is genuine and is left as-is.
+                                <Badge variant="secondary" size="sm">
+                                  Unknown (not probed)
                                 </Badge>
-                              ))}
+                              ) : null}
                             </div>
                             {model.error && (
                               <p className="text-xs text-destructive break-words">{model.error}</p>
