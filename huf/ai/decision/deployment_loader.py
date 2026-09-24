@@ -127,6 +127,13 @@ def load_chain(
 
 	if pinned_deployment:
 		rows = [row for row in rows if row["deployment_key"] == pinned_deployment]
+		# If pinned_deployment is not in the cached (enabled-only) rows AND we are bypassing
+		# health filter (indicating an explicit probe of a not-yet-enabled deployment), fetch
+		# that one row directly without the enabled=1 condition so it can be probed.
+		if not rows and bypass_health_filter:
+			pinned_row = _fetch_single_deployment(decision_model, pinned_deployment)
+			if pinned_row:
+				rows = [pinned_row]
 
 	candidates = []
 	for rank, row in enumerate(rows):
@@ -267,6 +274,33 @@ def _fetch_model_context(decision_model: str) -> dict[str, Any]:
 	)
 	context["rows"] = rows
 	return context
+
+
+def _fetch_single_deployment(decision_model: str, deployment_key: str) -> dict[str, Any] | None:
+	"""Fetch a single deployment row without the enabled=1 filter (for bypass_health_filter probes).
+
+	Used when a deployment is pinned for an explicit health probe but is currently disabled
+	(enabled=0). The cached row list from _fetch_model_context always excludes disabled rows
+	to avoid serving them in normal (non-pinned, non-bypass) traffic, but an explicit probe
+	of a not-yet-enabled deployment must still work (PLAN.md §3.3 step 4: test_deployment
+	calls load_chain with pinned_deployment + bypass_health_filter=True).
+
+	Returns the row dict if found, or None if the deployment does not exist or does not
+	belong to the specified decision_model. Never cached -- this query runs every time.
+	"""
+	field_list = ", ".join(f"dd.{field}" for field in _ROW_FIELDS)
+	rows = frappe.db.sql(
+		f"""
+		SELECT {field_list}
+		FROM `tabDecision Deployment` dd
+		INNER JOIN `tabAI Model` am ON am.name = dd.ai_model
+		INNER JOIN `tabAI Provider` ap ON ap.name = dd.provider
+		WHERE dd.decision_model = %s AND dd.deployment_key = %s
+		""",
+		(decision_model, deployment_key),
+		as_dict=True,
+	)
+	return rows[0] if rows else None
 
 
 def _in_cooldown(row: dict[str, Any]) -> bool:
