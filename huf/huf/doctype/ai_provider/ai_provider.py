@@ -1,10 +1,49 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+from urllib.parse import urlparse
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
 from huf.ai.provider_security import validate_api_base_url
+
+# Brands introduced alongside local network-exposed runtimes (mlx_lm.server,
+# laya-serve). Unlike Ollama/LM Studio, these can be started with
+# --host 0.0.0.0, which puts an unauthenticated model server on the network.
+LOCAL_NETWORK_SERVER_BRANDS = ("mlx", "laya")
+
+_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
+
+def requires_auth_for_network_exposed_local_llm(provider_brand, is_local_llm, base_url, api_key):
+	"""Return True when a local LLM provider must have a real API key.
+
+	Scoped to `provider_brand in LOCAL_NETWORK_SERVER_BRANDS` only. Ollama and
+	LM Studio providers are `is_local_llm=1` and unauthenticated by design;
+	every existing row of those brands already carries the "not-needed"
+	sentinel, so keying this rule on `is_local_llm` alone would make those
+	existing, working providers unsaveable on every future save. mlx/laya did
+	not exist before this rule, so no existing row can regress.
+
+	The key is treated as absent when it is empty OR equal to the
+	"not-needed" sentinel that `validate_api_key` auto-stamps for keyless
+	local providers -- otherwise this check would be dead code, since by the
+	time it runs the sentinel has already been written.
+	"""
+	if provider_brand not in LOCAL_NETWORK_SERVER_BRANDS:
+		return False
+	if not is_local_llm:
+		return False
+	if not base_url:
+		return False
+
+	hostname = (urlparse(base_url).hostname or "").lower()
+	if hostname in _LOOPBACK_HOSTS:
+		return False
+
+	key_absent = not api_key or api_key == "not-needed"
+	return key_absent
 
 
 class AIProvider(Document):
@@ -12,6 +51,7 @@ class AIProvider(Document):
 		self.validate_provider_name()
 		self.validate_api_key()
 		self.validate_api_base_url()
+		self.validate_local_network_exposed_api_key()
 
 	def validate_provider_name(self):
 		# The provider name becomes the LiteLLM model routing prefix
@@ -40,6 +80,23 @@ class AIProvider(Document):
 
 	def validate_api_base_url(self):
 		validate_api_base_url(self.api_base_url)
+
+	def validate_local_network_exposed_api_key(self):
+		# Runs after validate_api_key(), which stamps the "not-needed" sentinel
+		# onto keyless local providers -- requires_auth_for_network_exposed_local_llm
+		# treats that sentinel as an absent key, so running after the stamp
+		# (rather than reading a pre-mutation value) is safe and simpler.
+		base_url = self.api_base_url or self.url
+		if requires_auth_for_network_exposed_local_llm(
+			self.provider_brand, self.is_local_llm, base_url, self.api_key
+		):
+			frappe.throw(
+				_(
+					"This endpoint is non-loopback and therefore reachable from the network. "
+					"Local LLM servers such as mlx_lm.server or laya-serve must be started with "
+					"an API key (e.g. --api-key) before they can be used from a non-loopback host."
+				)
+			)
 
 @frappe.whitelist()
 def get_provider_settings(provider_name):
