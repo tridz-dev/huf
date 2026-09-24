@@ -99,26 +99,25 @@ class OllamaAdapter:
 		except Exception as e:
 			return {"ok": False, "capabilities": [], "error": str(e)}
 
-	def capability_overrides(self, capabilities: list[str]) -> dict:
-		"""Map probed capabilities to Huf configuration overrides.
+	def capability_overrides(self, probe: dict) -> dict:
+		"""Map a probe_model() result to Huf configuration overrides.
 
-		Converts a capability list from probe_model() into structured overrides
-		for model configuration.
+		Mirrors huf/ai/local_runtime.py:181-185 exactly: the capability flags are
+		read only when the probe succeeded, so an unprobed model stays unknown
+		(``supports_tools`` is None) while a successfully probed model that does
+		not advertise "tools" is a definite False.
 
 		Args:
-			capabilities: List of capability strings from probe_model().
+			probe: A probe_model() result -- {"ok", "capabilities", "error"}.
 
 		Returns:
 			dict: {"supports_tools": bool | None, "is_reasoning_model": bool}.
-				- supports_tools: True if the model supports tool/function calling.
-					None if the capability is unknown (not probed or not reported).
-				- is_reasoning_model: True if the model supports reasoning/thinking.
-					False if reasoning is not supported or unknown.
 		"""
-		if not capabilities:
+		if not probe.get("ok"):
 			return {"supports_tools": None, "is_reasoning_model": False}
 
-		supports_tools = True if "tools" in capabilities else None
-		is_reasoning_model = True if "thinking" in capabilities else False
-
-		return {"supports_tools": supports_tools, "is_reasoning_model": is_reasoning_model}
+		capabilities = probe.get("capabilities") or []
+		return {
+			"supports_tools": "tools" in capabilities,
+			"is_reasoning_model": "thinking" in capabilities,
+		}

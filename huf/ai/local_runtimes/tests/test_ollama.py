@@ -2,13 +2,35 @@
 # For license information, please see license.txt
 
 """
-Tests for OllamaAdapter implementation.
+Layer A (mocked-frappe, no bench) unit tests for OllamaAdapter.
+
+The adapter itself never imports frappe, but `huf/__init__.py:4` does, so a
+defensive stub is installed before the import below -- the same pattern as
+`huf/ai/tests/test_local_runtime_provider_connection_permission.py`, so this
+file behaves identically standalone and collected under a real bench.
+
+Run standalone (no bench) from the repo root:
+    PYTHONPATH=. python3 huf/ai/local_runtimes/tests/test_ollama.py -v
 """
 
+import sys
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
-from ..ollama import OllamaAdapter
+try:
+	import frappe  # noqa: F401
+except ImportError:
+	frappe_mock = MagicMock()
+	frappe_mock._ = lambda x: x
+	frappe_mock.whitelist = lambda *args, **kwargs: (lambda fn: fn)
+	sys.modules["frappe"] = frappe_mock
+
+try:
+	import requests  # noqa: F401
+except ImportError:
+	sys.modules["requests"] = MagicMock()
+
+from huf.ai.local_runtimes.ollama import OllamaAdapter  # noqa: E402
 
 
 class TestOllamaAdapter(unittest.TestCase):
@@ -185,50 +207,40 @@ class TestOllamaAdapter(unittest.TestCase):
 		self.assertEqual(result["capabilities"], [])
 		self.assertIsNone(result["error"])
 
-	def test_capability_overrides_with_tools_and_thinking(self):
-		"""Test capability_overrides when both tools and thinking are present."""
-		result = self.adapter.capability_overrides(["tools", "thinking"])
+	def test_capability_overrides_probed_with_tools_and_thinking(self):
+		"""A successful probe reporting both flags sets both True."""
+		result = self.adapter.capability_overrides({"ok": True, "capabilities": ["tools", "thinking"], "error": None})
+		self.assertEqual(result, {"supports_tools": True, "is_reasoning_model": True})
 
-		self.assertTrue(result["supports_tools"])
-		self.assertTrue(result["is_reasoning_model"])
+	def test_capability_overrides_probed_tools_only(self):
+		"""A successful probe reporting only tools leaves reasoning False."""
+		result = self.adapter.capability_overrides({"ok": True, "capabilities": ["tools"], "error": None})
+		self.assertEqual(result, {"supports_tools": True, "is_reasoning_model": False})
 
-	def test_capability_overrides_with_tools_only(self):
-		"""Test capability_overrides with only tools capability."""
-		result = self.adapter.capability_overrides(["tools"])
+	def test_capability_overrides_probed_thinking_only_is_definite_false(self):
+		"""A successful probe WITHOUT tools is a definite False, not unknown.
 
-		self.assertTrue(result["supports_tools"])
-		self.assertFalse(result["is_reasoning_model"])
+		This is the case that a capabilities-list-only signature got wrong: the
+		model was probed and did not advertise tools, so False -- not None.
+		Mirrors local_runtime.py:183 (`"tools" in capabilities`).
+		"""
+		result = self.adapter.capability_overrides({"ok": True, "capabilities": ["thinking"], "error": None})
+		self.assertEqual(result, {"supports_tools": False, "is_reasoning_model": True})
 
-	def test_capability_overrides_with_thinking_only(self):
-		"""Test capability_overrides with only thinking capability."""
-		result = self.adapter.capability_overrides(["thinking"])
+	def test_capability_overrides_probed_empty_list_is_definite_false(self):
+		"""A successful probe returning no capabilities is False, not unknown."""
+		result = self.adapter.capability_overrides({"ok": True, "capabilities": [], "error": None})
+		self.assertEqual(result, {"supports_tools": False, "is_reasoning_model": False})
 
-		self.assertIsNone(result["supports_tools"])
-		self.assertTrue(result["is_reasoning_model"])
+	def test_capability_overrides_failed_probe_stays_unknown(self):
+		"""A FAILED probe is the only case that yields None -- unknown, not False."""
+		result = self.adapter.capability_overrides({"ok": False, "capabilities": [], "error": "boom"})
+		self.assertEqual(result, {"supports_tools": None, "is_reasoning_model": False})
 
-	def test_capability_overrides_with_unknown_capability(self):
-		"""Test capability_overrides with unknown capability."""
-		result = self.adapter.capability_overrides(["unknown_feature"])
-
-		self.assertIsNone(result["supports_tools"])
-		self.assertFalse(result["is_reasoning_model"])
-
-	def test_capability_overrides_empty_list(self):
-		"""Test capability_overrides when capabilities list is empty."""
-		result = self.adapter.capability_overrides([])
-
-		self.assertIsNone(result["supports_tools"])
-		self.assertFalse(result["is_reasoning_model"])
-
-	def test_capability_overrides_none_stays_unknown(self):
-		"""Test that unknown supports_tools status stays None, never False."""
-		# When capabilities is empty, supports_tools must be None (unknown)
-		result = self.adapter.capability_overrides([])
-		self.assertIsNone(result["supports_tools"], "supports_tools must be None for empty capabilities, not False")
-
-		# When only thinking is present, supports_tools is still unknown
-		result = self.adapter.capability_overrides(["thinking"])
-		self.assertIsNone(result["supports_tools"], "supports_tools must be None when tools not probed")
+	def test_capability_overrides_unknown_capability_only(self):
+		"""An unrecognised capability does not imply tool support."""
+		result = self.adapter.capability_overrides({"ok": True, "capabilities": ["vision"], "error": None})
+		self.assertEqual(result, {"supports_tools": False, "is_reasoning_model": False})
 
 	@patch("huf.ai.local_runtimes.ollama.requests.get")
 	def test_probe_server_url_normalization(self, mock_get):

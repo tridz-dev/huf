@@ -68,23 +68,28 @@ class LocalRuntimeAdapter(Protocol):
 		"""
 		...
 
-	def capability_overrides(self, capabilities: list[str]) -> dict:
-		"""Map probed capabilities to Huf configuration overrides.
+	def capability_overrides(self, probe: dict) -> dict:
+		"""Map a probe_model() result to Huf configuration overrides.
 
-		Converts a capability list from probe_model() into structured overrides
-		for model configuration (e.g. whether Huf should assume the model can
-		handle tool calls, whether it is a reasoning model).
+		Takes the whole probe result, not just its capability list, because the
+		``None`` vs ``False`` distinction for ``supports_tools`` depends on whether
+		the probe SUCCEEDED, not on whether the list happens to be empty. A model
+		that was probed successfully and did not report "tools" definitively does
+		not support them (``False``); a model that could not be probed at all is
+		unknown (``None``). A list-only signature cannot express that difference,
+		which is why this takes the dict.
 
 		Args:
-			capabilities: List of capability strings from probe_model().
+			probe: A probe_model() result -- {"ok", "capabilities", "error"}.
 
 		Returns:
 			dict: {"supports_tools": bool | None, "is_reasoning_model": bool}.
-				- supports_tools: True if the model supports tool/function calling.
-					None if the capability is unknown (not probed or not reported).
-					Never assume False for unknown — preserve the "unknown" state so
-					Huf does not degrade behavior when capability cannot be determined.
-				- is_reasoning_model: True if the model supports reasoning/thinking.
-					False if reasoning is not supported or unknown.
+				- supports_tools: True if the probe succeeded and reported tool
+					support; False if the probe succeeded and did not; None if the
+					model could not be probed. Never assume False for an unprobed
+					model -- preserve the "unknown" state so Huf does not silently
+					degrade behaviour on a probe failure.
+				- is_reasoning_model: True if the probe succeeded and reported
+					reasoning/thinking support; False otherwise (including unprobed).
 		"""
 		...
