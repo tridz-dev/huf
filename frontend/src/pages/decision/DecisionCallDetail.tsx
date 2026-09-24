@@ -7,7 +7,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { PageFrame } from '@/layouts/PageFrame';
 import { cn } from '@/lib/utils';
 import { getDecisionCall } from '@/services/decisionApi';
-import { handleFrappeError } from '@/lib/frappe-error';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { formatTimeAgo } from '@/utils/time';
 import { usePermissions } from '@/contexts/PermissionsContext';
 
@@ -171,10 +171,9 @@ export default function DecisionCallDetail() {
         const callData = await getDecisionCall(name);
         setData(callData as DecisionCallDetail);
       } catch (err) {
-        handleFrappeError(err, `Error fetching decision call ${name}`);
-        // Use the actual error message instead of a generic fallback
-        const message = err instanceof Error ? err.message : `Failed to load decision call ${name}`;
-        setError(message);
+        // handleFrappeError throws (returns never), so it cannot be used here: the
+        // message must reach setError. Show the actual API error, not a generic fallback.
+        setError(getFrappeErrorMessage(err) || `Failed to load decision call ${name}`);
       } finally {
         setLoading(false);
       }
