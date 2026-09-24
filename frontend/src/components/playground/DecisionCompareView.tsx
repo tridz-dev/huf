@@ -65,7 +65,7 @@ export function DecisionCompareView({ running }: DecisionCompareViewProps) {
 
   const currentModel = models.find((m) => m.name === selectedModelForDeploy);
   const stateBytes = new TextEncoder().encode(state).length;
-  const stateLimit = currentModel?.state_limit ?? 8000;
+  const stateLimit = currentModel?.state_limit !== undefined ? currentModel.state_limit : 8000;
 
   // Load models on mount
   useEffect(() => {
@@ -491,7 +491,9 @@ function ResultColumn({ result }: ResultColumnProps) {
       {result.status !== 'success' && (
         <Alert variant="destructive" className="mt-2">
           <AlertCircle className="h-3 w-3" />
-          <AlertDescription className="text-xs">{result.status}</AlertDescription>
+          <AlertDescription className="text-xs">
+            {result.response?.error_code ? `Error: ${result.response.error_code}` : `Status: ${result.status}`}
+          </AlertDescription>
         </Alert>
       )}
     </div>
