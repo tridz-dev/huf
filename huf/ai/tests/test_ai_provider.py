@@ -18,7 +18,7 @@ Run standalone (no bench) from the repo root:
 
 import sys
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 try:
 	import frappe  # noqa: F401
@@ -36,6 +36,7 @@ except ImportError:
 	frappe_model_document_mock.Document = object
 	sys.modules["frappe.model.document"] = frappe_model_document_mock
 
+from huf.ai import provider_security  # noqa: E402
 from huf.huf.doctype.ai_provider.ai_provider import (  # noqa: E402
 	requires_auth_for_network_exposed_local_llm,
 )
@@ -161,6 +162,59 @@ class TestRequiresAuthForNetworkExposedLocalLLM(unittest.TestCase):
 		self.assertFalse(
 			requires_auth_for_network_exposed_local_llm("mlx", 1, "", "")
 		)
+
+
+class _Rejected(Exception):
+	"""Stand-in for the error frappe.throw would raise under a real bench."""
+
+
+class TestApiBaseUrlAllowsPrivateForLocalProviders(unittest.TestCase):
+	"""F-A3: the DocType validation path must honour is_local_llm.
+
+	`validate_api_base_url(self.api_base_url)` was called with the default
+	`allow_private=False`, so a local provider pointed at a LAN address was
+	rejected before it could be saved -- which is exactly the documented
+	cross-platform shape (a Linux/Docker bench driving MLX or laya-serve on
+	another machine). The decision transport already got this right
+	(`systemone_http.py` passes `allow_private=bool(is_local_llm)`); the
+	DocType path did not.
+
+	The earlier tests in this file all call the pure guard helper directly,
+	which is precisely why none of them caught this -- so these go through
+	`validate_api_base_url` itself.
+	"""
+
+	def test_lan_url_rejected_when_not_local(self):
+		"""A cloud provider must still not point at a private address.
+
+		`frappe.throw` is a MagicMock under the module-level stub and therefore
+		does NOT raise, so asserting a rejection requires giving it a
+		side_effect -- otherwise this test would pass vacuously whether or not
+		the rejection happened. (`huf/ai/decision/tests/test_provider_security.py`
+		uses the same technique for the same reason.)
+		"""
+		with patch(
+			"huf.ai.provider_security.frappe.throw", side_effect=_Rejected
+		) as mock_throw:
+			with self.assertRaises(_Rejected):
+				provider_security.validate_api_base_url(
+					"http://192.168.1.50:8080", allow_private=False
+				)
+			self.assertTrue(mock_throw.called)
+
+	def test_lan_url_allowed_when_local(self):
+		"""is_local_llm=1 is what makes the LAN deployment shape saveable."""
+		provider_security.validate_api_base_url(
+			"http://192.168.1.50:8080", allow_private=True
+		)
+
+	def test_loopback_allowed_either_way(self):
+		"""Loopback never needed allow_private and must not start needing it."""
+		for allow in (False, True):
+			with self.subTest(allow_private=allow):
+				provider_security.validate_api_base_url(
+					"http://127.0.0.1:8080", allow_private=allow
+				)
 
 
 if __name__ == "__main__":

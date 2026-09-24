@@ -67,8 +67,11 @@ dependencies = [
     # as well, but those paths aren't needed for our use case. A non-Apple
     # host that wants MLX installs it manually; the runtime device probe
     # reports whatever is actually importable regardless of install path.
+    # Both are bounded: mlx-lm tracks mlx's ABI closely, so an unbounded
+    # mlx-lm would become a hard resolver failure the first time it requires
+    # mlx>=0.33 against our mlx<0.33 ceiling. Lift both ceilings together.
     "mlx>=0.32.2,<0.33; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "mlx-lm; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx-lm>=0.31,<0.32; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [project.optional-dependencies]

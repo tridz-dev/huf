@@ -21,6 +21,9 @@ either "working" or "not installed".
 REASON_NOT_INSTALLED = "MLX package not installed"
 REASON_DEGRADED_NO_METAL = "MLX installed but no Metal device (degraded)"
 REASON_OK = "MLX installed and Metal device available"
+#: mlx also ships CUDA and CPU backends and real Linux wheels, so "no Metal" does
+#: not imply "no acceleration". A GPU device without Metal is fully accelerated.
+REASON_ACCELERATED_NON_METAL = "MLX installed with a non-Metal accelerator (e.g. CUDA)"
 
 
 def probe_device() -> dict:
@@ -38,7 +41,8 @@ def probe_device() -> dict:
 			- device (str | None): str(mx.default_device()) if available, else None.
 			- metal_available (bool): whether `mx.metal.is_available()` reports True.
 			- mlx_version (str | None): the installed mlx distribution version via
-				`importlib.metadata.version("mlx")`. Note `mlx.__version__` does NOT
+				`importlib.metadata.version("mlx")`. Resolution order is `mlx.core.__version__` then
+				`importlib.metadata.version("mlx")`. Note plain `mlx.__version__` does NOT
 				exist (verified against mlx 0.32.0); `mlx.core.__version__` does, but
 				the distribution metadata is the stabler source. None if unresolvable.
 	"""
@@ -97,9 +101,16 @@ def probe_device() -> dict:
 def describe_probe_result(result: dict) -> str:
 	"""Turn a `probe_device()` result into a human-readable reason string.
 
-	Distinguishes "MLX package not installed" from "MLX installed but no
-	Metal device (degraded)" so that callers (e.g. a provider connection
-	test) can surface a typed reason without re-deriving this wording.
+	Distinguishes four states so callers (e.g. a provider connection test) can
+	surface a typed reason without re-deriving this wording: package absent;
+	present with Metal; present with a non-Metal accelerator (CUDA -- fully
+	accelerated, NOT degraded); present on CPU only (genuinely degraded).
+
+	The non-Metal-accelerator case exists because treating `metal_available`
+	as the acceleration verdict repeats, one level down, the same
+	package-vs-device conflation that platform gating was rejected for: mlx
+	ships CUDA and CPU backends and real Linux wheels, so a Linux/CUDA host is
+	fully accelerated while reporting no Metal.
 
 	Args:
 		result (dict): The dict returned by `probe_device()`.
@@ -111,6 +122,12 @@ def describe_probe_result(result: dict) -> str:
 		return REASON_NOT_INSTALLED
 
 	if not result.get("metal_available"):
+		# `device` is the acceleration signal; `metal_available` only says which
+		# backend. A resolved GPU device without Metal (e.g. CUDA on Linux) is
+		# accelerated, not degraded -- only a CPU device is.
+		device = (result.get("device") or "").lower()
+		if device and "cpu" not in device:
+			return REASON_ACCELERATED_NON_METAL
 		return REASON_DEGRADED_NO_METAL
 
 	return REASON_OK

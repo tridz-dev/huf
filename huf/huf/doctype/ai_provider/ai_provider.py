@@ -31,7 +31,7 @@ def requires_auth_for_network_exposed_local_llm(provider_brand, is_local_llm, ba
 	local providers -- otherwise this check would be dead code, since by the
 	time it runs the sentinel has already been written.
 	"""
-	if provider_brand not in LOCAL_NETWORK_SERVER_BRANDS:
+	if (provider_brand or "").strip().lower() not in LOCAL_NETWORK_SERVER_BRANDS:
 		return False
 	if not is_local_llm:
 		return False
@@ -96,7 +96,17 @@ class AIProvider(Document):
 			frappe.throw(_("API Key is required for cloud providers."))
 
 	def validate_api_base_url(self):
-		validate_api_base_url(self.api_base_url)
+		# `allow_private` must track `is_local_llm`, exactly as the decision
+		# transport already does (huf/ai/decision/transports/systemone_http.py
+		# passes `allow_private=bool(is_local_llm)`). Without it a local provider
+		# pointed at a LAN address -- e.g. an MLX or Laya server on another
+		# machine at http://192.168.1.50:8080 -- is rejected here before it can
+		# ever be saved, which is the documented cross-platform deployment shape
+		# (a Linux/Docker bench driving MLX on a Mac). Loopback was always
+		# allowed either way; this is what makes the LAN case reachable through
+		# `api_base_url` rather than only through the unvalidated url+port
+		# fields. The network-exposure guard below is what then requires a key.
+		validate_api_base_url(self.api_base_url, allow_private=bool(self.is_local_llm))
 
 	def validate_local_network_exposed_api_key(self):
 		# Runs after validate_api_key(), which stamps the "not-needed" sentinel

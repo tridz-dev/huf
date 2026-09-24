@@ -34,6 +34,7 @@ except ImportError:
 	sys.modules["frappe"] = frappe_mock
 
 from huf.ai.local_runtimes.mlx_probe import (
+	REASON_ACCELERATED_NON_METAL,
 	REASON_DEGRADED_NO_METAL,
 	REASON_NOT_INSTALLED,
 	REASON_OK,
@@ -121,6 +122,32 @@ class TestProbeDeviceDegraded(unittest.TestCase):
 		)
 
 	def test_reason_string_for_degraded(self):
+		result = {
+			"import_ok": True,
+			"device": "Device(cpu, 0)",
+			"metal_available": False,
+			"mlx_version": "0.32.0",
+		}
+		self.assertEqual(describe_probe_result(result), REASON_DEGRADED_NO_METAL)
+
+	def test_describe_non_metal_gpu_is_accelerated_not_degraded(self):
+		"""A CUDA/Linux host is accelerated even with no Metal.
+
+		mlx ships CUDA and CPU backends and real Linux wheels, so treating
+		`metal_available` as the acceleration verdict would report a fully
+		accelerated host as degraded -- the same package-vs-device conflation
+		that platform gating was rejected for.
+		"""
+		result = {
+			"import_ok": True,
+			"device": "Device(gpu, 0)",
+			"metal_available": False,
+			"mlx_version": "0.32.0",
+		}
+		self.assertEqual(describe_probe_result(result), REASON_ACCELERATED_NON_METAL)
+
+	def test_describe_cpu_device_is_still_degraded(self):
+		"""Only a CPU device is degraded -- the guard must not over-reach."""
 		result = {
 			"import_ok": True,
 			"device": "Device(cpu, 0)",
