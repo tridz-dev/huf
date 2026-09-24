@@ -7,8 +7,8 @@ and that calls with no origin (Playground, API) are visible to their owner and d
 import frappe
 from frappe.tests import IntegrationTestCase
 
+from huf.ai.decision.tests._helpers import make_user_unthrottled as make_user
 from huf.ai.tests.factories import (
-	make_user,
 	make_agent_run,
 	make_automation,
 )

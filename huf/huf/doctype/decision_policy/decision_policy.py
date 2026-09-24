@@ -19,6 +19,38 @@ class DecisionPolicy(Document):
 		"""Validate policy definition on save."""
 		self._validate_definition()
 
+	def on_trash(self):
+		"""Block deletion if policy is referenced by active Flow Definitions.
+
+		Scans active Flow Definitions for router.decision nodes that reference
+		this policy by name. If found, raises an exception with the list of
+		references, preventing deletion.
+		"""
+		from huf.ai.decision.policy_references import get_policy_references
+
+		# Check if this policy is referenced by any active Flow Definitions
+		references = get_policy_references(self.name)
+
+		if references:
+			# Format a readable list of references
+			flow_refs = []
+			for ref in references:
+				flow_refs.append(
+					_("Flow: {0} (node: {1})").format(
+						frappe.bold(ref["flow_name"]),
+						ref["node_id"]
+					)
+				)
+
+			frappe.throw(
+				_("Cannot delete policy {0}: referenced by {1} active Flow(s):\n{2}").format(
+					frappe.bold(self.name),
+					len(references),
+					"\n".join(flow_refs)
+				),
+				title=_("Policy Referenced by Active Flows")
+			)
+
 	def _validate_definition(self):
 		"""Validate that definition_json is valid if provided."""
 		if self.definition_json:
@@ -32,6 +64,27 @@ class DecisionPolicy(Document):
 					_("Invalid policy definition: {0}").format(str(e)),
 					title=_("Policy Validation Error")
 				)
+
+	@frappe.whitelist()
+	def get_references(self):
+		"""Get all active Flow Definitions that reference this policy.
+
+		Used by the UI to show warnings when disabling a policy or planning
+		its deletion. Requires read permission on Decision Policy.
+
+		Returns:
+			List of dicts with flow_id, flow_name, node_id, node_label, flow_def_name
+		"""
+		from huf.ai.decision.policy_references import get_policy_references
+
+		# Permission check: user must have read permission on this policy
+		if not frappe.has_permission("Decision Policy", "read", self.name):
+			frappe.throw(
+				_("You do not have permission to view this policy's references"),
+				title=_("Permission Denied")
+			)
+
+		return get_policy_references(self.name)
 
 	@frappe.whitelist()
 	def publish_version(self):
