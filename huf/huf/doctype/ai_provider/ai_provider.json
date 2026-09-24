@@ -32,11 +32,11 @@
    "reqd": 0
   },
   {
-   "description": "The AI provider service. Used for model selection, key management, and cost tracking.",
+   "description": "The AI provider service. Used for model selection, key management, and cost tracking. For MLX: device/Metal capability is probed at runtime, not assumed from the platform (MLX ships Linux and Windows wheels, so the operating system alone does not tell you whether the fast path exists). For Laya: it is a PyTorch sidecar (laya-serve), not MLX.",
    "fieldname": "provider_brand",
    "fieldtype": "Select",
    "label": "Provider Brand",
-   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nmoonshot\nai21\nbaseten\ncloudflare-workers-ai\nclarifai\nnomic\nreplicate\nsagemaker\nstability-ai\nvllm\nwatsonx\nopencode-zen\nvercel-ai-gateway\nother",
+   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nmoonshot\nai21\nbaseten\ncloudflare-workers-ai\nclarifai\nnomic\nreplicate\nsagemaker\nstability-ai\nvllm\nwatsonx\nopencode-zen\nvercel-ai-gateway\nmlx\nlaya\nother",
    "reqd": 1
   },
   {
