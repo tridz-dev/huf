@@ -345,7 +345,9 @@ def _safe_recovery_actions(failed_node_type: str | None, failed_tool_is_write: b
 		]
 	return [
 		"Procedure failed mid-run; review completed_steps and committed_writes before retrying "
-		"any part of it.",
+		"any part of it. Note: committed_writes lists every write tool.call that was "
+		"ATTEMPTED, not confirmed as committed -- check each entry's own success field "
+		"(and re-read the target record) before assuming a write actually landed.",
 	]
 
 
