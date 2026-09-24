@@ -730,19 +730,20 @@ def test_deployment(deployment: str) -> dict:
 			latency_ms = (time.monotonic() - started) * 1000
 		else:
 			# Build a minimal judge question for probing
-			probe_policy = DecisionPolicy(
-				policy_id="__probe__",
-				questions=[
-					{
-						"id": "probe",
-						"kind": QuestionKind.JUDGE,
-						"instructions": "This is a probe question. Return true.",
-						"positive_criteria": "Always true.",
-						"negative_criteria": "Never applies.",
-					}
-				],
-				default_model=None,
-				store_state=False,
+			probe_policy = validate_policy_data(
+				{
+					"policy_id": "__probe__",
+					"questions": [
+						{
+							"id": "probe",
+							"kind": "judge",
+							"instructions": "This is a probe question. Return true.",
+							"positive_criteria": "Always true.",
+							"negative_criteria": "Never applies.",
+						}
+					],
+					"store_state": False,
+				}
 			)
 
 			request = DecisionRequest(
