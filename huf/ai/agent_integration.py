@@ -50,7 +50,19 @@ class _LazyLogger:
 logger = _LazyLogger()
 
 
-def _resolve_effective_model(agent_doc, model=None, provider=None):
+def _resolve_effective_model(
+    agent_doc,
+    model=None,
+    provider=None,
+    *,
+    user=None,
+    conversation=None,
+    agent_run=None,
+    request_text=None,
+    run_context=None,
+    override_source="caller_override",
+    selection_context=None,
+):
     """Resolve the effective provider and model for an agent run.
 
     Args:
@@ -58,6 +70,32 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
         model: Optional AI Model link name to override the agent's default model.
         provider: Optional provider link name. If omitted and model is provided,
             the provider is resolved from the AI Model doc.
+        user, conversation, agent_run, request_text, run_context: Best-effort context for
+            the Model Routing decision surface (PLAN.md §3.6, IP §12). All optional; a caller
+            that omits them still gets routing, just with a thinner ``Decision Call`` origin.
+        override_source: What to record as ``model_selection_source`` (T1.21) when ``model``
+            or ``provider`` was already supplied by the caller -- ``"caller_override"`` (the
+            default) or ``"orchestration_override"`` for a higher-level router that resolved
+            its own model before calling in. Ignored when routing runs (source is then always
+            ``"decision_policy"``) or when neither caller nor routing produced a model
+            (``"agent_default"``).
+        selection_context: Optional dict the caller supplies to receive
+            ``{"model_selection_source": ..., "decision_call": ...}`` after this call. The
+            return tuple's shape is unchanged so existing callers that unpack three values
+            (``agent_stream_renderer.py``, ``agent_chat.py``) keep working untouched.
+
+    Model Routing (IP §12, D14, D18): only when both ``model`` and ``provider`` are omitted --
+    i.e. the caller passed no override, direct or already-resolved-and-forwarded -- do we ask
+    ``huf.ai.decision.model_routing.route_agent_model`` for an automatic pick. It is the only
+    source of automatic candidates (never widened beyond the Agent's own default + its enabled
+    ``Agent Allowed Model`` rows, and never a Decision-only model); any error, timeout, Shadow,
+    disabled binding, or budget exhaustion falls back to the Agent's configured default exactly
+    as if no binding existed, and RunBudget is untouched either way. Because every internal
+    caller in this module that re-resolves an already-picked model (``_execute_agent_run``,
+    ``AgentManager.__init__``) always passes a concrete ``model``/``provider`` forward, routing
+    can only ever fire once per run, at the first resolution (``run_agent_sync`` /
+    ``run_agent_stream``), keeping sync and stream on the same resolved route and avoiding a
+    second (and billed) decision call for the same turn.
 
     Returns:
         Tuple of (provider_link, model_link, model_name).
@@ -65,6 +103,32 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
     Raises:
         frappe.ValidationError: if the override model or its provider is missing/invalid.
     """
+    selection_source = "agent_default"
+    decision_call = None
+
+    if model is None and provider is None:
+        from huf.ai.decision.model_routing import route_agent_model
+
+        routed, decision_call = route_agent_model(
+            agent_doc,
+            user=user,
+            conversation=conversation,
+            agent_run=agent_run,
+            request_text=request_text,
+            run_context=run_context,
+        )
+        if routed is not None:
+            model = routed.model
+            if routed.provider:
+                provider = routed.provider
+            selection_source = "decision_policy"
+    else:
+        selection_source = override_source
+
+    if selection_context is not None:
+        selection_context["model_selection_source"] = selection_source
+        selection_context["decision_call"] = decision_call
+
     effective_model = model if model else agent_doc.model
     if not effective_model:
         frappe.throw(_("Agent model is not configured"))
@@ -1354,10 +1418,19 @@ def run_agent_sync(
                     frappe.PermissionError,
                 )
 
+    # Model Routing (IP §12) fires here -- the earliest point in the sync path, before the
+    # conversation/Agent Run exist -- so its own origin.conversation/agent_run are best-effort
+    # None (see _resolve_effective_model's docstring). selection_context is read below once
+    # run_doc_data is being built, and the concrete model this call resolves to is threaded
+    # through to _execute_agent_run's own (non-routing) re-resolution.
+    model_selection_context = {}
     resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
         agent_doc,
         model=model,
         provider=provider,
+        user=frappe.session.user,
+        request_text=prompt,
+        selection_context=model_selection_context,
     )
 
     conv_manager = ConversationManager(
@@ -1428,6 +1501,7 @@ def run_agent_sync(
         "prompt_template": resolved_prompt_template,
         "model": resolved_model,
         "provider": resolved_provider,
+        "model_selection_source": model_selection_context.get("model_selection_source", "agent_default"),
         "parent_run": parent_run_id,
         "is_child": 1 if parent_run_id else 0,
         "agent_orchestration": orchestration_id,
@@ -3095,10 +3169,20 @@ async def run_agent_stream(
             provider = None
             model = None
 
+        # Model Routing (IP §12) fires here -- the same gate and candidate source as the sync
+        # path's first resolution in run_agent_sync, so sync and stream land on the same route
+        # for an equivalent call. The conversation already exists at this point in the stream
+        # path (unlike sync), so its origin is a little richer; still best-effort (agent_run
+        # doesn't exist yet either way).
+        model_selection_context = {}
         resolved_provider, resolved_model, resolved_model_name = _resolve_effective_model(
             agent_doc,
             model=model,
             provider=provider,
+            user=frappe.session.user,
+            conversation=conversation.name,
+            request_text=prompt,
+            selection_context=model_selection_context,
         )
 
         # Persist the effective model override on the conversation so subsequent
@@ -3149,7 +3233,8 @@ async def run_agent_stream(
             "prompt": prompt,
             "prompt_template": resolved_prompt_template,
             "model": resolved_model,
-            "provider": resolved_provider
+            "provider": resolved_provider,
+            "model_selection_source": model_selection_context.get("model_selection_source", "agent_default"),
         }
         if client_idempotency_key:
             run_doc_data["idempotency_key"] = client_idempotency_key
