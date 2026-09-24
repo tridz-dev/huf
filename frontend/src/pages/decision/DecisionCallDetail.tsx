@@ -173,7 +173,7 @@ export default function DecisionCallDetail() {
       } catch (err) {
         handleFrappeError(err, `Error fetching decision call ${name}`);
         // Use the actual error message instead of a generic fallback
-        const message = err instanceof Error ? err.message : `Failed to load decision call ${name}`;
+        const message = err instanceof Error ? (err as Error).message : `Failed to load decision call ${name}`;
         setError(message);
       } finally {
         setLoading(false);
