@@ -27,6 +27,7 @@ Run with:
 """
 
 import copy
+import json
 import sys
 import types
 import unittest
@@ -658,6 +659,19 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 	scoped to this class only, rather than widening it for every other test here.
 	"""
 
+	@staticmethod
+	def _definition(payload: dict) -> dict:
+		"""``definition_json`` is ``frappe.as_json(graph)`` -- under real frappe
+		(bench run) that's a JSON **string**; this file's own standalone stub
+		(``fake.as_json = lambda obj: obj``, see top of file) makes it a no-op
+		identity function instead, so it stays a **dict** when run frappe-free. Accept
+		either -- a bench-based run of this exact test file caught this file assuming
+		dict-only and failing under real frappe, which is exactly the kind of gap a
+		frappe-free stub can hide.
+		"""
+		definition = payload["definition_json"]
+		return json.loads(definition) if isinstance(definition, str) else definition
+
 	def setUp(self):
 		frappe_stub = sys.modules["frappe"]
 		# Snapshot-and-restore, not hasattr()-gated delete: frappe_stub is a MagicMock,
@@ -713,7 +727,7 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 			procedure_name="Create Todo",
 			classify_tool=_fake_classify_tool,
 		)
-		node = payload["definition_json"]["nodes"][0]
+		node = self._definition(payload)["nodes"][0]
 		self.assertEqual(node["config"]["recovery"], "abort")
 		self.assertTrue(node["config"]["input"]["idempotency_key"])
 
@@ -740,8 +754,8 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 			procedure_name="Create Todo",
 			classify_tool=_fake_classify_tool,
 		)
-		key_a = payload_a["definition_json"]["nodes"][0]["config"]["input"]["idempotency_key"]
-		key_b = payload_b["definition_json"]["nodes"][0]["config"]["input"]["idempotency_key"]
+		key_a = self._definition(payload_a)["nodes"][0]["config"]["input"]["idempotency_key"]
+		key_b = self._definition(payload_b)["nodes"][0]["config"]["input"]["idempotency_key"]
 		self.assertEqual(key_a, key_b)
 
 	def test_user_supplied_idempotency_key_is_not_overwritten(self):
@@ -762,7 +776,7 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 			procedure_name="Create Todo",
 			classify_tool=_fake_classify_tool,
 		)
-		node = payload["definition_json"]["nodes"][0]
+		node = self._definition(payload)["nodes"][0]
 		self.assertEqual(node["config"]["input"]["idempotency_key"], "hand-edited-key")
 
 
