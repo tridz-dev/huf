@@ -242,9 +242,22 @@ def test_provider_connection(
     # context that helps the user understand why a connection failed. A remote MLX
     # server (LAN deployment) can work even if MLX is not installed on the HUF host.
     if effective_brand and effective_brand.lower() == "mlx" and not server["ok"]:
+        # The connection failure is the verdict; local MLX state is context that
+        # only explains it when MLX is actually absent or degraded. When local MLX
+        # is healthy, describe_probe_result() returns its success string, so using
+        # it as the error would report "MLX installed and Metal device available"
+        # as the reason a connection failed — and would discard the real network
+        # error. Keep the network error primary and append context only when it
+        # adds something.
         device_info = adapter.get_device_info()
-        device_reason = mlx_probe.describe_probe_result(device_info)
-        result["provider"] = {"ok": False, "error": device_reason}
+        server_error = server["error"] or _("MLX server unreachable")
+        if not device_info.get("import_ok") or not device_info.get("metal_available"):
+            error = "{0} (local MLX state: {1})".format(
+                server_error, mlx_probe.describe_probe_result(device_info)
+            )
+        else:
+            error = server_error
+        result["provider"] = {"ok": False, "error": error}
     else:
         result["provider"] = {"ok": server["ok"], "error": server["error"]}
 
