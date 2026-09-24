@@ -660,8 +660,15 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 
 	def setUp(self):
 		frappe_stub = sys.modules["frappe"]
-		self._had_model = hasattr(frappe_stub, "model")
-		self._had_db = hasattr(frappe_stub, "db")
+		# Snapshot-and-restore, not hasattr()-gated delete: frappe_stub is a MagicMock,
+		# and MagicMock.__getattr__ auto-vivifies any attribute access (including inside
+		# hasattr()), so `hasattr(frappe_stub, "model")` is always True regardless of
+		# whether "model" was ever really set -- a prior version of this fixture used
+		# that check to decide whether to `del frappe_stub.model` in tearDown, which
+		# therefore never fired and leaked `.model`/`.db` into every test that ran after
+		# this class in the same process (caught by an adversarial review of this fix).
+		# Snapshotting __dict__ instead restores exactly what was there, unconditionally.
+		self._frappe_dict_snapshot = dict(frappe_stub.__dict__)
 
 		class _Document:
 			pass
@@ -679,10 +686,8 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 
 	def tearDown(self):
 		frappe_stub = sys.modules["frappe"]
-		if not self._had_model:
-			del frappe_stub.model
-		if not self._had_db:
-			del frappe_stub.db
+		frappe_stub.__dict__.clear()
+		frappe_stub.__dict__.update(self._frappe_dict_snapshot)
 		sys.modules.pop("frappe.model", None)
 		sys.modules.pop("frappe.model.document", None)
 		sys.modules.pop("huf.huf.doctype.agent_procedure.agent_procedure", None)

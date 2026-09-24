@@ -72,8 +72,12 @@ from huf.ai.procedure_versioning import compute_fingerprint
 
 # Default recovery mode for an auto-proposed write node absent other signal (T-40,
 # GOAL.md ss2.3): fail closed, no retry, no compensation -- the safest choice when nothing
-# about the underlying tool's failure semantics is known. A human reviewing the proposal
-# in ConvertToProcedureDialog.tsx can change it before accepting.
+# about the underlying tool's failure semantics is known. NOTE: as of this writing,
+# ConvertToProcedureDialog.tsx has no field for a human to change this before accepting --
+# the schema/runtime accept any of RECOVERY_MODES on a hand-edited graph, so the door is
+# open, but nothing in the current UI walks through it (see
+# Tracks/safwan-erooth.ProcedureWritePathBugs/README.md, "Not done"). Every auto-proposed
+# write node gets this default until that UI affordance exists.
 _DEFAULT_RECOVERY = "abort"
 
 # Statuses that count as "this tool call finished cleanly" (Agent Tool Call.status).
