@@ -624,6 +624,8 @@ def setup_deployment(
 	"""
 	from huf.ai.decision import catalog
 	from huf.patches.v1.seed_decision_system_one import (
+		PROVIDER_BRAND as _SEED_PROVIDER_BRAND,
+		CATALOG_MODEL_NAME as _SEED_CATALOG_MODEL_NAME,
 		_seed_classes,
 		_seed_families,
 		_seed_model,
@@ -649,6 +651,31 @@ def setup_deployment(
 	# Check that the provider has a key
 	if not provider_doc.api_key:
 		frappe.throw(_("Provider {0} has no API key. Add one first.").format(provider))
+
+	# The _seed_* helpers below are the install-time Jev seeders: every key they
+	# use is a module constant (DECISION_MODEL_KEY "jev-1-13", CATALOG_MODEL_NAME
+	# "jev-1.13-free", DEPLOYMENT_KEY "jev-1-13-opencode-zen", and
+	# _seed_deployment's own get_entry(PROVIDER_BRAND, CATALOG_MODEL_NAME)). They
+	# ignore `entry` entirely. Driving them with a non-Jev catalog entry does not
+	# create that entry's deployment -- on a seeded site _get_or_create returns
+	# the EXISTING OpenCode Zen deployment and the enabled flag below is then
+	# written onto it, silently mutating an unrelated deployment; on a fresh site
+	# it creates a "Jev 1.13 @ OpenCode Zen" row pointed at the wrong provider
+	# with provider_model_id "jev-1.13-free" and endpoint_path "/v1/systemone",
+	# so the entry's own endpoint_path is never honoured.
+	#
+	# Making this entry-driven is the blocked task T3.04 (it needs the setup
+	# wizard work from the DecisionRuntimeActivation track). Until that lands,
+	# fail loudly instead of corrupting data: a catalog entry this function
+	# cannot actually provision is rejected rather than quietly redirected.
+	if (provider_brand, model_name) != (_SEED_PROVIDER_BRAND, _SEED_CATALOG_MODEL_NAME):
+		frappe.throw(
+			_(
+				"Automated setup does not yet support {0} / {1}. Only {2} / {3} can be "
+				"provisioned automatically; create the Decision Model, AI Model and "
+				"Decision Deployment rows manually for this entry."
+			).format(provider_brand, model_name, _SEED_PROVIDER_BRAND, _SEED_CATALOG_MODEL_NAME)
+		)
 
 	# Idempotently create/reuse the Class/Family/Model hierarchy
 	class_names = _seed_classes()
