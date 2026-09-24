@@ -40,6 +40,8 @@ interface ToolsTabProps {
   // Decision bindings props
   decisionBindings?: AgentDecisionBindingRow[];
   onUpdateDecisionBindings?: (bindings: AgentDecisionBindingRow[]) => void;
+  /** Agent name to detect if this is the Hub Orchestrator */
+  agentName?: string;
 }
 
 export function ToolsTab({
@@ -56,6 +58,7 @@ export function ToolsTab({
   locked = false,
   decisionBindings = [],
   onUpdateDecisionBindings,
+  agentName,
 }: ToolsTabProps) {
   const [toolUsageMap, setToolUsageMap] = useState<Map<string, string[]>>(new Map());
 
@@ -131,9 +134,14 @@ export function ToolsTab({
     onUpdateDecisionBindings(updated);
   };
 
+  // Hub Orchestrator constant (matches backend HUB_AGENT_NAME)
+  const HUB_AGENT_NAME = 'Hub Orchestrator';
+  const isHubOrchestrator = agentName === HUB_AGENT_NAME;
+
   // Find bindings for this tab's surfaces
   const toolSelectionBinding = decisionBindings.find((b) => b.surface === 'Tool Selection');
   const agentToolBinding = decisionBindings.find((b) => b.surface === 'Agent Tool');
+  const agentRoutingBinding = decisionBindings.find((b) => b.surface === 'Agent Routing');
 
   const getStatusBadge = (server: MCPServerRef) => {
     const agentEnabled = isEnabled(server.enabled);
@@ -388,6 +396,16 @@ export function ToolsTab({
             onChange={(newBinding) => handleUpdateDecisionBinding('Agent Tool', newBinding)}
             disabled={locked}
           />
+
+          {/* Agent Routing Binding (Hub Orchestrator only) */}
+          {isHubOrchestrator && (
+            <DecisionBindingControl
+              surface="Agent Routing"
+              value={agentRoutingBinding}
+              onChange={(newBinding) => handleUpdateDecisionBinding('Agent Routing', newBinding)}
+              disabled={locked}
+            />
+          )}
         </CardContent>
       </Card>
     </>

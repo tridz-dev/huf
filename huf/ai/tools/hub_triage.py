@@ -4,7 +4,12 @@ Hub triage tools — read-only discovery and routing helpers for agent hub scena
 These handlers let users discover existing agents and site capabilities to
 route queries appropriately. Both tools enforce builder capability and return
 plain dicts with no secrets.
+
+Decision routing integration: find_existing_agents integrates with Decision Runtime
+via the Hub Orchestrator Agent's Agent Routing binding (PLAN.md D7, §3.10).
 """
+
+from __future__ import annotations
 
 import frappe
 
@@ -45,7 +50,10 @@ def _score_candidate(query_tokens: list, candidate_name: str, candidate_desc: st
 
 
 def find_existing_agents(query: str, limit: int = 5) -> dict:
-	"""Find existing agents matching a query and return ranked candidates.
+	"""Find existing agents matching a query, with optional Decision Runtime reranking.
+
+	Integrates with the Hub Orchestrator Agent's Agent Routing decision binding (D7, §3.10)
+	only when enabled. With no binding or kill switch off, output is byte-identical to pre-decide.
 
 	Args:
 		query: Search query (tokenized and scored against agent names, descriptions, and tools).
@@ -62,7 +70,9 @@ def find_existing_agents(query: str, limit: int = 5) -> dict:
 				},
 				...
 			],
-			"query": str
+			"query": str,
+			"decision_hint": str | None (only if Advise decision ran),
+			"decision_call": str | None (only if decision ran)
 		}
 	"""
 	_require_builder_capability()
@@ -97,6 +107,9 @@ def find_existing_agents(query: str, limit: int = 5) -> dict:
 	except Exception:
 		tools_by_agent = {}
 
+	# Build agent_id->name mapping (internal only, never exposed in result)
+	agent_id_map = {}
+
 	for cand in candidates:
 		# Skip "Hub Orchestrator" agent
 		if cand.get("agent_name") == "Hub Orchestrator":
@@ -128,15 +141,150 @@ def find_existing_agents(query: str, limit: int = 5) -> dict:
 				"tools": tools,
 				"score": score,
 			})
+			# Keep agent_id mapping internal
+			agent_id_map[cand.get("agent_name")] = agent_name
 
 	# Sort by score descending, cap at limit
 	scored.sort(key=lambda x: x["score"], reverse=True)
 	scored = scored[:limit]
 
-	return {
+	# Base result (byte-identical to pre-decide when decision is off)
+	result = {
 		"matches": scored,
 		"query": query,
 	}
+
+	# Apply Decision Runtime integration only if enabled
+	try:
+		result = _apply_agent_routing_decision(scored, agent_id_map, result)
+	except Exception as e:
+		# Log but don't break; decision integration is optional
+		frappe.logger("huf").warning(f"Agent routing decision integration error: {e}")
+
+	return result
+
+
+def _apply_agent_routing_decision(scored_agents: list, agent_id_map: dict, result: dict) -> dict:
+	"""Apply Agent Routing decision binding if configured on Hub Orchestrator Agent.
+
+	PLAN.md §3.10: If the Hub Orchestrator Agent has an enabled Agent Routing binding,
+	apply it to the authorized agent list. Early exit cheaply if kill switch is off or
+	binding is not enabled (harness principle: zero overhead when disabled).
+
+	Args:
+		scored_agents: The base-scored agent list without agent_id exposed.
+		agent_id_map: Internal mapping of agent_name -> agent_id for decision.
+		result: The result dict to update with decision_call and hint only if decision ran.
+
+	Returns:
+		The updated result dict.
+	"""
+	from huf.ai.app_seeding.hub_orchestrator import HUB_AGENT_NAME
+	from huf.ai.decision.agent_surfaces import decide_for_surface
+	from huf.ai.decision.types import DecisionOrigin, Option
+
+	# Check kill switch early (Agent Settings.decision_runtime_enabled)
+	try:
+		settings = frappe.get_single("Agent Settings")
+		if not settings.decision_runtime_enabled:
+			return result
+	except Exception:
+		# If settings not found or error reading, skip decision integration
+		return result
+
+	# Get Hub Orchestrator Agent doc
+	try:
+		hub_agent = frappe.get_doc("Agent", HUB_AGENT_NAME)
+	except frappe.DoesNotExistError:
+		# Hub Orchestrator not configured
+		return result
+
+	# Check for enabled Agent Routing binding early (cheap check before building candidates)
+	if not _has_enabled_agent_routing_binding(hub_agent):
+		return result
+
+	# Build Option objects for candidates using internal agent_id_map
+	candidates = tuple(
+		Option(id=agent_id_map.get(agent["agent_name"], agent["agent_name"]),
+		       description=agent.get("agent_name", ""))
+		for agent in scored_agents
+	)
+
+	if not candidates:
+		return result
+
+	# Call decide_for_surface with Agent Routing surface
+	# origin_type must be one of the Decision Call options: "Hub" (not "Hub Triage")
+	origin = DecisionOrigin(
+		origin_type="Hub",
+		agent=HUB_AGENT_NAME,
+		owner_user=frappe.session.user,
+	)
+	try:
+		decision = decide_for_surface(
+			hub_agent,
+			surface="Agent Routing",
+			candidates=candidates,
+			state={},  # No context state for hub triage
+			origin=origin,
+			candidate_source=None,
+			candidate_resolver_id=None,
+			top_n=len(scored_agents),
+			hint_kind="agents",
+		)
+	except Exception:
+		# Decision integration failed; continue with base list
+		return result
+
+	if decision is None:
+		# Off, Shadow (enqueued), or any error
+		return result
+
+	# Only add decision fields if decision actually returned (Advise or Enforce)
+	if decision.decision_call:
+		result["decision_call"] = decision.decision_call
+
+	if decision.mode == "Advise":
+		# Add hint to result
+		if decision.hint:
+			result["decision_hint"] = decision.hint
+		return result
+
+	if decision.mode == "Enforce":
+		# Rerank the list to match selected_ids order
+		if decision.selected_ids:
+			# Build agent_name->agent map for reordering
+			agent_by_name = {agent["agent_name"]: agent for agent in scored_agents}
+			reranked = []
+			for selected_id in decision.selected_ids:
+				# Find matching agent by agent_name (reverse lookup from agent_id_map)
+				for agent_name, agent_id in agent_id_map.items():
+					if agent_id == selected_id:
+						if agent_name in agent_by_name:
+							reranked.append(agent_by_name[agent_name])
+						break
+			result["matches"] = reranked
+		return result
+
+	return result
+
+
+def _has_enabled_agent_routing_binding(agent_doc: any) -> bool:
+	"""Check if agent has an enabled Agent Routing decision binding.
+
+	Args:
+		agent_doc: The Agent document.
+
+	Returns:
+		True if enabled Agent Routing binding exists, False otherwise.
+	"""
+	bindings = agent_doc.get("decision_bindings") or []
+	for binding in bindings:
+		if (binding.get("surface") == "Agent Routing" and
+		    binding.get("enabled") and
+		    binding.get("mode") in ("Advise", "Enforce", "Shadow")):
+			return True
+	return False
 
 
 def discover_site_capabilities(query: str, limit: int = 8) -> dict:
