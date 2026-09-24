@@ -300,12 +300,20 @@ class TestTestDeployment(FrappeTestCase):
 		"""test_deployment marks deployment unhealthy on failure."""
 		frappe.set_user(self.admin_user)
 
-		# This test will likely fail because the fake backend setup is incomplete,
-		# but we verify the error handling works
-		result = api.test_deployment(self.deployment.name)
+		# The "fake" adapter's backend defaults to DecisionStatus.SUCCESS, so force a
+		# failure response from it directly rather than relying on the probe itself
+		# breaking -- a broken probe is a bug (see FX4), not a way to test this path.
+		from huf.ai.decision.backends.fake import FakeDecisionBackend
 
-		# The test should return failed because the deployment transport will fail
-		# (no valid backend configured)
+		real_init = FakeDecisionBackend.__init__
+
+		def failing_init(self, *args, **kwargs):
+			kwargs["status"] = DecisionStatus.FAILED
+			real_init(self, *args, **kwargs)
+
+		with mock.patch.object(FakeDecisionBackend, "__init__", failing_init):
+			result = api.test_deployment(self.deployment.name)
+
 		self.assertEqual(result["status"], "failed")
 		self.assertIsNotNone(result["error_code"])
 		self.assertIn("latency_ms", result)
@@ -335,9 +343,19 @@ class TestTestDeployment(FrappeTestCase):
 		"""test_deployment handles exceptions gracefully without raising."""
 		frappe.set_user(self.admin_user)
 
-		# Even if something goes wrong internally, test_deployment should return
-		# a result, not raise
-		result = api.test_deployment(self.deployment.name)
+		# Force the backend's evaluate() to raise mid-probe, the way a real transport/
+		# provider exception would, and confirm it's caught rather than propagated,
+		# and that the raw exception text (which may carry request/credential data,
+		# per api.py's own docstring) never reaches the caller.
+		from huf.ai.decision.backends.fake import FakeDecisionBackend
+
+		def raising_evaluate(self, request):
+			raise RuntimeError("boom: SECRET_KEY=test-probe-key leaked in a raw provider error")
+
+		with mock.patch.object(FakeDecisionBackend, "evaluate", raising_evaluate):
+			# Even if something goes wrong internally, test_deployment should return
+			# a result, not raise
+			result = api.test_deployment(self.deployment.name)
 
 		# Should always return a dict with these keys
 		self.assertEqual(result["status"], "failed")
