@@ -57,7 +57,7 @@ _CATALOG = {
 		model_class="System One",
 		wire_protocol="systemone",
 		endpoint_path="/api/v1/systemone",
-		base_url=None,  # Use OpenRouter's default base URL
+		base_url="https://openrouter.ai",
 	),
 }
 
