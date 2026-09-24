@@ -62,6 +62,13 @@ dependencies = [
     "tinycss2>=1.5.0",
     # PDF export for document artifacts (huf.ai.artifacts.render.pdf/safety).
     "weasyprint>=68.0",
+    # MLX is gated to Apple Silicon (Darwin + arm64) because its Metal fast
+    # path is the sole reason HUF bundles it. Linux and Windows wheels ship
+    # as well, but those paths aren't needed for our use case. A non-Apple
+    # host that wants MLX installs it manually; the runtime device probe
+    # reports whatever is actually importable regardless of install path.
+    "mlx>=0.32.2,<0.33; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "mlx-lm; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [project.optional-dependencies]
