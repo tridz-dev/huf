@@ -24,7 +24,6 @@ import { settleAll } from '@/lib/settleAll';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import type { AgentPromptDoc } from '@/services/agentPromptApi';
-import type { RunDecisionResult } from '@/services/decisionApi';
 
 export { PlaygroundPage };
 export default PlaygroundPage;
@@ -45,6 +44,8 @@ function PlaygroundPage() {
   const [savePromptOverride, setSavePromptOverride] = useState<string | null>(null);
   const [loadedTemplate, setLoadedTemplate] = useState<AgentPromptDoc | null>(null);
   const [decisionRunning, setDecisionRunning] = useState(false);
+  // Bumped by the header Run button; the Decision panel owns its run logic and reacts to it.
+  const [decisionRunRequest, setDecisionRunRequest] = useState(0);
 
   // Close the global app sidebar so the playground uses the full viewport width.
   useEffect(() => {
@@ -139,15 +140,10 @@ function PlaygroundPage() {
       compareSlotA.run();
       compareSlotB.run();
     } else if (mode === 'decision') {
-      // DecisionPlaygroundPanel handles its own run logic
+      setDecisionRunRequest((n) => n + 1);
     } else {
       playgroundSlot.run();
     }
-  };
-
-  const handleDecisionRun = (_result: RunDecisionResult) => {
-    setDecisionRunning(false);
-    // Record the decision run in ledger if needed
   };
 
   const primaryRunning =
@@ -195,8 +191,8 @@ function PlaygroundPage() {
           />
         ) : mode === 'decision' ? (
           <DecisionPlaygroundPanel
-            running={decisionRunning}
-            onRun={handleDecisionRun}
+            runRequest={decisionRunRequest}
+            onRunningChange={setDecisionRunning}
           />
         ) : (
           <CompareView
