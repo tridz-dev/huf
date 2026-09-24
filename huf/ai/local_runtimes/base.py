@@ -10,10 +10,7 @@ server reachability checks, model listing, per-model capability queries, and
 capability-to-override mapping.
 """
 
-from typing import TYPE_CHECKING, Protocol
-
-if TYPE_CHECKING:
-	pass
+from typing import Protocol
 
 
 class LocalRuntimeAdapter(Protocol):
