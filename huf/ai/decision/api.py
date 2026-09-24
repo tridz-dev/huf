@@ -745,7 +745,7 @@ def test_deployment(deployment: str) -> dict:
 					"store_state": False,
 					# A policy must bind at least one piece of provider-visible state; the
 					# probe question doesn't need any, so bind a fixed placeholder.
-					"state_bindings": [{"name": "probe_context", "path": "$.probe"}],
+					"state_bindings": [{"name": "probe_context", "path": "probe"}],
 				}
 			)
 
