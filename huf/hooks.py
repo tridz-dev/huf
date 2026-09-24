@@ -200,6 +200,7 @@ permission_query_conditions = {
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
     "Agent Procedure Run": "huf.huf.doctype.agent_procedure_run.agent_procedure_run.get_permission_query_conditions",
     "Agent Run Feedback": "huf.ai.record_access.get_feedback_permission_conditions",
+    "Decision Call": "huf.huf.doctype.decision_call.decision_call.get_permission_query_conditions",
     "Gateway": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Gateway Access Entry": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Gateway Event": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
@@ -215,6 +216,7 @@ has_permission = {
 	"Agent Conversation": "huf.ai.hooks.has_permission_agent_conversation",
 	"Agent Tool Call": "huf.ai.hooks.has_permission_agent_tool_call",
 	"Agent Context Artifact": "huf.ai.hooks.has_permission_agent_context_artifact",
+	"Decision Call": "huf.huf.doctype.decision_call.decision_call.has_permission",
 	"Gateway": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Gateway Access Entry": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Gateway Event": "huf.ai.gateway_webhook.has_permission_gateway_family",
@@ -267,7 +269,19 @@ doc_events = {
         "on_trash": "huf.ai.automation_hooks.clear_doc_event_automation_cache",
     },
     "AI Provider": {
-        "on_update": "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
+        "on_update": [
+            "huf.ai.app_seeding.hub_orchestrator.on_ai_provider_update",
+            "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+        ],
+        "on_trash": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+    },
+    "AI Model": {
+        "on_update": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+        "on_trash": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+    },
+    "Decision Deployment": {
+        "on_update": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
+        "on_trash": "huf.ai.decision.deployment_loader.invalidate_deployment_chain_cache",
     },
     "Knowledge Source": {
         "after_insert": "huf.ai.knowledge.hooks.on_knowledge_source_created",
@@ -458,8 +472,11 @@ huf_knowledge_backends = {
 huf_voice_engines = {}
 
 # PR3 Jev semantic adapter; provider transport is injected by deployment resolution.
+# "jev_system_one" is the canonical adapter_id seeded on the Jev family (T1.12); "system_one"
+# is a provider-neutral alias to the same class for future non-Jev deployments.
 huf_decision_backends.update({
-    "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
+    "jev_system_one": "huf.ai.decision.backends.jev.SystemOneBackend",
+    "system_one": "huf.ai.decision.backends.jev.SystemOneBackend",
     "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
     "local_rules": "huf.ai.decision.backends.local.LocalRulesBackend",
     "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",

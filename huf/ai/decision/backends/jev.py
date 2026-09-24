@@ -14,7 +14,18 @@ from huf.ai.decision.types import (
 	DecisionResponse,
 	DecisionStatus,
 	DecisionUsage,
+	DeploymentSpec,
 	QuestionKind,
+)
+
+# Family defaults: honest limits of the Jev System One primitive translation itself,
+# independent of any one deployment's identity/provider. Not provider-specific values.
+_FAMILY_CAPABILITIES = DecisionCapabilities(
+	primitives=frozenset(QuestionKind),
+	parallel_questions=True,
+	probabilities=True,
+	confidence=True,
+	input_modalities=frozenset({"text", "json"}),
 )
 
 
@@ -22,45 +33,61 @@ class JevTransport(Protocol):
 	def __call__(self, payload: Mapping[str, Any]) -> tuple[int, Mapping[str, Any]]: ...
 
 
-class JevSystemOneBackend:
-	"""Translate HUF primitives to Jev ``noul``, ``choice``, and ``score``."""
+class SystemOneBackend:
+	"""Translate HUF primitives to Jev ``noul``, ``choice``, and ``score``.
+
+	Carries no hardcoded provider/deployment identity: a zero-argument instance is
+	registry-safe but "unconfigured" (its ``identity`` fields are all ``None`` except the
+	family markers, and its transport raises on use). Real identity and capabilities come
+	from ``from_deployment`` (deployment-driven, the normal registry path) or
+	``from_environment`` (local dev/test convenience against OpenCode Zen).
+	"""
 
 	def __init__(
 		self,
 		*,
 		transport: JevTransport | None = None,
-		provider: str = "OpenCode Zen",
-		deployment: str = "Jev 1.13 @ OpenCode Zen",
-		provider_model_id: str = "jev-1.13-free",
+		identity: DecisionIdentity | None = None,
+		capabilities: DecisionCapabilities | None = None,
 	):
 		self.transport = transport or self._unconfigured_transport
-		self.identity = DecisionIdentity(
+		self.identity = identity or DecisionIdentity(model_class="System One", model_family="Jev")
+		self._capabilities = capabilities or _FAMILY_CAPABILITIES
+
+	@classmethod
+	def from_deployment(cls, spec: DeploymentSpec, transport: JevTransport) -> "SystemOneBackend":
+		"""Build a deployment-configured instance.
+
+		``spec.identity`` (a ``DecisionIdentity``) supplies provider/deployment/model identity;
+		``spec.effective_capabilities`` is already the AND of family defaults and deployment
+		flags (computed by the deployment loader, huf/ai/decision/deployment_loader.py, T2A.09)
+		and is used as-is here rather than re-intersected.
+		"""
+		return cls(transport=transport, identity=spec.identity, capabilities=spec.effective_capabilities)
+
+	@classmethod
+	def from_environment(cls, **kwargs):
+		"""Construct the configured OpenCode Zen deployment from local environment secrets.
+
+		Dev/test convenience only; production instantiation goes through ``from_deployment``.
+		"""
+		identity = DecisionIdentity(
 			model_class="System One",
 			model_family="Jev",
 			canonical_model="Jev 1.13",
 			canonical_version="1.13",
-			provider=provider,
-			deployment=deployment,
-			provider_model_id=provider_model_id,
+			provider="OpenCode Zen",
+			deployment="Jev 1.13 @ OpenCode Zen",
+			provider_model_id="jev-1.13-free",
 		)
-
-	@classmethod
-	def from_environment(cls, **kwargs):
-		"""Construct the configured OpenCode Zen deployment from local environment secrets."""
-		return cls(transport=opencode_zen_transport_from_env(), **kwargs)
+		return cls(transport=opencode_zen_transport_from_env(), identity=identity, **kwargs)
 
 	@classmethod
 	def adapter_id(cls) -> str:
 		return "jev_system_one"
 
 	def capabilities(self) -> DecisionCapabilities:
-		return DecisionCapabilities(
-			primitives=frozenset(QuestionKind),
-			parallel_questions=True,
-			probabilities=True,
-			confidence=True,
-			input_modalities=frozenset({"text", "json"}),
-		)
+		return self._capabilities
 
 	def evaluate(self, request: DecisionBackendRequest) -> DecisionResponse:
 		payload = {
@@ -163,6 +190,11 @@ class JevSystemOneBackend:
 
 	def _failure(self, request: DecisionBackendRequest, status: DecisionStatus) -> DecisionResponse:
 		return DecisionResponse(status=status, identity=self.identity, backend_adapter=self.adapter_id())
+
+
+# Back-compat alias: registry/hooks and seeded family data reference "jev_system_one";
+# keep the old class name importable while the class itself is now provider-neutral.
+JevSystemOneBackend = SystemOneBackend
 
 
 def opencode_zen_transport_from_env(*, api_key: str | None = None, endpoint: str = "https://opencode.ai/zen/v1/systemone", timeout: float = 30.0, opener=None) -> JevTransport:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
-from huf.ai.decision.types import CandidateSource, DecisionIdentity, DecisionResponse, DecisionUsage
+from huf.ai.decision.types import CandidateSource, DecisionIdentity, DecisionOrigin, DecisionResponse, DecisionUsage
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +45,11 @@ class DecisionCall:
 	automation: str | None = None
 	owner_user: str | None = None
 	shadow_of: str | None = None
+	agent: str | None = None
+	agent_run: str | None = None
+	conversation: str | None = None
+	flow_run: str | None = None
+	flow_node_id: str | None = None
 
 
 TelemetrySink = Callable[[DecisionCall], None]
@@ -56,6 +61,10 @@ def make_decision_call(
 	*,
 	state_hash: str | None,
 	state_snapshot: Any | None = None,
+	origin: DecisionOrigin | None = None,
+	mode: str | None = None,
+	resolved_deployment: str | None = None,
+	resolved_provider: str | None = None,
 ) -> DecisionCall:
 	"""Build an audit event without copying execution context or secrets."""
 	questions = {item.id: item for item in request.policy.questions}
@@ -89,6 +98,18 @@ def make_decision_call(
 		policy_fallback_action=response.policy_fallback_action,
 		error_code=response.error_code,
 		deployment_fallback_chain=response.deployment_fallback_chain,
+		mode=mode,
+		origin_type=origin.origin_type if origin else None,
+		resolved_deployment=resolved_deployment,
+		resolved_provider=resolved_provider,
+		automation=origin.automation if origin else None,
+		owner_user=origin.owner_user if origin else None,
+		shadow_of=origin.shadow_of if origin else None,
+		agent=origin.agent if origin else None,
+		agent_run=origin.agent_run if origin else None,
+		conversation=origin.conversation if origin else None,
+		flow_run=origin.flow_run if origin else None,
+		flow_node_id=origin.flow_node_id if origin else None,
 	)
 
 

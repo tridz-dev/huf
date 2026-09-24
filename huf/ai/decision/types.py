@@ -22,6 +22,7 @@ class DecisionStatus(str, Enum):
 	INVALID_RESPONSE = "invalid_response"
 	TIMEOUT = "timeout"
 	RATE_LIMITED = "rate_limited"
+	THROUGHPUT_BUDGET_EXHAUSTED = "throughput_budget_exhausted"
 	FAILED = "failed"
 
 
@@ -247,3 +248,49 @@ class DecisionResponse:
 			raise ValueError("latency_ms cannot be negative")
 		if self.deployment_fallback_count < 0:
 			raise ValueError("deployment_fallback_count cannot be negative")
+
+
+@dataclass(frozen=True, slots=True)
+class DeploymentSpec:
+	"""Deployment identity, capabilities, and configuration for backend instantiation."""
+
+	identity: DecisionIdentity
+	effective_capabilities: DecisionCapabilities
+	wire_protocol: str
+	endpoint_path: str | None = None
+	latency_budget_ms: int | None = None
+
+	def __post_init__(self) -> None:
+		if self.latency_budget_ms is not None and self.latency_budget_ms <= 0:
+			raise ValueError("latency_budget_ms must be positive")
+		if not self.wire_protocol or not self.wire_protocol.strip():
+			raise ValueError("wire_protocol is required")
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionOrigin:
+	"""Origin of a decision call for linking to its source execution context."""
+
+	origin_type: str
+	agent: str | None = None
+	agent_run: str | None = None
+	conversation: str | None = None
+	flow_run: str | None = None
+	flow_node_id: str | None = None
+	automation: str | None = None
+	owner_user: str | None = None
+	shadow_of: str | None = None
+
+	def __post_init__(self) -> None:
+		if not self.origin_type or not self.origin_type.strip():
+			raise ValueError("origin_type is required")
+
+
+@dataclass(frozen=True, slots=True)
+class ServiceResult:
+	"""Result of a decision service call with status and resolved resources."""
+
+	status: DecisionStatus
+	response: DecisionResponse | None = None
+	decision_call: str | None = None
+	fallback_action: str | None = None
