@@ -18,6 +18,7 @@ import { getAgentRunStatusVariant } from '@/utils/status';
 import { getRunContextMetrics } from '@/services/runContextMetricsApi';
 import type { RunContextMetricsResponse } from '@/types/runContextMetrics.types';
 import { ContextBar } from '@/components/ui/context-bar';
+import { RunDecisionsSection } from '@/components/decision/RunDecisionsSection';
 import {
   ColumnDef,
   flexRender,
@@ -140,6 +141,10 @@ interface AgentRunDetail extends AgentRunDoc {
   round_count?: number | null;
   execution_mode?: 'sync' | 'stream' | null;
   provider_path?: 'litellm' | 'legacy_fallback' | null;
+  decision_call_count?: number | null;
+  decision_input_tokens?: number | null;
+  decision_output_tokens?: number | null;
+  decision_cost?: number | null;
 }
 
 async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null> {
@@ -478,6 +483,22 @@ function AgentRunDetailPage() {
                 value={typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
               />
               <DefinitionRow label="Cost source" value={run.cost_source || 'Not available'} />
+              {typeof run.decision_cost === 'number' && run.decision_cost > 0 && (
+                <>
+                  <DefinitionRow
+                    label="Decision input"
+                    value={typeof run.decision_input_tokens === 'number' ? run.decision_input_tokens.toLocaleString() : '0'}
+                  />
+                  <DefinitionRow
+                    label="Decision output"
+                    value={typeof run.decision_output_tokens === 'number' ? run.decision_output_tokens.toLocaleString() : '0'}
+                  />
+                  <DefinitionRow
+                    label="Decision cost"
+                    value={`$${run.decision_cost.toFixed(6)}`}
+                  />
+                </>
+              )}
             </DefinitionColumn>
           </div>
         </div>
@@ -533,6 +554,12 @@ function AgentRunDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        <RunDecisionsSection
+          agentRunName={run.name}
+          title="Decisions"
+          description="Decision policies applied during this run."
+        />
 
         <div className="grid gap-4 md:grid-cols-2">
           <CopyableTextPanel title="Prompt" content={run.prompt} emptyText="No prompt recorded." />

@@ -10,6 +10,8 @@ export interface AgentSettingsDoc {
   default_model?: string | null;
   skill_destinations?: string | null;
   last_skill_scans?: string | null;
+  decision_runtime_enabled?: number;
+  decision_shadow_rate_per_minute?: number;
 }
 
 export async function getAgentSettings(): Promise<AgentSettingsDoc | undefined> {

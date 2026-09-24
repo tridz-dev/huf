@@ -49,6 +49,14 @@ export const doctype = {
   Meeting: "Meeting",
   "Meeting Recording Chunk": "Meeting Recording Chunk",
   "Batch Job": "Batch Job",
+  "Decision Policy": "Decision Policy",
+  "Decision Policy Version": "Decision Policy Version",
+  "Decision Model": "Decision Model",
+  "Decision Model Class": "Decision Model Class",
+  "Decision Model Family": "Decision Model Family",
+  "Decision Deployment": "Decision Deployment",
+  "Decision Call": "Decision Call",
+  "Agent Decision Binding": "Agent Decision Binding",
 } as const;
 
 export type DocType = typeof doctype[keyof typeof doctype];

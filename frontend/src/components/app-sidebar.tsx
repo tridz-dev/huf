@@ -78,6 +78,13 @@ export const buildNavItems = [
     badge: "Experimental",
   },
   {
+    title: "Decisions",
+    url: "/decisions",
+    icon: SquareChevronRight,
+    capability: "decision.author",
+    badge: "Experimental",
+  },
+  {
     title: "Intelligence",
     url: "/memory",
     icon: Brain,
@@ -161,7 +168,7 @@ export const settingsNavGroups: Array<{ label?: string; items: Array<{ title: st
   {
     items: [
       { title: "General", url: "/settings/general", icon: SlidersHorizontal, capability: null },
-      { title: "AI providers & models", url: "/providers", icon: Layers, capability: "system.providers.manage" },
+      { title: "AI providers & models", url: "/providers", icon: Layers, capability: ["system.providers.manage", "decision.admin"] },
       { title: "MCP servers", url: "/mcp", icon: Server, capability: "system.mcp.manage" },
       { title: "Gateways", url: "/gateways", icon: GlobeLock, capability: "system.integrations.manage" },
       { title: "Integrations", url: "/integrations", icon: Link2, capability: "system.integrations.manage" },

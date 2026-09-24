@@ -50,7 +50,7 @@
    "fieldtype": "Data",
    "label": "Deployment Name",
    "reqd": 1,
-   "description": "A human-readable name for this deployment (e.g., 'Jev 1.13 @ OpenCode Zen')."
+   "description": "A human-readable name for this deployment (e.g., 'Jev 1.13'). Bare model name, matching AI Model's convention -- provider is its own field, not appended here."
   },
   {
    "fieldname": "decision_model",

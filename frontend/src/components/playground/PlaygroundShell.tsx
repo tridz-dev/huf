@@ -24,8 +24,9 @@ interface PlaygroundShellProps {
 }
 
 const tabs: WorkSurfaceTab[] = [
-  { value: 'playground', label: 'Single' },
+  { value: 'playground', label: 'Playground' },
   { value: 'compare', label: 'Compare' },
+  { value: 'decision', label: 'Decision' },
 ];
 
 export function PlaygroundShell({
@@ -60,7 +61,7 @@ export function PlaygroundShell({
       </DropdownMenu>
 
       <Button type="button" onClick={onRun} disabled={running} className="gap-2">
-        {running ? 'Running' : mode === 'compare' ? 'Run both' : 'Run'}
+        {running ? 'Running' : mode === 'compare' ? 'Run both' : mode === 'decision' ? 'Run' : 'Run'}
         {running ? (
           <Loader2 className="h-3 w-3 animate-spin" />
         ) : (

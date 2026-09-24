@@ -17,6 +17,7 @@ import {
   type PlaygroundMode,
   type RunOutcome,
 } from '@/components/playground';
+import { DecisionPlaygroundPanel } from '@/components/playground/DecisionPlaygroundPanel';
 import { getAgents } from '@/services/agentApi';
 import { getProviders } from '@/services/providerApi';
 import { settleAll } from '@/lib/settleAll';
@@ -42,6 +43,9 @@ function PlaygroundPage() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savePromptOverride, setSavePromptOverride] = useState<string | null>(null);
   const [loadedTemplate, setLoadedTemplate] = useState<AgentPromptDoc | null>(null);
+  const [decisionRunning, setDecisionRunning] = useState(false);
+  // Bumped by the header Run button; the Decision panel owns its run logic and reacts to it.
+  const [decisionRunRequest, setDecisionRunRequest] = useState(0);
 
   // Close the global app sidebar so the playground uses the full viewport width.
   useEffect(() => {
@@ -135,6 +139,8 @@ function PlaygroundPage() {
     if (mode === 'compare') {
       compareSlotA.run();
       compareSlotB.run();
+    } else if (mode === 'decision') {
+      setDecisionRunRequest((n) => n + 1);
     } else {
       playgroundSlot.run();
     }
@@ -143,7 +149,9 @@ function PlaygroundPage() {
   const primaryRunning =
     mode === 'compare'
       ? compareSlotA.state.running || compareSlotB.state.running
-      : playgroundSlot.state.running;
+      : mode === 'decision'
+        ? decisionRunning
+        : playgroundSlot.state.running;
 
   if (loading) {
     return (
@@ -167,7 +175,7 @@ function PlaygroundPage() {
         onModeChange={setMode}
         onRun={handleRunPrimary}
         running={primaryRunning}
-        canSaveTemplate={!!activePromptBody().trim()}
+        canSaveTemplate={mode !== 'decision' && !!activePromptBody().trim()}
         onLoadTemplate={() => setPickerOpen(true)}
         onSaveTemplate={handleSaveCurrent}
       >
@@ -180,6 +188,11 @@ function PlaygroundPage() {
             slot={playgroundSlot.state}
             onDraft={playgroundSlot.draft}
             ledger={ledgerProps}
+          />
+        ) : mode === 'decision' ? (
+          <DecisionPlaygroundPanel
+            runRequest={decisionRunRequest}
+            onRunningChange={setDecisionRunning}
           />
         ) : (
           <CompareView

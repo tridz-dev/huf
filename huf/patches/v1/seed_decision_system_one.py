@@ -53,7 +53,9 @@ DECISION_MODEL_KEY = "jev-1-13"
 DECISION_MODEL_NAME = "Jev 1.13"
 
 DEPLOYMENT_KEY = "jev-1-13-opencode-zen"
-DEPLOYMENT_NAME = "Jev 1.13 @ OpenCode Zen"
+# Bare canonical model name, matching AI Model's own naming convention (provider is its
+# own field, never concatenated into the display name -- see api.py's setup_deployment).
+DEPLOYMENT_NAME = "Jev 1.13"
 
 
 def _get_or_create(
@@ -209,7 +211,17 @@ def _seed_deployment(decision_model_name: str, ai_model_name: str, provider_name
 # these create an Agent Decision Binding, so they change nothing by
 # themselves -- they exist as ready-to-publish starting points.
 def _policy_definition(policy_id: str, question: dict) -> str:
-	return json.dumps({"policy_id": policy_id, "questions": [question]})
+	# Every policy must explicitly bind at least one piece of provider-visible state
+	# (huf.ai.decision.state.prepare_state) or it can be published but never actually run.
+	# Sample policies bind the whole caller-supplied state under "request"; a real policy
+	# built in the Decisions editor will usually bind narrower, named fields instead.
+	return json.dumps(
+		{
+			"policy_id": policy_id,
+			"questions": [question],
+			"state_bindings": [{"name": "request", "path": "request"}],
+		}
+	)
 
 
 SAMPLE_POLICIES = [

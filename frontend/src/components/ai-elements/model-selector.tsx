@@ -162,6 +162,7 @@ export type ModelSelectorLogoProps = Omit<
     | "baseten"
     | "huggingface"
     | "opencode"
+    | "opencode-zen"
     | "ai21"
     | "clarifai"
     | "nomic"
@@ -200,6 +201,7 @@ export type ModelSelectorLogoProps = Omit<
     | "scaleway"
     | "amazon-bedrock"
     | "cerebras"
+    | "vercel-ai-gateway"
     | (string & {});
 };
 
