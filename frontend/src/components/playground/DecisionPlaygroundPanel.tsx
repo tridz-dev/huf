@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FormDescription } from '@/components/ui/form';
+import { HelperText } from '@/components/ui/helper-text';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -26,6 +26,68 @@ import {
 import { QuestionBuilder, type PolicyDefinition } from '@/components/decision/QuestionBuilder';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { db } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
+
+const STARTER_AD_HOC_DEFINITION: PolicyDefinition = {
+  policy_id: 'playground_ad_hoc',
+  questions: [
+    {
+      id: 'question_1',
+      kind: 'judge',
+      instructions: 'Describe what this question should decide.',
+      options: [],
+      positive_criteria: '',
+      negative_criteria: '',
+    },
+  ],
+  state_bindings: [{ name: 'request', path: 'request' }],
+};
+
+/**
+ * Plain-language description for a `huf.ai.decision.errors.DecisionErrorCode` value, so a
+ * failed run says what actually happened instead of a bare status badge. Descriptions state
+ * only what the backend guarantees about each code (see errors.py) -- no invented specifics
+ * about the caller's own data.
+ */
+function describeDecisionErrorCode(code: string): string {
+  switch (code) {
+    case 'DECISION_PROVIDER_UNAVAILABLE':
+      return 'The provider could not be reached (no working deployment, or the connection failed).';
+    case 'DECISION_AUTHENTICATION_FAILED':
+      return "The provider rejected the request's credentials.";
+    case 'DECISION_TIMEOUT':
+      return 'The provider did not respond within the latency budget.';
+    case 'DECISION_RATE_LIMITED':
+      return 'The provider rate-limited this request.';
+    case 'DECISION_INVALID_RESPONSE':
+      return "The provider's response could not be parsed into a decision answer.";
+    case 'DECISION_UNSUPPORTED_CAPABILITY':
+      return "This deployment doesn't support a capability the policy needs (e.g. probabilities or confidence).";
+    case 'DECISION_POLICY_INVALID':
+      return 'The policy definition is invalid (see the Decision Call for details).';
+    case 'DECISION_STATE_TOO_LARGE':
+      return "The state is larger than the model's or policy's limit.";
+    case 'DECISION_CANDIDATE_INVALID':
+      return "The candidates don't match what this question or policy expects.";
+    case 'DECISION_LOW_CONFIDENCE':
+      return 'The answer came back below the minimum confidence threshold.';
+    case 'DECISION_NO_MATCH':
+      return 'No candidate matched.';
+    case 'DECISION_UNSUPPORTED_MODALITY':
+      return "The state includes a modality this backend doesn't accept.";
+    case 'DECISION_CANDIDATE_LIMIT_EXCEEDED':
+      return 'More candidates were supplied than the policy allows.';
+    case 'DECISION_THROUGHPUT_BUDGET_EXHAUSTED':
+      return "This deployment's throughput budget is exhausted right now.";
+    case 'DECISION_BACKEND_NOT_REGISTERED':
+      return "The family's adapter isn't registered on this site.";
+    case 'DECISION_FAILED':
+      return 'The decision failed for an internal reason that is not shown here to avoid leaking provider details.';
+    default:
+      return `The decision failed (${code}).`;
+  }
+}
 
 interface DecisionPlaygroundPanelProps {
   running: boolean;
@@ -52,7 +114,11 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
   // Policy vs ad-hoc mode
   const [policyMode, setPolicyMode] = useState<PolicyMode>('published');
   const [selectedPolicy, setSelectedPolicy] = useState<string>('');
-  const [adHocDefinition, setAdHocDefinition] = useState<PolicyDefinition | null>(null);
+  const [adHocDefinition, setAdHocDefinition] = useState<PolicyDefinition | null>(
+    STARTER_AD_HOC_DEFINITION
+  );
+  const [policies, setPolicies] = useState<{ name: string; policy_name?: string }[]>([]);
+  const [policiesLoading, setPoliciesLoading] = useState(true);
 
   // State and candidates
   const [state, setState] = useState<string>('');
@@ -65,7 +131,12 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
 
   const currentModel = models.find((m) => m.name === selectedModel);
   const stateBytes = new TextEncoder().encode(state).length;
-  const stateLimit = currentModel?.state_limit ?? 8000;
+  // 0/undefined means the model has no declared limit -- treat it as "not enforced
+  // client-side" rather than silently turning it into a false "0 bytes allowed" ceiling
+  // that flags every non-empty state as too large.
+  const stateLimit = currentModel?.state_limit && currentModel.state_limit > 0
+    ? currentModel.state_limit
+    : null;
 
   // Load models on mount
   useEffect(() => {
@@ -81,6 +152,28 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
         toast.error(`Failed to load decision models: ${getFrappeErrorMessage(error)}`);
       } finally {
         setModelsLoading(false);
+      }
+    })();
+  }, []);
+
+  // Load published, enabled Decision Policies for the "Policy" mode picker
+  useEffect(() => {
+    (async () => {
+      setPoliciesLoading(true);
+      try {
+        const rows = await db.getDocList(doctype['Decision Policy'], {
+          fields: ['name', 'policy_name'],
+          filters: [
+            ['enabled', '=', 1],
+            ['current_version', '!=', ''],
+          ],
+          limit: 200,
+        });
+        setPolicies((rows as { name: string; policy_name?: string }[]) || []);
+      } catch (error) {
+        toast.error(`Failed to load decision policies: ${getFrappeErrorMessage(error)}`);
+      } finally {
+        setPoliciesLoading(false);
       }
     })();
   }, []);
@@ -187,7 +280,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>Decision model for this run</FormDescription>
+              <HelperText>Decision model for this run</HelperText>
             </div>
 
             {/* Deployment selector */}
@@ -206,7 +299,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>Auto uses the default deployment and failover chain</FormDescription>
+              <HelperText>Auto uses the default deployment and failover chain</HelperText>
             </div>
 
             {/* Policy mode toggle */}
@@ -220,11 +313,11 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <FormDescription>
+              <HelperText>
                 {policyMode === 'published'
                   ? 'Run a published policy'
                   : 'Define questions on the fly (requires decision.author)'}
-              </FormDescription>
+              </HelperText>
             </div>
 
             {policyMode === 'published' && (
@@ -232,13 +325,24 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                 <label className="mb-2 block text-sm font-medium text-ink">Policy</label>
                 <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a policy…" />
+                    <SelectValue
+                      placeholder={policiesLoading ? 'Loading policies…' : 'Select a policy…'}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* TODO: fetch policies from API */}
+                    {!policiesLoading && policies.length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No published policies yet.
+                      </div>
+                    )}
+                    {policies.map((p) => (
+                      <SelectItem key={p.name} value={p.name}>
+                        {p.policy_name || p.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Published Decision Policies</FormDescription>
+                <HelperText>Published Decision Policies</HelperText>
               </div>
             )}
 
@@ -260,10 +364,12 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               <label className="text-sm font-medium text-ink">State</label>
               <div
                 className={`font-mono text-xs ${
-                  stateBytes > stateLimit ? 'text-status-critical' : 'text-steel-soft'
+                  stateLimit !== null && stateBytes > stateLimit
+                    ? 'text-status-critical'
+                    : 'text-steel-soft'
                 }`}
               >
-                {stateBytes} / {stateLimit} bytes
+                {stateLimit !== null ? `${stateBytes} / ${stateLimit} bytes` : `${stateBytes} bytes`}
               </div>
             </div>
             <Textarea
@@ -273,8 +379,8 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               className="mb-2 font-mono text-xs"
               rows={6}
             />
-            <FormDescription>Context as JSON</FormDescription>
-            {stateBytes > stateLimit && (
+            <HelperText>Context as JSON</HelperText>
+            {stateLimit !== null && stateBytes > stateLimit && (
               <Alert variant="destructive" className="mt-2">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>State exceeds model limit by {stateBytes - stateLimit} bytes</AlertDescription>
@@ -312,7 +418,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                 ))}
               </div>
             )}
-            <FormDescription>Options for select/score questions</FormDescription>
+            <HelperText>Options for select/score questions</HelperText>
           </div>
 
           {/* Run button */}
@@ -485,7 +591,24 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               {result.status !== 'success' && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{result.status}</AlertDescription>
+                  <AlertDescription>
+                    <div className="font-medium">
+                      {result.response?.error_code
+                        ? describeDecisionErrorCode(result.response.error_code)
+                        : `The decision did not complete (status: ${result.status}).`}
+                    </div>
+                    {result.response?.error_code && (
+                      <div className="mt-1 font-mono text-xs opacity-80">
+                        {result.response.error_code}
+                      </div>
+                    )}
+                    {result.fallback_action && (
+                      <div className="mt-1 text-xs">Fallback applied: {result.fallback_action}</div>
+                    )}
+                    <div className="mt-1 text-xs">
+                      See the Decision Call above for the full trace.
+                    </div>
+                  </AlertDescription>
                 </Alert>
               )}
             </div>

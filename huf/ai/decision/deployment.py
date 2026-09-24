@@ -41,12 +41,20 @@ class DeploymentChain:
 def resolve_deployment_chain(
 	requested_identity: DecisionIdentity,
 	candidates: tuple[DeploymentCandidate, ...],
+	*,
+	bypass_health_filter: bool = False,
 ) -> DeploymentChain:
-	"""Return enabled healthy deployments matching the requested canonical identity."""
+	"""Return enabled healthy deployments matching the requested canonical identity.
+
+	``bypass_health_filter`` is for an explicit health-probe caller (a deployment pinned by
+	name specifically to re-check it) -- normal policy-serving callers must never set it, or
+	a deployment marked unhealthy would silently start serving production traffic again
+	without being re-verified.
+	"""
 	eligible = [
 		candidate for candidate in candidates
 		if candidate.enabled
-		and candidate.health_status not in {"disabled", "unhealthy"}
+		and (bypass_health_filter or candidate.health_status not in {"disabled", "unhealthy"})
 		and _matches_model(requested_identity, candidate.identity)
 	]
 	ordered = tuple(sorted(eligible, key=lambda item: (item.priority, item.identity.deployment or "")))
