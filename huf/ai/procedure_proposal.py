@@ -65,9 +65,16 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from huf.ai.graph.idempotency import derive_idempotency_key
 from huf.ai.graph.permissions import ToolClassifier, compute_static_envelope, default_tool_classifier
 from huf.ai.graph.validator import GraphValidationError, validate_graph
 from huf.ai.procedure_versioning import compute_fingerprint
+
+# Default recovery mode for an auto-proposed write node absent other signal (T-40,
+# GOAL.md ss2.3): fail closed, no retry, no compensation -- the safest choice when nothing
+# about the underlying tool's failure semantics is known. A human reviewing the proposal
+# in ConvertToProcedureDialog.tsx can change it before accepting.
+_DEFAULT_RECOVERY = "abort"
 
 # Statuses that count as "this tool call finished cleanly" (Agent Tool Call.status).
 # Anything else (Started/Queued/Failed, or missing entirely) is a hard stop per the task
@@ -474,7 +481,18 @@ def compile_procedure_from_trace(
 			return ProposalResult(proposable=False, reason=exc.reason, step_count=len(tool_calls))
 
 		node_id = _unique_node_id(tool_id, i, node_ids)
-		nodes.append({"id": node_id, "type": "tool.call", "config": {"tool_id": tool_id, "input": bound_input}})
+		config: dict[str, Any] = {"tool_id": tool_id, "input": bound_input}
+		if classify_tool(tool_id).ptype in _WRITE_PTYPES:
+			# T-40/D5: a write node must declare a recovery mode and carry a
+			# content-derived idempotency_key, or procedure_runtime.py fails it closed
+			# before it ever runs (see this module's docstring). ``recovery`` is
+			# defaultable here; ``idempotency_key`` needs procedure_name + version,
+			# neither of which exist yet at proposal time -- stamped in by
+			# :func:`_stamp_write_node_idempotency_keys` once accept_procedure_proposal
+			# knows both.
+			config["recovery"] = _DEFAULT_RECOVERY
+			bound_input["idempotency_key"] = None
+		nodes.append({"id": node_id, "type": "tool.call", "config": config})
 		node_ids.append(node_id)
 
 	output_id = _unique_node_id("output", len(tool_calls) + 1, node_ids, prefix="")
@@ -575,6 +593,61 @@ def _revalidate_procedure_graph(
 	return parsed
 
 
+def _stamp_write_node_idempotency_keys(
+	graph: dict, *, procedure_id: str, procedure_name: str, classify_tool: ToolClassifier
+) -> None:
+	"""Fill in a real, content-derived ``idempotency_key`` (D5) on every write
+	``tool.call`` node whose ``input.idempotency_key`` is still the ``None`` placeholder
+	:func:`compile_procedure_from_trace` left it with. Mutates ``graph`` in place.
+
+	Only computable here, not at proposal time: :func:`~huf.ai.graph.idempotency
+	.derive_idempotency_key` needs ``procedure_name`` (the user supplies it on Accept,
+	not on Propose) and ``procedure_version`` (assigned by
+	``AgentProcedure.autoname`` -- best-efforted here via the same
+	``max(version) + 1`` query, since the real value isn't known until ``insert()``
+	runs; a losing race just means the key is scoped to a version number this row
+	doesn't end up with, which does not affect correctness -- content-derivation only
+	needs the key to be deterministic and stable for a given version's content, not to
+	predict the eventual autoname exactly).
+
+	A node the user has already hand-edited to carry a non-``None`` idempotency_key
+	(e.g. re-proposing after editing the graph client-side) is left untouched.
+	"""
+	candidates = []
+	for node in graph.get("nodes", []):
+		if node.get("type") != "tool.call":
+			continue
+		config = node.get("config") or {}
+		tool_id = config.get("tool_id")
+		if tool_id is None or classify_tool(tool_id).ptype not in _WRITE_PTYPES:
+			continue
+		bound_input = config.get("input")
+		if not isinstance(bound_input, dict) or bound_input.get("idempotency_key") is not None:
+			continue
+		candidates.append((node, tool_id, bound_input))
+
+	if not candidates:
+		return
+
+	# Imported lazily, and only once a write node actually needs stamping:
+	# huf.huf.doctype.agent_procedure.agent_procedure pulls in frappe.model.document at
+	# its own module level, which this module's frappe-free unit tests
+	# (test_procedure_proposal.py) do not stub -- see this module's own docstring on
+	# staying import-safe for those tests, most of which compile read-only graphs that
+	# never reach this branch. Only the frappe-touching accept path (which owns a real
+	# frappe) ever reaches this line.
+	from huf.huf.doctype.agent_procedure.agent_procedure import _next_version
+
+	next_version = str(_next_version(procedure_id))
+	for node, tool_id, bound_input in candidates:
+		bound_input["idempotency_key"] = derive_idempotency_key(
+			procedure_name=procedure_name,
+			procedure_version=next_version,
+			normalised_inputs={k: v for k, v in bound_input.items() if k != "idempotency_key"},
+			target_identity=f"{tool_id}:{node.get('id')}",
+		)
+
+
 def _build_procedure_document_payload(
 	*,
 	agent_run_name: str,
@@ -589,10 +662,14 @@ def _build_procedure_document_payload(
 	a flow-conversion.
 	"""
 	graph = _revalidate_procedure_graph(procedure_graph, classify_tool=classify_tool)
+	procedure_id = f"{agent_run_name}-procedure"
+	_stamp_write_node_idempotency_keys(
+		graph, procedure_id=procedure_id, procedure_name=procedure_name, classify_tool=classify_tool
+	)
 
 	return {
 		"doctype": "Agent Procedure",
-		"procedure_id": f"{agent_run_name}-procedure",
+		"procedure_id": procedure_id,
 		"procedure_name": procedure_name,
 		"definition_json": frappe.as_json(graph),
 		"tier": "Draft",

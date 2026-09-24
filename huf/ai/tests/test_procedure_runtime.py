@@ -780,5 +780,146 @@ class TestBenchmark1CustomerContext(unittest.TestCase):
 		self.assertEqual(invoice_call_args["currency"], self.CURRENCY)
 
 
+class _FakeCache:
+	"""Minimal stand-in for ``frappe.cache()`` covering only what
+	``huf.ai.graph.idempotency.reserve_idempotency_key``/``release_idempotency_key`` call
+	(``set(..., nx=True)`` / ``delete``) -- enough to exercise the real reservation logic
+	frappe-free, mirroring ``FakeInvoker``'s "hand-written double, no MagicMock magic"
+	convention above.
+	"""
+
+	def __init__(self):
+		self._store: dict[str, int] = {}
+
+	def set(self, key, value, ex=None, nx=False):  # noqa: A002 -- matches redis-py's signature
+		if nx and key in self._store:
+			return False
+		self._store[key] = value
+		return True
+
+	def delete(self, key):
+		self._store.pop(key, None)
+
+
+class TestWritePathBugFix(unittest.TestCase):
+	"""Regression coverage for TRK-20260924-4fb7 (Tracks/safwan-erooth
+	.ProcedureWritePathBugs): a write ``tool.call`` node with a valid ``recovery`` mode
+	and a content-derived ``idempotency_key`` must actually execute, end to end, through
+	``execute_procedure`` -- this is exactly the path that was previously impossible in
+	any form (schema forbade ``recovery``; nothing ever populated ``idempotency_key``).
+	"""
+
+	def setUp(self):
+		import types
+
+		self._had_frappe = "frappe" in sys.modules
+		self._prior_frappe = sys.modules.get("frappe")
+		fake_frappe = types.ModuleType("frappe")
+		fake_cache_singleton = _FakeCache()
+		fake_frappe.cache = lambda: fake_cache_singleton
+		fake_frappe.logger = lambda *a, **k: types.SimpleNamespace(
+			debug=lambda *a, **k: None, warning=lambda *a, **k: None
+		)
+		sys.modules["frappe"] = fake_frappe
+
+	def tearDown(self):
+		if self._had_frappe:
+			sys.modules["frappe"] = self._prior_frappe
+		else:
+			sys.modules.pop("frappe", None)
+
+	@staticmethod
+	def _write_graph(*, recovery: str | None, idempotency_key) -> dict:
+		input_ = {"description": "call the customer"}
+		if idempotency_key is not None:
+			input_["idempotency_key"] = idempotency_key
+		config = {"tool_id": "create_todo", "input": input_}
+		if recovery is not None:
+			config["recovery"] = recovery
+		return {
+			"schema_version": "1.0.0",
+			"profile": "procedure",
+			"entry": "create",
+			"contract": _contract(max_writes=1),
+			"nodes": [
+				{"id": "create", "type": "tool.call", "config": config, "next": "out"},
+				{"id": "out", "type": "output", "config": {"value": {"$from": "create"}}},
+			],
+		}
+
+	@staticmethod
+	def _classify_write(tool_id: str):
+		import types
+
+		return types.SimpleNamespace(ptype="create" if tool_id == "create_todo" else None)
+
+	def test_write_node_with_recovery_and_idempotency_key_executes_successfully(self):
+		invoker = FakeInvoker({"create_todo": {"name": "TODO-0001"}})
+		graph = self._write_graph(recovery="abort", idempotency_key="content-derived-key-1")
+		outcome = execute_procedure(
+			_pin(graph),
+			{},
+			tool_invoker=invoker,
+			classify_tool=self._classify_write,
+			procedure_name="Create Todo",
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS, outcome.error)
+		self.assertEqual(outcome.output, {"name": "TODO-0001"})
+		self.assertEqual(
+			invoker.calls,
+			[("create_todo", {"description": "call the customer", "idempotency_key": "content-derived-key-1"})],
+		)
+
+	def test_write_node_without_idempotency_key_still_fails_closed(self):
+		"""The runtime's own defence-in-depth check (T-24's validator is expected to catch
+		this earlier) must still refuse a write node missing the key -- this fix only makes
+		a *correctly authored* write node runnable, it does not relax the requirement.
+		"""
+		invoker = FakeInvoker({"create_todo": {"name": "TODO-0001"}})
+		graph = self._write_graph(recovery="abort", idempotency_key=None)
+		outcome = execute_procedure(
+			_pin(graph),
+			{},
+			tool_invoker=invoker,
+			classify_tool=self._classify_write,
+			procedure_name="Create Todo",
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertIn("idempotency_key", outcome.error)
+		self.assertEqual(invoker.calls, [])
+
+	def test_write_node_without_recovery_still_fails_closed(self):
+		invoker = FakeInvoker({"create_todo": {"name": "TODO-0001"}})
+		graph = self._write_graph(recovery=None, idempotency_key="content-derived-key-1")
+		outcome = execute_procedure(
+			_pin(graph),
+			{},
+			tool_invoker=invoker,
+			classify_tool=self._classify_write,
+			procedure_name="Create Todo",
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.FAILED)
+		self.assertIn("recovery", outcome.error)
+		self.assertEqual(invoker.calls, [])
+
+	def test_concurrent_reservation_of_the_same_key_is_a_no_op_not_a_second_write(self):
+		"""The reservation only closes the TRUE-CONCURRENCY race (two attempts both
+		reaching ``reserve`` before either finishes) -- see the ``release_idempotency_key``
+		comment in ``_handle_tool_call``. A key already held (as if another in-flight
+		attempt got there first) makes this node a duplicate no-op instead of a second
+		write; a later SEQUENTIAL replay after that reservation is released is a separate
+		concern the graph's own existing-check node handles, not this mechanism."""
+		invoker = FakeInvoker({"create_todo": {"name": "TODO-0001"}})
+		graph = self._write_graph(recovery="abort", idempotency_key="content-derived-key-1")
+		# Simulate a concurrent in-flight attempt already holding the reservation.
+		sys.modules["frappe"].cache().set("agent_procedure_idempotency_content-derived-key-1", 1, nx=True)
+		outcome = execute_procedure(
+			_pin(graph), {}, tool_invoker=invoker, classify_tool=self._classify_write, procedure_name="Create Todo"
+		)
+		self.assertEqual(outcome.status, ProcedureOutcome.SUCCESS, outcome.error)
+		self.assertEqual(outcome.output, {"duplicate": True, "idempotency_key": "content-derived-key-1"})
+		self.assertEqual(invoker.calls, [])
+
+
 if __name__ == "__main__":
 	unittest.main()

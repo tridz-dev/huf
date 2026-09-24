@@ -26,6 +26,7 @@ Run with:
   bench --site <site> run-tests --app huf --module huf.ai.tests.test_procedure_proposal
 """
 
+import copy
 import sys
 import types
 import unittest
@@ -642,6 +643,122 @@ class TestBuildProcedureDocumentPayload(unittest.TestCase):
 		self.assertEqual(payload["procedure_id"], "AR-0001-procedure")
 		self.assertEqual(payload["tier"], "Draft")
 		self.assertEqual(payload["status"], "Draft")
+
+
+class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
+	"""Regression coverage for TRK-20260924-4fb7 (Tracks/safwan-erooth
+	.ProcedureWritePathBugs), Bug 2: propose -> accept must produce a write ``tool.call``
+	node the runtime can actually execute -- a ``recovery`` mode and a non-empty,
+	content-derived ``idempotency_key`` -- not a graph that looks fine until
+	``run_agent_procedure_run`` fails it closed.
+
+	``_next_version`` (imported lazily by ``_stamp_write_node_idempotency_keys``, only
+	once a write node is present) needs ``frappe.model.document.Document`` and
+	``frappe.db.sql`` at import time -- augment this file's shared stub with just those,
+	scoped to this class only, rather than widening it for every other test here.
+	"""
+
+	def setUp(self):
+		frappe_stub = sys.modules["frappe"]
+		self._had_model = hasattr(frappe_stub, "model")
+		self._had_db = hasattr(frappe_stub, "db")
+
+		class _Document:
+			pass
+
+		fake_document_module = types.ModuleType("frappe.model.document")
+		fake_document_module.Document = _Document
+		fake_model_module = types.ModuleType("frappe.model")
+		fake_model_module.document = fake_document_module
+		frappe_stub.model = fake_model_module
+		sys.modules["frappe.model"] = fake_model_module
+		sys.modules["frappe.model.document"] = fake_document_module
+
+		frappe_stub.db = MagicMock()
+		frappe_stub.db.sql = lambda query, params: [[0]]  # no existing versions -> next version 1
+
+	def tearDown(self):
+		frappe_stub = sys.modules["frappe"]
+		if not self._had_model:
+			del frappe_stub.model
+		if not self._had_db:
+			del frappe_stub.db
+		sys.modules.pop("frappe.model", None)
+		sys.modules.pop("frappe.model.document", None)
+		sys.modules.pop("huf.huf.doctype.agent_procedure.agent_procedure", None)
+
+	def test_write_node_gains_recovery_and_idempotency_key_on_accept(self):
+		tool_calls = [
+			_completed_call("create_todo", {"description": "call the customer"}, {"name": "TODO-0001"}),
+		]
+		result = compile_procedure_from_trace(
+			prompt="call the customer",
+			response="done",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		)
+		self.assertTrue(result.proposable, result.reason)
+		# The propose-time preview cannot know procedure_name/version yet -- placeholder.
+		self.assertIsNone(result.procedure_graph["nodes"][0]["config"]["input"]["idempotency_key"])
+		self.assertEqual(result.procedure_graph["nodes"][0]["config"]["recovery"], "abort")
+
+		payload = _build_procedure_document_payload(
+			agent_run_name="AR-0002",
+			procedure_graph=result.procedure_graph,
+			procedure_name="Create Todo",
+			classify_tool=_fake_classify_tool,
+		)
+		node = payload["definition_json"]["nodes"][0]
+		self.assertEqual(node["config"]["recovery"], "abort")
+		self.assertTrue(node["config"]["input"]["idempotency_key"])
+
+	def test_idempotency_key_is_deterministic_for_the_same_content(self):
+		tool_calls = [
+			_completed_call("create_todo", {"description": "call the customer"}, {"name": "TODO-0001"}),
+		]
+		graph = compile_procedure_from_trace(
+			prompt="call the customer",
+			response="done",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		).procedure_graph
+
+		payload_a = _build_procedure_document_payload(
+			agent_run_name="AR-0002",
+			procedure_graph=copy.deepcopy(graph),
+			procedure_name="Create Todo",
+			classify_tool=_fake_classify_tool,
+		)
+		payload_b = _build_procedure_document_payload(
+			agent_run_name="AR-0002",
+			procedure_graph=copy.deepcopy(graph),
+			procedure_name="Create Todo",
+			classify_tool=_fake_classify_tool,
+		)
+		key_a = payload_a["definition_json"]["nodes"][0]["config"]["input"]["idempotency_key"]
+		key_b = payload_b["definition_json"]["nodes"][0]["config"]["input"]["idempotency_key"]
+		self.assertEqual(key_a, key_b)
+
+	def test_user_supplied_idempotency_key_is_not_overwritten(self):
+		tool_calls = [
+			_completed_call("create_todo", {"description": "call the customer"}, {"name": "TODO-0001"}),
+		]
+		graph = compile_procedure_from_trace(
+			prompt="call the customer",
+			response="done",
+			tool_calls=tool_calls,
+			classify_tool=_fake_classify_tool,
+		).procedure_graph
+		graph["nodes"][0]["config"]["input"]["idempotency_key"] = "hand-edited-key"
+
+		payload = _build_procedure_document_payload(
+			agent_run_name="AR-0002",
+			procedure_graph=graph,
+			procedure_name="Create Todo",
+			classify_tool=_fake_classify_tool,
+		)
+		node = payload["definition_json"]["nodes"][0]
+		self.assertEqual(node["config"]["input"]["idempotency_key"], "hand-edited-key")
 
 
 if __name__ == "__main__":
