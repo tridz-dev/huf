@@ -719,6 +719,8 @@ def test_deployment(deployment: str) -> dict:
 			decision_model=decision_model,
 			pinned_deployment=deployment,
 			deadline=time.monotonic() + 5.0,  # 5s timeout for the probe
+			bypass_health_filter=True,  # this call IS the health check; never let a
+			# previous failure permanently exclude the deployment from being re-tested
 		)
 
 		if not chain.candidates:
