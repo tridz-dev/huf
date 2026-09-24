@@ -754,7 +754,8 @@ def test_deployment(deployment: str) -> dict:
 				candidates=(),
 				candidate_source=None,
 				candidate_resolver_id=None,
-				modalities=None,
+				# Leave modalities at its dataclass default (frozenset({"text"})); passing
+				# None here crashes prepare_state's `request.modalities | detected_modalities`.
 			)
 
 			# Run through the runtime
