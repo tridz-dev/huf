@@ -885,6 +885,7 @@ def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
     brand_prefix_map = {
         "ollama": "ollama_chat",
         "lmstudio": "openai",  # LM Studio exposes an OpenAI-compatible API
+        "mlx": "openai",  # MLX (mlx_lm.server) exposes an OpenAI-compatible API
     }
     if brand and brand.lower() in brand_prefix_map:
         return f"{brand_prefix_map[brand.lower()]}/{model}"
@@ -907,6 +908,7 @@ def _normalize_model_name(model: str, provider: str, brand: str = None) -> str:
         "meta": "meta-llama",
         "ollama": "ollama_chat",  # chat endpoint required for reasoning models (e.g. gpt-oss) with tools
         "lmstudio": "openai",  # LM Studio exposes an OpenAI-compatible API
+        "mlx": "openai",  # MLX (mlx_lm.server) exposes an OpenAI-compatible API
         "moonshot": "moonshot",
     }
 
