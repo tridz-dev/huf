@@ -10,6 +10,7 @@ based on the provider brand.
 """
 
 from .generic_openai import GenericOpenAIAdapter
+from .mlx_server import MlxServerAdapter
 from .ollama import OllamaAdapter
 
 
@@ -28,11 +29,13 @@ def get_adapter(provider_brand: str | None):
 			- "ollama" → OllamaAdapter
 			- "lmstudio" → GenericOpenAIAdapter
 			- "vllm" → GenericOpenAIAdapter
+			- "mlx" → MlxServerAdapter
 			- None, empty, unrecognized → OllamaAdapter (default, preserves today's behaviour)
 
 	Note:
-		MLX is registered by a separate task (T2.04) and must not collide with
-		this file. Leave a short comment noting MLX is registered by that task.
+		"laya" is not mapped here. Laya is a decision-runtime provider served over
+		HTTP by a PyTorch sidecar (laya-serve), not a local generation runtime, and
+		has no LocalRuntimeAdapter implementation.
 	"""
 	if not provider_brand:
 		# Unset, None, or empty string → default to Ollama
@@ -44,8 +47,8 @@ def get_adapter(provider_brand: str | None):
 		return OllamaAdapter()
 	elif brand_lower in ("lmstudio", "vllm"):
 		return GenericOpenAIAdapter()
+	elif brand_lower == "mlx":
+		return MlxServerAdapter()
 	else:
 		# Unrecognized brand → default to Ollama
 		return OllamaAdapter()
-
-	# MLX adapter is wired in by task T2.04 (in that task's own file/registry update)

@@ -31,6 +31,7 @@ except ImportError:
 	sys.modules["requests"] = MagicMock()
 
 from huf.ai.local_runtimes.registry import get_adapter  # noqa: E402
+from huf.ai.local_runtimes.mlx_server import MlxServerAdapter  # noqa: E402
 from huf.ai.local_runtimes.ollama import OllamaAdapter  # noqa: E402
 from huf.ai.local_runtimes.generic_openai import GenericOpenAIAdapter  # noqa: E402
 
@@ -152,6 +153,28 @@ class TestRegistryGetAdapter(unittest.TestCase):
 
 		self.assertIsNone(overrides["supports_tools"])
 		self.assertFalse(overrides["is_reasoning_model"])
+
+	def test_get_adapter_mlx_exact_case(self):
+		"""Test that 'mlx' brand returns MlxServerAdapter."""
+		adapter = get_adapter("mlx")
+		self.assertIsInstance(adapter, MlxServerAdapter)
+		self.assertEqual(adapter.flavor(), "mlx_server")
+
+	def test_get_adapter_mlx_uppercase(self):
+		"""Test that 'MLX' (uppercase) returns MlxServerAdapter."""
+		adapter = get_adapter("MLX")
+		self.assertIsInstance(adapter, MlxServerAdapter)
+
+	def test_get_adapter_mlx_mixed_case(self):
+		"""Test that 'Mlx' (mixed case) returns MlxServerAdapter."""
+		adapter = get_adapter("Mlx")
+		self.assertIsInstance(adapter, MlxServerAdapter)
+
+	def test_get_adapter_none_returns_ollama_regression(self):
+		"""Regression test: None still returns OllamaAdapter, not MLX."""
+		adapter = get_adapter(None)
+		self.assertIsInstance(adapter, OllamaAdapter)
+		self.assertNotIsInstance(adapter, MlxServerAdapter)
 
 
 if __name__ == "__main__":
