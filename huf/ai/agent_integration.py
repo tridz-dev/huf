@@ -22,7 +22,12 @@ from .tool_functions import (
     cancel_document,
 	delete_document,
 )
-from .conversation_manager import ConversationManager, safe_history_slice, safe_history_split
+from .conversation_manager import (
+	ConversationManager,
+	get_tool_exchange_candidates,
+	safe_history_slice,
+	safe_history_split,
+)
 from .run import RunProvider
 from huf.ai.knowledge.context_builder import build_knowledge_context, inject_knowledge_context
 from huf.ai.providers.litellm import _normalize_model_name, ProviderUnavailableError
@@ -1283,6 +1288,68 @@ def _history_without_pending_user_turn(history, skip_user_message: bool):
 	return history
 
 
+def _apply_context_relevance_compaction(
+	agent_doc,
+	conversation_name: str,
+	history: list,
+	*,
+	agent_name: str,
+	agent_run: str | None,
+) -> list:
+	"""T8.04 -- Context Relevance (PLAN.md §3.6, I-DR1). Shared by the sync (run_agent_execution)
+	and streaming (stream_agent_response) history-build paths.
+
+	Builds the raw tool-exchange candidate list (``huf.ai.conversation_manager
+	.get_tool_exchange_candidates``, which already excludes nothing itself -- it only reports
+	status/error/pending-approval/recency/shared-turn per exchange) and hands it to
+	``huf.ai.decision.context_relevance.compact_context``, which applies the hard eligibility
+	constraints and, only on a confidently-irrelevant Enforce result, narrows the returned id set.
+	Off / no binding / Shadow / any non-success result returns every input id unchanged, so
+	``history`` comes back byte-identical to the input in that case (D14, D18 -- this surface is
+	never offered Advise).
+
+	Removing a dropped exchange's ``[start, end]`` span from ``history`` can never split a
+	tool_call/tool-result pair: ``get_tool_exchange_candidates`` marks any exchange that shares
+	its assistant turn with another tool call as ``shared_turn`` and ``compact_context`` treats
+	that as ineligible, so every span actually removed here is self-contained.
+
+	Never raises past this point on its own account beyond what ``compact_context`` and
+	``get_tool_exchange_candidates`` already guard; the one call site each of the two paths uses
+	wraps this in its own try/except as an extra safety net (this function's failure must never
+	block a run).
+	"""
+	exchange_candidates = get_tool_exchange_candidates(conversation_name, history)
+	if not exchange_candidates:
+		return history
+
+	from huf.ai.decision.context_relevance import compact_context
+	from huf.ai.decision.types import DecisionOrigin
+
+	kept_ids, _decision_call = compact_context(
+		agent_doc,
+		exchange_candidates,
+		DecisionOrigin(
+			origin_type="Agent Run",
+			agent=agent_name,
+			agent_run=agent_run,
+			conversation=conversation_name,
+			owner_user=frappe.session.user,
+		),
+	)
+	if len(kept_ids) == len(exchange_candidates):
+		return history
+
+	kept = set(kept_ids)
+	drop_indexes = set()
+	for candidate in exchange_candidates:
+		if candidate["id"] in kept:
+			continue
+		drop_indexes.update(range(candidate["start"], candidate["end"] + 1))
+	if not drop_indexes:
+		return history
+	return [msg for idx, msg in enumerate(history) if idx not in drop_indexes]
+
+
 def _link_preexisting_user_message(conversation_name: str, run_name: str):
 	"""Link an existing unlinked user message in a conversation to the newly created Agent Run."""
 	if not conversation_name or not run_name:
@@ -1888,6 +1955,78 @@ def _execute_agent_run(
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         history = _history_without_pending_user_turn(history, user_message_persisted)
 
+        # === T8.04: Context Relevance (PLAN.md §3.6 "Context Relevance" row, D6, D9, D14, D18,
+        # I-DR1) — additive, self-contained block. Drops only confidently-irrelevant, already-
+        # completed old tool exchanges from ``history`` before the run; anything recent, errored,
+        # or tied to a pending approval is never even offered as a candidate (built by
+        # ``conversation_manager.get_tool_exchange_candidates``, re-checked by
+        # ``compact_context`` itself). Off / no binding / Shadow / any decision error, timeout,
+        # or budget-exceeded result leaves ``history`` byte-identical to today. See
+        # huf/ai/decision/context_relevance.py for the full contract. === start ===
+        try:
+            history = _apply_context_relevance_compaction(
+                agent_doc,
+                conversation.name,
+                history,
+                agent_name=agent_name,
+                agent_run=run_doc.name,
+            )
+        except Exception:
+            frappe.log_error(title="context_relevance:run_agent_execution", message=frappe.get_traceback())
+        # === T8.04: Context Relevance — end ===
+
+        # T8.03: Input Guardrail (PLAN.md §3.6, §3.19) — the earliest point before the run
+        # starts, judged against the raw user prompt. Skipped for internal silent triggers
+        # (sub-agent wake-ups, not attacker-controlled user text). A "safe"/pass verdict is
+        # never used to skip or widen any permission/capability check above this point
+        # (I-DR1, P3) — it can only turn an otherwise-allowed run into a blocked one.
+        if prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+            from huf.ai.decision.guardrails import check_input_guardrail
+            from huf.ai.decision.types import DecisionOrigin
+
+            input_verdict = check_input_guardrail(
+                agent_doc,
+                prompt,
+                DecisionOrigin(
+                    origin_type="Agent Run",
+                    agent=agent_name,
+                    agent_run=run_doc.name,
+                    conversation=conversation.name,
+                    owner_user=frappe.session.user,
+                ),
+                conversation_id=conversation.name,
+                agent_run_id=run_doc.name,
+            )
+            if input_verdict.action == "block":
+                blocked_message = input_verdict.message or _("Your message could not be processed.")
+                blocked_agent_message = conv_manager.add_message(
+                    conversation, "agent", blocked_message, resolved_provider, resolved_model, agent_name, run_doc.name
+                )
+                frappe.db.set_value("Agent Run", run_doc.name, {
+                    "status": "Success",
+                    "response": blocked_message,
+                    "prompt": prompt,
+                    "model": resolved_model,
+                    "provider": resolved_provider,
+                    "end_time": now_datetime(),
+                }, update_modified=True)
+                _emit_run_lifecycle_event(
+                    run_doc, conversation, "success",
+                    {"response": blocked_message, "agent_message_id": getattr(blocked_agent_message, "name", None)},
+                )
+                safe_commit()
+                return {
+                    "success": True,
+                    "response": blocked_message,
+                    "client_side_tool_calls": [],
+                    "structured": None,
+                    "provider": resolved_provider,
+                    "agent_run_id": run_doc.name,
+                    "conversation_id": conversation.name,
+                    "session_id": conv_manager.session_id,
+                    "guardrail_blocked": True,
+                }
+
         # Check for multi-run orchestration mode
         # Skip if already called from orchestration to prevent infinite loop
         if agent_doc.enable_multi_run and channel_id not in ("orchestration", "orchestration_planning"):
@@ -2282,6 +2421,37 @@ def _execute_agent_run(
                     )
 
         final_output = getattr(result, "final_output", str(result))
+
+        # T8.03: Output Guardrail + Output Verification (PLAN.md §3.6, §3.19) — after the
+        # final output, before it is persisted to the conversation or returned to the
+        # caller. Usage/cost accounting below still reflects the real provider call
+        # (billing is not affected by a guardrail verdict); a block only substitutes the
+        # persisted/returned text. A "safe"/pass verdict never skips or widens any
+        # permission/capability check (I-DR1, P3).
+        from huf.ai.decision.guardrails import check_output_guardrail, check_output_verification
+        from huf.ai.decision.types import DecisionOrigin as _GuardrailOrigin
+
+        _output_guardrail_origin = _GuardrailOrigin(
+            origin_type="Agent Run",
+            agent=agent_name,
+            agent_run=run_doc.name,
+            conversation=conversation.name,
+            owner_user=frappe.session.user,
+        )
+        _output_verdict = check_output_guardrail(
+            agent_doc, final_output, _output_guardrail_origin,
+            conversation_id=conversation.name, agent_run_id=run_doc.name,
+        )
+        if _output_verdict.action != "block":
+            # Only run verification when the guardrail itself did not already block --
+            # no need to spend a second decision call once the output is withheld.
+            _output_verdict = check_output_verification(
+                agent_doc, final_output, _output_guardrail_origin,
+                conversation_id=conversation.name, agent_run_id=run_doc.name,
+            )
+        if _output_verdict.action == "block":
+            final_output = _output_verdict.message or _("This response could not be delivered.")
+
         usage = getattr(result, "usage", None)
         cost = getattr(result, "cost", 0)
         input_tokens = 0
@@ -3196,6 +3366,23 @@ async def run_agent_stream(
         history = conv_manager.get_conversation_history(conversation.name, limit=fetch_limit)
         history = _history_without_pending_user_turn(history, skip_user_message)
 
+        # === T8.04: Context Relevance (PLAN.md §3.6 "Context Relevance" row, D6, D9, D14, D18,
+        # I-DR1) — additive, self-contained block (streaming path; see run_agent_execution's copy
+        # of this comment for the full contract, and _apply_context_relevance_compaction's
+        # docstring for what it guarantees). No Agent Run exists yet on this path, so the origin
+        # carries no ``agent_run``. === start ===
+        try:
+            history = _apply_context_relevance_compaction(
+                agent_doc,
+                conversation.name,
+                history,
+                agent_name=agent_name,
+                agent_run=None,
+            )
+        except Exception:
+            frappe.log_error(title="context_relevance:stream_agent_response", message=frappe.get_traceback())
+        # === T8.04: Context Relevance — end ===
+
         if client_idempotency_key:
             # Mirror run_agent_sync's dedupe: a retried streaming request for
             # the same conversation must reuse the prior run rather than
@@ -3247,6 +3434,53 @@ async def run_agent_stream(
             _link_preexisting_user_message(conversation.name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
+
+        # T8.03: Input Guardrail (PLAN.md §3.6, §3.19) — mirrors the sync path's check in
+        # ``_execute_agent_run`` (same skip for internal silent triggers, though
+        # ``run_agent_stream`` is not itself used for those today; kept for defense in
+        # depth). A "safe"/pass verdict never skips or widens any permission/capability
+        # check already enforced above (I-DR1, P3).
+        if prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+            from huf.ai.decision.guardrails import check_input_guardrail
+            from huf.ai.decision.types import DecisionOrigin as _InputGuardrailOrigin
+
+            input_verdict = check_input_guardrail(
+                agent_doc,
+                prompt,
+                _InputGuardrailOrigin(
+                    origin_type="Agent Run",
+                    agent=agent_name,
+                    agent_run=run_doc.name,
+                    conversation=conversation.name,
+                    owner_user=frappe.session.user,
+                ),
+                conversation_id=conversation.name,
+                agent_run_id=run_doc.name,
+            )
+            if input_verdict.action == "block":
+                blocked_message = input_verdict.message or _("Your message could not be processed.")
+                blocked_agent_message = conv_manager.add_message(
+                    conversation, "agent", blocked_message, resolved_provider, resolved_model, agent_name, run_doc.name
+                )
+                frappe.db.set_value("Agent Run", run_doc.name, {
+                    "status": "Success",
+                    "response": blocked_message,
+                    "end_time": now_datetime(),
+                }, update_modified=True)
+                safe_commit()
+                yield {
+                    "type": "complete",
+                    "success": True,
+                    "response": blocked_message,
+                    "full_response": blocked_message,
+                    "agent_run_id": run_doc.name,
+                    "conversation_id": conversation.name,
+                    "agent_message_id": getattr(blocked_agent_message, "name", None),
+                    "session_id": conv_manager.session_id,
+                    "provider": resolved_provider,
+                    "guardrail_blocked": True,
+                }
+                return
 
         # Update agent stats
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
@@ -3524,6 +3758,38 @@ async def run_agent_stream(
                             "conversation_id": conversation.name
                         }
                         return
+
+                    # T8.03: Output Guardrail + Output Verification (PLAN.md §3.6, §3.19) —
+                    # after the final output, before it is persisted or the "complete" frame
+                    # is sent. Known streaming limitation: individual "delta" chunks were
+                    # already sent to the client as they arrived, so a block here withholds
+                    # the persisted record and the final frame but cannot retract deltas
+                    # already streamed — the same trade-off every token-streaming guardrail
+                    # implementation makes; PLAN.md's insertion point ("after final output")
+                    # is honored at the completion boundary. Usage/cost accounting below
+                    # still reflects the real provider call. A "safe"/pass verdict never
+                    # skips or widens any permission/capability check (I-DR1, P3).
+                    from huf.ai.decision.guardrails import check_output_guardrail, check_output_verification
+                    from huf.ai.decision.types import DecisionOrigin as _StreamGuardrailOrigin
+
+                    _stream_guardrail_origin = _StreamGuardrailOrigin(
+                        origin_type="Agent Run",
+                        agent=agent_name,
+                        agent_run=run_doc.name,
+                        conversation=conversation.name,
+                        owner_user=frappe.session.user,
+                    )
+                    _stream_output_verdict = check_output_guardrail(
+                        agent_doc, full_response, _stream_guardrail_origin,
+                        conversation_id=conversation.name, agent_run_id=run_doc.name,
+                    )
+                    if _stream_output_verdict.action != "block":
+                        _stream_output_verdict = check_output_verification(
+                            agent_doc, full_response, _stream_guardrail_origin,
+                            conversation_id=conversation.name, agent_run_id=run_doc.name,
+                        )
+                    if _stream_output_verdict.action == "block":
+                        full_response = _stream_output_verdict.message or _("This response could not be delivered.")
 
                     usage = chunk.get("usage", {})
 

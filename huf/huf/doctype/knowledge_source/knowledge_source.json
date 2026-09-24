@@ -12,6 +12,10 @@
 		"column_break_1",
 		"knowledge_type",
 		"scope",
+		"decision_section",
+		"ingestion_decision_policy",
+		"ingestion_decision_mode",
+		"ingestion_tag_field",
 		"vector_settings_section",
 		"embedding_model",
 		"vector_dimension",
@@ -96,6 +100,34 @@
 			"options": "Site\nWorkspace\nAgent\nGlobal",
 			"reqd": 1,
 			"fieldname": "scope"
+		},
+		{
+			"fieldname": "decision_section",
+			"fieldtype": "Section Break",
+			"label": "Knowledge Ingestion Decision"
+		},
+		{
+			"fieldname": "ingestion_decision_policy",
+			"fieldtype": "Link",
+			"label": "Ingestion Decision Policy",
+			"options": "Decision Policy",
+			"description": "Decision Policy used to tag chunks during ingestion. Leave empty to disable tagging."
+		},
+		{
+			"fieldname": "ingestion_decision_mode",
+			"fieldtype": "Select",
+			"label": "Ingestion Decision Mode",
+			"options": "Off\nShadow\nEnforce",
+			"default": "Off",
+			"description": "Off: no decision evaluation. Shadow: log decisions only, do not tag chunks. Enforce: evaluate and tag chunks with decision results.",
+			"depends_on": "eval:doc.ingestion_decision_policy"
+		},
+		{
+			"fieldname": "ingestion_tag_field",
+			"fieldtype": "Data",
+			"label": "Ingestion Tag Field",
+			"description": "Metadata field name where decision tags are stored in chunk metadata. Example: decision_classification",
+			"depends_on": "eval:doc.ingestion_decision_policy && doc.ingestion_decision_mode === 'Enforce'"
 		},
 		{
 			"fieldname": "vector_settings_section",
@@ -413,7 +445,7 @@
 	],
 	"index_web_pages_for_search": 1,
 	"links": [],
-	"modified": "2026-07-26 00:00:00.000000",
+	"modified": "2026-09-23 00:00:00.000000",
 	"modified_by": "Administrator",
 	"module": "Huf",
 	"name": "Knowledge Source",

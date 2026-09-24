@@ -7,6 +7,8 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime
 
+from huf.ai.decision.service import run_policy
+from huf.ai.decision.types import DecisionOrigin, DecisionStatus
 from .backends import get_backend
 from .chunkers.sentence import chunk_text
 from .extractors import ExtractedText, TextExtractor
@@ -74,6 +76,70 @@ def _build_backend_config(source) -> dict:
 	return config
 
 
+def _apply_ingestion_decision_tags(source, chunk_data: list) -> None:
+	"""Apply decision-based tags to chunks during ingestion.
+
+	Args:
+		source: Knowledge Source document
+		chunk_data: List of chunk dictionaries to be indexed
+
+	Note:
+		- Tags are applied to chunk metadata in-place
+		- Failures never block indexing (logged but not raised)
+		- Respects source.ingestion_decision_mode: Off/Shadow/Enforce
+		- In Shadow mode: decisions are logged only, chunks not modified
+		- In Enforce mode: decision results are written to chunk metadata
+	"""
+	if not source.ingestion_decision_policy or source.ingestion_decision_mode == "Off":
+		return
+
+	try:
+		policy_name = source.ingestion_decision_policy
+		mode = source.ingestion_decision_mode
+		tag_field = source.ingestion_tag_field or "decision_tag"
+
+		for chunk in chunk_data:
+			try:
+				# Run decision with chunk text as state
+				result = run_policy(
+					policy=policy_name,
+					mode=mode,
+					surface="knowledge_ingestion",
+					state={"text": chunk.get("text", "")},
+					origin=DecisionOrigin(
+						origin_type="knowledge_ingestion",
+						owner_user=frappe.session.user,
+					),
+				)
+
+				# In Enforce mode, store the decision result in metadata
+				if mode == "Enforce" and result.response:
+					# Extract the first answer (typically there's one question per policy)
+					answers = result.response.answers
+					if answers:
+						# Get the first answer's value
+						first_answer = next(iter(answers.values()))
+						chunk["metadata"][tag_field] = str(first_answer.value)
+
+				# In both Shadow and Enforce modes, log the decision call if persisted
+				if result.decision_call:
+					frappe.logger().debug(
+						f"Knowledge ingestion decision: {result.decision_call}, "
+						f"chunk={chunk.get('chunk_index')}, mode={mode}"
+					)
+
+			except Exception as e:
+				# Never block indexing on decision failures
+				frappe.logger().warning(
+					f"Decision tagging failed for chunk {chunk.get('chunk_index')}: {e!s}"
+				)
+				continue
+
+	except Exception as e:
+		# Log but never raise
+		frappe.logger().warning(f"Knowledge ingestion decision tagging failed: {e!s}")
+
+
 def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> dict:
 	"""
 	Process a single knowledge input and add to index.
@@ -126,6 +192,9 @@ def process_knowledge_input(knowledge_input: str, skip_lock: bool = False) -> di
 						"metadata": extracted.metadata or {},
 					}
 				)
+
+			# Apply decision-based tagging to chunks (after chunking, before embedding)
+			_apply_ingestion_decision_tags(source, chunk_data)
 
 			# Initialize backend and add chunks
 			backend_class = get_backend(source.knowledge_type)

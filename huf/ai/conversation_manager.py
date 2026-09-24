@@ -53,6 +53,130 @@ def _tool_call_group_intervals(history: list) -> list:
     return intervals
 
 
+# --------------------------------------------------------------------------------------------
+# T8.04 -- Context Relevance decision surface (PLAN.md §3.6). ``get_tool_exchange_candidates``
+# builds the raw per-exchange description ``huf.ai.decision.context_relevance.compact_context``
+# filters and (on Enforce) narrows. This function never decides eligibility itself -- it only
+# describes what each completed tool-call group in ``history`` is, so compact_context's own hard
+# constraints (I-DR1) have real data to filter on.
+# --------------------------------------------------------------------------------------------
+
+#: Tool exchanges within this many of the most recent tool-call groups are always protected
+#: (never a compaction candidate), regardless of what a policy would say -- PLAN.md §3.6
+#: "Context Relevance" row: candidates are "completed old tool exchanges" only.
+_RECENT_TOOL_EXCHANGES = 2
+
+
+def _tool_name_from_assistant(msg: dict, call_id: str) -> str:
+    """Best-effort tool name for ``call_id`` from the assistant message that declared it."""
+    for tc in (msg or {}).get("tool_calls") or []:
+        tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
+        if tc_id != call_id:
+            continue
+        fn = tc.get("function") if isinstance(tc, dict) else getattr(tc, "function", None)
+        if isinstance(fn, dict):
+            return fn.get("name") or ""
+        return getattr(fn, "name", "") or ""
+    return ""
+
+
+def get_tool_exchange_candidates(conversation_name: str, history: list) -> list:
+    """Describe every completed tool-call group in ``history`` for the Context Relevance
+    decision surface (T8.04).
+
+    ``history`` is the OpenAI-style message list ``get_conversation_history`` returns (or an
+    equivalent list already built by the caller for this turn). Each tool-call group -- an
+    assistant message that declared a ``tool_calls`` entry plus its matching ``role="tool"``
+    result message -- is found the same way ``safe_history_slice``/``safe_history_split`` find
+    group boundaries (``_tool_call_group_intervals``), so a caller that later removes a
+    candidate's ``[start, end]`` span from ``history`` can never split a tool_call/tool-result
+    pair.
+
+    Returns a list of dicts, one per group, each with everything
+    ``huf.ai.decision.context_relevance.compact_context`` needs to apply its own hard
+    constraints (I-DR1) -- this function does not decide eligibility, it only reports:
+
+    - ``id``: the ``tool_call_id`` (falls back to a positional placeholder if somehow absent).
+    - ``tool_name``, ``summary``: provider-visible description (state for the decision call).
+    - ``status``: the backing ``Agent Tool Call.status`` ("Completed"/"Failed"/"Started"/
+      "Queued"), or ``""`` when no Agent Tool Call is linked (legacy/synthesized messages --
+      treated as not-"Completed" by the decision module, i.e. never eligible).
+    - ``has_error``: ``Agent Tool Call.error_message`` set, or ``status == "Failed"``.
+    - ``pending_approval``: the tool result content carries the execution-approval sentinel
+      (``huf.ai.graph.procedure_runtime._APPROVAL_PENDING_PREFIX`` convention).
+    - ``is_recent``: one of the last ``_RECENT_TOOL_EXCHANGES`` groups in this history.
+    - ``shared_turn``: the declaring assistant message issued more than one tool call --
+      dropping only one of several would corrupt the tool_call/tool-result pairing invariant,
+      so these are never eligible either.
+    - ``start``, ``end``: indices into ``history`` spanning this exchange (inclusive), the exact
+      span a caller removes on Enforce.
+
+    Never raises: a lookup failure degrades to an empty list (nothing to compact, history is
+    used unchanged), matching this surface's safe-default philosophy.
+    """
+    try:
+        intervals = _tool_call_group_intervals(history)
+        if not intervals:
+            return []
+
+        declared_call_count_by_start: dict = {}
+        for start, _end in intervals:
+            assistant_msg = history[start]
+            declared_call_count_by_start[start] = len(_tool_call_ids_from_assistant(assistant_msg))
+
+        call_ids = []
+        for start, end in intervals:
+            cid = (history[end] or {}).get("tool_call_id")
+            if cid:
+                call_ids.append(cid)
+
+        status_by_call_id = {}
+        if call_ids:
+            rows = frappe.get_all(
+                "Agent Tool Call",
+                filters={"conversation": conversation_name, "call_id": ["in", call_ids]},
+                fields=["call_id", "status", "error_message"],
+            )
+            for row in rows:
+                status_by_call_id[row.call_id] = row
+
+        recent_cutoff = max(0, len(intervals) - _RECENT_TOOL_EXCHANGES)
+        candidates = []
+        for group_index, (start, end) in enumerate(intervals):
+            assistant_msg = history[start] or {}
+            tool_msg = history[end] or {}
+            call_id = tool_msg.get("tool_call_id") or ""
+            tool_name = _tool_name_from_assistant(assistant_msg, call_id)
+
+            row = status_by_call_id.get(call_id)
+            status = (getattr(row, "status", None) or "") if row else ""
+            error_message = getattr(row, "error_message", None) if row else None
+            has_error = bool(error_message) or status == "Failed"
+
+            content = tool_msg.get("content")
+            content_text = content if isinstance(content, str) else (json.dumps(content, default=str) if content else "")
+            pending_approval = "approval_pending:" in content_text
+
+            summary = f"{tool_name}: {content_text[:200]}" if tool_name else content_text[:200]
+
+            candidates.append({
+                "id": call_id or f"_exchange_{group_index}",
+                "tool_name": tool_name,
+                "summary": summary,
+                "status": status,
+                "has_error": has_error,
+                "pending_approval": pending_approval,
+                "is_recent": group_index >= recent_cutoff,
+                "shared_turn": declared_call_count_by_start.get(start, 1) > 1,
+                "start": start,
+                "end": end,
+            })
+        return candidates
+    except Exception:  # noqa: BLE001 - describing candidates must never break the history build
+        frappe.log_error(title="conversation_manager.get_tool_exchange_candidates", message=frappe.get_traceback())
+        return []
+
+
 def safe_history_slice(history: list, limit: int) -> list:
     """
     Return the last `limit` messages without splitting tool-call pairs.

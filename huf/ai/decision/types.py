@@ -37,6 +37,11 @@ class CandidateSource(str, Enum):
 	PERMITTED_SKILLS = "permitted_skills"
 	AUTHORIZED_KNOWLEDGE_CHUNKS = "authorized_knowledge_chunks"
 	MODEL_SUPPLIED_CANDIDATES = "model_supplied_candidates"
+	# T8.04 (Context Relevance, PLAN.md §3.6): completed old tool exchanges from conversation
+	# history, already filtered by huf.ai.conversation_manager.get_tool_exchange_candidates /
+	# huf.ai.decision.context_relevance.compact_context to exclude anything recent, errored, or
+	# tied to a pending approval (I-DR1) before they are ever offered as candidates.
+	COMPLETED_TOOL_EXCHANGES = "completed_tool_exchanges"
 
 
 @dataclass(frozen=True, slots=True)
