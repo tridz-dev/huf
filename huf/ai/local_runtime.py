@@ -15,6 +15,7 @@ from frappe import _
 from frappe.utils import cint
 
 from huf.ai.local_runtimes.registry import get_adapter
+from huf.ai.local_runtimes import mlx_probe
 
 _PROBE_TIMEOUT = 5
 _PROBE_CACHE_TTL = 3600  # 1 hour
@@ -234,7 +235,18 @@ def test_provider_connection(
 
     adapter = get_adapter(effective_brand)
     server = adapter.probe_server(api_base)
-    result["provider"] = {"ok": server["ok"], "error": server["error"]}
+
+    # For MLX providers, distinguish between the three failure modes by surfacing
+    # local MLX device state when the server is unreachable. The rationale:
+    # reachability is the verdict (ok/not-ok), but local MLX state is diagnostic
+    # context that helps the user understand why a connection failed. A remote MLX
+    # server (LAN deployment) can work even if MLX is not installed on the HUF host.
+    if effective_brand and effective_brand.lower() == "mlx" and not server["ok"]:
+        device_info = adapter.get_device_info()
+        device_reason = mlx_probe.describe_probe_result(device_info)
+        result["provider"] = {"ok": False, "error": device_reason}
+    else:
+        result["provider"] = {"ok": server["ok"], "error": server["error"]}
 
     model_names = frappe.get_all(
         "AI Model", filters={"provider": provider_name}, pluck="model_name"
