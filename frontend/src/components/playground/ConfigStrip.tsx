@@ -25,18 +25,27 @@ interface ConfigStripProps {
   compact?: boolean;
 }
 
-function Cell({
+/** One labelled cell of the playground config strip; also reused by the Decision tab. */
+export function ConfigStripCell({
   label,
+  hint,
   className,
   children,
 }: {
   label: string;
+  /** Optional one-line explanation, shown as the label's native tooltip. */
+  hint?: string;
   className?: string;
   children: ReactNode;
 }) {
   return (
-    <div className={cn('px-4 py-3', className)}>
-      <div className="mb-1.5 font-mono text-eyebrow uppercase text-steel-soft">
+    <div className={cn('min-w-0 px-4 py-3', className)}>
+      {/* Plain concatenation, not cn(): tailwind-merge reads the custom text-eyebrow size
+          as a colour and drops it in favour of text-steel-soft. */}
+      <div
+        className={`mb-1.5 font-mono text-eyebrow uppercase text-steel-soft${hint ? ' cursor-help underline decoration-dotted decoration-line underline-offset-2' : ''}`}
+        title={hint}
+      >
         {label}
       </div>
       {children}
@@ -45,7 +54,7 @@ function Cell({
 }
 
 /** Select trigger restyled to sit flush inside a strip cell (no box of its own). */
-const flushTriggerClass =
+export const flushTriggerClass =
   'h-auto w-auto justify-start gap-2 rounded-none border-0 bg-transparent px-0 py-0 text-[13.5px] text-ink shadow-none focus:ring-0 focus:ring-offset-0 disabled:opacity-40 [&>span]:truncate';
 
 export function ConfigStrip({ agents, providers, config, onChange, compact }: ConfigStripProps) {
@@ -176,32 +185,32 @@ export function ConfigStrip({ agents, providers, config, onChange, compact }: Co
   if (compact) {
     return (
       <div className="grid grid-cols-2 rounded border border-line bg-panel [&>div]:px-3.5 [&>div]:py-2.5">
-        <Cell label="Provider" className="border-b border-r border-line">
+        <ConfigStripCell label="Provider" className="border-b border-r border-line">
           {providerControl}
-        </Cell>
-        <Cell label="Model" className="border-b border-line">
+        </ConfigStripCell>
+        <ConfigStripCell label="Model" className="border-b border-line">
           {modelControl}
-        </Cell>
-        <Cell label="Agent" className="border-r border-line">
+        </ConfigStripCell>
+        <ConfigStripCell label="Agent" className="border-r border-line">
           {agentControl}
-        </Cell>
-        <Cell label="Temp · max tok">{generationControl}</Cell>
+        </ConfigStripCell>
+        <ConfigStripCell label="Temp · max tok">{generationControl}</ConfigStripCell>
       </div>
     );
   }
 
   return (
     <div className="grid grid-cols-4 rounded border border-line bg-panel max-lg:grid-cols-2">
-      <Cell label="Agent" className="border-r border-line max-lg:border-b">
+      <ConfigStripCell label="Agent" className="border-r border-line max-lg:border-b">
         {agentControl}
-      </Cell>
-      <Cell label="Provider" className="border-r border-line max-lg:border-b max-lg:border-r-0">
+      </ConfigStripCell>
+      <ConfigStripCell label="Provider" className="border-r border-line max-lg:border-b max-lg:border-r-0">
         {providerControl}
-      </Cell>
-      <Cell label="Model" className="border-r border-line">
+      </ConfigStripCell>
+      <ConfigStripCell label="Model" className="border-r border-line">
         {modelControl}
-      </Cell>
-      <Cell label="Temp · max tok">{generationControl}</Cell>
+      </ConfigStripCell>
+      <ConfigStripCell label="Temp · max tok">{generationControl}</ConfigStripCell>
     </div>
   );
 }
