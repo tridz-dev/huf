@@ -44,6 +44,51 @@ const STARTER_AD_HOC_DEFINITION: PolicyDefinition = {
   state_bindings: [{ name: 'request', path: 'request' }],
 };
 
+/**
+ * Plain-language description for a `huf.ai.decision.errors.DecisionErrorCode` value, so a
+ * failed run says what actually happened instead of a bare status badge. Descriptions state
+ * only what the backend guarantees about each code (see errors.py) -- no invented specifics
+ * about the caller's own data.
+ */
+function describeDecisionErrorCode(code: string): string {
+  switch (code) {
+    case 'DECISION_PROVIDER_UNAVAILABLE':
+      return 'The provider could not be reached (no working deployment, or the connection failed).';
+    case 'DECISION_AUTHENTICATION_FAILED':
+      return "The provider rejected the request's credentials.";
+    case 'DECISION_TIMEOUT':
+      return 'The provider did not respond within the latency budget.';
+    case 'DECISION_RATE_LIMITED':
+      return 'The provider rate-limited this request.';
+    case 'DECISION_INVALID_RESPONSE':
+      return "The provider's response could not be parsed into a decision answer.";
+    case 'DECISION_UNSUPPORTED_CAPABILITY':
+      return "This deployment doesn't support a capability the policy needs (e.g. probabilities or confidence).";
+    case 'DECISION_POLICY_INVALID':
+      return 'The policy definition is invalid (see the Decision Call for details).';
+    case 'DECISION_STATE_TOO_LARGE':
+      return "The state is larger than the model's or policy's limit.";
+    case 'DECISION_CANDIDATE_INVALID':
+      return "The candidates don't match what this question or policy expects.";
+    case 'DECISION_LOW_CONFIDENCE':
+      return 'The answer came back below the minimum confidence threshold.';
+    case 'DECISION_NO_MATCH':
+      return 'No candidate matched.';
+    case 'DECISION_UNSUPPORTED_MODALITY':
+      return "The state includes a modality this backend doesn't accept.";
+    case 'DECISION_CANDIDATE_LIMIT_EXCEEDED':
+      return 'More candidates were supplied than the policy allows.';
+    case 'DECISION_THROUGHPUT_BUDGET_EXHAUSTED':
+      return "This deployment's throughput budget is exhausted right now.";
+    case 'DECISION_BACKEND_NOT_REGISTERED':
+      return "The family's adapter isn't registered on this site.";
+    case 'DECISION_FAILED':
+      return 'The decision failed for an internal reason that is not shown here to avoid leaking provider details.';
+    default:
+      return `The decision failed (${code}).`;
+  }
+}
+
 interface DecisionPlaygroundPanelProps {
   running: boolean;
   onRun: (result: RunDecisionResult) => void;
@@ -86,7 +131,12 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
 
   const currentModel = models.find((m) => m.name === selectedModel);
   const stateBytes = new TextEncoder().encode(state).length;
-  const stateLimit = currentModel?.state_limit ?? 8000;
+  // 0/undefined means the model has no declared limit -- treat it as "not enforced
+  // client-side" rather than silently turning it into a false "0 bytes allowed" ceiling
+  // that flags every non-empty state as too large.
+  const stateLimit = currentModel?.state_limit && currentModel.state_limit > 0
+    ? currentModel.state_limit
+    : null;
 
   // Load models on mount
   useEffect(() => {
@@ -314,10 +364,12 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               <label className="text-sm font-medium text-ink">State</label>
               <div
                 className={`font-mono text-xs ${
-                  stateBytes > stateLimit ? 'text-status-critical' : 'text-steel-soft'
+                  stateLimit !== null && stateBytes > stateLimit
+                    ? 'text-status-critical'
+                    : 'text-steel-soft'
                 }`}
               >
-                {stateBytes} / {stateLimit} bytes
+                {stateLimit !== null ? `${stateBytes} / ${stateLimit} bytes` : `${stateBytes} bytes`}
               </div>
             </div>
             <Textarea
@@ -328,7 +380,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               rows={6}
             />
             <FormDescription>Context as JSON</FormDescription>
-            {stateBytes > stateLimit && (
+            {stateLimit !== null && stateBytes > stateLimit && (
               <Alert variant="destructive" className="mt-2">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>State exceeds model limit by {stateBytes - stateLimit} bytes</AlertDescription>
@@ -539,7 +591,24 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               {result.status !== 'success' && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{result.status}</AlertDescription>
+                  <AlertDescription>
+                    <div className="font-medium">
+                      {result.response?.error_code
+                        ? describeDecisionErrorCode(result.response.error_code)
+                        : `The decision did not complete (status: ${result.status}).`}
+                    </div>
+                    {result.response?.error_code && (
+                      <div className="mt-1 font-mono text-xs opacity-80">
+                        {result.response.error_code}
+                      </div>
+                    )}
+                    {result.fallback_action && (
+                      <div className="mt-1 text-xs">Fallback applied: {result.fallback_action}</div>
+                    )}
+                    <div className="mt-1 text-xs">
+                      See the Decision Call above for the full trace.
+                    </div>
+                  </AlertDescription>
                 </Alert>
               )}
             </div>
