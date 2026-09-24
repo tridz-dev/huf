@@ -13,6 +13,7 @@
   "section_break_identity",
   "description",
   "executor_section",
+  "action_type",
   "agent",
   "model_override",
   "column_break_executor",
@@ -25,6 +26,14 @@
   "source_system",
   "is_virtual",
   "metadata",
+  "decide_section",
+  "decision_policy",
+  "decision_state_template",
+  "column_break_decide",
+  "decision_output_field",
+  "decision_output_map",
+  "decision_on_failure",
+  "decision_fallback_value",
   "execution_section",
   "conversation_mode",
   "conversation",
@@ -85,12 +94,21 @@
    "label": "Executor"
   },
   {
+   "default": "Agent Run",
+   "description": "Execution type: Agent Run (legacy) or Decision (run a Decision Policy to determine automation behavior).",
+   "fieldname": "action_type",
+   "fieldtype": "Select",
+   "label": "Action Type",
+   "options": "Agent Run\nDecision"
+  },
+  {
+   "depends_on": "eval: doc.action_type == 'Agent Run' || !doc.action_type",
    "fieldname": "agent",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Agent",
    "options": "Agent",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.action_type!='Decision'"
   },
   {
    "description": "Optional AI Model to use for this automation instead of the Agent's default model.",
@@ -123,11 +141,12 @@
    "label": "Work"
   },
   {
+   "depends_on": "eval: doc.action_type == 'Agent Run' || !doc.action_type",
    "fieldname": "instruction",
    "fieldtype": "Long Text",
    "ignore_xss_filter": 1,
    "label": "Instruction",
-   "reqd": 1
+   "mandatory_depends_on": "eval:doc.action_type!='Decision'"
   },
   {
    "description": "Optional template used to build the instruction/input sent to the agent at run time.",
@@ -154,6 +173,64 @@
    "fieldname": "metadata",
    "fieldtype": "JSON",
    "label": "MetaData"
+  },
+  {
+   "fieldname": "decide_section",
+   "fieldtype": "Section Break",
+   "label": "Decision",
+   "depends_on": "eval: doc.action_type == 'Decision'"
+  },
+  {
+   "depends_on": "eval: doc.action_type == 'Decision'",
+   "description": "The Decision Policy to run for determining automation behavior.",
+   "fieldname": "decision_policy",
+   "fieldtype": "Link",
+   "label": "Decision Policy",
+   "options": "Decision Policy",
+   "mandatory_depends_on": "eval:doc.action_type=='Decision'"
+  },
+  {
+   "depends_on": "eval: doc.action_type == 'Decision'",
+   "description": "Optional Jinja template that renders state for the Decision Policy, using fields from the triggering document. Defaults to JSON of whitelisted fields if not provided.",
+   "fieldname": "decision_state_template",
+   "fieldtype": "Long Text",
+   "label": "State Template"
+  },
+  {
+   "fieldname": "column_break_decide",
+   "fieldtype": "Column Break",
+   "depends_on": "eval: doc.action_type == 'Decision'"
+  },
+  {
+   "depends_on": "eval: doc.action_type == 'Decision'",
+   "description": "The field name on the document to write the decision result to.",
+   "fieldname": "decision_output_field",
+   "fieldtype": "Data",
+   "label": "Output Field",
+   "mandatory_depends_on": "eval:doc.action_type=='Decision'"
+  },
+  {
+   "depends_on": "eval: doc.action_type == 'Decision'",
+   "description": "JSON mapping from decision answer to the value to write to the output field. Format: {\"answer_id\": \"output_value\"}",
+   "fieldname": "decision_output_map",
+   "fieldtype": "JSON",
+   "label": "Output Map"
+  },
+  {
+   "default": "Skip",
+   "depends_on": "eval: doc.action_type == 'Decision'",
+   "description": "Action to take if the decision fails or has insufficient confidence: Skip (no write), Mark Error (record error), or Set Fallback Value.",
+   "fieldname": "decision_on_failure",
+   "fieldtype": "Select",
+   "label": "On Failure",
+   "options": "Skip\nMark Error\nSet Fallback Value"
+  },
+  {
+   "depends_on": "eval: doc.action_type == 'Decision' && doc.decision_on_failure == 'Set Fallback Value'",
+   "description": "Value to write to the output field if the decision fails and On Failure is 'Set Fallback Value'.",
+   "fieldname": "decision_fallback_value",
+   "fieldtype": "Data",
+   "label": "Fallback Value"
   },
   {
    "fieldname": "execution_section",
@@ -269,7 +346,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 13:15:06.000000",
+ "modified": "2026-09-23T13:22:49",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Automation",

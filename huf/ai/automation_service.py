@@ -44,6 +44,13 @@ _CREATABLE_FIELDS = (
     "conversation",
     "notify_user",
     "disabled",
+    "action_type",
+    "decision_policy",
+    "decision_state_template",
+    "decision_output_field",
+    "decision_output_map",
+    "decision_on_failure",
+    "decision_fallback_value",
 )
 
 # Fields an existing Automation may be updated through. Deliberately
@@ -67,6 +74,13 @@ _UPDATABLE_FIELDS = (
     "conversation",
     "notify_user",
     "disabled",
+    "action_type",
+    "decision_policy",
+    "decision_state_template",
+    "decision_output_field",
+    "decision_output_map",
+    "decision_on_failure",
+    "decision_fallback_value",
 )
 
 _LIST_FIELDS = [
@@ -168,9 +182,10 @@ def validate_automation(automation_doc) -> None:
     (e.g. before ``run_automation_now``).
 
     Checks:
-        - agent and instruction are present (mirrors automation_runner's
+        - For Agent Run: agent and instruction are present (mirrors automation_runner's
           own guards, checked here too so bad config is caught at
           save-time rather than only at run-time).
+        - For Decision: decision_policy and decision_output_field are present.
         - conversation_mode is one of the doctype's allowed options.
         - conversation_mode == "Dedicated" does not require a pre-existing
           ``conversation`` -- automation_runner._resolve_conversation_routing
@@ -179,11 +194,23 @@ def validate_automation(automation_doc) -> None:
           since the lazy-creation path keys the conversation's external_id
           off it (``automation:{automation.name}``).
     """
-    if not automation_doc.agent:
-        frappe.throw(_("Automation must have an Agent configured."))
+    action_type = automation_doc.action_type or "Agent Run"
 
-    if not automation_doc.instruction or not str(automation_doc.instruction).strip():
-        frappe.throw(_("Automation must have an Instruction."))
+    # Validate fields based on action_type
+    if action_type == "Agent Run":
+        if not automation_doc.agent:
+            frappe.throw(_("Automation must have an Agent configured."))
+
+        if not automation_doc.instruction or not str(automation_doc.instruction).strip():
+            frappe.throw(_("Automation must have an Instruction."))
+    elif action_type == "Decision":
+        if not automation_doc.decision_policy:
+            frappe.throw(_("Automation must have a Decision Policy configured."))
+
+        if not automation_doc.decision_output_field or not str(automation_doc.decision_output_field).strip():
+            frappe.throw(_("Automation must have a Decision Output Field configured."))
+    else:
+        frappe.throw(_("Invalid Action Type: {0}").format(action_type))
 
     conversation_mode = automation_doc.conversation_mode or "New"
     if conversation_mode not in ("New", "Dedicated", "No-UI"):

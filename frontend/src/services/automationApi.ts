@@ -82,8 +82,8 @@ export async function draftAutomationFromConversation(
 
 export interface CreateAutomationParams {
   automation_name: string;
-  agent: string;
-  instruction: string;
+  agent?: string;
+  instruction?: string;
   description?: string;
   project?: string;
   model_override?: string;
@@ -94,6 +94,13 @@ export interface CreateAutomationParams {
   notify_user?: 0 | 1;
   source_system?: string;
   metadata?: string | Record<string, unknown>;
+  action_type?: string;
+  decision_policy?: string;
+  decision_state_template?: string;
+  decision_output_field?: string;
+  decision_output_map?: string | Record<string, string>;
+  decision_on_failure?: string;
+  decision_fallback_value?: string;
 }
 
 /**
@@ -103,8 +110,8 @@ export async function createAutomation(params: CreateAutomationParams): Promise<
   try {
     const result = await call.post('huf.ai.automation_api.create_automation', {
       automation_name: params.automation_name,
-      agent: params.agent,
-      instruction: params.instruction,
+      agent: params.agent ?? undefined,
+      instruction: params.instruction ?? undefined,
       description: params.description ?? undefined,
       project: params.project ?? undefined,
       model_override: params.model_override ?? undefined,
@@ -115,6 +122,13 @@ export async function createAutomation(params: CreateAutomationParams): Promise<
       notify_user: params.notify_user ?? undefined,
       source_system: params.source_system ?? undefined,
       metadata: params.metadata ?? undefined,
+      action_type: params.action_type ?? undefined,
+      decision_policy: params.decision_policy ?? undefined,
+      decision_state_template: params.decision_state_template ?? undefined,
+      decision_output_field: params.decision_output_field ?? undefined,
+      decision_output_map: params.decision_output_map ?? undefined,
+      decision_on_failure: params.decision_on_failure ?? undefined,
+      decision_fallback_value: params.decision_fallback_value ?? undefined,
     });
     return (result?.message ?? result) as Automation;
   } catch (error) {
@@ -140,6 +154,13 @@ export interface UpdateAutomationParams {
   notify_user?: 0 | 1;
   source_system?: string;
   metadata?: string | Record<string, unknown>;
+  action_type?: string;
+  decision_policy?: string;
+  decision_state_template?: string;
+  decision_output_field?: string;
+  decision_output_map?: string | Record<string, string>;
+  decision_on_failure?: string;
+  decision_fallback_value?: string;
 }
 
 /**
@@ -149,9 +170,11 @@ export interface UpdateAutomationParams {
 export async function updateAutomation(params: UpdateAutomationParams): Promise<Automation> {
   try {
     const { automation, ...fields } = params;
+    // Filter out undefined values
+    const payload = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
     const result = await call.post('huf.ai.automation_api.update_automation', {
       automation,
-      ...fields,
+      ...payload,
     });
     return (result?.message ?? result) as Automation;
   } catch (error) {
