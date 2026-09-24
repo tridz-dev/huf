@@ -38,7 +38,24 @@ def requires_auth_for_network_exposed_local_llm(provider_brand, is_local_llm, ba
 	if not base_url:
 		return False
 
-	hostname = (urlparse(base_url).hostname or "").lower()
+	# `url` is a free-form Data field with no scheme validation (only
+	# `api_base_url` goes through validate_api_base_url), so a perfectly valid
+	# loopback config can arrive as bare "localhost" or "127.0.0.1". urlparse
+	# gives no hostname for a scheme-less value, which would fall through to the
+	# non-loopback branch and block the commonest local setup. Normalise before
+	# parsing so both directions stay correct: "localhost" -> exempt,
+	# "192.168.1.50" -> still requires a key.
+	raw = base_url.strip()
+	if "://" not in raw:
+		# A bare IPv6 literal must be bracketed before urlparse can read a
+		# hostname out of it ("http://::1" parses to no host, "http://[::1]"
+		# parses to "::1"). One colon means host:port, so only bracket when
+		# there are several.
+		if raw.count(":") > 1 and not raw.startswith("["):
+			raw = f"[{raw}]"
+		raw = f"http://{raw}"
+	candidate = raw
+	hostname = (urlparse(candidate).hostname or "").lower()
 	if hostname in _LOOPBACK_HOSTS:
 		return False
 

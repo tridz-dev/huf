@@ -104,6 +104,27 @@ class TestRequiresAuthForNetworkExposedLocalLLM(unittest.TestCase):
 			)
 		)
 
+	def test_mlx_schemeless_loopback_host_passes(self):
+		"""A scheme-less loopback value in the free-form `url` field is exempt.
+
+		`url` is a Data field with no scheme validation -- only `api_base_url`
+		goes through validate_api_base_url -- so "localhost" / "127.0.0.1" with a
+		separate port is a legitimate config. Without normalisation urlparse
+		returns no hostname for these and the guard would block the commonest
+		local setup.
+		"""
+		for value in ("localhost", "127.0.0.1", "::1"):
+			with self.subTest(url=value):
+				self.assertFalse(
+					requires_auth_for_network_exposed_local_llm("mlx", 1, value, "not-needed")
+				)
+
+	def test_mlx_schemeless_lan_ip_still_raises(self):
+		"""Normalising a scheme-less value must not open the LAN hole it closes."""
+		self.assertTrue(
+			requires_auth_for_network_exposed_local_llm("mlx", 1, "192.168.1.50", "not-needed")
+		)
+
 	def test_ollama_lan_ip_sentinel_passes(self):
 		"""ollama + LAN IP + sentinel -> NOT flagged.
 
