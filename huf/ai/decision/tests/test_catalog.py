@@ -78,7 +78,7 @@ class TestCatalogLookups(unittest.TestCase):
 		self.assertEqual(entry.model_family, "Jev")
 		self.assertEqual(entry.wire_protocol, "systemone")
 		self.assertEqual(entry.endpoint_path, "/api/v1/systemone")
-		self.assertIsNone(entry.base_url)  # Use OpenRouter's standard base
+		self.assertEqual(entry.base_url, "https://openrouter.ai")
 
 	def test_get_entry_not_found(self):
 		"""Look up non-existent model."""
@@ -112,9 +112,9 @@ class TestCatalogLookups(unittest.TestCase):
 		self.assertEqual(url, "https://opencode.ai/zen")
 
 	def test_brand_default_base_url_openrouter(self):
-		"""OpenRouter uses provider's standard base (None)."""
+		"""OpenRouter's catalog default base URL."""
 		url = brand_default_base_url("openrouter")
-		self.assertIsNone(url)
+		self.assertEqual(url, "https://openrouter.ai")
 
 	def test_brand_default_base_url_unknown(self):
 		"""Unknown brand returns None."""
