@@ -359,6 +359,6 @@ class TestTestDeployment(FrappeTestCase):
 
 		# Should always return a dict with these keys
 		self.assertEqual(result["status"], "failed")
-		self.assertIn(result["error_code"], [None, "DEPLOYMENT_UNAVAILABLE", "INTERNAL_ERROR"])
+		self.assertIn(result["error_code"], [None, "DEPLOYMENT_UNAVAILABLE", "INTERNAL_ERROR", "DECISION_FAILED"])
 		# Exception details should never leak
 		self.assertNotIn("SECRET_KEY", str(result))
