@@ -140,7 +140,11 @@ class FlowDefinition(Document):
 		except (json.JSONDecodeError, TypeError) as e:
 			frappe.throw(_("Invalid JSON in definition: {0}").format(str(e)))
 
-		result = validate_flow_graph(defn)
+		# Activation-time checks (router.decision policy/published/uncertain_next -- T-24
+		# _check_router_decision_activation) only run when this save is making the Flow
+		# Active; a Draft (or Archived) save must still be allowed to persist an
+		# in-progress router.decision node that isn't wired up yet.
+		result = validate_flow_graph(defn, activation=(getattr(self, "status", None) == "Active"))
 		if not result.ok:
 			frappe.throw(
 				_("Definition JSON does not conform to the graph-IR Flow profile: {0}").format(

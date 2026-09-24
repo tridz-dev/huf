@@ -68,6 +68,14 @@ describe('flowSerializer', () => {
       expect(serialized.nodes[0].type).toBe('router.llm');
     });
 
+    it('maps decision-router action type to router.decision', () => {
+      const flow = createTestFlow([
+        createActionNode('node1', 'decision-router'),
+      ]);
+      const serialized = serializeFlow(flow);
+      expect(serialized.nodes[0].type).toBe('router.decision');
+    });
+
     it('maps human.approval action type to human.approval', () => {
       const flow = createTestFlow([
         createActionNode('node1', 'human.approval'),
@@ -301,6 +309,19 @@ describe('flowSerializer', () => {
 
       expect(deserialized.nodes[2].type).toBe('action');
       expect(deserialized.nodes[2].data?.actionConfig?.type).toBe('condition');
+    });
+
+    it('preserves decision-router through round trip', () => {
+      const flow = createTestFlow([
+        createActionNode('decision1', 'decision-router'),
+      ]);
+
+      const serialized = serializeFlow(flow);
+      const deserialized = deserializeFlow('flow1', 'Test Flow', 'Draft', serialized);
+
+      // Check that decision-router comes back intact
+      expect(deserialized.nodes[0].type).toBe('action');
+      expect(deserialized.nodes[0].data?.actionConfig?.type).toBe('decision-router');
     });
 
     it('LOSES IDENTITY for unmapped action types: they come back as tool-call', () => {
@@ -703,6 +724,47 @@ describe('flowSerializer', () => {
       expect(deserialized.edges).toHaveLength(2);
       expect(deserialized.edges[0].label).toBeUndefined();
       expect(deserialized.edges[1].label).toBe('Success');
+    });
+
+    it('derives labeled edges from router.decision config options', () => {
+      // A router.decision node's `options` each produce their own labeled edge,
+      // just like router.llm.
+      const backend = makeBackendGraph([
+        {
+          id: 'decision1',
+          type: 'router.decision',
+          config: {
+            policy: 'my-policy',
+            options: [
+              { label: 'Accept', node_id: 'node2' },
+              { label: 'Reject', node_id: 'node3' },
+            ],
+            default: 'node2',
+          },
+        },
+        {
+          id: 'node2',
+          type: 'tool.call',
+          config: {},
+          next: null,
+        },
+        {
+          id: 'node3',
+          type: 'tool.call',
+          config: {},
+          next: null,
+        },
+      ]);
+
+      const deserialized = deserializeFlow('flow1', 'Test', 'Draft', backend);
+
+      // router.decision should produce edges for each option
+      const decisionEdges = deserialized.edges.filter((e) => e.source === 'decision1');
+      expect(decisionEdges).toHaveLength(2);
+      expect(decisionEdges[0].label).toBe('Accept');
+      expect(decisionEdges[0].target).toBe('node2');
+      expect(decisionEdges[1].label).toBe('Reject');
+      expect(decisionEdges[1].target).toBe('node3');
     });
 
     it('maps backend status to frontend correctly', () => {

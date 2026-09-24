@@ -1052,6 +1052,35 @@
                 "policy": {
                   "type": "string",
                   "minLength": 1
+                },
+                "uncertain_next": {
+                  "$ref": "#/$defs/NodeId"
+                },
+                "minimum_confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "state_bindings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "name",
+                      "path"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "path": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
                 }
               }
             }

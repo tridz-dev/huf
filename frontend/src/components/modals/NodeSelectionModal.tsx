@@ -17,6 +17,11 @@ import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Badge } from '../ui/badge';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../ui/tooltip';
+import {
   Search,
   Webhook,
   Clock,
@@ -44,6 +49,7 @@ import { getAgents, getDocTypes } from '../../services/agentApi';
 import type { AgentDoc } from '../../types/agent.types';
 import { Combobox } from '../ui/combobox';
 import { toast } from 'sonner';
+import { listDecisionModels } from '../../services/decisionApi';
 
 interface NodeSelectionModalProps {
   open: boolean;
@@ -120,6 +126,7 @@ export function NodeSelectionModal({
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [docTypes, setDocTypes] = useState<Array<{ name: string }>>([]);
   const [loadingDocTypes, setLoadingDocTypes] = useState(false);
+  const [hasEnabledDeployments, setHasEnabledDeployments] = useState(false);
 
   // The modal stays mounted between openings, so its tab has to follow the
   // `mode` prop each time it is (re)opened — otherwise an "add action" request
@@ -159,17 +166,41 @@ export function NodeSelectionModal({
     }
   }, [open, triggerSubTab]);
 
+  // Check if Decision Deployments exist for the decision-router action
+  useEffect(() => {
+    if (open) {
+      listDecisionModels()
+        .then((models) => {
+          const hasDeployments = (models || []).some((m: any) => m.enabled && m.deployments && m.deployments.length > 0);
+          setHasEnabledDeployments(hasDeployments);
+        })
+        .catch(() => setHasEnabledDeployments(false));
+    }
+  }, [open]);
+
   const filteredTriggers = triggerOptions.filter(
     (trigger) =>
       trigger.tab === triggerSubTab &&
       trigger.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredActions = actionOptions.filter(
-    (action) =>
-      (!actionCategory || action.category === actionCategory) &&
-      action.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredActions = actionOptions
+    .filter(
+      (action) =>
+        (!actionCategory || action.category === actionCategory) &&
+        action.name.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .map((action) => {
+      // Disable decision-router if no enabled Decision Deployments exist
+      if (action.id === 'decision-router' && !hasEnabledDeployments) {
+        return {
+          ...action,
+          disabled: true,
+          disabledReason: 'Set up a decision model first',
+        };
+      }
+      return action;
+    });
 
   const highlightTriggers = filteredTriggers.filter((t) => t.category === 'highlight');
   const popularTriggers = filteredTriggers.filter((t) => t.category === 'popular');
@@ -225,6 +256,8 @@ export function NodeSelectionModal({
       config = { type: 'condition', expression: '', true_node: '', false_node: '' };
     } else if (actionId === 'router') {
       config = { type: 'router', router_agent_name: '', conversation_mode: 'flow_shared' };
+    } else if (actionId === 'decision-router') {
+      config = { type: 'decision-router', policy: '', options: [], default: '' };
     } else if (actionId === 'loop') {
       config = { type: 'loop', iterate_over: '', item_key: 'loop_item', index_key: 'loop_index', max_iterations: 100 };
     } else if (actionId === 'human.approval') {
@@ -477,13 +510,15 @@ export function NodeSelectionModal({
             const Icon = iconMap[action.icon || 'FileText'];
             // Super safe check to prevent React Error 130 (object without $$typeof)
             const isValidComponent = Icon && (typeof Icon === 'function' || (typeof Icon === 'object' && '$$typeof' in Icon));
+            const isDisabled = action.disabled ?? false;
 
-            return (
+            const button = (
               <Button
                 key={action.id}
                 type="button"
                 variant="ghost"
-                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep"
+                disabled={isDisabled}
+                className="flex h-auto w-full items-center justify-start gap-3 rounded border border-line p-3 font-normal hover:border-ink hover:bg-paper-deep disabled:opacity-60 disabled:cursor-not-allowed"
                 onClick={() => handleSelectAction(action.id)}
               >
                 <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -499,6 +534,24 @@ export function NodeSelectionModal({
                 </div>
               </Button>
             );
+
+            // Wrap with Tooltip if disabled with a reason
+            if (isDisabled && action.disabledReason) {
+              return (
+                <div key={action.id}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      {button}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      {action.disabledReason}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              );
+            }
+
+            return button;
           })}
         </div>
       </div>

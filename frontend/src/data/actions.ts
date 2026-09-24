@@ -28,6 +28,13 @@ export const actionOptions: ActionOption[] = [
     category: 'control'
   },
   {
+    id: 'decision-router',
+    name: 'Decision Router',
+    description: 'Route using a Decision Policy (fast, deterministic decisions vs LLM analysis)',
+    icon: 'GitBranch',
+    category: 'control'
+  },
+  {
     id: 'condition',
     name: 'Condition (If/Else)',
     description: 'Branch flow based on data',

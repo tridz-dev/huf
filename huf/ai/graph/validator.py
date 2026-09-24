@@ -225,6 +225,7 @@ def validate_graph(
 	profile: str,
 	*,
 	classify_tool: ToolClassifier = default_tool_classifier,
+	activation: bool = False,
 ) -> ValidationResult:
 	"""Validate ``graph`` against ``profile`` ("procedure" or "flow"). See module docstring for
 	the full check list. Returns a :class:`ValidationResult`; never raises for an invalid graph
@@ -233,6 +234,10 @@ def validate_graph(
 	``classify_tool`` is forwarded to ``compute_static_envelope`` (T-14) unchanged -- pass a fake
 	in tests exactly as ``test_graph_permissions.py`` does, to keep this function callable without
 	a Frappe bench.
+
+	``activation`` (default False) enables strict activation-time checks (e.g., Decision Policy
+	published status, uncertain_next presence). When False, only structural validation is performed,
+	allowing draft saves. Set to True when activating a graph for execution.
 	"""
 
 	if profile not in _PROFILE_SCHEMA_DEF:
@@ -275,6 +280,8 @@ def validate_graph(
 	errors.extend(_check_expressions(graph, nodes))
 	errors.extend(_check_references(nodes_by_id))
 	errors.extend(_check_limits_policy(graph))
+	if activation:
+		errors.extend(_check_router_decision_activation(nodes))
 
 	envelope: dict | None = None
 	if not errors:
@@ -438,6 +445,8 @@ def _control_flow_targets(node: dict) -> list[tuple[str, str | None]]:
 			if isinstance(option, dict):
 				targets.append((f"config.options[{i}].node_id", option.get("node_id")))
 		targets.append(("config.default", config.get("default")))
+		if ntype == "router.decision":
+			targets.append(("config.uncertain_next", config.get("uncertain_next")))
 	elif ntype == "human.approval":
 		targets.append(("config.approve_next", config.get("approve_next")))
 		targets.append(("config.reject_next", config.get("reject_next")))
@@ -827,5 +836,126 @@ def _check_expressions(graph: dict, nodes: list[dict]) -> list[ValidationError]:
 	contract = graph.get("contract") or {}
 	for i, expr in enumerate(contract.get("applies_when", []) or []):
 		_try_parse(None, f"contract.applies_when[{i}]", expr)
+
+	return errors
+
+
+# --------------------------------------------------------------------------------------
+# 9. Activation checks (Decision Router)
+# --------------------------------------------------------------------------------------
+
+
+def _check_router_decision_activation(nodes: list[dict]) -> list[ValidationError]:
+	"""Activation-time validation for router.decision nodes.
+
+	Checked only when activation=True (i.e., when a graph is being activated for execution).
+	Structural schema checks (policy field presence, type, etc.) are always enforced by the
+	schema; these checks validate semantic constraints: that the referenced policy is
+	published and, if the model may return uncertainty, that a fallback path (uncertain_next)
+	is specified.
+	"""
+	errors: list[ValidationError] = []
+
+	try:
+		import frappe
+	except ImportError:
+		# Outside a Frappe bench (e.g., in pure pytest), skip runtime semantic checks.
+		# The schema checks above still reject malformed nodes.
+		return errors
+
+	for node in nodes:
+		if not isinstance(node, dict) or node.get("type") != "router.decision":
+			continue
+
+		nid = node.get("id")
+		config = node.get("config") or {}
+		policy_name = config.get("policy")
+
+		# Policy presence and publication status.
+		if not policy_name:
+			errors.append(
+				ValidationError(
+					"DECISION_POLICY_MISSING",
+					nid,
+					"config.policy",
+					"router.decision node must reference a policy in config.policy",
+				)
+			)
+			continue
+
+		try:
+			policy = frappe.get_doc("Decision Policy", policy_name)
+		except (frappe.DoesNotExistError, Exception):
+			errors.append(
+				ValidationError(
+					"DECISION_POLICY_NOT_FOUND",
+					nid,
+					"config.policy",
+					f"Decision Policy {policy_name!r} does not exist",
+				)
+			)
+			continue
+
+		if not policy.get("enabled"):
+			errors.append(
+				ValidationError(
+					"DECISION_POLICY_DISABLED",
+					nid,
+					"config.policy",
+					f"Decision Policy {policy_name!r} is disabled; activation requires an enabled policy",
+				)
+			)
+
+		# Policy must have a published version.
+		current_version_name = policy.get("current_version")
+		if not current_version_name:
+			errors.append(
+				ValidationError(
+					"DECISION_POLICY_UNPUBLISHED",
+					nid,
+					"config.policy",
+					f"Decision Policy {policy_name!r} has no published version (current_version is not set); "
+					"activation requires a published Decision Policy Version",
+				)
+			)
+			continue
+
+		try:
+			version = frappe.get_doc("Decision Policy Version", current_version_name)
+		except (frappe.DoesNotExistError, Exception):
+			errors.append(
+				ValidationError(
+					"DECISION_POLICY_VERSION_NOT_FOUND",
+					nid,
+					"config.policy",
+					f"Decision Policy Version {current_version_name!r} (referenced by {policy_name!r}) does not exist",
+				)
+			)
+			continue
+
+		if version.get("status") != "Published":
+			errors.append(
+				ValidationError(
+					"DECISION_POLICY_UNPUBLISHED",
+					nid,
+					"config.policy",
+					f"Decision Policy {policy_name!r} has version {current_version_name!r} with status {version.get('status')!r}, "
+					"not 'Published'; activation requires a published version",
+				)
+			)
+
+		# uncertain_next is required: a decision model may always return uncertainty,
+		# and the node must have a fallback path.
+		uncertain_next = config.get("uncertain_next")
+		if not uncertain_next:
+			errors.append(
+				ValidationError(
+					"DECISION_UNCERTAIN_PATH_MISSING",
+					nid,
+					"config.uncertain_next",
+					"router.decision node must specify an uncertain_next target; "
+					"a decision model may return uncertainty, and the node must have a fallback path",
+				)
+			)
 
 	return errors

@@ -15,4 +15,6 @@ export interface ActionOption {
   description?: string;
   icon?: string;
   category: 'agent' | 'tool' | 'transform' | 'control' | 'utility' | 'integration';
+  disabled?: boolean;
+  disabledReason?: string;
 }
