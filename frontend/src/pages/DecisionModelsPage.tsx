@@ -1,394 +1,578 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Star, Loader2, Zap } from 'lucide-react';
+import { Cpu, Settings, Loader2, Plus, Zap, Star, Power } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { PageFrame } from '@/layouts/PageFrame';
 import { ProviderModelTabs } from '@/components/settings/ProviderModelTabs';
-import { DecisionEmptyState } from '@/components/decision/DecisionEmptyState';
-import { SetupSystemOneModal } from '@/components/decision/SetupSystemOneModal';
-import { toast } from 'sonner';
+import { FilterBar, GridView, EmptyState, ItemCard } from '@/components/dashboard';
+import {
+  DeploymentFields,
+  deploymentDocToForm,
+  emptyDeploymentFormData,
+  getDeploymentDoc,
+  saveDeployment,
+  validateDeploymentForm,
+  type DeploymentFormData,
+} from '@/components/decision/DeploymentForm';
 import {
   listDecisionModels,
   testDeployment,
-  type DecisionModel,
+  getSetupCatalog,
+  setupDeployment,
   type DecisionDeployment,
+  type SetupCatalogEntry,
 } from '@/services/decisionApi';
-import { usePermissions } from '../contexts/PermissionsContext';
+import { getProviders } from '@/services/providerApi';
+import type { AIProvider } from '@/types/agent.types';
 import { call } from '@/lib/frappe-sdk';
+import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 
-interface DeploymentWithModel extends DecisionDeployment {
-  model_name?: string;
+/** One card per deployment, carrying the Decision Model it serves. */
+interface DeploymentRow extends DecisionDeployment {
+  decision_model_name: string;
 }
 
-interface ModelGroup {
-  class: string;
-  families: {
-    family: string;
-    models: {
-      model: string;
-      deployments: DeploymentWithModel[];
-    }[];
-  }[];
+type Health = 'healthy' | 'unhealthy' | 'unknown';
+
+function healthOf(d: DecisionDeployment): Health {
+  if (d.health_status === 'healthy' || d.health_status === 'ok') return 'healthy';
+  if (d.health_status) return 'unhealthy';
+  return 'unknown';
 }
+
+const catalogKey = (e: SetupCatalogEntry) => `${e.provider_brand}::${e.model_name}`;
 
 export function DecisionModelsPage() {
   const navigate = useNavigate();
-  const { hasCapability } = usePermissions();
-  const isAdmin = hasCapability('decision.admin');
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [models, setModels] = useState<DecisionModel[]>([]);
+  const [rows, setRows] = useState<DeploymentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [testingDeployment, setTestingDeployment] = useState<string | null>(null);
-  const [deploymentUpdating, setDeploymentUpdating] = useState<string | null>(null);
-  const [setupModalOpen, setSetupModalOpen] = useState(searchParams.get('setup') === '1');
+  const [search, setSearch] = useState('');
+  const [providerFilter, setProviderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [busy, setBusy] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadModels();
-  }, []);
+  // Configure dialog (edit an existing deployment)
+  const [configureTarget, setConfigureTarget] = useState<DeploymentRow | null>(null);
+  const [loadingDoc, setLoadingDoc] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState<DeploymentFormData>(emptyDeploymentFormData);
 
-  useEffect(() => {
-    // Sync modal state with query param
-    setSetupModalOpen(searchParams.get('setup') === '1');
-  }, [searchParams]);
+  // Add dialog (replaces the old System One wizard)
+  const [addOpen, setAddOpen] = useState(false);
+  const [catalog, setCatalog] = useState<SetupCatalogEntry[]>([]);
+  const [providers, setProviders] = useState<AIProvider[]>([]);
+  const [addEntryKey, setAddEntryKey] = useState('');
+  const [addProvider, setAddProvider] = useState('');
+  const [adding, setAdding] = useState(false);
 
-  const loadModels = async () => {
+  const loadRows = async () => {
     setLoading(true);
     try {
-      const data = await listDecisionModels();
-      setModels(data);
-    } catch (error) {
-      toast.error('Failed to load decision models');
+      const models = await listDecisionModels();
+      setRows(
+        models.flatMap((m) =>
+          (m.deployments || []).map((d) => ({
+            ...d,
+            decision_model_name: m.display_name || m.model_name,
+          })),
+        ),
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTestConnection = async (deployment: DecisionDeployment) => {
-    setTestingDeployment(deployment.name);
+  useEffect(() => {
+    loadRows();
+    getProviders()
+      .then((data) => setProviders(Array.isArray(data) ? data : data.items))
+      .catch((e) => console.error('Error fetching providers:', e));
+  }, []);
+
+  // `?setup=1` (older deep link to the wizard) now opens the Add dialog.
+  useEffect(() => {
+    if (searchParams.get('setup') === '1') {
+      openAdd();
+      setSearchParams({}, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const providerOptions = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.provider).filter(Boolean))).sort(),
+    [rows],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (providerFilter !== 'all' && r.provider !== providerFilter) return false;
+      if (statusFilter === 'enabled' && !r.enabled) return false;
+      if (statusFilter === 'disabled' && r.enabled) return false;
+      if (statusFilter === 'unhealthy' && healthOf(r) !== 'unhealthy') return false;
+      if (!q) return true;
+      return [r.deployment_name, r.provider, r.provider_model_id, r.decision_model_name, r.name]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [rows, search, providerFilter, statusFilter]);
+
+  // ---- row actions -------------------------------------------------------
+
+  const handleTest = async (d: DeploymentRow) => {
+    setBusy(d.name);
     try {
-      const result = await testDeployment(deployment.name);
+      const result = await testDeployment(d.name);
       if (result.status === 'success') {
-        toast.success(
-          `Connection successful (${result.latency_ms}ms)`,
-        );
+        toast.success(`Connection successful (${result.latency_ms}ms)`);
       } else {
         toast.error(`Connection failed: ${result.error_code || 'Unknown error'}`);
       }
-      // Reload to get updated health status
-      await loadModels();
-    } catch (error) {
-      toast.error('Failed to test deployment');
+      await loadRows();
+    } catch {
+      // testDeployment already surfaced the error
     } finally {
-      setTestingDeployment(null);
+      setBusy(null);
     }
   };
 
-  const handleSetDefault = async (deployment: DecisionDeployment) => {
-    setDeploymentUpdating(deployment.name);
+  const setField = async (d: DeploymentRow, fieldname: Record<string, unknown>, ok: string) => {
+    setBusy(d.name);
     try {
       await call.post('frappe.client.set_value', {
         doctype: 'Decision Deployment',
-        name: deployment.name,
-        fieldname: {
-          is_default_for_model: deployment.is_default_for_model ? 0 : 1,
-        },
+        name: d.name,
+        fieldname,
       });
-      toast.success('Default deployment updated');
-      await loadModels();
-    } catch (error) {
-      toast.error('Failed to update default deployment');
+      toast.success(ok);
+      await loadRows();
+    } catch (e) {
+      toast.error('Failed to update deployment', { description: getFrappeErrorMessage(e) });
     } finally {
-      setDeploymentUpdating(null);
+      setBusy(null);
     }
   };
 
-  const handleToggleEnabled = async (deployment: DecisionDeployment) => {
-    setDeploymentUpdating(deployment.name);
+  // ---- configure dialog --------------------------------------------------
+
+  const handleConfigure = async (d: DeploymentRow) => {
+    setConfigureTarget(d);
+    setLoadingDoc(true);
     try {
-      await call.post('frappe.client.set_value', {
-        doctype: 'Decision Deployment',
-        name: deployment.name,
-        fieldname: {
-          enabled: deployment.enabled ? 0 : 1,
-        },
-      });
-      toast.success('Deployment status updated');
-      await loadModels();
-    } catch (error) {
-      toast.error('Failed to update deployment status');
+      setFormData(deploymentDocToForm(await getDeploymentDoc(d.name)));
+    } catch (e) {
+      toast.error('Failed to load deployment details');
+      console.error(e);
     } finally {
-      setDeploymentUpdating(null);
+      setLoadingDoc(false);
     }
   };
 
-  const handleSetupSystemOne = () => {
-    setSetupModalOpen(true);
-    setSearchParams((params) => {
-      params.set('setup', '1');
-      return params;
-    });
-  };
-
-  const handleSetupModalOpenChange = (open: boolean) => {
-    setSetupModalOpen(open);
-    if (!open) {
-      setSearchParams((params) => {
-        const newParams = new URLSearchParams(params);
-        newParams.delete('setup');
-        return newParams;
-      });
+  const handleSave = async () => {
+    if (!configureTarget) return;
+    const invalid = validateDeploymentForm(formData);
+    if (invalid) {
+      toast.error(invalid);
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveDeployment(configureTarget.name, formData);
+      toast.success('Deployment updated');
+      setConfigureTarget(null);
+      await loadRows();
+    } catch (e) {
+      toast.error('Failed to update deployment', { description: getFrappeErrorMessage(e) });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleSetupComplete = () => {
-    loadModels();
-  };
-
-  const groupedModels = groupModelsByClassFamily(models);
-
-  const hasDeployments = models.some(
-    (m) => m.deployments && m.deployments.length > 0
-  );
-
-  return (
-    <>
-      <SetupSystemOneModal
-        open={setupModalOpen}
-        onOpenChange={handleSetupModalOpenChange}
-        onSetup={handleSetupComplete}
-      />
-      <PageFrame
-        title="AI providers & models"
-        actions={
-          isAdmin && (
-            <Button onClick={handleSetupSystemOne} size="sm">
-              Set up System One
-            </Button>
-          )
-        }
-        filters={<ProviderModelTabs />}
-      >
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-6 w-6 animate-spin text-steel" />
-        </div>
-      ) : !hasDeployments ? (
-        <DecisionEmptyState
-          title="No decision models yet"
-          description="Decision models answer bounded questions (pick one, yes/no, score) fast and cheaply."
-          action={{
-            label: 'Set up System One',
-            onClick: handleSetupSystemOne,
-          }}
-          secondaryAction={{
-            label: 'Use a local rules/classifier backend',
-            onClick: () => navigate('/decisions/new'),
-          }}
-        />
-      ) : (
-        <div className="space-y-6">
-          {groupedModels.map((classGroup) => (
-            <div key={classGroup.class}>
-              <div className="mb-4">
-                <h2 className="font-mono text-[13px] uppercase tracking-wide text-steel font-semibold">
-                  {classGroup.class}
-                </h2>
-              </div>
-
-              <div className="space-y-4">
-                {classGroup.families.map((familyGroup) => (
-                  <div
-                    key={familyGroup.family}
-                    className="border border-line rounded-lg overflow-hidden"
-                  >
-                    <div className="bg-canvas-secondary px-4 py-3 border-b border-line">
-                      <p className="font-mono text-[12px] text-steel">
-                        {familyGroup.family}
-                      </p>
-                    </div>
-
-                    {familyGroup.models.map((modelGroup) => (
-                      <div key={modelGroup.model}>
-                        <div className="px-4 py-3 border-b border-line last:border-b-0 bg-white">
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="font-mono text-[13px] font-semibold text-ink">
-                              {modelGroup.model}
-                            </p>
-                            <span className="text-steel text-[12px]">
-                              {modelGroup.deployments.length}{' '}
-                              {modelGroup.deployments.length === 1
-                                ? 'deployment'
-                                : 'deployments'}
-                            </span>
-                          </div>
-
-                          <div className="space-y-2">
-                            {modelGroup.deployments.map((deployment) => (
-                              <div
-                                key={deployment.name}
-                                className="flex items-center gap-3 p-2 rounded bg-canvas-secondary text-[12px]"
-                              >
-                                <div className="flex-1 flex items-center gap-2">
-                                  <span className="font-mono text-ink font-medium min-w-max">
-                                    {deployment.is_default_for_model ? '★' : ' '}
-                                  </span>
-                                  <span className="text-ink font-medium">
-                                    {deployment.deployment_name}
-                                  </span>
-                                  <span className="text-steel">
-                                    {deployment.provider}
-                                  </span>
-                                  <code className="text-steel">
-                                    {deployment.provider_model_id}
-                                  </code>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  {deployment.health_status && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Badge
-                                          variant={
-                                            deployment.health_status === 'ok'
-                                              ? 'default'
-                                              : 'destructive'
-                                          }
-                                          className="text-[11px]"
-                                        >
-                                          {deployment.health_status === 'ok'
-                                            ? 'ok'
-                                            : 'error'}
-                                        </Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        {deployment.last_healthcheck
-                                          ? `Last checked: ${deployment.last_healthcheck}`
-                                          : 'Not checked yet'}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  )}
-
-                                  <Switch
-                                    checked={Boolean(deployment.enabled)}
-                                    onCheckedChange={() =>
-                                      handleToggleEnabled(deployment)
-                                    }
-                                    disabled={
-                                      deploymentUpdating === deployment.name
-                                    }
-                                  />
-
-                                  {isAdmin && (
-                                    <>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                              handleSetDefault(deployment)
-                                            }
-                                            disabled={
-                                              deploymentUpdating ===
-                                              deployment.name
-                                            }
-                                          >
-                                            <Star
-                                              className={`h-4 w-4 ${
-                                                deployment.is_default_for_model
-                                                  ? 'fill-signal'
-                                                  : ''
-                                              }`}
-                                            />
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                          Set as default
-                                        </TooltipContent>
-                                      </Tooltip>
-
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                          handleTestConnection(deployment)
-                                        }
-                                        disabled={
-                                          testingDeployment === deployment.name
-                                        }
-                                      >
-                                        {testingDeployment ===
-                                        deployment.name ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <Zap className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      </PageFrame>
-    </>
-  );
-}
-
-function groupModelsByClassFamily(models: DecisionModel[]): ModelGroup[] {
-  const grouped: Record<string, Record<string, Record<string, DecisionDeployment[]>>> = {};
-
-  models.forEach((model) => {
-    const modelClass = extractClass(model.model_key) || 'Other';
-    const family = model.family || 'Other';
-    const modelName = model.model_name || 'Unknown';
-
-    if (!grouped[modelClass]) {
-      grouped[modelClass] = {};
-    }
-    if (!grouped[modelClass][family]) {
-      grouped[modelClass][family] = {};
-    }
-    if (!grouped[modelClass][family][modelName]) {
-      grouped[modelClass][family][modelName] = [];
-    }
-
-    if (model.deployments) {
-      grouped[modelClass][family][modelName].push(...model.deployments);
-    }
+  useSaveShortcut({
+    onSave: handleSave,
+    enabled: !!configureTarget && !loadingDoc,
+    isSubmitting: saving,
+    allowInDialog: true,
   });
 
-  return Object.entries(grouped).map(([classKey, families]) => ({
-    class: classKey,
-    families: Object.entries(families).map(([family, models]) => ({
-      family,
-      models: Object.entries(models).map(([model, deployments]) => ({
-        model,
-        deployments,
-      })),
-    })),
-  }));
-}
+  // ---- add dialog --------------------------------------------------------
 
-function extractClass(modelKey: string): string {
-  // Extract the class from the model key (e.g., "jev-1.13-free" -> "System One")
-  if (modelKey.startsWith('jev')) return 'System One';
-  if (modelKey.startsWith('local')) return 'Local Rules';
-  if (modelKey.startsWith('classifier')) return 'Classifier';
-  if (modelKey.startsWith('similarity')) return 'Similarity';
-  return 'Other';
+  function openAdd() {
+    setAddEntryKey('');
+    setAddProvider('');
+    setAddOpen(true);
+    getSetupCatalog().then(setCatalog);
+  }
+
+  const addEntry = catalog.find((e) => catalogKey(e) === addEntryKey) || null;
+  const brandProviders = addEntry
+    ? providers.filter((p) => p.provider_brand === addEntry.provider_brand)
+    : [];
+
+  const handleAdd = async () => {
+    if (!addEntry || !addProvider) {
+      toast.error('Choose a model and a provider');
+      return;
+    }
+    setAdding(true);
+    try {
+      const result = await setupDeployment(addProvider, addEntry.model_name);
+      if (result.probe.status === 'success') {
+        toast.success(`Deployment added and enabled (${result.probe.latency_ms}ms)`);
+      } else {
+        toast.warning(
+          `Deployment added but disabled: connection test failed (${result.probe.error_code || 'unknown error'})`,
+        );
+      }
+      setAddOpen(false);
+      await loadRows();
+    } catch {
+      // setupDeployment already surfaced the error
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const goToProviders = () => {
+    setAddOpen(false);
+    if (addProvider) {
+      navigate(`/providers?configure=${encodeURIComponent(addProvider)}`);
+    } else if (addEntry?.provider_brand === 'openrouter') {
+      navigate('/providers?starter=openrouter');
+    } else {
+      navigate('/providers');
+    }
+  };
+
+  const isFiltered = !!search || providerFilter !== 'all' || statusFilter !== 'all';
+
+  return (
+    <PageFrame
+      title="Decision models"
+      actions={
+        <Button variant="display" size="sm" onClick={openAdd}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add deployment
+        </Button>
+      }
+      filters={
+        <FilterBar
+          searchPlaceholder="Search deployments..."
+          searchValue={search}
+          onSearchChange={setSearch}
+          filters={[
+            {
+              label: 'Provider',
+              value: providerFilter,
+              options: [
+                { label: 'All providers', value: 'all' },
+                ...providerOptions.map((p) => ({ label: p, value: p })),
+              ],
+              onChange: setProviderFilter,
+            },
+            {
+              label: 'Status',
+              value: statusFilter,
+              options: [
+                { label: 'All statuses', value: 'all' },
+                { label: 'Enabled', value: 'enabled' },
+                { label: 'Disabled', value: 'disabled' },
+                { label: 'Unhealthy', value: 'unhealthy' },
+              ],
+              onChange: setStatusFilter,
+            },
+          ]}
+        />
+      }
+    >
+      <ProviderModelTabs />
+      <GridView
+        items={filtered}
+        columns={{ sm: 1, md: 2, lg: 3 }}
+        loading={loading}
+        emptyState={
+          isFiltered ? (
+            <EmptyState
+              variant="no-results"
+              icon={Cpu}
+              title="No deployments found"
+              filterTerm={search}
+              secondaryAction={{
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setProviderFilter('all');
+                  setStatusFilter('all');
+                },
+              }}
+            />
+          ) : (
+            <EmptyState
+              variant="create"
+              icon={Cpu}
+              title="No decision deployments"
+              description="Decision models answer bounded questions (pick one, yes/no, score) fast and cheaply. Add a deployment to connect one through a provider."
+              action={{ label: 'Add deployment', onClick: openAdd }}
+              secondaryAction={{
+                label: 'Use a local rules/classifier backend',
+                onClick: () => navigate('/decisions/new'),
+              }}
+            />
+          )
+        }
+        keyExtractor={(d) => d.name}
+        renderItem={(d) => {
+          const health = healthOf(d);
+          return (
+            <ItemCard
+              key={d.name}
+              title={d.deployment_name || d.name}
+              description={d.decision_model_name}
+              icon={Cpu}
+              status={{
+                label: d.enabled ? 'Enabled' : 'Disabled',
+                variant: d.enabled ? 'success' : 'secondary',
+              }}
+              metadata={[
+                { label: 'Provider', value: d.provider || '-' },
+                { label: 'Model', value: d.provider_model_id || '-' },
+                { label: 'Priority', value: String(d.priority ?? 0) },
+                ...(d.latency_budget_ms
+                  ? [{ label: 'Latency budget', value: `${d.latency_budget_ms}ms` }]
+                  : []),
+              ]}
+              badges={[
+                ...(d.is_default_for_model ? [{ label: 'Default', variant: 'default' as const }] : []),
+                { label: d.wire_protocol, variant: 'secondary' as const },
+                ...(health !== 'unknown'
+                  ? [{
+                      label: health === 'healthy' ? 'Healthy' : 'Unhealthy',
+                      variant: health === 'healthy' ? ('success' as const) : ('destructive' as const),
+                    }]
+                  : []),
+              ]}
+              actions={[
+                { icon: Settings, label: 'Configure', onClick: () => handleConfigure(d), variant: 'ghost' },
+                {
+                  icon: Zap,
+                  label: 'Test connection',
+                  onClick: () => handleTest(d),
+                  variant: 'ghost',
+                },
+              ]}
+              menuActions={[
+                {
+                  icon: Power,
+                  label: d.enabled ? 'Disable' : 'Enable',
+                  onClick: () =>
+                    setField(d, { enabled: d.enabled ? 0 : 1 }, d.enabled ? 'Deployment disabled' : 'Deployment enabled'),
+                },
+                ...(!d.is_default_for_model
+                  ? [{
+                      icon: Star,
+                      label: 'Make default',
+                      onClick: () => setField(d, { is_default_for_model: 1 }, 'Default deployment updated'),
+                    }]
+                  : []),
+              ]}
+              onClick={() => handleConfigure(d)}
+            />
+          );
+        }}
+      />
+      {!loading && filtered.length > 0 && (
+        <div className="text-center py-4 text-sm font-body text-steel">
+          Showing {filtered.length} of {rows.length} deployments
+        </div>
+      )}
+
+      {/* Configure an existing deployment */}
+      <Dialog open={!!configureTarget} onOpenChange={(open) => !open && !saving && setConfigureTarget(null)}>
+        <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Configure {configureTarget?.deployment_name || 'Deployment'}</DialogTitle>
+            <DialogDescription>
+              {configureTarget
+                ? `${configureTarget.decision_model_name} via ${configureTarget.provider} · ${configureTarget.provider_model_id}`
+                : 'Update deployment settings'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingDoc ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-steel-soft" />
+            </div>
+          ) : (
+            <>
+              {configureTarget && (
+                <div className="flex items-center justify-between rounded-lg border border-line px-3 py-2 text-sm mt-2">
+                  <div>
+                    <p className="text-ink">
+                      Health:{' '}
+                      {healthOf(configureTarget) === 'unknown'
+                        ? 'not checked yet'
+                        : healthOf(configureTarget)}
+                    </p>
+                    {configureTarget.last_healthcheck && (
+                      <p className="text-xs text-steel-soft">Last checked {configureTarget.last_healthcheck}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy === configureTarget.name}
+                    onClick={async () => {
+                      await handleTest(configureTarget);
+                      setConfigureTarget(null);
+                    }}
+                  >
+                    {busy === configureTarget.name ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Zap className="h-4 w-4 mr-2" />
+                    )}
+                    Test connection
+                  </Button>
+                </div>
+              )}
+              <DeploymentFields value={formData} onChange={setFormData} />
+            </>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfigureTarget(null)} disabled={saving || loadingDoc}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={saving || loadingDoc}>
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add a new deployment from the catalog */}
+      <Dialog open={addOpen} onOpenChange={(open) => !adding && setAddOpen(open)}>
+        <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add deployment</DialogTitle>
+            <DialogDescription>
+              Connect a catalog decision model through one of your providers. A connection test runs
+              on create; the deployment is enabled only if it passes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="add_entry">
+                Model <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={addEntryKey}
+                onValueChange={(v) => {
+                  setAddEntryKey(v);
+                  const entry = catalog.find((e) => catalogKey(e) === v);
+                  const match = entry ? providers.filter((p) => p.provider_brand === entry.provider_brand) : [];
+                  setAddProvider(match.length === 1 ? match[0].name : '');
+                }}
+              >
+                <SelectTrigger id="add_entry">
+                  <SelectValue placeholder={catalog.length ? 'Select a model' : 'Loading catalog...'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {catalog.map((e) => (
+                    <SelectItem key={catalogKey(e)} value={catalogKey(e)}>
+                      {e.model_name} · {e.provider_brand}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {addEntry && (
+                <p className="text-xs text-steel-soft">
+                  {addEntry.canonical_model} ({addEntry.model_family}, {addEntry.model_class}) ·{' '}
+                  {addEntry.wire_protocol} · {addEntry.endpoint_path}
+                </p>
+              )}
+            </div>
+
+            {addEntry && (
+              <div className="space-y-2">
+                <Label htmlFor="add_provider">
+                  Provider <span className="text-destructive">*</span>
+                </Label>
+                {brandProviders.length > 0 ? (
+                  <Select value={addProvider} onValueChange={setAddProvider}>
+                    <SelectTrigger id="add_provider">
+                      <SelectValue placeholder="Select a provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brandProviders.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          {p.provider_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="text-sm text-steel">
+                    No {addEntry.provider_brand} provider is set up yet.
+                  </p>
+                )}
+                <p className="text-xs text-steel-soft">
+                  {addEntry.provider_ready
+                    ? 'Providers and API keys are managed on the Providers page.'
+                    : `A ${addEntry.provider_brand} provider needs an API key before this can connect.`}{' '}
+                  <button type="button" className="underline hover:text-ink" onClick={goToProviders}>
+                    {brandProviders.length > 0 ? 'Manage provider' : 'Set up provider'}
+                  </button>
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)} disabled={adding}>
+              Cancel
+            </Button>
+            <Button onClick={handleAdd} disabled={adding || !addEntry || !addProvider}>
+              {adding ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add & test'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageFrame>
+  );
 }

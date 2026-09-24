@@ -24,7 +24,12 @@ import { doctype } from '@/data/doctypes';
 import { handleFrappeError } from '@/lib/frappe-error';
 import { formatTimeAgo } from '@/utils/time';
 import { usePermissions } from '@/contexts/PermissionsContext';
-import { QuestionBuilder, type PolicyDefinition } from '@/components/decision/QuestionBuilder';
+import {
+  QuestionBuilder,
+  newPolicyDefinition,
+  FALLBACK_ACTIONS,
+  type PolicyDefinition,
+} from '@/components/decision/QuestionBuilder';
 import { RuntimeDisabledBanner } from '@/components/decision/RuntimeDisabledBanner';
 import {
   listDecisionModels,
@@ -77,7 +82,8 @@ function emptyDefinition(policyId: string): PolicyDefinition {
 }
 
 function parseDefinition(policyId: string, raw?: string): PolicyDefinition {
-  if (!raw) return emptyDefinition(policyId);
+  // A policy with no definition yet starts from the same real defaults as a new one.
+  if (!raw) return newPolicyDefinition(policyId);
   try {
     const parsed = JSON.parse(raw) as Partial<PolicyDefinition>;
     return {
@@ -212,7 +218,10 @@ function DecisionPolicyEditor() {
     setSaving(true);
     try {
       const trimmedName = newPolicyName.trim();
-      let definitionJson = newDefinitionJson;
+      // No template: seed the starter definition so the new policy carries real defaults
+      // (fallback_action, store_state, a starter question and binding) from the first save.
+      let definitionJson: string | undefined =
+        newDefinitionJson ?? JSON.stringify(newPolicyDefinition(trimmedName));
       if (definitionJson) {
         try {
           const parsed = JSON.parse(definitionJson) as Partial<PolicyDefinition>;
@@ -606,13 +615,17 @@ function DecisionPolicyEditor() {
             )}
             <div className="pt-2 border-t border-line text-xs text-steel space-y-1">
               <div>
-                Low confidence: <span className="text-ink">{definition.fallback_action || 'uncertain'}</span>
+                If the model fails:{' '}
+                <span className="text-ink">
+                  {FALLBACK_ACTIONS.find((a) => a.value === definition.fallback_action)?.label ||
+                    definition.fallback_action ||
+                    'Not set'}
+                </span>
               </div>
-              {definition.minimum_confidence !== undefined && (
-                <div>
-                  Minimum confidence: <span className="text-ink">{definition.minimum_confidence}</span>
-                </div>
-              )}
+              <div>
+                Minimum confidence:{' '}
+                <span className="text-ink">{definition.minimum_confidence ?? 'Off'}</span>
+              </div>
             </div>
           </div>
 

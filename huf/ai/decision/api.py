@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import time
 from datetime import timedelta
 from typing import Any
@@ -675,6 +676,93 @@ def get_setup_catalog() -> list[dict]:
 	return sorted(result, key=lambda x: (x["provider_brand"], x["model_name"]))
 
 
+def _ensure_decision_ai_model(entry, provider: str) -> str:
+	"""Create or reuse the ``AI Model`` (modality Decision) for a catalog entry on ``provider``.
+
+	``AI Model.model_name`` is globally unique, so an existing row bound to a *different*
+	provider cannot be silently reused -- that would route the deployment through the wrong
+	provider/key. Raise instead so the admin can resolve it.
+	"""
+	existing = frappe.db.get_value(
+		"AI Model", {"model_name": entry.model_name}, ["name", "provider", "modalities"], as_dict=True
+	)
+	if existing:
+		if existing.provider != provider:
+			frappe.throw(
+				_("AI Model {0} already exists for provider {1}; it cannot also be set up on {2}.").format(
+					entry.model_name, existing.provider, provider
+				)
+			)
+		modalities = [m.strip() for m in (existing.modalities or "").split(",") if m.strip()]
+		if "Decision" not in modalities:
+			modalities.append("Decision")
+			frappe.db.set_value("AI Model", existing.name, "modalities", ", ".join(modalities))
+		return existing.name
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "AI Model",
+			"model_name": entry.model_name,
+			"provider": provider,
+			"modalities": "Decision",
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	return doc.name
+
+
+def _ensure_decision_deployment(entry, decision_model: str, ai_model: str, provider: str) -> str:
+	"""Create or reuse the ``Decision Deployment`` binding ``decision_model`` to ``ai_model``.
+
+	Reuses any existing deployment for the same (decision_model, ai_model) pair -- which is how
+	the seeded OpenCode Zen deployment is picked up when that entry is chosen. A new deployment
+	goes to the end of the failover order and only becomes the model's default if none exists.
+	"""
+	existing = frappe.db.get_value(
+		"Decision Deployment", {"decision_model": decision_model, "ai_model": ai_model}, "name"
+	)
+	if existing:
+		return existing
+
+	siblings = frappe.get_all(
+		"Decision Deployment",
+		filters={"decision_model": decision_model},
+		fields=["priority", "is_default_for_model"],
+	)
+	priority = max([(r.priority or 0) for r in siblings], default=0) + 10
+	has_default = any(r.is_default_for_model for r in siblings)
+
+	base_key = frappe.scrub(f"{entry.model_name}-{provider}").replace("_", "-")
+	base_key = re.sub(r"[^a-z0-9-]+", "-", base_key).strip("-")
+	deployment_key = base_key
+	n = 2
+	while frappe.db.exists("Decision Deployment", {"deployment_key": deployment_key}):
+		deployment_key = f"{base_key}-{n}"
+		n += 1
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Decision Deployment",
+			"deployment_key": deployment_key,
+			# Bare canonical model name, matching AI Model's own naming convention
+			# (ModelsPage shows model_name alone; provider is its own field/badge, never
+			# concatenated into the title). Provider is already a separate column here too.
+			"deployment_name": entry.canonical_model,
+			"decision_model": decision_model,
+			"ai_model": ai_model,
+			"provider": provider,
+			"provider_model_id": entry.model_name,
+			"wire_protocol": entry.wire_protocol,
+			"endpoint_path": entry.endpoint_path,
+			"priority": priority,
+			"is_default_for_model": 0 if has_default else 1,
+			"enabled": 0,
+		}
+	)
+	doc.insert(ignore_permissions=True)
+	return doc.name
+
+
 @frappe.whitelist()
 def setup_deployment(
 	provider: str,
@@ -711,8 +799,6 @@ def setup_deployment(
 		_seed_classes,
 		_seed_families,
 		_seed_model,
-		_seed_ai_model,
-		_seed_deployment,
 	)
 
 	_require("decision.admin")
@@ -739,11 +825,11 @@ def setup_deployment(
 	family_names = _seed_families(class_names)
 	decision_model_name = _seed_model(family_names)
 
-	# Idempotently create/reuse the AI Model row
-	ai_model_name = _seed_ai_model(provider)
-
-	# Idempotently create the Deployment row
-	deployment_name = _seed_deployment(decision_model_name, ai_model_name, provider)
+	# Idempotently create/reuse the AI Model row and Deployment for the catalog entry the
+	# caller actually picked. (The seed patch's own _seed_ai_model/_seed_deployment are
+	# hardwired to the default OpenCode Zen stack and must not be used here.)
+	ai_model_name = _ensure_decision_ai_model(entry, provider)
+	deployment_name = _ensure_decision_deployment(entry, decision_model_name, ai_model_name, provider)
 
 	# Run a test probe on the deployment
 	probe_result = test_deployment(deployment_name)
