@@ -158,6 +158,10 @@ export interface FlowRunDetail {
     last_agent_run: string | null;
     started_at: string | null;
     completed_at: string | null;
+    decision_call_count?: number | null;
+    decision_input_tokens?: number | null;
+    decision_output_tokens?: number | null;
+    decision_cost?: number | null;
 }
 
 /** Pending human approval (from get_pending_approvals endpoint) */

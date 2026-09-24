@@ -17,12 +17,14 @@ import {
   type PlaygroundMode,
   type RunOutcome,
 } from '@/components/playground';
+import { DecisionPlaygroundPanel } from '@/components/playground/DecisionPlaygroundPanel';
 import { getAgents } from '@/services/agentApi';
 import { getProviders } from '@/services/providerApi';
 import { settleAll } from '@/lib/settleAll';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import type { AgentDoc, AIProvider } from '@/types/agent.types';
 import type { AgentPromptDoc } from '@/services/agentPromptApi';
+import type { RunDecisionResult } from '@/services/decisionApi';
 
 export { PlaygroundPage };
 export default PlaygroundPage;
@@ -42,6 +44,7 @@ function PlaygroundPage() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [savePromptOverride, setSavePromptOverride] = useState<string | null>(null);
   const [loadedTemplate, setLoadedTemplate] = useState<AgentPromptDoc | null>(null);
+  const [decisionRunning, setDecisionRunning] = useState(false);
 
   // Close the global app sidebar so the playground uses the full viewport width.
   useEffect(() => {
@@ -135,15 +138,24 @@ function PlaygroundPage() {
     if (mode === 'compare') {
       compareSlotA.run();
       compareSlotB.run();
+    } else if (mode === 'decision') {
+      // DecisionPlaygroundPanel handles its own run logic
     } else {
       playgroundSlot.run();
     }
   };
 
+  const handleDecisionRun = (_result: RunDecisionResult) => {
+    setDecisionRunning(false);
+    // Record the decision run in ledger if needed
+  };
+
   const primaryRunning =
     mode === 'compare'
       ? compareSlotA.state.running || compareSlotB.state.running
-      : playgroundSlot.state.running;
+      : mode === 'decision'
+        ? decisionRunning
+        : playgroundSlot.state.running;
 
   if (loading) {
     return (
@@ -167,7 +179,7 @@ function PlaygroundPage() {
         onModeChange={setMode}
         onRun={handleRunPrimary}
         running={primaryRunning}
-        canSaveTemplate={!!activePromptBody().trim()}
+        canSaveTemplate={mode !== 'decision' && !!activePromptBody().trim()}
         onLoadTemplate={() => setPickerOpen(true)}
         onSaveTemplate={handleSaveCurrent}
       >
@@ -180,6 +192,11 @@ function PlaygroundPage() {
             slot={playgroundSlot.state}
             onDraft={playgroundSlot.draft}
             ledger={ledgerProps}
+          />
+        ) : mode === 'decision' ? (
+          <DecisionPlaygroundPanel
+            running={decisionRunning}
+            onRun={handleDecisionRun}
           />
         ) : (
           <CompareView
