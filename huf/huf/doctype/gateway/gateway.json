@@ -5,7 +5,7 @@
  "creation": "2026-07-26 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
- "field_order": ["gateway_name", "provider", "is_enabled", "integration_settings", "execution_user", "description", "section_admission", "direct_policy", "room_policy", "room_sender_policy", "mention_required", "pairing_ttl_minutes", "pairing_reply_enabled", "section_default_route", "default_target_type", "default_agent", "default_flow", "section_status", "last_event_at", "last_error"],
+ "field_order": ["gateway_name", "provider", "is_enabled", "integration_settings", "execution_user", "description", "section_admission", "direct_policy", "room_policy", "room_sender_policy", "mention_required", "pairing_ttl_minutes", "pairing_reply_enabled", "section_default_route", "default_target_type", "default_agent", "default_flow", "section_pre_filter", "pre_filter_policy", "pre_filter_mode", "pre_filter_no_agent_reply", "section_status", "last_event_at", "last_error"],
  "fields": [
   {"fieldname":"gateway_name","fieldtype":"Data","in_list_view":1,"label":"Gateway name","reqd":1,"unique":1},
   {"fieldname":"provider","fieldtype":"Select","in_list_view":1,"label":"Channel","options":"WhatsApp\nMessenger\nInstagram\nTelegram\nSlack\nEmail\nGoogle Chat\nMicrosoft Teams","reqd":1},
@@ -24,6 +24,10 @@
   {"default":"","fieldname":"default_target_type","fieldtype":"Select","label":"When no route matches, send to","options":"\nAgent\nFlow"},
   {"depends_on":"eval:doc.default_target_type == 'Agent'","fieldname":"default_agent","fieldtype":"Link","label":"Default agent","options":"Agent"},
   {"depends_on":"eval:doc.default_target_type == 'Flow'","fieldname":"default_flow","fieldtype":"Link","label":"Default flow","options":"Flow Definition"},
+  {"fieldname":"section_pre_filter","fieldtype":"Section Break","label":"Pre-filter (Decision Runtime)"},
+  {"description":"Optional Decision Policy that classifies each inbound message before it reaches the target Agent or Flow. Its single select question must use exactly the option ids 'spam' and 'no_agent_needed'; any other answer is treated as 'continue normally'. Leave blank to skip pre-filtering.","fieldname":"pre_filter_policy","fieldtype":"Link","label":"Pre-filter policy","options":"Decision Policy"},
+  {"default":"Off","depends_on":"eval:doc.pre_filter_policy","description":"Off: the pre-filter never runs. Shadow: runs in the background for review only and never drops, replies, or delays this message. Enforce: 'spam' rejects the event with an audit trail and 'no_agent_needed' sends the canned reply below instead of routing to the Agent/Flow. Any error, timeout, or unrecognized answer falls back to routing the message exactly as if this were Off.","fieldname":"pre_filter_mode","fieldtype":"Select","label":"Pre-filter mode","options":"Off\nShadow\nEnforce"},
+  {"depends_on":"eval:doc.pre_filter_mode == 'Enforce'","description":"Sent back to the sender when Enforce mode classifies the message as not needing an agent. Leave blank to route the message through normally in that case instead of staying silent.","fieldname":"pre_filter_no_agent_reply","fieldtype":"Small Text","label":"'No agent needed' reply"},
   {"fieldname":"section_status","fieldtype":"Section Break","label":"Activity"},
   {"fieldname":"last_event_at","fieldtype":"Datetime","label":"Last event","read_only":1},
   {"fieldname":"last_error","fieldtype":"Small Text","label":"Last error","read_only":1}

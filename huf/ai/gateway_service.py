@@ -634,6 +634,104 @@ def ingest_gateway_event(
     return {"event_name": event.name, **route}
 
 
+def _run_gateway_pre_filter(gateway, event) -> dict | None:
+    """Optional Decision Runtime classification pass (PLAN.md §3.10 "Gateways").
+
+    Runs after admission/routing have already accepted and queued this event
+    (``_admission``/``resolve_gateway_route`` ran earlier, inside
+    ``ingest_gateway_event``) and before ``process_gateway_event`` starts any
+    Agent/Flow work. ``Gateway.pre_filter_policy`` is a ``Decision Policy``
+    whose single ``select`` question is authored with exactly the option ids
+    ``"spam"`` and ``"no_agent_needed"`` (any other id, including a
+    conventional ``"continue"``, is treated the same as no match); its
+    candidates are the policy's own options (``CandidateSource.POLICY_OPTIONS``
+    per the Automation Decide precedent, ``huf/ai/automation_runner.py``),
+    never a runtime-supplied set.
+
+    Returns a ``process_gateway_event``-shaped result dict to short-circuit
+    normal processing (spam drop), or ``None`` to continue exactly as today --
+    which is also the fallback for Off/no policy, Shadow (D18: enqueue only,
+    never gates), any non-success ``ServiceResult`` (disabled, timeout,
+    budget exceeded, failed, ...), an unrecognized answer, or any exception
+    raised while resolving/sending the canned reply. This function must never
+    let a Decision Runtime failure block a gateway message that would
+    otherwise have been processed.
+    """
+    # getattr with a default, not direct attribute access: gateway is a real
+    # Frappe document in production (every DocType field always resolves,
+    # "" when unset), but plenty of existing tests build it as a bare
+    # SimpleNamespace/MagicMock predating these fields -- for those this must
+    # degrade to "no pre-filter configured", not an AttributeError.
+    mode = getattr(gateway, "pre_filter_mode", None)
+    policy = getattr(gateway, "pre_filter_policy", None)
+    if not mode or mode == "Off" or not policy:
+        return None
+
+    try:
+        from huf.ai.decision import service
+        from huf.ai.decision.types import CandidateSource, DecisionOrigin, DecisionStatus
+
+        state = {
+            "message_text": event.message_text,
+            "sender_id": event.sender_id,
+            "conversation_id": event.conversation_id,
+            "thread_id": event.thread_id,
+            "provider": gateway.provider,
+        }
+        origin = DecisionOrigin(origin_type="Gateway", owner_user=gateway.execution_user)
+        result = service.run_policy(
+            policy,
+            state=state,
+            mode=mode,
+            surface="gateway",
+            candidate_source=CandidateSource.POLICY_OPTIONS,
+            origin=origin,
+        )
+
+        if mode == "Shadow":
+            # D18: Shadow enqueues a background job and never gates the
+            # surface that triggered it -- service.run_policy already
+            # returned immediately without evaluating anything inline.
+            return None
+
+        if result.status != DecisionStatus.SUCCESS or result.response is None:
+            return None
+
+        answer = next(iter(result.response.answers.values()), None)
+        if answer is None:
+            return None
+
+        if answer.value == "spam":
+            error_message = "Rejected by gateway pre-filter: message classified as spam."
+            if result.decision_call:
+                error_message += f" (decision_call={result.decision_call})"
+            event.db_set({"status": "Rejected", "error_message": error_message})
+            return {"event_name": event.name, "status": "Rejected"}
+
+        if answer.value == "no_agent_needed":
+            reply_text = (getattr(gateway, "pre_filter_no_agent_reply", None) or "").strip()
+            if not reply_text:
+                # "else continue" -- no canned reply configured, so the
+                # message routes through exactly as if pre-filter were Off.
+                return None
+            from huf.ai.gateway_webhook import send_gateway_reply
+
+            _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
+            delivery = send_gateway_reply(gateway, event, reply_text)
+            event.db_set({"status": "Succeeded"})
+            return {
+                "event_name": event.name,
+                "status": "Succeeded",
+                "provider_message_id": delivery.provider_message_id,
+            }
+
+        return None
+    except Exception:
+        message = _redact_error_text(frappe.get_traceback())
+        frappe.log_error(message, "Gateway pre-filter failed")
+        return None
+
+
 def process_gateway_event(event_name: str) -> dict:
     """Start queued Huf work under the Gateway's configured service user."""
     event = frappe.get_doc("Gateway Event", event_name)
@@ -644,6 +742,10 @@ def process_gateway_event(event_name: str) -> dict:
     if not gateway.is_enabled or not gateway.execution_user:
         event.db_set({"status": "Rejected", "error_message": "Gateway is disabled or has no Run as user"})
         return {"event_name": event.name, "status": "Rejected"}
+
+    pre_filter_result = _run_gateway_pre_filter(gateway, event)
+    if pre_filter_result is not None:
+        return pre_filter_result
 
     if event.target_type == "Agent":
         # GW-08: this pre-gate authorizes the run as the Gateway's configured

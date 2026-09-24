@@ -35,6 +35,9 @@ export interface GatewayDoc {
   default_target_type?: '' | 'Agent' | 'Flow';
   default_agent?: string;
   default_flow?: string;
+  pre_filter_policy?: string;
+  pre_filter_mode?: 'Off' | 'Shadow' | 'Enforce';
+  pre_filter_no_agent_reply?: string;
   last_event_at?: string;
   last_error?: string;
 }
@@ -45,7 +48,9 @@ export async function getGateways(): Promise<GatewayDoc[]> {
       'name', 'gateway_name', 'provider', 'is_enabled', 'execution_user', 'integration_settings',
       'direct_policy', 'room_policy', 'room_sender_policy',
       'mention_required', 'pairing_ttl_minutes', 'description',
-      'default_target_type', 'default_agent', 'default_flow', 'last_event_at', 'last_error',
+      'default_target_type', 'default_agent', 'default_flow',
+      'pre_filter_policy', 'pre_filter_mode', 'pre_filter_no_agent_reply',
+      'last_event_at', 'last_error',
     ],
     orderBy: { field: 'modified', order: 'desc' },
     limit: 100,
