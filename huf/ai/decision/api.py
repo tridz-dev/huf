@@ -663,7 +663,10 @@ def _ensure_decision_deployment(entry, decision_model: str, ai_model: str, provi
 		{
 			"doctype": "Decision Deployment",
 			"deployment_key": deployment_key,
-			"deployment_name": f"{entry.canonical_model} @ {provider}",
+			# Bare canonical model name, matching AI Model's own naming convention
+			# (ModelsPage shows model_name alone; provider is its own field/badge, never
+			# concatenated into the title). Provider is already a separate column here too.
+			"deployment_name": entry.canonical_model,
 			"decision_model": decision_model,
 			"ai_model": ai_model,
 			"provider": provider,
