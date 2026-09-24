@@ -26,6 +26,23 @@ import {
 import { QuestionBuilder, type PolicyDefinition } from '@/components/decision/QuestionBuilder';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { db } from '@/lib/frappe-sdk';
+import { doctype } from '@/data/doctypes';
+
+const STARTER_AD_HOC_DEFINITION: PolicyDefinition = {
+  policy_id: 'playground_ad_hoc',
+  questions: [
+    {
+      id: 'question_1',
+      kind: 'judge',
+      instructions: 'Describe what this question should decide.',
+      options: [],
+      positive_criteria: '',
+      negative_criteria: '',
+    },
+  ],
+  state_bindings: [{ name: 'request', path: 'request' }],
+};
 
 interface DecisionPlaygroundPanelProps {
   running: boolean;
@@ -52,7 +69,11 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
   // Policy vs ad-hoc mode
   const [policyMode, setPolicyMode] = useState<PolicyMode>('published');
   const [selectedPolicy, setSelectedPolicy] = useState<string>('');
-  const [adHocDefinition, setAdHocDefinition] = useState<PolicyDefinition | null>(null);
+  const [adHocDefinition, setAdHocDefinition] = useState<PolicyDefinition | null>(
+    STARTER_AD_HOC_DEFINITION
+  );
+  const [policies, setPolicies] = useState<{ name: string; policy_name?: string }[]>([]);
+  const [policiesLoading, setPoliciesLoading] = useState(true);
 
   // State and candidates
   const [state, setState] = useState<string>('');
@@ -81,6 +102,28 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
         toast.error(`Failed to load decision models: ${getFrappeErrorMessage(error)}`);
       } finally {
         setModelsLoading(false);
+      }
+    })();
+  }, []);
+
+  // Load published, enabled Decision Policies for the "Policy" mode picker
+  useEffect(() => {
+    (async () => {
+      setPoliciesLoading(true);
+      try {
+        const rows = await db.getDocList(doctype['Decision Policy'], {
+          fields: ['name', 'policy_name'],
+          filters: [
+            ['enabled', '=', 1],
+            ['current_version', '!=', ''],
+          ],
+          limit: 200,
+        });
+        setPolicies((rows as { name: string; policy_name?: string }[]) || []);
+      } catch (error) {
+        toast.error(`Failed to load decision policies: ${getFrappeErrorMessage(error)}`);
+      } finally {
+        setPoliciesLoading(false);
       }
     })();
   }, []);
@@ -232,10 +275,21 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                 <label className="mb-2 block text-sm font-medium text-ink">Policy</label>
                 <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a policy…" />
+                    <SelectValue
+                      placeholder={policiesLoading ? 'Loading policies…' : 'Select a policy…'}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* TODO: fetch policies from API */}
+                    {!policiesLoading && policies.length === 0 && (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No published policies yet.
+                      </div>
+                    )}
+                    {policies.map((p) => (
+                      <SelectItem key={p.name} value={p.name}>
+                        {p.policy_name || p.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <FormDescription>Published Decision Policies</FormDescription>
