@@ -88,6 +88,12 @@ function parseModalityBadges(modalities?: string): string[] {
   return modalities.split(',').map((m) => m.trim()).filter(Boolean);
 }
 
+function isDecisionOnly(modalities?: string): boolean {
+  if (!modalities?.trim()) return false;
+  const mods = modalities.split(',').map((m) => m.trim()).filter(Boolean);
+  return mods.length === 1 && mods[0] === 'Decision';
+}
+
 function formatPricingSummary(model: AIModel): string | null {
   if (model.use_custom_pricing !== 1) return null;
   const input = model.input_cost_per_1m_tokens;
@@ -129,7 +135,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     reset,
     error,
   } = useInfiniteScroll<
-    { provider?: string; page?: number; limit?: number; start?: number; search?: string },
+    { provider?: string; modality?: string; page?: number; limit?: number; start?: number; search?: string },
     AIModel
   >({
     fetchFn: async (params) => {
@@ -139,6 +145,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         start: params.start,
         search: params.search,
         provider: params.provider && params.provider !== 'all' ? params.provider : undefined,
+        modality: params.modality && params.modality !== 'all' ? params.modality : undefined,
       });
 
       if (Array.isArray(response)) {
@@ -356,7 +363,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
     }
   };
 
-  const isFiltered = !!search || (filters.provider && filters.provider !== 'all');
+  const isFiltered = !!search || (filters.provider && filters.provider !== 'all') || (filters.modality && filters.modality !== 'all');
 
   return (
     <PageFrame
@@ -375,6 +382,15 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 ...providers.map((p) => ({ label: p.provider_name, value: p.name })),
               ],
               onChange: (value) => setFilter('provider', value),
+            },
+            {
+              label: 'Modality',
+              value: filters.modality || 'all',
+              options: [
+                { label: 'All modalities', value: 'all' },
+                ...modalityOptions.map((m) => ({ label: m, value: m })),
+              ],
+              onChange: (value) => setFilter('modality', value),
             },
           ]}
         />
@@ -403,6 +419,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                 onClick: () => {
                   setSearch('');
                   setFilter('provider', 'all');
+                  setFilter('modality', 'all');
                 },
               }}
             />
@@ -419,6 +436,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
         renderItem={(model) => {
           const pricingSummary = formatPricingSummary(model);
           const modalities = parseModalityBadges(model.modalities);
+          const decisionOnly = isDecisionOnly(model.modalities);
 
           return (
             <ItemCard
@@ -432,7 +450,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
               ]}
               badges={modalities.map((modality) => ({
                 label: modality,
-                variant: 'secondary' as const,
+                variant: decisionOnly && modality === 'Decision' ? ('success' as const) : ('secondary' as const),
               }))}
               actions={[
                 {
@@ -441,6 +459,14 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
                   onClick: () => handleConfigure(model),
                   variant: 'ghost',
                 },
+                ...(decisionOnly ? [
+                  {
+                    icon: Settings,
+                    label: 'Configure deployment',
+                    onClick: () => window.location.href = '/decision-models',
+                    variant: 'ghost' as const,
+                  },
+                ] : []),
               ]}
               menuActions={[
                 {

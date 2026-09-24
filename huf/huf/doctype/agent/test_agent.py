@@ -19,7 +19,12 @@ MANAGER_ROLES = ["System Manager"]
 
 
 def _any_model_and_provider():
-    rows = frappe.get_all("AI Model", fields=["name", "provider"], limit=1)
+    rows = frappe.get_all(
+        "AI Model",
+        fields=["name", "provider"],
+        filters={"modalities": ["not in", ["Decision"]]},
+        limit=1,
+    )
     if not rows:
         return None, None
     return rows[0].name, rows[0].provider
@@ -35,7 +40,12 @@ class TestAgentSaveRoundtrip(IntegrationTestCase):
 
 	def setUp(self):
 		self._names = []
-		rows = frappe.get_all("AI Model", fields=["name", "provider"], limit=1)
+		rows = frappe.get_all(
+			"AI Model",
+			fields=["name", "provider"],
+			filters={"modalities": ["not in", ["Decision"]]},
+			limit=1,
+		)
 		if not rows:
 			self.skipTest("no AI Model records on this site")
 		self.model = rows[0].name
@@ -384,7 +394,11 @@ class TestAgentCodeExecution(IntegrationTestCase):
 		return provider.name
 
 	def _ensure_model(self, provider):
-		existing = frappe.db.get_value("AI Model", {"provider": provider}, "name")
+		existing = frappe.db.get_value(
+			"AI Model",
+			{"provider": provider, "modalities": ["not in", ["Decision"]]},
+			"name",
+		)
 		if existing:
 			return existing
 		model = frappe.get_doc(

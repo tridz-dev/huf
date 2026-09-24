@@ -43,12 +43,12 @@
    "unique": 1
   },
   {
-   "description": "Select one or more supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription, document OCR/vision).",
+   "description": "Select one or more supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription, document OCR/vision, decision reasoning).",
    "fieldname": "modalities",
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Modality",
-   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR\nSpeech-to-Speech\nVideo"
+   "options": "\nText\nImage\nText-to-Speech\nTranscription\nEmbeddings\nVision\nOCR\nSpeech-to-Speech\nVideo\nDecision"
   },
   {
    "description": "Configure internal model reasoning support and overrides.",

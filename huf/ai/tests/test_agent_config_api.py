@@ -10,7 +10,12 @@ from huf.ai.agent_config_api import get_agent_section, update_agent_section
 class TestAgentConfigAPI(IntegrationTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
-		model = frappe.get_all("AI Model", fields=["name", "provider"], limit=1)
+		model = frappe.get_all(
+			"AI Model",
+			fields=["name", "provider"],
+			filters={"modalities": ["not in", ["Decision"]]},
+			limit=1,
+		)
 		if not model:
 			self.skipTest("no AI Model records on this site")
 		self.agent = frappe.get_doc(
@@ -104,7 +109,12 @@ class TestAgentEditVsExecutionAccessAreSeparateAxes(IntegrationTestCase):
 
 	def setUp(self):
 		frappe.set_user("Administrator")
-		model = frappe.get_all("AI Model", fields=["name", "provider"], limit=1)
+		model = frappe.get_all(
+			"AI Model",
+			fields=["name", "provider"],
+			filters={"modalities": ["not in", ["Decision"]]},
+			limit=1,
+		)
 		if not model:
 			self.skipTest("no AI Model records on this site")
 

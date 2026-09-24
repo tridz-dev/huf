@@ -34,5 +34,7 @@
   { "id": "stability-ai", "label": "Stability AI" },
   { "id": "vllm", "label": "vLLM" },
   { "id": "watsonx", "label": "IBM Watsonx" },
+  { "id": "opencode-zen", "label": "OpenCode Zen" },
+  { "id": "vercel-ai-gateway", "label": "Vercel AI Gateway" },
   { "id": "other", "label": "Other / Custom" }
 ]

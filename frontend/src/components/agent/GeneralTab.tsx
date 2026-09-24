@@ -105,6 +105,7 @@ export function GeneralTab({
         provider: watchProvider,
         search: modelSearch,
         limit: 50,
+        modality: 'Text',
       })
         .then((res) => {
           const items = Array.isArray(res) ? res : res.items;
@@ -194,6 +195,7 @@ export function GeneralTab({
         provider: watchProvider,
         search: '',
         limit: 50,
+        modality: 'Text',
       });
 
       const items = Array.isArray(refreshed) ? refreshed : refreshed.items;

@@ -143,7 +143,20 @@ export async function getAIModels(): Promise<AIModelItem[]> {
       provider?: string;
       modalities?: string;
     }>)
-      .filter((m) => m.provider && providerBrandMap.has(m.provider))
+      .filter((m) => {
+        // Exclude models whose provider doesn't exist
+        if (!m.provider || !providerBrandMap.has(m.provider)) {
+          return false;
+        }
+        // Exclude Decision-only models from chat picker
+        if (m.modalities) {
+          const mods = m.modalities.split(',').map((x) => x.trim()).filter(Boolean);
+          if (mods.length === 1 && mods[0] === 'Decision') {
+            return false;
+          }
+        }
+        return true;
+      })
       .map((m) => {
         const brand = providerBrandMap.get(m.provider!) || 'other';
         return {

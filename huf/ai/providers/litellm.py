@@ -1506,6 +1506,16 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                 except Exception:
                     pass
 
+            # Defense in depth: reject Decision-only models before any provider call
+            if ai_model_doc is not None:
+                from huf.huf.doctype.ai_model.ai_model import is_decision_only_model
+                if is_decision_only_model(ai_model_doc):
+                    raise ProviderUnavailableError(
+                        f"Model '{model}' is configured for Decision use only and cannot be used for chat/generation. "
+                        f"This is a deployment configuration issue. Contact your administrator.",
+                        log_message=f"Decision-only model '{model}' reached chat path (litellm.run)"
+                    )
+
             r_policy = ReasoningPolicy.from_dict(reasoning_policy_data)
             r_caps = detect_model_capabilities(normalized_model, provider, ai_model_doc=ai_model_doc)
             r_res = resolve_reasoning(r_policy, r_caps, provider=provider, model_name=normalized_model)
@@ -2341,6 +2351,16 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                 ai_model_doc = frappe.get_doc("AI Model", model)
             except Exception:
                 pass
+
+        # Defense in depth: reject Decision-only models before any provider call
+        if ai_model_doc is not None:
+            from huf.huf.doctype.ai_model.ai_model import is_decision_only_model
+            if is_decision_only_model(ai_model_doc):
+                raise ProviderUnavailableError(
+                    f"Model '{model}' is configured for Decision use only and cannot be used for chat/generation. "
+                    f"This is a deployment configuration issue. Contact your administrator.",
+                    log_message=f"Decision-only model '{model}' reached chat path (litellm.run_stream)"
+                )
 
         r_policy = ReasoningPolicy.from_dict(reasoning_policy_data)
         r_caps = detect_model_capabilities(normalized_model, provider, ai_model_doc=ai_model_doc)

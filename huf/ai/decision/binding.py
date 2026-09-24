@@ -6,6 +6,15 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+# Surfaces that support Advise mode. Must match Agent Decision Binding surface options exactly.
+ADVISE_SURFACES = {
+	"Tool Selection",
+	"Skill Selection",
+	"Procedure Selection",
+	"Agent Routing",
+	"RAG Filter",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class ResolvedBinding:
@@ -28,6 +37,8 @@ def resolve_agent_decision_binding(agent_doc: Any, surface: str, *, requested_mo
 		if not getattr(binding, "enabled", True) or getattr(binding, "surface", None) != surface:
 			continue
 		mode = getattr(binding, "mode", "Off") or "Off"
+		if mode == "Advise" and surface not in ADVISE_SURFACES:
+			mode = "Off"
 		if mode == "Off" or (requested_mode is not None and mode != requested_mode):
 			continue
 		policy = getattr(binding, "policy", None)

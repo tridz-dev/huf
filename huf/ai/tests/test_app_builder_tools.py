@@ -151,7 +151,9 @@ class TestDraftApp(IntegrationTestCase):
 		super().setUpClass()
 		if not frappe.db.exists("Agent", cls.AGENT_NAME):
 			provider = frappe.db.get_value("AI Provider", {}, "name")
-			model = frappe.db.get_value("AI Model", {}, "name")
+			model = frappe.db.get_value(
+				"AI Model", {"modalities": ["not in", ["Decision"]]}, "name"
+			)
 			if provider and model:
 				frappe.get_doc(
 					{
@@ -318,7 +320,9 @@ class TestSetAppIcon(IntegrationTestCase):
 		super().setUpClass()
 		if not frappe.db.exists("Agent", cls.AGENT_NAME):
 			provider = frappe.db.get_value("AI Provider", {}, "name")
-			model = frappe.db.get_value("AI Model", {}, "name")
+			model = frappe.db.get_value(
+				"AI Model", {"modalities": ["not in", ["Decision"]]}, "name"
+			)
 			if provider and model:
 				frappe.get_doc(
 					{

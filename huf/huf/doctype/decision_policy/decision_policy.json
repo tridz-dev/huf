@@ -14,7 +14,9 @@
   "current_version",
   "definition_json",
   "schema_version",
-  "fingerprint"
+  "fingerprint",
+  "allow_api_access",
+  "max_candidates"
  ],
  "fields": [
   {
@@ -69,12 +71,25 @@
    "fieldname": "fingerprint",
    "fieldtype": "Data",
    "label": "Fingerprint"
+  },
+  {
+   "fieldname": "allow_api_access",
+   "fieldtype": "Check",
+   "label": "Allow API Access",
+   "description": "When enabled, this policy can be called via the public API (run_decision method) by non-desk sessions with an API key. When disabled (default), the policy is only accessible within the HUF interface (Playground, Automations, Agent bindings, Flow nodes).",
+   "default": 0
+  },
+  {
+   "fieldname": "max_candidates",
+   "fieldtype": "Int",
+   "label": "Max Candidates",
+   "description": "Maximum number of candidates the model can receive for choice questions (select, judge). When a decision tool or surface passes a candidate list larger than this limit, the oldest/lowest-priority candidates are dropped. Set to 0 for no limit. Used by the decide tool and surfaces like Tool Selection, Skill Selection, and Agent Routing."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Policy",
