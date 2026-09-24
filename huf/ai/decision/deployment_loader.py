@@ -143,7 +143,9 @@ def load_chain(
 		if candidate is not None:
 			candidates.append(candidate)
 
-	chain = resolve_deployment_chain(requested_identity, tuple(candidates))
+	chain = resolve_deployment_chain(
+		requested_identity, tuple(candidates), bypass_health_filter=bypass_health_filter
+	)
 	if pinned_deployment:
 		chain = DeploymentChain(
 			requested_identity=chain.requested_identity,
