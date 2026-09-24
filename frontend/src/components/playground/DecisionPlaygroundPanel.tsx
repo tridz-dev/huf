@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FieldHelp as FormDescription } from '@/components/decision/FieldHelp';
+import { HelperText } from '@/components/ui/helper-text';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -280,7 +280,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>Decision model for this run</FormDescription>
+              <HelperText>Decision model for this run</HelperText>
             </div>
 
             {/* Deployment selector */}
@@ -299,7 +299,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>Auto uses the default deployment and failover chain</FormDescription>
+              <HelperText>Auto uses the default deployment and failover chain</HelperText>
             </div>
 
             {/* Policy mode toggle */}
@@ -313,11 +313,11 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <FormDescription>
+              <HelperText>
                 {policyMode === 'published'
                   ? 'Run a published policy'
                   : 'Define questions on the fly (requires decision.author)'}
-              </FormDescription>
+              </HelperText>
             </div>
 
             {policyMode === 'published' && (
@@ -342,7 +342,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Published Decision Policies</FormDescription>
+                <HelperText>Published Decision Policies</HelperText>
               </div>
             )}
 
@@ -379,7 +379,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
               className="mb-2 font-mono text-xs"
               rows={6}
             />
-            <FormDescription>Context as JSON</FormDescription>
+            <HelperText>Context as JSON</HelperText>
             {stateLimit !== null && stateBytes > stateLimit && (
               <Alert variant="destructive" className="mt-2">
                 <AlertCircle className="h-4 w-4" />
@@ -418,7 +418,7 @@ export function DecisionPlaygroundPanel({ running, onRun }: DecisionPlaygroundPa
                 ))}
               </div>
             )}
-            <FormDescription>Options for select/score questions</FormDescription>
+            <HelperText>Options for select/score questions</HelperText>
           </div>
 
           {/* Run button */}

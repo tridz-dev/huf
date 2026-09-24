@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { FieldHelp as FormDescription } from '@/components/decision/FieldHelp';
+import { HelperText } from '@/components/ui/helper-text';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -221,10 +221,10 @@ export function QuestionBuilder({
               Add question
             </Button>
           </div>
-          <FormDescription>
+          <HelperText>
             Add select (pick one option), judge (yes/no decision), or score (rate on a scale)
             questions. The model will answer each.
-          </FormDescription>
+          </HelperText>
 
           {value.questions.length === 0 ? (
             <Alert>
@@ -268,10 +268,10 @@ export function QuestionBuilder({
                 disabled={readOnly}
                 className="mt-2"
               />
-              <FormDescription className="mt-2">
+              <HelperText className="mt-2">
                 If the model's confidence falls below this threshold, apply the low-confidence
                 action (0-1 scale).
-              </FormDescription>
+              </HelperText>
             </div>
 
             <div>
@@ -292,9 +292,9 @@ export function QuestionBuilder({
                   <SelectItem value="review">Request review</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription className="mt-2">
+              <HelperText className="mt-2">
                 What to do when low confidence is detected.
-              </FormDescription>
+              </HelperText>
             </div>
           </div>
 
@@ -317,9 +317,9 @@ export function QuestionBuilder({
                 <SelectItem value="review">Request review</SelectItem>
               </SelectContent>
             </Select>
-            <FormDescription className="mt-2">
+            <HelperText className="mt-2">
               The policy's failure action determines what happens when the model errors.
-            </FormDescription>
+            </HelperText>
           </div>
         </div>
 
@@ -328,9 +328,9 @@ export function QuestionBuilder({
           <div className="flex items-center justify-between">
             <div>
               <h3 className="font-semibold">State bindings</h3>
-              <FormDescription className="mt-1">
+              <HelperText className="mt-1">
                 Declare which fields from your state will be sent to the model.
-              </FormDescription>
+              </HelperText>
             </div>
             <Button
               type="button"
@@ -409,17 +409,17 @@ export function QuestionBuilder({
               />
               <span className="text-sm font-medium">Allow external API calls</span>
             </label>
-            <FormDescription className="mt-2 ml-6">
+            <HelperText className="mt-2 ml-6">
               When enabled, this policy can be called via the public Decision API.
-            </FormDescription>
+            </HelperText>
           </div>
         </div>
       </TabsContent>
 
       <TabsContent value="json" className="space-y-4">
-        <FormDescription>
+        <HelperText>
           Edit the policy definition as JSON. The builder above updates as you type.
-        </FormDescription>
+        </HelperText>
         {validationError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -490,9 +490,9 @@ function QuestionCard({
                   <SelectItem value="score">Score (rate on scale)</SelectItem>
                 </SelectContent>
               </Select>
-              <FormDescription className="mt-1 text-xs">
+              <HelperText className="mt-1">
                 select: choose from options; judge: binary yes/no; score: numeric rating.
-              </FormDescription>
+              </HelperText>
             </div>
 
             <div>
@@ -505,9 +505,9 @@ function QuestionCard({
                 disabled={readOnly}
                 className="mt-1"
               />
-              <FormDescription className="mt-1 text-xs">
+              <HelperText className="mt-1">
                 Unique identifier for this question.
-              </FormDescription>
+              </HelperText>
             </div>
           </div>
 
@@ -524,9 +524,9 @@ function QuestionCard({
               rows={2}
               placeholder="What should the model decide about?"
             />
-            <FormDescription className="mt-1 text-xs">
+            <HelperText className="mt-1">
               Clear question or instruction for the model to answer.
-            </FormDescription>
+            </HelperText>
           </div>
 
           {/* Judge-specific fields */}
@@ -547,9 +547,9 @@ function QuestionCard({
                   rows={2}
                   placeholder="What makes this true?"
                 />
-                <FormDescription className="mt-1 text-xs">
+                <HelperText className="mt-1">
                   Precise criteria that must be met for a yes answer.
-                </FormDescription>
+                </HelperText>
               </div>
 
               <div>
@@ -567,9 +567,9 @@ function QuestionCard({
                   rows={2}
                   placeholder="What makes this false?"
                 />
-                <FormDescription className="mt-1 text-xs">
+                <HelperText className="mt-1">
                   Criteria that make a no answer correct.
-                </FormDescription>
+                </HelperText>
               </div>
             </div>
           )}
