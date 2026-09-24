@@ -418,3 +418,240 @@ export async function getBindingStats(agent: string): Promise<GetBindingStatsRes
     return { agent, bindings: [] };
   }
 }
+
+/**
+ * Policy metrics result
+ */
+export interface PolicyMetricsResult {
+  policy: string;
+  policy_version?: string;
+  surface?: string;
+  from_date: string;
+  to_date: string;
+  sample_size: number;
+  sample_capped: boolean;
+  overall?: Record<string, unknown>;
+  by_version?: Record<string, unknown>[];
+}
+
+/**
+ * Get per-policy/version reliability and usage metrics for a time window.
+ *
+ * Requires `decision.run` capability.
+ */
+export async function getPolicyMetrics(params: {
+  policy: string;
+  policy_version?: string;
+  surface?: string;
+  from_date?: string;
+  to_date?: string;
+}): Promise<PolicyMetricsResult> {
+  try {
+    const result = await call.get('huf.ai.decision.api.get_policy_metrics', {
+      policy: params.policy,
+      policy_version: params.policy_version,
+      surface: params.surface,
+      from_date: params.from_date,
+      to_date: params.to_date,
+    });
+    return result.message as PolicyMetricsResult;
+  } catch (error) {
+    handleFrappeError(error, `Error fetching policy metrics for ${params.policy}`);
+    throw error;
+  }
+}
+
+/**
+ * Shadow agreement result
+ */
+export interface ShadowAgreementResult {
+  mode: string;
+  policy?: string;
+  agent?: string;
+  agent_run?: string;
+  surface?: string;
+  from_date: string;
+  to_date: string;
+  sample_size: number;
+  sample_capped: boolean;
+  measurable_surfaces: Record<string, string>;
+  by_surface: Array<{
+    surface: string;
+    mode: string;
+    sample_size: number;
+    matched: number | null;
+    matched_rate: number | null;
+  }>;
+  not_measurable: Record<string, string>;
+}
+
+/**
+ * Get shadow agreement metrics per surface.
+ *
+ * Returns Shadow Decision Call top candidate vs actual outcome.
+ * Requires `decision.run` capability.
+ */
+export async function getShadowAgreement(params?: {
+  policy?: string;
+  agent?: string;
+  agent_run?: string;
+  surface?: string;
+  from_date?: string;
+  to_date?: string;
+}): Promise<ShadowAgreementResult> {
+  try {
+    const result = await call.get('huf.ai.decision.api.get_shadow_agreement', {
+      policy: params?.policy,
+      agent: params?.agent,
+      agent_run: params?.agent_run,
+      surface: params?.surface,
+      from_date: params?.from_date,
+      to_date: params?.to_date,
+    });
+    return result.message as ShadowAgreementResult;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching shadow agreement metrics');
+    throw error;
+  }
+}
+
+/**
+ * Followed advice result
+ */
+export interface FollowedAdviceResult {
+  mode: string;
+  policy?: string;
+  agent?: string;
+  agent_run?: string;
+  surface?: string;
+  from_date: string;
+  to_date: string;
+  sample_size: number;
+  sample_capped: boolean;
+  measurable_surfaces: Record<string, string>;
+  by_surface: Array<{
+    surface: string;
+    mode: string;
+    sample_size: number;
+    matched: number | null;
+    matched_rate: number | null;
+  }>;
+  not_measurable: Record<string, string>;
+}
+
+/**
+ * Get followed-advice rate per surface.
+ *
+ * Returns Advise Decision Call top-suggested candidate vs what was actually used.
+ * Requires `decision.run` capability.
+ */
+export async function getFollowedAdvice(params?: {
+  policy?: string;
+  agent?: string;
+  agent_run?: string;
+  surface?: string;
+  from_date?: string;
+  to_date?: string;
+}): Promise<FollowedAdviceResult> {
+  try {
+    const result = await call.get('huf.ai.decision.api.get_followed_advice', {
+      policy: params?.policy,
+      agent: params?.agent,
+      agent_run: params?.agent_run,
+      surface: params?.surface,
+      from_date: params?.from_date,
+      to_date: params?.to_date,
+    });
+    return result.message as FollowedAdviceResult;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching followed advice metrics');
+    throw error;
+  }
+}
+
+/**
+ * Decision spend summary result
+ */
+export interface DecisionSpendSummary {
+  summary: {
+    call_count: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost: number;
+  };
+  breakdowns: Array<{
+    dimension_value: string;
+    call_count: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost: number;
+  }>;
+}
+
+/**
+ * Get aggregated decision spend metrics over a date range, grouped by dimension.
+ *
+ * Requires `decision.run` capability.
+ */
+export async function getDecisionSpendSummary(params?: {
+  from_date?: string;
+  to_date?: string;
+  group_by?: 'policy' | 'agent' | 'surface' | 'deployment' | 'origin_type' | 'mode';
+}): Promise<DecisionSpendSummary> {
+  try {
+    const result = await call.get('huf.ai.decision.analytics.get_decision_spend_summary', {
+      from_date: params?.from_date,
+      to_date: params?.to_date,
+      group_by: params?.group_by || 'policy',
+    });
+    return result.message as DecisionSpendSummary;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching decision spend summary');
+    throw error;
+  }
+}
+
+/**
+ * Decision spend timeseries result
+ */
+export interface DecisionSpendTimeseries {
+  bucket: string;
+  from_date: string;
+  to_date: string;
+  series: Array<{
+    bucket_time: string;
+    dimension_value?: string;
+    call_count: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    cost: number;
+  }>;
+}
+
+/**
+ * Get decision spend over time, bucketed by hour or day, optionally grouped by dimension.
+ *
+ * Requires `decision.run` capability.
+ */
+export async function getDecisionSpendTimeseries(params?: {
+  from_date?: string;
+  to_date?: string;
+  bucket?: 'hour' | 'day';
+  group_by?: 'policy' | 'agent' | 'surface' | 'deployment' | 'origin_type' | 'mode';
+}): Promise<DecisionSpendTimeseries> {
+  try {
+    const result = await call.get('huf.ai.decision.analytics.get_decision_spend_timeseries', {
+      from_date: params?.from_date,
+      to_date: params?.to_date,
+      bucket: params?.bucket || 'day',
+      group_by: params?.group_by,
+    });
+    return result.message as DecisionSpendTimeseries;
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching decision spend timeseries');
+    throw error;
+  }
+}

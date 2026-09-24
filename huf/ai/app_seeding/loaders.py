@@ -126,6 +126,36 @@ def _upsert_doc(doctype: str, key_field: str, data: dict, source_app: str, sourc
     except Exception as e:
         return False, str(e)
 
+def _force_decision_bindings_off(existing_agent_name, bindings: list) -> list:
+    """Force imported Agent Decision Binding rows to mode=Off unless a binding for
+    the same surface/policy is already enabled on the target site.
+
+    Decision bindings are behavior-changing (they can route/filter/enforce), so an
+    imported Agent must never silently turn one on. A binding only stays enabled if
+    the target site *already* has an enabled binding on that exact surface+policy
+    pair; every other imported row (including ones the source app shipped as
+    Advise/Enforce) is downgraded to Off.
+    """
+    already_enabled = set()
+    if existing_agent_name:
+        existing_rows = frappe.get_all(
+            "Agent Decision Binding",
+            filters={"parent": existing_agent_name, "parenttype": "Agent", "enabled": 1},
+            fields=["surface", "policy", "mode"],
+        )
+        for row in existing_rows:
+            if row.mode and row.mode != "Off":
+                already_enabled.add((row.surface, row.policy))
+
+    result = []
+    for row in bindings:
+        row = dict(row)
+        key = (row.get("surface"), row.get("policy"))
+        if key not in already_enabled:
+            row["mode"] = "Off"
+        result.append(row)
+    return result
+
 def upsert_agent(data: dict, source_app: str, source_file: str) -> tuple:
     data = data.copy()
     # `is_system` is intentionally a pass-through field so seed files can
@@ -136,7 +166,38 @@ def upsert_agent(data: dict, source_app: str, source_file: str) -> tuple:
     if "knowledge" in data and isinstance(data["knowledge"], list):
         data["agent_knowledge"] = [{"knowledge_source": k} for k in data["knowledge"]]
         del data["knowledge"]
+    if "decision_bindings" in data and isinstance(data["decision_bindings"], list):
+        existing_agent_name = frappe.db.get_value("Agent", {"agent_name": data.get("agent_name")})
+        data["decision_bindings"] = _force_decision_bindings_off(existing_agent_name, data["decision_bindings"])
     return _upsert_doc("Agent", "agent_name", data, source_app, source_file)
+
+def upsert_decision_policy(data: dict, source_app: str, source_file: str) -> tuple:
+    """Upsert a Decision Policy and re-publish its imported definition locally.
+
+    Never trusts the source site's version fingerprint/current_version -- those are
+    stripped from seed data (see `export_decision_policy_to_seed`) and, if present
+    anyway (e.g. hand-authored seed file), are ignored here too. Instead the
+    imported `definition_json` is published fresh via `Decision Policy.publish_version()`,
+    so the target site computes its own Decision Policy Version and fingerprint.
+    Decision Deployments and AI Provider keys are never part of this payload; they
+    are site-specific and are not seeded.
+    """
+    data = data.copy()
+    data.pop("current_version", None)
+    data.pop("fingerprint", None)
+
+    ok, error = _upsert_doc("Decision Policy", "policy_name", data, source_app, source_file)
+    if not ok:
+        return ok, error
+
+    if data.get("definition_json"):
+        try:
+            doc = frappe.get_doc("Decision Policy", data["policy_name"])
+            doc.publish_version()
+        except Exception as e:
+            return False, f"Failed to publish imported policy '{data['policy_name']}': {str(e)}"
+
+    return True, None
 
 VALID_TYPES = [
     "Get Document", "Get Multiple Documents", "Get List", "Create Document",

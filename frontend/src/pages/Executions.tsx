@@ -31,6 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ExecutionAnalyticsDashboard } from '@/components/executions/ExecutionAnalyticsDashboard';
+import { DecisionAnalyticsSection } from '@/components/executions/DecisionAnalyticsSection';
 import { DecisionCallsList } from '@/components/executions/DecisionCallsList';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AnalyticsPage from '@/pages/AnalyticsPage';
@@ -566,6 +567,9 @@ function ExecutionsRunsTab() {
 function ExecutionsDecisionsTab() {
   return (
     <PageFrame title={null} actions={null}>
+      <div className="mb-4">
+        <DecisionAnalyticsSection />
+      </div>
       <DecisionCallsList />
     </PageFrame>
   );

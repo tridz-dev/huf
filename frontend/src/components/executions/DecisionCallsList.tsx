@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ExternalLink } from 'lucide-react';
+import { Loader2, ExternalLink, X } from 'lucide-react';
 import { formatTimeAgo } from '@/utils/time';
 import { listDecisionCalls } from '@/services/decisionApi';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/dashboard';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   ColumnDef,
   flexRender,
@@ -99,19 +107,28 @@ export function DecisionCallsList() {
   const [pagination, setPagination] = useState({ limit_start: 0, total: 0 });
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Load decision calls on mount and when pagination changes
+  // Filter state
+  const [filters, setFilters] = useState<Record<string, unknown>>({});
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Load decision calls on mount and when pagination or filters change
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
+        // Reset pagination when filters change
+        const hasFilters = Object.keys(filters).length > 0;
+        const start = hasFilters ? 0 : pagination.limit_start;
+
         const response = await listDecisionCalls({
-          limit_start: pagination.limit_start,
+          filters: Object.keys(filters).length > 0 ? filters : undefined,
+          limit_start: start,
           limit_page_length: 50,
           order_by: 'started_at desc',
         });
         setData(response.rows);
         setPagination({
-          limit_start: response.limit_start,
+          limit_start: start,
           total: response.total,
         });
       } catch (error) {
@@ -121,7 +138,7 @@ export function DecisionCallsList() {
         setLoading(false);
       }
     })();
-  }, [pagination.limit_start]);
+  }, [pagination.limit_start, filters]);
 
   // Define table columns
   const columns = useMemo<ColumnDef<Record<string, unknown>>[]>(
@@ -248,8 +265,157 @@ export function DecisionCallsList() {
   const hasNextPage = currentPage < totalPages;
   const hasPrevPage = currentPage > 1;
 
+  const hasActiveFilters = Object.keys(filters).length > 0;
+
   return (
     <div className="w-full space-y-4">
+      {/* Filters Section */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-steel">Filters</h3>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilters({});
+                setPagination({ limit_start: 0, total: pagination.total });
+              }}
+              className="text-xs"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Clear filters
+            </Button>
+          )}
+        </div>
+
+        {showFilters && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 p-3 bg-paper rounded-lg border border-line">
+            {/* Surface filter */}
+            <div>
+              <label className="text-xs text-steel-soft mb-1 block">Surface</label>
+              <Input
+                placeholder="e.g. Tool Selection"
+                value={(filters.surface as string) || ''}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    surface: e.target.value || undefined,
+                  }))
+                }
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Policy filter */}
+            <div>
+              <label className="text-xs text-steel-soft mb-1 block">Policy</label>
+              <Input
+                placeholder="Policy name"
+                value={(filters.policy as string) || ''}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    policy: e.target.value || undefined,
+                  }))
+                }
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Policy Version filter */}
+            <div>
+              <label className="text-xs text-steel-soft mb-1 block">Version</label>
+              <Input
+                placeholder="Version"
+                value={(filters.policy_version as string) || ''}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    policy_version: e.target.value || undefined,
+                  }))
+                }
+                className="h-8 text-xs"
+              />
+            </div>
+
+            {/* Mode filter */}
+            <div>
+              <label className="text-xs text-steel-soft mb-1 block">Mode</label>
+              <Select
+                value={(filters.mode as string) || ''}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    mode: value || undefined,
+                  }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="All modes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All modes</SelectItem>
+                  <SelectItem value="Off">Off</SelectItem>
+                  <SelectItem value="Shadow">Shadow</SelectItem>
+                  <SelectItem value="Advise">Advise</SelectItem>
+                  <SelectItem value="Enforce">Enforce</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Status filter */}
+            <div>
+              <label className="text-xs text-steel-soft mb-1 block">Status</label>
+              <Select
+                value={(filters.status as string) || ''}
+                onValueChange={(value) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    status: value || undefined,
+                  }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All statuses</SelectItem>
+                  <SelectItem value="success">Success</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="timeout">Timeout</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Agent filter */}
+            <div>
+              <label className="text-xs text-steel-soft mb-1 block">Agent</label>
+              <Input
+                placeholder="Agent name"
+                value={(filters.agent as string) || ''}
+                onChange={(e) =>
+                  setFilters((prev) => ({
+                    ...prev,
+                    agent: e.target.value || undefined,
+                  }))
+                }
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+        )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowFilters(!showFilters)}
+          className="text-xs"
+        >
+          {showFilters ? 'Hide filters' : 'Show filters'}
+        </Button>
+      </div>
+
       <div className="rounded-lg border border-line bg-panel overflow-hidden">
         <Table>
           <TableHeader>

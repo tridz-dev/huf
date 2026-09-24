@@ -24,6 +24,8 @@ import {
   newPolicyDefinition,
   type PolicyDefinition,
 } from '@/components/decision/QuestionBuilder';
+import { DecisionCompareView } from '@/components/playground/DecisionCompareView';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { db } from '@/lib/frappe-sdk';
@@ -85,6 +87,7 @@ interface DecisionPlaygroundPanelProps {
 }
 
 type PolicyMode = 'published' | 'adhoc';
+type PanelMode = 'decision' | 'compare';
 
 interface DecisionCandidate {
   id: string;
@@ -151,6 +154,9 @@ export function DecisionPlaygroundPanel({ runRequest, onRunningChange }: Decisio
   const { hasCapability } = usePermissions();
   const isAdmin = hasCapability('decision.admin');
   const canAuthor = hasCapability('decision.author');
+
+  // Panel mode (decision vs compare)
+  const [panelMode, setPanelMode] = useState<PanelMode>('decision');
 
   // Models and deployments
   const [models, setModels] = useState<DecisionModel[]>([]);
@@ -332,35 +338,48 @@ export function DecisionPlaygroundPanel({ runRequest, onRunningChange }: Decisio
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto">
-      {/* Config strip -- same cell pattern as the Playground tab's ConfigStrip */}
-      <div className="px-5 pt-[18px]">
-        <div
-          className={cn(
-            'grid rounded border border-line bg-panel max-lg:grid-cols-2',
-            isAdHoc ? 'grid-cols-3' : 'grid-cols-4',
-            '[&>div:not(:last-child)]:border-r [&>div]:border-line'
-          )}
-        >
-          <ConfigStripCell label="Model" hint="Canonical decision model for this run">
-            <Select
-              value={selectedModel}
-              onValueChange={(v) => {
-                setSelectedModel(v);
-                setSelectedDeployment(AUTO_DEPLOYMENT);
-              }}
+      {/* Mode Tabs */}
+      <div className="border-b border-line px-5 pt-4">
+        <Tabs value={panelMode} onValueChange={(value) => setPanelMode(value as PanelMode)}>
+          <TabsList className="grid w-full grid-cols-2 max-w-xs">
+            <TabsTrigger value="decision">Decision</TabsTrigger>
+            <TabsTrigger value="compare">Compare</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* Decision Mode */}
+      {panelMode === 'decision' && (
+        <>
+          {/* Config strip -- same cell pattern as the Playground tab's ConfigStrip */}
+          <div className="px-5 pt-[18px]">
+            <div
+              className={cn(
+                'grid rounded border border-line bg-panel max-lg:grid-cols-2',
+                isAdHoc ? 'grid-cols-3' : 'grid-cols-4',
+                '[&>div:not(:last-child)]:border-r [&>div]:border-line'
+              )}
             >
-              <SelectTrigger className={flushTriggerClass} icon={chevron}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {models.map((model) => (
-                  <SelectItem key={model.name} value={model.name}>
-                    {model.display_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </ConfigStripCell>
+              <ConfigStripCell label="Model" hint="Canonical decision model for this run">
+                <Select
+                  value={selectedModel}
+                  onValueChange={(v) => {
+                    setSelectedModel(v);
+                    setSelectedDeployment(AUTO_DEPLOYMENT);
+                  }}
+                >
+                  <SelectTrigger className={flushTriggerClass} icon={chevron}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model.name} value={model.name}>
+                        {model.display_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </ConfigStripCell>
 
           <ConfigStripCell
             label="Provider"
@@ -638,6 +657,11 @@ export function DecisionPlaygroundPanel({ runRequest, onRunningChange }: Decisio
           </div>
         </Panel>
       </div>
+        </>
+      )}
+
+      {/* Compare Mode */}
+      {panelMode === 'compare' && <DecisionCompareView running={resultLoading} />}
     </div>
   );
 }
