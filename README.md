@@ -335,6 +335,13 @@ Upstream incident thread: https://github.com/BerriAI/litellm/issues/24518
 
 ---
 
+## Research
+
+- Erooth, S. (2026). *Don't Retry Blind: Recovering from Partial Side Effects in Agent
+  Procedures*. Zenodo. https://doi.org/10.5281/zenodo.22945662
+
+---
+
 ## License
 
 MIT License — see [LICENSE](./LICENSE) for details.
