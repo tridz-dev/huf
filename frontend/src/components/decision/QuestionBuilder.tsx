@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { FormDescription } from '@/components/ui/form';
+import { FieldHelp as FormDescription } from '@/components/decision/FieldHelp';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';

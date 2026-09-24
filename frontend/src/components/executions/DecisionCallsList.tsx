@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FormDescription } from '@/components/ui/form';
+import { FieldHelp as FormDescription } from '@/components/decision/FieldHelp';
 
 const RIGHT_ALIGNED_COLUMNS = new Set(['confidence', 'latency_ms', 'cost']);
 
