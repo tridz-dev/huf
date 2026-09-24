@@ -12,6 +12,7 @@ import {
 
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { HelperText } from '@/components/ui/helper-text';
 
 const Form = FormProvider;
 
@@ -137,10 +138,10 @@ const FormDescription = React.forwardRef<
   }
 
   return (
-    <p
+    <HelperText
       ref={ref}
       id={formDescriptionId}
-      className={cn('text-[0.8rem] text-muted-foreground', className)}
+      className={className}
       {...props}
     />
   );
@@ -159,14 +160,15 @@ const FormMessage = React.forwardRef<
   }
 
   return (
-    <p
+    <HelperText
       ref={ref}
       id={formMessageId}
-      className={cn('text-[0.8rem] font-medium text-destructive', className)}
+      tone="destructive"
+      className={className}
       {...props}
     >
       {body}
-    </p>
+    </HelperText>
   );
 });
 FormMessage.displayName = 'FormMessage';

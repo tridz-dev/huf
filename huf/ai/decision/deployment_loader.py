@@ -94,6 +94,7 @@ def load_chain(
 	decision_model: str,
 	pinned_deployment: str | None = None,
 	deadline: float | None = None,
+	bypass_health_filter: bool = False,
 ) -> DeploymentChain:
 	"""Resolve the deployment chain for one canonical ``Decision Model``.
 
@@ -107,6 +108,12 @@ def load_chain(
 			transport construction so an already-expired caller deadline is not spent trying
 			to build every candidate's transport. ``None`` means "no deadline yet known";
 			transports fall back to their own defaults (provider ``timeout_seconds`` etc.).
+		bypass_health_filter: Skip the unhealthy/cool-down exclusion. Only meant for an
+			explicit health probe (``api.test_deployment``) pinned to one deployment: without
+			this, a deployment marked unhealthy by a *previous* failed probe can never be
+			re-tested through the normal path, since the probe itself calls this function and
+			would exclude the very row it is trying to re-check. Never set this for a normal
+			policy-serving call -- production traffic must still honor health/cool-down.
 
 	Returns:
 		A :class:`~huf.ai.decision.deployment.DeploymentChain`. Never raises for "no rows" /
@@ -123,7 +130,7 @@ def load_chain(
 
 	candidates = []
 	for rank, row in enumerate(rows):
-		if _in_cooldown(row):
+		if not bypass_health_filter and _in_cooldown(row):
 			continue
 		candidate = _build_candidate(
 			row,
@@ -136,7 +143,9 @@ def load_chain(
 		if candidate is not None:
 			candidates.append(candidate)
 
-	chain = resolve_deployment_chain(requested_identity, tuple(candidates))
+	chain = resolve_deployment_chain(
+		requested_identity, tuple(candidates), bypass_health_filter=bypass_health_filter
+	)
 	if pinned_deployment:
 		chain = DeploymentChain(
 			requested_identity=chain.requested_identity,

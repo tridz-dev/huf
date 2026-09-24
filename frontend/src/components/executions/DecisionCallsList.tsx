@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FormDescription } from '@/components/ui/form';
+import { HelperText } from '@/components/ui/helper-text';
 
 const RIGHT_ALIGNED_COLUMNS = new Set(['confidence', 'latency_ms', 'cost']);
 
@@ -289,9 +289,9 @@ export function DecisionCallsList() {
         </Table>
       </div>
 
-      <FormDescription>
+      <HelperText>
         Showing {data.length} of {pagination.total} decision calls
-      </FormDescription>
+      </HelperText>
 
       {/* Pagination controls */}
       <div className="flex items-center justify-between">

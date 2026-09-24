@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { FormDescription } from '@/components/ui/form';
+import { HelperText } from '@/components/ui/helper-text';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -290,10 +290,10 @@ function DecisionPolicyEditor() {
           {(templatesLoading || templates.length > 0) && (
             <div className="rounded-lg border border-line bg-panel p-4 space-y-2">
               <Label size="eyebrow">Start from a template</Label>
-              <FormDescription>
+              <HelperText>
                 Copy the purpose, model, description and questions from a seeded example policy,
                 then adjust it. Optional — leave unselected to start blank.
-              </FormDescription>
+              </HelperText>
               {templatesLoading ? (
                 <div className="flex items-center gap-2 text-xs text-steel">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading templates...
@@ -327,9 +327,9 @@ function DecisionPolicyEditor() {
               className="mt-1.5"
               disabled={!canAuthor}
             />
-            <FormDescription className="mt-1.5">
+            <HelperText className="mt-1.5">
               Shown wherever this policy can be picked — flows, agent bindings, automations.
-            </FormDescription>
+            </HelperText>
           </div>
 
           <div>
@@ -346,10 +346,10 @@ function DecisionPolicyEditor() {
                 ))}
               </SelectContent>
             </Select>
-            <FormDescription className="mt-1.5">
+            <HelperText className="mt-1.5">
               What kind of decision this policy is used for — helps surfaces suggest the right
               policy when binding one.
-            </FormDescription>
+            </HelperText>
           </div>
 
           <div>
@@ -366,10 +366,10 @@ function DecisionPolicyEditor() {
                 ))}
               </SelectContent>
             </Select>
-            <FormDescription className="mt-1.5">
+            <HelperText className="mt-1.5">
               The decision model this policy asks by default. Can be changed later; bindings can
               also pin a different one.
-            </FormDescription>
+            </HelperText>
           </div>
 
           <div>
@@ -511,9 +511,9 @@ function DecisionPolicyEditor() {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription className="mt-1.5">
+              <HelperText className="mt-1.5">
                 What kind of decision this is used for.
-              </FormDescription>
+              </HelperText>
             </div>
 
             <div>
@@ -530,9 +530,9 @@ function DecisionPolicyEditor() {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription className="mt-1.5">
+              <HelperText className="mt-1.5">
                 The decision model this policy asks by default.
-              </FormDescription>
+              </HelperText>
               {unreachable && (
                 <Alert variant="warning" className="mt-2">
                   <AlertTriangle className="h-4 w-4" />
@@ -571,19 +571,19 @@ function DecisionPolicyEditor() {
                 <Switch checked={allowApiAccess} onCheckedChange={setAllowApiAccess} disabled={readOnly} />
                 <span className="text-sm text-ink">Allow external API calls</span>
               </div>
-              <FormDescription>
+              <HelperText>
                 When enabled, this policy can be called through the public Decision API using an
                 API key, not just from inside Huf. Requires the policy to be published.
-              </FormDescription>
+              </HelperText>
 
               <div className="flex items-center gap-3 pt-2">
                 <Switch checked={enabled} onCheckedChange={setEnabled} disabled={readOnly} />
                 <span className="text-sm text-ink">Enabled</span>
               </div>
-              <FormDescription>
+              <HelperText>
                 Disabling this policy makes every binding, flow node, and automation using it take
                 its fallback path instead of calling the model.
-              </FormDescription>
+              </HelperText>
             </div>
           )}
         </div>

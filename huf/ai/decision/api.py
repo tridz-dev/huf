@@ -119,7 +119,10 @@ def run_decision(
 			only ever names "published policies").
 		decision_model: ``Decision Model`` docname. Required with ``definition``; optional
 			override with ``policy``.
-		state: Opaque provider-visible state (text or JSON), passed through unchanged.
+		state: Provider-visible state -- a mapping, or a JSON string encoding one (decoded
+			via ``_json_arg`` the same way ``definition``/``candidates`` are). A policy's
+			``state_bindings`` are looked up as dict keys, so a state that arrives as a raw
+			(un-decoded) string fails every binding lookup with ``POLICY_INVALID``.
 		candidates: Closed candidate/option list for select/score questions -- a JSON
 			string or list of ``{"id": ..., "description": ...}`` mappings.
 		candidate_source: One of ``huf.ai.decision.types.CandidateSource`` values, required
@@ -198,7 +201,7 @@ def run_decision(
 		policy=policy,
 		definition=decoded_definition,
 		decision_model=decision_model,
-		state=state,
+		state=_json_arg(state),
 		candidates=parsed_candidates,
 		candidate_source=candidate_source_enum,
 		candidate_resolver_id=candidate_resolver_id,
@@ -721,6 +724,8 @@ def test_deployment(deployment: str) -> dict:
 			decision_model=decision_model,
 			pinned_deployment=deployment,
 			deadline=time.monotonic() + 5.0,  # 5s timeout for the probe
+			bypass_health_filter=True,  # this call IS the health check; never let a
+			# previous failure permanently exclude the deployment from being re-tested
 		)
 
 		if not chain.candidates:
@@ -730,30 +735,35 @@ def test_deployment(deployment: str) -> dict:
 			latency_ms = (time.monotonic() - started) * 1000
 		else:
 			# Build a minimal judge question for probing
-			probe_policy = DecisionPolicy(
-				policy_id="__probe__",
-				questions=[
-					{
-						"id": "probe",
-						"kind": QuestionKind.JUDGE,
-						"instructions": "This is a probe question. Return true.",
-						"positive_criteria": "Always true.",
-						"negative_criteria": "Never applies.",
-					}
-				],
-				default_model=None,
-				store_state=False,
+			probe_policy = validate_policy_data(
+				{
+					"policy_id": "__probe__",
+					"questions": [
+						{
+							"id": "probe",
+							"kind": "judge",
+							"instructions": "This is a probe question. Return true.",
+							"positive_criteria": "Always true.",
+							"negative_criteria": "Never applies.",
+						}
+					],
+					"store_state": False,
+					# A policy must bind at least one piece of provider-visible state; the
+					# probe question doesn't need any, so bind a fixed placeholder.
+					"state_bindings": [{"name": "probe_context", "path": "probe"}],
+				}
 			)
 
 			request = DecisionRequest(
 				policy=probe_policy,
 				identity=chain.requested_identity,
 				surface="admin_test",
-				state=None,
+				state={"probe": "connection test"},
 				candidates=(),
 				candidate_source=None,
 				candidate_resolver_id=None,
-				modalities=None,
+				# Leave modalities at its dataclass default (frozenset({"text"})); passing
+				# None here crashes prepare_state's `request.modalities | detected_modalities`.
 			)
 
 			# Run through the runtime
