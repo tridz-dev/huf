@@ -117,7 +117,10 @@ def run_decision(
 			only ever names "published policies").
 		decision_model: ``Decision Model`` docname. Required with ``definition``; optional
 			override with ``policy``.
-		state: Opaque provider-visible state (text or JSON), passed through unchanged.
+		state: Provider-visible state -- a mapping, or a JSON string encoding one (decoded
+			via ``_json_arg`` the same way ``definition``/``candidates`` are). A policy's
+			``state_bindings`` are looked up as dict keys, so a state that arrives as a raw
+			(un-decoded) string fails every binding lookup with ``POLICY_INVALID``.
 		candidates: Closed candidate/option list for select/score questions -- a JSON
 			string or list of ``{"id": ..., "description": ...}`` mappings.
 		candidate_source: One of ``huf.ai.decision.types.CandidateSource`` values, required
@@ -196,7 +199,7 @@ def run_decision(
 		policy=policy,
 		definition=decoded_definition,
 		decision_model=decision_model,
-		state=state,
+		state=_json_arg(state),
 		candidates=parsed_candidates,
 		candidate_source=candidate_source_enum,
 		candidate_resolver_id=candidate_resolver_id,
