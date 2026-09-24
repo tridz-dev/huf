@@ -2481,7 +2481,6 @@ export function AgentFormPage() {
                   mcpLoading={mcpLoading}
                   decisionBindings={decisionBindings}
                   onUpdateDecisionBindings={setDecisionBindings}
-                  agentName={form.watch('agent_name') || id || ''}
                 />
               </TabsContent>
 
