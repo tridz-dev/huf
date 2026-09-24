@@ -194,6 +194,48 @@ class TestDeploymentLoader(FrappeTestCase):
 		self.assertEqual(len(chain.candidates), 1)
 		self.assertEqual(chain.candidates[0].identity.deployment, f"dep-{self.suffix}-pin-target")
 
+	def test_pinned_disabled_deployment_with_bypass_health_filter_returns_candidate(self):
+		"""Verify that a disabled deployment can be probed via pinned + bypass_health_filter.
+
+		This is the core bug fix: test_deployment() needs to probe a not-yet-enabled deployment
+		by calling load_chain with pinned_deployment + bypass_health_filter=True. Before the fix,
+		the disabled deployment was not in the cached (enabled-only) row set, so the pinned
+		filter found nothing and returned an empty chain (DEPLOYMENT_UNAVAILABLE). After the fix,
+		a fresh uncached query fetches the disabled row and allows the probe to proceed.
+		"""
+		# Create a disabled deployment and an enabled one for comparison
+		disabled_deployment = self._make_deployment("disabled-probe", priority=1, enabled=0)
+		self._make_deployment("enabled-one", priority=10)
+
+		# Pinned + bypass_health_filter should find the disabled deployment and build a candidate
+		chain = load_chain(
+			decision_model=self.decision_model.name,
+			pinned_deployment=f"dep-{self.suffix}-disabled-probe",
+			bypass_health_filter=True,
+		)
+
+		# Assert that we got a candidate for the disabled deployment
+		self.assertEqual(chain.selection_source, "pinned")
+		self.assertEqual(len(chain.candidates), 1, "expected a candidate for the disabled deployment")
+		self.assertEqual(chain.candidates[0].identity.deployment, f"dep-{self.suffix}-disabled-probe")
+
+	def test_normal_load_chain_still_excludes_disabled_deployments(self):
+		"""Verify that normal (non-pinned, non-bypass) calls still exclude disabled rows.
+
+		The cached row list should exclude disabled deployments to prevent accidental serving
+		of not-yet-enabled deployments. Only explicit probes (pinned + bypass_health_filter=True)
+		should be able to bypass this restriction.
+		"""
+		self._make_deployment("disabled-one", priority=1, enabled=0)
+		self._make_deployment("enabled-one", priority=10)
+
+		# Normal call without pinning should exclude disabled deployments
+		chain = load_chain(decision_model=self.decision_model.name)
+
+		# Should only have the enabled deployment
+		self.assertEqual(len(chain.candidates), 1)
+		self.assertEqual(chain.candidates[0].identity.deployment, f"dep-{self.suffix}-enabled-one")
+
 	# -- Caching / invalidation -----------------------------------------------------------
 
 	def test_row_list_is_cached_and_invalidated_on_deployment_update(self):
