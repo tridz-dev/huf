@@ -53,7 +53,9 @@ DECISION_MODEL_KEY = "jev-1-13"
 DECISION_MODEL_NAME = "Jev 1.13"
 
 DEPLOYMENT_KEY = "jev-1-13-opencode-zen"
-DEPLOYMENT_NAME = "Jev 1.13 @ OpenCode Zen"
+# Bare canonical model name, matching AI Model's own naming convention (provider is its
+# own field, never concatenated into the display name -- see api.py's setup_deployment).
+DEPLOYMENT_NAME = "Jev 1.13"
 
 
 def _get_or_create(
