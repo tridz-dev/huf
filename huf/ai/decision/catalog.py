@@ -59,6 +59,41 @@ _CATALOG = {
 		endpoint_path="/api/v1/systemone",
 		base_url="https://openrouter.ai",
 	),
+	# Laya — PyTorch System One sidecar (not MLX).
+	# Laya is a self-hosted PyTorch decision engine serving decision queries over HTTP.
+	# It is NOT an MLX model, and torch/transformers are NOT HUF dependencies:
+	# operators run `pip install "laya[serve]" && laya-serve` in their own virtualenv
+	# and HUF talks to the local HTTP server over /predict. There is no hosted service.
+	("laya", "laya-english"): CatalogEntry(
+		provider_brand="laya",
+		model_name="laya-english",
+		canonical_model="Laya English",
+		model_family="Laya",
+		model_class="System One",
+		wire_protocol="systemone",
+		endpoint_path="/predict",
+		base_url=None,
+	),
+	("laya", "laya-multilingual"): CatalogEntry(
+		provider_brand="laya",
+		model_name="laya-multilingual",
+		canonical_model="Laya Multilingual",
+		model_family="Laya",
+		model_class="System One",
+		wire_protocol="systemone",
+		endpoint_path="/predict",
+		base_url=None,
+	),
+	("laya", "laya-typed"): CatalogEntry(
+		provider_brand="laya",
+		model_name="laya-typed",
+		canonical_model="Laya Typed Decisions",
+		model_family="Laya",
+		model_class="System One",
+		wire_protocol="systemone",
+		endpoint_path="/predict",
+		base_url=None,
+	),
 }
 
 

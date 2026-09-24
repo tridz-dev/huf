@@ -1,8 +1,20 @@
-"""Unit tests for the decision model catalog."""
+"""Unit tests for the decision model catalog.
+
+Run standalone (no bench) from the repo root:
+	PYTHONPATH=. python3 huf/ai/decision/tests/test_catalog.py -v
+"""
 
 from __future__ import annotations
 
+import sys
 import unittest
+from unittest.mock import MagicMock
+
+try:
+	import frappe  # noqa: F401
+except ImportError:
+	frappe_mock = MagicMock()
+	sys.modules["frappe"] = frappe_mock
 
 from huf.ai.decision.catalog import CatalogEntry, brand_default_base_url, get_entries, get_entry
 
@@ -152,6 +164,51 @@ class TestCatalogConsistency(unittest.TestCase):
 		self.assertEqual(opencode.endpoint_path, "/v1/systemone")
 		self.assertEqual(openrouter.endpoint_path, "/api/v1/systemone")
 		self.assertNotEqual(opencode.endpoint_path, openrouter.endpoint_path)
+
+	def test_all_laya_entries_use_systemone_wire(self):
+		"""All Laya entries use System One wire protocol."""
+		for model_name in ["laya-english", "laya-multilingual", "laya-typed"]:
+			entry = get_entry("laya", model_name)
+			self.assertIsNotNone(entry, f"Laya entry '{model_name}' not found")
+			self.assertEqual(entry.wire_protocol, "systemone")
+
+	def test_all_laya_entries_use_predict_endpoint(self):
+		"""All Laya entries use /predict endpoint path."""
+		for model_name in ["laya-english", "laya-multilingual", "laya-typed"]:
+			entry = get_entry("laya", model_name)
+			self.assertIsNotNone(entry, f"Laya entry '{model_name}' not found")
+			self.assertEqual(entry.endpoint_path, "/predict")
+
+	def test_laya_has_no_public_base_url(self):
+		"""Laya sidecar is self-hosted only; no public base URL default."""
+		url = brand_default_base_url("laya")
+		self.assertIsNone(url)
+
+	def test_laya_entries_resolve(self):
+		"""Laya entries resolve for all three checkpoints."""
+		english = get_entry("laya", "laya-english")
+		multilingual = get_entry("laya", "laya-multilingual")
+		typed = get_entry("laya", "laya-typed")
+
+		self.assertIsNotNone(english)
+		self.assertIsNotNone(multilingual)
+		self.assertIsNotNone(typed)
+
+		# All are System One, use /predict, and have proper metadata
+		for entry in [english, multilingual, typed]:
+			self.assertEqual(entry.provider_brand, "laya")
+			self.assertEqual(entry.model_family, "Laya")
+			self.assertEqual(entry.model_class, "System One")
+			self.assertEqual(entry.wire_protocol, "systemone")
+			self.assertEqual(entry.endpoint_path, "/predict")
+			self.assertIsNone(entry.base_url)
+
+	def test_all_laya_checkpoints_in_get_entries(self):
+		"""All three Laya checkpoints appear in get_entries('laya')."""
+		entries = get_entries("laya")
+		self.assertEqual(len(entries), 3)
+		model_names = {e.model_name for e in entries}
+		self.assertEqual(model_names, {"laya-english", "laya-multilingual", "laya-typed"})
 
 
 class TestCatalogDataStructure(unittest.TestCase):
