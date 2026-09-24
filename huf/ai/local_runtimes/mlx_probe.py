@@ -37,7 +37,10 @@ def probe_device() -> dict:
 			- import_ok (bool): whether `import mlx` (and `mlx.core`) succeeded.
 			- device (str | None): str(mx.default_device()) if available, else None.
 			- metal_available (bool): whether `mx.metal.is_available()` reports True.
-			- mlx_version (str | None): `mlx.__version__` if available, else None.
+			- mlx_version (str | None): the installed mlx distribution version via
+				`importlib.metadata.version("mlx")`. Note `mlx.__version__` does NOT
+				exist (verified against mlx 0.32.0); `mlx.core.__version__` does, but
+				the distribution metadata is the stabler source. None if unresolvable.
 	"""
 	result = {
 		"import_ok": False,

@@ -2,17 +2,36 @@
 # For license information, please see license.txt
 
 """
-Tests for the MLX runtime probe.
+Layer A (mocked-frappe, no bench) unit tests for the MLX runtime probe.
 
 Fakes all three MLX host states (not installed, installed-but-no-Metal,
 installed-with-Metal) via `sys.modules` / `unittest.mock`, so these tests
 exercise every branch without requiring real Apple Metal hardware in CI.
+
+`mlx_probe` itself never imports frappe, but `huf/__init__.py:4` does, so the
+defensive stub below runs before the import -- the same pattern as
+`huf/ai/tests/test_local_runtime_provider_connection_permission.py`. This
+keeps the file runnable whether or not `tests/__init__.py` exists and whether
+or not a bench is present; a `conftest.py`-only stub does not, because the
+package `__init__` chain is imported before conftest applies.
+
+Run standalone (no bench) from the repo root:
+    PYTHONPATH=. python3 huf/ai/local_runtimes/tests/test_mlx_probe.py -v
 """
 
 import sys
 import types
 import unittest
 from unittest import mock
+from unittest.mock import MagicMock
+
+try:
+	import frappe  # noqa: F401
+except ImportError:
+	frappe_mock = MagicMock()
+	frappe_mock._ = lambda x: x
+	frappe_mock.whitelist = lambda *args, **kwargs: (lambda fn: fn)
+	sys.modules["frappe"] = frappe_mock
 
 from huf.ai.local_runtimes.mlx_probe import (
 	REASON_DEGRADED_NO_METAL,
