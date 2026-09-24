@@ -39,6 +39,11 @@ export interface KnowledgeSourceDoc {
 	knowledge_type: KnowledgeType;
 	scope: KnowledgeScope;
 
+	// Knowledge Ingestion Decision
+	ingestion_decision_policy?: string | null;
+	ingestion_decision_mode?: 'Off' | 'Shadow' | 'Enforce' | null;
+	ingestion_tag_field?: string | null;
+
 	// Vector settings (sqlite_vec, chroma, pgvector, redis, and zvec)
 
 	embedding_model?: string | null;

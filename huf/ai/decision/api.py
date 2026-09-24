@@ -26,8 +26,10 @@ hook) marking exactly where the opt-in check and the rate-limit decorator belong
 from __future__ import annotations
 
 import json
+import math
 import re
 import time
+from datetime import timedelta
 from typing import Any
 
 import frappe
@@ -908,3 +910,111 @@ def test_deployment(deployment: str) -> dict:
 			"latency_ms": int(latency_ms),
 			"error_code": "INTERNAL_ERROR",
 		}
+
+
+# -- Binding stats & observability -------------------------------------------------------
+
+
+@frappe.whitelist()
+def get_binding_stats(agent: str) -> dict:
+	"""Return last-7-day statistics for each Agent Decision Binding (PLAN.md §3.14).
+
+	Aggregates Decision Call counts, latency, and fallback rates for each binding row
+	over the past 7 days, broken down by surface/policy/mode. Used by the Agent
+	observability / analytics view (not yet in this PR, deferred to analytics phase).
+
+	Requires ``agent.edit`` capability on the Agent *plus* ``frappe.has_permission("read")``
+	on the Agent document (D4: standard Agent ACL applies; agent.edit is the capability
+	gate, per-agent read check is the row-level gate).
+
+	Args:
+		agent: ``Agent`` docname.
+
+	Returns:
+		``{
+			"agent": <docname>,
+			"bindings": [
+				{
+					"binding_id": <child table hash>,
+					"surface": <surface name>,
+					"policy": <policy docname>,
+					"mode": <Off|Shadow|Advise|Enforce>,
+					"enabled": <bool>,
+					"stats": {
+						"calls": <7-day count>,
+						"fallback_rate": <0.0-1.0 or null if no calls>,
+						"p95_latency_ms": <milliseconds or null if no calls>,
+						"shadow_agreement": null,
+						"advise_followed_rate": null,
+					}
+				},
+				...
+			]
+		}``.
+
+	Raises:
+		frappe.PermissionError: missing ``agent.edit`` or the user cannot read the Agent.
+		frappe.DoesNotExistError: Agent not found.
+	"""
+	_require("agent.edit")
+
+	# Fetch and permission-check the Agent document
+	agent_doc = frappe.get_doc("Agent", agent)
+	agent_doc.check_permission("read")
+
+	# Compute the 7-day cutoff
+	now_dt = frappe.utils.now_datetime()
+	cutoff_dt = now_dt - timedelta(days=7)
+
+	bindings_stats = []
+
+	# Iterate through each binding and compute its stats
+	for binding in agent_doc.decision_bindings or []:
+		# Query Decision Call records for this binding's surface/policy combo
+		calls = frappe.get_list(
+			"Decision Call",
+			filters={
+				"agent": agent,
+				"surface": binding.surface,
+				"policy": binding.policy,
+				"started_at": [">=", cutoff_dt],
+			},
+			fields=["name", "latency_ms", "fallback_action"],
+			order_by="started_at asc",
+		)
+
+		# Calculate statistics
+		call_count = len(calls)
+		fallback_count = sum(1 for call in calls if call.fallback_action)
+		fallback_rate = (fallback_count / call_count) if call_count > 0 else None
+
+		# Compute p95 latency from the sample
+		p95_latency_ms = None
+		if call_count > 0:
+			latencies = sorted([call["latency_ms"] for call in calls if call["latency_ms"]])
+			if latencies:
+				# p95: 95th percentile using nearest rank method.
+				# For n items, p95 index = ceil(0.95 * n) - 1
+				p95_idx = min(len(latencies) - 1, math.ceil(0.95 * len(latencies)) - 1)
+				p95_latency_ms = latencies[p95_idx]
+
+		binding_stat = {
+			"binding_id": binding.name,
+			"surface": binding.surface,
+			"policy": binding.policy,
+			"mode": binding.mode,
+			"enabled": binding.enabled,
+			"stats": {
+				"calls": call_count,
+				"fallback_rate": fallback_rate,
+				"p95_latency_ms": p95_latency_ms,
+				"shadow_agreement": None,  # PR 10
+				"advise_followed_rate": None,  # PR 10
+			},
+		}
+		bindings_stats.append(binding_stat)
+
+	return {
+		"agent": agent,
+		"bindings": bindings_stats,
+	}

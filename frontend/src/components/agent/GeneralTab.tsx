@@ -7,7 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox, type ComboboxOption } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getProviders, getModels, createProvider, createModel } from '@/services/providerApi';        
+import { getProviders, getModels, createProvider, createModel } from '@/services/providerApi';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -22,6 +22,8 @@ import { PromptTemplateSection, type AgentPromptOption } from './PromptTemplateS
 import { LinkFieldControl } from '@/components/ui/link-field-control';
 import { linkRoutes } from '@/lib/link-routes';
 import { checkCacheableModels, type CacheableModelsResponse } from '@/services/agentApi';
+import { DecisionBindingControl, type AgentDecisionBindingRow } from '@/components/decision/DecisionBindingControl';
+import { AllowedModelsRoutingEditor } from './AllowedModelsRoutingEditor';
 
 interface GeneralTabProps {
   form: UseFormReturn<AgentFormValues>;
@@ -35,6 +37,9 @@ interface GeneralTabProps {
   showAddNewPrompt?: boolean;
   /** True when protected fields must be read-only (system agent + non-admin). */
   locked?: boolean;
+  // Decision bindings props
+  decisionBindings?: AgentDecisionBindingRow[];
+  onUpdateDecisionBindings?: (bindings: AgentDecisionBindingRow[]) => void;
 }
 
 export function GeneralTab({
@@ -48,6 +53,8 @@ export function GeneralTab({
   loadingPrompts,
   showAddNewPrompt = true,
   locked = false,
+  decisionBindings = [],
+  onUpdateDecisionBindings,
 }: GeneralTabProps) {
   const watchEnablePromptCaching = form.watch('enable_prompt_caching');
   const watchPromptCacheMode = form.watch('prompt_cache_mode');
@@ -62,6 +69,10 @@ export function GeneralTab({
     remove: removeStarterPrompt,
   } = useFieldArray({ control: form.control, name: 'starter_prompts' });
 
+  const {
+    fields: allowedModelsFields,
+  } = useFieldArray({ control: form.control, name: 'allowed_models' });
+
   const [cacheStatus, setCacheStatus] = useState<CacheableModelsResponse | null>(null);
     const [providerOptions, setProviderOptions] = useState<AIProvider[]>(providers);
   const [modelOptions, setModelOptions] = useState<AIModel[]>(models);
@@ -74,6 +85,18 @@ export function GeneralTab({
   const [newProviderName, setNewProviderName] = useState('');
   const [newProviderApiKey, setNewProviderApiKey] = useState('');
   const [newModelName, setNewModelName] = useState('');
+
+  // Get current Model Routing binding
+  const modelRoutingBinding = decisionBindings.find((b) => b.surface === 'Model Routing');
+
+  const handleUpdateModelRoutingBinding = (newBinding: AgentDecisionBindingRow | undefined) => {
+    if (!onUpdateDecisionBindings) return;
+    const updated = decisionBindings.filter((b) => b.surface !== 'Model Routing');
+    if (newBinding) {
+      updated.push(newBinding);
+    }
+    onUpdateDecisionBindings(updated);
+  };
 
   const [creatingProvider, setCreatingProvider] = useState(false);
   const [creatingModel, setCreatingModel] = useState(false);
@@ -410,6 +433,17 @@ export function GeneralTab({
               )}
             />
 
+            {onUpdateDecisionBindings && (
+              <div className="sm:col-span-2">
+                <DecisionBindingControl
+                  surface="Model Routing"
+                  value={modelRoutingBinding}
+                  onChange={handleUpdateModelRoutingBinding}
+                  disabled={locked}
+                />
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="temperature"
@@ -483,6 +517,25 @@ We generally recommend altering this or temperature but not both.`}
                 </FormItem>
               )}
             />
+
+            <div className="sm:col-span-2">
+              <AllowedModelsRoutingEditor
+                models={allowedModelsFields.map((_, index) => ({
+                  name: form.getValues(`allowed_models.${index}.name`),
+                  provider: form.getValues(`allowed_models.${index}.provider`),
+                  model: form.getValues(`allowed_models.${index}.model`),
+                  enable_auto_routing: form.getValues(`allowed_models.${index}.enable_auto_routing`),
+                  routing_description: form.getValues(`allowed_models.${index}.routing_description`),
+                  priority: form.getValues(`allowed_models.${index}.priority`),
+                }))}
+                providers={providers}
+                availableModels={models}
+                onModelsChange={(updated) => {
+                  form.setValue('allowed_models', updated);
+                }}
+                disabled={locked}
+              />
+            </div>
           </CardContent>
         </Card>
       )}

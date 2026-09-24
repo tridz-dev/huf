@@ -81,6 +81,9 @@ function mapDocToFormValues(doc: Partial<KnowledgeSourceDoc>): KnowledgeSourceFo
     pgvector_password: doc.pgvector_password || '',
     pgvector_sslmode: doc.pgvector_sslmode || 'prefer',
     advanced_config: parseAdvancedConfig(doc.advanced_config),
+    ingestion_decision_policy: doc.ingestion_decision_policy || '',
+    ingestion_decision_mode: doc.ingestion_decision_mode || 'Off',
+    ingestion_tag_field: doc.ingestion_tag_field || '',
   };
 }
 
@@ -101,6 +104,9 @@ function KnowledgeSourceFormPage() {
         'description',
         'knowledge_type',
         'scope',
+        'ingestion_decision_policy',
+        'ingestion_decision_mode',
+        'ingestion_tag_field',
         'storage_mode',
         'chunk_size',
         'chunk_overlap',
@@ -310,6 +316,9 @@ function KnowledgeSourceFormPage() {
         description: values.description || '',
         knowledge_type: values.knowledge_type,
         scope: values.scope,
+        ingestion_decision_policy: values.ingestion_decision_policy || '',
+        ingestion_decision_mode: values.ingestion_decision_mode || 'Off',
+        ingestion_tag_field: values.ingestion_tag_field || '',
         storage_mode: values.storage_mode as KnowledgeSourceDoc['storage_mode'],
         chunk_size: values.chunk_size,
         chunk_overlap: values.chunk_overlap,

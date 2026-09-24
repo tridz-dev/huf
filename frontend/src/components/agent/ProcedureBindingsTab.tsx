@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Combobox } from '@/components/ui/combobox';
+import { DecisionBindingControl, type AgentDecisionBindingRow } from '@/components/decision/DecisionBindingControl';
+import { usePermissions } from '@/contexts/PermissionsContext';
 import {
   getAgentProcedures,
   type AgentProcedureDoc,
@@ -20,9 +22,18 @@ interface ProcedureBindingsTabProps {
   /** The Agent this tab manages bindings for. Bindings can't be created until the
    * Agent itself has been saved (needs a `name` to link against). */
   agentId?: string;
+  /** The Procedure Selection decision binding, if it exists */
+  decisionBinding?: AgentDecisionBindingRow;
+  /** Callback when the Procedure Selection binding changes */
+  onDecisionBindingChange?: (binding: AgentDecisionBindingRow | undefined) => void;
 }
 
-export function ProcedureBindingsTab({ agentId }: ProcedureBindingsTabProps) {
+export function ProcedureBindingsTab({
+  agentId,
+  decisionBinding,
+  onDecisionBindingChange,
+}: ProcedureBindingsTabProps) {
+  const permissions = usePermissions();
   const [bindings, setBindings] = useState<AgentProcedureBindingDoc[]>([]);
   const [allProcedures, setAllProcedures] = useState<AgentProcedureDoc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,6 +178,16 @@ export function ProcedureBindingsTab({ agentId }: ProcedureBindingsTabProps) {
             {disabledWriteProcedures.length === 1 ? '' : 's'} hidden from this picker — binding is only
             allowed for read-only procedures.
           </p>
+        )}
+
+        {/* Procedure Selection decision binding control */}
+        {agentId && (
+          <DecisionBindingControl
+            surface="Procedure Selection"
+            value={decisionBinding}
+            onChange={onDecisionBindingChange || (() => {})}
+            disabled={!permissions.hasCapability('decision.run')}
+          />
         )}
 
         {loading ? (

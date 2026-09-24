@@ -35,6 +35,8 @@ class CandidateSource(str, Enum):
 	BOUND_ALLOWED_PROCEDURES = "bound_allowed_procedures"
 	AUTHORIZED_AGENTS = "authorized_agents"
 	PERMITTED_SKILLS = "permitted_skills"
+	AUTHORIZED_KNOWLEDGE_CHUNKS = "authorized_knowledge_chunks"
+	MODEL_SUPPLIED_CANDIDATES = "model_supplied_candidates"
 
 
 @dataclass(frozen=True, slots=True)

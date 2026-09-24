@@ -9,7 +9,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 import { UseFormReturn } from 'react-hook-form';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { db } from '@/lib/frappe-sdk';
 import { cn } from '@/lib/utils';
 import { knowledgeTypes, knowledgeScopes, knowledgeTypePresets, chromaModes, isVectorKnowledgeType } from '@/data/knowledge';
 import type { KnowledgeTypePresetId } from '@/data/knowledge';
@@ -44,6 +45,7 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
   const watchKnowledgeType = form.watch('knowledge_type');
   const watchChromaMode = form.watch('chroma_mode');
   const watchPGVectorConnectionMode = form.watch('pgvector_connection_mode');
+  const [policyOptions, setPolicyOptions] = useState<Array<{ value: string; label: string }>>([]);
 
   const [presetId, setPresetId] = useState<KnowledgeTypePresetId>(() =>
     presetIdForKnowledgeType(form.getValues('knowledge_type')),
@@ -53,6 +55,25 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
     () => providers.map((p) => ({ value: p.name, label: p.provider_name || p.name })),
     [providers],
   );
+
+  // Load available Decision Policies on mount
+  useEffect(() => {
+    db.getDocList('Decision Policy', {
+      fields: ['name'],
+      limit: 500,
+    })
+      .then((policies: Array<{ name: string }>) => {
+        setPolicyOptions(
+          policies.map((p) => ({
+            value: p.name,
+            label: p.name,
+          }))
+        );
+      })
+      .catch((error: Error) => {
+        console.error('Error loading policies:', error);
+      });
+  }, []);
 
   const handlePresetChange = (id: KnowledgeTypePresetId) => {
     setPresetId(id);
@@ -140,6 +161,91 @@ export function GeneralTab({ form, isNew, providers = [] }: GeneralTabProps) {
               </FormItem>
             )}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Knowledge Ingestion Decision</CardTitle>
+          <CardDescription>Tag and filter chunks during ingestion using a Decision Policy</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="ingestion_decision_policy"
+            render={({ field }) => (
+              <FormItem className="sm:col-span-2">
+                <FormLabel>Decision Policy</FormLabel>
+                <FormControl>
+                  <Combobox
+                    options={policyOptions}
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                    placeholder="Select a policy..."
+                    searchPlaceholder="Search policies..."
+                    emptyText="No policies found."
+                  />
+                </FormControl>
+                <FormDescription>
+                  Decision Policy used to evaluate and tag chunks during ingestion. Leave empty to disable decision-based tagging.
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {form.watch('ingestion_decision_policy') && (
+            <>
+              <FormField
+                control={form.control}
+                name="ingestion_decision_mode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Decision Mode</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || 'Off'}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select mode" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="Off">Off</SelectItem>
+                        <SelectItem value="Shadow">Shadow</SelectItem>
+                        <SelectItem value="Enforce">Enforce</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Off: no evaluation. Shadow: log only, no tags. Enforce: evaluate and tag chunks.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {form.watch('ingestion_decision_mode') === 'Enforce' && (
+                <FormField
+                  control={form.control}
+                  name="ingestion_tag_field"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tag Field</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. decision_classification"
+                          {...field}
+                          value={field.value ?? ''}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Metadata field name where decision tags are stored in chunk metadata.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 

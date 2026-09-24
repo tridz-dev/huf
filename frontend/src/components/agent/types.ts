@@ -117,6 +117,17 @@ export const agentFormSchema = z.object({
   allow_ask_user: z.boolean().optional(),
   allow_rich_elements: z.boolean().optional(),
   allow_document_artifacts: z.boolean().optional(),
+
+  allowed_models: z.array(
+    z.object({
+      name: z.string().optional(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
+      enable_auto_routing: z.boolean().optional(),
+      routing_description: z.string().optional(),
+      priority: z.number().optional(),
+    })
+  ).default([]),
 }).superRefine((values, ctx) => {
   if (values.agent_modality !== 'Voice') {
     if (!values.provider?.trim()) {

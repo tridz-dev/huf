@@ -113,9 +113,23 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 
 class AgentManager:
     """Manages the creation and execution of agents."""
-    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None):
+    def __init__(
+        self,
+        agent_name,
+        file_handler=None,
+        provider_override=None,
+        model_override=None,
+        conversation_id=None,
+        agent_run_id=None,
+        request_text=None,
+    ):
         self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
         self.conversation_id = conversation_id
+        # T4.13: best-effort current-turn context for the Tool/Skill/Procedure Selection
+        # decision surfaces built in _setup_tools() below -- both optional, both None for
+        # any caller that predates this (unchanged behavior: no binding, no state gap fix).
+        self.agent_run_id = agent_run_id
+        self.request_text = request_text
         (
             self.effective_provider,
             self.effective_model,
@@ -212,6 +226,8 @@ class AgentManager:
                 model_name=self.effective_model,
                 conversation_id=self.conversation_id,
                 agent_name=self.agent_doc.name,
+                agent_run_id=self.agent_run_id,
+                request_text=self.request_text,
             )
             if agent_tools:
                 self.tools.extend(agent_tools)
@@ -262,7 +278,12 @@ class AgentManager:
         try:
             from huf.ai.skills.loader import create_list_skills_tool
 
-            list_skills_tool = create_list_skills_tool(self.agent_doc.agent_name)
+            list_skills_tool = create_list_skills_tool(
+                self.agent_doc.agent_name,
+                conversation_id=self.conversation_id,
+                agent_run_id=self.agent_run_id,
+                request_text=self.request_text,
+            )
             if list_skills_tool:
                 existing_names = {tool.name for tool in self.tools}
                 if list_skills_tool.name not in existing_names:
@@ -309,6 +330,71 @@ class AgentManager:
         except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning(f"Failed to load knowledge tools: {e!s}")
             self.tool_setup_warnings.append(f"knowledge tools: {e!s}")
+
+        # Add the `decide` tool (D9, Agent Tool surface, PLAN.md §3.6) -- registered only
+        # when the Agent has at least one enabled Agent Tool binding (Enforce or Shadow)
+        # AND the site kill switch is on, so an agent with no such binding (the overwhelming
+        # majority today) pays no import/query cost and its tool list is byte-identical to
+        # before this surface existed.
+        try:
+            from typing import Literal
+
+            from huf.ai.decision.decide_tool import decide_tool_enabled, get_agent_tool_bindings, run_decide
+            from huf.ai.decision.types import DecisionOrigin
+
+            if decide_tool_enabled(self.agent_doc):
+                bound_policies = tuple(sorted(get_agent_tool_bindings(self.agent_doc).keys()))
+                # Restrict the JSON schema to the bound policy names (not just documented in
+                # prose) so the model cannot name a policy that was never bound (D9).
+                PolicyName = Literal[bound_policies]
+                origin = DecisionOrigin(
+                    origin_type="Agent Run",
+                    agent=self.agent_doc.name,
+                    conversation=self.conversation_id,
+                    owner_user=getattr(frappe.session, "user", None),
+                )
+                decide_doc = (
+                    "Ask a bound Decision Policy an advisory question. Never grants "
+                    "permission and has no side effects -- use your own judgement about "
+                    "the result. state is the text describing what you want a decision "
+                    "about. candidates is an optional JSON array string of "
+                    "{\"id\": str, \"description\": str} objects; required only for "
+                    "policies that ask you to choose among options, ignored otherwise."
+                )
+
+                @function_tool
+                def decide(policy: PolicyName, state: str, candidates: str | None = None) -> str:
+                    parsed_candidates = None
+                    if candidates:
+                        try:
+                            parsed_candidates = json.loads(candidates)
+                        except (TypeError, ValueError):
+                            return json.dumps(
+                                {
+                                    "status": "error",
+                                    "answer": None,
+                                    "confidence": None,
+                                    "error": "candidates must be a JSON array of {id, description} objects",
+                                }
+                            )
+                    result = run_decide(
+                        self.agent_doc,
+                        policy=policy,
+                        state=state,
+                        candidates=parsed_candidates,
+                        origin=origin,
+                    )
+                    return json.dumps(result)
+
+                decide.description = decide_doc
+
+                existing_names = {tool.name for tool in self.tools}
+                if decide.name not in existing_names:
+                    self.tools.append(decide)
+                    self.tool_sources[decide.name] = "internal_capability"
+        except (ImportError, AttributeError, TypeError, ValueError, RuntimeError) as e:
+            logger.warning(f"Failed to load decide tool: {e!s}")
+            self.tool_setup_warnings.append(f"decide tool: {e!s}")
 
     def _setup_client(self):
         """Configure OpenAI provider from the AI Provider doc"""
@@ -1765,6 +1851,8 @@ def _execute_agent_run(
             provider_override=resolved_provider,
             model_override=resolved_model,
             conversation_id=conversation_id,
+            agent_run_id=run_doc.name,
+            request_text=prompt,
         )
 
         if manager.tool_setup_warnings:
@@ -1828,6 +1916,11 @@ def _execute_agent_run(
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
+            # T4.13: current turn's request text -- threaded through so the Tool/Skill/
+            # Procedure Selection decision surfaces' state includes what the user actually
+            # asked (huf.ai.sdk_tools._merge_run_context injects it into tool-call kwargs
+            # under the same key; see huf.ai.decision.agent_surfaces.build_surface_state).
+            "request_text": prompt,
         }
 
         context_strategy = agent_doc.context_strategy or "Summarize"
@@ -1948,6 +2041,8 @@ def _execute_agent_run(
             "agent_run_id": run_doc.name,
             "prompt_cache_options": resolved_prompt_cache,
             "files": files,
+            # T4.13: see the matching context dict above for why this is here.
+            "request_text": prompt,
         }
         async def _run_with_mcp_pool():
             from huf.ai.mcp_client import mcp_session_pool
@@ -3083,6 +3178,8 @@ async def run_agent_stream(
             provider_override=resolved_provider,
             model_override=resolved_model,
             conversation_id=conversation.name,
+            agent_run_id=run_doc.name,
+            request_text=prompt,
         )
 
         if manager.tool_setup_warnings:
@@ -3113,6 +3210,8 @@ async def run_agent_stream(
             "prompt_cache_options": resolved_prompt_cache,
             "_tool_call_message_map": tool_call_message_map,
             "files": files,
+            # T4.13: see the matching context dict earlier in this module for why this is here.
+            "request_text": prompt,
         }
 
         stored_summary = conv_manager.get_stored_summary(conversation.name)

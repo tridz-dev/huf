@@ -53,6 +53,11 @@ export const knowledgeSourceFormSchema = z.object({
 
 	// Backend-specific advanced config (schema-driven, backend declares the shape)
 	advanced_config: z.record(z.unknown()).optional(),
+
+	// Knowledge Ingestion Decision fields
+	ingestion_decision_policy: z.string().optional(),
+	ingestion_decision_mode: z.enum(['Off', 'Shadow', 'Enforce']).default('Off').optional(),
+	ingestion_tag_field: z.string().optional(),
 }).superRefine((values, ctx) => {
 	if (isVectorKnowledgeType(values.knowledge_type)) {
 		if (!values.embedding_model?.trim()) {

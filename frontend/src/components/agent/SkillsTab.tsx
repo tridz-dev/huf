@@ -13,14 +13,23 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { AgentSkillRow } from '@/types/skill.types';
+import { DecisionBindingControl, type AgentDecisionBindingRow } from '@/components/decision/DecisionBindingControl';
 
 interface SkillsTabProps {
   skills: AgentSkillRow[];
   skillOptions: { value: string; label: string; subtitle?: string }[];
   onChange: (skills: AgentSkillRow[]) => void;
+  decisionBinding?: AgentDecisionBindingRow;
+  onDecisionBindingChange?: (binding: AgentDecisionBindingRow | undefined) => void;
 }
 
-export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
+export function SkillsTab({
+  skills,
+  skillOptions,
+  onChange,
+  decisionBinding,
+  onDecisionBindingChange,
+}: SkillsTabProps) {
   const [selectedSkill, setSelectedSkill] = useState('');
   const comboboxRef = useRef<HTMLDivElement>(null);
 
@@ -158,6 +167,14 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
               </div>
             ))}
           </div>
+        )}
+
+        {onDecisionBindingChange && (
+          <DecisionBindingControl
+            surface="Skill Selection"
+            value={decisionBinding}
+            onChange={onDecisionBindingChange}
+          />
         )}
       </CardContent>
     </Card>

@@ -173,6 +173,57 @@ def _tool_name_for(bound: BoundProcedure) -> str:
 	return f"{TOOL_NAME_PREFIX}{safe}"
 
 
+def _apply_procedure_decision(agent, bound_procedures: list[BoundProcedure], kwargs: dict):
+	"""Apply Procedure Selection decision binding if one exists (T4.04).
+
+	Calls ``decide_for_surface`` with the bound procedures as candidates. Returns
+	a ``SurfaceDecision`` (Enforce/Advise mode) or ``None`` (Off/Shadow/error).
+
+	Exceptions and timeouts are swallowed (the decision module is guarded);
+	this function never raises or returns an exceptional status.
+	"""
+	try:
+		from huf.ai.decision.agent_surfaces import build_surface_state, decide_for_surface
+		from huf.ai.decision.types import DecisionOrigin, Option
+
+		# Build candidates from procedures
+		candidates = [
+			Option(bound.procedure_id, bound.procedure_name or bound.procedure_id)
+			for bound in bound_procedures
+		]
+		if not candidates:
+			return None
+
+		# Build DecisionOrigin for the run
+		agent_run_id = (kwargs or {}).get("agent_run_id")
+		origin = DecisionOrigin(
+			origin_type="Agent Run",
+			agent=agent.name if hasattr(agent, "name") else None,
+			agent_run=agent_run_id,
+		)
+
+		# T4.13: conversation_id/agent_run_id/request_text (the current user turn) from the
+		# run context -- Procedure Selection previously always ran with state={} (the biggest
+		# gap this task closes). No domain-specific keys of its own beyond that.
+		state = build_surface_state(kwargs)
+
+		# Call the decision surface
+		decision = decide_for_surface(
+			agent,
+			surface="Procedure Selection",
+			candidates=candidates,
+			state=state,
+			origin=origin,
+			hint_kind="procedures",
+		)
+		return decision
+	except Exception as exc:  # noqa: BLE001 - decision failures must not block procedure execution
+		frappe.logger("huf").debug(
+			f"Procedure Selection decision binding failed for agent {getattr(agent, 'name', '?')}: {exc!s}"
+		)
+		return None
+
+
 def invoke_bound_procedure(bound: BoundProcedure, args: dict, *, agent_run_id: str | None = None) -> dict:
 	"""Run a bound procedure end to end, always through ``run_agent_procedure_run``.
 
@@ -252,15 +303,40 @@ def build_procedure_binding_tools(agent, **kwargs) -> list:
 	``input_schema`` (falling back to an empty object schema) -- nothing richer, so the
 	binding never re-introduces the context bloat lazy discovery (GT-07) already removed
 	for the eager Agent Tool Function path.
+
+	Decision integration (T4.04): if a decision binding exists for "Procedure Selection",
+	calls ``decide_for_surface`` to apply Enforce or Advise modes. Enforce narrows the
+	exposed procedures; Advise adds a hint to the description.
 	"""
 	agent_name = getattr(agent, "name", None)
 	bound_procedures = get_bound_procedures_for_agent(agent_name)
 	if not bound_procedures:
 		return []
 
+	# Attempt decision binding for Procedure Selection (T4.04, PLAN.md §3.6/§3.9)
+	decision = _apply_procedure_decision(agent, bound_procedures, kwargs)
+
+	# Build tools for the (possibly filtered) procedures
 	tools = []
-	for bound in bound_procedures:
-		tools.append(_make_binding_tool(bound, agent_run_id=(kwargs or {}).get("agent_run_id")))
+	hint_text = None
+	if decision and decision.hint:
+		hint_text = decision.hint
+
+	# In Enforce mode, only expose selected procedures
+	exposed_procedures = bound_procedures
+	if decision and decision.selected_ids is not None:
+		exposed_procedures = [
+			bp for bp in bound_procedures
+			if bp.procedure_id in decision.selected_ids
+		]
+
+	for i, bound in enumerate(exposed_procedures):
+		tool = _make_binding_tool(bound, agent_run_id=(kwargs or {}).get("agent_run_id"))
+		# In Advise mode, add hint to first tool's description
+		if hint_text and i == 0:
+			tool.description = f"{tool.description}\n\n{hint_text}"
+		tools.append(tool)
+
 	return tools
 
 

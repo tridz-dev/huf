@@ -3,12 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AgentKnowledgeRow } from '@/types/agent.types';
+import { DecisionBindingControl, type AgentDecisionBindingRow } from '@/components/decision/DecisionBindingControl';
 
 interface KnowledgeTabProps {
   knowledgeSources: AgentKnowledgeRow[];
   onAdd: () => void;
   onEdit: (index: number) => void;
   onRemove: (index: number) => void;
+  // Decision bindings props
+  decisionBindings?: AgentDecisionBindingRow[];
+  onUpdateDecisionBindings?: (bindings: AgentDecisionBindingRow[]) => void;
 }
 
 export function KnowledgeTab({
@@ -16,7 +20,22 @@ export function KnowledgeTab({
   onAdd,
   onEdit,
   onRemove,
+  decisionBindings = [],
+  onUpdateDecisionBindings,
 }: KnowledgeTabProps) {
+  // Handle Decision Binding updates for RAG Filter
+  const handleUpdateDecisionBinding = (surface: string, newBinding: AgentDecisionBindingRow | undefined) => {
+    if (!onUpdateDecisionBindings) return;
+
+    const updated = decisionBindings.filter((b) => b.surface !== surface);
+    if (newBinding) {
+      updated.push(newBinding);
+    }
+    onUpdateDecisionBindings(updated);
+  };
+
+  // Find binding for RAG Filter surface
+  const ragFilterBinding = decisionBindings.find((b) => b.surface === 'RAG Filter');
   return (
     <Card>
       <CardHeader>
@@ -110,6 +129,14 @@ export function KnowledgeTab({
               </div>
             ))}
           </div>
+        )}
+
+        {onUpdateDecisionBindings && (
+          <DecisionBindingControl
+            surface="RAG Filter"
+            value={ragFilterBinding}
+            onChange={(binding) => handleUpdateDecisionBinding('RAG Filter', binding)}
+          />
         )}
       </CardContent>
     </Card>
