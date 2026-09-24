@@ -134,7 +134,7 @@ function ResultReadout({ running, result }: { running: boolean; result: RunDecis
   const segments: string[] = [result.status];
   const response = result.response;
   if (response?.latency_ms !== undefined && response?.latency_ms !== null) {
-    segments.push(`${response.latency_ms}ms`);
+    segments.push(`${Math.round(response.latency_ms)}ms`);
   }
   const tokens = (response?.usage?.input_tokens || 0) + (response?.usage?.output_tokens || 0);
   if (tokens > 0) segments.push(`${tokens} tok`);
@@ -279,10 +279,15 @@ export function DecisionPlaygroundPanel({ runRequest, onRunningChange }: Decisio
   };
 
   // The header Run button lives in PlaygroundShell; it signals here via runRequest.
+  // Only a change after mount is a click: the counter outlives this panel (it lives on
+  // PlaygroundPage), so switching tabs back to Decision must not replay the last run.
   const handleRunRef = useRef(handleRun);
   handleRunRef.current = handleRun;
+  const handledRunRequest = useRef(runRequest);
   useEffect(() => {
-    if (runRequest > 0) void handleRunRef.current();
+    if (runRequest === handledRunRequest.current) return;
+    handledRunRequest.current = runRequest;
+    void handleRunRef.current();
   }, [runRequest]);
 
   const handleAddCandidate = () => {

@@ -40,11 +40,10 @@ export function ConfigStripCell({
 }) {
   return (
     <div className={cn('min-w-0 px-4 py-3', className)}>
+      {/* Plain concatenation, not cn(): tailwind-merge reads the custom text-eyebrow size
+          as a colour and drops it in favour of text-steel-soft. */}
       <div
-        className={cn(
-          'mb-1.5 font-mono text-eyebrow uppercase text-steel-soft',
-          hint && 'cursor-help underline decoration-dotted decoration-line underline-offset-2',
-        )}
+        className={`mb-1.5 font-mono text-eyebrow uppercase text-steel-soft${hint ? ' cursor-help underline decoration-dotted decoration-line underline-offset-2' : ''}`}
         title={hint}
       >
         {label}

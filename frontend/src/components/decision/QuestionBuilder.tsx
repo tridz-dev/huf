@@ -127,11 +127,9 @@ function FieldLabel({ children, hint, className }: { children: ReactNode; hint?:
 function SectionHeader({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2">
+      {/* Plain concatenation, not cn(): tailwind-merge drops the custom text-eyebrow size. */}
       <span
-        className={cn(
-          'font-mono text-eyebrow font-medium uppercase text-steel',
-          hint && 'cursor-help underline decoration-dotted decoration-line underline-offset-2',
-        )}
+        className={`font-mono text-eyebrow font-medium uppercase text-steel${hint ? ' cursor-help underline decoration-dotted decoration-line underline-offset-2' : ''}`}
         title={hint}
       >
         {title}
