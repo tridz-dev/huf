@@ -14,6 +14,8 @@ import requests
 from frappe import _
 from frappe.utils import cint
 
+from huf.ai.local_runtimes.registry import get_adapter
+
 _PROBE_TIMEOUT = 5
 _PROBE_CACHE_TTL = 3600  # 1 hour
 
@@ -76,15 +78,12 @@ def probe_ollama(api_base: str) -> dict:
     """Ping an Ollama server and list its pulled models.
 
     Returns {"ok": bool, "models": [names], "error": str|None}. Never raises.
+
+    Delegates to the Ollama adapter in huf.ai.local_runtimes; kept as a
+    module-level function (rather than inlined at call sites) since it is
+    part of this module's existing public surface.
     """
-    try:
-        resp = requests.get(f"{api_base.rstrip('/')}/api/tags", timeout=_PROBE_TIMEOUT)
-        resp.raise_for_status()
-        data = resp.json()
-        models = [m.get("name") for m in data.get("models", []) if m.get("name")]
-        return {"ok": True, "models": models, "error": None}
-    except Exception as e:
-        return {"ok": False, "models": [], "error": str(e)}
+    return get_adapter("ollama").probe_server(api_base)
 
 
 def probe_model(api_base: str, model: str) -> dict:
@@ -93,29 +92,10 @@ def probe_model(api_base: str, model: str) -> dict:
     Returns {"ok": bool, "capabilities": [...], "error": str|None}. When the
     model is not pulled, returns ok=False with the server error message.
     Never raises.
+
+    Delegates to the Ollama adapter in huf.ai.local_runtimes.
     """
-    name = model or ""
-    for prefix in ("ollama_chat/", "ollama/"):
-        if name.startswith(prefix):
-            name = name[len(prefix):]
-            break
-
-    try:
-        resp = requests.post(
-            f"{api_base.rstrip('/')}/api/show", json={"name": name}, timeout=_PROBE_TIMEOUT
-        )
-        if resp.status_code != 200:
-            try:
-                error = resp.json().get("error") or resp.text
-            except Exception:
-                error = resp.text or f"HTTP {resp.status_code}"
-            return {"ok": False, "capabilities": [], "error": str(error)}
-
-        data = resp.json()
-        capabilities = data.get("capabilities") or []
-        return {"ok": True, "capabilities": capabilities, "error": None}
-    except Exception as e:
-        return {"ok": False, "capabilities": [], "error": str(e)}
+    return get_adapter("ollama").probe_model(api_base, model)
 
 
 def probe_cloud_provider(provider_brand: str, api_key: str, api_base_url: str | None = None) -> dict:
@@ -178,11 +158,9 @@ def build_local_overrides(provider_doc, model_name: str) -> dict:
     if cached:
         return cached
 
-    probe = probe_model(api_base, model_name)
-    if probe["ok"]:
-        capabilities = probe["capabilities"]
-        overrides["supports_tools"] = "tools" in capabilities
-        overrides["is_reasoning_model"] = "thinking" in capabilities
+    adapter = get_adapter((provider_doc or {}).get("provider_brand"))
+    probe = adapter.probe_model(api_base, model_name)
+    overrides.update(adapter.capability_overrides(probe))
 
     frappe.cache().set_value(cache_key, overrides, expires_in_sec=_PROBE_CACHE_TTL)
     return overrides
@@ -254,7 +232,8 @@ def test_provider_connection(
         )
         return result
 
-    server = probe_ollama(api_base)
+    adapter = get_adapter(effective_brand)
+    server = adapter.probe_server(api_base)
     result["provider"] = {"ok": server["ok"], "error": server["error"]}
 
     model_names = frappe.get_all(
@@ -269,7 +248,7 @@ def test_provider_connection(
             )
             continue
 
-        probe = probe_model(api_base, model_name)
+        probe = adapter.probe_model(api_base, model_name)
         result["models"].append(
             {
                 "name": model_name,
