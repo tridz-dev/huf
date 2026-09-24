@@ -34,6 +34,18 @@ def _make_user_unthrottled(*args, **kwargs):
 		frappe.flags.in_import = previous
 
 
+def _purge_ai_model(model_name: str) -> None:
+	"""Remove an AI Model (and deployments on it) left behind by an earlier committed run.
+
+	setup_deployment commits, and AI Model.model_name is globally unique, so a prior run's
+	row bound to a since-discarded test provider would otherwise make the next run conflict.
+	"""
+	for dep in frappe.get_all("Decision Deployment", filters={"ai_model": model_name}, pluck="name"):
+		frappe.delete_doc("Decision Deployment", dep, force=True, ignore_permissions=True)
+	if frappe.db.exists("AI Model", model_name):
+		frappe.delete_doc("AI Model", model_name, force=True, ignore_permissions=True)
+
+
 class TestGetSetupCatalog(FrappeTestCase):
 	"""Tests for get_setup_catalog()."""
 
@@ -128,6 +140,18 @@ class TestSetupDeployment(FrappeTestCase):
 			"api_key": "test-key-for-setup",
 		}).insert(ignore_permissions=True)
 
+		cls.openrouter_provider = frappe.get_doc({
+			"doctype": "AI Provider",
+			"provider_name": f"TestSetupOpenRouter{suffix}",
+			"provider_brand": "openrouter",
+			"api_key": "test-openrouter-key",
+		}).insert(ignore_permissions=True)
+
+		# jev-1.13-free is owned by the seeded OpenCodeZen provider; these tests use
+		# catalog entries no seed claims, owned by this class's own providers.
+		_purge_ai_model("jev-1.13")
+		_purge_ai_model("typesafe/jev-1.13")
+
 		cls.admin_user = _make_user_unthrottled(roles=("Huf Manager",)).email
 		cls.non_admin_user = _make_user_unthrottled(roles=()).email
 
@@ -136,6 +160,38 @@ class TestSetupDeployment(FrappeTestCase):
 		super().tearDownClass()
 		if hasattr(cls, "_prev_kill_switch"):
 			frappe.db.set_single_value("Agent Settings", "decision_runtime_enabled", cls._prev_kill_switch)
+
+	@mock.patch("huf.ai.decision.api.test_deployment")
+	def test_setup_deployment_uses_chosen_catalog_entry(self, mock_probe):
+		"""Picking OpenRouter produces an OpenRouter deployment, not the OpenCode Zen one."""
+		frappe.set_user(self.admin_user)
+		mock_probe.return_value = {"status": "success", "latency_ms": 1, "error_code": None}
+
+		result = api.setup_deployment(self.openrouter_provider.name, "typesafe/jev-1.13")
+
+		self.assertNotEqual(result["deployment"], "jev-1-13-opencode-zen")
+		self.assertNotEqual(result["ai_model"], "jev-1.13-free")
+
+		ai_model = frappe.get_doc("AI Model", result["ai_model"])
+		self.assertEqual(ai_model.model_name, "typesafe/jev-1.13")
+		self.assertEqual(ai_model.provider, self.openrouter_provider.name)
+		self.assertIn("Decision", ai_model.modalities)
+
+		dep = frappe.get_doc("Decision Deployment", result["deployment"])
+		self.assertEqual(dep.ai_model, "typesafe/jev-1.13")
+		self.assertEqual(dep.provider, self.openrouter_provider.name)
+		self.assertEqual(dep.provider_model_id, "typesafe/jev-1.13")
+		self.assertEqual(dep.endpoint_path, "/api/v1/systemone")
+		self.assertEqual(dep.enabled, 1)
+		mock_probe.assert_called_once_with(result["deployment"])
+
+	def test_setup_deployment_rejects_ai_model_owned_by_other_provider(self):
+		"""An AI Model already bound to another provider is not silently reused."""
+		frappe.set_user(self.admin_user)
+		if not frappe.db.exists("AI Model", "jev-1.13-free"):
+			self.skipTest("seeded jev-1.13-free AI Model not present")
+		with self.assertRaises(frappe.ValidationError):
+			api.setup_deployment(self.provider.name, "jev-1.13-free")
 
 	def test_setup_deployment_requires_admin(self):
 		"""setup_deployment requires decision.admin."""
@@ -177,14 +233,14 @@ class TestSetupDeployment(FrappeTestCase):
 			mock_runtime_class.return_value = mock_runtime
 
 			# First call
-			result1 = api.setup_deployment(self.provider.name, "jev-1.13-free")
+			result1 = api.setup_deployment(self.provider.name, "jev-1.13")
 			self.assertIn("deployment", result1)
 			self.assertIn("ai_model", result1)
 			self.assertIn("probe", result1)
 			deployment_name_1 = result1["deployment"]
 
 			# Second call should return the same deployment
-			result2 = api.setup_deployment(self.provider.name, "jev-1.13-free")
+			result2 = api.setup_deployment(self.provider.name, "jev-1.13")
 			self.assertEqual(result1["deployment"], result2["deployment"])
 			self.assertEqual(result1["ai_model"], result2["ai_model"])
 
