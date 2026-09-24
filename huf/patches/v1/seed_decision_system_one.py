@@ -209,7 +209,17 @@ def _seed_deployment(decision_model_name: str, ai_model_name: str, provider_name
 # these create an Agent Decision Binding, so they change nothing by
 # themselves -- they exist as ready-to-publish starting points.
 def _policy_definition(policy_id: str, question: dict) -> str:
-	return json.dumps({"policy_id": policy_id, "questions": [question]})
+	# Every policy must explicitly bind at least one piece of provider-visible state
+	# (huf.ai.decision.state.prepare_state) or it can be published but never actually run.
+	# Sample policies bind the whole caller-supplied state under "request"; a real policy
+	# built in the Decisions editor will usually bind narrower, named fields instead.
+	return json.dumps(
+		{
+			"policy_id": policy_id,
+			"questions": [question],
+			"state_bindings": [{"name": "request", "path": "request"}],
+		}
+	)
 
 
 SAMPLE_POLICIES = [
