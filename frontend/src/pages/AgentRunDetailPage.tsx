@@ -139,7 +139,11 @@ interface AgentRunDetail extends AgentRunDoc {
   cost_source?: string | null;
   round_count?: number | null;
   execution_mode?: 'sync' | 'stream' | null;
-  provider_path?: 'litellm' | 'legacy_fallback' | null;
+  provider_path?: 'litellm' | 'legacy_fallback' | 'subscription_cli' | null;
+  billing_mode?: 'api' | 'subscription' | 'local' | 'unknown' | null;
+  usage_source?: 'provider_reported' | 'estimated' | 'unavailable' | null;
+  runtime?: string | null;
+  runtime_mode?: string | null;
 }
 
 async function fetchAgentRunDetail(name: string): Promise<AgentRunDetail | null> {
@@ -414,8 +418,19 @@ function AgentRunDetailPage() {
         <div className="rounded-lg border border-line bg-panel p-5">
           <div className="flex flex-wrap items-center gap-3 pb-4">
             <h2 className="text-[17px] font-[600] text-ink">Agent run</h2>
-            <Badge variant={getAgentRunStatusVariant(run.status)}>{status}</Badge>
+            <Badge
+              variant={
+                status.toLowerCase() === 'waiting authentication'
+                  ? 'pill-warning'
+                  : getAgentRunStatusVariant(run.status)
+              }
+            >
+              {status}
+            </Badge>
             <span className="text-[13px] text-steel">{run.agent || 'Unknown agent'}</span>
+            {run.runtime && (
+              <Badge variant="chip">Runtime: {run.runtime}</Badge>
+            )}
           </div>
 
           <div className="grid gap-x-10 gap-y-4 md:grid-cols-2">
@@ -451,6 +466,8 @@ function AgentRunDetailPage() {
                 value={
                   run.provider_path === 'legacy_fallback' ? (
                     <span className="text-warning">Fallback provider (cache and cost not recorded)</span>
+                  ) : run.provider_path === 'subscription_cli' ? (
+                    'Subscription CLI'
                   ) : run.provider_path === 'litellm' ? (
                     'Standard'
                   ) : (
@@ -463,20 +480,45 @@ function AgentRunDetailPage() {
             <DefinitionColumn heading="Tokens & Cost">
               <DefinitionRow
                 label="Input"
-                value={typeof run.input_tokens === 'number' ? run.input_tokens.toLocaleString() : 'Not available'}
+                value={
+                  run.usage_source === 'unavailable'
+                    ? 'Not reported by provider'
+                    : typeof run.input_tokens === 'number'
+                      ? run.input_tokens.toLocaleString()
+                      : 'Not available'
+                }
               />
               <DefinitionRow
                 label="Output"
-                value={typeof run.output_tokens === 'number' ? run.output_tokens.toLocaleString() : 'Not available'}
+                value={
+                  run.usage_source === 'unavailable'
+                    ? 'Not reported by provider'
+                    : typeof run.output_tokens === 'number'
+                      ? run.output_tokens.toLocaleString()
+                      : 'Not available'
+                }
               />
               <DefinitionRow
                 label="Cached"
-                value={typeof run.cached_tokens === 'number' ? run.cached_tokens.toLocaleString() : 'Not available'}
+                value={
+                  run.usage_source === 'unavailable'
+                    ? 'Not reported by provider'
+                    : typeof run.cached_tokens === 'number'
+                      ? run.cached_tokens.toLocaleString()
+                      : 'Not available'
+                }
               />
-              <DefinitionRow
-                label="Cost"
-                value={typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
-              />
+              {run.billing_mode === 'subscription' ? (
+                <>
+                  <DefinitionRow label="Billing" value="Subscription" />
+                  <DefinitionRow label="Metered cost" value="Not available" />
+                </>
+              ) : (
+                <DefinitionRow
+                  label="Cost"
+                  value={typeof run.cost === 'number' ? `$${run.cost.toFixed(6)}` : 'Not available'}
+                />
+              )}
               <DefinitionRow label="Cost source" value={run.cost_source || 'Not available'} />
             </DefinitionColumn>
           </div>
