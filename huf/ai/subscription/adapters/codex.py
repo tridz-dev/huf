@@ -172,6 +172,33 @@ def parse_codex_usage(raw_usage: dict[str, Any]) -> dict[str, Any]:
 	}
 
 
+# Matches common credential/token shapes (Bearer header, sk-/ya29.-style
+# provider tokens, api_key=/access_token: assignments) that a CLI's stderr
+# might echo back verbatim. Used by `_sanitize_stderr_excerpt` (Track-Item:
+# T-T6) so a raw stderr excerpt embedded in an exception message never
+# carries a live credential value. Mirrors adapters/claude.py::_SECRET_VALUE_RE.
+_SECRET_VALUE_RE = re.compile(
+	r"(?i)"
+	r"bearer\s+[a-z0-9._\-]{10,}"
+	r"|sk-[a-z0-9_\-]{10,}"
+	r"|ya29\.[a-z0-9._\-]{10,}"
+	r"|(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret)\s*[=:]\s*[\"']?[a-z0-9._\-]{8,}[\"']?"
+)
+
+
+def _sanitize_stderr_excerpt(stderr: str) -> str:
+	"""Redact credential-shaped substrings from a stderr excerpt.
+
+	Applied before a raw stderr excerpt is embedded in a `SubscriptionCLIError`
+	message (see the exit!=0/no-stdout branch of `run_turn`) -- that message
+	is `str(exc)`-ed by callers (e.g. `executor.py`'s generic `except
+	SubscriptionError` branch) which already re-sanitizes via
+	`streaming._sanitize_error_message`, but this adapter must not depend on
+	every caller doing that; it should never hand out a raw secret itself.
+	"""
+	return _SECRET_VALUE_RE.sub("<redacted>", stderr)
+
+
 def is_resume_not_found_error(stderr: str) -> bool:
 	"""Detect the plain-text "no rollout found for thread id" resume error.
 
@@ -494,7 +521,8 @@ class CodexAdapter(SubscriptionCLIAdapter):
 			# beyond what was captured for the resume-not-found case above).
 			raise SubscriptionCLIError(
 				SubscriptionErrorCode.CLI_PROCESS_FAILED,
-				f"codex exec failed (exit={result.exit_code}): {stderr.strip()[:500]}",
+				f"codex exec failed (exit={result.exit_code}): "
+				f"{_sanitize_stderr_excerpt(stderr.strip()[:500])}",
 			)
 
 		parsed = parse_codex_jsonl(result.stdout)

@@ -57,6 +57,20 @@ _VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 #    any session title.'
 _RESUME_NOT_FOUND_MARKERS = ("is not a uuid", "does not match")
 
+# Matches common credential/token shapes that a CLI's stderr/stdout might
+# echo back verbatim (e.g. from an underlying HTTP client's error message):
+# `Authorization: Bearer <token>`, an Anthropic/OpenAI-style `sk-...` secret
+# key, a Google OAuth `ya29....` access token, or an `api_key=`/
+# `access_token:`-style assignment. Used by `_sanitize` (Track-Item: T-T6)
+# so adapter-classified error text never carries a live credential value.
+_SECRET_VALUE_RE = re.compile(
+	r"(?i)"
+	r"bearer\s+[a-z0-9._\-]{10,}"
+	r"|sk-[a-z0-9_\-]{10,}"
+	r"|ya29\.[a-z0-9._\-]{10,}"
+	r"|(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret)\s*[=:]\s*[\"']?[a-z0-9._\-]{8,}[\"']?"
+)
+
 
 class ClaudeAdapter(SubscriptionCLIAdapter):
 	"""Adapter for the Claude Code CLI (``claude``) subscription runtime.
@@ -313,6 +327,14 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 			return None
 		# Redact anything that looks like a home-directory path.
 		text = re.sub(r"/(Users|home)/[^/\s]+", r"/\1/<redacted>", text)
+		# Redact anything that looks like a credential/token value (e.g. a
+		# Bearer header, an `sk-`/`ya29.`-style provider token, or an
+		# `api_key=...`/`access_token: ...` assignment). CLI stderr can echo
+		# these back verbatim (e.g. from a proxy or curl error), and this
+		# text is surfaced in SubscriptionTurnResult.events[]/auth_reason,
+		# which downstream code treats as safe to log/display. Security
+		# fix, Track-Item: T-T6 -- see test_security.py.
+		text = _SECRET_VALUE_RE.sub("<redacted>", text)
 		if len(text) > max_len:
 			text = text[:max_len] + "...(truncated)"
 		return text
