@@ -1,0 +1,321 @@
+"""Tests for the Codex CLI subscription adapter.
+
+Parser-level tests feed the REAL captured fixture content (from
+``ai/tests/subscription/fixtures/real/codex/``, a sibling top-level fixtures
+directory outside the ``huf.ai`` package) directly into the adapter's
+JSONL-parsing helpers, per T-05-adapter-codex.
+
+Async adapter methods are exercised via ``asyncio.run(...)`` inline (matching
+the convention already used in test_adapter_base.py) rather than
+pytest-asyncio, which is not a project dependency here.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+
+import pytest
+
+from huf.ai.subscription.adapters.codex import (
+	CODEX_APPROVAL_POLICY,
+	CODEX_SANDBOX_MODE,
+	CODEX_TRUST_FLAG,
+	CodexAdapter,
+	is_resume_not_found_error,
+	parse_codex_jsonl,
+	parse_codex_login_status,
+	parse_codex_usage,
+)
+from huf.ai.subscription.errors import SubscriptionCLIError, SubscriptionErrorCode, SubscriptionRuntimeError
+from huf.ai.subscription.transports.base import ExecutionTransport, ProcessResult, StagedFile, TransportProbe
+from huf.ai.subscription.types import SubscriptionTurnRequest
+
+# Fixtures live at the repo-root-relative path
+# ai/tests/subscription/fixtures/real/codex/ — a top-level directory distinct
+# from the huf.ai package tree this test file lives under.
+FIXTURES_DIR = Path(__file__).resolve().parents[4] / "ai" / "tests" / "subscription" / "fixtures" / "real" / "codex"
+
+
+def _read_fixture(name: str) -> str:
+	path = FIXTURES_DIR / name
+	if not path.exists():
+		pytest.skip(f"real codex fixture not present on disk: {path}")
+	return path.read_text()
+
+
+class FakeTransport(ExecutionTransport):
+	"""Records the argv/cwd it was called with and returns a canned result."""
+
+	def __init__(self, result: ProcessResult) -> None:
+		self.result = result
+		self.calls: list[dict] = []
+
+	async def probe(self) -> TransportProbe:
+		return TransportProbe(reachable=True)
+
+	async def run(self, argv, *, cwd=None, env=None, stdin=None, timeout=None) -> ProcessResult:
+		self.calls.append({"argv": argv, "cwd": cwd, "env": env, "stdin": stdin, "timeout": timeout})
+		return self.result
+
+	async def stage_file(self, source_path: str, *, target_name: str | None = None) -> StagedFile:
+		raise NotImplementedError
+
+	async def remove_staged_file(self, staged_file: StagedFile) -> None:
+		pass
+
+
+class FakeRuntime:
+	def __init__(self, working_directory: str | None = "/tmp/codex_ws"):
+		self.name = "codex-runtime"
+		self.transport_type = "local"
+		self.executable = "codex"
+		self.working_directory = working_directory
+
+
+def _make_request(
+	*, provider_session_id: str | None = None, text: str = "hello", files: list[str] | None = None
+) -> SubscriptionTurnRequest:
+	return SubscriptionTurnRequest(
+		runtime_name="codex-runtime",
+		provider_session_id=provider_session_id,
+		text=text,
+		files=files or [],
+		model_override=None,
+		run_id="run-1",
+		conversation_id=None,
+		timeout_seconds=60,
+	)
+
+
+# --- Parser tests against real fixture content ------------------------------
+
+
+def test_parse_create_session_jsonl_real_fixture_extracts_thread_and_usage():
+	stdout = _read_fixture("create_session.jsonl")
+	parsed = parse_codex_jsonl(stdout)
+
+	assert parsed["thread_id"] == "01a0da32-e450-7691-a8e5-579223d9a47a"
+	assert parsed["final_text"] == "HELLO"
+	assert parsed["turn_status"] == "completed"
+	assert parsed["usage"] == {
+		"input_tokens": 18669,
+		"cached_input_tokens": 8960,
+		"output_tokens": 6,
+		"reasoning_output_tokens": 0,
+	}
+
+
+def test_parse_create_session_does_not_fail_turn_on_nonfatal_error_item():
+	"""Real fixture: an item.completed(type='error') skills-budget warning
+	appears mid-turn, but the turn still ends in turn.completed. Only
+	turn.failed should mark failure."""
+	stdout = _read_fixture("create_session.jsonl")
+	parsed = parse_codex_jsonl(stdout)
+
+	error_items = [item for item in parsed["items"] if item.get("type") == "error"]
+	assert len(error_items) == 1
+	assert "skills context budget" in error_items[0]["message"]
+
+	# Despite the error-typed item, the turn is NOT considered failed.
+	assert parsed["turn_status"] == "completed"
+	assert parsed["turn_failed_reason"] is None
+
+
+def test_parse_resume_turn_jsonl_real_fixture():
+	stdout = _read_fixture("resume_turn.jsonl")
+	parsed = parse_codex_jsonl(stdout)
+
+	assert parsed["thread_id"] == "01a0da32-e450-7691-a8e5-579223d9a47a"
+	assert parsed["final_text"] == "HELLO"
+	assert parsed["turn_status"] == "completed"
+	usage = parse_codex_usage(parsed["usage"])
+	assert usage["cached_input_tokens"] == 27136
+
+
+def test_parse_usage_normalizes_real_shape():
+	raw = {"input_tokens": 1, "cached_input_tokens": 2, "output_tokens": 3, "reasoning_output_tokens": 4}
+	assert parse_codex_usage(raw) == raw
+
+
+# --- Malformed resume: plain-text stderr, not JSON --------------------------
+
+
+def test_malformed_resume_is_plain_text_not_json():
+	stderr = _read_fixture("error_malformed_resume.txt")
+	assert is_resume_not_found_error(stderr)
+
+	# Sanity: it truly is not JSON (would raise if json.loads succeeded on
+	# the whole blob the way a JSONL event would parse per-line).
+	with pytest.raises(json.JSONDecodeError):
+		json.loads(stderr.strip())
+
+
+def test_run_turn_classifies_malformed_resume_as_error_result_not_crash():
+	stderr = _read_fixture("error_malformed_resume.txt")
+	transport = FakeTransport(ProcessResult(stdout="", stderr=stderr, exit_code=1))
+	adapter = CodexAdapter(transport)
+	request = _make_request(provider_session_id="00000000-0000-0000-0000-000000000000", text="hi")
+
+	result = asyncio.run(adapter.run_turn(FakeRuntime(), request))
+
+	assert result.status == "error"
+	assert result.provider_session_id == "00000000-0000-0000-0000-000000000000"
+	assert "no rollout found" in (result.raw_debug_ref or "").lower()
+
+
+# --- Auth status: plain text, no shared format ------------------------------
+
+
+def test_parse_login_status_real_fixture_authenticated():
+	stdout = _read_fixture("auth_status.txt")
+	status = parse_codex_login_status(stdout)
+
+	assert status.state == "authenticated"
+	assert status.method == "ChatGPT"
+	assert status.message == "Logged in using ChatGPT"
+
+
+def test_parse_login_status_unauthenticated_text():
+	status = parse_codex_login_status("Not logged in")
+	assert status.state == "unauthenticated"
+
+
+def test_parse_login_status_unrecognized_shape_is_unknown_not_guessed():
+	status = parse_codex_login_status("some future CLI output we've never seen")
+	assert status.state == "unknown"
+
+
+def test_check_auth_uses_parser():
+	transport = FakeTransport(ProcessResult(stdout="Logged in using ChatGPT", stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+
+	status = asyncio.run(adapter.check_auth(FakeRuntime()))
+
+	assert status.state == "authenticated"
+	assert transport.calls[0]["argv"] == ["codex", "login", "status"]
+
+
+# --- Working-directory trust-check logic ------------------------------------
+
+
+def test_run_turn_raises_runtime_unreachable_without_working_directory():
+	transport = FakeTransport(ProcessResult(stdout="", stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request()
+
+	with pytest.raises(SubscriptionRuntimeError) as excinfo:
+		asyncio.run(adapter.run_turn(FakeRuntime(working_directory=None), request))
+
+	assert excinfo.value.code == SubscriptionErrorCode.RUNTIME_UNREACHABLE
+	# No CLI call should have been attempted.
+	assert transport.calls == []
+
+
+def test_run_turn_always_passes_documented_trust_flag_and_least_priv_sandbox():
+	stdout = _read_fixture("create_session.jsonl")
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request(text="Say hello and reply with exactly one word: HELLO")
+
+	asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
+
+	assert len(transport.calls) == 1
+	call = transport.calls[0]
+	argv = call["argv"]
+	assert call["cwd"] == "/tmp/codex_ws"
+	assert CODEX_TRUST_FLAG in argv
+	assert "--sandbox" in argv and CODEX_SANDBOX_MODE in argv
+	assert "--ask-for-approval" in argv and CODEX_APPROVAL_POLICY in argv
+	# Never the unattended-writes-allowed / bypass-everything modes.
+	assert "workspace-write" not in argv
+	assert "danger-full-access" not in argv
+	assert "--dangerously-bypass-approvals-and-sandbox" not in argv
+
+
+def test_run_turn_resume_uses_documented_verbatim_flag_order():
+	stdout = _read_fixture("resume_turn.jsonl")
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request(
+		provider_session_id="01a0da32-e450-7691-a8e5-579223d9a47a",
+		text="What was the exact word I told you to reply with in the previous message? Answer in one word.",
+	)
+
+	result = asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
+
+	argv = transport.calls[0]["argv"]
+	# Real fixture: `codex exec resume --json <thread_id> "<prompt>"`
+	assert argv[0:3] == ["codex", "exec", "resume"]
+	assert "--json" in argv
+	assert "01a0da32-e450-7691-a8e5-579223d9a47a" in argv
+	assert result.status == "success"
+	assert result.final_text == "HELLO"
+	assert result.provider_session_id == "01a0da32-e450-7691-a8e5-579223d9a47a"
+
+
+# --- Passthrough boundary self-check ----------------------------------------
+
+
+def test_run_turn_argv_never_contains_huf_generated_system_or_mcp_content():
+	"""CRITICAL passthrough constraint: only request.text/request.files may
+	appear in the constructed argv — never HUF Agent instructions, an
+	HUF-generated MCP config, or conversation history."""
+	stdout = _read_fixture("create_session.jsonl")
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+
+	forbidden_markers = [
+		"HUF_SYSTEM_PROMPT",
+		"AGENT_INSTRUCTIONS",
+		"--mcp-config",
+		"mcp_config.json",
+		"CONVERSATION_HISTORY",
+	]
+	request = _make_request(text="Say hello and reply with exactly one word: HELLO")
+
+	asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
+
+	argv = transport.calls[0]["argv"]
+	joined = " ".join(argv)
+	for marker in forbidden_markers:
+		assert marker not in joined
+	# The only free-form content in argv must be exactly request.text.
+	assert argv[-1] == request.text
+
+
+def test_create_session_raises_cli_error_no_standalone_command():
+	transport = FakeTransport(ProcessResult(stdout="", stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request()
+
+	with pytest.raises(SubscriptionCLIError):
+		asyncio.run(adapter.create_session(request))
+
+
+def test_validate_session_reports_not_independently_verifiable():
+	transport = FakeTransport(ProcessResult(stdout="", stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+
+	status = asyncio.run(adapter.validate_session(FakeRuntime(), "some-id"))
+	assert status.exists is True
+	assert status.detail == "not independently verifiable"
+
+
+def test_delete_session_reports_provider_retained():
+	transport = FakeTransport(ProcessResult(stdout="", stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+
+	result = asyncio.run(adapter.delete_session(FakeRuntime(), "some-id"))
+	assert result.cleanup_status == "provider_retained"
+
+
+def test_probe_reports_automation_not_supported_by_default():
+	transport = FakeTransport(ProcessResult(stdout="codex-cli 0.144.6", stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+
+	caps = asyncio.run(adapter.probe(FakeRuntime()))
+	assert caps.automation_supported is False
+	assert caps.supports_json is True
+	assert caps.supports_session_resume is True
