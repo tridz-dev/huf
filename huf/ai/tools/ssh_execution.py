@@ -10,20 +10,20 @@ First PR scope:
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import io
 import json
-import select
-import socket
-import time
 from dataclasses import dataclass
 from typing import Any
 
 import frappe
-import paramiko
 from frappe.utils import add_to_date, now_datetime
 
+from huf.ai.tools.ssh_connection_primitive import (
+	SSHPrimitiveResult,
+	connect_transport,
+	fingerprint_for_key,
+	load_private_key,
+	run_exec_over_transport,
+)
 from huf.permissions import has_capability
 
 _TOOL_NAME = "run_ssh_command"
@@ -43,19 +43,9 @@ class PendingExecutionExpired(Exception):
 	"""The Redis hold for a parked SSH execution expired before approval."""
 
 
-@dataclass
-class SSHExecutionResult:
-	stdout: str
-	stderr: str
-	exit_code: int | None
-	exit_status: str
-	wall_s: float
-	output_bytes: int
-	limits_hit: bool
-	host_key_fingerprint: str
-	host_key_type: str
-	timed_out: bool = False
-	idle_timed_out: bool = False
+# SSHExecutionResult is now SSHPrimitiveResult from ssh_connection_primitive
+# We alias it here for backward compatibility with existing code
+SSHExecutionResult = SSHPrimitiveResult
 
 
 def _as_agent_doc(agent_doc: Any) -> Any:
@@ -86,25 +76,6 @@ def _pending_execution_key(approval_name: str) -> str:
 	return f"{_PENDING_EXECUTION_PREFIX}:{approval_name}"
 
 
-def _fingerprint_for_key(server_key) -> str:
-	digest = hashlib.sha256(server_key.asbytes()).digest()
-	return "SHA256:" + base64.b64encode(digest).decode("ascii").rstrip("=")
-
-
-def _load_private_key(private_key: str, passphrase: str | None):
-	password = passphrase or None
-	key_classes = [paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey]
-	# DSSKey was removed from newer Paramiko releases. Keep compatibility with
-	# old installations without making all private-key auth fail at import time.
-	dss_key = getattr(paramiko, "DSSKey", None)
-	if dss_key is not None:
-		key_classes.append(dss_key)
-	for key_cls in key_classes:
-		try:
-			return key_cls.from_private_key(io.StringIO(private_key), password=password)
-		except Exception:
-			continue
-	frappe.throw("Unsupported or invalid private key.", frappe.ValidationError)
 
 
 def _has_allowlisted_connection(agent, connection_name: str) -> bool:
@@ -451,137 +422,6 @@ def _release_connection_slot(connection_name: str) -> None:
 	cache.set_value(key, current - 1, expires_in_sec=max(DEFAULT_EXECUTION_TIMEOUT_S * 2, 600))
 
 
-def _connect_transport(connection_doc, limits: dict):
-	timeout = int(limits.get("connection_timeout_seconds") or DEFAULT_CONNECTION_TIMEOUT_S)
-	sock = socket.create_connection((connection_doc.host, int(connection_doc.port or 22)), timeout=timeout)
-	transport = paramiko.Transport(sock)
-	transport.banner_timeout = timeout
-	transport.handshake_timeout = timeout
-	transport.auth_timeout = timeout
-	transport.start_client(timeout=timeout)
-	server_key = transport.get_remote_server_key()
-	fingerprint = _fingerprint_for_key(server_key)
-	expected = (connection_doc.host_key_fingerprint or "").strip()
-	if fingerprint != expected:
-		transport.close()
-		frappe.throw(
-			f"SSH host key mismatch for {connection_doc.name}. Expected {expected}, got {fingerprint}.",
-			frappe.ValidationError,
-		)
-	if (connection_doc.host_key_type or "").strip() and server_key.get_name() != connection_doc.host_key_type:
-		transport.close()
-		frappe.throw(
-			f"SSH host key type mismatch for {connection_doc.name}. Expected {connection_doc.host_key_type}, got {server_key.get_name()}.",
-			frappe.ValidationError,
-		)
-
-	if connection_doc.auth_method == "Password":
-		transport.auth_password(
-			username=connection_doc.username,
-			password=connection_doc.get_password("password"),
-		)
-	else:
-		pkey = _load_private_key(
-			connection_doc.get_password("private_key"),
-			connection_doc.get_password("private_key_passphrase", raise_exception=False),
-		)
-		transport.auth_publickey(username=connection_doc.username, key=pkey)
-
-	if not transport.is_authenticated():
-		transport.close()
-		frappe.throw("SSH authentication failed.", frappe.PermissionError)
-	return transport, fingerprint, server_key.get_name()
-
-
-def _run_exec_over_transport(transport, command: str, limits: dict, fingerprint: str, host_key_type: str) -> SSHExecutionResult:
-	channel = transport.open_session(timeout=int(limits.get("connection_timeout_seconds") or DEFAULT_CONNECTION_TIMEOUT_S))
-	channel.set_combine_stderr(False)
-	channel.exec_command(command)
-
-	execution_timeout = int(limits.get("execution_timeout_seconds") or DEFAULT_EXECUTION_TIMEOUT_S)
-	idle_timeout = int(limits.get("idle_timeout_seconds") or DEFAULT_IDLE_TIMEOUT_S)
-	stdout_limit = int(limits.get("stdout_max_bytes") or DEFAULT_STDOUT_MAX_BYTES)
-	stderr_limit = int(limits.get("stderr_max_bytes") or DEFAULT_STDERR_MAX_BYTES)
-	combined_limit = int(limits.get("combined_output_max_bytes") or DEFAULT_COMBINED_OUTPUT_MAX_BYTES)
-	start = time.monotonic()
-	last_progress = start
-	stdout = bytearray()
-	stderr = bytearray()
-	limits_hit = False
-	timed_out = False
-	idle_timed_out = False
-
-	while True:
-		now = time.monotonic()
-		if now - start > execution_timeout:
-			timed_out = True
-			limits_hit = True
-			channel.close()
-			break
-		if now - last_progress > idle_timeout:
-			idle_timed_out = True
-			limits_hit = True
-			channel.close()
-			break
-
-		wait_s = min(1.0, max(0.1, idle_timeout - (now - last_progress)))
-		ready, _, _ = select.select([channel], [], [], wait_s)
-		progress = False
-
-		if ready and channel.recv_ready():
-			chunk = channel.recv(min(4096, max(1, stdout_limit - len(stdout))))
-			if chunk:
-				stdout.extend(chunk)
-				progress = True
-		if ready and channel.recv_stderr_ready():
-			chunk = channel.recv_stderr(min(4096, max(1, stderr_limit - len(stderr))))
-			if chunk:
-				stderr.extend(chunk)
-				progress = True
-
-		if len(stdout) >= stdout_limit or len(stderr) >= stderr_limit or (len(stdout) + len(stderr)) >= combined_limit:
-			limits_hit = True
-			channel.close()
-			break
-
-		if progress:
-			last_progress = time.monotonic()
-
-		if channel.exit_status_ready():
-			while channel.recv_ready() and len(stdout) < stdout_limit:
-				chunk = channel.recv(min(4096, max(1, stdout_limit - len(stdout))))
-				if not chunk:
-					break
-				stdout.extend(chunk)
-			while channel.recv_stderr_ready() and len(stderr) < stderr_limit:
-				chunk = channel.recv_stderr(min(4096, max(1, stderr_limit - len(stderr))))
-				if not chunk:
-					break
-				stderr.extend(chunk)
-			break
-
-	exit_code = channel.recv_exit_status() if channel.exit_status_ready() else None
-	wall_s = time.monotonic() - start
-	status = "Ok"
-	if timed_out:
-		status = "Timeout"
-	elif idle_timed_out:
-		status = "Killed"
-	elif exit_code not in (None, 0):
-		status = "Error"
-	return SSHExecutionResult(
-		stdout=stdout.decode("utf-8", errors="replace"),
-		stderr=stderr.decode("utf-8", errors="replace"),
-		exit_code=exit_code,
-		exit_status=status,
-		wall_s=wall_s,
-		output_bytes=len(stdout) + len(stderr),
-		limits_hit=limits_hit,
-		host_key_fingerprint=fingerprint,
-		host_key_type=host_key_type,
-		timed_out=timed_out,
-		idle_timed_out=idle_timed_out,
-	)
 
 
 def execute_job(
@@ -611,8 +451,8 @@ def execute_job(
 		_validate_agent_connection_for_user(agent_name, connection_doc.name, acting_user)
 		_acquire_connection_slot(connection_doc.name, max_concurrent)
 		acquired = True
-		transport, fingerprint, host_key_type = _connect_transport(connection_doc, limits)
-		result = _run_exec_over_transport(transport, command, limits, fingerprint, host_key_type)
+		transport, fingerprint, host_key_type = connect_transport(connection_doc, limits)
+		result = run_exec_over_transport(transport, command, limits, fingerprint, host_key_type)
 		_apply_result(call, result, limits)
 	except Exception as exc:  # noqa: BLE001
 		call.status = "Failed"
