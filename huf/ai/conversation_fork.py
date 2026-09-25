@@ -22,6 +22,7 @@ from frappe.utils import now
 from huf.ai.agent_integration import _run_async_safely
 from huf.ai.conversation_manager import ConversationManager
 from huf.ai.providers.litellm import get_simple_completion
+from huf.ai.subscription.session_binding import binding_for_fork
 
 
 logger = frappe.logger("huf")
@@ -94,6 +95,12 @@ def fork_conversation_impl(
     target_title = _default_fork_title(title, source.title)
     target_project = project if project is not None else source.project
     target = cm.create_new_conversation(title=target_title, project=target_project)
+
+    # A fork must never inherit the source's provider session binding, even
+    # though the DocType defaults happen to already be clean today (plan
+    # §11.3). Apply this explicitly so the guarantee is enforced, not incidental.
+    target.update(binding_for_fork())
+    target.save(ignore_permissions=True)
 
     try:
         if mode == "full_history":
