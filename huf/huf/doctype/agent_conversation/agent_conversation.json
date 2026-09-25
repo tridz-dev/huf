@@ -31,7 +31,13 @@
   "total_cost",
   "system_tab",
   "channel",
-  "external_id"
+  "external_id",
+  "subscription_runtime",
+  "subscription_provider_session_id",
+  "subscription_provider_session_status",
+  "subscription_provider_session_created_at",
+  "subscription_provider_session_last_verified_at",
+  "runtime_mode"
  ],
  "fields": [
   {
@@ -228,6 +234,45 @@
    "fieldname": "token_breakdown_section",
    "fieldtype": "Section Break",
    "label": "Token Breakdown"
+  },
+  {
+   "description": "Link to the subscription runtime configuration for this conversation.",
+   "fieldname": "subscription_runtime",
+   "fieldtype": "Link",
+   "label": "Subscription Runtime",
+   "options": "Subscription Runtime"
+  },
+  {
+   "description": "Session identifier provided by the subscription provider.",
+   "fieldname": "subscription_provider_session_id",
+   "fieldtype": "Data",
+   "label": "Subscription Provider Session ID"
+  },
+  {
+   "description": "Current status of the subscription provider session.",
+   "fieldname": "subscription_provider_session_status",
+   "fieldtype": "Select",
+   "label": "Subscription Provider Session Status",
+   "options": "Uninitialized\nActive\nUnavailable\nExpired\nClosed\nError"
+  },
+  {
+   "description": "Timestamp when the subscription provider session was created.",
+   "fieldname": "subscription_provider_session_created_at",
+   "fieldtype": "Datetime",
+   "label": "Subscription Provider Session Created At"
+  },
+  {
+   "description": "Timestamp of the most recent verification of the subscription provider session.",
+   "fieldname": "subscription_provider_session_last_verified_at",
+   "fieldtype": "Datetime",
+   "label": "Subscription Provider Session Last Verified At"
+  },
+  {
+   "description": "The runtime mode used for this conversation.",
+   "fieldname": "runtime_mode",
+   "fieldtype": "Select",
+   "label": "Runtime Mode",
+   "options": "subscription_passthrough"
   }
  ],
  "grid_page_length": 50,

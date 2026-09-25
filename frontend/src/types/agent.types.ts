@@ -174,7 +174,7 @@ export type AgentRun = {
   agent: string;
   prompt: string;
   response?: string;
-  status: "Started" | "Queued" | "Success" | "Failed";
+  status: "Started" | "Queued" | "Success" | "Failed" | "Waiting Authentication";
   error_message?: string;
   input_tokens?: number;
   output_tokens?: number;

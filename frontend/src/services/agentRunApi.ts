@@ -89,7 +89,7 @@ export interface GetAgentRunsParams {
   limit?: number;
   start?: number;
   search?: string;
-  status?: 'Started' | 'Queued' | 'Success' | 'Failed' | 'all';
+  status?: 'Started' | 'Queued' | 'Success' | 'Failed' | 'Waiting Authentication' | 'all';
   agents?: string[];
   filters?: Array<[string, string, unknown]>
 }

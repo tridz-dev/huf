@@ -114,7 +114,7 @@ function ExecutionsRunsTab() {
         limit: params.limit,
         start: params.start,
         search: params.search,
-        status: params.status as 'Started' | 'Queued' | 'Success' | 'Failed' | 'all' | undefined,
+        status: params.status as 'Started' | 'Queued' | 'Success' | 'Failed' | 'Waiting Authentication' | 'all' | undefined,
         agents: params.agents ? params.agents.split(',').filter(Boolean) : undefined,
         filters: runFilters,
       });

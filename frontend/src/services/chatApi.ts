@@ -786,7 +786,7 @@ export async function getAgentMessageIdForRun(agentRunId: string): Promise<strin
 export interface AgentRunStatusResponse {
   success: boolean;
   queued?: boolean;
-  status: 'Queued' | 'Started' | 'Success' | 'Failed';
+  status: 'Queued' | 'Started' | 'Success' | 'Failed' | 'Waiting Authentication';
   response?: string | null;
   error?: string | null;
   agent_run_id: string;

@@ -638,7 +638,7 @@ def _is_user_allowed(agent_doc, user: str) -> bool:
     return _check_agent_access(agent_doc, user)
 
 # Canonical lifecycle status values. These must match the Agent Run doctype
-# Select options (Queued/Started/Success/Failed), the HTTP acknowledgement
+# Select options (Queued/Started/Success/Failed/Waiting Authentication), the HTTP acknowledgement
 # returned by run_agent_sync, and the frontend AgentRunStatusEvent union in
 # frontend/src/hooks/useChatSocket.tsx. Callers may pass lowercase; the wire
 # contract is always canonical.
@@ -647,6 +647,7 @@ _RUN_STATUS_CANONICAL = {
     "started": "Started",
     "success": "Success",
     "failed": "Failed",
+    "waiting_authentication": "Waiting Authentication",
 }
 
 

@@ -398,7 +398,7 @@ export type ToolGroupProps = Omit<ComponentProps<typeof Collapsible>, "open" | "
   /** Called with the call's `callId` when its inline "Deny" button is clicked. */
   onDeny?: (callId: string) => void;
   /** Drives auto-expand-while-running / auto-collapse-when-done below. Omit for a plain uncontrolled group. */
-  runStatus?: "Queued" | "Started" | "Success" | "Failed";
+  runStatus?: "Queued" | "Started" | "Success" | "Failed" | "Waiting Authentication";
   /** Groups rehydrated from persisted history have no in-flight signal — render collapsed, not auto-open. */
   isHistorical?: boolean;
 };
@@ -552,7 +552,7 @@ export type ProcedureRunRowProps = Omit<ComponentProps<typeof Collapsible>, "ope
   onOpenGraph?: () => void;
   onApprove?: (callId: string) => void;
   onDeny?: (callId: string) => void;
-  runStatus?: "Queued" | "Started" | "Success" | "Failed";
+  runStatus?: "Queued" | "Started" | "Success" | "Failed" | "Waiting Authentication";
   isHistorical?: boolean;
 };
 

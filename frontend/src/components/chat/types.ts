@@ -12,7 +12,7 @@ export type MessageType = {
   generatedAudio?: string;
   generatedVideo?: string;
   voiceMessage?: string;
-  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
+  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed' | 'Waiting Authentication';
   /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
   agentRunId?: string;
   error?: string;

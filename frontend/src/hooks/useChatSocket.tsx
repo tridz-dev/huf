@@ -33,7 +33,7 @@ export type AgentRunStatusEvent = {
     agent_run_id: string;
     conversation_id: string;
     session_id?: string;
-    status: 'Queued' | 'Started' | 'Success' | 'Failed';
+    status: 'Queued' | 'Started' | 'Success' | 'Failed' | 'Waiting Authentication';
     response?: string;
     error?: string;
     agent_message_id?: string;

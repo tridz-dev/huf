@@ -66,7 +66,13 @@
   "column_break_hbrm",
   "reference_name",
   "automation",
-  "automation_trigger"
+  "automation_trigger",
+  "billing_mode",
+  "usage_source",
+  "provider_session_id_snapshot",
+  "runtime",
+  "runtime_mode",
+  "auth_challenge"
  ],
  "fields": [
   {
@@ -97,7 +103,7 @@
    "hidden": 1,
    "in_list_view": 1,
    "label": "Status",
-   "options": "\nStarted\nQueued\nSuccess\nFailed",
+   "options": "\nStarted\nQueued\nSuccess\nFailed\nWaiting Authentication",
    "read_only": 1
   },
   {
@@ -278,7 +284,7 @@
    "fieldname": "provider_path",
    "fieldtype": "Select",
    "label": "Provider Path",
-   "options": "\nlitellm\nlegacy_fallback",
+   "options": "\nlitellm\nlegacy_fallback\nsubscription_cli",
    "read_only": 1
   },
   {
@@ -300,7 +306,7 @@
    "fieldname": "cost_source",
    "fieldtype": "Select",
    "label": "Cost Source",
-   "options": "unknown\nprovider_reported\ncustom\nlitellm",
+   "options": "unknown\nprovider_reported\ncustom\nlitellm\nsubscription_unmetered",
    "read_only": 1
   },
   {
@@ -477,6 +483,47 @@
   {
    "fieldname": "column_break_hbrm",
    "fieldtype": "Column Break"
+  },
+  {
+   "description": "The billing mode for this run.",
+   "fieldname": "billing_mode",
+   "fieldtype": "Select",
+   "label": "Billing Mode",
+   "options": "api\nsubscription\nlocal\nunknown"
+  },
+  {
+   "description": "The source of usage data for this run.",
+   "fieldname": "usage_source",
+   "fieldtype": "Select",
+   "label": "Usage Source",
+   "options": "provider_reported\nestimated\nunavailable"
+  },
+  {
+   "description": "Snapshot of the provider session ID at the time of execution.",
+   "fieldname": "provider_session_id_snapshot",
+   "fieldtype": "Data",
+   "label": "Provider Session ID Snapshot"
+  },
+  {
+   "description": "Link to the subscription runtime configuration for this run.",
+   "fieldname": "runtime",
+   "fieldtype": "Link",
+   "label": "Runtime",
+   "options": "Subscription Runtime"
+  },
+  {
+   "description": "The runtime mode used for this run.",
+   "fieldname": "runtime_mode",
+   "fieldtype": "Select",
+   "label": "Runtime Mode",
+   "options": "subscription_passthrough"
+  },
+  {
+   "description": "Link to the authentication challenge if the run is waiting for authentication.",
+   "fieldname": "auth_challenge",
+   "fieldtype": "Link",
+   "label": "Auth Challenge",
+   "options": "Subscription Auth Challenge"
   }
  ],
  "grid_page_length": 50,
