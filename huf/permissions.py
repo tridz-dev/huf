@@ -78,6 +78,9 @@ CAPABILITIES: dict[str, str] = {
 	"ssh.approve": "Approve SSH Executions",
 	# --- Docker Execution ---
 	"docker.run": "Run Docker Execution Tool",
+	# --- Subscription CLI Runtimes ---
+	"subscription_runtime.manage": "Manage Subscription Runtimes",
+	"subscription_runtime.use": "Use Subscription Runtimes",
 	# --- Developer Platform ---
 	"developer.access": "Access Developer Platform",
 	"developer.keys.manage": "Manage Developer API Keys",
@@ -117,6 +120,8 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"ssh.run",
 		"ssh.approve",
 		"docker.run",
+		"subscription_runtime.manage",
+		"subscription_runtime.use",
 		"developer.access",
 		"developer.keys.manage",
 	],
@@ -132,6 +137,7 @@ DEFAULT_ROLE_CAPABILITIES: dict[str, list[str]] = {
 		"data.records.edit_own",
 		"code_execution.run",
 		"ssh.run",
+		"subscription_runtime.use",
 		"developer.access",
 		"developer.keys.manage",
 	],

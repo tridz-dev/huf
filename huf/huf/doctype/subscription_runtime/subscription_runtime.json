@@ -1,0 +1,366 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:runtime_name",
+ "creation": "2026-09-26 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "runtime_name",
+  "enabled",
+  "column_break_identity",
+  "runtime_mode",
+  "provider_family",
+  "transport_section",
+  "cli_type",
+  "cli_path",
+  "transport_type",
+  "column_break_transport",
+  "working_directory",
+  "execution_user_hint",
+  "ssh_section",
+  "ssh_connection",
+  "docker_section",
+  "docker_container",
+  "docker_context",
+  "docker_workdir",
+  "limits_section",
+  "timeout_seconds",
+  "max_output_bytes",
+  "tenancy_section",
+  "owner_user",
+  "tenancy_policy",
+  "column_break_tenancy",
+  "allowed_users_json",
+  "allowed_roles_json",
+  "probe_section",
+  "detected_version",
+  "last_tested_on",
+  "last_test_status",
+  "column_break_probe",
+  "last_error",
+  "capabilities_snapshot",
+  "auth_section",
+  "auth_status",
+  "auth_method",
+  "auth_account_hint",
+  "column_break_auth",
+  "last_auth_checked_at",
+  "last_auth_success_at",
+  "last_auth_failure_at",
+  "auth_error_code",
+  "auth_error_message"
+ ],
+ "fields": [
+  {
+   "fieldname": "runtime_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Runtime Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "subscription_passthrough",
+   "fieldname": "runtime_mode",
+   "fieldtype": "Select",
+   "label": "Runtime Mode",
+   "options": "subscription_passthrough",
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider_family",
+   "fieldtype": "Select",
+   "label": "Provider Family",
+   "options": "Claude\nCodex\nGemini",
+   "reqd": 1
+  },
+  {
+   "fieldname": "transport_section",
+   "fieldtype": "Section Break",
+   "label": "Transport"
+  },
+  {
+   "fieldname": "cli_type",
+   "fieldtype": "Data",
+   "label": "CLI Type",
+   "description": "Binary name, e.g. claude / codex / gemini."
+  },
+  {
+   "fieldname": "cli_path",
+   "fieldtype": "Data",
+   "label": "CLI Path"
+  },
+  {
+   "fieldname": "transport_type",
+   "fieldtype": "Select",
+   "label": "Transport Type",
+   "options": "Local\nDocker\nSSH",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_transport",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "working_directory",
+   "fieldtype": "Data",
+   "label": "Working Directory",
+   "description": "Required for non-Local transports."
+  },
+  {
+   "fieldname": "execution_user_hint",
+   "fieldtype": "Data",
+   "label": "Execution User Hint",
+   "description": "Informational only. Not enforced.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ssh_section",
+   "fieldtype": "Section Break",
+   "label": "SSH Transport",
+   "depends_on": "eval:doc.transport_type === 'SSH'"
+  },
+  {
+   "fieldname": "ssh_connection",
+   "fieldtype": "Link",
+   "label": "SSH Connection",
+   "options": "SSH Connection",
+   "depends_on": "eval:doc.transport_type === 'SSH'"
+  },
+  {
+   "fieldname": "docker_section",
+   "fieldtype": "Section Break",
+   "label": "Docker Transport",
+   "depends_on": "eval:doc.transport_type === 'Docker'"
+  },
+  {
+   "fieldname": "docker_container",
+   "fieldtype": "Data",
+   "label": "Docker Container",
+   "depends_on": "eval:doc.transport_type === 'Docker'"
+  },
+  {
+   "fieldname": "docker_context",
+   "fieldtype": "Data",
+   "label": "Docker Context",
+   "depends_on": "eval:doc.transport_type === 'Docker'"
+  },
+  {
+   "fieldname": "docker_workdir",
+   "fieldtype": "Data",
+   "label": "Docker Workdir",
+   "depends_on": "eval:doc.transport_type === 'Docker'"
+  },
+  {
+   "fieldname": "limits_section",
+   "fieldtype": "Section Break",
+   "label": "Limits"
+  },
+  {
+   "default": "120",
+   "fieldname": "timeout_seconds",
+   "fieldtype": "Int",
+   "label": "Timeout Seconds"
+  },
+  {
+   "default": "1048576",
+   "fieldname": "max_output_bytes",
+   "fieldtype": "Int",
+   "label": "Max Output Bytes"
+  },
+  {
+   "fieldname": "tenancy_section",
+   "fieldtype": "Section Break",
+   "label": "Tenancy"
+  },
+  {
+   "fieldname": "owner_user",
+   "fieldtype": "Link",
+   "label": "Owner User",
+   "options": "User"
+  },
+  {
+   "default": "owner_only",
+   "fieldname": "tenancy_policy",
+   "fieldtype": "Select",
+   "label": "Tenancy Policy",
+   "options": "owner_only\nexplicit_users\nexplicit_roles\nsystem_managed_shared",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_tenancy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "allowed_users_json",
+   "fieldtype": "Long Text",
+   "label": "Allowed Users (JSON)",
+   "description": "Interim JSON array of allowed user emails. Used only when Tenancy Policy is 'explicit_users'."
+  },
+  {
+   "fieldname": "allowed_roles_json",
+   "fieldtype": "Long Text",
+   "label": "Allowed Roles (JSON)",
+   "description": "Interim JSON array of allowed role names. Used only when Tenancy Policy is 'explicit_roles'."
+  },
+  {
+   "fieldname": "probe_section",
+   "fieldtype": "Section Break",
+   "label": "Probe State"
+  },
+  {
+   "fieldname": "detected_version",
+   "fieldtype": "Data",
+   "label": "Detected Version",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_tested_on",
+   "fieldtype": "Datetime",
+   "label": "Last Tested On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_test_status",
+   "fieldtype": "Data",
+   "label": "Last Test Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_probe",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_error",
+   "fieldtype": "Small Text",
+   "label": "Last Error",
+   "read_only": 1
+  },
+  {
+   "fieldname": "capabilities_snapshot",
+   "fieldtype": "Long Text",
+   "label": "Capabilities Snapshot",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auth_section",
+   "fieldtype": "Section Break",
+   "label": "Authentication State"
+  },
+  {
+   "default": "unknown",
+   "fieldname": "auth_status",
+   "fieldtype": "Select",
+   "label": "Auth Status",
+   "options": "unknown\nready\nrequired\nwaiting_user\nverifying\nfailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auth_method",
+   "fieldtype": "Data",
+   "label": "Auth Method",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auth_account_hint",
+   "fieldtype": "Data",
+   "label": "Auth Account Hint",
+   "description": "Masked/safe display value only. Never a token or credential.",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_auth",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_auth_checked_at",
+   "fieldtype": "Datetime",
+   "label": "Last Auth Checked At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_auth_success_at",
+   "fieldtype": "Datetime",
+   "label": "Last Auth Success At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_auth_failure_at",
+   "fieldtype": "Datetime",
+   "label": "Last Auth Failure At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auth_error_code",
+   "fieldtype": "Data",
+   "label": "Auth Error Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "auth_error_message",
+   "fieldtype": "Small Text",
+   "label": "Auth Error Message",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-26 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Subscription Runtime",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
