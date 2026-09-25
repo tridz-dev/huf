@@ -13,6 +13,9 @@
   "provider_name",
   "api_key",
   "provider_brand",
+  "provider_mode",
+  "billing_mode",
+  "subscription_runtime",
   "timeout_seconds"
  ],
  "fields": [
@@ -69,6 +72,31 @@
    "fieldtype": "Int",
    "label": "Timeout (seconds)",
    "non_negative": 1
+  },
+  {
+   "default": "API",
+   "description": "How this provider is accessed: API (cloud/remote HTTP), Local Endpoint (self-hosted model server), or Subscription CLI (external CLI tool).",
+   "fieldname": "provider_mode",
+   "fieldtype": "Select",
+   "label": "Provider Mode",
+   "options": "API\nLocal Endpoint\nSubscription CLI",
+   "reqd": 1
+  },
+  {
+   "default": "API",
+   "description": "Billing method: API (per-token pricing), Subscription (fixed fee), Local (self-hosted, no cost), or Unknown.",
+   "fieldname": "billing_mode",
+   "fieldtype": "Select",
+   "label": "Billing Mode",
+   "options": "API\nSubscription\nLocal\nUnknown",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subscription_runtime",
+   "fieldtype": "Link",
+   "label": "Subscription Runtime",
+   "options": "Subscription Runtime",
+   "depends_on": "eval:doc.provider_mode == 'Subscription CLI';"
   }
  ],
  "grid_page_length": 50,

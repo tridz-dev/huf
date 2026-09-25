@@ -8,6 +8,7 @@
  "field_order": [
   "model_name",
   "provider",
+  "runtime_model_name",
   "modalities",
   "capabilities_section",
   "supports_reasoning",
@@ -41,6 +42,12 @@
    "label": "Model Name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "runtime_model_name",
+   "fieldtype": "Data",
+   "label": "Runtime Model Name",
+   "description": "Optional. The model name to pass to a CLI or external runtime when the display name differs from the CLI flag value (e.g. 'gpt-4-turbo' in HUF but 'gpt-4-1106-preview' for the actual API call)."
   },
   {
    "description": "Select one or more supported modalities / tasks for this model. Used to filter model pickers (e.g. image generation, TTS, transcription, document OCR/vision).",
