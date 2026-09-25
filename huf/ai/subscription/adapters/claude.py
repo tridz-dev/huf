@@ -20,6 +20,8 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -47,6 +49,16 @@ _FLAG_RESUME = "--resume"
 _FLAG_STRICT_MCP_CONFIG = "--strict-mcp-config"
 _FLAG_RESTRICTED = "--restricted"
 _FLAG_MODEL = "--model"
+# H5 fix (security review): help_output.txt documents that --restricted still
+# "confines the file tools to the working directories" rather than removing
+# them -- Read/Write/Edit remain available there. `--tools <tools...>` is
+# documented as accepting `""` to "disable all tools", which is the strictest
+# combination that still allows normal (tool-free) conversational use of the
+# adapter -- this adapter never wires any HUF tool schema to the CLI anyway
+# (see module docstring passthrough constraint), so disabling every built-in
+# tool costs nothing functionally and closes the "read the working directory
+# for secrets" vector the review flagged.
+_FLAG_TOOLS = "--tools"
 
 _VERSION_RE = re.compile(r"(\d+\.\d+\.\d+)")
 
@@ -88,6 +100,33 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 
 	def _executable(self, runtime: Any = None) -> str:
 		return getattr(runtime, "cli_path", None) or self.DEFAULT_EXECUTABLE
+
+	def _resolve_working_directory(self, runtime: Any = None) -> tuple[str, str | None]:
+		"""Resolve the `cwd` a turn-execution call must pass to `transport.run()`.
+
+		H5 fix (security review): "The Claude adapter passes no working
+		directory, so SSH and Docker run from $HOME... A prompt like 'print
+		~/.claude/.credentials.json' puts the token into an Agent Message."
+		Never return None/empty here for a turn-execution call -- that lets
+		the transport's own default apply, which is exactly the bug the
+		review found. Prefer the runtime's configured `working_directory`
+		(same attribute Codex/Gemini require -- see adapters/codex.py's
+		`_require_trusted_working_directory` and adapters/gemini.py); if none
+		is configured, create a fresh, empty, per-run scratch directory
+		instead of ever defaulting to $HOME.
+
+		Returns:
+			(cwd, scratch_dir_to_clean_up_or_None). The second element is
+			non-None only when this call created a new scratch directory, so
+			the caller can remove it after the turn -- it must never be a
+			shared/persistent directory that could accumulate sensitive
+			leftovers across runs.
+		"""
+		configured = getattr(runtime, "working_directory", None)
+		if configured and str(configured).strip():
+			return str(configured), None
+		scratch_dir = tempfile.mkdtemp(prefix="huf-claude-turn-")
+		return scratch_dir, scratch_dir
 
 	# ------------------------------------------------------------------
 	# Probe / auth
@@ -267,20 +306,63 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 		session_id: str | None,
 		resume_id: str | None,
 		model_override: str | None,
+		executable: str | None = None,
 	) -> list[str]:
 		"""Build the argv for a turn.
 
-		Always includes `--strict-mcp-config` (suppress ambient MCP config) and
-		`--restricted` (tool restriction, help_output.txt) -- and NEVER
+		H4 fix (security review): `executable` defaults to `DEFAULT_EXECUTABLE`
+		("claude") only when the caller doesn't pass one -- turn-execution call
+		sites (create_session/run_turn) must pass `self._executable(runtime)`
+		so a configured `runtime.cli_path` is actually used, matching the
+		pattern probe()/check_auth()/begin_auth()/logout() already use (commit
+		8fb114c6). The bare-string default only remains here for callers with
+		no runtime handle available (see FakeCLIAdapter in
+		test_adapter_claude.py, which overrides DEFAULT_EXECUTABLE itself).
+
+		Always includes `--strict-mcp-config` (suppress ambient MCP config),
+		`--restricted` (tool restriction, help_output.txt), and `--tools ""`
+		(H5 fix: disables every built-in tool, since `--restricted` alone still
+		"confines the file tools to the working directories" rather than
+		removing them -- Read/Write/Edit would otherwise remain available
+		there per help_output.txt's `--restricted` description) -- and NEVER
 		`--mcp-config`/`--append-system-prompt`, per the passthrough constraint
 		in adapters/base.py. See test_adapter_claude.py's argv self-check.
 		"""
-		argv = [self.DEFAULT_EXECUTABLE, _FLAG_PRINT, text]
+		exe = executable or self.DEFAULT_EXECUTABLE
+		argv = [exe, _FLAG_PRINT]
+		# Argv-injection guard (review finding): `text` is a positional argv
+		# entry, so a message starting with "-"/"--" could otherwise be
+		# parsed as a CLI flag instead of literal prompt text (e.g. a user
+		# typing "--dangerously-skip-permissions" as their message).
+		# help_output.txt does not explicitly document POSIX "--"
+		# end-of-options support for this CLI build, and the Stage 0 spike
+		# never live-captured a hyphen-leading prompt (NOT LIVE-VERIFIED
+		# against a real build). Inserted immediately here, directly before
+		# `text` and before any later flag -- NOT at the end of argv --
+		# because "--" conventionally makes everything after it positional,
+		# and every later flag in this method (--resume/--session-id/
+		# --output-format/--strict-mcp-config/--restricted/--tools/--model)
+		# still needs to be parsed as a flag, not swallowed as extra
+		# positional text. Only applied when `text` actually starts with
+		# "-": ordinary prompts (the overwhelming common case) are
+		# byte-for-byte unaffected if this build does NOT honor "--", while a
+		# hyphen-leading prompt -- already unsafe today with no guard at all
+		# -- can only be helped, never made worse, by this addition.
+		if text.startswith("-"):
+			argv.append("--")
+		argv.append(text)
 		if resume_id is not None:
 			argv += [_FLAG_RESUME, resume_id]
 		elif session_id is not None:
 			argv += [_FLAG_SESSION_ID, session_id]
-		argv += [_FLAG_OUTPUT_FORMAT, "json", _FLAG_STRICT_MCP_CONFIG, _FLAG_RESTRICTED]
+		argv += [
+			_FLAG_OUTPUT_FORMAT,
+			"json",
+			_FLAG_STRICT_MCP_CONFIG,
+			_FLAG_RESTRICTED,
+			_FLAG_TOOLS,
+			"",
+		]
 		if model_override:
 			argv += [_FLAG_MODEL, model_override]
 		return argv
@@ -397,46 +479,40 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 		)
 
 	async def create_session(self, request: SubscriptionTurnRequest) -> ProviderSession:
-		"""Create a session by running the first turn with an explicit --session-id.
-
-		Claude's CLI has no separate "create an empty session" command -- a
+		"""Claude's CLI has no separate "create an empty session" command -- a
 		session comes into existence as the side effect of the first `-p` turn
 		(help_output.txt: `--session-id <uuid>` "Use a specific session ID for
-		the conversation (must be a valid UUID)"). So HUF generates the UUID up
-		front for idempotency (plan §16.2) and this method executes that first
-		turn.
+		the conversation (must be a valid UUID)").
 
-		Command constructed (see _build_argv):
-			claude -p "<text>" --session-id <uuid> --output-format json \
-				--strict-mcp-config --restricted [--model <override>]
+		H4/H5 fix (security review): this method previously ran that first
+		turn itself, but `create_session`'s signature (fixed by
+		SubscriptionCLIAdapter's abstract base -- see adapters/base.py) takes
+		only a bare `SubscriptionTurnRequest`, with no `runtime` handle. That
+		made it structurally impossible to resolve `runtime.cli_path` (H4) or
+		a safe `runtime.working_directory`/scratch `cwd` (H5) here, which is
+		exactly how this method ended up hardcoding the bare `"claude"` string
+		with no working directory while probe()/check_auth()/begin_auth()/
+		logout() were already fixed elsewhere (commit 8fb114c6) -- those all
+		take `runtime` directly.
+
+		`executor.py::_execute_inner` (the only real caller of any adapter in
+		this codebase) never calls `create_session` -- it always calls
+		`run_turn` with `provider_session_id=None`, which creates the session
+		as part of that (runtime-aware) call. This mirrors
+		`adapters/codex.py::create_session`, which raises for the same
+		structural reason. Rather than leave a second, unreachable-in-practice
+		turn-execution code path that can only ever run with the wrong CLI
+		binary and no cwd guard, this now refuses clearly and points callers
+		at the one path that has both a `runtime` and a HUF-managed working
+		directory.
 		"""
-		self._reject_unsupported_images(request)
-
-		session_id = str(uuid.uuid4())
-		argv = self._build_argv(
-			text=request.text,
-			session_id=session_id,
-			resume_id=None,
-			model_override=request.model_override,
+		raise SubscriptionCLIError(
+			SubscriptionErrorCode.CLI_PROCESS_FAILED,
+			"ClaudeAdapter.create_session() cannot resolve a runtime's cli_path/"
+			"working_directory (its signature carries no runtime handle); call "
+			"run_turn with provider_session_id=None to create a session as part "
+			"of the first turn instead.",
 		)
-		result = await self.transport.run(argv, timeout=request.timeout_seconds)
-		if result.timed_out:
-			raise SubscriptionCLIError(SubscriptionErrorCode.CLI_PROCESS_TIMEOUT)
-
-		turn_result = self._parse_turn_output(argv, result)
-		if turn_result.status == "error":
-			event = turn_result.events[0] if turn_result.events else {}
-			code_value = event.get("code", SubscriptionErrorCode.CLI_PROCESS_FAILED.value)
-			try:
-				code = SubscriptionErrorCode(code_value)
-			except ValueError:
-				code = SubscriptionErrorCode.CLI_PROCESS_FAILED
-			if code is SubscriptionErrorCode.AUTH_REQUIRED:
-				raise SubscriptionAuthError(code, message=event.get("message"))
-			raise SubscriptionCLIError(code, message=event.get("message"))
-
-		resolved_session_id = turn_result.provider_session_id or session_id
-		return ProviderSession(session_id=resolved_session_id, created_at=_utcnow_iso())
 
 	async def validate_session(self, runtime: Any, session_id: str) -> SessionStatus:
 		"""Best-effort session-existence check.
@@ -475,6 +551,19 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 		  (resume_turn.json / help_output.txt, both REAL), same
 		  --output-format json / --strict-mcp-config / --restricted flags.
 
+		H4 fix: this is the actual turn-execution path (the only one the real
+		executor calls -- see create_session's docstring) and previously built
+		argv with the bare `"claude"` string even though it takes `runtime`
+		and could resolve `runtime.cli_path` like probe/check_auth/etc.
+		already did (commit 8fb114c6). Fixed by passing
+		`self._executable(runtime)` into `_build_argv`.
+
+		H5 fix: always resolves and passes an explicit `cwd` to
+		`transport.run()` -- `runtime.working_directory` if configured,
+		otherwise a fresh empty scratch directory -- and never lets the
+		transport's own default (which the review found silently applies and
+		can be $HOME for SSH/Docker transports) take over.
+
 		Never raises on malformed CLI output -- see _parse_turn_output.
 		"""
 		self._reject_unsupported_images(request)
@@ -486,9 +575,16 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 			session_id=session_id,
 			resume_id=resume_id,
 			model_override=request.model_override,
+			executable=self._executable(runtime),
 		)
 
-		result = await self.transport.run(argv, timeout=request.timeout_seconds)
+		cwd, scratch_dir = self._resolve_working_directory(runtime)
+		try:
+			result = await self.transport.run(argv, cwd=cwd, timeout=request.timeout_seconds)
+		finally:
+			if scratch_dir is not None:
+				shutil.rmtree(scratch_dir, ignore_errors=True)
+
 		if result.timed_out:
 			return SubscriptionTurnResult(
 				status="error",
