@@ -14,6 +14,7 @@ import { MessageActions } from './MessageActions';
 import { ProposeProcedureAction } from './ProposeProcedureAction';
 import { MessageLoadingState } from './MessageLoadingState';
 import { ChatErrorCard } from './ChatErrorCard';
+import { SubscriptionAuthCard } from './SubscriptionAuthCard';
 import { CopyButton } from './CopyButton';
 import { Image } from '@/components/ai-elements/image';
 import { Video } from '@/components/ai-elements/video';
@@ -271,7 +272,15 @@ export function ChatMessage({
                                     toolName={showToolExecutionDetails ? message.tools?.[0]?.name : undefined}
                                 />
                             )}
-                            {message.error ? (
+                            {message.runStatus === 'Waiting Authentication' ? (
+                                // Parked run waiting on subscription-runtime login — a normal,
+                                // recoverable waiting state (PLAN.md §64.2), never the red
+                                // ChatErrorCard treatment used for a genuinely Failed run.
+                                <SubscriptionAuthCard
+                                    runtimeName={message.runtimeName}
+                                    authReason={message.error}
+                                />
+                            ) : message.error ? (
                                 <ChatErrorCard
                                     error={message.error}
                                     onRetry={handleRegenerate}
