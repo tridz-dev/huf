@@ -324,6 +324,7 @@ scheduler_events = {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent_integration.recover_stalled_agent_runs",
+            "huf.ai.subscription.auth_service.sweep_expired_auth_challenges",
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",

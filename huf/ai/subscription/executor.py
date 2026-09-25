@@ -401,6 +401,7 @@ class SubscriptionPassthroughExecutor:
 	def _park_for_auth(runtime, run_doc, conversation) -> None:
 		challenge = auth_service.get_or_create_active_challenge(runtime)
 		auth_service.park_run(run_doc.name, challenge["name"])
+		SubscriptionPassthroughExecutor._notify_owner_of_park(runtime, run_doc, conversation, challenge)
 		# CONTRACT (auth_service.park_run docstring / PLAN §75.3): release any
 		# per-conversation execution lock BEFORE returning — parking can leave
 		# the run waiting for an arbitrary (possibly very long) amount of time
@@ -423,6 +424,49 @@ class SubscriptionPassthroughExecutor:
 					"Failed to release conversation lock while parking run %s", run_doc.name
 				)
 		frappe.db.commit()  # nosemgrep: justified — must persist park state before returning
+
+	@staticmethod
+	def _notify_owner_of_park(runtime, run_doc, conversation, challenge: dict[str, Any]) -> None:
+		"""
+		PLAN.md sec 63.2 "notify runtime owner/designated operator": when a run
+		is parked behind a login challenge, let the runtime's owner know a
+		conversation is waiting on them, via HUF's existing Notification Log
+		mechanism (the same `enqueue_create_notification` helper used for flow
+		approval notifications in `flow_engine.py::_send_approval_notifications`
+		— reused here rather than inventing a new channel). Best-effort: a
+		notification failure must never fail the park itself.
+		"""
+		owner_user = getattr(runtime, "owner_user", None) if not isinstance(runtime, str) else None
+		if not owner_user:
+			return
+
+		try:
+			from frappe.desk.doctype.notification_log.notification_log import (
+				enqueue_create_notification,
+			)
+
+			runtime_name = runtime if isinstance(runtime, str) else runtime.name
+			conversation_name = getattr(conversation, "name", None) if conversation else None
+			subject_target = conversation_name or run_doc.name
+
+			enqueue_create_notification(
+				owner_user,
+				{
+					"type": "Alert",
+					"document_type": "Subscription Auth Challenge",
+					"document_name": challenge.get("name"),
+					"subject": f"Sign-in required for {runtime_name} — conversation {subject_target} is waiting",
+					"email_content": (
+						f"<p>Agent Run {run_doc.name} is parked waiting on authentication "
+						f"for Subscription Runtime {runtime_name}.</p>"
+						f"<p>Complete the login challenge ({challenge.get('name')}) to resume it.</p>"
+					),
+				},
+			)
+		except Exception:
+			logger.exception(
+				"Failed to notify owner %s of parked run %s", owner_user, run_doc.name
+			)
 
 	@staticmethod
 	def _fail(run_doc, conversation, reason: str) -> dict[str, Any]:

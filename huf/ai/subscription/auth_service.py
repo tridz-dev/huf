@@ -10,10 +10,12 @@ Explicitly OUT of scope here (wired by later, serialized tasks):
   - Calling into `agent_integration.py` / `run.py` to actually pause/resume
     agent execution.
   - Acquiring or releasing the per-conversation Redis lock.
-  - The scheduled sweeper that expires stale challenges (T-06-E) - this
-    module only provides the pure `check_challenge_expiry` check it needs.
   - Re-queuing parked runs once auth succeeds - this module only provides
     the read-only `resolve_parked_runs_for_runtime` lookup it needs.
+
+T-06-E added `sweep_expired_auth_challenges()` (the scheduled job registered
+in `hooks.py`, PLAN.md sec 63.2) and the rate-limit guard inside
+`get_or_create_active_challenge()` (PLAN.md sec 63.3).
 """
 
 from __future__ import annotations
@@ -23,9 +25,23 @@ from typing import Any
 import frappe
 from frappe.utils import now_datetime
 
+from huf.ai.subscription.errors import SubscriptionAuthError, SubscriptionErrorCode
+
 # Active = still eligible to be reused instead of creating a duplicate
 # challenge for the same runtime (dedup - PLAN.md sec 63.3).
 ACTIVE_CHALLENGE_STATUSES = ("Pending", "Waiting User", "Verifying")
+
+# Terminal-failure statuses counted by the rate-limit guard below.
+_FAILED_CHALLENGE_STATUSES = ("Failed", "Expired")
+
+# PLAN.md sec 63.3 "rate-limit repeated failed login attempts": if a runtime
+# has racked up this many Failed/Expired challenges within the trailing
+# window, stop auto-creating new challenges and surface a clear signal
+# instead of spinning up challenge after challenge (a "challenge storm").
+# Kept deliberately simple - a single frappe.get_all count query, not a full
+# rate-limiter framework.
+AUTH_RATE_LIMIT_MAX_RECENT_FAILURES = 3
+AUTH_RATE_LIMIT_WINDOW_MINUTES = 60
 
 CHALLENGE_FIELDS = [
 	"name",
@@ -91,6 +107,8 @@ def get_or_create_active_challenge(runtime) -> dict[str, Any]:
 	if existing_name:
 		challenge = frappe.get_doc("Subscription Auth Challenge", existing_name[0])
 		return {field: challenge.get(field) for field in CHALLENGE_FIELDS}
+
+	_raise_if_rate_limited(runtime_name)
 
 	provider = runtime.provider_family if not isinstance(runtime, str) else None
 
@@ -214,3 +232,137 @@ def resolve_parked_runs_for_runtime(runtime_name: str) -> list[str]:
 		},
 		pluck="name",
 	)
+
+
+def _raise_if_rate_limited(runtime_name: str) -> None:
+	"""
+	PLAN.md sec 63.3 - rate-limit repeated failed login attempts.
+
+	Counts this runtime's `Subscription Auth Challenge` docs with status in
+	(Failed, Expired) created within the trailing
+	`AUTH_RATE_LIMIT_WINDOW_MINUTES` minutes. If that count is at or above
+	`AUTH_RATE_LIMIT_MAX_RECENT_FAILURES`, raises `SubscriptionAuthError`
+	instead of letting a new challenge be created - manual intervention is
+	required at that point rather than HUF auto-retrying into another
+	device-code/login prompt.
+
+	Deliberately simple: one `frappe.get_all` count query, not a full
+	rate-limiter framework.
+	"""
+	window_start = frappe.utils.add_to_date(now_datetime(), minutes=-AUTH_RATE_LIMIT_WINDOW_MINUTES)
+
+	recent_failures = frappe.get_all(
+		"Subscription Auth Challenge",
+		filters={
+			"runtime": runtime_name,
+			"status": ["in", list(_FAILED_CHALLENGE_STATUSES)],
+			"creation": [">=", window_start],
+		},
+		pluck="name",
+	)
+
+	if len(recent_failures) >= AUTH_RATE_LIMIT_MAX_RECENT_FAILURES:
+		raise SubscriptionAuthError(
+			SubscriptionErrorCode.AUTH_REQUIRED_TIMEOUT,
+			(
+				f"Too many recent authentication attempts for runtime {runtime_name} "
+				f"({len(recent_failures)} failed/expired challenges in the last "
+				f"{AUTH_RATE_LIMIT_WINDOW_MINUTES} minutes) - manual intervention required "
+				"before a new login challenge will be created."
+			),
+		)
+
+
+def sweep_expired_auth_challenges() -> None:
+	"""
+	Scheduled job (T-06-E, PLAN.md sec 63.2/77): expire stale auth challenges
+	and fail whatever Agent Runs were parked behind them, so unattended
+	automation never waits forever on a login prompt nobody is answering.
+
+	For every `Subscription Auth Challenge` with status in
+	(Pending, Waiting User, Verifying) where `check_challenge_expiry()` is
+	True:
+	  1. Set the challenge's status to "Expired".
+	  2. For its `parked_agent_run` (if any) and any other Agent Run still
+	     parked on it (`resolve_parked_runs_for_runtime`-style lookup, scoped
+	     to THIS challenge rather than the whole runtime): mark it "Failed"
+	     with a distinguishable AUTH_REQUIRED_TIMEOUT error code/message.
+	  3. Mark the challenge's runtime's `auth_status` "failed" with
+	     `error_code=AUTH_REQUIRED_TIMEOUT`.
+
+	SIMPLIFICATION (documented per task T-06-E): there is currently no field
+	on `Agent Run` / `Agent Conversation` distinguishing "a human is actively
+	chatting" from "this run was scheduled/unattended" automation. Every run
+	parked behind an expired challenge is therefore timed out uniformly -
+	this sweeper does not attempt to spare runs that happen to belong to a
+	live interactive session. This is intentionally conservative: an
+	interactive user who wants to keep waiting past `expires_at` can retry
+	after completing a fresh challenge; PLAN.md sec 63.2's bound ("must not
+	wait forever") takes priority over guessing at session liveness.
+	"""
+	timeout_code = SubscriptionErrorCode.AUTH_REQUIRED_TIMEOUT.value
+	timeout_message = (
+		"Authentication was not completed before the login challenge expired. "
+		"Unattended automation does not wait indefinitely for a user to sign in - "
+		"complete a fresh login challenge and retry."
+	)
+
+	candidate_names = frappe.get_all(
+		"Subscription Auth Challenge",
+		filters={"status": ["in", list(ACTIVE_CHALLENGE_STATUSES)]},
+		pluck="name",
+	)
+
+	for challenge_name in candidate_names:
+		challenge = frappe.get_doc("Subscription Auth Challenge", challenge_name)
+
+		if not check_challenge_expiry(challenge):
+			continue
+
+		frappe.db.set_value(
+			"Subscription Auth Challenge",
+			challenge_name,
+			"status",
+			"Expired",
+			update_modified=True,
+		)
+
+		# Runs parked specifically on THIS challenge - not every run parked
+		# on the runtime, which may span multiple challenges over time.
+		parked_run_names = set(
+			frappe.get_all(
+				"Agent Run",
+				filters={
+					"status": AGENT_RUN_WAITING_AUTH_STATUS,
+					"auth_challenge": challenge_name,
+				},
+				pluck="name",
+			)
+		)
+		if challenge.get("parked_agent_run"):
+			parked_run_names.add(challenge.get("parked_agent_run"))
+
+		for run_name in parked_run_names:
+			frappe.db.set_value(
+				"Agent Run",
+				run_name,
+				{
+					"status": "Failed",
+					"response": timeout_message,
+					"error_code": timeout_code,
+					"error_message": timeout_message,
+					"end_time": now_datetime(),
+				},
+				update_modified=True,
+			)
+
+		runtime_name = challenge.get("runtime")
+		if runtime_name:
+			mark_runtime_auth_state(
+				runtime_name,
+				"failed",
+				error_code=timeout_code,
+				error_message=timeout_message,
+			)
+
+		frappe.db.commit()  # nosemgrep: justified - persist each expiry before moving on
