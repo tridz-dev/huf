@@ -119,8 +119,8 @@ def _run_subprocess(cmd, timeout=DEFAULT_TIMEOUT_SECONDS):
         }
 
 def _run_via_ssh_connection(ssh_connection, cmd_str, timeout=DEFAULT_TIMEOUT_SECONDS):
-    from huf.ai.tools.ssh_execution import _connect_transport, _run_exec_over_transport
-    
+    from huf.ai.tools.ssh_connection_primitive import connect_transport, run_exec_over_transport
+
     doc = frappe.get_doc("SSH Connection", ssh_connection)
     limits = {
         "connection_timeout_seconds": 10,
@@ -129,9 +129,9 @@ def _run_via_ssh_connection(ssh_connection, cmd_str, timeout=DEFAULT_TIMEOUT_SEC
         "stderr_max_bytes": 1048576,
         "combined_output_max_bytes": 2097152,
     }
-    transport, fingerprint, host_key_type = _connect_transport(doc, limits)
+    transport, fingerprint, host_key_type = connect_transport(doc, limits)
     try:
-        res = _run_exec_over_transport(transport, cmd_str, limits, fingerprint, host_key_type)
+        res = run_exec_over_transport(transport, cmd_str, limits, fingerprint, host_key_type)
         if res.exit_code == 0:
             return {"success": True, "output": res.stdout, "stderr": res.stderr, "exit_code": 0}
         else:
