@@ -28,7 +28,7 @@ import frappe
 
 from huf.ai import subscription_api
 from huf.ai.subscription.errors import SubscriptionAuthError, SubscriptionErrorCode
-from huf.ai.subscription.types import AuthStatus
+from huf.ai.subscription.types import AuthChallenge, AuthStatus
 
 
 def _fake_runtime(**overrides):
@@ -273,6 +273,88 @@ class TestPollToResumeWiring(unittest.TestCase):
 			subscription_api.submit_subscription_auth_input("SAC-0001", "123456")
 
 		mock_resume.assert_called_once_with("RUNTIME-1")
+
+
+class TestBeginAuthDoesNotOverwriteExpiresAtWithNone(unittest.TestCase):
+	"""Regression test: `begin_subscription_auth` must not let a `None`
+	`expires_at` from the adapter's `AuthChallenge` stomp the sane default
+	`expires_at` that `Subscription Auth Challenge.validate()` already set
+	at creation time. All three real adapters (claude.py/codex.py/gemini.py)
+	return `expires_at=None` from `begin_auth()` today, so this is the
+	normal path, not an edge case."""
+
+	def setUp(self):
+		self._patches = [
+			mock.patch("huf.permissions.has_capability", return_value=True),
+			mock.patch.object(frappe, "get_roles", return_value=["Agent User"]),
+			mock.patch.object(frappe, "session", types.SimpleNamespace(user="alice@example.com")),
+		]
+		for p in self._patches:
+			p.start()
+			self.addCleanup(p.stop)
+
+	def test_none_expires_at_from_adapter_does_not_blank_existing_default(self):
+		runtime = _fake_runtime()
+
+		# `get_or_create_active_challenge` returned a bare Pending challenge
+		# with no provider details yet (falsy "mode") -- this is what drives
+		# `begin_subscription_auth` into the adapter-fill-in branch.
+		existing = {"name": "SAC-0001", "mode": None}
+
+		# What `validate()` already put on the doc at creation time (the
+		# sane 15-minute default) -- this must survive the fill-in branch.
+		prior_expires_at = "2026-09-26T00:15:00"
+		final_doc = _fake_challenge_doc(expires_at=prior_expires_at)
+
+		adapter = mock.MagicMock()
+
+		async def fake_begin_auth(_runtime):
+			return AuthChallenge(
+				challenge_id="chal-1",
+				provider="Claude",
+				mode="device_code",
+				verification_url="https://example.com/device",
+				user_code="ABCD-1234",
+				requires_huf_input=True,
+				prompt="Enter this code",
+				expires_at=None,
+				poll_supported=True,
+			)
+
+		adapter.begin_auth = fake_begin_auth
+
+		captured_updates = {}
+
+		def fake_set_value(doctype, name, updates, update_modified=False):
+			captured_updates.update(updates)
+
+		def fake_get_doc(doctype, name=None):
+			if doctype == "Subscription Runtime":
+				return runtime
+			if doctype == "Subscription Auth Challenge":
+				return final_doc
+			raise AssertionError(f"unexpected get_doc({doctype!r})")
+
+		with mock.patch.object(frappe, "get_doc", side_effect=fake_get_doc), \
+			mock.patch.object(
+				subscription_api.auth_service, "get_or_create_active_challenge", return_value=existing
+			), \
+			mock.patch.object(subscription_api, "_build_adapter", return_value=adapter), \
+			mock.patch.object(frappe, "db", mock.MagicMock(set_value=fake_set_value)):
+
+			result = subscription_api.begin_subscription_auth("RUNTIME-1")
+
+		# The None the adapter returned must never have been written.
+		self.assertNotIn("expires_at", captured_updates)
+		# And the doc's (mocked) prior/default value must be what comes back.
+		self.assertEqual(result["expires_at"], prior_expires_at)
+		self.assertTrue(result["expires_at"])
+
+		# Fields the adapter DID populate should still be written normally.
+		self.assertEqual(captured_updates["mode"], "device_code")
+		self.assertEqual(captured_updates["verification_url"], "https://example.com/device")
+		self.assertEqual(captured_updates["user_code"], "ABCD-1234")
+		self.assertEqual(captured_updates["safe_instructions"], "Enter this code")
 
 
 class TestNoPasswordFields(unittest.TestCase):

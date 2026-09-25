@@ -382,17 +382,35 @@ def begin_subscription_auth(runtime_name: str) -> dict[str, Any]:
 			)
 			frappe.throw(_("Failed to start authentication: {0}").format(str(exc)))
 
+		# Only overwrite fields the adapter actually populated. All three
+		# adapters (claude.py/codex.py/gemini.py) currently return
+		# `expires_at=None` from `begin_auth()` -- unconditionally writing
+		# that would wipe the sane default `expires_at` that
+		# `Subscription Auth Challenge.validate()` already set at creation
+		# time (creation + DEFAULT_CHALLENGE_LIFETIME_MINUTES), which both
+		# breaks `auth_service`'s active-challenge dedup (it filters on
+		# `expires_at > now`) and means `sweep_expired_auth_challenges` would
+		# never expire the challenge. The same guard is applied to the other
+		# adapter-sourced fields since this branch can, in principle, run
+		# again against an already-existing challenge (e.g. via
+		# `get_or_create_active_challenge`'s reuse path) and a None from the
+		# adapter should never blank out a previously-set value.
+		updates = {"status": "Waiting User"}
+		if auth_challenge.mode:
+			updates["mode"] = auth_challenge.mode
+		if auth_challenge.verification_url:
+			updates["verification_url"] = auth_challenge.verification_url
+		if auth_challenge.user_code:
+			updates["user_code"] = auth_challenge.user_code
+		if auth_challenge.prompt:
+			updates["safe_instructions"] = auth_challenge.prompt
+		if auth_challenge.expires_at:
+			updates["expires_at"] = auth_challenge.expires_at
+
 		frappe.db.set_value(
 			"Subscription Auth Challenge",
 			existing["name"],
-			{
-				"status": "Waiting User",
-				"mode": auth_challenge.mode,
-				"verification_url": auth_challenge.verification_url,
-				"user_code": auth_challenge.user_code,
-				"safe_instructions": auth_challenge.prompt,
-				"expires_at": auth_challenge.expires_at,
-			},
+			updates,
 			update_modified=True,
 		)
 		existing = frappe.get_doc("Subscription Auth Challenge", existing["name"]).as_dict()
