@@ -506,23 +506,23 @@ class CodexAdapter(SubscriptionCLIAdapter):
 		# H2 fix: --ask-for-approval is a TOP-LEVEL-only flag (see
 		# CODEX_APPROVAL_POLICY's comment above) and must come BEFORE `exec`,
 		# e.g. `codex --ask-for-approval never exec ...`. --sandbox is documented
-		# at both the top level and under `codex exec --help`, so it stays after
-		# `exec`/`exec resume` alongside the other exec-only flags (--json,
-		# CODEX_TRUST_FLAG, --model, image flags).
+		# under `codex exec --help` for a NEW session, but a LIVE-VERIFIED test
+		# (real `codex exec resume --help` on codex-cli 0.144.6) found `resume`
+		# accepts neither `--ask-for-approval` nor `--sandbox` at all -- passing
+		# either causes `error: unexpected argument '--sandbox' found` (exit 2)
+		# and the resumed turn never runs. Sandbox/approval mode is fixed at
+		# session creation and carries over automatically on resume, so the
+		# resume branch must omit both flags entirely.
 		executable = getattr(runtime, "cli_path", None) or "codex"
 		if request.provider_session_id:
 			argv = [
 				executable,
-				"--ask-for-approval",
-				CODEX_APPROVAL_POLICY,
 				"exec",
 				"resume",
 				"--json",
 				request.provider_session_id,
 				*image_flags,
 				CODEX_TRUST_FLAG,
-				"--sandbox",
-				CODEX_SANDBOX_MODE,
 			]
 			if request.model_override:
 				argv.extend(["--model", request.model_override])

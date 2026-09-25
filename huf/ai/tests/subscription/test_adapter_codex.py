@@ -391,21 +391,23 @@ def test_run_turn_resume_uses_documented_verbatim_flag_order():
 
 	call = transport.calls[0]
 	argv = call["argv"]
-	# Real fixture: `codex exec resume --json <thread_id> "<prompt>"`, but
-	# --ask-for-approval (top-level-only) must precede `exec`.
+	# LIVE-VERIFIED against real codex-cli 0.144.6: `codex exec resume --help`
+	# does not accept `--ask-for-approval` or `--sandbox` at all (only
+	# `exec`, not `exec resume`, documents them) -- passing either causes
+	# `error: unexpected argument '--sandbox' found` (exit 2) and the
+	# resumed turn never runs. Sandbox/approval mode is fixed at session
+	# creation and carries over automatically on resume.
 	assert argv == [
 		"codex",
-		"--ask-for-approval",
-		CODEX_APPROVAL_POLICY,
 		"exec",
 		"resume",
 		"--json",
 		"01a0da32-e450-7691-a8e5-579223d9a47a",
 		CODEX_TRUST_FLAG,
-		"--sandbox",
-		CODEX_SANDBOX_MODE,
 	]
 	assert call["stdin"] == request.text
+	assert "--sandbox" not in argv
+	assert "--ask-for-approval" not in argv
 	assert result.status == "success"
 	assert result.final_text == "HELLO"
 	assert result.provider_session_id == "01a0da32-e450-7691-a8e5-579223d9a47a"
