@@ -426,14 +426,35 @@ class SubscriptionPassthroughExecutor:
 			# `frappe.db.set_value` would raise. Stash it inside the existing
 			# `usage_snapshot` JSON field instead, merging rather than
 			# clobbering in case telemetry already populated it above.
-			usage_snapshot = dict(telemetry_fields.get("usage_snapshot") or {})
+			# LIVE-VERIFIED bug fix: `usage_snapshot` is a Frappe JSON/Long
+			# Text column -- `frappe.db.set_value` does not auto-serialize a
+			# raw dict for it, so passing one produced a malformed UPDATE
+			# statement (`ProgrammingError 1064`, the dict's Python repr
+			# landing directly in the SQL text) the moment this branch was
+			# actually exercised. Serialize explicitly, matching the
+			# `json.dumps` convention already used elsewhere in this codebase
+			# for the same field (agent_integration.py).
+			existing_snapshot_raw = telemetry_fields.get("usage_snapshot")
+			existing_snapshot = (
+				frappe.parse_json(existing_snapshot_raw)
+				if isinstance(existing_snapshot_raw, str) and existing_snapshot_raw
+				else (existing_snapshot_raw or {})
+			)
+			usage_snapshot = dict(existing_snapshot)
 			usage_snapshot["subscription_cleanup_status"] = cleanup_status
-			telemetry_fields["usage_snapshot"] = usage_snapshot
+			telemetry_fields["usage_snapshot"] = frappe.as_json(usage_snapshot)
 
 		run_fields = dict(telemetry_fields)
 		run_fields["status"] = "Success"
 		run_fields["response"] = result.final_text
 		run_fields["end_time"] = now_datetime()
+		# LIVE-VERIFIED bug fix: `frappe.db.set_value` (raw UPDATE, unlike
+		# `doc.save()`) does not auto-serialize dict/list values for JSON
+		# columns -- `telemetry.map_turn_result_to_agent_run_fields` can set
+		# `reasoning_snapshot` to a plain dict, which produced the exact same
+		# malformed-SQL failure the `usage_snapshot` fix above addresses.
+		if isinstance(run_fields.get("reasoning_snapshot"), (dict, list)):
+			run_fields["reasoning_snapshot"] = frappe.as_json(run_fields["reasoning_snapshot"])
 		frappe.db.set_value("Agent Run", run_doc.name, run_fields, update_modified=True)
 
 		if conversation and getattr(conversation, "name", None):
