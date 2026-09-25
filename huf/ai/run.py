@@ -33,7 +33,31 @@ class RunProvider:
     """
 
     @staticmethod
+    def _assert_not_subscription_cli(provider):
+        """Fail closed if a Subscription CLI provider ever reaches RunProvider.
+
+        Structurally unreachable given the passthrough branch in
+        `agent_integration.py` (`_execute_agent_run` / `run_agent_stream`
+        intercept and return before either ever calls into `RunProvider`) —
+        this guard exists only to catch a future code path that bypasses that
+        branch by mistake (Track-Item: T-06-C).
+        """
+        try:
+            from huf.ai.subscription.executor import is_subscription_cli_provider
+
+            if is_subscription_cli_provider(provider):
+                raise RuntimeError(
+                    "RunProvider must never be invoked for a Subscription CLI provider "
+                    f"({provider!r}); this indicates the subscription passthrough branch "
+                    "in agent_integration.py was bypassed."
+                )
+        except ImportError:
+            # Subscription module unavailable (e.g. partial install) — nothing to guard.
+            pass
+
+    @staticmethod
     async def run(agent, enhanced_prompt, provider, model, context=None):
+        RunProvider._assert_not_subscription_cli(provider)
         provider_lower = provider.lower()
         original_exception = None
 
@@ -131,6 +155,7 @@ class RunProvider:
         followed by `async for` over it) already consumes it that way, so no
         change is needed here.
         """
+        RunProvider._assert_not_subscription_cli(provider)
         try:
             from huf.ai.providers import litellm
             return litellm.run_stream(

@@ -1000,7 +1000,17 @@ def _run_async_safely(coro):
 def run_background_summarization(conversation_name, agent_name):
     """
     Background job to summarize conversation history.
+
+    Subscription CLI passthrough conversations are skipped entirely (Track-Item
+    T-06-C): summarization is a LiteLLM-history feature and passthrough
+    conversations never accumulate HUF-visible history for HUF to summarize —
+    the provider's own session holds context instead.
     """
+    from huf.ai.subscription.executor import is_subscription_passthrough_conversation
+
+    if is_subscription_passthrough_conversation(conversation_name):
+        return
+
     try:
         from huf.ai.prompt_resolver import resolve_summary_prompt
 
@@ -1069,7 +1079,14 @@ def run_background_summarization(conversation_name, agent_name):
 def generate_conversation_title(conversation_name, agent_name):
     """
     Background job to auto-name conversation based on context.
+
+    Subscription CLI passthrough conversations (Track-Item T-06-C) skip the
+    LiteLLM call entirely (a passthrough run has no HUF-owned history to feed
+    it, and it must never invoke HUF's own inference path) and instead use a
+    plain truncated-first-user-message heuristic for the title.
     """
+    from huf.ai.subscription.executor import is_subscription_passthrough_conversation
+
     try:
         # Check if title is still default to avoid overwriting user changes
         current_title = frappe.db.get_value("Agent Conversation", conversation_name, "title")
@@ -1080,6 +1097,24 @@ def generate_conversation_title(conversation_name, agent_name):
         history = conv_manager.get_conversation_history(conversation_name, limit=5)
 
         if not history:
+            return
+
+        if is_subscription_passthrough_conversation(conversation_name):
+            first_user_text = None
+            for message in history:
+                if message.get("role") == "user":
+                    content = message.get("content")
+                    first_user_text = content if isinstance(content, str) else json.dumps(content)
+                    break
+            if not first_user_text:
+                return
+            title = first_user_text.strip()[:60]
+            if len(first_user_text.strip()) > 60:
+                title = title.rstrip() + "…"
+            if title:
+                frappe.db.set_value("Agent Conversation", conversation_name, "title", title)
+                frappe.db.commit()  # nosemgrep: justified background-job commit
+                _emit_conversation_title_updated(conversation_name, title)
             return
 
         prompt = f"""
@@ -1688,6 +1723,44 @@ def _execute_agent_run(
         model=model,
         provider=provider,
     )
+
+    # --- Subscription CLI passthrough interception (Track-Item: T-06-C) ---
+    # Must happen BEFORE conversation history is fetched and BEFORE AgentManager
+    # is constructed: a subscription-mode run must never build knowledge/memory
+    # context, tool schemas, or an MCP config — see
+    # huf/ai/subscription/adapters/base.py and REVIEW_NOTES.md. This check is
+    # cheap (a cached AI Provider field read) so it is safe to do this early,
+    # ahead of the conversation/run doc work below that both paths need.
+    from huf.ai.subscription.executor import (
+        SubscriptionPassthroughExecutor,
+        is_subscription_cli_provider,
+    )
+
+    if is_subscription_cli_provider(resolved_provider):
+        provider_doc = frappe.get_doc("AI Provider", resolved_provider)
+        conversation = frappe.get_doc("Agent Conversation", conversation_id)
+        run_doc = frappe.get_doc("Agent Run", run_id)
+        budget = RunBudget.from_run_doc(run_doc)
+        set_current_budget(budget)
+        frappe.flags.huf_current_agent_run_id = run_doc.name
+        frappe.db.set_value("Agent Run", run_doc.name, "status", "Started", update_modified=True)
+        _emit_run_lifecycle_event(run_doc, conversation, "started")
+        safe_commit()
+        if not skip_user_message and prompt and not str(prompt).startswith("[SILENT_TRIGGER]"):
+            if not frappe.db.exists("Agent Message", {"agent_run": run_doc.name, "role": "user"}):
+                ConversationManager(agent_name=agent_name, channel=channel_id, external_id=external_id).add_message(
+                    conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name
+                )
+                safe_commit()
+        return SubscriptionPassthroughExecutor.execute(
+            agent_doc=agent_doc,
+            run_doc=run_doc,
+            conversation=conversation,
+            provider_doc=provider_doc,
+            prompt=prompt or "",
+            files=files,
+            model_override=resolved_model_name,
+        )
 
     conv_manager = ConversationManager(
         agent_name=agent_name,
@@ -2843,6 +2916,171 @@ def recover_stalled_agent_runs():
         frappe.log_error(f"Agent run recovery failed: {frappe.get_traceback()}", "Huf")
 
 
+_SUBSCRIPTION_STREAM_POLL_INTERVAL_SECONDS = 1.0
+_SUBSCRIPTION_STREAM_POLL_TIMEOUT_SECONDS = 600
+_SUBSCRIPTION_STREAM_TERMINAL_STATUSES = ("Success", "Failed", "Waiting Authentication")
+
+
+async def _run_subscription_stream_interim(
+    *,
+    agent_name,
+    agent_doc,
+    conversation,
+    conv_manager,
+    prompt,
+    resolved_provider,
+    resolved_model,
+    resolved_prompt_template,
+    prompt_template,
+    prompt_version,
+    parent_conversation_id,
+    invoked_by_agent,
+    prompt_cache_options,
+    files,
+    skip_user_message,
+    channel_id,
+    external_id,
+    response_format,
+    client_idempotency_key,
+):
+    """Interim streaming design for Subscription CLI passthrough runs (Track-Item: T-06-C).
+
+    `run_agent_stream()` has no conversation lock of its own today (see
+    RESEARCH_NOTES.md §3.3) — only `run_agent_sync()`'s queue-first path is
+    serialized per conversation via `_run_queued_agent`'s Redis lock. Rather
+    than inventing a SECOND lock for the streaming entrypoint (explicitly
+    against the review's recommendation), this function converts a streaming
+    passthrough request into a normal Queued Agent Run and hands it to the
+    EXISTING drainer (`_enqueue_drain` / `_run_queued_agent`), which executes
+    it under that one lock via `_execute_agent_run` — the same function the
+    sync path uses, and which already carries the passthrough branch above.
+
+    Interim simplification (documented per the task's guidance — a later task
+    may refine this): because the drainer runs in a background job, this
+    generator cannot receive the adapter's output inline. Instead it polls the
+    Agent Run row until it reaches a terminal status and yields the existing
+    stream chunk vocabulary (`error` / `complete`) once. It does NOT emit
+    incremental `delta` chunks — subscription passthrough delivery is buffered
+    only (see `streaming.py` docstring), so there is nothing to stream
+    incrementally, and realtime `agent_run_status` events (emitted by
+    `SubscriptionPassthroughExecutor.execute()` via `streaming.py`) are the
+    channel a socket-subscribed client should prefer over polling this
+    generator's chunks.
+    """
+    if client_idempotency_key:
+        existing_run_name = frappe.db.get_value(
+            "Agent Run",
+            {"conversation": conversation.name, "idempotency_key": client_idempotency_key},
+            "name",
+        )
+        if existing_run_name:
+            existing_run = frappe.get_doc("Agent Run", existing_run_name)
+            yield {
+                "type": "duplicate_request",
+                "success": True,
+                "status": existing_run.status,
+                "response": existing_run.response if existing_run.status == "Success" else None,
+                "agent_run_id": existing_run.name,
+                "conversation_id": existing_run.conversation,
+            }
+            return
+
+    if not frappe.has_permission("Agent Run", "create"):
+        yield {"type": "error", "error": "You do not have permission to create an Agent Run."}
+        return
+
+    frappe.db.set_value("Agent Conversation", conversation.name, "model", resolved_model)
+
+    sequence = _next_run_sequence(conversation.name)
+    runtime_context = {
+        "channel_id": channel_id,
+        "external_id": external_id,
+        "response_format": response_format,
+        "prompt_template": prompt_template,
+        "prompt_version": prompt_version,
+        "resolved_prompt_template": resolved_prompt_template,
+        "parent_conversation_id": parent_conversation_id,
+        "invoked_by_agent": invoked_by_agent,
+        "prompt_cache_options": prompt_cache_options,
+        "files": files,
+        "skip_user_message": skip_user_message,
+    }
+    run_doc_data = {
+        "doctype": "Agent Run",
+        "agent": agent_name,
+        "status": "Queued",
+        "conversation": conversation.name,
+        "prompt": prompt,
+        "prompt_template": resolved_prompt_template,
+        "model": resolved_model,
+        "provider": resolved_provider,
+        "sequence": sequence,
+        "runtime_context": frappe.as_json(runtime_context),
+    }
+    if client_idempotency_key:
+        run_doc_data["idempotency_key"] = client_idempotency_key
+
+    run_doc = frappe.get_doc(run_doc_data)
+    run_doc.insert()
+    safe_commit()
+
+    _enqueue_drain(conversation.name)
+    _emit_run_lifecycle_event(run_doc, conversation, "queued")
+    safe_commit()
+
+    elapsed = 0.0
+    while elapsed < _SUBSCRIPTION_STREAM_POLL_TIMEOUT_SECONDS:
+        await asyncio.sleep(_SUBSCRIPTION_STREAM_POLL_INTERVAL_SECONDS)
+        elapsed += _SUBSCRIPTION_STREAM_POLL_INTERVAL_SECONDS
+        frappe.db.commit()  # nosemgrep: refresh read view of a row another worker/job updates
+        status, response, error_message = frappe.db.get_value(
+            "Agent Run", run_doc.name, ["status", "response", "error_message"]
+        )
+        if status not in _SUBSCRIPTION_STREAM_TERMINAL_STATUSES:
+            continue
+
+        if status == "Success":
+            yield {
+                "type": "complete",
+                "conversation_id": conversation.name,
+                "response": response,
+                "full_response": response,
+                "success": True,
+                "agent_run_id": run_doc.name,
+                "session_id": conv_manager.session_id,
+                "provider": resolved_provider,
+                "status": status,
+            }
+            return
+
+        if status == "Waiting Authentication":
+            yield {
+                "type": "subscription_auth_required",
+                "conversation_id": conversation.name,
+                "agent_run_id": run_doc.name,
+                "status": status,
+            }
+            return
+
+        yield {
+            "type": "error",
+            "error": error_message or response or "Subscription run failed",
+            "success": False,
+            "agent_run_id": run_doc.name,
+            "conversation_id": conversation.name,
+            "status": status,
+        }
+        return
+
+    yield {
+        "type": "error",
+        "error": "Timed out waiting for subscription run to complete",
+        "success": False,
+        "agent_run_id": run_doc.name,
+        "conversation_id": conversation.name,
+    }
+
+
 async def run_agent_stream(
     agent_name: str,
     prompt: str,
@@ -2996,6 +3234,39 @@ async def run_agent_stream(
             model=model,
             provider=provider,
         )
+
+        # --- Subscription CLI passthrough interception (Track-Item: T-06-C) ---
+        # Same constraint as `_execute_agent_run`: must happen BEFORE the
+        # history fetch and BEFORE AgentManager construction below. See the
+        # module-level design note on `_run_subscription_stream_interim` for
+        # why this path queues + drains under the sync path's lock instead of
+        # running inline, and yields polled chunks instead of a live stream.
+        from huf.ai.subscription.executor import is_subscription_cli_provider
+
+        if is_subscription_cli_provider(resolved_provider):
+            async for chunk in _run_subscription_stream_interim(
+                agent_name=agent_name,
+                agent_doc=agent_doc,
+                conversation=conversation,
+                conv_manager=conv_manager,
+                prompt=prompt,
+                resolved_provider=resolved_provider,
+                resolved_model=resolved_model,
+                resolved_prompt_template=resolved_prompt_template,
+                prompt_template=prompt_template,
+                prompt_version=prompt_version,
+                parent_conversation_id=parent_conversation_id,
+                invoked_by_agent=invoked_by_agent,
+                prompt_cache_options=prompt_cache_options,
+                files=files,
+                skip_user_message=skip_user_message,
+                channel_id=channel_id,
+                external_id=external_id,
+                response_format=response_format,
+                client_idempotency_key=client_idempotency_key,
+            ):
+                yield chunk
+            return
 
         # Persist the effective model override on the conversation so subsequent
         # turns in the same chat continue using it unless explicitly changed again.
