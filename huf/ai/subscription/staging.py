@@ -68,38 +68,38 @@ async def stage_turn_files(
 	"""
 	staged: list[StagedFile] = []
 
+	# Validate ALL files (existence, size, MIME type) before staging ANY of them.
+	# This guarantees that a validation failure on a later file never leaves an
+	# earlier file staged without a corresponding rollback attempt.
+	for file_path in file_paths:
+		path = Path(file_path)
+		if not path.exists():
+			raise FileNotFoundError(f"File not found: {file_path}")
+
+		file_size = path.stat().st_size
+		if file_size > max_file_size_bytes:
+			raise SubscriptionCLIError(
+				SubscriptionErrorCode.FILE_TOO_LARGE,
+				f"File {path.name} exceeds maximum size of {max_file_size_bytes} bytes "
+				f"({file_size} bytes)",
+			)
+
+		mime_type, _ = mimetypes.guess_type(file_path)
+		if mime_type is None:
+			raise SubscriptionCLIError(
+				SubscriptionErrorCode.INVALID_FILE_TYPE,
+				f"Could not determine MIME type for {path.name}",
+			)
+
+		if not any(mime_type.startswith(prefix) for prefix in allowed_mime_prefixes):
+			raise SubscriptionCLIError(
+				SubscriptionErrorCode.INVALID_FILE_TYPE,
+				f"File type {mime_type} not allowed for {path.name}. "
+				f"Allowed types: {', '.join(allowed_mime_prefixes)}",
+			)
+
 	try:
 		for file_path in file_paths:
-			# Validate file exists
-			path = Path(file_path)
-			if not path.exists():
-				raise FileNotFoundError(f"File not found: {file_path}")
-
-			# Validate file size
-			file_size = path.stat().st_size
-			if file_size > max_file_size_bytes:
-				raise SubscriptionCLIError(
-					SubscriptionErrorCode.FILE_TOO_LARGE,
-					f"File {path.name} exceeds maximum size of {max_file_size_bytes} bytes "
-					f"({file_size} bytes)",
-				)
-
-			# Validate MIME type using mimetypes module
-			mime_type, _ = mimetypes.guess_type(file_path)
-			if mime_type is None:
-				raise SubscriptionCLIError(
-					SubscriptionErrorCode.INVALID_FILE_TYPE,
-					f"Could not determine MIME type for {path.name}",
-				)
-
-			# Check if MIME type matches allowed prefixes
-			if not any(mime_type.startswith(prefix) for prefix in allowed_mime_prefixes):
-				raise SubscriptionCLIError(
-					SubscriptionErrorCode.INVALID_FILE_TYPE,
-					f"File type {mime_type} not allowed for {path.name}. "
-					f"Allowed types: {', '.join(allowed_mime_prefixes)}",
-				)
-
 			# Stage the file via transport
 			staged_file = await transport.stage_file(file_path)
 			staged.append(staged_file)

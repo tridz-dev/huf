@@ -99,10 +99,11 @@ class FakeExecutionTransport(ExecutionTransport):
 		Raises:
 			RuntimeError: If fail_on_remove is True
 		"""
+		self.remove_staged_file_call_count += 1
+
 		if self.fail_on_remove:
 			raise RuntimeError(f"Failed to remove {staged_file.remote_path}")
 
-		self.remove_staged_file_call_count += 1
 		self.removed_files.append(staged_file.remote_path)
 
 

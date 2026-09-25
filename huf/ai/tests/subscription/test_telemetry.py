@@ -24,42 +24,54 @@ class TestTelemetryMapperBasics(TestCase):
 
 	def test_provider_path_always_subscription_cli(self) -> None:
 		"""provider_path must always be "subscription_cli"."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertEqual(fields["provider_path"], "subscription_cli")
 
 	def test_billing_mode_always_subscription(self) -> None:
 		"""billing_mode must always be "subscription"."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertEqual(fields["billing_mode"], "subscription")
 
 	def test_runtime_set_from_parameter(self) -> None:
 		"""runtime field must be set to the runtime_name parameter."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "gpt_runner")
 
 		self.assertEqual(fields["runtime"], "gpt_runner")
 
 	def test_runtime_mode_always_subscription_passthrough(self) -> None:
 		"""runtime_mode must always be "subscription_passthrough"."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertEqual(fields["runtime_mode"], "subscription_passthrough")
 
 	def test_cost_source_always_subscription_unmetered(self) -> None:
 		"""cost_source must always be "subscription_unmetered"."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertEqual(fields["cost_source"], "subscription_unmetered")
 
 	def test_cost_calculation_status_always_unavailable(self) -> None:
 		"""cost_calculation_status must always be "unavailable"."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertEqual(fields["cost_calculation_status"], "unavailable")
@@ -88,7 +100,9 @@ class TestCostCompliance(TestCase):
 
 	def test_cost_is_none_not_zero(self) -> None:
 		"""Cost must be None, not 0 or 0.0. This is the single most important rule."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello")
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertIsNone(fields["cost"])
@@ -100,6 +114,7 @@ class TestCostCompliance(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			usage={"input_tokens": 100, "output_tokens": 50},
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
@@ -109,7 +124,10 @@ class TestCostCompliance(TestCase):
 	def test_cost_is_none_even_on_error(self) -> None:
 		"""Cost must be None even if the turn failed (no successful API charge recorded)."""
 		result = SubscriptionTurnResult(
-			status="error", final_text=None, usage={"input_tokens": 100}
+			status="error",
+			final_text=None,
+			provider_session_id=None,
+			usage={"input_tokens": 100},
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
@@ -128,6 +146,7 @@ class TestUsageFieldSemantics(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			usage={"input_tokens": 150, "output_tokens": 75, "total_tokens": 225},
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
@@ -141,6 +160,7 @@ class TestUsageFieldSemantics(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			usage={"input_tokens": 100},  # Only input_tokens reported
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
@@ -154,6 +174,7 @@ class TestUsageFieldSemantics(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			usage={
 				"input_tokens": 100,
 				"output_tokens": 0,  # Explicitly reported as zero
@@ -169,7 +190,7 @@ class TestUsageFieldSemantics(TestCase):
 	def test_all_usage_fields_unmapped_stay_null(self) -> None:
 		"""All usage fields default to None if not in result.usage."""
 		result = SubscriptionTurnResult(
-			status="success", final_text="Hello", usage={}
+			status="success", final_text="Hello", provider_session_id="sess-test-001", usage={}
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
@@ -184,7 +205,10 @@ class TestUsageFieldSemantics(TestCase):
 	def test_round_count_from_usage(self) -> None:
 		"""round_count should be extracted from usage dict when present."""
 		result = SubscriptionTurnResult(
-			status="success", final_text="Hello", usage={"round_count": 3}
+			status="success",
+			final_text="Hello",
+			provider_session_id="sess-test-001",
+			usage={"round_count": 3},
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
@@ -192,7 +216,9 @@ class TestUsageFieldSemantics(TestCase):
 
 	def test_round_count_null_when_missing(self) -> None:
 		"""round_count should be None if not in usage dict."""
-		result = SubscriptionTurnResult(status="success", final_text="Hello", usage={})
+		result = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001", usage={}
+		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertIsNone(fields["round_count"])
@@ -206,6 +232,7 @@ class TestUsageSourceMarking(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			usage={"input_tokens": 100, "output_tokens": 50},
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
@@ -215,12 +242,14 @@ class TestUsageSourceMarking(TestCase):
 	def test_usage_source_unavailable_when_no_usage(self) -> None:
 		"""When result.usage is empty or None, mark usage_source="unavailable"."""
 		result1 = SubscriptionTurnResult(
-			status="success", final_text="Hello", usage={}
+			status="success", final_text="Hello", provider_session_id="sess-test-001", usage={}
 		)
 		fields1 = map_turn_result_to_agent_run_fields(result1, "my_runtime")
 		self.assertEqual(fields1["usage_source"], "unavailable")
 
-		result2 = SubscriptionTurnResult(status="success", final_text="Hello")
+		result2 = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields2 = map_turn_result_to_agent_run_fields(result2, "my_runtime")
 		self.assertEqual(fields2["usage_source"], "unavailable")
 
@@ -229,7 +258,7 @@ class TestUsageSourceMarking(TestCase):
 		# This test documents the current behavior: passthrough mapper does NOT estimate.
 		# If future mapper gains estimation, this test catches the change.
 		result = SubscriptionTurnResult(
-			status="success", final_text="Hello", usage={}
+			status="success", final_text="Hello", provider_session_id="sess-test-001", usage={}
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
@@ -244,6 +273,7 @@ class TestReasoningSnapshot(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			reasoning_summary="Analyzed the prompt and decided to answer directly.",
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
@@ -259,12 +289,14 @@ class TestReasoningSnapshot(TestCase):
 	def test_reasoning_snapshot_none_when_no_summary(self) -> None:
 		"""When reasoning_summary is None/empty, reasoning_snapshot should be None."""
 		result1 = SubscriptionTurnResult(
-			status="success", final_text="Hello", reasoning_summary=None
+			status="success", final_text="Hello", provider_session_id=None, reasoning_summary=None
 		)
 		fields1 = map_turn_result_to_agent_run_fields(result1, "my_runtime")
 		self.assertIsNone(fields1["reasoning_snapshot"])
 
-		result2 = SubscriptionTurnResult(status="success", final_text="Hello")
+		result2 = SubscriptionTurnResult(
+			status="success", final_text="Hello", provider_session_id="sess-test-001"
+		)
 		fields2 = map_turn_result_to_agent_run_fields(result2, "my_runtime")
 		self.assertIsNone(fields2["reasoning_snapshot"])
 
@@ -273,6 +305,7 @@ class TestReasoningSnapshot(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
+			provider_session_id="sess-test-001",
 			reasoning_summary="Step 1. Think. Step 2. Answer.",
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
@@ -398,6 +431,7 @@ class TestTableDrivenCases(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Answer",
+			provider_session_id="sess-test-001",
 			usage={
 				"input_tokens": 100,
 				"output_tokens": 50,
@@ -415,6 +449,7 @@ class TestTableDrivenCases(TestCase):
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Answer",
+			provider_session_id="sess-test-001",
 			usage={
 				"input_tokens": 100,
 				"output_tokens": 50,
