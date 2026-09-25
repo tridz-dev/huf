@@ -23,6 +23,7 @@ from huf.ai.subscription.adapters.codex import (
 	CODEX_SANDBOX_MODE,
 	CODEX_TRUST_FLAG,
 	CodexAdapter,
+	classify_codex_stderr,
 	is_resume_not_found_error,
 	parse_codex_jsonl,
 	parse_codex_login_status,
@@ -171,6 +172,58 @@ def test_run_turn_classifies_malformed_resume_as_error_result_not_crash():
 	assert "no rollout found" in (result.raw_debug_ref or "").lower()
 
 
+# --- H9: resume-not-found / auth-required must populate a classified code ---
+# in `events` so executor.py's _extract_error_code() can read it, matching
+# the pattern adapters/claude.py already implements (see
+# ClaudeAdapter._classify_stderr / _parse_turn_output).
+
+
+def test_classify_codex_stderr_resume_not_found():
+	stderr = _read_fixture("error_malformed_resume.txt")
+	assert classify_codex_stderr(stderr) == SubscriptionErrorCode.SESSION_NOT_FOUND
+
+
+def test_classify_codex_stderr_auth_required():
+	assert classify_codex_stderr("Not logged in") == SubscriptionErrorCode.AUTH_REQUIRED
+	assert classify_codex_stderr("Error: not authenticated with this account") == SubscriptionErrorCode.AUTH_REQUIRED
+
+
+def test_classify_codex_stderr_generic_failure():
+	assert classify_codex_stderr("boom: something else broke") == SubscriptionErrorCode.CLI_PROCESS_FAILED
+
+
+def test_run_turn_resume_not_found_populates_classified_error_code_in_events():
+	"""H9 regression guard: a prior version returned events=[] here, so
+	executor.py::_extract_error_code() could never see SESSION_NOT_FOUND for
+	Codex and the session binding was never marked Unavailable."""
+	stderr = _read_fixture("error_malformed_resume.txt")
+	transport = FakeTransport(ProcessResult(stdout="", stderr=stderr, exit_code=1))
+	adapter = CodexAdapter(transport)
+	request = _make_request(provider_session_id="00000000-0000-0000-0000-000000000000", text="hi")
+
+	result = asyncio.run(adapter.run_turn(FakeRuntime(), request))
+
+	assert result.status == "error"
+	assert result.events, "events must not be empty -- executor._extract_error_code() reads events[0]['code']"
+	assert result.events[0]["code"] == SubscriptionErrorCode.SESSION_NOT_FOUND.value
+
+
+def test_run_turn_auth_required_mid_turn_populates_classified_error_code_not_generic_failure():
+	"""Related H9 finding: 'Codex ... logouts fail the run instead of parking
+	it' -- a runtime logout surfacing mid-turn (auth-required condition during
+	what should be a normal resume) must come back as a classified
+	AUTH_REQUIRED result, not raise a generic SubscriptionCLIError."""
+	transport = FakeTransport(ProcessResult(stdout="", stderr="Not logged in", exit_code=1))
+	adapter = CodexAdapter(transport)
+	request = _make_request(provider_session_id="01a0da32-e450-7691-a8e5-579223d9a47a", text="hi")
+
+	result = asyncio.run(adapter.run_turn(FakeRuntime(), request))
+
+	assert result.status == "error"
+	assert result.events[0]["code"] == SubscriptionErrorCode.AUTH_REQUIRED.value
+	assert result.auth_reason is not None
+
+
 # --- Auth status: plain text, no shared format ------------------------------
 
 
@@ -276,6 +329,55 @@ def test_run_turn_always_passes_documented_trust_flag_and_least_priv_sandbox():
 	assert "--dangerously-bypass-approvals-and-sandbox" not in argv
 
 
+def test_run_turn_ask_for_approval_is_placed_before_exec_not_after():
+	"""H2 regression guard: --ask-for-approval is documented ONLY under the
+	TOP-LEVEL `codex --help` (help_output_top.txt) and does NOT appear at all
+	in `codex exec --help` (help_output_exec.txt) -- it must come before the
+	`exec` subcommand, e.g. `codex --ask-for-approval never exec ...`, never
+	`codex exec --ask-for-approval never ...`."""
+	stdout = _read_fixture("create_session.jsonl")
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request(text="Say hello and reply with exactly one word: HELLO")
+
+	asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
+
+	argv = transport.calls[0]["argv"]
+	exec_index = argv.index("exec")
+	approval_index = argv.index("--ask-for-approval")
+	assert approval_index < exec_index, f"--ask-for-approval must precede exec, got argv={argv}"
+	assert argv[approval_index + 1] == CODEX_APPROVAL_POLICY
+	# --sandbox is documented on both sides of `exec` in the real fixtures, so
+	# it is only required to appear somewhere in argv, not before `exec`.
+	assert "--sandbox" in argv
+
+
+def test_run_turn_exact_argv_for_create_session():
+	"""Assert the full argv shape, not just membership, so a future edit that
+	reorders flags in a way that changes CLI parsing is caught immediately."""
+	stdout = _read_fixture("create_session.jsonl")
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request(text="Say hello and reply with exactly one word: HELLO")
+
+	asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
+
+	call = transport.calls[0]
+	assert call["argv"] == [
+		"codex",
+		"--ask-for-approval",
+		CODEX_APPROVAL_POLICY,
+		"exec",
+		"--json",
+		CODEX_TRUST_FLAG,
+		"--sandbox",
+		CODEX_SANDBOX_MODE,
+	]
+	# H2/argv-injection fix: the prompt text goes over stdin, never argv.
+	assert call["stdin"] == request.text
+	assert request.text not in call["argv"]
+
+
 def test_run_turn_resume_uses_documented_verbatim_flag_order():
 	stdout = _read_fixture("resume_turn.jsonl")
 	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
@@ -287,14 +389,42 @@ def test_run_turn_resume_uses_documented_verbatim_flag_order():
 
 	result = asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
 
-	argv = transport.calls[0]["argv"]
-	# Real fixture: `codex exec resume --json <thread_id> "<prompt>"`
-	assert argv[0:3] == ["codex", "exec", "resume"]
-	assert "--json" in argv
-	assert "01a0da32-e450-7691-a8e5-579223d9a47a" in argv
+	call = transport.calls[0]
+	argv = call["argv"]
+	# Real fixture: `codex exec resume --json <thread_id> "<prompt>"`, but
+	# --ask-for-approval (top-level-only) must precede `exec`.
+	assert argv == [
+		"codex",
+		"--ask-for-approval",
+		CODEX_APPROVAL_POLICY,
+		"exec",
+		"resume",
+		"--json",
+		"01a0da32-e450-7691-a8e5-579223d9a47a",
+		CODEX_TRUST_FLAG,
+		"--sandbox",
+		CODEX_SANDBOX_MODE,
+	]
+	assert call["stdin"] == request.text
 	assert result.status == "success"
 	assert result.final_text == "HELLO"
 	assert result.provider_session_id == "01a0da32-e450-7691-a8e5-579223d9a47a"
+
+
+# --- H5: cwd must always be explicitly passed to the transport ---------------
+
+
+def test_run_turn_always_passes_explicit_cwd_never_none():
+	stdout = _read_fixture("create_session.jsonl")
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=0))
+	adapter = CodexAdapter(transport)
+	request = _make_request(text="hello")
+
+	asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
+
+	call = transport.calls[0]
+	assert call["cwd"] == "/tmp/codex_ws"
+	assert call["cwd"] is not None
 
 
 # --- Passthrough boundary self-check ----------------------------------------
@@ -319,12 +449,14 @@ def test_run_turn_argv_never_contains_huf_generated_system_or_mcp_content():
 
 	asyncio.run(adapter.run_turn(FakeRuntime(working_directory="/tmp/codex_ws"), request))
 
-	argv = transport.calls[0]["argv"]
-	joined = " ".join(argv)
+	call = transport.calls[0]
+	joined = " ".join(call["argv"])
 	for marker in forbidden_markers:
 		assert marker not in joined
-	# The only free-form content in argv must be exactly request.text.
-	assert argv[-1] == request.text
+	# The only free-form content passed through at all is request.text, and it
+	# travels via stdin (see argv-injection fix), never as an argv element.
+	assert request.text not in call["argv"]
+	assert call["stdin"] == request.text
 
 
 def test_create_session_raises_cli_error_no_standalone_command():

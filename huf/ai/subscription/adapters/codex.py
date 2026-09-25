@@ -63,9 +63,18 @@ CODEX_TRUST_FLAG = "--skip-git-repo-check"
 #
 # Per plan §15.4/§73.1: never default to a mode that allows unattended
 # filesystem writes or shell execution for the default HUF chat use case.
-# The real top-level `codex --help` / `codex exec --help` fixtures document:
-#   -s/--sandbox <read-only|workspace-write|danger-full-access>
-#   -a/--ask-for-approval <untrusted|on-request|never>
+# The real fixtures document:
+#   -s/--sandbox <read-only|workspace-write|danger-full-access>   -- documented
+#       under BOTH `codex --help` (help_output_top.txt) AND `codex exec --help`
+#       (help_output_exec.txt), so it is valid on either side of `exec`.
+#   -a/--ask-for-approval <untrusted|on-request|never>            -- documented
+#       ONLY under the TOP-LEVEL `codex --help` (help_output_top.txt, ~line
+#       105). It does NOT appear in `codex exec --help` (help_output_exec.txt)
+#       at all -- `codex exec` has no `-a`/`--ask-for-approval` flag of its
+#       own. It must therefore be placed BEFORE the `exec` subcommand, e.g.
+#       `codex --ask-for-approval never exec ...`, never
+#       `codex exec --ask-for-approval never ...` (which the real CLI would
+#       reject as an unrecognized flag for `exec`).
 # We pick the least-privileged combination that still runs non-interactively:
 #   --sandbox read-only        (no filesystem writes, no shell execution)
 #   --ask-for-approval never   (never prompts; per --help, "Execution failures
@@ -212,6 +221,43 @@ def is_resume_not_found_error(stderr: str) -> bool:
 	normal "session not found" outcome, not a generic CLI parse failure.
 	"""
 	return bool(_RESUME_NOT_FOUND_RE.search(stderr))
+
+
+# Substrings from the real `codex login status` plain-text shapes (see
+# parse_codex_login_status below) -- reused here to classify a mid-turn
+# auth failure (e.g. the runtime got logged out between turns) the same way,
+# since no separate live-captured "auth failed during exec" fixture exists.
+_AUTH_REQUIRED_MARKERS = ("not logged in", "not authenticated")
+
+
+def classify_codex_stderr(stderr: str) -> SubscriptionErrorCode:
+	"""Classify a plain-text `codex exec` stderr failure into a stable HUF code.
+
+	Mirrors adapters/claude.py::_classify_stderr's pattern so `executor.py`'s
+	`_extract_error_code()` can read a classified code out of
+	`SubscriptionTurnResult.events` for Codex the same way it already does for
+	Claude, instead of only ever seeing a generic CLI_PROCESS_FAILED (finding
+	H9: "Codex resume-not-found returns an empty events=[] ... the binding is
+	never marked Unavailable").
+
+	- "no rollout found for thread id ..." (Finding 1, error_malformed_resume.txt,
+	  REAL) -> SESSION_NOT_FOUND.
+	- Plain-text auth wording matching the same markers `parse_codex_login_status`
+	  recognizes for a logged-out `codex login status` -> AUTH_REQUIRED. This
+	  covers "Codex ... logouts fail the run instead of parking it": a runtime
+	  logout surfacing mid-turn must be classified as AUTH_REQUIRED, not a
+	  generic failure, so the executor parks the run instead of failing it.
+	- Any other mention of "resume"/"rollout" -> SESSION_RESUME_FAILED.
+	- Otherwise -> CLI_PROCESS_FAILED (no more specific classification available).
+	"""
+	if is_resume_not_found_error(stderr):
+		return SubscriptionErrorCode.SESSION_NOT_FOUND
+	lowered = stderr.lower()
+	if any(marker in lowered for marker in _AUTH_REQUIRED_MARKERS):
+		return SubscriptionErrorCode.AUTH_REQUIRED
+	if "resume" in lowered or "rollout" in lowered:
+		return SubscriptionErrorCode.SESSION_RESUME_FAILED
+	return SubscriptionErrorCode.CLI_PROCESS_FAILED
 
 
 def parse_codex_login_status(stdout: str) -> AuthStatus:
@@ -453,13 +499,22 @@ class CodexAdapter(SubscriptionCLIAdapter):
 				image_flags.extend(["--image", f])
 
 		# CRITICAL passthrough constraint: only request.text/request.files are
-		# ever placed on the argv below. No HUF system-prompt content,
+		# ever placed on the argv/stdin below. No HUF system-prompt content,
 		# conversation history, or HUF-generated MCP config is constructed or
 		# passed here — see SubscriptionCLIAdapter's docstring contract.
+		#
+		# H2 fix: --ask-for-approval is a TOP-LEVEL-only flag (see
+		# CODEX_APPROVAL_POLICY's comment above) and must come BEFORE `exec`,
+		# e.g. `codex --ask-for-approval never exec ...`. --sandbox is documented
+		# at both the top level and under `codex exec --help`, so it stays after
+		# `exec`/`exec resume` alongside the other exec-only flags (--json,
+		# CODEX_TRUST_FLAG, --model, image flags).
 		executable = getattr(runtime, "cli_path", None) or "codex"
 		if request.provider_session_id:
 			argv = [
 				executable,
+				"--ask-for-approval",
+				CODEX_APPROVAL_POLICY,
 				"exec",
 				"resume",
 				"--json",
@@ -468,32 +523,36 @@ class CodexAdapter(SubscriptionCLIAdapter):
 				CODEX_TRUST_FLAG,
 				"--sandbox",
 				CODEX_SANDBOX_MODE,
-				"--ask-for-approval",
-				CODEX_APPROVAL_POLICY,
 			]
 			if request.model_override:
 				argv.extend(["--model", request.model_override])
-			argv.append(request.text)
 		else:
 			argv = [
 				executable,
+				"--ask-for-approval",
+				CODEX_APPROVAL_POLICY,
 				"exec",
 				"--json",
 				CODEX_TRUST_FLAG,
 				"--sandbox",
 				CODEX_SANDBOX_MODE,
-				"--ask-for-approval",
-				CODEX_APPROVAL_POLICY,
 				*image_flags,
 			]
 			if request.model_override:
 				argv.extend(["--model", request.model_override])
-			argv.append(request.text)
 
+		# Argv-injection safety: never place the free-form request.text on argv
+		# as a positional PROMPT. Per help_output_exec.txt: "[PROMPT] ... If not
+		# provided as an argument (or if `-` is used), instructions are read
+		# from stdin." There is no documented `--` end-of-options marker for
+		# `codex exec`, but stdin delivery is explicitly documented, so a prompt
+		# that happens to start with `-` (e.g. "-h", "--json") can never be
+		# misparsed as a flag -- it is simply never placed on argv at all.
 		result = await self.transport.run(
 			argv,
 			cwd=working_directory,
 			timeout=request.timeout_seconds,
+			stdin=request.text,
 		)
 
 		if result.timed_out:
@@ -506,26 +565,62 @@ class CodexAdapter(SubscriptionCLIAdapter):
 
 		# Finding 1: malformed/nonexistent resume target -> plain-text stderr,
 		# not a JSONL event, even with --json requested.
+		#
+		# H9 fix: this used to return events=[] here, so executor.py's
+		# _extract_error_code() (which only reads result.events[0]["code"])
+		# could never see a classified code for Codex, the binding was never
+		# marked Unavailable, and every later turn against the same session
+		# failed the same generic way. Populate events with a classified
+		# SESSION_NOT_FOUND entry, mirroring adapters/claude.py's
+		# _parse_turn_output "cli_stderr" event shape.
 		if request.provider_session_id and is_resume_not_found_error(stderr):
+			sanitized = _sanitize_stderr_excerpt(stderr.strip()) or None
 			return SubscriptionTurnResult(
 				status="error",
 				final_text=None,
 				provider_session_id=request.provider_session_id,
 				usage={},
-				events=[],
+				events=[
+					{
+						"source": "cli_stderr",
+						"code": SubscriptionErrorCode.SESSION_NOT_FOUND.value,
+						"message": sanitized,
+					}
+				],
 				raw_debug_ref=stderr.strip() or None,
 				exit_code=result.exit_code,
 				auth_reason=None,
 			)
 
 		if result.exit_code != 0 and not result.stdout.strip():
-			# No JSONL at all to parse and a non-zero exit: treat as a plain
-			# CLI process failure (do not assume any particular error shape
-			# beyond what was captured for the resume-not-found case above).
+			# No JSONL at all to parse and a non-zero exit. Classify the
+			# stderr the same way as the resume-not-found case above instead
+			# of always raising a generic CLI_PROCESS_FAILED: a runtime
+			# logout surfacing mid-turn (e.g. during what should be a normal
+			# resume) must come back as a classified AUTH_REQUIRED result in
+			# `events` so the executor parks the run for re-auth instead of
+			# failing it outright ("Codex ... logouts fail the run instead of
+			# parking it"). Only an unclassifiable failure still raises.
+			sanitized = _sanitize_stderr_excerpt(stderr.strip()[:500])
+			code = classify_codex_stderr(stderr)
+			if code in (
+				SubscriptionErrorCode.AUTH_REQUIRED,
+				SubscriptionErrorCode.SESSION_NOT_FOUND,
+				SubscriptionErrorCode.SESSION_RESUME_FAILED,
+			):
+				return SubscriptionTurnResult(
+					status="error",
+					final_text=None,
+					provider_session_id=request.provider_session_id,
+					usage={},
+					events=[{"source": "cli_stderr", "code": code.value, "message": sanitized}],
+					raw_debug_ref=stderr.strip() or None,
+					exit_code=result.exit_code,
+					auth_reason=sanitized if code is SubscriptionErrorCode.AUTH_REQUIRED else None,
+				)
 			raise SubscriptionCLIError(
 				SubscriptionErrorCode.CLI_PROCESS_FAILED,
-				f"codex exec failed (exit={result.exit_code}): "
-				f"{_sanitize_stderr_excerpt(stderr.strip()[:500])}",
+				f"codex exec failed (exit={result.exit_code}): {sanitized}",
 			)
 
 		parsed = parse_codex_jsonl(result.stdout)
@@ -568,7 +663,15 @@ class CodexAdapter(SubscriptionCLIAdapter):
 # subprocess round-trip on every probe() call in environments where spawning
 # `codex exec --help` would itself be subject to the trust gate. This mirrors
 # exactly the flags captured in
-# huf/ai/tests/subscription/fixtures/real/codex/help_output_exec.txt.
+# ai/tests/subscription/fixtures/real/codex/help_output_exec.txt.
+#
+# H2 fix: a prior version of this excerpt incorrectly included a
+# `-a, --ask-for-approval <APPROVAL_POLICY>` line here, claiming it was a
+# verbatim quote of `codex exec --help`. It is not -- `--ask-for-approval`
+# does not appear anywhere in the real help_output_exec.txt fixture; it is
+# documented only under the TOP-LEVEL `codex --help`
+# (help_output_top.txt, ~line 105). That line has been removed so this
+# excerpt actually matches the fixture it claims to quote.
 _EXEC_HELP_EXCERPT = """
   -i, --image <FILE>...
           Optional image(s) to attach to the initial prompt
@@ -576,7 +679,6 @@ _EXEC_HELP_EXCERPT = """
           Allow running Codex outside a Git repository
   -s, --sandbox <SANDBOX_MODE>
           Select the sandbox policy to use when executing model-generated shell commands
-  -a, --ask-for-approval <APPROVAL_POLICY>
       --json
           Print events to stdout as JSONL
 """
