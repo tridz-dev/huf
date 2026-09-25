@@ -139,10 +139,24 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 		- supports_json: `--output-format json` (create_session.json / resume_turn.json, both REAL)
 		- supports_session_resume: `-r/--resume` (resume_turn.json, REAL; also documented in help_output.txt)
 		- supports_session_id: `--session-id <uuid>` (help_output.txt; not exercised live but flag exists)
-		- supports_images: no dedicated image/vision flag exists in help_output.txt --
-		  Claude Code takes images via file paths/paste in prompt content, not a
-		  CLI flag. Set False per plan §20.3 ("fail clearly rather than silently
-		  dropping the image").
+		- supports_images: LIVE-VERIFIED False is the correct, deliberate value
+		  -- not a missing feature. Claude Code has no dedicated image/vision
+		  CLI flag; it reads an image by file path using its built-in Read
+		  tool. Confirmed live: with no tool restriction, `claude -p "look at
+		  /path/to.png..."` correctly describes the image. But with this
+		  adapter's actual security posture (`--restricted --tools ""`, see
+		  the H5 fix below), the exact same command gets a correct, honest
+		  refusal: "I can't view that image. This session doesn't give me any
+		  tool that reads local files." The Read tool that would enable vision
+		  is the SAME tool that would let the model read
+		  `~/.claude/.credentials.json` or any other file on disk -- there is
+		  no documented way to scope Read to a single image path. Enabling
+		  vision for Claude would therefore reopen the exact class of
+		  credential-exfiltration risk that is separately confirmed (and left
+		  open, flagged via `filesystem_isolation_verified=False`) on the
+		  Codex adapter. Per plan §20.3 ("fail clearly rather than silently
+		  dropping the image"), this adapter fails clearly via
+		  VISION_UNSUPPORTED rather than trading that security posture away.
 		- supports_mcp: True, but ONLY in the "suppress ambient config" sense --
 		  `--strict-mcp-config` (help_output.txt) with no `--mcp-config` value
 		  makes the CLI ignore ambient project/user MCP servers. This adapter
