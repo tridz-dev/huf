@@ -440,12 +440,21 @@ class SubscriptionPassthroughExecutor:
 			from huf.ai.conversation_manager import ConversationManager
 
 			conv_manager = ConversationManager(agent_name=agent_doc.name)
+			# LIVE-VERIFIED bug fix: `model_override` is a CLI-facing model
+			# string (e.g. "sonnet", from AI Model.runtime_model_name) meant
+			# for the subscription CLI's --model flag -- it is NOT an "AI
+			# Model" doctype name. Agent Message.model is a Link field to
+			# "AI Model", so passing model_override here raised
+			# `LinkValidationError: Could not find Model: sonnet` on a real
+			# site the moment runtime_model_name differed from the AI Model
+			# doc's own name (exactly the case §10.4/H1 exists to support).
+			# Always use the actual AI Model doc reference.
 			conv_manager.add_message(
 				conversation,
 				role="agent",
 				content=result.final_text or "",
 				provider=provider_doc.name,
-				model=model_override or agent_doc.model,
+				model=agent_doc.model,
 				agent=agent_doc.name,
 				run_name=run_doc.name,
 			)
@@ -507,6 +516,39 @@ class SubscriptionPassthroughExecutor:
 			except Exception:
 				logger.exception(
 					"Failed to publish subscription_auth_required event for run %s", run_doc.name
+				)
+
+			# Also emit a STANDARD `agent_run_status` lifecycle event (mirrors
+			# `_emit_run_lifecycle_event` in agent_integration.py) with
+			# status "Waiting Authentication", so that any code path that only
+			# watches ordinary run-status events — not the custom
+			# `subscription_auth_required` type above — still learns the run
+			# is parked. This matters for two consumers in particular: (1) a
+			# frontend socket handler that has not been updated to know about
+			# `subscription_auth_required` yet, and (2) the polling/hydration
+			# path (`get_agent_run_status`), which reads the Agent Run's
+			# `status` column rather than replaying realtime events — that
+			# column is already set to "Waiting Authentication" by
+			# `auth_service.park_run` above, so this event is purely to avoid
+			# making socket-first consumers wait for the poll fallback.
+			try:
+				frappe.publish_realtime(
+					event=f"conversation:{conversation.name}",
+					message={
+						"type": "agent_run_status",
+						"status": "Waiting Authentication",
+						"agent_run_id": run_doc.name,
+						"conversation_id": conversation.name,
+						"agent": getattr(run_doc, "agent", None),
+						"sequence": getattr(run_doc, "sequence", None),
+						"runtime_name": runtime_name,
+					},
+					user=frappe.session.user,
+				)
+			except Exception:
+				logger.exception(
+					"Failed to publish agent_run_status(Waiting Authentication) event for run %s",
+					run_doc.name,
 				)
 
 		# CONTRACT (auth_service.park_run docstring / PLAN §75.3): the per-

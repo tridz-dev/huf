@@ -1614,6 +1614,15 @@ def get_agent_run_status(agent_run_id: str):
             order_by="creation desc",
         )
 
+    # A parked run needs the Subscription Runtime name so the poller (like
+    # the realtime path) can drive `SubscriptionAuthCard` — it is keyed by
+    # runtime, not by conversation, and isn't otherwise part of Agent Run.
+    runtime_name = None
+    if run.status == "Waiting Authentication" and run.conversation:
+        runtime_name = frappe.db.get_value(
+            "Agent Conversation", run.conversation, "subscription_runtime"
+        )
+
     return {
         "success": True,
         "queued": run.status in ("Queued", "Started"),
@@ -1622,6 +1631,7 @@ def get_agent_run_status(agent_run_id: str):
         "error": run.error_message if run.status == "Failed" else None,
         "agent_run_id": run.name,
         "conversation_id": run.conversation,
+        "runtime_name": runtime_name,
         "agent": run.agent,
         "agent_message_id": agent_message_id,
         "tool_setup_warnings": run.tool_setup_warnings,

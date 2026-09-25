@@ -166,10 +166,21 @@ class TestParkEmitsRealtimeEventWithRuntimeName(unittest.TestCase):
 		mock_build_adapter.assert_not_called()
 		self.assertEqual(result["status"], "Waiting Authentication")
 
-		mock_publish.assert_called_once()
-		_, kwargs = mock_publish.call_args
-		self.assertEqual(kwargs["event"], "conversation:CONV-1")
-		message = kwargs["message"]
+		# `_park_for_auth` now publishes TWO realtime events: the custom
+		# `subscription_auth_required` event (challenge details, for the
+		# socket-first frontend path) and a standard `agent_run_status`
+		# lifecycle event with status "Waiting Authentication" (so a
+		# consumer that only watches ordinary run-status events — e.g. a
+		# polling/hydration path — also learns the run is parked). See
+		# Track-Item: fix-c3-frontend-auth-card-wiring.
+		self.assertEqual(mock_publish.call_count, 2)
+		calls_by_type = {
+			call.kwargs["message"]["type"]: call.kwargs for call in mock_publish.call_args_list
+		}
+
+		auth_kwargs = calls_by_type["subscription_auth_required"]
+		self.assertEqual(auth_kwargs["event"], "conversation:CONV-1")
+		message = auth_kwargs["message"]
 		self.assertEqual(message["type"], "subscription_auth_required")
 		self.assertEqual(message["agent_run_id"], "RUN-1")
 		self.assertEqual(message["conversation_id"], "CONV-1")
@@ -177,6 +188,14 @@ class TestParkEmitsRealtimeEventWithRuntimeName(unittest.TestCase):
 		self.assertEqual(message["verification_url"], "https://example.com/verify")
 		self.assertEqual(message["user_code"], "ABCD-1234")
 		self.assertEqual(message["mode"], "device_code")
+
+		status_kwargs = calls_by_type["agent_run_status"]
+		self.assertEqual(status_kwargs["event"], "conversation:CONV-1")
+		status_message = status_kwargs["message"]
+		self.assertEqual(status_message["status"], "Waiting Authentication")
+		self.assertEqual(status_message["agent_run_id"], "RUN-1")
+		self.assertEqual(status_message["conversation_id"], "CONV-1")
+		self.assertEqual(status_message["runtime_name"], "RUNTIME-1")
 
 	def test_park_for_auth_does_not_delete_conversation_lock_directly(self):
 		"""The redundant/racy direct lock deletion in `_park_for_auth` was
