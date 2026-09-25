@@ -1,7 +1,156 @@
-import { call } from '@/lib/frappe-sdk';
+import { call, db } from '@/lib/frappe-sdk';
 import { handleFrappeError } from '@/lib/frappe-error';
+import { doctype } from '@/data/doctypes';
+import { fetchPaginatedCount } from './utilsApi';
 
 const API_MODULE = 'huf.ai.subscription_api';
+
+export interface SubscriptionRuntimeDoc {
+  name: string;
+  runtime_name: string;
+  enabled?: 0 | 1;
+  runtime_mode?: string;
+  provider_family: 'Claude' | 'Codex' | 'Gemini';
+  cli_type?: string;
+  cli_path?: string;
+  transport_type: 'Local' | 'Docker' | 'SSH';
+  working_directory?: string;
+  execution_user_hint?: string;
+  ssh_connection?: string;
+  docker_container?: string;
+  docker_context?: string;
+  docker_workdir?: string;
+  timeout_seconds?: number;
+  max_output_bytes?: number;
+  owner_user?: string;
+  tenancy_policy?: 'owner_only' | 'explicit_users' | 'explicit_roles' | 'system_managed_shared';
+  allowed_users_json?: string;
+  allowed_roles_json?: string;
+  detected_version?: string;
+  last_tested_on?: string;
+  last_test_status?: string;
+  last_error?: string;
+  capabilities_snapshot?: string;
+  auth_status?: 'unknown' | 'ready' | 'required' | 'waiting_user' | 'verifying' | 'failed';
+  auth_method?: string;
+  auth_account_hint?: string;
+  last_auth_checked_at?: string;
+  last_auth_success_at?: string;
+  last_auth_failure_at?: string;
+  auth_error_code?: string;
+  auth_error_message?: string;
+  modified?: string;
+}
+
+export interface GetSubscriptionRuntimesParams {
+  page?: number;
+  limit?: number;
+  start?: number;
+  search?: string;
+  status?: 'enabled' | 'disabled' | 'all';
+  [key: string]: unknown;
+}
+
+export interface PaginatedSubscriptionRuntimesResponse {
+  items: SubscriptionRuntimeDoc[];
+  hasMore: boolean;
+  total?: number;
+}
+
+const SUBSCRIPTION_RUNTIME_LIST_FIELDS = [
+  'name',
+  'runtime_name',
+  'enabled',
+  'provider_family',
+  'transport_type',
+  'auth_status',
+  'last_tested_on',
+  'last_test_status',
+  'modified',
+];
+
+/** Fetch a page of Subscription Runtime records for the list view. */
+export async function getSubscriptionRuntimes(
+  params: GetSubscriptionRuntimesParams = {}
+): Promise<PaginatedSubscriptionRuntimesResponse> {
+  try {
+    const { page = 1, limit = 20, start = (page - 1) * limit, search, status = 'all' } = params;
+    const filters: Array<[string, string, string | number | boolean]> = [];
+
+    if (status === 'enabled') {
+      filters.push(['enabled', '=', 1]);
+    } else if (status === 'disabled') {
+      filters.push(['enabled', '=', 0]);
+    }
+
+    if (search && search.trim()) {
+      filters.push(['runtime_name', 'like', `%${search.trim()}%`]);
+    }
+
+    const runtimes = await db.getDocList(doctype['Subscription Runtime'], {
+      fields: SUBSCRIPTION_RUNTIME_LIST_FIELDS,
+      filters: filters.length > 0 ? (filters as never) : undefined,
+      limit: limit + 1,
+      ...(start > 0 && { limit_start: start }),
+      orderBy: { field: 'modified', order: 'desc' },
+    });
+
+    const mapped = runtimes as SubscriptionRuntimeDoc[];
+    const hasMore = mapped.length > limit;
+    const items = hasMore ? mapped.slice(0, limit) : mapped;
+    const total = await fetchPaginatedCount(page, items.length, doctype['Subscription Runtime'], filters);
+
+    return { items, hasMore, total };
+  } catch (error) {
+    handleFrappeError(error, 'Error fetching subscription runtimes');
+    throw error;
+  }
+}
+
+/** Fetch a single Subscription Runtime by name (has no secret fields to leak). */
+export async function getSubscriptionRuntime(name: string): Promise<SubscriptionRuntimeDoc> {
+  try {
+    const response = await db.getDoc(doctype['Subscription Runtime'], name);
+    return response as SubscriptionRuntimeDoc;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function createSubscriptionRuntime(
+  data: Partial<SubscriptionRuntimeDoc>
+): Promise<SubscriptionRuntimeDoc> {
+  try {
+    const response = await db.createDoc(doctype['Subscription Runtime'], data);
+    return response as SubscriptionRuntimeDoc;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function updateSubscriptionRuntime(
+  name: string,
+  data: Partial<SubscriptionRuntimeDoc>
+): Promise<SubscriptionRuntimeDoc> {
+  try {
+    const response = await db.updateDoc(doctype['Subscription Runtime'], name, data);
+    return response as SubscriptionRuntimeDoc;
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
+
+export async function deleteSubscriptionRuntime(name: string): Promise<void> {
+  try {
+    await db.deleteDoc(doctype['Subscription Runtime'], name);
+  } catch (error) {
+    handleFrappeError(error);
+    throw error;
+  }
+}
 
 export interface SubscriptionRuntimeProbeResult {
   success: boolean;

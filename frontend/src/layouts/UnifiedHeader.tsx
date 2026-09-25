@@ -121,6 +121,7 @@ export function UnifiedHeader({ actions, breadcrumbs, showCurrentCrumb, leftCont
     if (path.startsWith('/models')) return 'AI providers & models';
     if (path.startsWith('/execution-profiles')) return 'Code execution';
     if (path.startsWith('/ssh-connections')) return 'SSH connections';
+    if (path.startsWith('/subscription-runtimes')) return 'Subscription runtimes';
     if (path.startsWith('/apps')) return 'Apps';
     if (path.startsWith('/memory')) return 'Intelligence';
     if (path.startsWith('/skills')) return 'Skills';
