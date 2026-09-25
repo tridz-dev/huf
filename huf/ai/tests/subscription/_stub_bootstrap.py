@@ -92,7 +92,7 @@ if "frappe" not in sys.modules:
 	utils_mod = types.ModuleType("frappe.utils")
 	utils_mod.__path__ = []  # pretend to be a package so frappe.utils.<x> auto-stubs
 	utils_mod.__getattr__ = lambda attr: MagicMock()  # noqa: ARG005
-	utils_mod.now_datetime = MagicMock(return_value="2026-09-26T00:00:00Z")
+	utils_mod.now_datetime = MagicMock(side_effect=lambda: __import__("datetime").datetime.now())
 	utils_mod.add_to_date = MagicMock(return_value="2026-09-26T00:00:00Z")
 
 	background_jobs_mod = types.ModuleType("frappe.utils.background_jobs")

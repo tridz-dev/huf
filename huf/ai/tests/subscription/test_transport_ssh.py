@@ -430,7 +430,7 @@ class TestSSHExecTransportStaging:
 
 			# Verify rm command was executed
 			call_args = mock_run.call_args
-			assert "/bin/rm" in call_args[0][0]
+			assert "/bin/rm" in call_args[0][1]
 
 
 class TestSSHExecTransportErrorSanitization:
