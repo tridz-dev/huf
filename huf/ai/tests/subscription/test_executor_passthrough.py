@@ -359,6 +359,79 @@ class TestSyncPathNeverBuildsAgentManagerForPassthrough(unittest.TestCase):
 		self.assertTrue(result["success"])
 
 
+class TestModelOverrideUsesRuntimeModelName(unittest.TestCase):
+	"""Bugfix (Track-Item: fix-h1-model-override-resolution): the passthrough
+	branch must pass AI Model.runtime_model_name as `model_override` when it
+	is set, since that is the identifier the CLI's own --model flag accepts —
+	which can differ from the HUF-facing display name in AI Model.model_name.
+	When runtime_model_name is empty/unset, it must fall back to the display
+	name (existing behavior)."""
+
+	def _run_dispatch(self, runtime_model_name):
+		provider_doc = _fake_provider_doc()
+		agent_doc = _fake_agent_doc()
+		conversation = _fake_conversation()
+		run_doc = _fake_run_doc()
+
+		docs_by_type = {
+			("Agent", "AGENT-1"): agent_doc,
+			("AI Provider", "PROVIDER-1"): provider_doc,
+			("Agent Conversation", "CONV-1"): conversation,
+			("Agent Run", "RUN-1"): run_doc,
+		}
+
+		def fake_get_doc(doctype, name):
+			return docs_by_type[(doctype, name)]
+
+		def fake_get_cached_value(doctype, name, fieldname):
+			self.assertEqual(doctype, "AI Model")
+			self.assertEqual(name, "MODEL-1")
+			self.assertEqual(fieldname, "runtime_model_name")
+			return runtime_model_name
+
+		with mock.patch.object(agent_integration, "_resolve_effective_model",
+				return_value=("PROVIDER-1", "MODEL-1", "Claude Sonnet 4.5")), \
+			mock.patch.object(executor_module, "is_subscription_cli_provider", return_value=True), \
+			mock.patch.object(agent_integration.frappe, "get_doc", side_effect=fake_get_doc), \
+			mock.patch.object(agent_integration.frappe, "get_cached_value", side_effect=fake_get_cached_value), \
+			mock.patch.object(agent_integration.frappe, "db", mock.MagicMock()), \
+			mock.patch.object(agent_integration, "RunBudget") as mock_budget_cls, \
+			mock.patch.object(agent_integration, "set_current_budget"), \
+			mock.patch.object(agent_integration, "safe_commit"), \
+			mock.patch.object(agent_integration, "_emit_run_lifecycle_event"), \
+			mock.patch.object(agent_integration, "ConversationManager"), \
+			mock.patch.object(
+				executor_module.SubscriptionPassthroughExecutor, "execute",
+				return_value={"success": True, "response": "ok", "agent_run_id": "RUN-1", "status": "Success"},
+			) as mock_execute:
+
+			mock_budget_cls.from_run_doc.return_value = mock.MagicMock()
+
+			agent_integration._execute_agent_run(
+				agent_name="AGENT-1",
+				run_id="RUN-1",
+				conversation_id="CONV-1",
+				prompt="hello",
+			)
+
+		return mock_execute
+
+	def test_uses_runtime_model_name_when_set(self):
+		mock_execute = self._run_dispatch(runtime_model_name="claude-sonnet-4-5-20250929")
+		_, kwargs = mock_execute.call_args
+		self.assertEqual(kwargs["model_override"], "claude-sonnet-4-5-20250929")
+
+	def test_falls_back_to_display_model_name_when_runtime_unset(self):
+		mock_execute = self._run_dispatch(runtime_model_name=None)
+		_, kwargs = mock_execute.call_args
+		self.assertEqual(kwargs["model_override"], "Claude Sonnet 4.5")
+
+	def test_falls_back_to_display_model_name_when_runtime_empty_string(self):
+		mock_execute = self._run_dispatch(runtime_model_name="")
+		_, kwargs = mock_execute.call_args
+		self.assertEqual(kwargs["model_override"], "Claude Sonnet 4.5")
+
+
 class TestStreamingPathNeverBuildsAgentManagerForPassthrough(unittest.TestCase):
 	"""`run_agent_stream` must intercept before its own history-fetch/AgentManager
 	construction and never call AgentManager/RunProvider directly for a

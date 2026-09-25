@@ -1752,6 +1752,11 @@ def _execute_agent_run(
                     conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name
                 )
                 safe_commit()
+        # Prefer AI Model.runtime_model_name (plan §10.4) when set: it carries
+        # the identifier the CLI's own `--model` flag accepts, which can
+        # differ from resolved_model_name (the HUF-facing display name).
+        # Fall back to the display name when no runtime override is configured.
+        runtime_model_name = frappe.get_cached_value("AI Model", resolved_model, "runtime_model_name")
         return SubscriptionPassthroughExecutor.execute(
             agent_doc=agent_doc,
             run_doc=run_doc,
@@ -1759,7 +1764,7 @@ def _execute_agent_run(
             provider_doc=provider_doc,
             prompt=prompt or "",
             files=files,
-            model_override=resolved_model_name,
+            model_override=runtime_model_name or resolved_model_name,
         )
 
     conv_manager = ConversationManager(
