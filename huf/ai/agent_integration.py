@@ -2645,10 +2645,32 @@ def _next_run_sequence(conversation_id: str) -> int:
 
 
 def _next_queued_run(conversation_id: str):
-    """Return the oldest Queued Agent Run name for a conversation, or None."""
+    """Return the oldest Queued Agent Run name for a conversation, or None.
+
+    Claim-ordering fix (T-06-D, plan §62.2/§75.3, review finding A3): a
+    "Waiting Authentication" run parks indefinitely (until the user completes
+    an auth challenge) without changing its `sequence`. Without this check, a
+    later `Queued` run in the same conversation would be claimed and executed
+    ahead of it — silently reordering turns out from under the parked one. If
+    a parked run exists, only a `Queued` run that already sorts strictly
+    before it (lower `sequence`) may be claimed; anything at or after the
+    parked run's sequence blocks until that run resolves (resumes or is
+    abandoned).
+    """
+    blocking_sequence = frappe.db.get_value(
+        "Agent Run",
+        filters={"conversation": conversation_id, "status": "Waiting Authentication"},
+        fieldname="sequence",
+        order_by="sequence asc",
+    )
+
+    filters = {"conversation": conversation_id, "status": "Queued"}
+    if blocking_sequence is not None:
+        filters["sequence"] = ("<", blocking_sequence)
+
     return frappe.db.get_value(
         "Agent Run",
-        filters={"conversation": conversation_id, "status": "Queued"},
+        filters=filters,
         fieldname="name",
         order_by="sequence asc, creation asc",
     )

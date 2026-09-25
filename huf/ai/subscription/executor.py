@@ -33,9 +33,35 @@ from huf.ai.subscription.adapters.base import SubscriptionCLIAdapter
 from huf.ai.subscription.adapters.claude import ClaudeAdapter
 from huf.ai.subscription.adapters.codex import CodexAdapter
 from huf.ai.subscription.adapters.gemini import GeminiAdapter
-from huf.ai.subscription.errors import SubscriptionError
+from huf.ai.subscription.errors import SubscriptionError, SubscriptionErrorCode
 from huf.ai.subscription.transports.base import ExecutionTransport
 from huf.ai.subscription.types import SubscriptionTurnRequest, SubscriptionTurnResult
+
+# Error codes that mean "this specific provider-native session can't be
+# resumed" (adapter-reported, via SubscriptionTurnResult.events[0]["code"]),
+# as opposed to SubscriptionErrorCode.AUTH_REQUIRED, which means the
+# runtime's login itself is the problem. See _extract_error_code / step 8.
+_SESSION_LOST_CODES = (
+	SubscriptionErrorCode.SESSION_NOT_FOUND.value,
+	SubscriptionErrorCode.SESSION_RESUME_FAILED.value,
+)
+
+
+def _extract_error_code(result: SubscriptionTurnResult) -> str | None:
+	"""Best-effort read of the adapter-classified error code off a turn result.
+
+	Adapters never raise for a classified CLI/session error (see
+	adapters/claude.py::_parse_turn_output) — they return
+	`status="error"` with the stable HUF error code in the first event's
+	`code` field. Returns None if no event/code is present (e.g. transport-
+	level errors that raised `SubscriptionError` instead, already handled by
+	the `except SubscriptionError` branch above this call site).
+	"""
+	for event in result.events or []:
+		code = event.get("code")
+		if code:
+			return code
+	return None
 
 logger = logging.getLogger(__name__)
 
@@ -278,7 +304,12 @@ class SubscriptionPassthroughExecutor:
 				_run_async(staging.cleanup_staged_files(adapter.transport, staged_files))
 
 		# --- Step 8: auth_required result -> park, never fail. ---
-		if result.status == "auth_required":
+		# Covers both an adapter setting status="auth_required" directly, and
+		# an adapter that returns status="error" with AUTH_REQUIRED classified
+		# in the first event (see adapters/claude.py::_parse_turn_output) —
+		# either way this means the runtime's login itself needs attention.
+		error_code = _extract_error_code(result)
+		if result.status == "auth_required" or error_code == SubscriptionErrorCode.AUTH_REQUIRED.value:
 			auth_service.mark_runtime_auth_state(runtime, "required", error_message=result.auth_reason)
 			SubscriptionPassthroughExecutor._park_for_auth(runtime, run_doc, conversation)
 			return {
@@ -287,6 +318,30 @@ class SubscriptionPassthroughExecutor:
 				"agent_run_id": run_doc.name,
 				"status": "Waiting Authentication",
 			}
+
+		# --- Step 8b: SESSION_LOST vs AUTH_REQUIRED (plan §26.4/§62.4, review
+		# A2 second half). The runtime's auth is fine (we already passed the
+		# auth-status gate above) but this specific conversation's provider-
+		# native session could not be resumed. This is NOT an auth problem —
+		# never park/auth-challenge for it — and HUF must never silently
+		# replay conversation history into a fresh session on the caller's
+		# behalf. Mark the binding Unavailable and fail this run only, with a
+		# message that makes the distinction from an auth failure explicit.
+		if not is_stateless and not is_new_session and error_code in _SESSION_LOST_CODES:
+			if conversation and getattr(conversation, "name", None):
+				frappe.db.set_value(
+					"Agent Conversation",
+					conversation.name,
+					session_binding.binding_for_missing_session(),
+					update_modified=False,
+				)
+			return SubscriptionPassthroughExecutor._fail(
+				run_doc,
+				conversation,
+				"Your subscription login is fine, but this conversation's CLI session was "
+				"lost and can no longer be resumed. Start a new conversation to continue — "
+				"this is not an authentication problem.",
+			)
 
 		# --- Step 10: any other non-success result -> Failed, sanitized. ---
 		if result.status != "success":
