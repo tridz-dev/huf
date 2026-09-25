@@ -495,3 +495,13 @@ def test_probe_reports_automation_not_supported_by_default():
 	assert caps.automation_supported is False
 	assert caps.supports_json is True
 	assert caps.supports_session_resume is True
+	# Track-Item: fix-h5-codex-credential-read-leak — live-verified against a
+	# real, authenticated codex-cli 0.144.6 install that `--sandbox
+	# read-only` does not confine filesystem *reads* to the working
+	# directory (only writes/shell side effects are blocked); a forwarded
+	# prompt can still read and echo back an arbitrary file, including the
+	# runtime's own ~/.codex/auth.json. No CLI flag or env-var jail was
+	# found that closes this, so probe() must report the gap rather than
+	# silently claiming isolation. See codex.py's module docstring "ACTIVE
+	# KNOWN LIMITATION" section for the full empirical transcript.
+	assert caps.filesystem_isolation_verified is False

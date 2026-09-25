@@ -14,6 +14,74 @@ choices below — see the inline comments at each site:
 3. A JSONL `item.completed` of `type: "error"` can be a non-fatal warning
    that still ends in a successful `turn.completed` — only `turn.failed`
    means the turn failed.
+
+ACTIVE KNOWN LIMITATION (Track-Item: fix-h5-codex-credential-read-leak) --
+NOT RESOLVED, do not remove this section without re-running the live
+experiments below against the then-installed codex-cli version:
+
+`codex exec --sandbox read-only` (the mode this adapter always uses, see
+CODEX_SANDBOX_MODE below) blocks filesystem *writes* and shell side effects,
+but does **not** restrict filesystem *reads* to the configured working
+directory. Any prompt HUF forwards to Codex can ask it to run a shell command
+that reads and echoes back an arbitrary file readable by the OS user codex
+runs as -- including the runtime's own ChatGPT OAuth credential file. This
+was live-verified against a real, authenticated `codex` 0.144.6 install:
+
+    $ cd /tmp/codex_scratch_test   # untrusted scratch dir, not the real HOME
+    $ codex --ask-for-approval never exec --json --skip-git-repo-check \
+        --sandbox read-only "run the shell command: wc -c ~/.codex/auth.json"
+    ...
+    {"type":"item.completed","item":{"id":"item_1","type":"command_execution",
+     "command":"/bin/zsh -lc 'wc -c ~/.codex/auth.json'",
+     "aggregated_output":"    4782 /Users/safwan/.codex/auth.json\n",
+     "exit_code":0,"status":"completed"}}
+    {"type":"item.completed","item":{"id":"item_2","type":"agent_message",
+     "text":"```text\n4782 /Users/safwan/.codex/auth.json\n```"}}
+
+The command succeeded and returned the real credential file's byte count
+(i.e. Codex could just as easily have been asked to `cat` and return its
+full contents). Two mitigations were investigated and empirically ruled out
+before landing on this documented-limitation-plus-flag approach:
+
+1. `-c sandbox_permissions=[...]` config overrides (hinted at in
+   `codex exec --help`'s own examples, e.g. `disk-full-read-access`) only
+   ever *grant* additional permissions on top of the sandbox profile; there
+   is no documented value that *restricts* reads to a directory. Passing
+   `-c 'sandbox_permissions=[]'` was tested directly and did not change the
+   outcome -- the same file was still readable:
+       $ codex --ask-for-approval never exec --json --skip-git-repo-check \
+           --sandbox read-only -c 'sandbox_permissions=[]' \
+           "run: wc -c ~/.codex/auth.json"
+       ... {"aggregated_output":"    4782 /Users/safwan/.codex/auth.json\n", "exit_code":0, ...}
+   A lower-level `codex sandbox` subcommand does expose
+   `--sandbox-state-readable-root` (a raw seatbelt-profile runner), but that
+   command is a separate, undocumented-for-`exec` mechanism, not something
+   `codex exec`/`codex exec resume` accepts -- there is no supported way to
+   plumb a readable-root restriction through the `exec` invocation this
+   adapter uses.
+2. Restricting `$HOME`/`$CODEX_HOME` does not help either, because the read
+   is not confined to `~`-relative paths: an absolute path works exactly the
+   same regardless of the process's `HOME`/`CODEX_HOME` env vars, live-
+   verified with both isolated:
+       $ HOME=/tmp/codex_scratch_test/fake_home CODEX_HOME=/Users/safwan/.codex \
+           codex --ask-for-approval never exec --json --skip-git-repo-check \
+           --sandbox read-only "run: wc -c /Users/safwan/.codex/auth.json"
+       ... {"aggregated_output":"    4782 /Users/safwan/.codex/auth.json\n", "exit_code":0, ...}
+   i.e. even with `HOME` pointed at an empty scratch directory, the absolute
+   path to the real credential file is still readable -- there is no
+   env-based jail that survives an absolute-path argument, and Codex itself
+   needs *some* real `CODEX_HOME` to authenticate at all, so this mitigation
+   cannot be made airtight without breaking auth.
+
+Because neither mitigation is airtight against this installed codex-cli
+version, this adapter keeps `RuntimeCapabilities.automation_supported=False`
+(already the default posture per plan §73.2) and additionally reports
+`filesystem_isolation_verified=False` (see probe() below) so the
+runtime-tenancy/UI layer has a machine-readable signal to warn admins before
+recommending Codex for any shared/multi-tenant HUF deployment. Do **not**
+flip `filesystem_isolation_verified` to True for this adapter without a new
+live experiment against the then-current codex-cli version showing reads
+are actually confined.
 """
 
 from __future__ import annotations
@@ -333,6 +401,17 @@ class CodexAdapter(SubscriptionCLIAdapter):
 		safe on a per-deployment basis before being turned on — chat/
 		supervised use (what this adapter targets with read-only sandbox +
 		never-approval) is still fully usable with automation_supported=False.
+
+		filesystem_isolation_verified is deliberately False: a live
+		experiment against a real, authenticated codex-cli 0.144.6 install
+		confirmed `--sandbox read-only` blocks writes but does not confine
+		reads to the working directory -- a forwarded prompt can make Codex
+		read and echo back an arbitrary file, including the runtime's own
+		`~/.codex/auth.json` ChatGPT OAuth credentials (4782 bytes read back
+		verbatim in the test run). No config override or env-var jail was
+		found that closes this for the installed CLI. See the module
+		docstring's "ACTIVE KNOWN LIMITATION" section above for the full
+		empirical transcript before ever flipping this to True.
 		"""
 		executable = getattr(runtime, "cli_path", None) or "codex"
 		result = await self.transport.run([executable, "--version"], timeout=30)
@@ -362,6 +441,7 @@ class CodexAdapter(SubscriptionCLIAdapter):
 			supports_tool_restriction=True,
 			requires_stable_cwd=True,
 			automation_supported=False,
+			filesystem_isolation_verified=False,
 		)
 
 	# -- working-directory trust check --------------------------------------

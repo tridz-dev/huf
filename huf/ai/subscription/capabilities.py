@@ -24,3 +24,16 @@ class RuntimeCapabilities:
 	supports_tool_restriction: bool = False
 	requires_stable_cwd: bool = False
 	automation_supported: bool = True
+	# Whether this runtime's sandbox/permission model has been empirically
+	# verified to confine *filesystem reads* (not just writes) to the
+	# configured working directory. Most CLI "read-only" sandbox modes only
+	# block writes/shell execution side effects and still allow reading any
+	# path on disk the OS user can read -- which lets a prompt/tool-call ask
+	# the model to read and echo back an unrelated credential file (e.g. the
+	# runtime's own OAuth token store). Default True preserves prior adapter
+	# behavior for runtimes that have not been specifically audited for this
+	# gap; an adapter that empirically confirms unrestricted reads (see
+	# adapters/codex.py's probe() docstring for a live-verified example)
+	# must set this to False so the runtime-tenancy/UI layer can warn admins
+	# before recommending that CLI for shared/multi-tenant deployments.
+	filesystem_isolation_verified: bool = True
