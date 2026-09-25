@@ -207,6 +207,7 @@ permission_query_conditions = {
     "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Subscription Auth Challenge": "huf.huf.doctype.subscription_auth_challenge.subscription_auth_challenge.get_permission_query_conditions",
 }
 
 has_permission = {

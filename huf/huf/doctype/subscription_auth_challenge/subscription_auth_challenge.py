@@ -65,3 +65,40 @@ class SubscriptionAuthChallenge(Document):
 				message=frappe.get_traceback(),
 			)
 			return None
+
+
+def get_permission_query_conditions(user=None):
+	"""
+	List/report-view counterpart to `SubscriptionAuthChallenge.has_permission()`.
+
+	`has_permission()` only gates opening a *specific* document by name; it is
+	never consulted for the SQL used to build list views, report views, or the
+	`frappe.client.get_list` API. Without this hook every Huf User could list
+	every challenge row - including `user_code` and `verification_url`, which
+	are live, short-lived credentials - regardless of who created it or which
+	runtime it belongs to. Mirrors the exact three-way check in
+	`has_permission()`:
+	  - the user who created the challenge,
+	  - the owner of the linked Subscription Runtime,
+	  - a user holding the `subscription_runtime.manage` capability.
+	"""
+	from huf.permissions import has_capability
+
+	if not user:
+		user = frappe.session.user
+
+	if "System Manager" in frappe.get_roles(user):
+		return None
+
+	if has_capability(user, "subscription_runtime.manage"):
+		return None
+
+	user_escaped = frappe.db.escape(user)
+
+	return f"""(
+		`tabSubscription Auth Challenge`.`created_by` = {user_escaped}
+		OR `tabSubscription Auth Challenge`.`runtime` IN (
+			SELECT `name` FROM `tabSubscription Runtime`
+			WHERE `tabSubscription Runtime`.`owner_user` = {user_escaped}
+		)
+	)"""
