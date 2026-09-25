@@ -129,6 +129,21 @@ def test_codex_read_only_sandbox_does_not_confine_reads_to_cwd() -> None:
 		outputs = _extract_command_outputs(result.stdout)
 		combined_output = "\n".join(outputs)
 
+		# Live-only test hardening: a transient auth/network failure on the
+		# CLI's own backend (e.g. an expired/rate-limited token returning
+		# "401 Unauthorized", or a websocket drop that exhausts retries) is
+		# not a signal about whether the read-only sandbox confines reads --
+		# it just means the turn never got far enough to try. Skip rather
+		# than fail in that case so this live regression guard doesn't flap
+		# on session/network flakiness unrelated to the sandbox behavior it
+		# actually tests.
+		if "Unauthorized" in (result.stdout + result.stderr) or "turn.failed" in result.stdout:
+			pytest.skip(
+				"codex exec did not complete a turn (transient auth/network "
+				f"failure on the CLI's own backend) -- not a signal either "
+				f"way about read confinement. stdout={result.stdout!r}"
+			)
+
 		# The credential file's real path shows up in a successful command
 		# output -- i.e. Codex actually read a file well outside the scratch
 		# working directory it was invoked in, confirming the sandbox's
