@@ -31,6 +31,12 @@ from huf.ai.subscription.transports.base import ProcessResult
 from huf.ai.subscription.transports.local import LocalTransport
 from huf.ai.subscription.types import SubscriptionTurnRequest
 
+# Canonical AuthStatus.state vocabulary per huf/ai/subscription/types.py's
+# docstring / plan §60.1. Callers (subscription_api.py, executor.py) only
+# recognize these values -- anything else (e.g. "authenticated") silently
+# parks every run. See Track-Item: fix-c1-auth-status-vocabulary.
+CANONICAL_AUTH_STATES = {"ready", "required", "waiting_user", "verifying", "failed", "unknown"}
+
 # Fixtures live in a sibling top-level directory outside the `huf` app
 # package (ai/tests/subscription/fixtures/, at the worktree root), not
 # alongside this test file -- mirrors test_adapter_codex.py's convention.
@@ -272,8 +278,42 @@ def test_parses_real_auth_status_json():
 	adapter2 = ClaudeAdapter(transport=_StubTransport())
 	status = _run(adapter2.check_auth(runtime=None))
 
-	assert status.state == "authenticated"
+	assert status.state == "ready"
 	assert status.method == "claude.ai"
+
+
+class _StubTransportWithStdout:
+	def __init__(self, stdout: str = "", stderr: str = "", exit_code: int = 0):
+		self._stdout = stdout
+		self._stderr = stderr
+		self._exit_code = exit_code
+
+	async def run(self, argv, **kwargs):
+		return ProcessResult(stdout=self._stdout, stderr=self._stderr, exit_code=self._exit_code)
+
+
+@pytest.mark.parametrize(
+	"stdout,stderr,exit_code",
+	[
+		# Logged in (real fixture shape).
+		(json.dumps({"loggedIn": True, "authMethod": "claude.ai"}), "", 0),
+		# Logged out.
+		(json.dumps({"loggedIn": False}), "", 0),
+		# Malformed / non-JSON stdout.
+		("not json at all {{{", "some stderr", 1),
+		# Empty stdout, process errored.
+		("", "boom", 1),
+	],
+)
+def test_check_auth_never_returns_non_canonical_state(stdout, stderr, exit_code):
+	"""CRITICAL regression guard (Track-Item: fix-c1-auth-status-vocabulary):
+	check_auth() must only ever report a state from the canonical vocabulary
+	documented on AuthStatus -- every caller only recognizes those values, so
+	anything else (e.g. the old "authenticated"/"unauthenticated" bug) makes
+	the executor park every run forever."""
+	adapter = ClaudeAdapter(transport=_StubTransportWithStdout(stdout, stderr, exit_code))
+	status = _run(adapter.check_auth(runtime=None))
+	assert status.state in CANONICAL_AUTH_STATES
 
 
 def test_classify_stderr_matches_real_malformed_resume_text():

@@ -157,7 +157,7 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 
 		NOTE: the logged-out JSON shape was NOT captured live (see
 		auth_status.meta.md) -- if `loggedIn` is absent/false or the process exits
-		non-zero without JSON, we fall back to state="unknown"/"unauthenticated"
+		non-zero without JSON, we fall back to state="unknown"/"required"
 		rather than guessing an unverified shape.
 		"""
 		argv = [self._executable(runtime), "auth", "status"]
@@ -185,7 +185,7 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 
 		logged_in = bool(data.get("loggedIn"))
 		return AuthStatus(
-			state="authenticated" if logged_in else "unauthenticated",
+			state="ready" if logged_in else "required",
 			account_hint=data.get("email") or data.get("orgName"),
 			method=data.get("authMethod"),
 			message=f"apiProvider={data.get('apiProvider')} subscriptionType={data.get('subscriptionType')}",

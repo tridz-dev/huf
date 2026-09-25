@@ -26,6 +26,12 @@ from huf.ai.subscription.adapters.base import DeleteSessionResult
 from huf.ai.subscription.transports.base import ExecutionTransport, ProcessResult, StagedFile, TransportProbe
 from huf.ai.subscription.types import SubscriptionTurnRequest
 
+# Canonical AuthStatus.state vocabulary per huf/ai/subscription/types.py's
+# docstring / plan §60.1. Callers (subscription_api.py, executor.py) only
+# recognize these values -- anything else (e.g. "authenticated") silently
+# parks every run. See Track-Item: fix-c1-auth-status-vocabulary.
+CANONICAL_AUTH_STATES = {"ready", "required", "waiting_user", "verifying", "failed", "unknown"}
+
 
 class FakeRuntime:
 	def __init__(self, working_directory: str = "/work/proj", executable: str = "gemini", name: str = "gemini-rt"):
@@ -259,6 +265,42 @@ class TestPassthroughBoundary:
 		argv_joined = " ".join(transport.calls[0]["argv"])
 		for marker in self.FORBIDDEN_MARKERS:
 			assert marker not in argv_joined
+
+
+class TestCheckAuthCanonicalVocabulary:
+	"""CRITICAL regression guard (Track-Item: fix-c1-auth-status-vocabulary):
+	check_auth() must only ever report a state from the canonical vocabulary
+	documented on AuthStatus -- every caller only recognizes those values, so
+	anything else (e.g. the old "authenticated"/"unauthenticated" bug) makes
+	the executor park every run forever."""
+
+	@pytest.mark.asyncio
+	@pytest.mark.parametrize("exit_code", [0, 1, 2])
+	async def test_check_auth_never_returns_non_canonical_state(self, exit_code):
+		transport = RecordingTransport([ProcessResult(stdout="", stderr="not authenticated", exit_code=exit_code)])
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		status = await adapter.check_auth(runtime)
+
+		assert status.state in CANONICAL_AUTH_STATES
+
+	@pytest.mark.asyncio
+	async def test_check_auth_transport_exception_is_runtime_error_not_auth_status(self):
+		"""A transport-level failure raises rather than fabricating an AuthStatus
+		with an invalid state -- exercised here to document the boundary."""
+
+		class RaisingTransport(RecordingTransport):
+			async def run(self, argv, *, cwd=None, env=None, stdin=None, timeout=None):
+				self.calls.append({"argv": argv})
+				raise ConnectionError("ssh dropped")
+
+		transport = RaisingTransport()
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		with pytest.raises(Exception):
+			await adapter.check_auth(runtime)
 
 
 class TestVisionUnsupported:

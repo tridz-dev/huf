@@ -217,7 +217,7 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 		checked_at = _now_iso()
 		if result.exit_code == 0:
 			return AuthStatus(
-				state="authenticated",
+				state="ready",
 				account_hint=None,  # not exposed by any documented non-interactive output
 				method=None,  # cannot distinguish OAuth vs API key vs Vertex without a dedicated status call
 				message="Non-interactive probe call succeeded (no dedicated auth-status command is documented)",
@@ -225,7 +225,7 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 			)
 
 		return AuthStatus(
-			state="unauthenticated",
+			state="required",
 			account_hint=None,
 			method=None,
 			message=(

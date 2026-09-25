@@ -32,6 +32,12 @@ from huf.ai.subscription.errors import SubscriptionCLIError, SubscriptionErrorCo
 from huf.ai.subscription.transports.base import ExecutionTransport, ProcessResult, StagedFile, TransportProbe
 from huf.ai.subscription.types import SubscriptionTurnRequest
 
+# Canonical AuthStatus.state vocabulary per huf/ai/subscription/types.py's
+# docstring / plan §60.1. Callers (subscription_api.py, executor.py) only
+# recognize these values -- anything else (e.g. "authenticated") silently
+# parks every run. See Track-Item: fix-c1-auth-status-vocabulary.
+CANONICAL_AUTH_STATES = {"ready", "required", "waiting_user", "verifying", "failed", "unknown"}
+
 # Fixtures live at the repo-root-relative path
 # ai/tests/subscription/fixtures/real/codex/ — a top-level directory distinct
 # from the huf.ai package tree this test file lives under.
@@ -172,19 +178,55 @@ def test_parse_login_status_real_fixture_authenticated():
 	stdout = _read_fixture("auth_status.txt")
 	status = parse_codex_login_status(stdout)
 
-	assert status.state == "authenticated"
+	assert status.state == "ready"
 	assert status.method == "ChatGPT"
 	assert status.message == "Logged in using ChatGPT"
 
 
 def test_parse_login_status_unauthenticated_text():
 	status = parse_codex_login_status("Not logged in")
-	assert status.state == "unauthenticated"
+	assert status.state == "required"
 
 
 def test_parse_login_status_unrecognized_shape_is_unknown_not_guessed():
 	status = parse_codex_login_status("some future CLI output we've never seen")
 	assert status.state == "unknown"
+
+
+@pytest.mark.parametrize(
+	"text",
+	[
+		"Logged in using ChatGPT",  # logged in
+		"Not logged in",  # logged out
+		"not authenticated with this account",  # logged out, alternate wording
+		"some future CLI output we've never seen",  # unrecognized/malformed
+		"",  # empty output
+	],
+)
+def test_parse_login_status_never_returns_non_canonical_state(text):
+	"""CRITICAL regression guard (Track-Item: fix-c1-auth-status-vocabulary):
+	parse_codex_login_status() must only ever report a state from the
+	canonical vocabulary documented on AuthStatus."""
+	status = parse_codex_login_status(text)
+	assert status.state in CANONICAL_AUTH_STATES
+
+
+@pytest.mark.parametrize(
+	"stdout,exit_code",
+	[
+		("Logged in using ChatGPT", 0),
+		("Not logged in", 0),
+		("garbage \x00 output", 1),
+		("", 1),
+	],
+)
+def test_check_auth_never_returns_non_canonical_state(stdout, exit_code):
+	transport = FakeTransport(ProcessResult(stdout=stdout, stderr="", exit_code=exit_code))
+	adapter = CodexAdapter(transport)
+
+	status = asyncio.run(adapter.check_auth(FakeRuntime()))
+
+	assert status.state in CANONICAL_AUTH_STATES
 
 
 def test_check_auth_uses_parser():
@@ -193,7 +235,7 @@ def test_check_auth_uses_parser():
 
 	status = asyncio.run(adapter.check_auth(FakeRuntime()))
 
-	assert status.state == "authenticated"
+	assert status.state == "ready"
 	assert transport.calls[0]["argv"] == ["codex", "login", "status"]
 
 

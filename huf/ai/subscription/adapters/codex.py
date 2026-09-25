@@ -241,7 +241,7 @@ def parse_codex_login_status(stdout: str) -> AuthStatus:
 	if logged_in_match:
 		method = logged_in_match.group(1).strip()
 		return AuthStatus(
-			state="authenticated",
+			state="ready",
 			account_hint=None,
 			method=method,
 			message=text,
@@ -250,7 +250,7 @@ def parse_codex_login_status(stdout: str) -> AuthStatus:
 
 	if "not logged in" in lowered or "not authenticated" in lowered:
 		return AuthStatus(
-			state="unauthenticated",
+			state="required",
 			account_hint=None,
 			method=None,
 			message=text,
