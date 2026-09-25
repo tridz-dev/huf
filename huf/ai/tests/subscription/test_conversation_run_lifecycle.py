@@ -374,36 +374,28 @@ class TestSessionIdFieldNeverWritten(unittest.TestCase):
 class TestForkNeverCallsBindingForFork(unittest.TestCase):
 	"""§41: conversation fork does not inherit the source's provider session.
 
-	FINDING (real gap, reported not fixed): `session_binding.binding_for_fork()`
-	exists (huf/ai/subscription/session_binding.py) specifically to compute
-	the field-reset for a forked conversation, but
-	`huf/ai/conversation_fork.py::fork_conversation_impl` never imports or
-	calls it. The forked conversation happens to end up in an equivalent
-	state today ONLY because `ConversationManager.create_new_conversation`
-	builds a brand-new `Agent Conversation` dict that never sets any
-	`subscription_*` field, so they default to their doctype defaults (None /
-	unset, which `resolve_binding_for_turn` treats identically to
-	"Uninitialized"). That is incidental, not a guarantee: if a future change
-	to `create_new_conversation` or the doctype's field defaults changes that
-	default, nothing will fail loudly, and a forked conversation could start
-	inheriting stale provider-session-shaped state. `binding_for_fork()`
-	should be wired into `fork_conversation_impl` explicitly rather than
-	relying on this coincidence. Flagged for follow-up; not fixed here per
-	task instructions.
+	FIXED (commit 3237d9bf): `session_binding.binding_for_fork()`
+	(huf/ai/subscription/session_binding.py) computes the field-reset for a
+	forked conversation, and `huf/ai/conversation_fork.py::fork_conversation_impl`
+	now imports and calls it explicitly (`target.update(binding_for_fork())`)
+	rather than relying on `create_new_conversation`'s doc dict incidentally
+	omitting every `subscription_*` key. This test locks in that wiring as a
+	regression guard. A dedicated passing test also exists at
+	`huf/ai/tests/subscription/test_fork_binding_wiring.py`.
 	"""
 
-	def test_fork_conversation_impl_source_does_not_reference_binding_for_fork(self):
+	def test_fork_conversation_impl_now_calls_binding_for_fork(self):
 		import inspect
 
 		from huf.ai import conversation_fork
 
 		source = inspect.getsource(conversation_fork)
-		self.assertNotIn(
+		self.assertIn(
 			"binding_for_fork",
 			source,
-			"conversation_fork.py now calls session_binding.binding_for_fork() -- "
-			"if this assertion starts failing, the gap this test documents has "
-			"been fixed; please update/remove this test rather than silencing it.",
+			"conversation_fork.py should call session_binding.binding_for_fork() "
+			"explicitly so a forked conversation never inherits the source's "
+			"provider-session-shaped state.",
 		)
 
 	def test_new_conversation_dict_omits_every_subscription_field(self):

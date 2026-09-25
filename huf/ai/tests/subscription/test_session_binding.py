@@ -142,12 +142,14 @@ def test_binding_for_new_session_shape():
 	assert result["subscription_runtime"] == "claude-code"
 	assert isinstance(result["subscription_provider_session_created_at"], str)
 	assert isinstance(result["subscription_provider_session_last_verified_at"], str)
+	assert result["runtime_mode"] == "subscription_passthrough"
 	assert set(result.keys()) == {
 		"subscription_provider_session_id",
 		"subscription_provider_session_status",
 		"subscription_runtime",
 		"subscription_provider_session_created_at",
 		"subscription_provider_session_last_verified_at",
+		"runtime_mode",
 	}
 
 

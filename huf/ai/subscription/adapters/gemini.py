@@ -49,6 +49,21 @@ _UUID_RE = re.compile(
 	r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
+# Matches common credential/token shapes that a CLI's stderr/stdout might
+# echo back verbatim (e.g. from an underlying HTTP client's error message):
+# `Authorization: Bearer <token>`, an Anthropic/OpenAI-style `sk-...` secret
+# key, a Google OAuth `ya29....` access token, or an `api_key=`/
+# `access_token:`-style assignment. Kept identical to claude.py's
+# `_SECRET_VALUE_RE` (Track-Item: T-T6) so both adapters redact the same
+# secret shapes before CLI error text is surfaced via `auth_reason`/`events`.
+_SECRET_VALUE_RE = re.compile(
+	r"(?i)"
+	r"bearer\s+[a-z0-9._\-]{10,}"
+	r"|sk-[a-z0-9_\-]{10,}"
+	r"|ya29\.[a-z0-9._\-]{10,}"
+	r"|(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret)\s*[=:]\s*[\"']?[a-z0-9._\-]{8,}[\"']?"
+)
+
 
 def _now_iso() -> str:
 	return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -410,6 +425,7 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 		text = text.strip()
 		if not text:
 			return None
+		text = _SECRET_VALUE_RE.sub("<redacted>", text)
 		if len(text) > max_len:
 			text = text[:max_len] + "...(truncated)"
 		return text
