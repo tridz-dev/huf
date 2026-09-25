@@ -374,6 +374,47 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 		return DeleteSessionResult(cleanup_status="cleanup_failed")
 
 	# ------------------------------------------------------------------
+	# Best-effort error classification (H9, Track-Item: fix-gemini-h3-h9)
+	# ------------------------------------------------------------------
+
+	# NOT LIVE-VERIFIED: Gemini's exact logout/auth-failure stderr text and exit
+	# code were never captured (Stage 0 spike had no installed/authenticated
+	# Gemini CLI — see class docstring). No fixture documents what a logged-out
+	# `gemini -p ... --output-format json` invocation actually prints. This is a
+	# best-effort keyword classifier only, modeled on the sibling claude.py
+	# adapter's `_classify_stderr` (which IS confirmed-working per the review),
+	# not a verified Gemini-specific contract. Re-check against a live capture
+	# in Stage 12 before trusting the exact keyword list.
+	_AUTH_FAILURE_MARKERS = ("auth", "login", "unauthorized", "credential")
+
+	def _classify_stderr(self, stderr_text: str) -> SubscriptionErrorCode:
+		"""Best-effort classification of a Gemini CLI stderr failure.
+
+		NOT LIVE-VERIFIED (see `_AUTH_FAILURE_MARKERS` above): checks stderr text
+		case-insensitively for auth/login/unauthorized/credential-shaped keywords
+		and classifies a match as AUTH_REQUIRED so `executor.py::_extract_error_code`
+		can park the run for re-authentication instead of failing it outright
+		(matching the working pattern in claude.py's `_classify_stderr` ->
+		AUTH_REQUIRED path). Anything else is classified as a generic CLI failure.
+		"""
+		lowered = (stderr_text or "").lower()
+		if any(marker in lowered for marker in self._AUTH_FAILURE_MARKERS):
+			return SubscriptionErrorCode.AUTH_REQUIRED
+		return SubscriptionErrorCode.CLI_PROCESS_FAILED
+
+	@staticmethod
+	def _sanitize(text: str | None, *, max_len: int = 2000) -> str | None:
+		"""Bound CLI error text before it is surfaced via `auth_reason`/`events`."""
+		if not text:
+			return None
+		text = text.strip()
+		if not text:
+			return None
+		if len(text) > max_len:
+			text = text[:max_len] + "...(truncated)"
+		return text
+
+	# ------------------------------------------------------------------
 	# run_turn()
 	# ------------------------------------------------------------------
 
@@ -407,10 +448,22 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 		if request.provider_session_id:
 			argv += ["-r", request.provider_session_id]
 		else:
-			# Best-effort: pin the session id we generated in create_session().
-			# NOT LIVE-VERIFIED that --session-id is respected as documented (see
-			# create_session docstring).
-			argv += ["--session-id", request.provider_session_id or ""]
+			# H3 fix (review finding, Track-Item: fix-gemini-h3-h9): help_output.txt
+			# (fixtures/real/gemini/help_output.txt) documents `--session-id` NOWHERE --
+			# the only session-management flags it lists are `-r/--resume
+			# <latest|INDEX|SESSION_UUID>`, `--list-sessions`, and `--delete-session
+			# <INDEX>`. There is no documented way to pre-assign a session id for a
+			# brand-new session (unlike Claude, where `--session-id` on first
+			# invocation is confirmed-documented). Passing `--session-id ""` here was
+			# the bug: it sent an EMPTY STRING as the flag value on every new-session
+			# turn instead of either omitting the flag or generating a real id.
+			#
+			# Fix: omit any session-id flag entirely for a new session and let Gemini
+			# generate its own session id. The resulting id is recovered from the
+			# turn's JSON response by `_parse_turn_output` (which already tries
+			# several plausible key names: `session_id`/`sessionId`/`session`/
+			# `session_uuid`) and returned as `SubscriptionTurnResult.provider_session_id`.
+			pass
 		if request.model_override:
 			# NOT LIVE-VERIFIED: no documented model-selection flag was found in the
 			# fetched docs/fixtures for this adapter; supports_model_selection is
@@ -443,12 +496,24 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 			# both of which are confirmed to emit plain-text stderr even when JSON
 			# output was requested). Surface stderr verbatim rather than guessing a
 			# structured shape.
+			#
+			# H9 fix (review finding, Track-Item: fix-gemini-h3-h9): a logout/auth
+			# failure must be classified as AUTH_REQUIRED and surfaced via
+			# `events`, matching the pattern in claude.py's `_parse_turn_output`
+			# (`_classify_stderr` -> `events=[{"source": "cli_stderr", "code": ...}]`).
+			# Without this, executor.py::_extract_error_code() sees no `code` on
+			# any event, never recognizes AUTH_REQUIRED, and fails the run outright
+			# instead of parking it for re-authentication (plan §26.4/§62.4).
+			code = self._classify_stderr(result.stderr or "")
+			auth_reason = self._sanitize(result.stderr) if code is SubscriptionErrorCode.AUTH_REQUIRED else None
 			return SubscriptionTurnResult(
 				status="failed",
 				final_text=None,
 				provider_session_id=request.provider_session_id,
 				exit_code=result.exit_code,
 				raw_debug_ref=result.stderr[:4000] if result.stderr else None,
+				auth_reason=auth_reason,
+				events=[{"source": "cli_stderr", "code": code.value}],
 			)
 
 		parsed = self._parse_turn_output(result.stdout)

@@ -348,3 +348,90 @@ class TestStableWorkingDirectory:
 
 		cwds = [call["cwd"] for call in transport.calls]
 		assert all(cwd == "/stable/project/path" for cwd in cwds)
+
+
+class TestNewSessionNeverSendsEmptySessionId:
+	"""H3 regression test (Track-Item: fix-gemini-h3-h9): a brand-new-session turn
+	must never send `--session-id ""` (or `--session-id` with any value) -- Gemini's
+	help_output.txt does not document `--session-id` at all, only `-r/--resume`."""
+
+	@pytest.mark.asyncio
+	async def test_new_session_turn_omits_session_id_flag(self):
+		payload = {"result": "ok", "session_id": "gemini-generated-id", "usage": {}}
+		transport = RecordingTransport([ProcessResult(stdout=json.dumps(payload), stderr="", exit_code=0)])
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		# No provider_session_id -> new session.
+		request = make_request(session_id=None)
+		result = await adapter.run_turn(runtime, request)
+
+		assert len(transport.calls) == 1
+		argv = transport.calls[0]["argv"]
+
+		assert "--session-id" not in argv
+		# The provider-generated session id from the response is still surfaced.
+		assert result.provider_session_id == "gemini-generated-id"
+
+	@pytest.mark.asyncio
+	async def test_resume_turn_still_uses_resume_flag(self):
+		"""Sanity check: an existing session still resumes via -r, unaffected by the fix."""
+		payload = {"result": "ok", "session_id": "sess-uuid-1", "usage": {}}
+		transport = RecordingTransport([ProcessResult(stdout=json.dumps(payload), stderr="", exit_code=0)])
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		request = make_request(session_id="sess-uuid-1")
+		await adapter.run_turn(runtime, request)
+
+		argv = transport.calls[0]["argv"]
+		assert "-r" in argv
+		assert argv[argv.index("-r") + 1] == "sess-uuid-1"
+		assert "--session-id" not in argv
+
+
+class TestAuthFailureClassification:
+	"""H9 regression test (Track-Item: fix-gemini-h3-h9): a CLI failure whose stderr
+	looks auth/logout-shaped must be classified as AUTH_REQUIRED in `events` so
+	executor.py::_extract_error_code() can park the run instead of failing it."""
+
+	@pytest.mark.asyncio
+	async def test_auth_keyword_in_stderr_classified_as_auth_required(self):
+		transport = RecordingTransport(
+			[ProcessResult(stdout="", stderr="Error: not authenticated, please login again", exit_code=1)]
+		)
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		result = await adapter.run_turn(runtime, make_request())
+
+		assert result.status == "failed"
+		assert result.events
+		assert result.events[0]["code"] == SubscriptionErrorCode.AUTH_REQUIRED.value
+		assert result.auth_reason is not None
+
+	@pytest.mark.asyncio
+	async def test_unauthorized_keyword_classified_as_auth_required(self):
+		transport = RecordingTransport(
+			[ProcessResult(stdout="", stderr="401 Unauthorized: invalid credential", exit_code=1)]
+		)
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		result = await adapter.run_turn(runtime, make_request())
+
+		assert result.events[0]["code"] == SubscriptionErrorCode.AUTH_REQUIRED.value
+
+	@pytest.mark.asyncio
+	async def test_non_auth_failure_not_misclassified(self):
+		transport = RecordingTransport(
+			[ProcessResult(stdout="", stderr="Error: rate limit exceeded", exit_code=1)]
+		)
+		adapter = GeminiAdapter(transport)
+		runtime = FakeRuntime()
+
+		result = await adapter.run_turn(runtime, make_request())
+
+		assert result.status == "failed"
+		assert result.events[0]["code"] == SubscriptionErrorCode.CLI_PROCESS_FAILED.value
+		assert result.auth_reason is None
