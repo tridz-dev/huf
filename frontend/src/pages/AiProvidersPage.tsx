@@ -44,8 +44,20 @@ import type { AIProvider, AIModel } from '../types/agent.types';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
 import { ProviderBrandSelect } from '@/components/providers/ProviderBrandSelect';
 import { ProviderBrandIcon } from '@/components/providers/ProviderBrandIcon';
+import { SubscriptionRuntimeSelect } from '@/components/providers/SubscriptionRuntimeSelect';
 import { suggestBrandFromProviderName, resolveProviderBrand } from '@/utils/providerBrands';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import { testSubscriptionRuntimeConnection } from '@/services/subscriptionRuntimeApi';
+import type { SubscriptionRuntimeProbeResult } from '@/services/subscriptionRuntimeApi';
+
+type ProviderMode = 'API' | 'Local Endpoint' | 'Subscription CLI';
 
 interface AiProvidersPageProps {
   addProviderKey?: number;
@@ -108,9 +120,13 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     provider_brand: '',
     is_local_llm: false,
     api_base_url: '',
+    provider_mode: 'API' as ProviderMode,
+    subscription_runtime: '',
   });
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionTest, setConnectionTest] = useState<ProviderConnectionTestResult | null>(null);
+  const [testingRuntime, setTestingRuntime] = useState(false);
+  const [runtimeTest, setRuntimeTest] = useState<SubscriptionRuntimeProbeResult | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AIProvider | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -120,6 +136,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     provider_brand: '',
     is_local_llm: false,
     api_base_url: '',
+    provider_mode: 'API' as ProviderMode,
+    subscription_runtime: '',
   };
 
   const {
@@ -200,6 +218,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setSelectedProvider(null);
     setIsEditing(false);
     setConnectionTest(null);
+    setRuntimeTest(null);
     setFormData({ ...emptyFormData });
     setConfigureModalOpen(true);
   };
@@ -217,6 +236,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     setConfigureModalOpen(true);
     setLoadingProvider(true);
     setConnectionTest(null);
+    setRuntimeTest(null);
 
     try {
       const details = await getProvider(provider.name);
@@ -226,6 +246,8 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
         provider_brand: details.provider_brand || '',
         is_local_llm: details.is_local_llm === 1,
         api_base_url: details.api_base_url || '',
+        provider_mode: (details.provider_mode || 'API') as ProviderMode,
+        subscription_runtime: details.subscription_runtime || '',
       });
     } catch (error) {
       toast.error('Failed to load provider details');
@@ -288,8 +310,14 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
     }
 
     // Local providers need an endpoint URL instead of an API key
-    if (formData.is_local_llm && !formData.api_base_url.trim()) {
+    if (formData.provider_mode !== 'Subscription CLI' && formData.is_local_llm && !formData.api_base_url.trim()) {
       toast.error('API Base URL is required for local providers');
+      return;
+    }
+
+    // Subscription CLI providers are backed by a Subscription Runtime, not an API key/URL
+    if (formData.provider_mode === 'Subscription CLI' && !formData.subscription_runtime) {
+      toast.error('Select a Subscription Runtime');
       return;
     }
 
@@ -298,14 +326,19 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       suggestBrandFromProviderName(formData.provider_name) ||
       'other';
 
+    const isSubscriptionCli = formData.provider_mode === 'Subscription CLI';
+
     setSaving(true);
     try {
       if (isEditing && selectedProvider) {
         await updateProvider(selectedProvider.name, {
           api_key: formData.api_key,
           provider_brand: providerBrand,
-          is_local_llm: formData.is_local_llm ? 1 : 0,
+          is_local_llm: isSubscriptionCli ? 0 : formData.is_local_llm ? 1 : 0,
           api_base_url: formData.api_base_url.trim(),
+          provider_mode: formData.provider_mode,
+          billing_mode: isSubscriptionCli ? 'Subscription' : undefined,
+          subscription_runtime: isSubscriptionCli ? formData.subscription_runtime : '',
         });
         toast.success('Provider updated successfully');
       } else {
@@ -313,8 +346,11 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
           provider_name: formData.provider_name.trim(),
           api_key: formData.api_key,
           provider_brand: providerBrand,
-          is_local_llm: formData.is_local_llm ? 1 : 0,
+          is_local_llm: isSubscriptionCli ? 0 : formData.is_local_llm ? 1 : 0,
           api_base_url: formData.api_base_url.trim(),
+          provider_mode: formData.provider_mode,
+          billing_mode: isSubscriptionCli ? 'Subscription' : undefined,
+          subscription_runtime: isSubscriptionCli ? formData.subscription_runtime : '',
         });
         toast.success('Provider created successfully');
       }
@@ -362,6 +398,25 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
       console.error(error);
     } finally {
       setTestingConnection(false);
+    }
+  };
+
+  const handleTestRuntime = async () => {
+    if (!formData.subscription_runtime) return;
+
+    setTestingRuntime(true);
+    setRuntimeTest(null);
+    try {
+      const result = await testSubscriptionRuntimeConnection(formData.subscription_runtime);
+      setRuntimeTest(result);
+    } catch (error) {
+      toast.error('Runtime test failed', {
+        description: getFrappeErrorMessage(error),
+        duration: 8000,
+      });
+      console.error(error);
+    } finally {
+      setTestingRuntime(false);
     }
   };
 
@@ -624,53 +679,144 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="api_key">
-                  {formData.is_local_llm ? 'API Key (optional for local)' : 'API Key'}
-                </Label>
-                <Input
-                  id="api_key"
-                  type="password"
-                  placeholder="Enter API key"
-                  value={formData.api_key}
-                  onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                />
+                <Label htmlFor="provider_mode">Provider Mode</Label>
+                <Select
+                  value={formData.provider_mode}
+                  onValueChange={(value) =>
+                    setFormData({ ...formData, provider_mode: value as ProviderMode })
+                  }
+                >
+                  <SelectTrigger id="provider_mode">
+                    <SelectValue placeholder="Select provider mode" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="API">API</SelectItem>
+                    <SelectItem value="Local Endpoint">Local Endpoint</SelectItem>
+                    <SelectItem value="Subscription CLI">Subscription CLI</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="is_local_llm"
-                  checked={formData.is_local_llm}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, is_local_llm: checked === true })
-                  }
-                />
-                <Label htmlFor="is_local_llm" weight="normal" className="cursor-pointer">
-                  Is local LLM (self-hosted endpoint)
-                </Label>
-              </div>
+              {formData.provider_mode !== 'Subscription CLI' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="api_key">
+                      {formData.is_local_llm ? 'API Key (optional for local)' : 'API Key'}
+                    </Label>
+                    <Input
+                      id="api_key"
+                      type="password"
+                      placeholder="Enter API key"
+                      value={formData.api_key}
+                      onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                    />
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="api_base_url">
-                  API Base URL
-                  {formData.is_local_llm && <span className="text-destructive"> *</span>}
-                </Label>
-                <Input
-                  id="api_base_url"
-                  type="text"
-                  placeholder={
-                    formData.is_local_llm
-                      ? 'http://host.docker.internal:11434'
-                      : 'Leave blank to use the provider default (e.g. https://api.openai.com/v1)'
-                  }
-                  value={formData.api_base_url}
-                  onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
-                />
-                {!formData.is_local_llm && (
-                  <p className="text-xs text-muted-foreground">
-                    Only needed for a custom or self-hosted endpoint (Azure, Moonshot, a LiteLLM proxy, etc.).
-                  </p>
-                )}
-              </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="is_local_llm"
+                      checked={formData.is_local_llm}
+                      onCheckedChange={(checked) =>
+                        setFormData({ ...formData, is_local_llm: checked === true })
+                      }
+                    />
+                    <Label htmlFor="is_local_llm" weight="normal" className="cursor-pointer">
+                      Is local LLM (self-hosted endpoint)
+                    </Label>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="api_base_url">
+                      API Base URL
+                      {formData.is_local_llm && <span className="text-destructive"> *</span>}
+                    </Label>
+                    <Input
+                      id="api_base_url"
+                      type="text"
+                      placeholder={
+                        formData.is_local_llm
+                          ? 'http://host.docker.internal:11434'
+                          : 'Leave blank to use the provider default (e.g. https://api.openai.com/v1)'
+                      }
+                      value={formData.api_base_url}
+                      onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
+                    />
+                    {!formData.is_local_llm && (
+                      <p className="text-xs text-muted-foreground">
+                        Only needed for a custom or self-hosted endpoint (Azure, Moonshot, a LiteLLM proxy, etc.).
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {formData.provider_mode === 'Subscription CLI' && (
+                <div className="space-y-4">
+                  <SubscriptionRuntimeSelect
+                    value={formData.subscription_runtime}
+                    onChange={(subscription_runtime) =>
+                      setFormData({ ...formData, subscription_runtime })
+                    }
+                    required
+                  />
+
+                  <div className="flex items-center gap-2">
+                    <Label weight="normal">Billing Mode:</Label>
+                    <Badge variant="secondary">Subscription</Badge>
+                  </div>
+
+                  <div className="space-y-3 rounded-md border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label>Runtime</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleTestRuntime}
+                        disabled={testingRuntime || saving || !formData.subscription_runtime}
+                      >
+                        {testingRuntime ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Testing...
+                          </>
+                        ) : (
+                          'Test Runtime'
+                        )}
+                      </Button>
+                    </div>
+                    {runtimeTest && (
+                      <div className="space-y-2 text-sm">
+                        <div className="flex items-start gap-2">
+                          {runtimeTest.success ? (
+                            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-good" />
+                          ) : (
+                            <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                          )}
+                          <div className="min-w-0">
+                            <span className={runtimeTest.success ? 'text-good' : 'text-destructive'}>
+                              {runtimeTest.success ? 'Runtime reachable' : 'Runtime unreachable'}
+                            </span>
+                            {runtimeTest.error && (
+                              <p className="text-xs text-destructive break-words">{runtimeTest.error}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1 pl-6">
+                          {runtimeTest.version && (
+                            <Badge variant="secondary" size="sm">
+                              Version {runtimeTest.version}
+                            </Badge>
+                          )}
+                          <Badge variant={runtimeTest.authenticated ? 'secondary' : 'outline'} size="sm">
+                            {runtimeTest.authenticated ? 'Authenticated' : 'Not authenticated'}
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <ProviderBrandSelect
                 value={formData.provider_brand}
@@ -679,7 +825,7 @@ export function AiProvidersPage({ addProviderKey }: AiProvidersPageProps) {
                 required
               />
 
-              {isEditing && (
+              {isEditing && formData.provider_mode !== 'Subscription CLI' && (
                 <div className="space-y-3 rounded-md border p-3">
                   <div className="flex items-center justify-between gap-2">
                     <Label>Connection</Label>

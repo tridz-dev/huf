@@ -6,6 +6,12 @@ export type AIProvider = {
   is_local_llm?: number;
   /** Base URL for local endpoints, e.g. http://host.docker.internal:11434 */
   api_base_url?: string;
+  /** How this provider is accessed: API, Local Endpoint, or Subscription CLI. */
+  provider_mode?: 'API' | 'Local Endpoint' | 'Subscription CLI';
+  /** Billing method: API, Subscription, Local, or Unknown. */
+  billing_mode?: 'API' | 'Subscription' | 'Local' | 'Unknown';
+  /** Linked Subscription Runtime, set when provider_mode is 'Subscription CLI'. */
+  subscription_runtime?: string;
 };
 
 export type AIModel = {
