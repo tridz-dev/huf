@@ -124,7 +124,7 @@ class GeminiAdapter(SubscriptionCLIAdapter):
 		return str(cwd)
 
 	def _executable(self, runtime: Any) -> str:
-		executable = getattr(runtime, "executable", None)
+		executable = getattr(runtime, "cli_path", None)
 		return str(executable) if executable else "gemini"
 
 	def _policy_argv(self) -> list[str]:

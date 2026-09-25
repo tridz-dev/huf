@@ -288,7 +288,8 @@ class CodexAdapter(SubscriptionCLIAdapter):
 		supervised use (what this adapter targets with read-only sandbox +
 		never-approval) is still fully usable with automation_supported=False.
 		"""
-		result = await self.transport.run(["codex", "--version"], timeout=30)
+		executable = getattr(runtime, "cli_path", None) or "codex"
+		result = await self.transport.run([executable, "--version"], timeout=30)
 		if result.exit_code != 0 or result.timed_out:
 			raise SubscriptionRuntimeError(
 				SubscriptionErrorCode.RUNTIME_UNREACHABLE,
@@ -350,7 +351,8 @@ class CodexAdapter(SubscriptionCLIAdapter):
 	# -- auth ----------------------------------------------------------------
 
 	async def check_auth(self, runtime: Any) -> AuthStatus:
-		result = await self.transport.run(["codex", "login", "status"], timeout=30)
+		executable = getattr(runtime, "cli_path", None) or "codex"
+		result = await self.transport.run([executable, "login", "status"], timeout=30)
 		if result.timed_out:
 			raise SubscriptionAuthError(
 				SubscriptionErrorCode.RUNTIME_UNREACHABLE,
@@ -454,9 +456,10 @@ class CodexAdapter(SubscriptionCLIAdapter):
 		# ever placed on the argv below. No HUF system-prompt content,
 		# conversation history, or HUF-generated MCP config is constructed or
 		# passed here — see SubscriptionCLIAdapter's docstring contract.
+		executable = getattr(runtime, "cli_path", None) or "codex"
 		if request.provider_session_id:
 			argv = [
-				"codex",
+				executable,
 				"exec",
 				"resume",
 				"--json",
@@ -473,7 +476,7 @@ class CodexAdapter(SubscriptionCLIAdapter):
 			argv.append(request.text)
 		else:
 			argv = [
-				"codex",
+				executable,
 				"exec",
 				"--json",
 				CODEX_TRUST_FLAG,

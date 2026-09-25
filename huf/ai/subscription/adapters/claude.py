@@ -82,12 +82,12 @@ class ClaudeAdapter(SubscriptionCLIAdapter):
 	# Fallback executable name used only where no `runtime` object is available
 	# (create_session/run_turn per the base class contract take a bare
 	# SubscriptionTurnRequest with no runtime handle). probe/check_auth/etc.
-	# prefer `runtime.executable` when given, matching how other adapters in
+	# prefer `runtime.cli_path` when given, matching how other adapters in
 	# this codebase resolve the CLI path.
 	DEFAULT_EXECUTABLE = "claude"
 
 	def _executable(self, runtime: Any = None) -> str:
-		return getattr(runtime, "executable", None) or self.DEFAULT_EXECUTABLE
+		return getattr(runtime, "cli_path", None) or self.DEFAULT_EXECUTABLE
 
 	# ------------------------------------------------------------------
 	# Probe / auth

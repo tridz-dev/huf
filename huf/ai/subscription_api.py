@@ -75,7 +75,7 @@ def _build_transport_for_runtime(runtime):
 	if transport_type == "Local":
 		from huf.ai.subscription.transports.local import LocalTransport
 
-		return LocalTransport(runtime.executable, runtime_dir=runtime.working_directory or None)
+		return LocalTransport(runtime.cli_path, runtime_dir=runtime.working_directory or None)
 
 	if transport_type == "Docker":
 		from huf.ai.subscription.transports.docker import DockerExecTransport

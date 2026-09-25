@@ -28,6 +28,16 @@ class AIProvider(Document):
 				)
 
 	def validate_api_key(self):
+		if self.provider_mode == "Subscription CLI":
+			# Subscription CLI providers are driven entirely by the linked
+			# Subscription Runtime (a local/SSH/Docker CLI session) — they
+			# never hold a cloud API key.
+			if not self.subscription_runtime:
+				frappe.throw(_("Subscription Runtime is required when Provider Mode is Subscription CLI."))
+			if not self.api_key:
+				# Set a dummy value to satisfy legacy readers that expect one.
+				self.api_key = "not-needed"
+			return
 		if self.is_local_llm:
 			if not (self.api_base_url or self.url):
 				frappe.throw(_("API Base URL or URL is required for a local LLM provider."))
