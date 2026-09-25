@@ -20,10 +20,32 @@ reads set directly. This exercises the real, unmodified implementation
 that is the only external dependency `check_tenancy()` has.
 """
 
+import sys
+import types
 import unittest
 from unittest import mock
 
 import frappe
+
+# `subscription_runtime.py` does `from frappe.model.document import Document`,
+# matching every other HUF DocType controller (see huf/huf/doctype/ssh_connection/
+# ssh_connection.py). `huf/ai/tests/conftest.py` only stubs a bare `frappe` module
+# for standalone (frappe-less) runs, which is enough for `import frappe` but not
+# for `from frappe.model.document import Document` (Python's import machinery
+# needs `frappe.model` and `frappe.model.document` present in `sys.modules` as
+# real submodules, not just attributes of a MagicMock). Register a minimal,
+# real `Document` base class for exactly that import, only when the real
+# `frappe` package isn't installed -- this must never touch a live bench run.
+if not hasattr(frappe, "__file__"):
+	_frappe_model = sys.modules.setdefault("frappe.model", types.ModuleType("frappe.model"))
+	_frappe_model_document = sys.modules.setdefault(
+		"frappe.model.document", types.ModuleType("frappe.model.document")
+	)
+	if not hasattr(_frappe_model_document, "Document"):
+		class Document:  # noqa: D401 - minimal stand-in, real class lives in frappe
+			pass
+
+		_frappe_model_document.Document = Document
 
 from huf.huf.doctype.subscription_runtime.subscription_runtime import SubscriptionRuntime
 
