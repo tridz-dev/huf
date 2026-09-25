@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import json
 
+import re
+
 import frappe
 
 from huf.ai.decision.catalog import get_entry
@@ -43,6 +45,13 @@ CLASSES = [
 # Decision Model Family rows: family_key -> (family_name, adapter_id, model_class key).
 FAMILIES = [
 	("jev", "Jev", "jev_system_one", "system_one"),
+	# Laya answers the same choice/score/noul primitives over the same
+	# /v1/systemone-shaped wire, so it shares the System One adapter rather than
+	# needing a backend of its own. Only the endpoint path and checkpoint differ,
+	# and both are Decision Deployment concerns. Laya is a self-hosted PyTorch
+	# sidecar (`pip install "laya[serve]"` -> `laya-serve`); torch/transformers
+	# are deliberately NOT HUF dependencies.
+	("laya", "Laya", "jev_system_one", "system_one"),
 	("local_rules", "Local Rules", "local_rules", "rules"),
 	("classifier", "Classifier", "classifier", "classifier"),
 	("similarity", "Similarity", "similarity", "similarity"),
@@ -352,3 +361,95 @@ def seed_decision_system_one() -> None:
 
 def execute() -> None:
 	seed_decision_system_one()
+
+# --- Entry-driven provisioning -------------------------------------------------
+#
+# The _seed_* helpers above are the install-time seed: every key is a module
+# constant, so they can only ever produce the Jev/OpenCode Zen stack. That is
+# correct for `after_install`, but `setup_deployment` (huf/ai/decision/api.py)
+# needs to provision whichever catalog entry an admin actually picked. The
+# helpers below derive every key from the CatalogEntry, so Jev and Laya -- and
+# any future System One family -- provision through one path.
+#
+# Row keys are slugs of catalog values rather than new constants, so adding a
+# catalog entry is still all it takes to make a model provisionable.
+
+#: Display name -> family_key, derived from FAMILIES so the two cannot drift.
+_FAMILY_KEY_BY_NAME = {family_name: family_key for family_key, family_name, _, _ in FAMILIES}
+
+
+def _slug(value: str) -> str:
+	"""Lowercase, hyphen-separated slug suitable for a *_key field."""
+	return re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
+
+
+def provision_catalog_entry(entry, provider_name: str) -> str:
+	"""Idempotently create the Class/Family/Model/AI Model/Deployment rows for one
+	catalog entry, and return the Decision Deployment name.
+
+	Every value comes from ``entry``: the family is resolved from
+	``entry.model_family`` (not hardcoded to Jev), the Decision Model is keyed on
+	``entry.canonical_model``, the AI Model on ``entry.model_name``, and the
+	deployment carries ``entry.wire_protocol`` and ``entry.endpoint_path`` -- so a
+	Laya deployment really does get ``/predict`` rather than ``/v1/systemone``.
+
+	Raises:
+		frappe.ValidationError: ``entry.model_family`` has no family in FAMILIES.
+			Failing here is deliberate: a catalog entry naming a family nothing can
+			adapt would otherwise silently provision against the wrong adapter.
+	"""
+	family_key = _FAMILY_KEY_BY_NAME.get(entry.model_family)
+	if family_key is None:
+		frappe.throw(
+			frappe._("No decision model family is registered for {0}. Add it to FAMILIES first.").format(
+				entry.model_family
+			)
+		)
+
+	class_names = _seed_classes()
+	family_names = _seed_families(class_names)
+
+	model_key = _slug(entry.canonical_model)
+	decision_model_name = _get_or_create(
+		"Decision Model",
+		"model_key",
+		model_key,
+		{
+			"model_name": entry.canonical_model,
+			"family": family_names[family_key],
+			"display_name": entry.canonical_model,
+			"enabled": 1,
+		},
+	)
+
+	ai_model_name = _get_or_create(
+		"AI Model",
+		"model_name",
+		entry.model_name,
+		{
+			"provider": provider_name,
+			"modalities": "Decision",
+		},
+	)
+
+	deployment_key = f"{model_key}-{_slug(entry.provider_brand)}"
+	return _get_or_create(
+		"Decision Deployment",
+		"deployment_key",
+		deployment_key,
+		{
+			"deployment_name": f"{entry.canonical_model} @ {provider_name}",
+			"decision_model": decision_model_name,
+			"ai_model": ai_model_name,
+			# provider / provider_model_id are fetch_from(ai_model.*) read-only
+			# fields; set explicitly too so a server-side insert is correct even
+			# if fetch_from does not run.
+			"provider": provider_name,
+			"provider_model_id": entry.model_name,
+			"wire_protocol": entry.wire_protocol,
+			"endpoint_path": entry.endpoint_path,
+			"priority": 10,
+			"is_default_for_model": 1,
+			"enabled": 0,
+		},
+	)
