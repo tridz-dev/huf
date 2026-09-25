@@ -206,7 +206,47 @@ class SubscriptionPassthroughExecutor:
 			A plain dict describing the outcome, shaped like the normal
 			`_execute_agent_run` return value: {"success": bool, "response": str|None,
 			"agent_run_id": run_doc.name, "status": <canonical status>}.
+
+		This is a thin safety-net wrapper around `_execute_inner`: an adapter-build
+		refusal, a staging/vision error, or any other exception raised before
+		`_execute_inner` reaches its own internal `except SubscriptionError`
+		handling would otherwise propagate out of this method entirely, leaving
+		the run stuck in "Started" (direct path) or "Queued"/"Started" (queued
+		path) until the 10-minute stall-recovery sweep picks it up. No exception
+		may leave here without the run ending up either Failed (sanitized) or
+		legitimately parked for auth.
 		"""
+		try:
+			return SubscriptionPassthroughExecutor._execute_inner(
+				agent_doc=agent_doc,
+				run_doc=run_doc,
+				conversation=conversation,
+				provider_doc=provider_doc,
+				prompt=prompt,
+				files=files,
+				model_override=model_override,
+			)
+		except SubscriptionPassthroughRefusal as exc:
+			return SubscriptionPassthroughExecutor._fail(run_doc, conversation, exc.reason)
+		except Exception as exc:  # noqa: BLE001 - last-resort safety net, see docstring above.
+			logger.exception(
+				"Unhandled exception in SubscriptionPassthroughExecutor.execute for run %s",
+				run_doc.name,
+			)
+			return SubscriptionPassthroughExecutor._fail_sanitized(run_doc, conversation, str(exc))
+
+	@staticmethod
+	def _execute_inner(
+		*,
+		agent_doc,
+		run_doc,
+		conversation,
+		provider_doc,
+		prompt: str,
+		files: list[str] | None = None,
+		model_override: str | None = None,
+	) -> dict[str, Any]:
+		"""Actual passthrough turn logic; see `execute` for the exception safety net."""
 		files = files or []
 		runtime_name = provider_doc.subscription_runtime
 		if not runtime_name:
@@ -217,8 +257,14 @@ class SubscriptionPassthroughExecutor:
 		runtime = frappe.get_doc("Subscription Runtime", runtime_name)
 
 		# --- Step 2: tenancy check BEFORE any login/inference attempt. ---
-		current_user = frappe.session.user
-		if not runtime.check_tenancy(current_user):
+		# Check tenancy against the Agent Run's own recorded owner, not
+		# `frappe.session.user`: for a RESUMED run (re-dispatched by
+		# `recover_stalled_agent_runs`, or resumed via
+		# `resume_after_auth_success` from a poll made by a different user's
+		# session than the one that originally started the run) the current
+		# session user may not be the run's actual owner.
+		run_owner = getattr(run_doc, "owner", None) or frappe.session.user
+		if not runtime.check_tenancy(run_owner):
 			return SubscriptionPassthroughExecutor._fail(
 				run_doc,
 				conversation,
@@ -237,6 +283,25 @@ class SubscriptionPassthroughExecutor:
 			}
 
 		# --- Step 4/5: session binding (skip entirely for stateless runs). ---
+		# NOTE (H8): as of this writing every Agent Run created by
+		# `run_agent_sync` — including automation/scheduled-trigger runs in
+		# every `conversation_mode` ("Dedicated", "New", and even "No-UI",
+		# which only hides the prompt from the visible chat history via
+		# `skip_user_message` — it still creates/reuses a real Agent
+		# Conversation, see `automation_runner.py::_resolve_conversation_routing`)
+		# always has an associated conversation with a real `.name`. There is
+		# currently no run type that sets `conversation` to None or omits its
+		# name, so this condition is never True in practice and the branch
+		# below it is effectively dead code. It is kept (rather than removed)
+		# because a genuinely conversation-less "one-shot automation run" is a
+		# real future case (plan §27/§56.3) and this is where it should plug
+		# in once such a run type exists — introducing that run type is a
+		# separate, larger change (new Agent Run flag/DocType support) outside
+		# this fix's scope. Until then this stays defensively correct: no
+		# write here targets a nonexistent column (see the `usage_snapshot`
+		# use below instead of a nonexistent `subscription_cleanup_status`
+		# column), so this dead branch cannot raise even if a future caller
+		# starts hitting it.
 		is_stateless = not conversation or not getattr(conversation, "name", None)
 		provider_session_id: str | None = None
 		is_new_session = True
@@ -356,7 +421,14 @@ class SubscriptionPassthroughExecutor:
 			binding_updates = session_binding.binding_for_new_session(result.provider_session_id, runtime_name)
 			frappe.db.set_value("Agent Conversation", conversation.name, binding_updates, update_modified=False)
 		elif is_stateless and cleanup_status:
-			telemetry_fields["subscription_cleanup_status"] = cleanup_status
+			# `subscription_cleanup_status` is NOT a real column on Agent Run
+			# (confirmed against `agent_run.json`) — writing it via
+			# `frappe.db.set_value` would raise. Stash it inside the existing
+			# `usage_snapshot` JSON field instead, merging rather than
+			# clobbering in case telemetry already populated it above.
+			usage_snapshot = dict(telemetry_fields.get("usage_snapshot") or {})
+			usage_snapshot["subscription_cleanup_status"] = cleanup_status
+			telemetry_fields["usage_snapshot"] = usage_snapshot
 
 		run_fields = dict(telemetry_fields)
 		run_fields["status"] = "Success"
@@ -370,7 +442,7 @@ class SubscriptionPassthroughExecutor:
 			conv_manager = ConversationManager(agent_name=agent_doc.name)
 			conv_manager.add_message(
 				conversation,
-				role="assistant",
+				role="agent",
 				content=result.final_text or "",
 				provider=provider_doc.name,
 				model=model_override or agent_doc.model,
@@ -402,27 +474,54 @@ class SubscriptionPassthroughExecutor:
 		challenge = auth_service.get_or_create_active_challenge(runtime)
 		auth_service.park_run(run_doc.name, challenge["name"])
 		SubscriptionPassthroughExecutor._notify_owner_of_park(runtime, run_doc, conversation, challenge)
-		# CONTRACT (auth_service.park_run docstring / PLAN §75.3): release any
-		# per-conversation execution lock BEFORE returning — parking can leave
-		# the run waiting for an arbitrary (possibly very long) amount of time
-		# until the user completes the auth challenge, and no lock may be held
-		# across that wait. `_execute_agent_run` runs either directly (no lock)
-		# or under `_run_queued_agent`'s Redis lock keyed by
-		# `_conversation_lock_key(conversation_id)` (agent_integration.py). We
-		# delete that key directly here (lazy import to avoid a module-load
-		# cycle with agent_integration.py, which imports this module) rather
-		# than threading a release callback through every call site — deleting
-		# a lock we don't hold is a harmless no-op for the direct-execution
-		# path, and correctly frees it for the queued path.
-		if conversation is not None and getattr(conversation, "name", None):
-			try:
-				from huf.ai.agent_integration import _conversation_lock_key
 
-				frappe.cache().delete(_conversation_lock_key(conversation.name))
+		# Emit a realtime event so the frontend knows this run is now waiting
+		# on an auth challenge, instead of appearing frozen until it times out.
+		# Uses the SAME publish mechanism/channel as every other event in this
+		# module (`frappe.publish_realtime` on `conversation:<name>` — see
+		# `_emit_run_lifecycle_event` in agent_integration.py for the pattern
+		# this mirrors). Built manually rather than via
+		# `streaming.map_turn_result_to_realtime_events` because that mapper's
+		# "subscription_auth_required" shape (built from a SubscriptionTurnResult)
+		# has no `runtime_name` field — and the frontend needs the runtime name
+		# to call the auth-challenge APIs — nor does it carry the challenge's
+		# public info (verification_url/user_code/mode) the frontend card needs
+		# to render.
+		if conversation is not None and getattr(conversation, "name", None):
+			runtime_name = runtime if isinstance(runtime, str) else runtime.name
+			try:
+				frappe.publish_realtime(
+					event=f"conversation:{conversation.name}",
+					message={
+						"type": "subscription_auth_required",
+						"agent_run_id": run_doc.name,
+						"conversation_id": conversation.name,
+						"runtime_name": runtime_name,
+						"auth_challenge": challenge.get("name"),
+						"verification_url": challenge.get("verification_url"),
+						"user_code": challenge.get("user_code"),
+						"mode": challenge.get("mode"),
+					},
+					user=frappe.session.user,
+				)
 			except Exception:
 				logger.exception(
-					"Failed to release conversation lock while parking run %s", run_doc.name
+					"Failed to publish subscription_auth_required event for run %s", run_doc.name
 				)
+
+		# CONTRACT (auth_service.park_run docstring / PLAN §75.3): the per-
+		# conversation execution lock must be released BEFORE returning —
+		# parking can leave the run waiting for an arbitrary (possibly very
+		# long) amount of time until the user completes the auth challenge,
+		# and no lock may be held across that wait. We deliberately do NOT
+		# delete the lock here: `_execute_agent_run`'s callers already release
+		# it themselves in a `finally` block on both the direct-execution path
+		# (agent_integration.py's direct-override lock) and the queued
+		# drainer path (`_run_queued_agent`/`_drain_run`), so releasing it a
+		# second time here was both redundant and racy — if resume happens
+		# quickly after parking, a fresh acquire could take the lock before
+		# this code ran, and deleting it here would then delete a *different*
+		# drainer's lock out from under it.
 		frappe.db.commit()  # nosemgrep: justified — must persist park state before returning
 
 	@staticmethod

@@ -136,6 +136,7 @@ def binding_for_new_session(provider_session_id: str, runtime_name: str) -> dict
 		"subscription_runtime": runtime_name,
 		"subscription_provider_session_created_at": now,
 		"subscription_provider_session_last_verified_at": now,
+		"runtime_mode": "subscription_passthrough",
 	}
 
 

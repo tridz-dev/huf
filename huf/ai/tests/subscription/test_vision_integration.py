@@ -181,7 +181,7 @@ def test_executor_source_wraps_adapter_call_in_try_finally_with_cleanup():
 
 	from huf.ai.subscription import executor
 
-	source = inspect.getsource(executor.SubscriptionPassthroughExecutor.execute)
+	source = inspect.getsource(executor.SubscriptionPassthroughExecutor._execute_inner)
 
 	# The adapter call and the cleanup call must both exist...
 	assert "adapter.run_turn(runtime, request)" in source
@@ -207,7 +207,7 @@ def test_executor_source_checks_vision_before_staging():
 
 	from huf.ai.subscription import executor
 
-	source = inspect.getsource(executor.SubscriptionPassthroughExecutor.execute)
+	source = inspect.getsource(executor.SubscriptionPassthroughExecutor._execute_inner)
 	vision_index = source.index("staging.assert_vision_supported(")
 	stage_index = source.index("staging.stage_turn_files(")
 	assert vision_index < stage_index
