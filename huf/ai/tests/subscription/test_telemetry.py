@@ -96,21 +96,30 @@ class TestTelemetryMapperBasics(TestCase):
 
 
 class TestCostCompliance(TestCase):
-	"""CRITICAL compliance rule: cost must NEVER be 0 or 0.0 (per PLAN §58, §12.2)."""
+	"""CRITICAL compliance rule (per PLAN §58, §12.2): a subscription turn's cost is
+	unmetered by HUF, which must never be conflated with "this turn cost $0". Since
+	`Agent Run.cost` is a Frappe Currency field -- a NOT NULL DB column with DEFAULT
+	0.000000000, confirmed live via `DESCRIBE` on a real site, so `cost=None` raises
+	`IntegrityError: Column 'cost' cannot be null` -- the "not a real charge" signal
+	is carried entirely by `cost_source="subscription_unmetered"` and
+	`cost_calculation_status="unavailable"`, not by `cost` itself. `cost` stays 0
+	(the field's own numeric default) in every case below.
+	"""
 
-	def test_cost_is_none_not_zero(self) -> None:
-		"""Cost must be None, not 0 or 0.0. This is the single most important rule."""
+	def test_cost_is_zero_with_unmetered_source_and_status(self) -> None:
+		"""cost=0 alone is fine here because cost_source/cost_calculation_status carry
+		the "not a real charge" signal that cost=None was originally meant to carry."""
 		result = SubscriptionTurnResult(
 			status="success", final_text="Hello", provider_session_id="sess-test-001"
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
-		self.assertIsNone(fields["cost"])
-		self.assertNotEqual(fields["cost"], 0)
-		self.assertNotEqual(fields["cost"], 0.0)
+		self.assertEqual(fields["cost"], 0)
+		self.assertEqual(fields["cost_source"], "subscription_unmetered")
+		self.assertEqual(fields["cost_calculation_status"], "unavailable")
 
-	def test_cost_is_none_even_with_usage(self) -> None:
-		"""Cost must be None even when provider reports usage (subscription is unmetered by HUF)."""
+	def test_cost_is_zero_even_with_usage(self) -> None:
+		"""cost stays 0 even when provider reports usage (subscription is unmetered by HUF)."""
 		result = SubscriptionTurnResult(
 			status="success",
 			final_text="Hello",
@@ -119,10 +128,10 @@ class TestCostCompliance(TestCase):
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
-		self.assertIsNone(fields["cost"])
+		self.assertEqual(fields["cost"], 0)
 
-	def test_cost_is_none_even_on_error(self) -> None:
-		"""Cost must be None even if the turn failed (no successful API charge recorded)."""
+	def test_cost_is_zero_even_on_error(self) -> None:
+		"""cost stays 0 even if the turn failed (no successful API charge recorded)."""
 		result = SubscriptionTurnResult(
 			status="error",
 			final_text=None,
@@ -131,7 +140,7 @@ class TestCostCompliance(TestCase):
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
-		self.assertIsNone(fields["cost"])
+		self.assertEqual(fields["cost"], 0)
 
 
 class TestUsageFieldSemantics(TestCase):
@@ -166,8 +175,8 @@ class TestUsageFieldSemantics(TestCase):
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
 		self.assertEqual(fields["input_tokens"], 100)
-		self.assertIsNone(fields["output_tokens"])  # NOT 0
-		self.assertIsNone(fields["total_tokens"])  # NOT 0
+		self.assertEqual(fields["output_tokens"], 0)  # missing metric -> 0 (schema constraint, see module docstring)
+		self.assertEqual(fields["total_tokens"], 0)  # missing metric -> 0 (schema constraint)
 
 	def test_provider_reported_zero_preserved_as_zero(self) -> None:
 		"""When provider explicitly reports 0, preserve it (different from missing). Per PLAN §12.3."""
@@ -187,20 +196,20 @@ class TestUsageFieldSemantics(TestCase):
 		self.assertEqual(fields["output_tokens"], 0)  # Preserved, not treated as missing
 		self.assertEqual(fields["cached_tokens"], 0)  # Preserved, not treated as missing
 
-	def test_all_usage_fields_unmapped_stay_null(self) -> None:
-		"""All usage fields default to None if not in result.usage."""
+	def test_all_usage_fields_unmapped_default_to_zero(self) -> None:
+		"""All usage fields default to 0 (not None -- Int columns are NOT NULL) if not in result.usage."""
 		result = SubscriptionTurnResult(
 			status="success", final_text="Hello", provider_session_id="sess-test-001", usage={}
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
-		self.assertIsNone(fields["input_tokens"])
-		self.assertIsNone(fields["output_tokens"])
-		self.assertIsNone(fields["cached_tokens"])
-		self.assertIsNone(fields["billed_input_tokens"])
-		self.assertIsNone(fields["peak_context_tokens"])
-		self.assertIsNone(fields["cache_creation_tokens"])
-		self.assertIsNone(fields["total_tokens"])
+		self.assertEqual(fields["input_tokens"], 0)
+		self.assertEqual(fields["output_tokens"], 0)
+		self.assertEqual(fields["cached_tokens"], 0)
+		self.assertEqual(fields["billed_input_tokens"], 0)
+		self.assertEqual(fields["peak_context_tokens"], 0)
+		self.assertEqual(fields["cache_creation_tokens"], 0)
+		self.assertEqual(fields["total_tokens"], 0)
 
 	def test_round_count_from_usage(self) -> None:
 		"""round_count should be extracted from usage dict when present."""
@@ -214,14 +223,14 @@ class TestUsageFieldSemantics(TestCase):
 
 		self.assertEqual(fields["round_count"], 3)
 
-	def test_round_count_null_when_missing(self) -> None:
-		"""round_count should be None if not in usage dict."""
+	def test_round_count_zero_when_missing(self) -> None:
+		"""round_count should be 0 (not None -- Int column is NOT NULL) if not in usage dict."""
 		result = SubscriptionTurnResult(
 			status="success", final_text="Hello", provider_session_id="sess-test-001", usage={}
 		)
 		fields = map_turn_result_to_agent_run_fields(result, "my_runtime")
 
-		self.assertIsNone(fields["round_count"])
+		self.assertEqual(fields["round_count"], 0)
 
 
 class TestUsageSourceMarking(TestCase):
@@ -341,7 +350,7 @@ class TestTableDrivenCases(TestCase):
 		self.assertEqual(fields["billing_mode"], "subscription")
 		self.assertEqual(fields["runtime"], "gemini_runtime")
 		self.assertEqual(fields["runtime_mode"], "subscription_passthrough")
-		self.assertIsNone(fields["cost"])
+		self.assertEqual(fields["cost"], 0)
 		self.assertEqual(fields["cost_source"], "subscription_unmetered")
 		self.assertEqual(fields["cost_calculation_status"], "unavailable")
 		self.assertEqual(fields["provider_session_id_snapshot"], "sess_abc123")
@@ -371,9 +380,9 @@ class TestTableDrivenCases(TestCase):
 
 		self.assertEqual(fields["input_tokens"], 150)
 		self.assertEqual(fields["output_tokens"], 100)
-		self.assertIsNone(fields["cached_tokens"])  # Not reported
-		self.assertIsNone(fields["total_tokens"])  # Not reported
-		self.assertIsNone(fields["round_count"])  # Not reported
+		self.assertEqual(fields["cached_tokens"], 0)  # Not reported -> 0 (schema constraint)
+		self.assertEqual(fields["total_tokens"], 0)  # Not reported -> 0 (schema constraint)
+		self.assertEqual(fields["round_count"], 0)  # Not reported -> 0 (schema constraint)
 		self.assertEqual(fields["usage_source"], "provider_reported")
 		self.assertIsNone(fields["reasoning_snapshot"])
 
@@ -388,11 +397,11 @@ class TestTableDrivenCases(TestCase):
 
 		fields = map_turn_result_to_agent_run_fields(result, "openai_runtime")
 
-		self.assertIsNone(fields["input_tokens"])
-		self.assertIsNone(fields["output_tokens"])
-		self.assertIsNone(fields["total_tokens"])
+		self.assertEqual(fields["input_tokens"], 0)
+		self.assertEqual(fields["output_tokens"], 0)
+		self.assertEqual(fields["total_tokens"], 0)
 		self.assertEqual(fields["usage_source"], "unavailable")
-		self.assertIsNone(fields["cost"])
+		self.assertEqual(fields["cost"], 0)
 
 	def test_error_result(self) -> None:
 		"""Error turn (e.g., model unavailable, CLI crashed)."""
@@ -405,7 +414,7 @@ class TestTableDrivenCases(TestCase):
 
 		fields = map_turn_result_to_agent_run_fields(result, "fallback_runtime")
 
-		self.assertIsNone(fields["cost"])
+		self.assertEqual(fields["cost"], 0)
 		self.assertEqual(fields["usage_source"], "unavailable")
 		self.assertIsNone(fields["reasoning_snapshot"])
 
@@ -423,7 +432,7 @@ class TestTableDrivenCases(TestCase):
 		# Even on auth failure, fields are set consistently
 		self.assertEqual(fields["provider_path"], "subscription_cli")
 		self.assertEqual(fields["billing_mode"], "subscription")
-		self.assertIsNone(fields["cost"])
+		self.assertEqual(fields["cost"], 0)
 		self.assertEqual(fields["usage_source"], "unavailable")
 
 	def test_cached_tokens_alias(self) -> None:
@@ -464,7 +473,7 @@ class TestTableDrivenCases(TestCase):
 		self.assertEqual(fields["cached_tokens"], 0)
 		self.assertEqual(fields["cache_creation_tokens"], 0)
 		# But unmentioned fields stay null
-		self.assertIsNone(fields["billed_input_tokens"])
+		self.assertEqual(fields["billed_input_tokens"], 0)
 
 
 if __name__ == "__main__":

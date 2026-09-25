@@ -4,11 +4,25 @@ Telemetry mapper for subscription CLI turns to Agent Run fields.
 PURE FUNCTION MODULE: no Frappe doc writes, no I/O. Takes data in, returns a dict out.
 This is a compliance-critical function — a test suite checks every rule.
 
-Key compliance rules (from PLAN.md §58 and §12.2/§12.3):
-- cost MUST be None, NEVER 0 or 0.0: an unmetered subscription turn must never be recorded as a $0 API cost
-- missing usage metrics stay null, NOT 0: provider silence means "unknown", not "zero"
-- provider-reported 0 is preserved as 0: a metric explicitly reported as 0 is different from missing
-- usage_source marks the provenance of metrics (provider_reported vs estimated vs unavailable)
+Key compliance rules (from PLAN.md §58 and §12.2/§12.3), AS ADAPTED to a real,
+live-verified schema constraint: every numeric Agent Run field this module
+writes (`cost`, `input_tokens`, `output_tokens`, `cached_tokens`,
+`billed_input_tokens`, `peak_context_tokens`, `cache_creation_tokens`,
+`total_tokens`, `round_count`) is a Frappe Currency/Int field -- a NOT NULL DB
+column with a numeric DEFAULT -- so none of them can ever be written as
+`None` (confirmed live: `IntegrityError: Column '<field>' cannot be null`).
+The plan's null-vs-zero distinction is therefore carried at the WHOLE-RECORD
+level via `cost_source`/`cost_calculation_status`/`usage_source`, not
+per-field:
+- cost is always 0 (the field's only representable "no real charge" value);
+  `cost_source="subscription_unmetered"` and
+  `cost_calculation_status="unavailable"` are what tell a reader this 0 is
+  not a real charge total.
+- usage fields default to 0 when the provider reports nothing; `usage_source`
+  is "unavailable" for that whole record, or "provider_reported" when at
+  least one metric was present (individual missing sibling fields within a
+  provider_reported record still read as 0 -- the schema cannot distinguish
+  "reported 0" from "not reported" at the single-field level).
 - never blend estimated values into provider-reported fields without a distinguishing marker
 """
 
@@ -48,10 +62,19 @@ def map_turn_result_to_agent_run_fields(
 		"runtime": runtime_name,
 		"runtime_mode": "subscription_passthrough",
 		"provider_session_id_snapshot": result.provider_session_id,
-		# CRITICAL: Cost must be None, not 0 or 0.0.
-		# Per PLAN §58 and §12.2: "Do not write cost = 0 merely because HUF did not make
-		# an API-billed request." Subscription has economic cost; "unmetered by HUF" ≠ "free".
-		"cost": None,
+		# LIVE-VERIFIED bug fix: `Agent Run.cost` is a Frappe Currency field,
+		# which is a NOT NULL DB column with DEFAULT 0.000000000 (confirmed via
+		# `DESCRIBE` on a real site) -- `frappe.db.set_value(..., "cost": None)`
+		# raises `IntegrityError: Column 'cost' cannot be null` on any real
+		# Frappe site (structurally, no Currency field can ever be written as
+		# NULL). PLAN §58/§12.2's intent -- "do not write cost = 0 merely
+		# because HUF did not make an API-billed request; subscription has
+		# economic cost, unmetered by HUF != free" -- must therefore be carried
+		# entirely by `cost_source`/`cost_calculation_status` (both nullable),
+		# not by `cost` itself. `cost` stays at the field's own numeric
+		# default; the source/status fields are what tell a reader "this 0 is
+		# not a real charge total, it is unmeasured."
+		"cost": 0,
 		"cost_source": "subscription_unmetered",
 		"cost_calculation_status": "unavailable",
 	}
@@ -74,21 +97,27 @@ def map_turn_result_to_agent_run_fields(
 		"total_tokens": ["total_tokens"],
 	}
 
+	# LIVE-VERIFIED bug fix: every one of these Agent Run fields is a Frappe
+	# Int field, a NOT NULL DB column with DEFAULT 0 (confirmed via `DESCRIBE`
+	# on a real site) -- writing `None` raises
+	# `IntegrityError: Column '<field>' cannot be null`. So a "missing metric"
+	# is represented as 0 in the field itself (structurally unavoidable), with
+	# `usage_source` (set below) as the sole signal of whether that 0 means
+	# "provider reported 0" / "provider reported this metric" or "provider
+	# reported nothing at all, this whole record is unavailable" -- the
+	# per-field null/zero distinction PLAN §12.3 originally asked for is not
+	# representable field-by-field on this schema, only at the whole-record
+	# `usage_source` level.
 	for field_name, provider_keys in usage_field_definitions.items():
-		# Find first key that's present in usage
-		value = None
+		value = 0
 		for key in provider_keys:
 			if key in usage:
 				value = usage[key]
 				break
-
-		# Set field: use found value (including 0 if provider reported it) or None if not reported.
-		# Per PLAN §12.3: missing metrics → null, provider-reported 0 → preserved as 0.
 		fields[field_name] = value
 
 	# Round count: special case, used for multi-step completions.
-	# If provider reported it, use it; otherwise leave unset.
-	fields["round_count"] = usage.get("round_count")
+	fields["round_count"] = usage.get("round_count", 0)
 
 	# Mark usage source: provider_reported (only when provider gave us metrics),
 	# estimated (if HUF estimated from text — not done here), or unavailable.

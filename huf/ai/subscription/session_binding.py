@@ -36,7 +36,16 @@ class BindingDecision:
 
 
 def _iso_now() -> str:
-	return datetime.now(timezone.utc).isoformat()
+	# LIVE-VERIFIED bug fix: `datetime.isoformat()` with a tz-aware datetime
+	# produces "...+00:00", which MariaDB (in Frappe's default strict SQL
+	# mode) rejects for a Datetime column with
+	# `OperationalError: (1292, "Incorrect datetime value ...")` -- confirmed
+	# by an actual live run against a real Frappe site. Frappe's own
+	# `frappe.utils.now_datetime()`/DB layer expects a naive
+	# "YYYY-MM-DD HH:MM:SS.ffffff" string (no "T", no offset). This module
+	# deliberately has no Frappe import (see module docstring), so format it
+	# by hand rather than depending on `frappe.utils.get_datetime_str`.
+	return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
 
 
 def resolve_binding_for_turn(
