@@ -1,0 +1,21 @@
+SYNTHETIC — NOT a captured run. Gemini CLI was not installed/authenticated in this environment.
+
+Per docs/cli/session-management.md and docs/cli/cli-reference.md, resuming a session by UUID
+in non-interactive JSON mode would use:
+
+  gemini -r "<SESSION_UUID>" -p "What was the exact word I told you to reply with in the
+  previous message? Answer in one word." --output-format json
+
+('-r "latest"' is also documented as a shorthand for the most recent session; an index number
+like '-r 1' referencing --list-sessions output is a third accepted form.)
+
+No worked example of the resumed-turn response body was found in the fetched docs. Do not
+assume this mirrors Claude's or Codex's shape — Gemini's docs describe session storage as
+including "tool execution history" and "assistant thoughts/reasoning summaries when available"
+in the session's saved history, which suggests a possibly richer/different structure than
+Claude's flat result object, but this is inference from prose, not a confirmed field list.
+
+MUST-VERIFY before implementation: actual resumed-turn JSON shape, and whether resume genuinely
+requires being invoked from the same working directory as session creation (PLAN.md §17.1's
+"project hash" scoping claim) — this project-hash claim itself should be re-confirmed against
+the live CLI's actual session storage location/key, not just the docs summary.

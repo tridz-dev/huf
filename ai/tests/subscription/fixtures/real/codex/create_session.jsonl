@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a0da32-e450-7691-a8e5-579223d9a47a"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Exceeded skills context budget of 2%. All skill descriptions were removed and 5 additional skills were not included in the model-visible skills list."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"HELLO"}}
+{"type":"turn.completed","usage":{"input_tokens":18669,"cached_input_tokens":8960,"output_tokens":6,"reasoning_output_tokens":0}}

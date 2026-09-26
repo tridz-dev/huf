@@ -1,0 +1,41 @@
+SYNTHETIC — reconstructed from documentation prose, NOT a captured --help dump.
+Gemini CLI was not installed in this environment (`which gemini` -> not found), so no live
+--help output could be captured. The flags below are as stated in the official docs fetched
+2026-09-26; they are NOT a verbatim --help transcript (the real CLI's --help formatting,
+flag ordering, and full flag set are unknown and must be captured live before shipping).
+
+Non-interactive execution:
+  -p, --prompt <TEXT>            Prompt text. Appended to stdin input if provided. Forces
+                                  non-interactive mode.
+                                  Example: gemini -p "summarize README.md"
+  -i, --prompt-interactive <TEXT>  Execute prompt and continue in interactive mode.
+
+Output format:
+  -o, --output-format <text|json|stream-json>   (default: text)
+
+Session management:
+  -r, --resume <latest|INDEX|SESSION_UUID>   Resume a previous session. Use 'latest' for the
+                                              most recent, or an index number, or a full UUID.
+                                              Examples:
+                                                gemini -r "latest"
+                                                gemini -r "abc123" "Finish this PR"
+  --list-sessions                Display available sessions for the current project.
+  --delete-session <INDEX>       Remove a session by index number.
+
+MCP configuration:
+  --allowed-mcp-server-names <names...>   Comma-separated list of permitted MCP servers.
+  gemini mcp add <name> <command>         Add a stdio-based MCP server.
+  gemini mcp list                         View configured MCP servers.
+  gemini mcp remove <name>                Remove an MCP server.
+
+Authentication (interactive flow only; no documented status/JSON flag found):
+  gemini                          Launch CLI; prompts for auth method selection on first run
+                                  (Google account sign-in via browser OAuth, GEMINI_API_KEY env
+                                  var, or Vertex AI credentials).
+  Headless mode reuses the cached credential from a prior interactive login; no separate
+  "auth status" subcommand/flag was found in the fetched docs.
+
+NOT DOCUMENTED / NOT FOUND in the fetched pages:
+  - No dedicated image/vision input flag was found in docs/cli/cli-reference.md.
+  - No explicit non-interactive JSON *response* schema (e.g. equivalent to Claude's
+    `session_id`/`result`/`usage` fields) was found — only the --output-format flag itself.

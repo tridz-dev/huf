@@ -1,0 +1,10 @@
+SYNTHETIC — NOT a captured run, and NOT doc-derived either (no error example was found in the
+fetched documentation pages for an invalid/nonexistent --resume target). This file is a
+placeholder documenting the ABSENCE of source material, not a guessed error message.
+
+No error text is provided here because inventing one would violate the "no invented behavior"
+constraint for this spike. Before implementation, run:
+
+  gemini -r "00000000-0000-0000-0000-000000000000" -p "hi" --output-format json
+
+against a live authenticated gemini CLI and capture the actual stdout/stderr/exit code here.
