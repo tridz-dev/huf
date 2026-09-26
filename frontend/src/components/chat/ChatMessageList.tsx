@@ -5,7 +5,7 @@ import { getConversationMessages, createAgentRunFeedback, getConversation, type 
 import { cn } from "@/lib/utils";
 
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
-import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent } from '@/hooks/useChatSocket';
+import { useChatSocket, type ToolCallEvent, type NewAgentMessageEvent, type AgentRunStatusEvent, type ConversationTitleUpdatedEvent, type FrontendToolCallEvent, type SubscriptionAuthRequiredEvent } from '@/hooks/useChatSocket';
 import { executeClientToolCall, resetClientToolCallTracking } from '@/lib/clientToolDispatcher';
 import { ChatMessage as ChatMessageComponent } from './ChatMessage';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -202,6 +202,23 @@ export function ChatMessageList({
         setMessages((prev) => upsertAgentRunStatusFromSocket(prev, event));
     }, [chatId]);
 
+    // Handle the custom `subscription_auth_required` event (backend:
+    // `SubscriptionPassthroughExecutor._park_for_auth`). A standard
+    // `agent_run_status` "Waiting Authentication" event is published
+    // alongside it and already routes through `handleAgentRunStatus` above,
+    // so this handler's only job is to layer the runtime/challenge details
+    // that event doesn't carry onto the same message.
+    const handleSubscriptionAuthRequired = useCallback((event: SubscriptionAuthRequiredEvent) => {
+        if (event.conversation_id !== chatId) return;
+        setMessages((prev) => upsertAgentRunStatusFromSocket(prev, {
+            type: 'agent_run_status',
+            agent_run_id: event.agent_run_id,
+            conversation_id: event.conversation_id,
+            status: 'Waiting Authentication',
+            runtime_name: event.runtime_name,
+        }));
+    }, [chatId]);
+
     const handleConversationTitleUpdated = useCallback((event: ConversationTitleUpdatedEvent) => {
         if (event.conversation_id !== chatId) return;
         setConversationTitle(event.title);
@@ -242,6 +259,7 @@ export function ChatMessageList({
         onAgentRunStatus: handleAgentRunStatus,
         onConversationTitleUpdated: handleConversationTitleUpdated,
         onFrontendToolCall: handleFrontendToolCall,
+        onSubscriptionAuthRequired: handleSubscriptionAuthRequired,
     });
 
     useConversationTitlePostSuccessFallback({

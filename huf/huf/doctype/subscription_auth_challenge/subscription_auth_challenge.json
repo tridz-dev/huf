@@ -1,0 +1,206 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-09-26 09:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "runtime",
+  "provider",
+  "status",
+  "column_break_identity",
+  "mode",
+  "created_by",
+  "challenge_section",
+  "verification_url",
+  "user_code",
+  "column_break_challenge",
+  "safe_instructions",
+  "lifecycle_section",
+  "expires_at",
+  "completed_at",
+  "column_break_lifecycle",
+  "error_code",
+  "error_message",
+  "parking_section",
+  "parked_agent_run",
+  "parked_conversation",
+  "metadata_section",
+  "metadata"
+ ],
+ "fields": [
+  {
+   "fieldname": "runtime",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Runtime",
+   "options": "Subscription Runtime",
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Provider"
+  },
+  {
+   "default": "Pending",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Pending\nWaiting User\nVerifying\nSuccess\nFailed\nExpired\nCancelled",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_identity",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "browser\ndevice_code\nterminal_code\nmanual_command\nunsupported"
+  },
+  {
+   "fieldname": "created_by",
+   "fieldtype": "Link",
+   "label": "Created By",
+   "options": "User"
+  },
+  {
+   "fieldname": "challenge_section",
+   "fieldtype": "Section Break",
+   "label": "Challenge Details"
+  },
+  {
+   "description": "Where the user completes the authentication flow, if applicable.",
+   "fieldname": "verification_url",
+   "fieldtype": "Data",
+   "label": "Verification URL"
+  },
+  {
+   "description": "SENSITIVE / SHORT-LIVED: a device-code style user code. Never log this value - it is a live credential for the duration of the challenge.",
+   "fieldname": "user_code",
+   "fieldtype": "Data",
+   "label": "User Code"
+  },
+  {
+   "fieldname": "column_break_challenge",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "safe_instructions",
+   "fieldtype": "Small Text",
+   "label": "Safe Instructions",
+   "description": "Human-readable, safe-to-display instructions for completing this challenge."
+  },
+  {
+   "fieldname": "lifecycle_section",
+   "fieldtype": "Section Break",
+   "label": "Lifecycle"
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At"
+  },
+  {
+   "fieldname": "column_break_lifecycle",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "error_code",
+   "fieldtype": "Data",
+   "label": "Error Code"
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message"
+  },
+  {
+   "fieldname": "parking_section",
+   "fieldtype": "Section Break",
+   "label": "Parked Work"
+  },
+  {
+   "fieldname": "parked_agent_run",
+   "fieldtype": "Link",
+   "label": "Parked Agent Run",
+   "options": "Agent Run"
+  },
+  {
+   "fieldname": "parked_conversation",
+   "fieldtype": "Link",
+   "label": "Parked Conversation",
+   "options": "Agent Conversation"
+  },
+  {
+   "fieldname": "metadata_section",
+   "fieldtype": "Section Break",
+   "label": "Metadata",
+   "collapsible": 1
+  },
+  {
+   "description": "Provider-specific JSON metadata for this challenge.",
+   "fieldname": "metadata",
+   "fieldtype": "Long Text",
+   "label": "Metadata (JSON)"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-26 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Subscription Auth Challenge",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "select": 1,
+   "share": 1,
+   "write": 1
+  },
+  {
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf Manager",
+   "select": 1,
+   "share": 1
+  },
+  {
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Huf User",
+   "select": 1,
+   "share": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

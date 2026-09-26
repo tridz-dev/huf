@@ -1,0 +1,21 @@
+SYNTHETIC — NOT a captured run. No dedicated machine-readable "auth status" command/flag was
+found in the fetched Gemini CLI docs (docs/get-started/authentication.mdx, docs/cli/cli-reference.md).
+
+Per docs/get-started/authentication.mdx, authentication is established interactively:
+  - Launch `gemini`, select "Sign in with Google" -> opens a browser OAuth prompt, OR
+  - Set the GEMINI_API_KEY environment variable, OR
+  - Configure Vertex AI (Application Default Credentials via gcloud, a service account JSON
+    key, or a Google Cloud API key).
+Docs state: "[Headless mode] will use your existing authentication method, if an existing
+authentication credential is cached." — implying there is no separate status probe; an
+adapter would likely need to attempt a trivial non-interactive call and interpret failure
+as "not authenticated," rather than querying a dedicated status endpoint/flag.
+
+One documented error string exists for API-key mode: "API keys are not supported by this
+API..." (shown when an org restricts API key usage) — this is the only auth-adjacent error
+text found in the fetched docs.
+
+MUST-VERIFY before implementation: whether a machine-readable auth-status command exists
+outside the fetched pages (e.g. `gemini auth status`, `gemini whoami`, or similar) — search
+the full CLI reference and `gemini --help` directly against a live install; do not assume
+none exists just because this summarized extract didn't surface one.

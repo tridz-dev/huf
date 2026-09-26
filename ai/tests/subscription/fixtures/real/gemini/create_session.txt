@@ -1,0 +1,24 @@
+SYNTHETIC — NOT a captured run. Gemini CLI was not installed/authenticated in this environment.
+
+Per fetched docs (docs/cli/cli-reference.md, docs/cli/session-management.md), a non-interactive
+JSON-mode call would look like:
+
+  gemini -p "Say hello and reply with exactly one word: HELLO" --output-format json
+
+The docs describe --output-format json as an output mode but do NOT show a worked example of
+the resulting JSON body's field names. Unlike the Claude and Codex fixtures in the sibling
+directories (which are raw captured stdout), this file intentionally contains NO fabricated
+JSON body, because the specific field names (equivalent to Claude's "session_id"/"result" or
+Codex's "thread_id"/"turn.completed") were not present in any fetched documentation page and
+must not be invented from training-data memory per the task instructions.
+
+What IS documented and can be treated as reasonably confident:
+  - Sessions are auto-saved and identified by a UUID (see session-management.md example UUID
+    format: "a1b2c3d4-e5f6-7890-abcd-ef1234567890").
+  - `--list-sessions` output (interactive/text mode, not JSON) shows entries like:
+      1. Fix bug in auth (2 days ago) [a1b2c3d4]
+  - `general.sessionRetention` and `model.maxSessionTurns` are real settings.json keys per docs.
+
+MUST-VERIFY before implementation: the actual --output-format json response schema for a
+non-interactive turn. Capture this live against an authenticated gemini CLI before writing any
+parser code against it.

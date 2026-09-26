@@ -12,9 +12,13 @@ export type MessageType = {
   generatedAudio?: string;
   generatedVideo?: string;
   voiceMessage?: string;
-  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed';
+  runStatus?: 'Queued' | 'Started' | 'Success' | 'Failed' | 'Waiting Authentication';
   /** Links a user bubble to the Agent Run that created it (for merge/hydration). */
   agentRunId?: string;
+  /** Subscription Runtime this run is parked on while `runStatus` is
+   * `'Waiting Authentication'` — the auth-challenge API is keyed by runtime
+   * name, so `SubscriptionAuthCard` needs this to resume/poll/cancel. */
+  runtimeName?: string;
   error?: string;
   sttModel?: string;
   status?: string;

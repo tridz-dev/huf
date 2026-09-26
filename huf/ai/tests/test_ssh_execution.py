@@ -197,8 +197,8 @@ class _SSHExecutionTestBase(unittest.TestCase):
 		transport.open_session.return_value = channel or Mock()
 		if configure_transport:
 			configure_transport(transport)
-		with patch("huf.ai.tools.ssh_execution.socket.create_connection", return_value=Mock()), \
-				patch("huf.ai.tools.ssh_execution.paramiko.Transport", return_value=transport):
+		with patch("huf.ai.tools.ssh_connection_primitive.socket.create_connection", return_value=Mock()), \
+				patch("huf.ai.tools.ssh_connection_primitive.paramiko.Transport", return_value=transport):
 			execute_job(
 				call.name,
 				command=command,
@@ -272,7 +272,7 @@ class TestSSHExecutionRedaction(_SSHExecutionTestBase):
 		agent = self._make_agent(ssh_connections=[connection.name])
 		frappe.set_user(user)
 		with patch(
-			"huf.ai.tools.ssh_execution.socket.create_connection",
+			"huf.ai.tools.ssh_connection_primitive.socket.create_connection",
 			side_effect=AssertionError("no network access expected before approval"),
 		):
 			result = run_ssh_command(connection.name, "cat /etc/passwd", agent_doc=agent.name)
@@ -355,10 +355,10 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		channel.recv_stderr_ready.return_value = False
 		channel.exit_status_ready.return_value = False
 		with patch(
-				"huf.ai.tools.ssh_execution.time.monotonic",
+				"huf.ai.tools.ssh_connection_primitive.time.monotonic",
 				side_effect=_monotonic_clock(step=100.0),
 			), \
-				patch("huf.ai.tools.ssh_execution.select.select", return_value=([], [], [])):
+				patch("huf.ai.tools.ssh_connection_primitive.select.select", return_value=([], [], [])):
 			call, _ = self._run_execute_job(
 				connection,
 				agent,
@@ -381,10 +381,10 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		channel.recv_stderr_ready.return_value = False
 		channel.exit_status_ready.return_value = False
 		with patch(
-				"huf.ai.tools.ssh_execution.time.monotonic",
+				"huf.ai.tools.ssh_connection_primitive.time.monotonic",
 				side_effect=_monotonic_clock(step=100.0),
 			), \
-				patch("huf.ai.tools.ssh_execution.select.select", return_value=([], [], [])):
+				patch("huf.ai.tools.ssh_connection_primitive.select.select", return_value=([], [], [])):
 			call, _ = self._run_execute_job(
 				connection,
 				agent,
@@ -407,8 +407,8 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		channel.recv.side_effect = lambda n: b"a" * n
 		channel.recv_stderr_ready.return_value = False
 		channel.exit_status_ready.return_value = False
-		with patch("huf.ai.tools.ssh_execution.time.monotonic", return_value=0.0), \
-				patch("huf.ai.tools.ssh_execution.select.select", return_value=([channel], [], [])):
+		with patch("huf.ai.tools.ssh_connection_primitive.time.monotonic", return_value=0.0), \
+				patch("huf.ai.tools.ssh_connection_primitive.select.select", return_value=([channel], [], [])):
 			call, _ = self._run_execute_job(
 				connection,
 				agent,
@@ -429,8 +429,8 @@ class TestSSHExecutionLimits(_SSHExecutionTestBase):
 		channel.recv_stderr_ready.return_value = True
 		channel.recv_stderr.side_effect = lambda n: b"e" * n
 		channel.exit_status_ready.return_value = False
-		with patch("huf.ai.tools.ssh_execution.time.monotonic", return_value=0.0), \
-				patch("huf.ai.tools.ssh_execution.select.select", return_value=([channel], [], [])):
+		with patch("huf.ai.tools.ssh_connection_primitive.time.monotonic", return_value=0.0), \
+				patch("huf.ai.tools.ssh_connection_primitive.select.select", return_value=([channel], [], [])):
 			call, _ = self._run_execute_job(
 				connection,
 				agent,

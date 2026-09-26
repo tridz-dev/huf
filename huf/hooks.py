@@ -207,6 +207,7 @@ permission_query_conditions = {
     "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "Subscription Auth Challenge": "huf.huf.doctype.subscription_auth_challenge.subscription_auth_challenge.get_permission_query_conditions",
 }
 
 has_permission = {
@@ -324,6 +325,7 @@ scheduler_events = {
         "*/1 * * * *": [
             "huf.ai.orchestration.scheduler.process_orchestrations",
             "huf.ai.agent_integration.recover_stalled_agent_runs",
+            "huf.ai.subscription.auth_service.sweep_expired_auth_challenges",
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",

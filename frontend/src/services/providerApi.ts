@@ -173,6 +173,9 @@ export interface AIProviderDoc {
   provider_brand?: string;
   is_local_llm?: number;
   api_base_url?: string;
+  provider_mode?: 'API' | 'Local Endpoint' | 'Subscription CLI';
+  billing_mode?: 'API' | 'Subscription' | 'Local' | 'Unknown';
+  subscription_runtime?: string;
 }
 
 /**

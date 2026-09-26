@@ -786,13 +786,17 @@ export async function getAgentMessageIdForRun(agentRunId: string): Promise<strin
 export interface AgentRunStatusResponse {
   success: boolean;
   queued?: boolean;
-  status: 'Queued' | 'Started' | 'Success' | 'Failed';
+  status: 'Queued' | 'Started' | 'Success' | 'Failed' | 'Waiting Authentication';
   response?: string | null;
   error?: string | null;
   agent_run_id: string;
   conversation_id?: string;
   agent?: string;
   agent_message_id?: string | null;
+  /** Subscription Runtime this run is parked on, set only when `status` is
+   * `'Waiting Authentication'` — needed by `SubscriptionAuthCard` to resume
+   * the auth-challenge APIs after a page reload / polling reconcile. */
+  runtime_name?: string | null;
 }
 
 /**
@@ -815,7 +819,10 @@ export async function getPendingConversationRuns(
       fields: ['name', 'status', 'prompt', 'sequence', 'conversation'],
       filters: [
         ['conversation', '=', conversationId],
-        ['status', 'in', ['Queued', 'Started']],
+        // Include parked runs so a page refresh while a run is waiting on
+        // subscription-runtime auth still surfaces it, instead of only
+        // appearing to time out (see SubscriptionAuthCard/C3 wiring).
+        ['status', 'in', ['Queued', 'Started', 'Waiting Authentication']],
         ['is_child', '=', 0],
       ],
       orderBy: { field: 'sequence', order: 'asc' },

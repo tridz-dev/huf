@@ -96,6 +96,44 @@ describe('upsertAgentRunStatusFromSocket', () => {
     expect(next).toHaveLength(1);
   });
 
+  it('parks the run on Waiting Authentication and sets runtimeName from the event payload', () => {
+    const prev: MessageType[] = [pendingRun('AR-1')];
+    const next = upsertAgentRunStatusFromSocket(prev, {
+      type: 'agent_run_status',
+      agent_run_id: 'AR-1',
+      conversation_id: 'CONV-1',
+      status: 'Waiting Authentication',
+      runtime_name: 'Claude Code (local)',
+    });
+    expect(next[0].runStatus).toBe('Waiting Authentication');
+    expect(next[0].runtimeName).toBe('Claude Code (local)');
+  });
+
+  it('creates a new parked message for Waiting Authentication when no matching run exists yet', () => {
+    const next = upsertAgentRunStatusFromSocket([], {
+      type: 'agent_run_status',
+      agent_run_id: 'AR-2',
+      conversation_id: 'CONV-1',
+      status: 'Waiting Authentication',
+      runtime_name: 'Codex CLI',
+    });
+    expect(next).toHaveLength(1);
+    expect(next[0].runStatus).toBe('Waiting Authentication');
+    expect(next[0].runtimeName).toBe('Codex CLI');
+  });
+
+  it('tolerates the lowercase "waiting authentication" spelling', () => {
+    const prev: MessageType[] = [pendingRun('AR-1')];
+    const next = upsertAgentRunStatusFromSocket(prev, {
+      type: 'agent_run_status',
+      agent_run_id: 'AR-1',
+      conversation_id: 'CONV-1',
+      status: 'waiting authentication',
+      runtime_name: 'Claude Code (local)',
+    });
+    expect(next[0].runStatus).toBe('Waiting Authentication');
+  });
+
   it('ignores events without an agent_run_id', () => {
     const prev: MessageType[] = [pendingRun('AR-1')];
     const next = upsertAgentRunStatusFromSocket(prev, {

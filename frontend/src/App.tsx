@@ -40,6 +40,8 @@ const ExecutionProfilesPage = lazy(() => import('./pages/ExecutionProfilesPage')
 const ExecutionProfileFormPageWrapper = lazy(() => import('./pages/ExecutionProfileFormPageWrapper'));
 const SSHConnectionsPage = lazy(() => import('./pages/SSHConnectionsPage'));
 const SSHConnectionFormPageWrapper = lazy(() => import('./pages/SSHConnectionFormPageWrapper'));
+const SubscriptionRuntimesPage = lazy(() => import('./pages/SubscriptionRuntimesPage'));
+const SubscriptionRuntimeFormPageWrapper = lazy(() => import('./pages/SubscriptionRuntimeFormPageWrapper'));
 const NetworkAccessPoliciesPage = lazy(() => import('./pages/NetworkAccessPoliciesPage'));
 const NetworkAccessPolicyFormPage = lazy(() => import('./pages/NetworkAccessPolicyFormPage'));
 const FlowListPage = lazy(() => import('./pages/FlowListPage'));
@@ -329,6 +331,28 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <SSHConnectionFormPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscription-runtimes"
+            element={
+              <ProtectedRoute>
+                <UnifiedLayout>
+                  <Suspense fallback={<PageLoader />}>
+                    <SubscriptionRuntimesPage />
+                  </Suspense>
+                </UnifiedLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscription-runtimes/:id"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <SubscriptionRuntimeFormPageWrapper />
                 </Suspense>
               </ProtectedRoute>
             }

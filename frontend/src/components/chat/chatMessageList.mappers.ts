@@ -199,6 +199,7 @@ const CANONICAL_RUN_STATUSES: Record<string, AgentRunStatusEvent['status']> = {
   started: 'Started',
   success: 'Success',
   failed: 'Failed',
+  'waiting authentication': 'Waiting Authentication',
 };
 
 function normalizeAgentRunStatusEvent(raw: Record<string, unknown>): AgentRunStatusEvent {
@@ -218,6 +219,7 @@ function normalizeAgentRunStatusEvent(raw: Record<string, unknown>): AgentRunSta
     error: raw.error as string | undefined,
     agent_message_id: raw.agent_message_id as string | undefined,
     sequence: typeof raw.sequence === 'number' ? raw.sequence : undefined,
+    runtime_name: raw.runtime_name as string | undefined,
   } as AgentRunStatusEvent;
 }
 
@@ -240,6 +242,35 @@ export function upsertAgentRunStatusFromSocket(
     agentRunId: event.agent_run_id,
     versions: [{ id: event.agent_run_id, content }],
   });
+
+  // Parked run waiting on subscription-runtime auth — a normal, recoverable
+  // waiting state (never treated as `error`/`Failed`). Sets `runtimeName` so
+  // `ChatMessage.tsx`'s `runStatus === 'Waiting Authentication'` branch can
+  // actually render `SubscriptionAuthCard` instead of bailing out early on a
+  // missing runtime name.
+  if (event.status === 'Waiting Authentication') {
+    if (runIndex >= 0) {
+      const updated = [...prev];
+      updated[runIndex] = {
+        ...updated[runIndex],
+        runStatus: 'Waiting Authentication',
+        agentRunId: event.agent_run_id || updated[runIndex].agentRunId,
+        runtimeName: event.runtime_name || updated[runIndex].runtimeName,
+      };
+      return updated;
+    }
+    return [
+      ...prev,
+      {
+        key: event.agent_run_id,
+        from: 'assistant',
+        runStatus: 'Waiting Authentication',
+        agentRunId: event.agent_run_id,
+        runtimeName: event.runtime_name,
+        versions: [{ id: event.agent_run_id, content: '' }],
+      },
+    ];
+  }
 
   if (event.status === 'Queued' || event.status === 'Started') {
     if (runIndex >= 0) {
@@ -387,6 +418,7 @@ export function applyPolledRunStatus(
     response: poll.response ?? undefined,
     error: poll.error ?? undefined,
     agent_message_id: poll.agent_message_id ?? undefined,
+    runtime_name: poll.runtime_name ?? undefined,
   });
 
   if (poll.status === 'Success' && poll.agent_message_id) {
@@ -402,15 +434,29 @@ export function applyPolledRunStatus(
   return withStatus;
 }
 
-const PENDING_RUN_STATUSES = new Set<MessageType['runStatus']>(['Queued', 'Started']);
+// "Waiting Authentication" is included alongside Queued/Started here: it is
+// an open (non-terminal) Agent Run state just like them, and a parked run's
+// temp bubble must survive re-merges with server-fetched conversation items
+// the same way a Queued/Started one does (see isPendingRunMessage/
+// shouldPreserveTempMessage below) — otherwise reloading persisted messages
+// while a run is parked would silently drop the auth card.
+const PENDING_RUN_STATUSES = new Set<MessageType['runStatus']>([
+  'Queued',
+  'Started',
+  'Waiting Authentication',
+]);
 
 function isPendingRunMessage(msg: MessageType): boolean {
-  return msg.runStatus === 'Queued' || msg.runStatus === 'Started';
+  return (
+    msg.runStatus === 'Queued' ||
+    msg.runStatus === 'Started' ||
+    msg.runStatus === 'Waiting Authentication'
+  );
 }
 
-function normalizeRunStatus(status: string): 'Queued' | 'Started' | null {
+function normalizeRunStatus(status: string): 'Queued' | 'Started' | 'Waiting Authentication' | null {
   const normalized = CANONICAL_RUN_STATUSES[status.trim().toLowerCase()];
-  if (normalized === 'Queued' || normalized === 'Started') {
+  if (normalized === 'Queued' || normalized === 'Started' || normalized === 'Waiting Authentication') {
     return normalized;
   }
   return null;
@@ -489,8 +535,11 @@ export function mergePendingRunsIntoMessages(
 
   const runsToHydrate = runs
     .map((run) => ({ run, status: normalizeRunStatus(run.status) }))
-    .filter((entry): entry is { run: PendingConversationRun; status: 'Queued' | 'Started' } =>
-      entry.status !== null
+    .filter(
+      (
+        entry
+      ): entry is { run: PendingConversationRun; status: 'Queued' | 'Started' | 'Waiting Authentication' } =>
+        entry.status !== null
     )
     .filter(({ run }) => !completedAssistantRunIds.has(run.name))
     .filter(({ run }) => !run.prompt?.startsWith('[SILENT_TRIGGER]'))

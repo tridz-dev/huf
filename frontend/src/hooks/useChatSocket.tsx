@@ -33,11 +33,18 @@ export type AgentRunStatusEvent = {
     agent_run_id: string;
     conversation_id: string;
     session_id?: string;
-    status: 'Queued' | 'Started' | 'Success' | 'Failed';
+    status: 'Queued' | 'Started' | 'Success' | 'Failed' | 'Waiting Authentication';
     response?: string;
     error?: string;
     agent_message_id?: string;
     sequence?: number;
+    /** Subscription Runtime this run is parked on. Only present when
+     * `status` is `'Waiting Authentication'` — see
+     * `SubscriptionPassthroughExecutor._park_for_auth`, which publishes this
+     * alongside the custom `subscription_auth_required` event so any
+     * consumer that only watches standard run-status events still learns
+     * which runtime to resume/poll/cancel via `SubscriptionAuthCard`. */
+    runtime_name?: string;
 };
 
 export type ConversationTitleUpdatedEvent = {
@@ -63,6 +70,27 @@ export type OpenArtifactPaneEvent = {
     artifact_id: string;
 };
 
+/**
+ * Emitted by `SubscriptionPassthroughExecutor._park_for_auth`
+ * (huf/ai/subscription/executor.py) when a run is parked waiting on a
+ * subscription-runtime login. Field names match that publish call exactly —
+ * do not rename without updating the backend. A companion standard
+ * `agent_run_status` event with `status: "Waiting Authentication"` is also
+ * published alongside this one (same payload minus the challenge fields),
+ * so this event only needs to add the challenge/runtime details on top of
+ * whatever `onAgentRunStatus` already did.
+ */
+export type SubscriptionAuthRequiredEvent = {
+    type: 'subscription_auth_required';
+    agent_run_id: string;
+    conversation_id: string;
+    runtime_name: string;
+    auth_challenge?: string;
+    verification_url?: string;
+    user_code?: string;
+    mode?: string;
+};
+
 type ChatSocketProps = {
     conversationId: string | null;
     onToolUpdate?: (event: ToolCallEvent) => void;
@@ -71,9 +99,10 @@ type ChatSocketProps = {
     onConversationTitleUpdated?: (event: ConversationTitleUpdatedEvent) => void;
     onFrontendToolCall?: (event: FrontendToolCallEvent) => void;
     onOpenArtifactPane?: (event: OpenArtifactPaneEvent) => void;
+    onSubscriptionAuthRequired?: (event: SubscriptionAuthRequiredEvent) => void;
 }
 
-export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane }: ChatSocketProps) {
+export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane, onSubscriptionAuthRequired }: ChatSocketProps) {
     const socket = useSocket();
 
     useEffect(() => {
@@ -82,7 +111,7 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
         }
 
         // Listen for conversation-specific events on the shared socket
-        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | FrontendToolCallEvent | OpenArtifactPaneEvent) => {
+        const handler = (data: NewAgentMessageEvent | ToolCallEvent | AgentRunStatusEvent | ConversationTitleUpdatedEvent | FrontendToolCallEvent | OpenArtifactPaneEvent | SubscriptionAuthRequiredEvent) => {
             console.log("Conversation event received:", data);
 
             // Route to appropriate handler based on event type
@@ -102,6 +131,8 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
                 onFrontendToolCall?.(data as FrontendToolCallEvent);
             } else if (data.type === 'open_artifact_pane') {
                 onOpenArtifactPane?.(data as OpenArtifactPaneEvent);
+            } else if (data.type === 'subscription_auth_required') {
+                onSubscriptionAuthRequired?.(data as SubscriptionAuthRequiredEvent);
             }
         };
 
@@ -112,5 +143,5 @@ export function useChatSocket({ conversationId, onToolUpdate, onNewMessage, onAg
             // itself is owned by SocketProvider and stays connected.
             socket.off(`conversation:${conversationId}`, handler);
         };
-    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane]);
+    }, [socket, conversationId, onToolUpdate, onNewMessage, onAgentRunStatus, onConversationTitleUpdated, onFrontendToolCall, onOpenArtifactPane, onSubscriptionAuthRequired]);
 }

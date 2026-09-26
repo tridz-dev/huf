@@ -52,6 +52,22 @@ vi.mock('@/lib/frappe-sdk', () => ({
 	frappe: {},
 }));
 
+// `SubscriptionAuthCard` (rendered for `runStatus === 'Waiting Authentication'`)
+// calls `beginSubscriptionAuth` on mount to fetch the challenge — mock it so
+// the C3-wiring test below doesn't hit the real Frappe backend.
+vi.mock('@/services/subscriptionRuntimeApi', () => ({
+	beginSubscriptionAuth: vi.fn().mockResolvedValue({
+		name: 'CHALLENGE-1',
+		mode: 'device_code',
+		verification_url: 'https://example.com/verify',
+		user_code: 'ABCD-1234',
+		safe_instructions: 'Open the link and enter the code.',
+	}),
+	pollSubscriptionAuth: vi.fn().mockResolvedValue({ state: 'pending' }),
+	cancelSubscriptionAuth: vi.fn().mockResolvedValue(undefined),
+	submitSubscriptionAuthInput: vi.fn().mockResolvedValue({ state: 'pending' }),
+}));
+
 const noop = () => {};
 
 function baseMessage(overrides: Partial<MessageType> = {}): MessageType {
@@ -277,6 +293,44 @@ describe('ChatMessage — lifecycle run-status states render distinguishably', (
 
 		expect(screen.getByText('The run timed out.')).toBeInTheDocument();
 		expect(container.querySelector('.lucide-brain-circuit')).toBeNull();
+	});
+
+	// C3 fix (fix-c3-frontend-auth-card-wiring): a parked run must render
+	// SubscriptionAuthCard, not silently fall through to the timeout/error
+	// treatment. This is only possible when `message.runtimeName` actually
+	// gets set by the socket-event mapper (chatMessageList.mappers.ts) — with
+	// runtimeName missing, SubscriptionAuthCard's own effect bails out before
+	// ever calling `beginSubscriptionAuth`, and the card renders only its
+	// static "Authentication required" heading, never the challenge details.
+	it('Waiting Authentication with a populated runtimeName renders SubscriptionAuthCard (not the error card)', async () => {
+		renderMessage(
+			baseMessage({
+				key: 'AR-AUTH',
+				from: 'assistant',
+				runStatus: 'Waiting Authentication',
+				runtimeName: 'Claude Code (local)',
+				versions: [{ id: 'v-auth', content: '' }],
+			}),
+			'ready'
+		);
+
+		// Static heading rendered regardless of whether the challenge has
+		// loaded yet.
+		expect(
+			screen.getByText('Authentication required to continue this conversation.')
+		).toBeInTheDocument();
+
+		// Proves SubscriptionAuthCard did NOT bail out on a falsy
+		// runtimeName: it only reaches this content after `beginSubscriptionAuth`
+		// resolves, which its effect only calls when `runtimeName` is truthy.
+		expect(await screen.findByText('ABCD-1234')).toBeInTheDocument();
+		expect(screen.getByRole('link', { name: /Open sign-in page/i })).toHaveAttribute(
+			'href',
+			'https://example.com/verify'
+		);
+
+		// Never the red ChatErrorCard/timeout treatment for this state.
+		expect(screen.queryByText(/No response from agent/i)).toBeNull();
 	});
 });
 
