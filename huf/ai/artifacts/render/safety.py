@@ -21,6 +21,13 @@ from urllib.parse import urlparse
 
 from weasyprint import default_url_fetcher
 
+from huf.ai.artifacts.render.design_tokens import (
+	BODY_STACK,
+	HEADING_STACK,
+	METRIC_WEBFONTS,
+	MONO_STACK,
+)
+
 #: Hosts a document may fetch from. Deliberately tiny: font CSS is served by
 #: fonts.googleapis.com and the font binaries themselves by fonts.gstatic.com,
 #: so both are required for a webfont to actually embed.
@@ -46,11 +53,17 @@ CURATED_FONTS = {
 	"Source Code Pro": ("Source+Code+Pro:wght@400;600", "'Source Code Pro', 'DejaVu Sans Mono', monospace"),
 }
 
+# The metric-compatible webfonts the shared design tokens fall back to are
+# loaded too, so a server without Arial/Georgia/Courier New still draws the
+# face Word draws. They are not offered to the model as choices.
+for _family, _spec in METRIC_WEBFONTS.items():
+	CURATED_FONTS.setdefault(_family, (_spec, f"'{_family}', 'DejaVu Sans', sans-serif"))
+
 #: Default stacks used by the generated stylesheet when a document does not
 #: pick a family explicitly.
-DEFAULT_BODY_FONT = CURATED_FONTS["Source Sans 3"][1]
-DEFAULT_HEADING_FONT = CURATED_FONTS["Source Serif 4"][1]
-DEFAULT_MONO_FONT = CURATED_FONTS["JetBrains Mono"][1]
+DEFAULT_BODY_FONT = BODY_STACK
+DEFAULT_HEADING_FONT = HEADING_STACK
+DEFAULT_MONO_FONT = MONO_STACK
 
 
 #: CSS properties permitted in an inline ``style="..."`` attribute.

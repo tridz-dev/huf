@@ -131,6 +131,8 @@ def handle_show_artifact(**kwargs) -> str:
 			"type": "open_artifact_pane",
 			"artifact_id": artifact.name,
 			"conversation_id": conversation_id,
+			"artifact_type": artifact.artifact_type,
+			"title": artifact.title or "",
 		},
 		user=frappe.session.user,
 	)
@@ -168,6 +170,141 @@ def handle_export_artifact(**kwargs) -> str:
 		return json.dumps({"success": False, "error": str(e)})
 
 	return json.dumps({"success": True, "file_url": result["file_url"], "format": result["format"]})
+
+
+def _find_artifact_by_title(title: str, conversation_id: str = ""):
+	"""Newest document/markdown artifact whose title matches, that the caller may read.
+
+	An exact (case-insensitive) title match wins over a substring match. When the run's
+	conversation is known the search is restricted to it, so "the report" means the report
+	in THIS chat and not one from an unrelated conversation.
+	"""
+	from huf.ai.artifact_api import _check_conversation_access
+
+	filters = {"artifact_type": ["in", ["document", "markdown"]]}
+	if conversation_id:
+		filters["conversation"] = conversation_id
+	rows = frappe.get_all(
+		"Artifact",
+		filters=filters,
+		fields=["name", "title", "conversation"],
+		order_by="creation desc",
+		limit=200,
+	)
+	wanted = title.strip().lower()
+	ordered = [r for r in rows if (r.title or "").strip().lower() == wanted] + [
+		r for r in rows if wanted in (r.title or "").strip().lower() and (r.title or "").strip().lower() != wanted
+	]
+	for row in ordered:
+		try:
+			_check_conversation_access(row.conversation)
+		except frappe.PermissionError:
+			continue
+		return frappe.get_doc("Artifact", row.name)
+	return None
+
+
+def _announce_exported_file(conversation_id: str, file_url: str, file_name: str, export_format: str) -> None:
+	"""Ask the owner's open client to show a freshly exported file in the artifacts pane.
+
+	A distinct event type (``open_file_artifact``) rather than ``open_artifact_pane``:
+	that one carries an Artifact id and existing clients read it as such. Needs the run's
+	conversation (injected from the run context on most paths); without one there is no
+	channel to publish on and nothing is sent. Never raises.
+	"""
+	try:
+		if not conversation_id or not frappe.db.exists("Agent Conversation", conversation_id):
+			return
+		frappe.publish_realtime(
+			event=f"conversation:{conversation_id}",
+			message={
+				"type": "open_file_artifact",
+				"conversation_id": conversation_id,
+				"file_url": file_url,
+				"file_name": file_name,
+				"format": export_format,
+			},
+			user=frappe.session.user,
+			after_commit=True,
+		)
+	except Exception:
+		frappe.log_error(title="Exported file open event failed", message=frappe.get_traceback())
+
+
+def handle_export_document(**kwargs) -> str:
+	"""Produce a downloadable PDF / DOCX / HTML / Markdown file from a document.
+
+	Two ways to say WHAT to export, so a single request such as "create a docx
+	report" works without the two-turn dance export_artifact needs (a document
+	emitted in the CURRENT response has no id yet):
+
+	- ``content`` (+ optional ``title``, ``language``): render this text directly.
+	- ``artifact_id_or_title``: an Artifact id, or a title / part of a title of a
+	  document already in the conversation.
+
+	Returns ``success``, ``file_url`` (a private Frappe File), ``file_name``,
+	``format`` and ``markdown_link`` - a ready-made ``[name](url)`` the agent
+	relays so the chat shows a download link instead of the document pasted as text.
+	Never raises: every failure is a structured ``success: False`` result.
+	"""
+	from huf.ai.artifact_export_api import _FORMATS, _render_bytes, _normalize_language, export_filename
+
+	export_format = (kwargs.get("format") or "").strip().lower()
+	target = (kwargs.get("artifact_id_or_title") or kwargs.get("artifact_id") or "").strip()
+	content = kwargs.get("content") or ""
+	title = (kwargs.get("title") or "").strip()
+	language = (kwargs.get("language") or "markdown").strip().lower()
+	conversation_id = (kwargs.get("conversation_id") or "").strip()
+
+	if export_format not in _FORMATS:
+		return json.dumps({"success": False, "error": f"'format' must be one of {', '.join(_FORMATS)}"})
+	if not target and not content:
+		return json.dumps({"success": False, "error": "Give either 'content' (the document text) or 'artifact_id_or_title'."})
+
+	try:
+		if content and not target:
+			from frappe.utils.file_manager import save_file
+
+			if len(content.encode("utf-8")) > 200_000:
+				return json.dumps({"success": False, "error": "Content is too large to export (200 KB limit)."})
+			data = _render_bytes(content, title or "Document", _normalize_language(language), export_format)
+			file_name = export_filename(title, export_format)
+			if conversation_id and frappe.db.exists("Agent Conversation", conversation_id):
+				file_doc = save_file(file_name, data, "Agent Conversation", conversation_id, is_private=True)
+			else:
+				file_doc = save_file(file_name, data, None, None, is_private=True)
+			frappe.db.commit()
+			file_url = file_doc.file_url
+		else:
+			from huf.ai.artifact_export_api import export_artifact
+
+			artifact = None
+			if frappe.db.exists("Artifact", target):
+				artifact = frappe.get_doc("Artifact", target)
+			else:
+				artifact = _find_artifact_by_title(target, conversation_id)
+			if artifact is None:
+				return json.dumps({
+					"success": False,
+					"error": f"No document artifact matches '{target}'. Pass the document text as 'content' instead.",
+				})
+			result = export_artifact(artifact.name, export_format)
+			file_url = result["file_url"]
+			file_name = export_filename(artifact.title or artifact.name, export_format)
+	except frappe.PermissionError:
+		return json.dumps({"success": False, "error": "You do not have permission to export this document."})
+	except Exception as e:
+		return json.dumps({"success": False, "error": str(e)})
+
+	_announce_exported_file(conversation_id, file_url, file_name, export_format)
+
+	return json.dumps({
+		"success": True,
+		"file_url": file_url,
+		"file_name": file_name,
+		"format": export_format,
+		"markdown_link": f"[{file_name}]({file_url})",
+	})
 
 
 def handle_redline_artifact(**kwargs) -> str:

@@ -200,7 +200,7 @@ class PermissionAwareToolRegistry:
         """Gate the document-artifact tools on Agent.allow_document_artifacts /
         AI Model.disable_document_artifacts."""
         tool_name = (getattr(tool_doc, "tool_name", None) or "").strip()
-        if tool_name not in ("list_document_artifacts", "export_artifact", "redline_artifact"):
+        if tool_name not in ("list_document_artifacts", "export_artifact", "export_document", "redline_artifact"):
             return True
 
         from huf.ai.capabilities import capability_enabled

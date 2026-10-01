@@ -8,6 +8,7 @@ import { Skeleton } from '../../ui/skeleton';
 import { useChatList } from '../useChatList';
 import ConversationTitle, { type ConversationTitleRef } from '../ConversationTitle';
 import ConversationMenu from '../ConversationMenu';
+import { DesktopHostBadge } from '../desktop/DesktopHostBadge';
 
 const UNTITLED_CONVERSATION_TITLE = 'Untitled Chat';
 
@@ -104,6 +105,7 @@ function ConversationRow({
           animate={animatingConversationId === chat.id}
           className={cn('min-w-0 flex-1 truncate', isUntitledConversationTitle(chat.title) && 'italic text-steel-soft')}
         />
+        {chat.host && <DesktopHostBadge host={chat.host} compact className="flex-none" />}
       </Link>
     </ConversationMenu>
   );

@@ -31,7 +31,13 @@
   "total_cost",
   "system_tab",
   "channel",
-  "external_id"
+  "external_id",
+  "desktop_host_section",
+  "execution_host",
+  "host_device_id",
+  "column_break_host",
+  "host_workspace_fingerprint",
+  "host_label"
  ],
  "fields": [
   {
@@ -228,12 +234,52 @@
    "fieldname": "token_breakdown_section",
    "fieldtype": "Section Break",
    "label": "Token Breakdown"
+  },
+  {
+   "fieldname": "desktop_host_section",
+   "fieldtype": "Section Break",
+   "label": "Desktop Host"
+  },
+  {
+   "default": "server",
+   "description": "Where this conversation's runs execute. A desktop-hosted conversation always runs on its host device and never falls back to the server. Set at creation, not editable.",
+   "fieldname": "execution_host",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Execution Host",
+   "options": "server\ndesktop",
+   "read_only": 1
+  },
+  {
+   "description": "Public id of the desktop (derived from its public key). Never a credential.",
+   "fieldname": "host_device_id",
+   "fieldtype": "Data",
+   "label": "Host Device ID",
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "column_break_host",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "host_workspace_fingerprint",
+   "fieldtype": "Data",
+   "label": "Host Workspace Fingerprint",
+   "read_only": 1
+  },
+  {
+   "description": "Human label of the host, shown as a badge in conversation lists.",
+   "fieldname": "host_label",
+   "fieldtype": "Data",
+   "label": "Host Label",
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-01-21 19:13:42.068454",
+ "modified": "2026-09-30 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Conversation",

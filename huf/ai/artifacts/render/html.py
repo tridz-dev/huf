@@ -20,6 +20,7 @@ from huf.ai.artifacts.render.safety import (
 	DEFAULT_HEADING_FONT,
 	DEFAULT_MONO_FONT,
 )
+from huf.ai.artifacts.render.design_tokens import HEADING_SIZES_PT
 from huf.ai.artifacts.render.components import components_css
 
 #: Matches a Pandoc-style fenced div marking a multi-column region:
@@ -98,42 +99,42 @@ pre, code {
 }
 
 h1 {
-	font-size: 28pt;
+	font-size: __H1_PT__pt;
 	font-weight: bold;
 	margin-top: 1em;
 	margin-bottom: 0.5em;
 }
 
 h2 {
-	font-size: 22pt;
+	font-size: __H2_PT__pt;
 	font-weight: bold;
 	margin-top: 0.9em;
 	margin-bottom: 0.4em;
 }
 
 h3 {
-	font-size: 18pt;
+	font-size: __H3_PT__pt;
 	font-weight: bold;
 	margin-top: 0.8em;
 	margin-bottom: 0.3em;
 }
 
 h4 {
-	font-size: 14pt;
+	font-size: __H4_PT__pt;
 	font-weight: bold;
 	margin-top: 0.7em;
 	margin-bottom: 0.3em;
 }
 
 h5 {
-	font-size: 12pt;
+	font-size: __H5_PT__pt;
 	font-weight: bold;
 	margin-top: 0.6em;
 	margin-bottom: 0.2em;
 }
 
 h6 {
-	font-size: 11pt;
+	font-size: __H6_PT__pt;
 	font-weight: bold;
 	margin-top: 0.5em;
 	margin-bottom: 0.2em;
@@ -233,6 +234,12 @@ PRINT_STYLESHEET = (
 	.replace("__BODY_FONT__", DEFAULT_BODY_FONT)
 	.replace("__HEADING_FONT__", DEFAULT_HEADING_FONT)
 	.replace("__MONO_FONT__", DEFAULT_MONO_FONT)
+	.replace("__H1_PT__", str(HEADING_SIZES_PT[1]))
+	.replace("__H2_PT__", str(HEADING_SIZES_PT[2]))
+	.replace("__H3_PT__", str(HEADING_SIZES_PT[3]))
+	.replace("__H4_PT__", str(HEADING_SIZES_PT[4]))
+	.replace("__H5_PT__", str(HEADING_SIZES_PT[5]))
+	.replace("__H6_PT__", str(HEADING_SIZES_PT[6]))
 )
 
 #: Component registry CSS (huf/ai/artifacts/render/components.py) is

@@ -77,7 +77,7 @@ export function splitPreambleAndJsx(source: string): { preamble: string; jsx: st
  * Parse preamble declarations and return bindings plus the JSX body.
  * On failure, returns the original source as JSX with empty bindings.
  */
-export function extractJsxAndBindings(source: string): JsxPreambleResult {
+function extractJsxAndBindingsRaw(source: string): JsxPreambleResult {
 	const warnings: string[] = [];
 	const { preamble, jsx } = splitPreambleAndJsx(source);
 
@@ -293,4 +293,19 @@ function evaluateExpression(
 		default:
 			throw new Error(`Unsupported expression type: ${node.type}`);
 	}
+}
+
+/**
+ * react-jsx-parser cannot evaluate a JSXEmptyExpression, which is what a comment-only brace group is:
+ * `{/* note *\/}` or `{ // note \n }`. Models write these all the time in dashboards. Remove brace groups
+ * that contain only comments. Groups without a comment (`{}` in `style={{}}`) are left alone on purpose.
+ */
+const COMMENT_ONLY_BRACES = /\{\s*(?:(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*)\s*)+\}/g;
+export function stripJsxComments(jsx: string): string {
+	return jsx.replace(COMMENT_ONLY_BRACES, '');
+}
+
+export function extractJsxAndBindings(source: string): JsxPreambleResult {
+	const result = extractJsxAndBindingsRaw(source);
+	return { ...result, jsx: stripJsxComments(result.jsx) };
 }

@@ -18,13 +18,21 @@ from huf.api.v1.scopes import require_agent_allowed, require_scope
 
 def _to_public_shape(conv_doc) -> dict:
 	"""Build the public, stable shape for a single Agent Conversation."""
-	return {
+	shape = {
 		"id": conv_doc.name,
 		"agent_id": conv_doc.agent,
 		"title": conv_doc.title,
 		"created_at": conv_doc.created_at,
 		"status": conv_doc.status,
 	}
+	if getattr(conv_doc, "execution_host", None) == "desktop":
+		# Only a public device id and label; never anything a client could use as a credential.
+		shape["host"] = {
+			"type": "desktop",
+			"device_id": conv_doc.host_device_id,
+			"label": conv_doc.host_label,
+		}
+	return shape
 
 
 def _owns_conversation(conv_doc, user: str) -> bool:
@@ -72,7 +80,16 @@ def handle_create_conversation(context: RequestContext, agent_id: str, title: st
 MAX_PAGE_LENGTH = 50
 
 # Fields fetched directly via `frappe.get_all` - exactly what `_to_public_shape` uses.
-_CONVERSATION_LIST_FIELDS = ["name", "agent", "title", "created_at", "status"]
+_CONVERSATION_LIST_FIELDS = [
+	"name",
+	"agent",
+	"title",
+	"created_at",
+	"status",
+	"execution_host",
+	"host_device_id",
+	"host_label",
+]
 
 
 def handle_list_conversations(context: RequestContext, agent_id: str = None) -> dict:

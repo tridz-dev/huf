@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import type { ChatListItem } from '@/services/chatApi';
-import { getConversation } from '@/services/chatApi';
+import { getConversation, hostFromConversation, type ChatListItem } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
 import { getProject, getPinnedConversations } from '@/services/projectApi';
 import { ChatRailToolbar } from './ChatRailToolbar';
@@ -231,6 +230,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
         title,
         agent: conversationDoc.agent || '',
         timestamp: conversationDoc.last_activity || conversationDoc.modified,
+        host: hostFromConversation(conversationDoc),
       };
 
       addItemRef.current?.(conversationItem);
@@ -268,6 +268,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
           title: conversationDoc.title || 'Untitled Chat',
           agent: conversationDoc.agent || agentName || '',
           timestamp: conversationDoc.last_activity || conversationDoc.modified,
+          host: hostFromConversation(conversationDoc),
         };
 
         addItemRef.current?.(conversationItem);

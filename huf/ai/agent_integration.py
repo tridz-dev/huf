@@ -103,9 +103,15 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
 
 class AgentManager:
     """Manages the creation and execution of agents."""
-    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None):
+
+    # Class-level default so instances built without __init__ (tests) still work.
+    desktop_ctx = None
+
+    def __init__(self, agent_name, file_handler=None, provider_override=None, model_override=None, conversation_id=None, desktop_ctx=None):
         self.agent_doc = frappe.get_cached_doc("Agent", agent_name)
         self.conversation_id = conversation_id
+        # Pinned Huf Desktop executor context (None for every non-desktop run).
+        self.desktop_ctx = desktop_ctx
         (
             self.effective_provider,
             self.effective_model,
@@ -202,6 +208,7 @@ class AgentManager:
                 model_name=self.effective_model,
                 conversation_id=self.conversation_id,
                 agent_name=self.agent_doc.name,
+                desktop_ctx=self.desktop_ctx,
             )
             if agent_tools:
                 self.tools.extend(agent_tools)
@@ -586,6 +593,20 @@ class AgentManager:
                 instructions += DOCUMENT_ARTIFACT_INSTRUCTIONS
                 if agent_has_document_tools(self.agent_doc):
                     instructions += DOCUMENT_EXPORT_TOOL_INSTRUCTIONS
+
+                # A Huf Desktop run with a workspace produces files on the user's machine: teach the
+                # local office skills (or say plainly they are off), instead of leaving the agent to
+                # pick the server export by default.
+                if self.desktop_ctx:
+                    from huf.ai.document_artifact_instructions import (
+                        DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_NO_SKILLS,
+                        DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_WITH_SKILLS,
+                    )
+
+                    if "desktop_skill_run" in {tool.name for tool in self.tools}:
+                        instructions += DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_WITH_SKILLS
+                    else:
+                        instructions += DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_NO_SKILLS
 
         # Inject Project-level instructions, if the conversation is scoped to a
         # HUF Project. This layer sits between the Agent's own instructions
@@ -1149,6 +1170,225 @@ def _link_preexisting_user_message(conversation_name: str, run_name: str):
 		frappe.db.set_value("Agent Message", msg_name, "agent_run", run_name, update_modified=False)
 
 
+def desktop_executor_origin_ip():
+    """IP literal of the request that starts a remote-origin run (see ``request_origin_ip``)."""
+    from huf.ai.desktop_executor import request_origin_ip
+
+    return request_origin_ip()
+
+
+def _resolve_desktop_request(desktop_executor_id, desktop_lease_secret=None, agent_doc=None):
+    """Resolve an optional ``desktop_executor_id`` once, at run start (a conversation that is NOT
+    desktop-hosted; see :func:`_resolve_desktop_for_run` for the hosted case).
+
+    Returns ``(desktop_ctx, desktop_tools_status)``. Both are ``None`` when no
+    id was supplied (the web/PWA never sends one), so callers see zero change.
+    An id that is not a live lease owned by the session user is ignored with a
+    warning; it never raises, so it cannot break the chat.
+
+    The ctx carries ``origin``: ``desktop`` only when the request presented the lease secret, else
+    ``remote``. A remote request needs the desktop's remote-control switch and the agent's
+    ``allow_remote_desktop`` flag, otherwise the run proceeds WITHOUT desktop tools
+    (``reason: remote_disabled``). ``agent_policy`` is the agent's effective desktop policy.
+    """
+    if not desktop_executor_id:
+        return None, None
+    try:
+        from huf.ai import desktop_policy, desktop_sessions
+        from huf.ai.desktop_executor import lease_remote_control, origin_for, resolve_desktop_ctx
+
+        ctx = resolve_desktop_ctx(desktop_executor_id, user=frappe.session.user)
+        if ctx:
+            origin = origin_for(desktop_executor_id, desktop_lease_secret, user=frappe.session.user)
+            policy = desktop_policy.policy_from_agent(agent_doc)
+            ctx = {**ctx, "origin": origin, "agent_policy": policy}
+            if origin == "remote":
+                origin_ip = desktop_executor_origin_ip()
+                if origin_ip:
+                    ctx["origin_ip"] = origin_ip
+                gate = desktop_sessions.remote_gate(
+                    {"remote_control": lease_remote_control(desktop_executor_id)}, policy
+                )
+                if gate:
+                    frappe.logger("huf").warning(f"Ignoring desktop_executor_id: remote control off ({gate})")
+                    return None, {"available": False, "reason": "remote_disabled"}
+                desktop_sessions.audit(
+                    "remote_run",
+                    "allowed",
+                    user=frappe.session.user,
+                    device_id=ctx.get("device_id"),
+                    origin="remote",
+                    agent=getattr(agent_doc, "name", None),
+                    ip=ctx.get("origin_ip") or None,
+                )
+    except Exception as exc:  # never break the chat over an optional feature
+        frappe.logger("huf").warning(f"desktop executor resolution failed: {exc!s}")
+        ctx = None
+    if not ctx:
+        frappe.logger("huf").warning(
+            "Ignoring desktop_executor_id: no live lease owned by the session user"
+        )
+        return None, {"available": False, "reason": "executor_unavailable"}
+    return ctx, {"available": True, "reason": None}
+
+
+def _resolve_desktop_for_run(agent_doc, conversation, desktop_executor_id, desktop_lease_secret):
+    """``(desktop_ctx, desktop_status, error)`` for a run.
+
+    A desktop-hosted conversation always pins to its own device, from any client (a client-supplied
+    ``desktop_executor_id`` is ignored): an offline device, a changed workspace or a disabled remote
+    control gives a structured ``error`` and NEVER a server-side run. Any other conversation uses
+    the optional ``desktop_executor_id`` exactly as before.
+    """
+    from huf.ai import desktop_sessions
+
+    if desktop_sessions.is_hosted(conversation):
+        return desktop_sessions.resolve_hosted_run(conversation, agent_doc, desktop_lease_secret)
+    ctx, status = _resolve_desktop_request(desktop_executor_id, desktop_lease_secret, agent_doc)
+    return ctx, status, None
+
+
+def _desktop_runtime_context(desktop_ctx, conversation_id=None, run=None, sign=True):
+    """Persistable pin for ``runtime_context['desktop']`` (identifiers only, no secrets).
+
+    ``origin``, ``device_id`` and ``agent_policy`` are covered by ``sig``: ``runtime_context`` is
+    writable by a Huf User, so the worker honours them only from a verified pin. With ``run`` the
+    signature also binds the pin to that Agent Run (name, conversation, agent, creation, prompt), so
+    it cannot be replayed in another run. ``sign=False`` returns the pin without a signature (the
+    run does not exist yet; :func:`_sign_run_desktop_pin` signs it right after the insert).
+    """
+    if not desktop_ctx:
+        return None
+    from huf.ai.desktop_executor import sign_pin
+
+    pin = {
+        "executor_id": desktop_ctx.get("executor_id"),
+        "fingerprint": desktop_ctx.get("fingerprint"),
+        "user": desktop_ctx.get("user"),
+        "label": desktop_ctx.get("label"),
+    }
+    # The local-capability catalog the lease published at send time: tools are built from
+    # this snapshot for the whole run (a later change only affects new runs).
+    if desktop_ctx.get("catalog_hash"):
+        pin["catalog_hash"] = desktop_ctx["catalog_hash"]
+    if desktop_ctx.get("origin"):
+        pin["origin"] = desktop_ctx["origin"]
+    if desktop_ctx.get("device_id"):
+        pin["device_id"] = desktop_ctx["device_id"]
+    if desktop_ctx.get("agent_policy"):
+        pin["agent_policy"] = desktop_ctx["agent_policy"]
+    if desktop_ctx.get("origin") == "remote" and desktop_ctx.get("origin_ip"):
+        pin["origin_ip"] = desktop_ctx["origin_ip"]
+    if sign:
+        pin["sig"] = sign_pin(pin, conversation_id, run)
+    return pin
+
+
+def _sign_run_desktop_pin(run_doc, runtime_context, conversation_id):
+    """Sign the desktop pin of a just-inserted run, bound to that run, and store it.
+
+    The run name and creation time exist only after the insert, so the pin is written unsigned and
+    signed in the same transaction (nothing can drain the run before it commits). An unsigned pin
+    is treated as remote, so a failure here fails closed."""
+    from huf.ai.desktop_executor import sign_pin
+
+    pin = dict((runtime_context or {}).get("desktop") or {})
+    if not pin:
+        return
+    pin.pop("sig", None)
+    pin["sig"] = sign_pin(pin, conversation_id, run_doc)
+    runtime_context["desktop"] = pin
+    frappe.db.set_value(
+        "Agent Run", run_doc.name, "runtime_context", frappe.as_json(runtime_context), update_modified=False
+    )
+
+
+def _desktop_ctx_from_runtime_context(
+    context, run_owner=None, conversation_owner=None, conversation_id=None, run=None
+):
+    """Re-resolve a pinned desktop ctx in the worker.
+
+    The identity comes from the run OWNER, never from the session user (a queued run
+    drained by the stale-run sweeper has session user Administrator). The pin is
+    honoured only if ALL hold, otherwise the run proceeds without desktop tools:
+
+    * ``pinned.user`` equals the run owner (Frappe sets ``owner``; a user cannot
+      forge it, unlike ``runtime_context`` which a Huf User can write on insert);
+    * the conversation, when known, is owned by the same user;
+    * the lease is still live and owned by that user.
+
+    The returned ctx keeps the ORIGINAL pinned fingerprint, so a workspace switch
+    after the send is still detected.
+    """
+    pinned = (context or {}).get("desktop")
+    if not pinned or not isinstance(pinned, dict):
+        return None
+    if not run_owner or pinned.get("user") != run_owner:
+        frappe.logger("huf").warning("Dropping desktop pin: pinned user is not the run owner")
+        return None
+    if conversation_owner and conversation_owner != run_owner:
+        frappe.logger("huf").warning("Dropping desktop pin: conversation belongs to another user")
+        return None
+    try:
+        from huf.ai.desktop_executor import resolve_desktop_ctx
+
+        live = resolve_desktop_ctx(pinned.get("executor_id"), user=run_owner)
+    except Exception as exc:
+        frappe.logger("huf").warning(f"desktop ctx re-resolution failed: {exc!s}")
+        return None
+    if not live or live.get("user") != run_owner:
+        return None
+    resolved = {**live, "fingerprint": pinned.get("fingerprint") or live.get("fingerprint")}
+    # The catalog is the PINNED one, never the lease's current one.
+    resolved.pop("catalog_hash", None)
+    if pinned.get("catalog_hash"):
+        resolved["catalog_hash"] = pinned["catalog_hash"]
+    # Origin and the agent policy are honoured only from a pin the server signed. An unsigned or
+    # altered pin (a forged Agent Run) is treated as REMOTE with no policy, which the dispatcher
+    # refuses unless remote control is on for the desktop and the agent.
+    try:
+        from huf.ai.desktop_executor import pin_is_fresh, verify_pin
+
+        # The signature must be FOR THIS RUN (name, conversation, agent, creation, prompt): a pin
+        # copied out of another run, or kept while the run is rewritten and re-queued, fails it. With
+        # no run to bind to, nothing verifies.
+        signed = run is not None and verify_pin(pinned, conversation_id, run) and pin_is_fresh(run)
+    except Exception:
+        signed = False
+    if signed:
+        resolved["origin"] = pinned.get("origin") if pinned.get("origin") in ("desktop", "remote") else "remote"
+        if pinned.get("agent_policy"):
+            resolved["agent_policy"] = pinned["agent_policy"]
+        if pinned.get("origin_ip"):
+            resolved["origin_ip"] = pinned["origin_ip"]
+        if pinned.get("device_id") and live.get("device_id") != pinned["device_id"]:
+            frappe.logger("huf").warning("Dropping desktop pin: the executor now belongs to another device")
+            return None
+        if resolved["origin"] == "desktop":
+            # Desktop origin is single-use: only the execution that claims the pin gets it. A run
+            # that is executed again (re-queued by a client, or drained again after a lost lease) is
+            # a fresh server decision, REMOTE, against the agent's current policy.
+            from huf.ai.desktop_executor import claim_desktop_pin, replay_policy
+
+            if not claim_desktop_pin(run.get("name") if isinstance(run, dict) else run.name):
+                frappe.logger("huf").warning("Desktop pin already used: run is executed again as remote")
+                resolved["origin"] = "remote"
+                resolved["agent_policy"] = replay_policy(run.get("agent") if isinstance(run, dict) else run.agent)
+                if not resolved["agent_policy"]:
+                    resolved.pop("agent_policy")
+                resolved.pop("origin_ip", None)
+    else:
+        resolved["origin"] = "remote"
+        resolved.pop("agent_policy", None)
+    return resolved
+
+
+def _with_desktop_status(result, status):
+    if status is not None and isinstance(result, dict):
+        result["desktop_tools"] = status
+    return result
+
+
 @frappe.whitelist(allow_guest=True)
 @rate_limit(key="agent_name", limit=20, seconds=60, ip_based=True)
 def run_agent_sync(
@@ -1175,8 +1415,16 @@ def run_agent_sync(
     now=None,
     project: str = None,
     client_idempotency_key: str = None,
+    desktop_executor_id: str = None,
+    desktop_lease_secret: str = None,
 ):
     """Run an agent synchronously (queue-first by default; see ``now``).
+
+    ``desktop_lease_secret`` (or the ``X-Huf-Lease-Secret`` header) is presented only by Huf
+    Desktop: it makes the run desktop-origin. Without it a run pinned to a desktop is
+    remote-origin. A desktop-hosted conversation always pins to its own device; when that cannot be
+    done a structured error dict (``desktop_offline``, ``workspace_changed``, ``remote_disabled``,
+    ``permission_denied``) is returned and nothing is created.
 
     ``allow_guest=True`` is intentional (Track-Item: ST-R4.3) — Agent has a
     per-agent ``allow_guest`` flag that is a deliberate, supported product
@@ -1309,6 +1557,12 @@ def run_agent_sync(
 
     sequence = _next_run_sequence(conversation.name)
 
+    desktop_ctx, desktop_status, desktop_error = _resolve_desktop_for_run(
+        agent_doc, conversation, desktop_executor_id, desktop_lease_secret
+    )
+    if desktop_error:
+        return desktop_error
+
     runtime_context = {
         "channel_id": channel_id,
         "external_id": external_id,
@@ -1322,6 +1576,8 @@ def run_agent_sync(
         "files": files,
         "skip_user_message": skip_user_message,
     }
+    if desktop_ctx:
+        runtime_context["desktop"] = _desktop_runtime_context(desktop_ctx, conversation.name, sign=False)
 
     run_doc_data = {
         "doctype": "Agent Run",
@@ -1370,7 +1626,13 @@ def run_agent_sync(
         )
         if existing_run_name:
             existing_run = frappe.get_doc("Agent Run", existing_run_name)
-            return {
+            existing_pin = (
+                frappe.parse_json(existing_run.runtime_context or "{}").get("desktop") or {}
+            )
+            if desktop_status is not None and existing_pin.get("executor_id") != desktop_executor_id:
+                # The replayed run was never pinned to this executor: do not claim tools.
+                desktop_status = {"available": False, "reason": "run_not_pinned"}
+            return _with_desktop_status({
                 "success": True,
                 "queued": existing_run.status in ("Queued", "Started"),
                 "status": existing_run.status,
@@ -1380,7 +1642,7 @@ def run_agent_sync(
                 "conversation_id": existing_run.conversation,
                 "session_id": conv_manager.session_id,
                 "sequence": existing_run.sequence,
-            }
+            }, desktop_status)
         run_doc_data["idempotency_key"] = client_idempotency_key
 
     if not frappe.has_permission("Agent Run", "create"):
@@ -1391,6 +1653,8 @@ def run_agent_sync(
 
     run_doc = frappe.get_doc(run_doc_data)
     run_doc.insert()
+    if desktop_ctx:
+        _sign_run_desktop_pin(run_doc, runtime_context, conversation.name)
 
     execution_kwargs = {
         "agent_name": agent_name,
@@ -1410,6 +1674,7 @@ def run_agent_sync(
         "prompt_cache_options": prompt_cache_options,
         "files": files,
         "skip_user_message": skip_user_message,
+        "desktop_ctx": desktop_ctx,
     }
 
     is_queued = not getattr(agent_doc, "run_immediately", 0) and not _is_truthy(now)
@@ -1430,7 +1695,7 @@ def run_agent_sync(
         )
         _emit_run_lifecycle_event(run_doc, conversation, "queued")
         safe_commit()
-        return {
+        return _with_desktop_status({
             "success": True,
             "queued": True,
             "status": "Queued",
@@ -1440,7 +1705,15 @@ def run_agent_sync(
             "conversation_id": conversation.name,
             "session_id": conv_manager.session_id,
             "sequence": sequence,
-        }
+        }, desktop_status)
+
+    if desktop_ctx and desktop_ctx.get("origin") == "desktop":
+        # This request executes the run itself, so it is the one execution allowed to use the
+        # pin's desktop origin. Claimed now, a client that sets the run back to Queued afterwards
+        # gets it drained as remote.
+        from huf.ai.desktop_executor import claim_desktop_pin
+
+        claim_desktop_pin(run_doc.name)
 
     # Direct path (``now`` override or Agent.run_immediately): preserve the
     # existing immediate behavior — persist the user message up front and
@@ -1501,7 +1774,7 @@ def run_agent_sync(
             _link_preexisting_user_message(conversation.name, run_doc.name)
         safe_commit()
 
-        return _execute_agent_run(**execution_kwargs)
+        return _with_desktop_status(_execute_agent_run(**execution_kwargs), desktop_status)
     finally:
         heartbeat.stop()
         try:
@@ -1672,6 +1945,7 @@ def _execute_agent_run(
     prompt_cache_options=None,
     files=None,
     skip_user_message=False,
+    desktop_ctx=None,
 ):
     """Execute an agent against an existing Agent Run and conversation.
 
@@ -1694,6 +1968,11 @@ def _execute_agent_run(
         external_id=external_id
     )
     conversation = frappe.get_doc("Agent Conversation", conversation_id)
+    # A desktop-hosted conversation never runs without a live pin to its own device (a queued run
+    # drained after the desktop went offline fails here instead of running on the server).
+    from huf.ai import desktop_sessions
+
+    desktop_sessions.assert_hosted_pin(conversation, desktop_ctx)
     run_doc = frappe.get_doc("Agent Run", run_id)
 
     # Reconstruct and cache the budget (ST-09.2)
@@ -1755,6 +2034,7 @@ def _execute_agent_run(
             provider_override=resolved_provider,
             model_override=resolved_model,
             conversation_id=conversation_id,
+            desktop_ctx=desktop_ctx,
         )
 
         if manager.tool_setup_warnings:
@@ -2636,6 +2916,66 @@ class _RunHeartbeat:
                 frappe.logger("huf").debug(f"Lock heartbeat renewal failed for {self.lock_key}: {exc!s}")
 
 
+def _begin_desktop_job_budget(conversation_id):
+    try:
+        from huf.ai.desktop_executor import begin_job_budget
+
+        begin_job_budget(conversation_id)
+    except Exception as exc:  # advisory accounting: never blocks the drain
+        frappe.logger("huf").debug(f"Desktop job budget start failed for {conversation_id}: {exc!s}")
+
+
+def _end_desktop_job_budget(conversation_id):
+    try:
+        from huf.ai.desktop_executor import end_job_budget
+
+        end_job_budget(conversation_id)
+    except Exception as exc:
+        frappe.logger("huf").debug(f"Desktop job budget end failed for {conversation_id}: {exc!s}")
+
+
+def _desktop_run_requeue_block(run_id):
+    """Why a stale run must NOT be re-queued, or None when re-queueing is safe.
+
+    Only a run pinned to Huf Desktop is affected. Fails CLOSED: if the desktop ledger
+    cannot be read (Redis error) the run is treated as possibly changed and is not re-run.
+    """
+    try:
+        pinned = _run_is_desktop_pinned(run_id)
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Could not read runtime context of {run_id}: {exc!s}")
+        return _(
+            "Worker heartbeat lost and the run could not be inspected; it was not re-run "
+            "automatically. Send the request again."
+        )
+    if not pinned:
+        return None
+    try:
+        from huf.ai.desktop_executor import run_executed_mutations
+
+        if run_executed_mutations(run_id):
+            return _(
+                "Worker heartbeat lost after this run had already changed the desktop "
+                "workspace; it was not re-run automatically. Send the request again."
+            )
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Desktop ledger check failed for {run_id}: {exc!s}")
+        return _(
+            "Worker heartbeat lost and the desktop call ledger could not be read, so it is unknown "
+            "whether this run already changed the desktop workspace; it was not re-run "
+            "automatically. Send the request again."
+        )
+    return None
+
+
+def _run_is_desktop_pinned(run_id) -> bool:
+    raw = frappe.db.get_value("Agent Run", run_id, "runtime_context")
+    if not raw:
+        return False
+    ctx = raw if isinstance(raw, dict) else frappe.parse_json(raw)
+    return bool(isinstance(ctx, dict) and ctx.get("desktop"))
+
+
 def _run_queued_agent(lock_attempt=0, **kwargs):
     """Background drainer for a single conversation.
 
@@ -2657,6 +2997,9 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
         return
 
     last_result = None
+    # One RQ job (timeout _QUEUE_LOCK_TTL) drains every queued run of the conversation: the
+    # runs share one desktop wait budget so together they cannot reach the job timeout.
+    _begin_desktop_job_budget(conversation_id)
     try:
         while True:
             run_id = _next_queued_run(conversation_id)
@@ -2671,6 +3014,7 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
         # Background queue drainer boundary: log full traceback.
         frappe.log_error(f"Conversation drainer failed: {frappe.get_traceback()}", "Huf")
     finally:
+        _end_desktop_job_budget(conversation_id)
         try:
             frappe.cache().delete(lock_key)
         except Exception as exc:
@@ -2693,6 +3037,14 @@ def _drain_run(run_doc, lock_key: str):
     try:
         context = frappe.parse_json(run_doc.runtime_context or "{}")
         execution_kwargs = _build_execution_kwargs(run_doc, context)
+        if isinstance(context, dict) and context.get("desktop"):
+            # A run executed again must not repeat desktop calls that already ran.
+            try:
+                from huf.ai.desktop_executor import begin_run_attempt
+
+                begin_run_attempt(run_doc.name)
+            except Exception as exc:
+                frappe.logger("huf").debug(f"Desktop run attempt start failed for {run_doc.name}: {exc!s}")
 
         prompt = execution_kwargs.get("prompt")
         if (
@@ -2742,6 +3094,16 @@ def _drain_run(run_doc, lock_key: str):
         heartbeat.stop()
 
 
+def _conversation_owner(conversation_id):
+    """Owner of an Agent Conversation, or None when unknown (never raises)."""
+    if not conversation_id:
+        return None
+    try:
+        return frappe.db.get_value("Agent Conversation", conversation_id, "owner")
+    except Exception:
+        return None
+
+
 def _build_execution_kwargs(run_doc, context: dict):
     """Reconstruct execution kwargs from the persisted run doc + runtime context."""
     return {
@@ -2762,6 +3124,13 @@ def _build_execution_kwargs(run_doc, context: dict):
         "prompt_cache_options": context.get("prompt_cache_options"),
         "files": context.get("files"),
         "skip_user_message": context.get("skip_user_message", False),
+        "desktop_ctx": _desktop_ctx_from_runtime_context(
+            context,
+            run_owner=getattr(run_doc, "owner", None),
+            conversation_owner=_conversation_owner(getattr(run_doc, "conversation", None)),
+            conversation_id=getattr(run_doc, "conversation", None),
+            run=run_doc,
+        ),
     }
 
 
@@ -2811,7 +3180,15 @@ def recover_stalled_agent_runs():
             if ttl and ttl > 0:
                 continue
             for run in conversation_runs:
+                block = _desktop_run_requeue_block(run.name)
+                if block:
+                    # Re-running would repeat writes / commands already applied on the user's
+                    # machine (the model would re-issue them under new tool_call ids), or we
+                    # cannot tell (fail closed).
+                    _fail_queued_run(run.name, block)
+                    continue
                 _reset_run_to_queued(run.name, _("Worker heartbeat lost; run recovered to queue."))
+            # Also wakes the drainer for runs queued behind a failed one (no-op when none).
             _enqueue_drain(conversation)
             drained_conversations.add(conversation)
 
@@ -2860,6 +3237,8 @@ async def run_agent_stream(
     files=None,
     project: str = None,
     client_idempotency_key: str = None,
+    desktop_executor_id: str = None,
+    desktop_lease_secret: str = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -3049,6 +3428,21 @@ async def run_agent_stream(
         if client_idempotency_key:
             run_doc_data["idempotency_key"] = client_idempotency_key
 
+        # Resolve the optional desktop executor once at run start and pin it on
+        # the run (tool handlers verify the run's pinned executor).
+        desktop_ctx, desktop_status, desktop_error = _resolve_desktop_for_run(
+            agent_doc, conversation, desktop_executor_id, desktop_lease_secret
+        )
+        if desktop_error:
+            yield {"type": "error", "error": desktop_error["message"], "code": desktop_error["code"], **{
+                k: v for k, v in desktop_error.items() if k in ("last_seen", "host_device_id", "host_label")
+            }}
+            return
+        if desktop_ctx:
+            run_doc_data["runtime_context"] = frappe.as_json(
+                {"desktop": _desktop_runtime_context(desktop_ctx, conversation.name)}
+            )
+
         run_doc = frappe.get_doc(run_doc_data)
         run_doc.insert()
         if not skip_user_message:
@@ -3057,6 +3451,9 @@ async def run_agent_stream(
             _link_preexisting_user_message(conversation.name, run_doc.name)
         run_doc.db_set("start_time", now_datetime())
         safe_commit()
+
+        if desktop_status is not None:
+            yield {"type": "desktop_tools", **desktop_status}
 
         # Update agent stats
         total_runs = frappe.db.count("Agent Run", filters={"agent": agent_name})
@@ -3073,6 +3470,7 @@ async def run_agent_stream(
             provider_override=resolved_provider,
             model_override=resolved_model,
             conversation_id=conversation.name,
+            desktop_ctx=desktop_ctx,
         )
 
         if manager.tool_setup_warnings:

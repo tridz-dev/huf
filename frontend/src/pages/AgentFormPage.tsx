@@ -11,7 +11,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import { AIProvider, AIModel, AgentToolFunctionRef, type ToolType } from '../types/agent.types';
 import type { AgentSkillRow } from '../types/skill.types';
 import { getSkillOptions } from '../services/skillApi';
-import { getAgent, getAgentSection, updateAgent, updateAgentSection, createAgent, type AgentConfigSection, runAgentTest, deleteAgent, duplicateAgent } from '../services/agentApi';
+import { getAgent, getAgentSection, updateAgent, updateAgentSection, createAgent, type AgentConfigSection, runAgentTest, deleteAgent, duplicateAgent, getAgentDesktopAccess, updateAgentDesktopAccess, DESKTOP_ACCESS_DOC_FIELDS } from '../services/agentApi';
 import { getAgentPrompt } from '../services/agentPromptApi';
 import { getAgentSummaryPrompt } from '../services/agentSummaryPromptApi';
 import { getProviders, getModels } from '../services/providerApi';
@@ -39,7 +39,7 @@ import { SkillsTab } from '../components/agent/SkillsTab';
 import { ProcedureBindingsTab } from '../components/agent/ProcedureBindingsTab';
 import { AgentKnowledgeModal } from '../components/agent/AgentKnowledgeModal';
 import { UnsavedChangesDialog } from '../components/UnsavedChangesDialog';
-import { agentFormSchema, type AgentFormValues } from '../components/agent/types';
+import { agentFormSchema, toDesktopAccessLevel, type AgentFormValues } from '../components/agent/types';
 import { syncMCPTools, getMCPServer, type MCPServerRef } from '../services/mcpApi';
 import type { MCPServerDoc } from '../services/mcpApi';
 import type { AgentKnowledgeRow, AgentPermissionUserRow, AgentPermissionRoleRow } from '../types/agent.types';
@@ -145,6 +145,14 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     max_turns: agent.max_turns !== undefined && agent.max_turns !== null ? agent.max_turns : undefined,
     max_context_chars:
       agent.max_context_chars !== undefined && agent.max_context_chars !== null ? agent.max_context_chars : undefined,
+    desktop_access_cli: toDesktopAccessLevel(agent.desktop_access_cli),
+    desktop_access_files: toDesktopAccessLevel(agent.desktop_access_files),
+    desktop_access_skills: toDesktopAccessLevel(agent.desktop_access_skills),
+    desktop_access_local_mcp: toDesktopAccessLevel(agent.desktop_access_local_mcp),
+    desktop_access_browser: toDesktopAccessLevel(agent.desktop_access_browser),
+    desktop_access_installs: toDesktopAccessLevel(agent.desktop_access_installs),
+    desktop_access_processes: toDesktopAccessLevel(agent.desktop_access_processes),
+    allow_remote_desktop: agent.allow_remote_desktop === 1,
     enable_conversation_data: agent.enable_conversation_data === 1,
     inject_conversation_data: agent.inject_conversation_data === 1,
     conversation_data_api_permission: agent.conversation_data_api_permission || '',
@@ -272,7 +280,8 @@ export function AgentFormPage() {
         'enable_conversation_data',
         'conversation_data_api_permission',
         'allow_code_execution', 'execution_profile', 'execution_shared_dir_limit_mb',
-        'allow_ssh', 'ssh_connections'
+        'allow_ssh', 'ssh_connections',
+        'desktop_access_cli', 'desktop_access_files', 'desktop_access_skills', 'desktop_access_local_mcp', 'desktop_access_browser', 'desktop_access_installs', 'desktop_access_processes', 'allow_remote_desktop'
       ],
       default: false,
       disabled: false,
@@ -394,6 +403,10 @@ export function AgentFormPage() {
   const [agentOwner, setAgentOwner] = useState<string | null>(null);
   const [sectionRevisions, setSectionRevisions] = useState<Partial<Record<AgentConfigSection, string>>>({});
   const [loadedSections, setLoadedSections] = useState<Set<AgentConfigSection>>(new Set());
+  // Desktop access lives outside the section endpoint, so it has its own load state. Until it has
+  // loaded, the form holds placeholder defaults, so nothing is written back (fail-safe, not fail-open).
+  const [desktopAccessStatus, setDesktopAccessStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const desktopAccessBaselineRef = useRef<Record<string, unknown> | null>(null);
   const [loadingSection, setLoadingSection] = useState<AgentConfigSection | null>(null);
   const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
   const [editingKnowledgeIndex, setEditingKnowledgeIndex] = useState<number | null>(null);
@@ -442,6 +455,14 @@ export function AgentFormPage() {
         max_knowledge_tokens: undefined,
         max_turns: undefined,
         max_context_chars: undefined,
+        desktop_access_cli: 'allowed',
+        desktop_access_files: 'allowed',
+        desktop_access_skills: 'allowed',
+        desktop_access_local_mcp: 'allowed',
+        desktop_access_browser: 'allowed',
+        desktop_access_installs: 'allowed',
+        desktop_access_processes: 'allowed',
+        allow_remote_desktop: false,
         enable_conversation_data: false,
         inject_conversation_data: true,
         conversation_data_api_permission: '',
@@ -1160,6 +1181,8 @@ export function AgentFormPage() {
   // Load agent data when id is available (only for edit mode)
   useEffect(() => {
     if (id && !isNew) {
+      setDesktopAccessStatus('loading');
+      desktopAccessBaselineRef.current = null;
       getAgentSection(id, 'general').then((response) => {
         const data = {
           name: response.name,
@@ -1229,6 +1252,14 @@ export function AgentFormPage() {
             max_turns: data.max_turns !== undefined && data.max_turns !== null ? data.max_turns : undefined,
             max_context_chars:
               data.max_context_chars !== undefined && data.max_context_chars !== null ? data.max_context_chars : undefined,
+            desktop_access_cli: toDesktopAccessLevel(data.desktop_access_cli),
+            desktop_access_files: toDesktopAccessLevel(data.desktop_access_files),
+            desktop_access_skills: toDesktopAccessLevel(data.desktop_access_skills),
+            desktop_access_local_mcp: toDesktopAccessLevel(data.desktop_access_local_mcp),
+            desktop_access_browser: toDesktopAccessLevel(data.desktop_access_browser),
+            desktop_access_installs: toDesktopAccessLevel(data.desktop_access_installs),
+            desktop_access_processes: toDesktopAccessLevel(data.desktop_access_processes),
+            allow_remote_desktop: data.allow_remote_desktop === 1,
             enable_conversation_data: data.enable_conversation_data === 1,
             inject_conversation_data: data.inject_conversation_data === 1,
             conversation_data_api_permission: data.conversation_data_api_permission || '',
@@ -1477,8 +1508,27 @@ export function AgentFormPage() {
           const mapped = mapAgentDocToFormValues(data);
           const fields = tabConfig[section].fields;
           const sectionValues = Object.fromEntries(
-            fields.map((field) => [field, mapped[field as keyof AgentFormValues]]),
+            fields
+              .filter((field) => !(DESKTOP_ACCESS_DOC_FIELDS as readonly string[]).includes(field))
+              .map((field) => [field, mapped[field as keyof AgentFormValues]]),
           ) as Partial<AgentFormValues>;
+          if (section === 'permissions') {
+            try {
+              const desktop = mapAgentDocToFormValues(await getAgentDesktopAccess(id));
+              if (cancelled) return;
+              for (const field of DESKTOP_ACCESS_DOC_FIELDS) {
+                (sectionValues as Record<string, unknown>)[field] = desktop[field as keyof AgentFormValues];
+              }
+              desktopAccessBaselineRef.current = Object.fromEntries(
+                DESKTOP_ACCESS_DOC_FIELDS.map((field) => [field, desktop[field as keyof AgentFormValues]]),
+              );
+              setDesktopAccessStatus('ready');
+            } catch (error) {
+              console.error('Error loading desktop access:', error);
+              setDesktopAccessStatus('error');
+              toast.error('Failed to load desktop access settings');
+            }
+          }
           form.reset(
             { ...form.getValues(), ...sectionValues },
             { keepDirtyValues: true },
@@ -1551,6 +1601,14 @@ export function AgentFormPage() {
         max_knowledge_tokens: values.max_knowledge_tokens !== undefined ? values.max_knowledge_tokens : undefined,
         max_turns: values.max_turns !== undefined ? values.max_turns : undefined,
         max_context_chars: values.max_context_chars !== undefined ? values.max_context_chars : undefined,
+        desktop_access_cli: values.desktop_access_cli ?? 'allowed',
+        desktop_access_files: values.desktop_access_files ?? 'allowed',
+        desktop_access_skills: values.desktop_access_skills ?? 'allowed',
+        desktop_access_local_mcp: values.desktop_access_local_mcp ?? 'allowed',
+        desktop_access_browser: values.desktop_access_browser ?? 'allowed',
+        desktop_access_installs: values.desktop_access_installs ?? 'allowed',
+        desktop_access_processes: values.desktop_access_processes ?? 'allowed',
+        allow_remote_desktop: values.allow_remote_desktop ? 1 : 0,
         enable_conversation_data: values.enable_conversation_data ? 1 : 0,
         inject_conversation_data: values.inject_conversation_data ? 1 : 0,
         conversation_data_api_permission: values.conversation_data_api_permission || undefined,
@@ -1639,6 +1697,7 @@ export function AgentFormPage() {
         };
         const sectionPayload = Object.fromEntries(
           sectionFields[section]
+            .filter((field) => !(DESKTOP_ACCESS_DOC_FIELDS as readonly string[]).includes(field))
             .filter((field) => field in agentData)
             .map((field) => [field, agentData[field as keyof AgentUpdatePayload]]),
         ) as Partial<AgentDoc>;
@@ -1675,9 +1734,29 @@ export function AgentFormPage() {
 
         const result = await updateAgentSection(id, section, sectionPayload, expectedModified);
         const savedAgentId = result.name;
+        let savedRevision = result.modified;
+        // Desktop access is saved with the Permissions tab, through a document write (the section
+        // endpoint does not carry these fields). Skipped unless it loaded and something changed.
+        if (section === 'permissions' && desktopAccessBaselineRef.current) {
+          const baseline = desktopAccessBaselineRef.current;
+          const desktopValues = Object.fromEntries(
+            DESKTOP_ACCESS_DOC_FIELDS.map((field) => [field, agentData[field as keyof AgentUpdatePayload]]),
+          );
+          const changed = DESKTOP_ACCESS_DOC_FIELDS.some(
+            (field) => values[field as keyof AgentFormValues] !== baseline[field],
+          );
+          if (changed) {
+            const modified = await updateAgentDesktopAccess(savedAgentId, desktopValues);
+            if (modified) savedRevision = modified;
+            desktopAccessBaselineRef.current = Object.fromEntries(
+              DESKTOP_ACCESS_DOC_FIELDS.map((field) => [field, values[field as keyof AgentFormValues]]),
+            );
+            messages.push('Desktop access saved');
+          }
+        }
         setSectionRevisions((current) =>
           Object.fromEntries(
-            Object.keys(current).map((key) => [key, result.modified]),
+            Object.keys(current).map((key) => [key, savedRevision]),
           ) as Partial<Record<AgentConfigSection, string>>,
         );
         sectionFields[section].forEach((field) => {
@@ -1755,6 +1834,14 @@ export function AgentFormPage() {
           max_turns: newAgent.max_turns !== undefined && newAgent.max_turns !== null ? newAgent.max_turns : undefined,
           max_context_chars:
             newAgent.max_context_chars !== undefined && newAgent.max_context_chars !== null ? newAgent.max_context_chars : undefined,
+          desktop_access_cli: toDesktopAccessLevel(newAgent.desktop_access_cli),
+          desktop_access_files: toDesktopAccessLevel(newAgent.desktop_access_files),
+          desktop_access_skills: toDesktopAccessLevel(newAgent.desktop_access_skills),
+          desktop_access_local_mcp: toDesktopAccessLevel(newAgent.desktop_access_local_mcp),
+          desktop_access_browser: toDesktopAccessLevel(newAgent.desktop_access_browser),
+          desktop_access_installs: toDesktopAccessLevel(newAgent.desktop_access_installs),
+          desktop_access_processes: toDesktopAccessLevel(newAgent.desktop_access_processes),
+          allow_remote_desktop: newAgent.allow_remote_desktop === 1,
           enable_conversation_data: newAgent.enable_conversation_data === 1,
           inject_conversation_data: newAgent.inject_conversation_data === 1,
           conversation_data_api_permission: newAgent.conversation_data_api_permission || '',
@@ -1856,6 +1943,14 @@ export function AgentFormPage() {
           max_knowledge_tokens: values.max_knowledge_tokens,
           max_turns: values.max_turns,
           max_context_chars: values.max_context_chars,
+          desktop_access_cli: values.desktop_access_cli,
+          desktop_access_files: values.desktop_access_files,
+          desktop_access_skills: values.desktop_access_skills,
+          desktop_access_local_mcp: values.desktop_access_local_mcp,
+          desktop_access_browser: values.desktop_access_browser,
+          desktop_access_installs: values.desktop_access_installs,
+          desktop_access_processes: values.desktop_access_processes,
+          allow_remote_desktop: values.allow_remote_desktop,
           enable_conversation_data: values.enable_conversation_data,
           inject_conversation_data: values.inject_conversation_data,
           conversation_data_api_permission: values.conversation_data_api_permission,
@@ -2464,6 +2559,7 @@ export function AgentFormPage() {
                   loadingExecutionProfiles={loadingExecutionProfiles}
                   sshConnectionOptions={sshConnectionOptions}
                   loadingSSHConnections={loadingSSHConnections}
+                  desktopAccessStatus={isNew ? 'ready' : desktopAccessStatus}
                 />
               </TabsContent>
 

@@ -309,6 +309,16 @@ export interface AgentDoc {
   max_knowledge_tokens?: number | null; // Maximum tokens for knowledge context
   max_turns?: number | null; // Maximum consecutive turns/steps
   max_context_chars?: number | null; // Maximum characters for tool results before truncation
+  /** Desktop access ceiling per capability: what a run pinned to a Huf Desktop may do there. */
+  desktop_access_cli?: 'off' | 'ask' | 'allowed';
+  desktop_access_files?: 'off' | 'ask' | 'allowed';
+  desktop_access_skills?: 'off' | 'ask' | 'allowed';
+  desktop_access_local_mcp?: 'off' | 'ask' | 'allowed';
+  desktop_access_browser?: 'off' | 'ask' | 'allowed';
+  desktop_access_installs?: 'off' | 'ask' | 'allowed';
+  desktop_access_processes?: 'off' | 'ask' | 'allowed';
+  /** Allow runs started from a web or mobile client (same user) to use a desktop with remote control on. */
+  allow_remote_desktop?: number; // 0 or 1
   enable_conversation_data?: number; // 0 or 1
   inject_conversation_data?: number; // 0 or 1
   conversation_data_api_permission?: '' | 'Read' | 'Write';

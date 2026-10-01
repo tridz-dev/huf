@@ -3,7 +3,7 @@ import type { UseFormReturn } from 'react-hook-form';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 
-import type { AgentFormValues } from './types';
+import { DESKTOP_ACCESS_FIELDS, type AgentFormValues, type DesktopAccessLevel } from './types';
 import type { ExecutionProfileOption, SSHConnectionOption } from './AdvancedTab';
 import { parseOptionalNumber } from './AdvancedTab';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,7 +31,15 @@ interface PermissionsTabProps {
   loadingExecutionProfiles?: boolean;
   sshConnectionOptions?: SSHConnectionOption[];
   loadingSSHConnections?: boolean;
+  /** Desktop access is loaded separately from the rest of the tab; the controls stay disabled until it is ready. */
+  desktopAccessStatus?: 'loading' | 'ready' | 'error';
 }
+
+const DESKTOP_ACCESS_OPTION_LABELS: Record<DesktopAccessLevel, string> = {
+  off: 'Off',
+  ask: 'Ask',
+  allowed: 'Allowed',
+};
 
 function mergeByName(base: NamedOption[], extra: NamedOption[]): NamedOption[] {
   const merged = [...base];
@@ -72,6 +80,7 @@ export function PermissionsTab({
   loadingExecutionProfiles = false,
   sshConnectionOptions = [],
   loadingSSHConnections = false,
+  desktopAccessStatus = 'ready',
 }: PermissionsTabProps) {
   const [userQuery, setUserQuery] = useState('');
   const [userOptionsData, setUserOptionsData] = useState<NamedOption[]>([]);
@@ -525,6 +534,83 @@ export function PermissionsTab({
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="desktop-access-card">
+        <CardHeader>
+          <CardTitle>Desktop access</CardTitle>
+          <CardDescription>
+            What this agent may do on a computer running Huf Desktop. Each setting is a ceiling: the person using
+            the desktop can restrict it further, and the stricter one applies. The agent still needs the matching
+            tools attached.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          {desktopAccessStatus === 'error' && (
+            <p role="alert" className="text-sm text-destructive sm:col-span-2">
+              Desktop access settings could not be loaded. Reload the page to edit them.
+            </p>
+          )}
+          {desktopAccessStatus === 'loading' && (
+            <p className="text-sm text-muted-foreground sm:col-span-2">Loading desktop access...</p>
+          )}
+          {DESKTOP_ACCESS_FIELDS.map(({ name, label }) => (
+            <FormField
+              key={name}
+              control={form.control}
+              name={name}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{label}</FormLabel>
+                  <Select
+                    value={field.value ?? 'allowed'}
+                    onValueChange={field.onChange}
+                    disabled={desktopAccessStatus !== 'ready'}
+                  >
+                    <FormControl>
+                      <SelectTrigger aria-label={label}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(Object.keys(DESKTOP_ACCESS_OPTION_LABELS) as DesktopAccessLevel[]).map((level) => (
+                        <SelectItem key={level} value={level}>
+                          {DESKTOP_ACCESS_OPTION_LABELS[level]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ))}
+
+          <FormField
+            control={form.control}
+            name="allow_remote_desktop"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Allow remote desktop control</FormLabel>
+                  <FormDescription>
+                    Let runs started from the web or mobile app, by the same user, use this agent&apos;s tools on a
+                    desktop that has remote control turned on. Both switches must be on. When they are, remote runs
+                    use the workspace&apos;s permission mode with no extra limit or prompting.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                    disabled={desktopAccessStatus !== 'ready'}
+                    aria-label="Allow remote desktop control"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </CardContent>
       </Card>
     </div>

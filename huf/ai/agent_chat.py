@@ -373,9 +373,32 @@ def render_markdown(content: str = "") -> str:
         return frappe.utils.escape_html(content or "")
 
 
+def _host_for_new_conversation(execution_host, desktop_executor_id, desktop_lease_secret):
+    """The host block of a new conversation: None for a server conversation, else the desktop's
+    device (only a lease-secret-authenticated desktop may create one)."""
+    if not execution_host or execution_host == "server":
+        return None
+    if execution_host != "desktop":
+        frappe.throw(_("Invalid execution_host"), frappe.ValidationError)
+    from huf.ai.desktop_sessions import host_from_desktop_request
+
+    return host_from_desktop_request(desktop_executor_id, desktop_lease_secret)
+
+
 @frappe.whitelist()
-def create_conversation(agent: str, channel: str = "Chat", project: str | None = None):
-    """Create a new Agent Conversation without running the agent."""
+def create_conversation(
+    agent: str,
+    channel: str = "Chat",
+    project: str | None = None,
+    execution_host: str | None = None,
+    desktop_executor_id: str | None = None,
+    desktop_lease_secret: str | None = None,
+):
+    """Create a new Agent Conversation without running the agent.
+
+    ``execution_host="desktop"`` (Huf Desktop only: needs ``desktop_executor_id`` and the lease
+    secret) creates a desktop-hosted conversation bound to that device and workspace.
+    """
     if not agent:
         frappe.throw(_("agent is required"))
 
@@ -383,8 +406,9 @@ def create_conversation(agent: str, channel: str = "Chat", project: str | None =
     assert_agent_access(agent_doc, user=frappe.session.user)
 
     try:
+        host = _host_for_new_conversation(execution_host, desktop_executor_id, desktop_lease_secret)
         cm = ConversationManager(agent_name=agent, channel=channel)
-        conversation = cm.create_new_conversation(project=project)
+        conversation = cm.create_new_conversation(project=project, host=host)
         return {
             "success": True,
             "conversation_id": conversation.name,
@@ -446,7 +470,7 @@ def fork_conversation(conversation_id: str, mode: str, title: str | None = None,
 
 
 @frappe.whitelist()
-def new_conversation(agent: str, message: str, skip_user_message=0, files=None, model_override: str | None = None, project: str | None = None):
+def new_conversation(agent: str, message: str, skip_user_message=0, files=None, model_override: str | None = None, project: str | None = None, desktop_executor_id: str | None = None, execution_host: str | None = None, desktop_lease_secret: str | None = None):
 
     if not agent:
         frappe.throw(_("agent is required"))
@@ -454,8 +478,9 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None, 
         frappe.throw(_("message is required"))
 
     try:
+        host = _host_for_new_conversation(execution_host, desktop_executor_id, desktop_lease_secret)
         cm = ConversationManager(agent_name=agent, channel="Chat")
-        conversation = cm.create_new_conversation(project=project)
+        conversation = cm.create_new_conversation(project=project, host=host)
 
         effective_model = model_override if model_override else frappe.db.get_value("Agent", agent, "model")
 
@@ -468,6 +493,8 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None, 
             conversation_id=conversation.name,
             skip_user_message=_is_truthy(skip_user_message),
             files=files,
+            desktop_executor_id=desktop_executor_id,
+            desktop_lease_secret=desktop_lease_secret,
         )
 
         if run_result.get("conversation_id"):
@@ -477,11 +504,14 @@ def new_conversation(agent: str, message: str, skip_user_message=0, files=None, 
                 # Best-effort defensive update; ignore known validation failures.
                 pass
 
-        return {
+        response = {
             "success": True,
             "conversation_id": conversation.name,
             "run": run_result
         }
+        if isinstance(run_result, dict) and run_result.get("desktop_tools") is not None:
+            response["desktop_tools"] = run_result["desktop_tools"]
+        return response
 
     except Exception as e:  # boundary exception handler: API endpoint
         # API boundary: log unexpected failure with traceback, then re-raise.
@@ -496,6 +526,8 @@ def send_message_to_conversation(
     skip_user_message=0,
     files=None,
     model_override: str | None = None,
+    desktop_executor_id: str | None = None,
+    desktop_lease_secret: str | None = None,
 ):
     if not conversation:
         frappe.throw(_("conversation is required"))
@@ -532,6 +564,8 @@ def send_message_to_conversation(
             conversation_id=conv_doc.name,
             skip_user_message=_is_truthy(skip_user_message),
             files=files,
+            desktop_executor_id=desktop_executor_id,
+            desktop_lease_secret=desktop_lease_secret,
         )
 
         if result.get("conversation_id") and not conv_doc.name:

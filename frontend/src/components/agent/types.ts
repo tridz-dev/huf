@@ -1,5 +1,30 @@
 import * as z from 'zod';
 
+/** Ceiling on what a run pinned to a Huf Desktop may do on that computer, per capability. */
+export const DESKTOP_ACCESS_LEVELS = ['off', 'ask', 'allowed'] as const;
+export type DesktopAccessLevel = (typeof DESKTOP_ACCESS_LEVELS)[number];
+
+/** The seven per-capability selectors, in display order. Fieldnames match the Agent doctype. */
+export const DESKTOP_ACCESS_FIELDS = [
+  { name: 'desktop_access_cli', label: 'Run commands' },
+  { name: 'desktop_access_files', label: 'Files' },
+  { name: 'desktop_access_skills', label: 'Local skills' },
+  { name: 'desktop_access_local_mcp', label: 'Local MCP servers' },
+  { name: 'desktop_access_browser', label: 'Browser' },
+  { name: 'desktop_access_installs', label: 'Installs' },
+  { name: 'desktop_access_processes', label: 'Background processes' },
+] as const;
+export type DesktopAccessFieldName = (typeof DESKTOP_ACCESS_FIELDS)[number]['name'];
+
+const desktopAccessSchema = z.enum(DESKTOP_ACCESS_LEVELS).optional();
+
+/** Read a stored level, treating anything unknown or missing as the server default (`allowed`). */
+export function toDesktopAccessLevel(value: unknown): DesktopAccessLevel {
+  return (DESKTOP_ACCESS_LEVELS as readonly string[]).includes(value as string)
+    ? (value as DesktopAccessLevel)
+    : 'allowed';
+}
+
 export const agentFormSchema = z.object({
   agent_name: z.string().min(1, 'Agent name is required'),
   agent_modality: z.enum(['Text', 'Voice', 'Both']).default('Both'),
@@ -58,6 +83,14 @@ export const agentFormSchema = z.object({
   max_knowledge_tokens: z.number().optional(),
   max_turns: z.number().optional(),
   max_context_chars: z.number().optional(),
+  desktop_access_cli: desktopAccessSchema,
+  desktop_access_files: desktopAccessSchema,
+  desktop_access_skills: desktopAccessSchema,
+  desktop_access_local_mcp: desktopAccessSchema,
+  desktop_access_browser: desktopAccessSchema,
+  desktop_access_installs: desktopAccessSchema,
+  desktop_access_processes: desktopAccessSchema,
+  allow_remote_desktop: z.boolean().optional(),
   enable_conversation_data: z.boolean().optional(),
   inject_conversation_data: z.boolean().optional(),
   conversation_data_api_permission: z.string().optional(),
