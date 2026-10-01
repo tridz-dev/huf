@@ -43,6 +43,9 @@ export interface ComboboxProps {
   onSearchChange?: (search: string) => void;
   shouldFilter?: boolean;
   className?: string;
+  /** Optional controlled open state. Uncontrolled when omitted. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function Combobox({
@@ -59,8 +62,16 @@ export function Combobox({
   onSearchChange,
   shouldFilter,
   className,
+  open: openProp,
+  onOpenChange,
 }: ComboboxProps) {
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const isControlled = openProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
 
   const selectedOption = options.find((option) => option.value === value);
   const href = value && linkTo ? linkTo(value) : undefined;
