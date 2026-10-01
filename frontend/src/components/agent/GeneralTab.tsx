@@ -295,7 +295,7 @@ export function GeneralTab({
                 <FormItem className="sm:col-span-2">
                   <FormLabel>Agent name</FormLabel>
                   <FormControl>
-                    <Input placeholder="my-agent" {...field} />
+                    <Input autoComplete="off" placeholder="my-agent" {...field} />
                   </FormControl>
                   <FormDescription>A unique name for this agent.</FormDescription>
                   <FormMessage />
