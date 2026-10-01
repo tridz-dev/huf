@@ -596,12 +596,6 @@ We generally recommend altering this or temperature but not both.`}
                           }
                         }}
                       />
-
-                     
-
-
-
-
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -639,14 +633,11 @@ We generally recommend altering this or temperature but not both.`}
                   });
                 }
               }}
-              
+            >
               <Plus className="h-4 w-4 mr-1" />
               Add starter prompt
             </Button>
           )}
-
-        
-
         </CardContent>
       </Card>
       )}
