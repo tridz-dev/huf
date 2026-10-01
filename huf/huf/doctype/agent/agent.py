@@ -183,6 +183,7 @@ class Agent(Document):
             self._validate_prompt_caching()
 
         self._validate_advanced_models()
+        self._validate_decision_bindings()
         self._validate_skills()
         self._validate_starter_prompts()
         self._validate_allowed_users_and_roles()
@@ -409,6 +410,8 @@ class Agent(Document):
                 row.tool_count = 0
 
     def _validate_advanced_models(self):
+        from huf.huf.doctype.ai_model.ai_model import is_decision_only_model
+
         def _has_modality(model_docname: str, required: str) -> bool:
             if not model_docname:
                 return True
@@ -416,6 +419,21 @@ class Agent(Document):
             # MultiSelect is stored as CSV
             items = {m.strip() for m in modalities.split(",") if m and m.strip()}
             return required in items
+
+        def _reject_decision_only(model_docname: str, field_label: str):
+            if model_docname and is_decision_only_model(model_docname):
+                frappe.throw(
+                    _(
+                        "AI Model '{0}' only supports the Decision modality and cannot be used as the {1}."
+                    ).format(model_docname, field_label),
+                    title=_("Invalid Model Capability"),
+                )
+
+        # Primary model
+        _reject_decision_only(getattr(self, "model", None), _("Model"))
+
+        # Summary model
+        _reject_decision_only(getattr(self, "summary_model", None), _("Summary Model"))
 
         # Image generation model
         if getattr(self, "image_generation_model", None):
@@ -447,6 +465,24 @@ class Agent(Document):
                 frappe.throw(
                     _("OCR is enabled but the agent's model does not support modality: OCR"),
                     title=_("Invalid Model Capability"),
+                )
+
+    def _validate_decision_bindings(self):
+        """Validate that Advise mode is only used on surfaces that support it.
+
+        Advise mode can only be applied to specific decision surfaces.
+        Reject any binding with mode=Advise on an unsupported surface.
+        """
+        from huf.ai.decision.binding import ADVISE_SURFACES
+
+        for row in self.get("decision_bindings", []):
+            if row.mode == "Advise" and row.surface not in ADVISE_SURFACES:
+                allowed_modes = ", ".join(sorted(ADVISE_SURFACES))
+                frappe.throw(
+                    _("Advise mode is not supported on surface '{0}'. Supported surfaces are: {1}").format(
+                        row.surface, allowed_modes
+                    ),
+                    title=_("Invalid Decision Surface for Advise Mode"),
                 )
 
     def _validate_prompt_caching(self):

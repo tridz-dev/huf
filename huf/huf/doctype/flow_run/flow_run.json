@@ -32,7 +32,12 @@
   "timing_tab",
   "started_at",
   "column_break_tm1",
-  "completed_at"
+  "completed_at",
+  "decisions_section",
+  "decision_call_count",
+  "decision_input_tokens",
+  "decision_output_tokens",
+  "decision_cost"
  ],
  "fields": [
   {
@@ -205,11 +210,44 @@
    "fieldtype": "Datetime",
    "label": "Completed At",
    "read_only": 1
+  },
+  {
+   "fieldname": "decisions_section",
+   "fieldtype": "Section Break",
+   "label": "Decisions"
+  },
+  {
+   "description": "Total number of decision calls made during this flow run.",
+   "fieldname": "decision_call_count",
+   "fieldtype": "Int",
+   "label": "Decision Call Count",
+   "read_only": 1
+  },
+  {
+   "description": "Total input tokens used across all decision calls in this flow run.",
+   "fieldname": "decision_input_tokens",
+   "fieldtype": "Int",
+   "label": "Decision Input Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Total output tokens generated across all decision calls in this flow run.",
+   "fieldname": "decision_output_tokens",
+   "fieldtype": "Int",
+   "label": "Decision Output Tokens",
+   "read_only": 1
+  },
+  {
+   "description": "Total cost in USD of all decision calls made during this flow run.",
+   "fieldname": "decision_cost",
+   "fieldtype": "Float",
+   "label": "Decision Cost",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-02-18 10:00:00.000000",
+ "modified": "2026-09-23 13:15:06.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Flow Run",

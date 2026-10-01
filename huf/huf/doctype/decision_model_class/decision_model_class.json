@@ -19,42 +19,48 @@
    "fieldtype": "Data",
    "label": "Class Key",
    "reqd": 1,
-   "unique": 1
+   "unique": 1,
+   "description": "Unique identifier for this model class (e.g., System One)."
   },
   {
    "fieldname": "class_name",
    "fieldtype": "Data",
    "label": "Class Name",
-   "reqd": 1
+   "reqd": 1,
+   "description": "Human-readable name for this model class (e.g., System One)."
   },
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
-   "label": "Description"
+   "label": "Description",
+   "description": "What this model class is and what it is used for."
   },
   {
    "fieldname": "enabled",
    "fieldtype": "Check",
    "label": "Enabled",
-   "default": "1"
+   "default": "1",
+   "description": "Whether this model class is available for use in deployments."
   },
   {
    "fieldname": "default_capability_schema",
    "fieldtype": "Code",
    "label": "Default Capability Schema",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "JSON schema describing the default capabilities that models in this class provide."
   },
   {
    "fieldname": "metadata_json",
    "fieldtype": "Code",
    "label": "Metadata",
-   "options": "JSON"
+   "options": "JSON",
+   "description": "Additional structured metadata about this model class."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-09-23 00:00:00.000000",
+ "modified": "2026-09-23 13:26:16.817",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Decision Model Class",

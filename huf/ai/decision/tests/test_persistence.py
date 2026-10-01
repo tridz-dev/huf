@@ -16,10 +16,18 @@ def test_frappe_sink_persists_normalized_identity_and_usage():
         requested_model="Jev 1.13", requested_model_version="1.13", resolved_model="Jev 1.13", resolved_model_version="1.13",
         candidate_ids=(), candidate_source=None, candidate_resolver_id=None,
         answers={"is_urgent": {"value": True}}, usage=DecisionUsage(input_tokens=10, output_tokens=2),
+        mode="Enforce", origin_type="Playground", resolved_deployment="jev-deployment-1",
+        automation=None, owner_user="admin@example.com", shadow_of=None,
     )
     make_frappe_telemetry_sink(frappe_module=frappe)(call)
     values, kwargs = calls[0]
     assert values["decision_model"] == "Jev 1.13"
-    assert values["decision_provider"] == "OpenCode Zen"
+    assert values["resolved_provider"] == "OpenCode Zen"
+    assert values["resolved_provider_model_id"] == "jev-1.13-free"
+    assert values["requested_model"] == "Jev 1.13"
+    assert values["resolved_deployment"] == "jev-deployment-1"
+    assert values["mode"] == "Enforce"
+    assert values["origin_type"] == "Playground"
+    assert values["owner_user"] == "admin@example.com"
     assert values["input_tokens"] == 10
     assert kwargs == {"ignore_permissions": True}

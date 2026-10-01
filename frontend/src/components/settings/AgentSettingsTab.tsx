@@ -107,6 +107,7 @@ function AgentSettingsTab() {
           provider: defaultProvider,
           search: modelSearch || undefined,
           limit: 50,
+          modality: 'Text',
         });
 
         if (!cancelled) {
@@ -239,6 +240,7 @@ function AgentSettingsTab() {
       const result = await getModels({
         provider: defaultProvider,
         limit: 50,
+        modality: 'Text',
       });
 
       const refreshedModels = Array.isArray(result)

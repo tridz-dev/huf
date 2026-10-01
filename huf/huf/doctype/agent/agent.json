@@ -82,6 +82,9 @@
   "skills_tab",
   "skills_section",
   "agent_skill",
+  "decisions_tab",
+  "decisions_section",
+  "decision_bindings",
   "advance_settings_tab",
   "context_settings_section",
   "context_strategy",
@@ -483,6 +486,23 @@
    "fieldtype": "Table",
    "label": "Skills",
    "options": "Agent Skill"
+  },
+  {
+   "fieldname": "decisions_tab",
+   "fieldtype": "Tab Break",
+   "label": "Decisions"
+  },
+  {
+   "fieldname": "decisions_section",
+   "fieldtype": "Section Break",
+   "label": "Decision Bindings"
+  },
+  {
+   "description": "Policies binding decisions to this agent across different surfaces (Tool Selection, Routing, Filtering, etc.). Each binding controls when and how a policy advises or enforces a decision.",
+   "fieldname": "decision_bindings",
+   "fieldtype": "Table",
+   "label": "Decision Bindings",
+   "options": "Agent Decision Binding"
   },
   {
    "fieldname": "advance_settings_tab",
@@ -1144,7 +1164,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-09 03:51:03.550222",
+ "modified": "2026-09-23 13:14:10.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

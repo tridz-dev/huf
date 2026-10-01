@@ -91,6 +91,16 @@ def _resolve_effective_model(agent_doc, model=None, provider=None):
     if not effective_provider:
         frappe.throw(_("Provider is not configured"))
 
+    from huf.huf.doctype.ai_model.ai_model import is_decision_only_model
+
+    if is_decision_only_model(effective_model):
+        frappe.throw(
+            _("AI Model '{0}' only supports the Decision modality and cannot be used for chat/generation.").format(
+                effective_model
+            ),
+            frappe.ValidationError,
+        )
+
     model_name = frappe.get_cached_value("AI Model", effective_model, "model_name")
     if not model_name:
         frappe.throw(

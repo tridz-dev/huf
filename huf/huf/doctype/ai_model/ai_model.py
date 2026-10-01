@@ -16,6 +16,7 @@ MODEL_MODALITY_OPTIONS = {
 	"Vision",
 	"OCR",
 	"Speech-to-Speech",
+	"Decision",
 }
 
 
@@ -65,6 +66,24 @@ class AIModel(Document):
 		invalidate_model_pricing_cache(self.name)
 
 
+def is_decision_only_model(ai_model_name_or_doc) -> bool:
+	"""Return True if an AI Model's parsed modality set is exactly {"Decision"}.
+
+	Accepts either an ``AI Model`` docname (str) or an already-loaded document
+	(anything exposing a ``modalities`` attribute, e.g. via ``.get()``).
+	Uses the same comma-separated parsing as ``_validate_modalities`` /
+	``Agent._validate_advanced_models._has_modality``. A blank/missing
+	``modalities`` value returns False, so existing models with no modality
+	set (or any other modality) are unaffected.
+	"""
+	if isinstance(ai_model_name_or_doc, str):
+		modalities = frappe.db.get_value("AI Model", ai_model_name_or_doc, "modalities") or ""
+	else:
+		modalities = getattr(ai_model_name_or_doc, "modalities", None) or ""
+
+	items = {m.strip() for m in modalities.split(",") if m and m.strip()}
+	return items == {"Decision"}
+
 
 @frappe.whitelist()
 def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
@@ -99,7 +118,11 @@ def get_models_by_modality(doctype, txt, searchfield, start, page_len, filters):
 	}
 
 	# Modalities are stored as a comma-separated list; use FIND_IN_SET for multi-select matching.
-	conditions.append("FIND_IN_SET(%(modality)s, IFNULL(modalities, '')) > 0")
+	if modality == "Text":
+		# Legacy rows with no modality were created as chat models; keep them pickable.
+		conditions.append("(FIND_IN_SET(%(modality)s, IFNULL(modalities, '')) > 0 OR IFNULL(modalities, '') = '')")
+	else:
+		conditions.append("FIND_IN_SET(%(modality)s, IFNULL(modalities, '')) > 0")
 
 	if provider:
 		conditions.append("provider = %(provider)s")

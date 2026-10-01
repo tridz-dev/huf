@@ -69,6 +69,18 @@ class TestSelfApprovalGuard(unittest.TestCase):
     def setUp(self):
         # Reset frappe stub attributes touched by _can_decide / its helpers
         # between tests so mock call history doesn't leak across cases.
+        #
+        # Under `bench run-tests` this module runs in the same process as every
+        # other huf test module, against the *real* frappe module (`_stub_env`
+        # only stubs `frappe` when it is not a real installed package). Setting
+        # `frappe.db` / `frappe.get_roles` directly therefore replaces the live
+        # database handle for the rest of the process unless it is restored --
+        # breaking any later module that calls `frappe.db.sql`/`.get_value`/etc.
+        # with an AttributeError-free but nonsensical MagicMock. Save and
+        # restore the originals via addCleanup so this module is self-contained
+        # regardless of run order.
+        self.addCleanup(setattr, frappe, "get_roles", frappe.get_roles)
+        self.addCleanup(setattr, frappe, "db", frappe.db)
         frappe.get_roles = MagicMock(return_value=[])
         frappe.db = MagicMock()
         frappe.db.get_single_value = MagicMock(return_value=0)

@@ -26,7 +26,7 @@ from huf.ai.app_seeding.hub_orchestrator import HUB_AGENT_NAME
 
 # Date the CATALOG_CANDIDATES snapshot below was verified against public
 # provider docs/announcements. Bump whenever the list is refreshed.
-CATALOG_RETRIEVED_AT = "2026-07-25"
+CATALOG_RETRIEVED_AT = "2026-09-23"
 
 # Curated catalog proposals, verified against public sources on
 # CATALOG_RETRIEVED_AT (see module docstring / PR notes for citations).
@@ -93,6 +93,10 @@ CATALOG_CANDIDATES = [
     {"model_name": "kimi-k2.5", "provider_brand": "moonshot", "modalities": "Text, Vision",
      "source_url": "https://platform.moonshot.cn/docs/intro",
      "source": "web", "retrieved_at": CATALOG_RETRIEVED_AT},
+    # Decision runtime modality — System One provider
+    {"model_name": "jev-1.13-free", "provider_brand": "opencode-zen", "modalities": "Decision",
+     "source_url": "https://docs.huf.ai",
+     "source": "local", "retrieved_at": CATALOG_RETRIEVED_AT},
 ]
 
 # Roles allowed to approve model catalog proposals.
@@ -343,7 +347,9 @@ def get_model_catalog_proposals():
     READ-ONLY: this endpoint only proposes; it never creates AI Model rows.
 
     Returns:
-        dict: ``proposals`` — list of {model_name, provider (existing AI
+        dict: ``proposals`` — list of chat/text/vision/etc models (never Decision);
+        ``decision_proposals`` — list of Decision-modality models (separate group,
+        never as chat defaults). Each proposal: {model_name, provider (existing AI
         Provider matching the brand, or None), modalities, already_exists}.
 
     Requires: authenticated user with Agent read access.
@@ -353,8 +359,9 @@ def get_model_catalog_proposals():
     existing = set(frappe.get_all("AI Model", pluck="model_name"))
 
     proposals = []
+    decision_proposals = []
     for candidate in CATALOG_CANDIDATES:
-        proposals.append({
+        proposal = {
             "model_name": candidate["model_name"],
             "provider": _provider_for_brand(candidate["provider_brand"]),
             "modalities": candidate["modalities"],
@@ -362,8 +369,13 @@ def get_model_catalog_proposals():
             "source_url": candidate.get("source_url"),
             "retrieved_at": candidate.get("retrieved_at"),
             "already_exists": candidate["model_name"] in existing,
-        })
-    return {"proposals": proposals}
+        }
+        # Separate Decision models from chat/text/vision models.
+        if "Decision" in candidate.get("modalities", ""):
+            decision_proposals.append(proposal)
+        else:
+            proposals.append(proposal)
+    return {"proposals": proposals, "decision_proposals": decision_proposals}
 
 
 @frappe.whitelist()

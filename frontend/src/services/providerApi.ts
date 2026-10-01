@@ -63,6 +63,7 @@ export interface GetModelsParams {
   start?: number;
   search?: string;
   provider?: string;
+  modality?: string;
 }
 
 /**
@@ -299,6 +300,7 @@ export async function getModels(
       start = (page - 1) * limit,
       search,
       provider,
+      modality,
     } = params;
 
     // Build filters
@@ -310,6 +312,17 @@ export async function getModels(
 
     if (provider) {
       filters.push(['provider', '=', provider]);
+    }
+
+    if (modality && modality.trim()) {
+      const wanted = modality.trim();
+      if (wanted === 'Text') {
+        // Chat pickers: legacy rows with no modality are text models, so only
+        // exclude Decision-only rows instead of requiring an explicit 'Text'.
+        filters.push(['modalities', 'not in', ['Decision']]);
+      } else {
+        filters.push(['modalities', 'like', `%${wanted}%`]);
+      }
     }
 
     // Fetch data

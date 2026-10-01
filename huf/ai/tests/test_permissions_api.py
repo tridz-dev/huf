@@ -139,6 +139,9 @@ class TestPermissionsAPISelfTargetingAndCapabilities(IntegrationTestCase):
 		"docker.run",
 		"developer.access",
 		"developer.keys.manage",
+		"decision.admin",
+		"decision.author",
+		"decision.run",
 	]
 
 	def _make_capability_limited_manager(self, extra_frappe_roles=()):

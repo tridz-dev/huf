@@ -32,10 +32,11 @@
    "reqd": 0
   },
   {
+   "description": "The AI provider service. Used for model selection, key management, and cost tracking.",
    "fieldname": "provider_brand",
    "fieldtype": "Select",
    "label": "Provider Brand",
-   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nmoonshot\nai21\nbaseten\ncloudflare-workers-ai\nclarifai\nnomic\nreplicate\nsagemaker\nstability-ai\nvllm\nwatsonx\nother",
+   "options": "openai\nanthropic\ngoogle\nopenrouter\nxai\ngroq\nmistral\ndeepseek\nperplexity\ncohere\nhuggingface\nelevenlabs\namazon-bedrock\nazure\nalibaba\ntogetherai\nmeta\nollama\nlmstudio\nfireworks-ai\ncerebras\ndeepinfra\ngoogle-vertex\nnvidia\nmoonshot\nai21\nbaseten\ncloudflare-workers-ai\nclarifai\nnomic\nreplicate\nsagemaker\nstability-ai\nvllm\nwatsonx\nopencode-zen\nvercel-ai-gateway\nother",
    "reqd": 1
   },
   {
@@ -74,7 +75,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-07-26 13:40:00.000000",
+ "modified": "2026-09-23 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "AI Provider",
