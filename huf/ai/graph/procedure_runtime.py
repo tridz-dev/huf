@@ -53,7 +53,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from huf.ai.graph.executor import (
 	ExecutionListener,
@@ -77,6 +77,7 @@ from huf.ai.graph.idempotency import (
 	release_idempotency_key,
 	reserve_idempotency_key,
 )
+from huf.ai.graph.replay_guard import GuardDecision, RecoverySession, ReplayGuard
 from huf.ai.graph.scheduler import (
 	DEFAULT_MAX_GRAPH_CONCURRENCY,
 	DEFAULT_MAX_TOOL_CONCURRENCY,
@@ -95,9 +96,11 @@ __all__ = [
 	"RECOVERY_MODES",
 	"RECOVERY_RESUME",
 	"RECOVERY_RETRY",
+	"FenceFn",
 	"ProcedureExecutionError",
 	"ProcedureLimitExceeded",
 	"ProcedureOutcome",
+	"StatusCheckFn",
 	"ToolInvoker",
 	"ToolInvocation",
 	"build_program",
@@ -145,6 +148,20 @@ RECOVERY_RESUME = "resume"
 RECOVERY_ABORT = "abort"
 RECOVERY_COMPENSATE = "compensate"
 RECOVERY_MODES = (RECOVERY_RETRY, RECOVERY_RESUME, RECOVERY_ABORT, RECOVERY_COMPENSATE)
+
+# -- SafeDeoptCommittedGuardWiring, stage 4: optional guard-resolution hooks ---------------
+# ``status_resolvable``/``fenceable`` are declarable on a tool (Stage 1) and consulted by
+# ``ReplayGuard.check`` (Stage 2/3), but until now nothing ever populated the
+# ``RecoverySession`` those two guarantee levels need -- so they behaved exactly like
+# ``none`` (see the v1 scope note added in a53df54c). These two optional per-run hooks are
+# the fix: a caller MAY supply one or both to ``execute_procedure``/``_Runner`` so the
+# runtime can actually resolve a status check or a fence BEFORE consulting the guard on a
+# ``RECOVERY_RETRY`` write. Left at their default of ``None`` (the only value every existing
+# caller passes), neither hook is ever invoked and behaviour for every guarantee level,
+# including ``status_resolvable``/``fenceable``, is byte-for-byte unchanged from before this
+# stage -- this is strictly additive.
+StatusCheckFn = Callable[[str], Literal["COMMITTED", "NOT_COMMITTED", "UNKNOWN"]]
+FenceFn = Callable[[str], bool]
 
 
 class ProcedureExecutionError(Exception):
@@ -409,6 +426,9 @@ class _Runner:
 		classify_tool: Callable[[str], Any] | None = None,
 		procedure_name: str = "",
 		dedup_window_seconds: int = DEDUP_WINDOW_SECONDS,
+		replay_guard_enabled: bool = False,
+		status_check_fn: StatusCheckFn | None = None,
+		fence_fn: FenceFn | None = None,
 	):
 		self.version = version
 		self.tool_invoker = tool_invoker
@@ -429,6 +449,26 @@ class _Runner:
 		self.classify_tool = classify_tool
 		self.procedure_name = procedure_name
 		self.dedup_window_seconds = dedup_window_seconds
+
+		# -- SafeDeoptCommittedGuardWiring, stage 3: opt-in replay guard --------------
+		# Off by default (``replay_guard_enabled=False``): the pre-check gate below is
+		# never consulted and the RECOVERY_RETRY branch behaves exactly as it did before
+		# this feature existed (plan section 4/7 -- the single required safety property).
+		# ``ReplayGuard``/``RecoverySession`` are cheap, pure, in-memory objects (no I/O),
+		# so they are constructed unconditionally rather than lazily -- one per run,
+		# never shared across runs (plan section 6, non-goal 3: run-scoped, not
+		# persisted, not shared cross-worker).
+		self.replay_guard_enabled = replay_guard_enabled
+		self._replay_guard = ReplayGuard()
+		self._recovery_session = RecoverySession()
+
+		# -- SafeDeoptCommittedGuardWiring, stage 4: optional resolution hooks --------
+		# Both default to ``None`` -- the only value every caller passes before this stage
+		# existed -- so ``_resolve_status``/``_resolve_fence`` below are no-ops and
+		# ``status_resolvable``/``fenceable`` keep behaving exactly like ``none`` unless a
+		# caller opts in by supplying the corresponding hook for THIS run.
+		self.status_check_fn = status_check_fn
+		self.fence_fn = fence_fn
 
 		# -- T-30 concurrency bounds -------------------------------------------------
 		# One graph-wide semaphore for the whole run (shared by every parallel node,
@@ -532,6 +572,59 @@ class _Runner:
 		ptype = getattr(perm, "ptype", None)
 		return bool(ptype in _WRITE_PTYPES)
 
+	def _recovery_guarantee(self, tool_id: str) -> str:
+		"""Resolve ``tool_id``'s declared recovery guarantee for the replay guard.
+
+		Reads the same ``classify_tool`` seam ``_is_write_tool`` already uses (plan
+		section 1/3): an undeclared tool -- ``classify_tool`` returning an object with no
+		``recovery_guarantee`` attribute, or one that is falsy/``None`` -- defaults to
+		``"none"``, the safest level, per the plan's fail-closed default. Only reached
+		when ``self.replay_guard_enabled`` is True (see ``_handle_tool_call``'s gate), so
+		this never runs, and never affects behaviour, for any caller that has not opted
+		in.
+		"""
+		if self.classify_tool is None:
+			return "none"
+		try:
+			perm = self.classify_tool(tool_id)
+		except Exception:  # noqa: BLE001 -- unclassifiable is treated as "none", fail closed
+			return "none"
+		return getattr(perm, "recovery_guarantee", None) or "none"
+
+	def _resolve_status_check(self, tool_id: str, operation_key: str) -> None:
+		"""Invoke ``self.status_check_fn`` (if supplied) and record its result into the
+		run's ``RecoverySession`` BEFORE the guard is consulted. A no-op when no hook was
+		supplied (the default) -- the guard then sees the same unresolved state it always
+		has, so ``status_resolvable`` continues to behave like ``none`` (fail closed).
+
+		A raising hook is treated the same as no hook: the exception is swallowed and
+		nothing is recorded, so a broken caller-supplied hook can only ever make the guard
+		MORE conservative (reject a retry it might otherwise have allowed), never less.
+		"""
+		if self.status_check_fn is None:
+			return
+		try:
+			status = self.status_check_fn(operation_key)
+		except Exception:  # noqa: BLE001 -- fail closed: an unresolved status blocks the retry, never fakes one
+			return
+		if status not in ("COMMITTED", "NOT_COMMITTED", "UNKNOWN"):
+			return
+		self._recovery_session.record_status_check(operation_key, status)
+
+	def _resolve_fence(self, tool_id: str, operation_key: str) -> None:
+		"""Invoke ``self.fence_fn`` (if supplied) and record its result into the run's
+		``RecoverySession`` BEFORE the guard is consulted. Mirrors
+		:meth:`_resolve_status_check` -- a no-op, or a swallowed exception from the hook,
+		leaves ``fenceable`` behaving exactly like ``none``.
+		"""
+		if self.fence_fn is None:
+			return
+		try:
+			fenced = bool(self.fence_fn(operation_key))
+		except Exception:  # noqa: BLE001 -- fail closed: a failed/raising fence attempt never unlocks a retry
+			return
+		self._recovery_session.record_fence(operation_key, fenced=fenced)
+
 	def _invoke_tool_once(self, tool_id: str, args: dict) -> ToolInvocation:
 		tool_sem = self._tool_semaphore(tool_id)
 		tool_sem.acquire()
@@ -600,6 +693,18 @@ class _Runner:
 			)
 			reserved = reserve_idempotency_key(str(idempotency_key), window_seconds=self.dedup_window_seconds)
 			if not reserved:
+				# SafeDeoptCommittedGuardWiring plan section 7, risk item 7 (Opus-low review,
+				# decided explicitly, not left silent): this branch is NOT gated by the
+				# replay guard, even when ``self.replay_guard_enabled`` is True and even for
+				# a tool declaring the "none" recovery guarantee. Reasoning: this branch only
+				# fires for a genuinely CONCURRENT second attempt at the same operation_key
+				# within the reservation window -- exactly the race idempotency.py's own
+				# reservation mechanism (not the guard) already exists to close. The guard's
+				# job is to gate a *sequential*, same-process bounded retry after an in-doubt
+				# failure; a concurrent duplicate never reaches that retry branch at all, so
+				# there is nothing here for the guard to additionally protect. Deliberately
+				# left as-is -- see the plan and the PR description for the full reasoning.
+				#
 				# Another attempt (this run, a retried job, or a second invocation entirely --
 				# see idempotency.py) already holds this key within the dedup window. This
 				# node is a duplicate invocation, not a failure: report it as an idempotent
@@ -625,54 +730,106 @@ class _Runner:
 				tool_id=tool_id, args=args, success=False, result=None, error=f"tool.call '{tool_id}' raised: {exc}"
 			)
 
+		guard_rejected = False
+		guard_reason = None
 		if is_write and not invocation.success and recovery == RECOVERY_RETRY:
-			# Bounded: exactly one extra attempt, never a loop. Safe only because the
-			# reservation above already guarantees a genuinely-committed first attempt
-			# cannot be duplicated by this retry (the tool's own idempotency_key arg is the
-			# same value both times).
-			try:
-				invocation = self._invoke_tool_once(tool_id, args)
-			except ProcedureLimitExceeded:
-				raise
-			except Exception as exc:  # noqa: BLE001
-				invocation = ToolInvocation(
-					tool_id=tool_id,
-					args=args,
-					success=False,
-					result=None,
-					error=f"tool.call '{tool_id}' raised on retry: {exc}",
+			# SafeDeoptCommittedGuardWiring plan section 2/7 risk 5 (highest-severity risk
+			# the plan calls out): this pre-check gate lives STRICTLY inside this
+			# ``RECOVERY_RETRY`` branch, guarding only the retry call immediately below --
+			# never the first attempt at line ~664 above, which this ``if`` cannot reach
+			# under any flag/guarantee/session state, because that call already ran and
+			# already produced ``invocation`` before this line is even evaluated.
+			decision: GuardDecision | None = None
+			if self.replay_guard_enabled:
+				guarantee = self._recovery_guarantee(tool_id)
+				# SafeDeoptCommittedGuardWiring, stage 4: give the guard something real to
+				# see for status_resolvable/fenceable, via the caller's optional hooks --
+				# BEFORE ``check`` is consulted below. A no-op when the relevant hook was
+				# not supplied for this run (see ``_resolve_status_check``/``_resolve_fence``
+				# docstrings), so an opted-out caller's guard decision is identical to before
+				# this stage existed.
+				if guarantee == "status_resolvable":
+					self._resolve_status_check(tool_id, str(operation_key))
+				elif guarantee == "fenceable":
+					self._resolve_fence(tool_id, str(operation_key))
+				decision = self._replay_guard.check(
+					operation_key=str(operation_key),
+					tool_guarantee=guarantee,
+					recovery_session=self._recovery_session,
 				)
+			if decision is not None and not decision.allowed:
+				# Do NOT retry. Keep the original failed ``invocation`` -- the node fails
+				# closed exactly as it would today for recovery == RECOVERY_ABORT. Mark the
+				# rejection so the caller below can (a) skip the idempotency-key release
+				# (risk 6) and (b) record a distinguishable ``guard_rejected`` audit field
+				# (section 5.3) rather than an ordinary exhausted-retry failure.
+				guard_rejected = True
+				guard_reason = decision.reason
+			else:
+				# Bounded: exactly one extra attempt, never a loop. Safe only because the
+				# reservation above already guarantees a genuinely-committed first attempt
+				# cannot be duplicated by this retry (the tool's own idempotency_key arg is
+				# the same value both times).
+				try:
+					invocation = self._invoke_tool_once(tool_id, args)
+				except ProcedureLimitExceeded:
+					raise
+				except Exception as exc:  # noqa: BLE001
+					invocation = ToolInvocation(
+						tool_id=tool_id,
+						args=args,
+						success=False,
+						result=None,
+						error=f"tool.call '{tool_id}' raised on retry: {exc}",
+					)
 
 		if is_write:
 			if not invocation.success and recovery == RECOVERY_COMPENSATE:
 				self._run_compensation(node, context, args)
-			# Release the reservation on EVERY path -- success, failure, or compensated --
-			# not just failure. The reservation's job is narrower than "block this key for
-			# the rest of the dedup window": it exists to close the race between two
-			# attempts that are truly CONCURRENT (both pass ``reserve``'s ``nx`` check
-			# before either has finished), which is the one gap the graph's own
-			# read-before-write (``existing_check`` in benchmark-3's shape) cannot close by
-			# itself. Holding it for the full window on a SUCCESSFUL write would also block
-			# every legitimate SEQUENTIAL replay within that window from ever reaching the
-			# tool again -- and a sequential replay is exactly what a checkpoint-resume or
-			# a duplicate-invocation-after-full-success needs to be able to do (the graph's
-			# own existing_check is what turns that replay into a correct idempotent no-op,
-			# but only if it is actually allowed to run). ``window_seconds`` (D5's
-			# proposed 24h) is therefore best understood as an orphan-reservation TTL, not
-			# a hold duration this module normally waits out: it only ever matters if a
-			# worker crashes between ``reserve`` and this release, leaving a stuck
-			# reservation that must still self-heal eventually rather than block that key
-			# forever.
-			release_idempotency_key(str(idempotency_key))
+			# SafeDeoptCommittedGuardWiring plan section 7, risk item 6 (Opus-low review,
+			# required fix): a guard-rejected retry must NOT release the reservation --
+			# hold it for the existing dedup window exactly as an orphaned reservation
+			# already would be, so a later, separate attempt at the SAME operation_key
+			# (a job-level retry, a checkpoint resume, a duplicate Procedure invocation)
+			# still hits this reservation's own protection instead of being free to
+			# re-invoke with no memory of this run's rejection. Every OTHER path --
+			# success, a non-guard failure, or an exhausted/never-attempted retry --
+			# releases exactly as it always has, unchanged below.
+			if not guard_rejected:
+				# Release the reservation on EVERY other path -- success, failure, or
+				# compensated -- not just failure. The reservation's job is narrower than
+				# "block this key for the rest of the dedup window": it exists to close the
+				# race between two attempts that are truly CONCURRENT (both pass
+				# ``reserve``'s ``nx`` check before either has finished), which is the one
+				# gap the graph's own read-before-write (``existing_check`` in benchmark-3's
+				# shape) cannot close by itself. Holding it for the full window on a
+				# SUCCESSFUL write would also block every legitimate SEQUENTIAL replay
+				# within that window from ever reaching the tool again -- and a sequential
+				# replay is exactly what a checkpoint-resume or a
+				# duplicate-invocation-after-full-success needs to be able to do (the
+				# graph's own existing_check is what turns that replay into a correct
+				# idempotent no-op, but only if it is actually allowed to run).
+				# ``window_seconds`` (D5's proposed 24h) is therefore best understood as an
+				# orphan-reservation TTL, not a hold duration this module normally waits
+				# out: it only ever matters if a worker crashes between ``reserve`` and this
+				# release, leaving a stuck reservation that must still self-heal eventually
+				# rather than block that key forever.
+				release_idempotency_key(str(idempotency_key))
 
+		extra: dict[str, Any] = dict(
+			operation_key=operation_key,
+			idempotency_key=idempotency_key,
+			recovery=recovery,
+		)
+		if guard_rejected:
+			extra["guard_rejected"] = True
+			extra["guard_rejection_reason"] = guard_reason
 		self._record_invocation(
 			node.id,
 			tool_id,
 			args,
 			invocation,
-			operation_key=operation_key,
-			idempotency_key=idempotency_key,
-			recovery=recovery,
+			**extra,
 		)
 
 		if not invocation.success:
@@ -950,6 +1107,9 @@ def execute_procedure(
 	classify_tool: Callable[[str], Any] | None = None,
 	procedure_name: str = "",
 	dedup_window_seconds: int = DEDUP_WINDOW_SECONDS,
+	replay_guard_enabled: bool = False,
+	status_check_fn: StatusCheckFn | None = None,
+	fence_fn: FenceFn | None = None,
 ) -> ProcedureOutcome:
 	"""Execute a pinned Procedure graph to completion, frappe-free.
 
@@ -969,10 +1129,30 @@ def execute_procedure(
 	(``classify_tool=None``), every ``tool.call`` is treated as non-write and this function's
 	behaviour is byte-for-byte unchanged from before T-40 -- callers must opt in explicitly
 	by passing a real classifier (see :func:`run_agent_procedure_run`).
+
+	``replay_guard_enabled`` (SafeDeoptCommittedGuardWiring, stage 3): opt-in gate in front
+	of the existing ``RECOVERY_RETRY`` bounded retry (plan section 2/4). Defaults to
+	``False``, in which case behaviour is byte-for-byte unchanged from before this feature
+	existed, regardless of any tool's declared ``recovery_guarantee``. Also readable from
+	``contract.limits.replay_guard_enabled`` -- the same per-Procedure "how conservative
+	should this run be" namespace every other limit (``max_wall_time_ms``, etc.) already
+	lives in -- so a caller need not thread a new kwarg through every call site (e.g.
+	:func:`run_agent_procedure_run`, which builds ``limits`` from the pinned graph's own
+	``contract.limits`` before calling this function): either source turning it on is
+	enough, and leaving both off/absent is what preserves the existing default.
+
+	``status_check_fn`` / ``fence_fn`` (SafeDeoptCommittedGuardWiring, stage 4): optional
+	per-run hooks that let a ``status_resolvable``/``fenceable`` tool's guarded retry
+	actually be admitted -- see the module-level ``StatusCheckFn``/``FenceFn`` docstring and
+	``_Runner._resolve_status_check``/``_resolve_fence``. Both default to ``None``, in which
+	case ``status_resolvable`` and ``fenceable`` continue to behave exactly like ``none``
+	(blanket rejection of a ``RECOVERY_RETRY`` write), unchanged from every version of this
+	function before this stage.
 	"""
 	graph = version.graph
 	contract = graph.get("contract") or {}
 	limits = contract.get("limits") or {}
+	replay_guard_enabled = bool(replay_guard_enabled) or bool(limits.get("replay_guard_enabled", False))
 
 	# GraphContext's own "input" reference root is its whole ``data`` namespace (see
 	# GraphContext.reference_roots), not a nested "input" key inside it -- so the payload
@@ -994,6 +1174,9 @@ def execute_procedure(
 		classify_tool=classify_tool,
 		procedure_name=procedure_name,
 		dedup_window_seconds=dedup_window_seconds,
+		replay_guard_enabled=replay_guard_enabled,
+		status_check_fn=status_check_fn,
+		fence_fn=fence_fn,
 	)
 
 	program = build_program(version)

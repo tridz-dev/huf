@@ -25,6 +25,7 @@
   "http_headers",
   "section_break_ajuk",
   "required_permission",
+  "recovery_guarantee",
   "is_read_only",
   "allowed_for_guest",
   "parameters_section",
@@ -80,6 +81,13 @@
    "fieldtype": "Select",
    "label": "Required Permission",
    "options": "\nread\nwrite\ncreate\ndelete\nsubmit\ncancel"
+  },
+  {
+   "description": "What a recovery agent may trust about this tool's write outcome after an in-doubt failure. Leave blank to keep today's behaviour (retry allowed, no guard). v1 note: 'server_idempotent' always admits a guarded retry. 'status_resolvable' and 'fenceable' are functional WHEN the caller running the Procedure supplies the matching optional per-run hook to execute_procedure (status_check_fn / fence_fn respectively) -- that hook's result is what lets the guard admit the retry. Without the matching hook supplied for a given run, both levels still fall back to blanket rejection, identical to 'none'.",
+   "fieldname": "recovery_guarantee",
+   "fieldtype": "Select",
+   "label": "Recovery Guarantee",
+   "options": "\nserver_idempotent\nstatus_resolvable\nfenceable\nnone"
   },
   {
    "default": "0",
@@ -220,7 +228,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-01 10:00:00.000000",
+ "modified": "2026-09-22 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent Tool Function",
