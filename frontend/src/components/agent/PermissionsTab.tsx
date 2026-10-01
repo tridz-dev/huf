@@ -157,16 +157,11 @@ export function PermissionsTab({
         <CardHeader>
           <CardTitle>Access Control</CardTitle>
           <CardDescription>
-            Configure who can run this agent. If both lists are empty, any authenticated user can access it.
-            Otherwise access is limited to the owner, selected users, or users with selected roles.
+            Control who can run this agent. The owner always has access. Signed-in users are governed by
+            the switch and lists below; public access is governed only by the public access switch.
             <br />
-            Agents reached via external channels (Slack, Discord, Teams, Telegram, voice) are only
-            reachable if Allow Public / Unauthenticated Access is enabled below -- Allowed Users and
-            Allowed Roles cannot be evaluated for those channels since external callers are not mapped
-            to a HUF user.
-            <br />
-            This tab controls who can run this agent; it is separate from data-table agent access,
-            which controls what an agent can do to a table.
+            Agents reached through external channels (Slack, Discord, Teams, Telegram, voice) can only be
+            run when public access is enabled, because those callers are not matched to a Huf user.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -178,8 +173,8 @@ export function PermissionsTab({
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Allow all authenticated users</FormLabel>
                   <FormDescription>
-                    Allow all authenticated users. When unchecked, only the listed users and roles may use
-                    this agent.
+                    Applies only when Allowed users and Allowed roles are both empty. On: every signed-in
+                    user can run this agent. Off: only the owner can.
                   </FormDescription>
                 </div>
                 <FormControl>
@@ -230,9 +225,8 @@ export function PermissionsTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Add specific users to limit who can run this agent. If both Allowed Users and Allowed
-                  Roles are left empty, every logged-in HUF user can run this agent -- leaving both empty
-                  does not restrict access, it removes all restrictions.
+                  Limit access to these users. When users or roles are listed, only they (and the owner)
+                  can run this agent, and the switch above no longer applies.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -256,9 +250,8 @@ export function PermissionsTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Use roles for scalable access control across teams without listing every user
-                  individually -- e.g. restrict an HR agent to the HR Manager role. If both Allowed Users
-                  and Allowed Roles are empty, every logged-in user can run this agent.
+                  Limit access to people holding these roles, for example a single team. Works together
+                  with Allowed users; the switch above applies only when both are empty.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
