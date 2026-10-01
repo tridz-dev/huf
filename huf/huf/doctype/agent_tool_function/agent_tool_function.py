@@ -12,6 +12,23 @@ from frappe.model.document import Document
 from huf.ai.tool_registry import get_hook_declared_function_paths
 
 
+# Identifier parameters the built-in document operations use (see tool_functions.py and
+# prepare_function_params). They are arguments to the operation, not fields of the
+# reference DocType, so they must not be checked against the DocType meta.
+RESERVED_IDENTIFIER_PARAMS = {
+	"Get Document": {"document_id"},
+	"Get Multiple Documents": {"document_ids"},
+	"Update Document": {"document_id"},
+	"Update Multiple Documents": {"document_id"},
+	"Delete Document": {"document_id"},
+	"Delete Multiple Documents": {"document_ids"},
+	"Submit Document": {"document_id"},
+	"Cancel Document": {"document_id"},
+	"Get Amended Document": {"document_id"},
+	"Attach File to Document": {"document_id"},
+}
+
+
 def _json_schema_type(param_type):
 	"""Map a stored Agent Function Params `type` value to a valid JSON Schema type.
 
@@ -233,6 +250,8 @@ class AgentToolFunction(Document):
 				if not docfield:
 					frappe.throw(_("Field {0} not found in {1}").format(param.fieldname, child_table.options))
 			else:
+				if param.fieldname in RESERVED_IDENTIFIER_PARAMS.get(self.types, ()):
+					continue
 
 				field = doctype.get_field(param.fieldname)
 
@@ -692,6 +711,14 @@ class AgentToolFunction(Document):
 			required.append("document_id")
 
 		for param in self.parameters:
+			if (
+				not param.child_table_name
+				and param.fieldname in RESERVED_IDENTIFIER_PARAMS.get(self.types, ())
+				and param.fieldname in properties
+			):
+				# Already added above; avoid duplicating it in properties/required.
+				continue
+
 			obj = {
 				"type": _json_schema_type(param.type),
 				"description": param.description or param.label,
