@@ -24,6 +24,8 @@ export interface ChatRailHistoryProps {
    * project-scoped variant. Omit for the global/unscoped rail.
    */
   project?: string;
+  /** When set, scopes Recents to conversations belonging to this agent. */
+  agent?: string;
   onRename: (conversationId: string) => void;
   onFork: (conversationId: string, title: string, agentName: string) => void;
   titleRefs: React.MutableRefObject<Map<string, ConversationTitleRef>>;
@@ -138,6 +140,7 @@ export function ChatRailHistory({
   selectedChatId,
   pinnedChats = [],
   project,
+  agent,
   onRename,
   onFork,
   titleRefs,
@@ -155,7 +158,7 @@ export function ChatRailHistory({
     scrollRef,
     addItem,
     refresh,
-  } = useChatList({ refreshOnRouteChange: false, project });
+  } = useChatList({ refreshOnRouteChange: false, project, agent });
 
   // A12: a conversation moved in/out of a Project (via ConversationMenu)
   // may enter or leave this list's scope - re-fetch from the first page
@@ -206,7 +209,10 @@ export function ChatRailHistory({
 
   // A conversation shown under Pinned must not also appear under Recents.
   const pinnedIds = useMemo(() => new Set(pinnedChats.map((chat) => chat.id)), [pinnedChats]);
-  const recentChats = useMemo(() => chats.filter((chat) => !pinnedIds.has(chat.id)), [chats, pinnedIds]);
+  const recentChats = useMemo(
+    () => chats.filter((chat) => !pinnedIds.has(chat.id) && (!agent || chat.agent === agent)),
+    [agent, chats, pinnedIds]
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-2">

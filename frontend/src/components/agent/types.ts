@@ -104,6 +104,10 @@ export const agentFormSchema = z.object({
   tts_voice: z.string().optional(),
   stt_model: z.string().optional(),
 
+  embed_enabled: z.boolean().optional(),
+  publishable_key: z.string().optional(),
+  allowed_origins: z.string().optional(),
+
   allow_file_upload: z.boolean().optional(),
   enable_ocr: z.boolean().optional(),
   max_upload_size_mb: z.number().int().nonnegative().optional(),
