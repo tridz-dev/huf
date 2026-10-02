@@ -119,6 +119,7 @@ import {
 } from './services/streamChatApi';
 const MembersPage = lazy(() => import('./pages/MembersPage'));
 const HufRoleFormPage = lazy(() => import('./pages/HufRoleFormPage'));
+const ChessPage = lazy(() => import('./pages/ChessPage'));
 
 function ChatOnlyRedirectGuard() {
   const location = useLocation();
@@ -876,6 +877,16 @@ function AppShell() {
               <ProtectedRoute>
                 <Suspense fallback={<PageLoader />}>
                   <MeetingDetailPageWrapper />
+                </Suspense>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chess"
+            element={
+              <ProtectedRoute>
+                <Suspense fallback={<PageLoader />}>
+                  <ChessPage />
                 </Suspense>
               </ProtectedRoute>
             }
