@@ -432,24 +432,13 @@ class TestScreenStylesheet(unittest.TestCase):
 
 
 class TestThemeExtraction(unittest.TestCase):
-	"""Tests for docx theme extraction from rendered HTML."""
+	"""The screen stylesheet must never shift the theme the DOCX export reads."""
+
+	def test_screen_stylesheet_light_root_matches_registry_theme(self):
+		"""docx's _extract_theme matches any bare ``:root {}`` block, including the
+		one nested in @media screen; its values must equal the registry defaults so
+		even if that CSS ever reaches the DOCX path the theme is unchanged."""
+		self.assertEqual(_extract_theme(SCREEN_STYLESHEET), THEME)
 
 	def test_extract_theme_without_style_returns_defaults(self):
-		"""_extract_theme with no author styles returns the registry defaults."""
-		html = render_document_html("<p>Simple paragraph</p>", language="html")
-		# Extract style text from the rendered HTML (empty or no :root override)
-		# _extract_theme should return unmodified THEME when no :root block exists
-		theme = _extract_theme("")
-		self.assertEqual(theme, THEME)
-
-	def test_extract_theme_with_basic_document(self):
-		"""Theme extraction is unaffected by screen stylesheet additions.
-		A document without custom theme overrides should extract to defaults."""
-		html = render_document_html(
-			"<h1>Title</h1><p>Body text</p>",
-			title="Test Doc",
-			language="html",
-		)
-		# Style text from a basic markdown render should extract to defaults
-		theme = _extract_theme("")
-		self.assertEqual(theme, THEME)
+		self.assertEqual(_extract_theme(""), THEME)
