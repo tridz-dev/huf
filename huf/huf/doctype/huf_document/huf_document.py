@@ -17,10 +17,24 @@ class HUFDocument(Document):
 		if not self.title:
 			frappe.throw(_("Title is required"), frappe.ValidationError)
 		self._check_parent_cycle()
-		if not self.is_new() and self.has_value_changed("body_markdown"):
-			self.body_html = None
-		elif self.is_new():
-			self.body_html = None
+		self._check_parent_readable()
+		# body_html is a server-side render cache written only by get_document_html
+		# (via db.set_value, bypassing validate). Any save through the controller or
+		# REST discards whatever the client sent; the cache regenerates lazily.
+		self.body_html = None
+
+	def _check_parent_readable(self):
+		if not self.parent_document:
+			return
+		if not self.is_new() and not self.has_value_changed("parent_document"):
+			return
+		if not frappe.db.exists("HUF Document", self.parent_document) or not frappe.has_permission(
+			"HUF Document", "read", self.parent_document
+		):
+			frappe.throw(
+				_("You do not have permission to use the selected parent document"),
+				frappe.ValidationError,
+			)
 
 	def _check_parent_cycle(self):
 		if not self.parent_document:

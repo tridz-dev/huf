@@ -27,7 +27,9 @@ def save_artifact_as_document(artifact: str) -> dict:
 	if art.artifact_type not in _MARKDOWN_TYPES:
 		frappe.throw(_("Only markdown documents can be saved to the workspace."), frappe.ValidationError)
 
-	existing = frappe.db.get_value("HUF Document", {"source_artifact": art.name}, "name")
+	existing = frappe.db.get_value(
+		"HUF Document", {"source_artifact": art.name, "owner": frappe.session.user}, "name"
+	)
 	if existing:
 		doc = frappe.get_doc("HUF Document", existing)
 		doc.check_permission("write")
@@ -50,8 +52,10 @@ def list_documents(parent: str | None = None, q: str | None = None, limit: int =
 	limit = max(1, min(int(limit or 100), 500))
 	filters = {}
 	or_filters = None
-	if q and q.strip():
-		like = f"%{q.strip()}%"
+	q = (q or "").strip()[:200]
+	if q:
+		escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+		like = f"%{escaped}%"
 		or_filters = [
 			["title", "like", like],
 			["keywords", "like", like],
@@ -60,7 +64,13 @@ def list_documents(parent: str | None = None, q: str | None = None, limit: int =
 	elif parent:
 		filters["parent_document"] = parent
 	else:
-		filters["parent_document"] = ["is", "not set"]
+		# Roots: no parent, or a parent this user cannot read.
+		readable = frappe.get_list("HUF Document", pluck="name", limit_page_length=0)
+		or_filters = [["parent_document", "is", "not set"]]
+		if readable:
+			or_filters.append(["parent_document", "not in", readable])
+		else:
+			or_filters.append(["parent_document", "is", "set"])
 
 	rows = frappe.get_list(
 		"HUF Document",

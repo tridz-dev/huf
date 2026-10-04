@@ -136,3 +136,52 @@ class TestHUFDocument(IntegrationTestCase):
 		d.save()
 		self.assertFalse(frappe.db.get_value("HUF Document", d.name, "body_html"))
 		self.assertIn("Changed", document_api.get_document_html(d.name))
+
+	def test_client_body_html_dropped(self):
+		d = _make_doc("Cache", body_markdown="# x", body_html="<script>evil()</script>")
+		self.assertFalse(frappe.db.get_value("HUF Document", d.name, "body_html"))
+		html = document_api.get_document_html(d.name)
+		d.reload()
+		d.body_html = "<b>forged</b>"
+		d.title = "Cache2"
+		d.save()
+		self.assertFalse(frappe.db.get_value("HUF Document", d.name, "body_html"))
+		self.assertIn("<h1>x</h1>", document_api.get_document_html(d.name))
+
+	def test_save_artifact_per_owner(self):
+		conv = self._conversation("Administrator")
+		art = self._artifact(conv)
+		frappe.set_user("Administrator")
+		r_admin = document_api.save_artifact_as_document(art.name)
+		# make the artifact reachable by USER_B
+		conv.db_set("owner", USER_B, update_modified=False)
+		frappe.set_user(USER_B)
+		r_b = document_api.save_artifact_as_document(art.name)
+		self.assertNotEqual(r_admin["name"], r_b["name"])
+		self.assertEqual(frappe.db.get_value("HUF Document", r_b["name"], "owner"), USER_B)
+		self.assertEqual(frappe.db.get_value("HUF Document", r_admin["name"], "owner"), "Administrator")
+		self.assertEqual(document_api.save_artifact_as_document(art.name)["name"], r_b["name"])
+
+	def test_shared_child_listed_as_root(self):
+		p = _make_doc("PrivParent", user=USER_A)
+		c = _make_doc("SharedChild", user=USER_A, parent_document=p.name)
+		frappe.set_user("Administrator")
+		frappe.share.add("HUF Document", c.name, USER_B, read=1)
+		frappe.set_user(USER_B)
+		roots = [r.name for r in document_api.list_documents()]
+		self.assertIn(c.name, roots)
+		self.assertNotIn(p.name, roots)
+		frappe.set_user("Administrator")
+		frappe.share.remove("HUF Document", c.name, USER_B)
+
+	def test_like_wildcards_escaped(self):
+		_make_doc("Plain wildcard test")
+		self.assertEqual(document_api.list_documents(q="%"), [])
+		self.assertEqual(document_api.list_documents(q="_"), [])
+		self.assertEqual(document_api.list_documents(q="\\"), [])
+		self.assertTrue(document_api.list_documents(q="x" * 500) == [])
+
+	def test_parent_must_be_readable(self):
+		p = _make_doc("OtherPrivate", user=USER_A)
+		with self.assertRaises(frappe.ValidationError):
+			_make_doc("Sneaky", user=USER_B, parent_document=p.name)
