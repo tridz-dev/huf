@@ -364,8 +364,9 @@ class TestScreenStylesheet(unittest.TestCase):
 		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
 
 	def test_html_has_data_theme_dark_attribute(self):
-		"""The HTML root element carries data-theme="dark" for theme injection."""
-		self.assertIn('<html data-theme="dark">', self.document)
+		"""The root element has no forced theme; hosts opt in via data-theme."""
+		self.assertIn("<html>", self.document)
+		self.assertNotIn('<html data-theme=', self.document)
 
 	def test_print_stylesheet_is_unchanged(self):
 		"""The print stylesheet (PRINT_STYLESHEET) must remain byte-identical.

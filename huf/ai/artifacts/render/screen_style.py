@@ -14,24 +14,19 @@ optimized for on-screen preview in the artifact pane.
 #: so it inherits all color tokens and base font setup.
 SCREEN_STYLESHEET = """
 @media screen {
-	/* Light mode: default palette from components.py */
-	:root[data-theme="light"],
-	:root:not([data-theme="dark"]):not([data-theme="light"]) {
+	/* Light palette is the default; hosts set data-theme="light"|"dark" on <html>. */
+	:root {
 		--ink: #16294D;
 		--muted: #6B7891;
 		--rule: #D9E0EC;
 		--surface: #F7FAFD;
 		--callout-bg: #EAF2FD;
 		--accent: #2C5AA8;
+		color-scheme: light;
 	}
 
-	:root[data-theme="light"],
-	:root:not([data-theme="dark"]):not([data-theme="light"]) {
-		background-color: #FFFFFF;
-		color: var(--ink);
-	}
+	html { background-color: #FFFFFF; }
 
-	/* Dark mode: override palette for dark theme */
 	:root[data-theme="dark"] {
 		--ink: #ECECEE;
 		--muted: #A0A3AB;
@@ -39,14 +34,11 @@ SCREEN_STYLESHEET = """
 		--surface: #1B1C20;
 		--callout-bg: #1F2A3D;
 		--accent: #7FA6E8;
+		color-scheme: dark;
 	}
 
-	:root[data-theme="dark"] {
-		background-color: #0F1013;
-		color: var(--ink);
-	}
+	:root[data-theme="dark"] { background-color: #0F1013; }
 
-	/* Prefer dark mode based on system setting */
 	@media (prefers-color-scheme: dark) {
 		:root:not([data-theme="light"]) {
 			--ink: #ECECEE;
@@ -55,11 +47,8 @@ SCREEN_STYLESHEET = """
 			--surface: #1B1C20;
 			--callout-bg: #1F2A3D;
 			--accent: #7FA6E8;
-		}
-
-		:root:not([data-theme="light"]) {
+			color-scheme: dark;
 			background-color: #0F1013;
-			color: var(--ink);
 		}
 	}
 

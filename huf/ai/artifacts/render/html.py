@@ -433,7 +433,7 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 
 	# Build the complete HTML document
 	html_document = f"""<!DOCTYPE html>
-<html data-theme="dark">
+<html>
 <head>
 <meta charset="utf-8">
 <title>{title}</title>
