@@ -1,0 +1,138 @@
+import frappe
+from frappe.tests import IntegrationTestCase
+
+from huf.ai import document_api
+
+USER_A = "hufdoc_a@example.com"
+USER_B = "hufdoc_b@example.com"
+
+
+def _ensure_user(email):
+	if not frappe.db.exists("User", email):
+		frappe.get_doc(
+			{"doctype": "User", "email": email, "first_name": email.split("@")[0], "send_welcome_email": 0}
+		).insert(ignore_permissions=True)
+
+
+def _make_doc(title, user=None, **kw):
+	prev = frappe.session.user
+	if user:
+		frappe.set_user(user)
+	try:
+		d = frappe.get_doc({"doctype": "HUF Document", "title": title, **kw})
+		d.insert()
+		return d
+	finally:
+		frappe.set_user(prev)
+
+
+class TestHUFDocument(IntegrationTestCase):
+	def setUp(self):
+		frappe.set_user("Administrator")
+		_ensure_user(USER_A)
+		_ensure_user(USER_B)
+		if not frappe.db.exists("Agent", "HD Test Agent"):
+			frappe.get_doc(
+				{"doctype": "Agent", "agent_name": "HD Test Agent", "agent_modality": "Both",
+				 "instructions": "fixture"}
+			).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def _conversation(self, owner):
+		c = frappe.new_doc("Agent Conversation")
+		c.agent = "HD Test Agent"
+		c.session_id = frappe.generate_hash(length=10)
+		c.insert(ignore_permissions=True)
+		c.db_set("owner", owner, update_modified=False)
+		return c
+
+	def _artifact(self, conv, **kw):
+		data = {"doctype": "Artifact", "title": "Spec", "artifact_type": "markdown", "language": "markdown",
+			"content": "# Hi\n\nbody text zebra", "conversation": conv.name, "agent": "HD Test Agent"}
+		data.update(kw)
+		a = frappe.get_doc(data)
+		a.insert(ignore_permissions=True)
+		return a
+
+	def test_self_parent_and_cycle_rejected(self):
+		a = _make_doc("A")
+		b = _make_doc("B", parent_document=a.name)
+		a.parent_document = a.name
+		self.assertRaises(frappe.ValidationError, a.save)
+		a.reload()
+		a.parent_document = b.name
+		self.assertRaises(frappe.ValidationError, a.save)
+
+	def test_blank_title_rejected(self):
+		d = _make_doc("x")
+		d.title = "   "
+		self.assertRaises(frappe.ValidationError, d.save)
+
+	def test_delete_with_children_blocked(self):
+		a = _make_doc("P")
+		b = _make_doc("C", parent_document=a.name)
+		self.assertRaises(frappe.ValidationError, a.delete)
+		b.delete()
+		a.delete()
+
+	def test_idempotent_save(self):
+		conv = self._conversation("Administrator")
+		art = self._artifact(conv)
+		r1 = document_api.save_artifact_as_document(art.name)
+		art.db_set("content", "# Hi v2")
+		r2 = document_api.save_artifact_as_document(art.name)
+		self.assertEqual(r1["name"], r2["name"])
+		self.assertEqual(frappe.db.count("HUF Document", {"source_artifact": art.name}), 1)
+		d = frappe.get_doc("HUF Document", r1["name"])
+		self.assertEqual(d.body_markdown, "# Hi v2")
+		self.assertEqual(d.source_conversation, conv.name)
+		self.assertEqual(d.created_by_agent, "HD Test Agent")
+
+	def test_html_artifact_refused(self):
+		conv = self._conversation("Administrator")
+		art = self._artifact(conv, artifact_type="html", language="html", content="<p>x</p>")
+		self.assertRaises(frappe.ValidationError, document_api.save_artifact_as_document, art.name)
+
+	def test_save_requires_conversation_access(self):
+		conv = self._conversation(USER_A)
+		art = self._artifact(conv)
+		frappe.set_user(USER_B)
+		self.assertRaises(frappe.PermissionError, document_api.save_artifact_as_document, art.name)
+
+	def test_permission_isolation_and_share(self):
+		d = _make_doc("Private", user=USER_A)
+		frappe.set_user(USER_B)
+		self.assertNotIn(d.name, [r.name for r in document_api.list_documents()])
+		self.assertRaises(frappe.PermissionError, document_api.get_document_html, d.name)
+		frappe.set_user("Administrator")
+		frappe.share.add("HUF Document", d.name, USER_B, read=1)
+		frappe.set_user(USER_B)
+		self.assertIn(d.name, [r.name for r in document_api.list_documents()])
+		self.assertTrue(document_api.get_document_html(d.name))
+		frappe.set_user("Administrator")
+		frappe.share.remove("HUF Document", d.name, USER_B)
+
+	def test_list_tree_and_search(self):
+		p = _make_doc("Root zzq")
+		c = _make_doc("Child", parent_document=p.name, keywords="kiwiword", body_markdown="needle123")
+		roots = {r.name: r for r in document_api.list_documents()}
+		self.assertEqual(roots[p.name]["child_count"], 1)
+		self.assertNotIn(c.name, roots)
+		kids = document_api.list_documents(parent=p.name)
+		self.assertEqual([k.name for k in kids], [c.name])
+		for q in ("kiwiword", "needle123", "Root zzq"):
+			self.assertTrue(document_api.list_documents(q=q), q)
+		self.assertEqual(document_api.list_documents(q="nomatchxyz"), [])
+
+	def test_html_cache(self):
+		d = _make_doc("H", body_markdown="# Title here")
+		html = document_api.get_document_html(d.name)
+		self.assertIn("Title here", html)
+		self.assertEqual(frappe.db.get_value("HUF Document", d.name, "body_html"), html)
+		d.reload()
+		d.body_markdown = "# Changed"
+		d.save()
+		self.assertFalse(frappe.db.get_value("HUF Document", d.name, "body_html"))
+		self.assertIn("Changed", document_api.get_document_html(d.name))
