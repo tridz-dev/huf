@@ -30,6 +30,7 @@ delay documents behind unrelated work. Plan: ship `HUF Document` now; later regi
 3. Render: `get_document_html(name)` reuses `render_document_html` (Step 1 stylesheet) and caches in `body_html`.
 4. Search: index title+keywords+body into the existing knowledge FTS5 backend (`ai/knowledge/backends/sqlite_fts.py`)
    via a Knowledge Input projection like Memory Record does (`memory_record.py:124`); API `search_documents(q)`.
+   Deferred: v1 ships `list_documents(q=...)` using SQL LIKE over title/keywords/body_markdown; the FTS5 projection is a follow-up.
 5. List/tree API: `list_documents(parent=None)` returning children with counts, permission-filtered
    (`permission_query_conditions` + `has_permission` hooks, which Artifact lacks today).
 6. Desktop (this step only): a "Documents" entry in the chat rail with a flat search + tree list and the existing
