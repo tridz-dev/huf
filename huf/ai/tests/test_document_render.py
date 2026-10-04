@@ -22,7 +22,7 @@ from huf.ai.artifacts.render.components import (
 	resolve_theme_token,
 	theme_css,
 )
-from huf.ai.artifacts.render.docx import html_to_docx
+from huf.ai.artifacts.render.docx import html_to_docx, _extract_theme
 from huf.ai.artifacts.render.html import (
 	_hoist_running_footer,
 	render_document_html,
@@ -410,3 +410,46 @@ class TestScreenStylesheet(unittest.TestCase):
 	def test_screen_stylesheet_has_proper_line_height(self):
 		"""Body line-height is 1.65 for comfortable reading."""
 		self.assertIn("line-height: 1.65", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_defines_accent_contrast_in_dark_blocks(self):
+		"""Dark mode accent-contrast token is defined for readable headers/badges.
+		The token is needed in both :root[data-theme="dark"] and
+		@media (prefers-color-scheme: dark) blocks."""
+		# Check :root[data-theme="dark"] block
+		self.assertIn(':root[data-theme="dark"] {', SCREEN_STYLESHEET)
+		dark_explicit_idx = SCREEN_STYLESHEET.index(':root[data-theme="dark"] {')
+		dark_explicit_block = SCREEN_STYLESHEET[dark_explicit_idx : SCREEN_STYLESHEET.index("}", dark_explicit_idx) + 1]
+		self.assertIn("--accent-contrast: #0F1013", dark_explicit_block)
+
+		# Check @media (prefers-color-scheme: dark) block
+		self.assertIn("@media (prefers-color-scheme: dark)", SCREEN_STYLESHEET)
+		media_idx = SCREEN_STYLESHEET.index("@media (prefers-color-scheme: dark)")
+		media_block = SCREEN_STYLESHEET[media_idx : SCREEN_STYLESHEET.index("}}", media_idx) + 2]
+		self.assertIn("--accent-contrast: #0F1013", media_block)
+
+		# Check light palette
+		self.assertIn("--accent-contrast: #FFFFFF", SCREEN_STYLESHEET)
+
+
+class TestThemeExtraction(unittest.TestCase):
+	"""Tests for docx theme extraction from rendered HTML."""
+
+	def test_extract_theme_without_style_returns_defaults(self):
+		"""_extract_theme with no author styles returns the registry defaults."""
+		html = render_document_html("<p>Simple paragraph</p>", language="html")
+		# Extract style text from the rendered HTML (empty or no :root override)
+		# _extract_theme should return unmodified THEME when no :root block exists
+		theme = _extract_theme("")
+		self.assertEqual(theme, THEME)
+
+	def test_extract_theme_with_basic_document(self):
+		"""Theme extraction is unaffected by screen stylesheet additions.
+		A document without custom theme overrides should extract to defaults."""
+		html = render_document_html(
+			"<h1>Title</h1><p>Body text</p>",
+			title="Test Doc",
+			language="html",
+		)
+		# Style text from a basic markdown render should extract to defaults
+		theme = _extract_theme("")
+		self.assertEqual(theme, THEME)

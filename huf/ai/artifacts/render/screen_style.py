@@ -22,6 +22,7 @@ SCREEN_STYLESHEET = """
 		--surface: #F7FAFD;
 		--callout-bg: #EAF2FD;
 		--accent: #2C5AA8;
+		--accent-contrast: #FFFFFF;
 		color-scheme: light;
 	}
 
@@ -34,6 +35,7 @@ SCREEN_STYLESHEET = """
 		--surface: #1B1C20;
 		--callout-bg: #1F2A3D;
 		--accent: #7FA6E8;
+		--accent-contrast: #0F1013;
 		color-scheme: dark;
 	}
 
@@ -47,6 +49,7 @@ SCREEN_STYLESHEET = """
 			--surface: #1B1C20;
 			--callout-bg: #1F2A3D;
 			--accent: #7FA6E8;
+			--accent-contrast: #0F1013;
 			color-scheme: dark;
 			background-color: #0F1013;
 		}
