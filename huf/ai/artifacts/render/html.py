@@ -22,6 +22,7 @@ from huf.ai.artifacts.render.safety import (
 )
 from huf.ai.artifacts.render.design_tokens import HEADING_SIZES_PT
 from huf.ai.artifacts.render.components import components_css
+from huf.ai.artifacts.render.screen_style import SCREEN_STYLESHEET
 
 #: Matches a Pandoc-style fenced div marking a multi-column region:
 #:   :::columns-2
@@ -432,12 +433,13 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 
 	# Build the complete HTML document
 	html_document = f"""<!DOCTYPE html>
-<html>
+<html data-theme="dark">
 <head>
 <meta charset="utf-8">
 <title>{title}</title>
 <style>
 {PRINT_STYLESHEET}
+{SCREEN_STYLESHEET}
 </style>
 </head>
 <body>

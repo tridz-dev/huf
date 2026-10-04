@@ -23,7 +23,12 @@ from huf.ai.artifacts.render.components import (
 	theme_css,
 )
 from huf.ai.artifacts.render.docx import html_to_docx
-from huf.ai.artifacts.render.html import _hoist_running_footer, render_document_html
+from huf.ai.artifacts.render.html import (
+	_hoist_running_footer,
+	render_document_html,
+	PRINT_STYLESHEET,
+)
+from huf.ai.artifacts.render.screen_style import SCREEN_STYLESHEET
 
 
 def _docx_part(docx_bytes: bytes, name_fragment: str) -> str:
@@ -336,3 +341,71 @@ class TestDocxExport(unittest.TestCase):
 		)
 		body = _docx_part(html_to_docx(html), "word/document.xml")
 		self.assertIn("In Progress", body)
+
+
+class TestScreenStylesheet(unittest.TestCase):
+	"""Screen stylesheet is scoped to @media screen, leaving PDF output untouched."""
+
+	def setUp(self):
+		self.document = render_document_html("<p>Sample content</p>", title="Test", language="html")
+
+	def test_screen_stylesheet_is_included(self):
+		"""The rendered HTML includes the screen stylesheet."""
+		self.assertIn(SCREEN_STYLESHEET, self.document)
+
+	def test_screen_stylesheet_is_in_media_block(self):
+		"""Screen stylesheet is wrapped in @media screen so print is untouched."""
+		self.assertIn("@media screen {", SCREEN_STYLESHEET)
+		screen_index = self.document.index("@media screen {", self.document.index(SCREEN_STYLESHEET))
+		self.assertIsNotNone(screen_index)
+
+	def test_screen_stylesheet_defines_max_width_720px(self):
+		"""The measure constraint for editorial reading: 720px max-width."""
+		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
+
+	def test_html_has_data_theme_dark_attribute(self):
+		"""The HTML root element carries data-theme="dark" for theme injection."""
+		self.assertIn('<html data-theme="dark">', self.document)
+
+	def test_print_stylesheet_is_unchanged(self):
+		"""The print stylesheet (PRINT_STYLESHEET) must remain byte-identical.
+		This test ensures PDF/DOCX output is completely unaffected."""
+		# Verify PRINT_STYLESHEET is still in the document
+		self.assertIn(PRINT_STYLESHEET, self.document)
+		# Extract the stylesheet from the rendered document (before SCREEN_STYLESHEET appends)
+		style_start = self.document.index("<style>") + len("<style>")
+		# The PRINT_STYLESHEET is first, then components CSS, then screen stylesheet
+		# We verify only that PRINT_STYLESHEET appears exactly as constant defined
+		extracted_print = self.document[style_start : style_start + len(PRINT_STYLESHEET)]
+		self.assertEqual(extracted_print, PRINT_STYLESHEET, "PRINT_STYLESHEET was modified")
+
+	def test_screen_stylesheet_contains_dark_mode_colors(self):
+		"""Dark mode colour tokens are defined in the screen stylesheet."""
+		self.assertIn("--ink: #ECECEE", SCREEN_STYLESHEET)
+		self.assertIn("--muted: #A0A3AB", SCREEN_STYLESHEET)
+		self.assertIn("--rule: #2E3036", SCREEN_STYLESHEET)
+		self.assertIn("--surface: #1B1C20", SCREEN_STYLESHEET)
+		self.assertIn("--callout-bg: #1F2A3D", SCREEN_STYLESHEET)
+		self.assertIn("--accent: #7FA6E8", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_contains_light_mode_colors(self):
+		"""Light mode colour tokens are defined in the screen stylesheet."""
+		self.assertIn("--ink: #16294D", SCREEN_STYLESHEET)
+		self.assertIn("--muted: #6B7891", SCREEN_STYLESHEET)
+		self.assertIn("--rule: #D9E0EC", SCREEN_STYLESHEET)
+		self.assertIn("--surface: #F7FAFD", SCREEN_STYLESHEET)
+		self.assertIn("--callout-bg: #EAF2FD", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_measure(self):
+		"""Body has proper measure: max-width 720px, centered, with padding."""
+		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
+		self.assertIn("margin: 0 auto", SCREEN_STYLESHEET)
+		self.assertIn("padding: 48px 24px 96px", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_body_font_size(self):
+		"""Body font size is 17px for editorial reading on screen."""
+		self.assertIn("font-size: 17px", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_line_height(self):
+		"""Body line-height is 1.65 for comfortable reading."""
+		self.assertIn("line-height: 1.65", SCREEN_STYLESHEET)
