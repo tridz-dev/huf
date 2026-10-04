@@ -177,19 +177,18 @@ SCREEN_STYLESHEET = """
 	}
 
 	th {
-		font-size: 12px;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		font-size: 13px;
 		font-weight: 600;
 		color: var(--muted);
+		border: 0;
 		border-bottom: 1px solid var(--rule);
 		padding: 10px 12px;
 		background: none;
 		text-align: left;
-		font-weight: 600;
 	}
 
 	td {
+		border: 0;
 		border-bottom: 1px solid var(--rule);
 		padding: 10px 12px;
 	}
