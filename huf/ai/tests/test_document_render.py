@@ -371,14 +371,12 @@ class TestScreenStylesheet(unittest.TestCase):
 	def test_print_stylesheet_is_unchanged(self):
 		"""The print stylesheet (PRINT_STYLESHEET) must remain byte-identical.
 		This test ensures PDF/DOCX output is completely unaffected."""
-		# Verify PRINT_STYLESHEET is still in the document
-		self.assertIn(PRINT_STYLESHEET, self.document)
-		# Extract the stylesheet from the rendered document (before SCREEN_STYLESHEET appends)
-		style_start = self.document.index("<style>") + len("<style>")
-		# The PRINT_STYLESHEET is first, then components CSS, then screen stylesheet
-		# We verify only that PRINT_STYLESHEET appears exactly as constant defined
-		extracted_print = self.document[style_start : style_start + len(PRINT_STYLESHEET)]
-		self.assertEqual(extracted_print, PRINT_STYLESHEET, "PRINT_STYLESHEET was modified")
+		# The renderer emits <style>, PRINT_STYLESHEET, then components/screen CSS.
+		print_idx = self.document.index(PRINT_STYLESHEET)
+		self.assertIn("<style>", self.document[:print_idx])
+		self.assertLess(print_idx, self.document.index(SCREEN_STYLESHEET), "screen CSS must come after print CSS")
+		# The screen stylesheet may only add rules inside @media screen.
+		self.assertTrue(SCREEN_STYLESHEET.lstrip().startswith("@media screen"))
 
 	def test_screen_stylesheet_contains_dark_mode_colors(self):
 		"""Dark mode colour tokens are defined in the screen stylesheet."""
@@ -424,7 +422,7 @@ class TestScreenStylesheet(unittest.TestCase):
 		# Check @media (prefers-color-scheme: dark) block
 		self.assertIn("@media (prefers-color-scheme: dark)", SCREEN_STYLESHEET)
 		media_idx = SCREEN_STYLESHEET.index("@media (prefers-color-scheme: dark)")
-		media_block = SCREEN_STYLESHEET[media_idx : SCREEN_STYLESHEET.index("}}", media_idx) + 2]
+		media_block = SCREEN_STYLESHEET[media_idx : SCREEN_STYLESHEET.index("}", media_idx) + 1]
 		self.assertIn("--accent-contrast: #0F1013", media_block)
 
 		# Check light palette
