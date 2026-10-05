@@ -48,7 +48,7 @@ class TestHUFDocumentComment(IntegrationTestCase):
 		c = self.as_user(RO, api.add_document_comment, self.doc.name, "from ro")
 		self.assertEqual(c["author"], RO)
 		self.assertFalse(c["resolved"])
-		self.assertEqual(set(c), {"name", "document", "body", "author", "author_full_name", "creation", "resolved"})
+		self.assertEqual(set(c), {"name", "document", "body", "author", "author_full_name", "creation", "resolved", "can_edit"})
 		items = self.as_user(RO, api.list_document_comments, self.doc.name)
 		self.assertEqual([i["name"] for i in items], [c["name"]])
 		self.assertEqual(len(self.as_user(AUTHOR, api.list_document_comments, self.doc.name)), 1)
@@ -134,3 +134,27 @@ class TestHUFDocumentComment(IntegrationTestCase):
 		c = self.as_user(RO, api.add_document_comment, self.doc.name, "bye")
 		frappe.delete_doc("HUF Document", self.doc.name)
 		self.assertFalse(frappe.db.exists("HUF Document Comment", c["name"]))
+
+	def test_owner_deleting_document_removes_comments(self):
+		c = self.as_user(RO, api.add_document_comment, self.doc.name, "bye")
+		frappe.set_user(AUTHOR)
+		frappe.delete_doc("HUF Document", self.doc.name)
+		self.assertFalse(frappe.db.exists("HUF Document Comment", c["name"]))
+
+	def test_text_fidelity(self):
+		c = self.as_user(AUTHOR, api.add_document_comment, self.doc.name, "if a<b and c>d")
+		self.assertEqual(c["body"], "if a<b and c>d")
+		c = self.as_user(AUTHOR, api.add_document_comment, self.doc.name, "<script>alert(1)</script>hi")
+		self.assertEqual(c["body"], "hi")  # script blocks are removed with their content
+		c = self.as_user(AUTHOR, api.add_document_comment, self.doc.name, "<b>x</b><!-- c -->y")
+		self.assertEqual(c["body"], "xy")
+
+	def test_can_edit_flag(self):
+		c = self.as_user(RO, api.add_document_comment, self.doc.name, "mine")
+		self.assertTrue(c["can_edit"])
+		for u in (RO, RW, AUTHOR):
+			item = [i for i in self.as_user(u, api.list_document_comments, self.doc.name) if i["name"] == c["name"]][0]
+			self.assertTrue(item["can_edit"])
+		o = self.as_user(AUTHOR, api.add_document_comment, self.doc.name, "owner's")
+		item = [i for i in self.as_user(RO, api.list_document_comments, self.doc.name) if i["name"] == o["name"]][0]
+		self.assertFalse(item["can_edit"])

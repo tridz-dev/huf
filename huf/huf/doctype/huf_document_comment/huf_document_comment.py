@@ -10,13 +10,32 @@ no role rows besides System Manager.
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import strip_html_tags
+import re
 
 MAX_BODY_LENGTH = 5000
 
 
+_BLOCK_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1\s*>", re.I | re.S)
+_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+# A tag is a name followed only by name=value attributes, so prose like "a<b and c>d"
+# (valueless words after the name) is not treated as markup.
+_TAG_RE = re.compile(
+	r"</?[A-Za-z][A-Za-z0-9-]*(?:\s+[\w:.-]+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>\"']+))*\s*/?>"
+)
+
+
+def strip_markup(text: str) -> str:
+	"""Remove real HTML only (script/style blocks with content, comments, tags).
+
+	A bare "<" or ">" in prose such as "a<b and c>d" is preserved.
+	"""
+	text = _BLOCK_RE.sub("", text)
+	text = _COMMENT_RE.sub("", text)
+	return _TAG_RE.sub("", text)
+
+
 def clean_body(body) -> str:
-	text = strip_html_tags(str(body or "")).strip()
+	text = strip_markup(str(body or "")).strip()
 	if not text:
 		frappe.throw(_("Comment cannot be empty"), frappe.ValidationError)
 	if len(text) > MAX_BODY_LENGTH:

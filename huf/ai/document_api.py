@@ -92,6 +92,7 @@ def list_documents(parent: str | None = None, q: str | None = None, limit: int =
 	counts = Counter(children)
 	for r in rows:
 		r["child_count"] = counts.get(r.name, 0)
+		r["can_write"] = bool(frappe.has_permission("HUF Document", "write", r.name))
 	return rows
 
 
@@ -162,6 +163,17 @@ def move_document(name: str, parent: str | None = None) -> dict:
 	parent = parent or None
 	doc = frappe.get_doc("HUF Document", name)
 	doc.check_permission("write")
+	old_parent = doc.parent_document
+	if (
+		old_parent
+		and doc.owner != frappe.session.user
+		and frappe.db.exists("HUF Document", old_parent)
+		and not frappe.has_permission("HUF Document", "write", old_parent)
+	):
+		frappe.throw(
+			_("You do not have permission to move this document out of its current parent"),
+			frappe.PermissionError,
+		)
 	_check_parent_writable(parent)
 	doc.parent_document = parent
 	doc.save()

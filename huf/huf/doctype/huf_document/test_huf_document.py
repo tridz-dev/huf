@@ -265,3 +265,47 @@ class TestHUFDocument(IntegrationTestCase):
 		frappe.set_user(USER_B)
 		with self.assertRaises(frappe.PermissionError):
 			document_api.move_document(ro.name, None)
+
+	def test_delete_orphan_safe(self):
+		p = _make_doc("P", user=USER_A)
+		self._share(p, USER_B, write=1)
+		frappe.set_user(USER_B)
+		r = document_api.create_workspace_document("BKid", p.name)
+		frappe.set_user(USER_A)
+		self.assertFalse(frappe.has_permission("HUF Document", "read", r["name"]))
+		frappe.delete_doc("HUF Document", p.name)
+		self.assertFalse(frappe.db.exists("HUF Document", p.name))
+		self.assertTrue(frappe.db.exists("HUF Document", r["name"]))
+		self.assertFalse(frappe.db.get_value("HUF Document", r["name"], "parent_document"))
+		self.assertEqual(frappe.db.get_value("HUF Document", r["name"], "owner"), USER_B)
+
+	def test_delete_blocked_by_readable_child(self):
+		p = _make_doc("P2", user=USER_A)
+		c = _make_doc("Mine", user=USER_A, parent_document=p.name)
+		frappe.set_user(USER_A)
+		with self.assertRaises(frappe.ValidationError):
+			frappe.delete_doc("HUF Document", p.name)
+		self.assertEqual(frappe.db.get_value("HUF Document", c.name, "parent_document"), p.name)
+
+	def test_move_requires_write_on_old_parent(self):
+		old = _make_doc("Old", user=USER_A)
+		doc = _make_doc("Doc", user=USER_A, parent_document=old.name)
+		new = _make_doc("New", user=USER_A)
+		self._share(doc, USER_B, write=1)
+		self._share(new, USER_B, write=1)
+		self._share(old, USER_B, write=0)
+		frappe.set_user(USER_B)
+		with self.assertRaises(frappe.PermissionError):
+			document_api.move_document(doc.name, new.name)
+		frappe.set_user(USER_A)
+		self.assertEqual(document_api.move_document(doc.name, new.name)["parent_document"], new.name)
+
+	def test_list_can_write_flag(self):
+		d = _make_doc("Flag", user=USER_A)
+		self._share(d, USER_B, write=0)
+		frappe.set_user(USER_B)
+		rows = [r for r in document_api.list_documents() if r["name"] == d.name]
+		self.assertFalse(rows[0]["can_write"])
+		frappe.set_user(USER_A)
+		rows = [r for r in document_api.list_documents() if r["name"] == d.name]
+		self.assertTrue(rows[0]["can_write"])

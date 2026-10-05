@@ -42,6 +42,16 @@ def _items(rows):
 	names = {}
 	if owners:
 		names = dict(frappe.get_all("User", filters={"name": ("in", list(owners))}, fields=["name", "full_name"], as_list=True))
+	user = frappe.session.user
+	can_write_doc = {}
+
+	def _can_edit(r):
+		if r.owner == user:
+			return True
+		if r.document not in can_write_doc:
+			can_write_doc[r.document] = bool(frappe.has_permission("HUF Document", "write", r.document))
+		return can_write_doc[r.document]
+
 	return [
 		{
 			"name": r.name,
@@ -51,6 +61,7 @@ def _items(rows):
 			"author_full_name": names.get(r.owner) or r.owner,
 			"creation": str(r.creation),
 			"resolved": bool(r.resolved),
+			"can_edit": _can_edit(r),
 		}
 		for r in rows
 	]

@@ -7,7 +7,7 @@
  "field_order": ["document", "body", "resolved", "resolved_by", "resolved_on"],
  "fields": [
   {"fieldname": "document", "fieldtype": "Link", "label": "Document", "options": "HUF Document", "reqd": 1, "search_index": 1, "in_list_view": 1},
-  {"fieldname": "body", "fieldtype": "Text", "label": "Body", "reqd": 1},
+  {"fieldname": "body", "fieldtype": "Text", "label": "Body", "reqd": 1, "ignore_xss_filter": 1},
   {"fieldname": "resolved", "fieldtype": "Check", "label": "Resolved", "default": "0"},
   {"fieldname": "resolved_by", "fieldtype": "Link", "label": "Resolved By", "options": "User", "read_only": 1},
   {"fieldname": "resolved_on", "fieldtype": "Datetime", "label": "Resolved On", "read_only": 1}

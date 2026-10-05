@@ -52,12 +52,22 @@ class HUFDocument(Document):
 			current = frappe.db.get_value("HUF Document", current, "parent_document")
 
 	def on_trash(self):
-		count = frappe.db.count("HUF Document", {"parent_document": self.name})
-		if count:
+		children = frappe.get_all(
+			"HUF Document", filters={"parent_document": self.name}, fields=["name", "title"], ignore_permissions=True
+		)
+		readable = [c for c in children if frappe.has_permission("HUF Document", "read", c.name)]
+		if readable:
+			titles = ", ".join(c.title or c.name for c in readable[:5])
 			frappe.throw(
-				_("Cannot delete a document that has {0} child document(s). Move or delete them first.").format(count),
+				_("Cannot delete a document that has {0} child document(s) ({1}). Move or delete them first.").format(
+					len(readable), titles
+				),
 				frappe.ValidationError,
 			)
+		# Children the user cannot read (e.g. created by a write-sharee) must not block
+		# deletion forever: detach them to root; they keep their own owner/shares.
+		for c in children:
+			frappe.db.set_value("HUF Document", c.name, "parent_document", None, update_modified=False)
 		# Comments are owned by the document: remove them with it.
 		for name in frappe.get_all("HUF Document Comment", filters={"document": self.name}, pluck="name"):
 			frappe.delete_doc("HUF Document Comment", name, ignore_permissions=True, force=True)
