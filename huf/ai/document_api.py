@@ -48,12 +48,24 @@ def save_artifact_as_document(artifact: str) -> dict:
 
 @frappe.whitelist()
 def list_documents(parent: str | None = None, q: str | None = None, limit: int = 100) -> list[dict]:
-	"""List permission-filtered documents; ``q`` searches title/keywords/body (LIKE)."""
+	"""List permission-filtered documents.
+
+	``q`` runs ranked full-text search (title hits first, then recency) with an
+	escaped LIKE fallback; it takes precedence over ``parent``.
+	"""
 	limit = max(1, min(int(limit or 100), 500))
 	filters = {}
 	or_filters = None
 	q = (q or "").strip()[:200]
+	ranked = None
 	if q:
+		from huf.ai.document_search import ranked_names
+
+		ranked = ranked_names(q)
+	if ranked:
+		# Permissions are applied by get_list; order is restored below.
+		filters["name"] = ["in", ranked]
+	elif q:
 		escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 		like = f"%{escaped}%"
 		or_filters = [
@@ -78,8 +90,12 @@ def list_documents(parent: str | None = None, q: str | None = None, limit: int =
 		or_filters=or_filters,
 		fields=["name", "title", "parent_document", "summary", "modified"],
 		order_by="sort_order asc, modified desc",
-		limit_page_length=limit,
+		limit_page_length=0 if ranked else limit,
 	)
+	if ranked:
+		pos = {n: i for i, n in enumerate(ranked)}
+		rows.sort(key=lambda r: pos.get(r.name, len(pos)))
+		rows = rows[:limit]
 	if not rows:
 		return rows
 	children = frappe.get_list(

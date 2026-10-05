@@ -28,9 +28,24 @@ delay documents behind unrelated work. Plan: ship `HUF Document` now; later regi
    `HUF Document` (idempotent: second save updates the same document via `source_artifact`).
 2. Agent tool `save_document` does the same from chat; `create_document` artifacts are unchanged.
 3. Render: `get_document_html(name)` reuses `render_document_html` (Step 1 stylesheet) and caches in `body_html`.
-4. Search: index title+keywords+body into the existing knowledge FTS5 backend (`ai/knowledge/backends/sqlite_fts.py`)
-   via a Knowledge Input projection like Memory Record does (`memory_record.py:124`); API `search_documents(q)`.
-   Deferred: v1 ships `list_documents(q=...)` using SQL LIKE over title/keywords/body_markdown; the FTS5 projection is a follow-up.
+4. Search: ranked full-text search inside `list_documents(q=...)` using a MariaDB/MySQL InnoDB FULLTEXT index owned by
+   HUF Document (decision: design A). Rejected the knowledge FTS5 projection (`ai/knowledge/backends/sqlite_fts.py`,
+   `memory_record.py:124`): it is keyed on agent/knowledge-source semantics and per-agent scoping, would need a
+   Knowledge Input per document kept in sync on every save/move/delete, and cannot honour per-user document
+   permissions without a second filter anyway.
+   - Indexes `ft_huf_document_search (title, keywords, body_markdown)` and `ft_huf_document_title (title)`, created
+     idempotently by `huf.ai.document_search.ensure_fulltext_indexes` from patch `add_huf_document_fulltext` and
+     `after_migrate` (Frappe DocType JSON cannot declare FULLTEXT). Deployed sites run `bench migrate`.
+   - Query: free text is reduced to word tokens only (so `+ - * ~ " ( ) < > @` never reach MATCH) and built as
+     `+tok*` BOOLEAN MODE (all tokens required, prefix match). Score = 3 x MATCH(title) + MATCH(all); order by score
+     then recency. Up to 1000 candidate names are ranked in SQL, then re-read through `frappe.get_list`, so
+     permission_query_conditions/shares apply and no unreadable title or summary is ever returned. Response shape unchanged.
+   - Fallback to the escaped LIKE path when: not MariaDB/MySQL, index missing, no token reaches
+     `innodb_ft_min_token_size` (default 3), only stopwords, the query errors, or FULLTEXT returns nothing (substring
+     queries). `q` keeps its 200-char cap and precedence over `parent`.
+   - Caveats: InnoDB FULLTEXT sees rows only after commit (fine per request; tests commit); `ft_min_word_len` (MyISAM)
+     is irrelevant; changing `innodb_ft_min_token_size` requires rebuilding the index (`OPTIMIZE TABLE` / re-run migrate
+     after dropping the index). Verified on MariaDB 10.11.
 5. List/tree API: `list_documents(parent=None)` returning children with counts, permission-filtered
    (`permission_query_conditions` + `has_permission` hooks, which Artifact lacks today).
 6. Desktop (this step only): a "Documents" entry in the chat rail with a flat search + tree list and the existing

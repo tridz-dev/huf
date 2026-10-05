@@ -159,6 +159,12 @@ def after_migrate():
 	Syncs all discovered tools from all installed apps.
 	"""
 	create_huf_roles()
+	try:
+		from huf.ai.document_search import ensure_fulltext_indexes
+
+		ensure_fulltext_indexes()
+	except Exception:
+		frappe.log_error(title="huf after_migrate: HUF Document FULLTEXT index failed")
 	create_demo_ai_providers()
 	try:
 		create_demo_ai_models()

@@ -309,3 +309,95 @@ class TestHUFDocument(IntegrationTestCase):
 		frappe.set_user(USER_A)
 		rows = [r for r in document_api.list_documents() if r["name"] == d.name]
 		self.assertTrue(rows[0]["can_write"])
+
+
+class TestHUFDocumentSearch(IntegrationTestCase):
+	"""Ranked full-text search. InnoDB FULLTEXT only sees committed rows."""
+
+	def setUp(self):
+		frappe.set_user("Administrator")
+		_ensure_user(USER_A)
+		_ensure_user(USER_B)
+		from huf.ai.document_search import ensure_fulltext_indexes
+
+		ensure_fulltext_indexes()
+		self._made = []
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+		for n in self._made:
+			frappe.db.delete("DocShare", {"share_doctype": "HUF Document", "share_name": n})
+			frappe.db.delete("HUF Document", {"name": n})
+		frappe.db.commit()
+
+	def _mk(self, title, user=None, **kw):
+		d = _make_doc(title, user=user, **kw)
+		self._made.append(d.name)
+		frappe.db.commit()
+		return d
+
+	def _names(self, q, user=None):
+		if user:
+			frappe.set_user(user)
+		try:
+			return [r.name for r in document_api.list_documents(q=q)]
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_title_hit_outranks_body_hit(self):
+		body = self._mk("Unrelated", body_markdown="the quokkafruit appears only here")
+		title = self._mk("Quokkafruit guide", body_markdown="nothing")
+		self.assertEqual(self._names("quokkafruit")[:2], [title.name, body.name])
+
+	def test_response_shape_unchanged(self):
+		self._mk("Shapeword page")
+		rows = document_api.list_documents(q="shapeword")
+		self.assertEqual(
+			set(rows[0].keys()),
+			{"name", "title", "parent_document", "summary", "modified", "child_count", "can_write"},
+		)
+
+	def test_operator_characters_are_safe(self):
+		d = self._mk("Operatorword page", user=USER_A)
+		for q in ['+ - * ~ " ( ) < > @', '"unterminated', "+++", "-operatorword", "(operatorword", "operatorword*"]:
+			self._names(q)
+			self.assertNotIn(d.name, self._names(q, user=USER_B))
+		self.assertIn(d.name, self._names("+operatorword*", user=USER_A))
+
+	def test_short_query_falls_back_to_like(self):
+		d = self._mk("Ab shortq", body_markdown="xy")
+		self.assertIn(d.name, self._names("xy"))
+		self.assertIn(d.name, self._names("ab"))
+
+	def test_substring_falls_back_to_like(self):
+		d = self._mk("Substringtest", body_markdown="a longerwordhere")
+		self.assertIn(d.name, self._names("ngerwordh"))
+
+	def test_stranger_isolation_and_share(self):
+		d = self._mk("Secretword plan", user=USER_A, body_markdown="secretbody")
+		self.assertIn(d.name, self._names("secretword", user=USER_A))
+		self.assertEqual(self._names("secretword", user=USER_B), [])
+		self.assertEqual(self._names("secretbody", user=USER_B), [])
+		frappe.share.add("HUF Document", d.name, USER_B, read=1)
+		frappe.db.commit()
+		self.assertIn(d.name, self._names("secretword", user=USER_B))
+
+	def test_index_follows_body_edit(self):
+		d = self._mk("Editable", body_markdown="oldtermalpha")
+		self.assertIn(d.name, self._names("oldtermalpha"))
+		doc = frappe.get_doc("HUF Document", d.name)
+		doc.body_markdown = "newtermbeta"
+		doc.save()
+		frappe.db.commit()
+		self.assertIn(d.name, self._names("newtermbeta"))
+		self.assertNotIn(d.name, self._names("oldtermalpha"))
+
+	def test_rename_and_move_keep_search_working(self):
+		p = self._mk("Parentpage")
+		c = self._mk("Movable", body_markdown="movetermgamma")
+		document_api.move_document(c.name, p.name)
+		frappe.db.commit()
+		self.assertIn(c.name, self._names("movetermgamma"))
+		document_api.rename_document(c.name, "Renamedomega")
+		frappe.db.commit()
+		self.assertIn(c.name, self._names("renamedomega"))
