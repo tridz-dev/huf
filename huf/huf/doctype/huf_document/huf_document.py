@@ -58,6 +58,9 @@ class HUFDocument(Document):
 				_("Cannot delete a document that has {0} child document(s). Move or delete them first.").format(count),
 				frappe.ValidationError,
 			)
+		# Comments are owned by the document: remove them with it.
+		for name in frappe.get_all("HUF Document Comment", filters={"document": self.name}, pluck="name"):
+			frappe.delete_doc("HUF Document Comment", name, ignore_permissions=True, force=True)
 
 
 def _is_system_manager(user):
