@@ -387,7 +387,41 @@ def _attribute_filter(tag: str, name: str, value: str) -> bool:
 	return name in _TAG_ALLOWED_ATTRIBUTES.get(tag, [])
 
 
+def sanitize_html(html_body: str) -> str:
+	"""Run the pipeline's bleach configuration over an HTML fragment.
+
+	css_sanitizer is required for inline style="..." to survive at all:
+	bleach drops the whole attribute unless one is supplied, which would
+	silently discard the agent's inline styling while <style> blocks kept
+	working. It also acts as a second filter, restricting inline CSS to
+	ALLOWED_CSS_PROPERTIES.
+	"""
+	return bleach.clean(
+		html_body,
+		tags=ALLOWED_TAGS,
+		attributes=_attribute_filter,
+		css_sanitizer=css_sanitizer(),
+		strip=True,
+	)
+
+
 def render_document_html(markdown_source: str, title: str = "", language: str = "markdown") -> str:
+	"""Render a document (see ``render_document_html_with_report``) and return only the HTML."""
+	html_document, report = render_document_html_with_report(markdown_source, title, language)
+	if report["leaks_found"]:
+		try:
+			import frappe
+
+			frappe.logger("huf.document").warning(
+				"markdown leak guard: found=%s repaired=%s remaining=%s kinds=%s",
+				report["leaks_found"], report["repaired"], report["leaks_remaining"], ",".join(report["kinds"]),
+			)
+		except Exception:
+			pass
+	return html_document
+
+
+def render_document_html_with_report(markdown_source: str, title: str = "", language: str = "markdown"):
 	"""Render a document source to a full, sanitized, print-ready HTML document.
 
 	Args:
@@ -398,34 +432,46 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 			sanitized and embedded directly - no markdown conversion runs.
 
 	Returns:
-		A complete HTML document string with sanitized content, ready for
-		conversion to PDF or DOCX.
+		``(html_document, report)``; report has ``leaks_found``, ``repaired``,
+		``leaks_remaining`` (counts) and ``kinds`` (sorted leak kinds found).
 	"""
+	from huf.ai.artifacts.render.markdown_guard import (
+		convert_task_markers,
+		enable_markdown_in_containers,
+		find_markdown_leaks,
+		repair_markdown_leaks,
+	)
+
 	if language == "html":
-		html_body = markdown_source
+		# Containers holding markdown get markdown="1" and the source then
+		# takes a markdown pass; sources with no such container are untouched.
+		annotated = enable_markdown_in_containers(markdown_source)
+		html_body = _render_markdown(convert_task_markers(annotated)) if annotated != markdown_source else markdown_source
 	else:
 		# Strip orphaned `{: .class-name}` markers that agents often separate
 		# from their content by a blank line (causing attr_list to fail).
 		# Then expand :::columns-N...::: regions (pre-rendered to raw HTML),
 		# then run through markdown. Markdown leaves embedded raw HTML alone.
 		cleaned_source = _strip_orphaned_class_markers(markdown_source)
-		preprocessed_source = _expand_columns_blocks(cleaned_source)
+		preprocessed_source = _expand_columns_blocks(convert_task_markers(enable_markdown_in_containers(cleaned_source)))
 		html_body = _render_markdown(preprocessed_source)
 
-	# Sanitize the HTML to remove any dangerous content.
-	#
-	# css_sanitizer is required for inline style="..." to survive at all:
-	# bleach drops the whole attribute unless one is supplied, which would
-	# silently discard the agent's inline styling while <style> blocks kept
-	# working. It also acts as a second filter, restricting inline CSS to
-	# ALLOWED_CSS_PROPERTIES.
-	sanitized_body = bleach.clean(
-		html_body,
-		tags=ALLOWED_TAGS,
-		attributes=_attribute_filter,
-		css_sanitizer=css_sanitizer(),
-		strip=True
-	)
+	# Sanitize the HTML to remove any dangerous content (see sanitize_html).
+	sanitized_body = sanitize_html(html_body)
+
+	# Safety net: detect residual markdown in the sanitized output and repair.
+	leaks = find_markdown_leaks(sanitized_body)
+	repaired = 0
+	remaining = 0
+	if leaks:
+		sanitized_body, repaired = repair_markdown_leaks(sanitized_body)
+		remaining = len(find_markdown_leaks(sanitized_body))
+	report = {
+		"leaks_found": len(leaks),
+		"repaired": repaired,
+		"leaks_remaining": remaining,
+		"kinds": sorted({lk.kind for lk in leaks}),
+	}
 
 	# Hoisted AFTER sanitization so the slice being moved is already known to
 	# be well-formed, allowlisted markup rather than raw agent output.
@@ -448,4 +494,4 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 </html>
 """
 
-	return html_document
+	return html_document, report

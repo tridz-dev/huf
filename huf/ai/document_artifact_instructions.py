@@ -165,6 +165,32 @@ opening tag:
 
     </section>
 
+**Markdown inside HTML containers - hard rules:**
+- Inside an HTML component (`<div>`, `<section>`, `<aside>`, ...) either write
+  plain HTML tags, or put `markdown="1"` on that container and leave a blank
+  line after the opening tag and before the closing tag.
+- NEVER write raw markdown (`##`, `**bold**`, `- item`, `| table |`) inside a
+  container that lacks `markdown="1"` - it can show up as literal symbols.
+- Want columns or sidebars with mostly prose? Prefer a markdown document
+  (language markdown) and use `:::columns-2` ... `:::` instead of HTML.
+
+Wrong (shows literal `##` and `**`):
+
+    <div class="split-side">
+    ### Priorities
+    - **Scale APAC**
+    </div>
+
+Right:
+
+    <div class="split-side" markdown="1">
+
+    ### Priorities
+
+    - **Scale APAC**
+
+    </div>
+
 ### Colours: set the theme, do NOT restyle the components
 
 The entire palette is driven by seven CSS custom properties. Re-theme a
