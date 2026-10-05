@@ -110,3 +110,59 @@ def get_document_html(name: str) -> str:
 	html = render_document_html(doc.body_markdown or "", doc.title or "", "markdown")
 	frappe.db.set_value("HUF Document", doc.name, "body_html", html, update_modified=False)
 	return html
+
+
+def _clean_title(title) -> str:
+	title = (title or "").strip()
+	if not title:
+		frappe.throw(_("Title is required"), frappe.ValidationError)
+	return title
+
+
+def _check_parent_writable(parent: str | None):
+	if not parent:
+		return
+	if not frappe.db.exists("HUF Document", parent):
+		frappe.throw(_("Parent document not found"), frappe.ValidationError)
+	if not frappe.has_permission("HUF Document", "write", parent):
+		frappe.throw(_("You do not have permission to add pages under this document"), frappe.PermissionError)
+
+
+@frappe.whitelist()
+def create_workspace_document(title: str, parent: str | None = None) -> dict:
+	"""Create an empty-body document owned by the caller, optionally under a writable parent."""
+	title = _clean_title(title)
+	parent = parent or None
+	_check_parent_writable(parent)
+	doc = frappe.new_doc("HUF Document")
+	doc.title = title
+	doc.parent_document = parent
+	doc.insert()
+	return {"name": doc.name, "title": doc.title, "parent_document": doc.parent_document}
+
+
+@frappe.whitelist()
+def rename_document(name: str, title: str) -> dict:
+	"""Rename a document (write permission required)."""
+	if not name:
+		frappe.throw(_("Document name is required"), frappe.ValidationError)
+	title = _clean_title(title)
+	doc = frappe.get_doc("HUF Document", name)
+	doc.check_permission("write")
+	doc.title = title
+	doc.save()
+	return {"name": doc.name, "title": doc.title}
+
+
+@frappe.whitelist()
+def move_document(name: str, parent: str | None = None) -> dict:
+	"""Re-parent a document; ``parent=None`` moves it to the root."""
+	if not name:
+		frappe.throw(_("Document name is required"), frappe.ValidationError)
+	parent = parent or None
+	doc = frappe.get_doc("HUF Document", name)
+	doc.check_permission("write")
+	_check_parent_writable(parent)
+	doc.parent_document = parent
+	doc.save()
+	return {"name": doc.name, "parent_document": doc.parent_document}

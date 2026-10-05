@@ -185,3 +185,83 @@ class TestHUFDocument(IntegrationTestCase):
 		p = _make_doc("OtherPrivate", user=USER_A)
 		with self.assertRaises(frappe.ValidationError):
 			_make_doc("Sneaky", user=USER_B, parent_document=p.name)
+
+	def _share(self, doc, user, write=0):
+		frappe.set_user("Administrator")
+		frappe.share.add("HUF Document", doc.name, user, read=1, write=write)
+
+	def test_create_workspace_document(self):
+		frappe.set_user(USER_A)
+		r = document_api.create_workspace_document("  Fresh  ")
+		self.assertEqual(r["title"], "Fresh")
+		self.assertFalse(r["parent_document"])
+		d = frappe.get_doc("HUF Document", r["name"])
+		self.assertEqual(d.owner, USER_A)
+		self.assertFalse(d.body_markdown)
+		child = document_api.create_workspace_document("Kid", r["name"])
+		self.assertEqual(child["parent_document"], r["name"])
+		with self.assertRaises(frappe.ValidationError):
+			document_api.create_workspace_document("   ")
+
+	def test_create_under_parent_permissions(self):
+		p = _make_doc("P", user=USER_A)
+		self._share(p, USER_B, write=0)
+		frappe.set_user(USER_B)
+		with self.assertRaises(frappe.PermissionError):
+			document_api.create_workspace_document("Nope", p.name)
+		self._share(p, USER_B, write=1)
+		frappe.set_user(USER_B)
+		r = document_api.create_workspace_document("Allowed", p.name)
+		self.assertEqual(r["parent_document"], p.name)
+		self.assertEqual(frappe.db.get_value("HUF Document", r["name"], "owner"), USER_B)
+		# unrelated private parent
+		q = _make_doc("Q", user=USER_A)
+		with self.assertRaises((frappe.PermissionError, frappe.ValidationError)):
+			document_api.create_workspace_document("Sneak", q.name)
+
+	def test_rename_document(self):
+		d = _make_doc("Old", user=USER_A)
+		frappe.set_user(USER_A)
+		self.assertEqual(document_api.rename_document(d.name, " New ")["title"], "New")
+		with self.assertRaises(frappe.ValidationError):
+			document_api.rename_document(d.name, "  ")
+		self.assertEqual(frappe.db.get_value("HUF Document", d.name, "title"), "New")
+		self._share(d, USER_B, write=0)
+		frappe.set_user(USER_B)
+		with self.assertRaises(frappe.PermissionError):
+			document_api.rename_document(d.name, "Hijack")
+		self._share(d, USER_B, write=1)
+		frappe.set_user(USER_B)
+		self.assertEqual(document_api.rename_document(d.name, "ByB")["title"], "ByB")
+
+	def test_move_document(self):
+		a = _make_doc("A", user=USER_A)
+		b = _make_doc("B", user=USER_A, parent_document=a.name)
+		frappe.set_user(USER_A)
+		with self.assertRaises(frappe.ValidationError):
+			document_api.move_document(a.name, a.name)
+		with self.assertRaises(frappe.ValidationError):
+			document_api.move_document(a.name, b.name)  # cycle
+		r = document_api.move_document(b.name, None)
+		self.assertFalse(r["parent_document"])
+		self.assertFalse(frappe.db.get_value("HUF Document", b.name, "parent_document"))
+		r = document_api.move_document(b.name, a.name)
+		self.assertEqual(r["parent_document"], a.name)
+
+	def test_move_permissions(self):
+		doc = _make_doc("Doc", user=USER_A)
+		target = _make_doc("Target", user=USER_A)
+		self._share(doc, USER_B, write=1)
+		self._share(target, USER_B, write=0)
+		frappe.set_user(USER_B)
+		with self.assertRaises(frappe.PermissionError):
+			document_api.move_document(doc.name, target.name)  # no write on new parent
+		self._share(target, USER_B, write=1)
+		frappe.set_user(USER_B)
+		self.assertEqual(document_api.move_document(doc.name, target.name)["parent_document"], target.name)
+		# read-only share cannot move
+		ro = _make_doc("RO", user=USER_A)
+		self._share(ro, USER_B, write=0)
+		frappe.set_user(USER_B)
+		with self.assertRaises(frappe.PermissionError):
+			document_api.move_document(ro.name, None)
