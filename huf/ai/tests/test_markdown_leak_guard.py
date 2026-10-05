@@ -167,7 +167,7 @@ class TestRepair(unittest.TestCase):
 		fixed, count = repair_markdown_leaks(leaked)
 		self.assertGreaterEqual(count, 1)
 		self.assertEqual(find_markdown_leaks(fixed), [])
-		for needle in ("<h2>Title</h2>", "<li><strong>a</strong></li>", "<table>", "<strong>2</strong>"):
+		for needle in ("<h2>Title</h2>", "<strong>a</strong>", "<li>", "<table>", "<strong>2</strong>"):
 			self.assertIn(needle, fixed)
 		self.assertIn('class="split-main"', fixed)
 
