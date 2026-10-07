@@ -215,3 +215,5 @@ class TestPromptGuard(unittest.TestCase):
 		self.assertIn('markdown="1"', I)
 		self.assertIn("NEVER write raw markdown", I)
 		self.assertIn(":::columns-2", I)
+		self.assertIn("BLANK LINE before and after every heading, list, table and code fence", I)
+		self.assertIn("Wrong (no blank lines", I)

@@ -24,6 +24,8 @@ from collections import namedtuple
 
 import markdown
 
+from huf.ai.artifacts.render.markdown_normalize import normalize_markdown_blocks
+
 Leak = namedtuple("Leak", ["kind", "sample", "tag"])
 
 MARKDOWN_EXTENSIONS = ["tables", "fenced_code", "attr_list", "sane_lists", "md_in_html"]
@@ -151,7 +153,7 @@ _RE_FENCE = re.compile(r"^[ \t]*(?:```|~~~)", re.MULTILINE)
 
 
 class _Node:
-	__slots__ = ("tag", "start", "end", "open_end", "close_start", "children", "parent", "texts")
+	__slots__ = ("tag", "start", "end", "open_end", "close_start", "children", "parent", "texts", "spans")
 
 	def __init__(self, tag, start, parent):
 		self.tag = tag
@@ -161,6 +163,7 @@ class _Node:
 		self.end = None
 		self.children = []
 		self.parent = parent
+		self.spans = []  # (start, end) offsets of each direct text piece
 		self.texts = []  # (kind, string) pieces in order: ("t", text) or ("c", None)
 
 
@@ -185,6 +188,7 @@ def _parse(html: str):
 		tm = _TAG_RE.fullmatch(tok) if tok.startswith("<") else None
 		if tm is None:
 			cur.texts.append(("t", tok))
+			cur.spans.append((start, start + len(tok)))
 			continue
 		tag = tm.group("tag").lower()
 		if tm.group("closing"):
@@ -304,12 +308,87 @@ _INLINE_PARENTS = frozenset({"span", "strong", "em", "a", "small", "li", "td", "
 def _render(inner: str) -> str:
 	from huf.ai.artifacts.render.html import sanitize_html
 
-	# Lists/headings glued to the previous line (no blank line) would be lazy
-	# continuations; separate them so they parse as blocks.
-	inner = re.sub(
-		r"(?<=[^\n])\n(?=[ \t]{0,3}(?:[-*+][ \t]|#{1,6}[ \t]|\d{1,3}[.)][ \t]))", "\n\n", convert_task_markers(inner)
-	)
+	inner = normalize_markdown_blocks(convert_task_markers(inner))
 	return sanitize_html(markdown.markdown(inner, extensions=MARKDOWN_EXTENSIONS))
+
+
+# --------------------------------------------------------------------------
+# Fail-safe fallback
+# --------------------------------------------------------------------------
+
+_FB_HEADING = re.compile(r"^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$")
+_FB_ITEM = re.compile(r"^(\s*)([-*+]|\d{1,3}[.)])\s+(?:\[([ xX])\]\s+)?(.*)$")
+_FB_FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def _fb_inline(t: str) -> str:
+	t = re.sub(r"\[([^\]\n]+)\]\(((?:https?://|/|#|mailto:)[^)\s]+)\)", r"\1 (\2)", t)
+	t = re.sub(r"\*\*(.+?)\*\*", r"\1", t)
+	t = re.sub(r"(?<![\w_])__(.+?)__(?![\w_])", r"\1", t)
+	return t.replace("**", "").replace("__", "")
+
+
+def _fallback_text(text: str) -> str:
+	"""Minimal deterministic markdown -> plain text-with-<br> conversion.
+
+	``text`` is already HTML-escaped sanitized output, so it is kept verbatim
+	apart from the stripped markers.
+	"""
+	out = []
+	for raw in text.split("\n"):
+		line = raw.rstrip()
+		if not line.strip() or _FB_FENCE.match(line):
+			continue
+		if _RE_TABLE_SEP.match(line) and "|" in line:
+			continue
+		m = _FB_HEADING.match(line)
+		if m:
+			out.append("<strong>" + _fb_inline(m.group(1)) + "</strong>")
+			continue
+		m = _FB_ITEM.match(line)
+		if m:
+			pad = "\u00a0" * min(len(m.group(1)), 8)
+			if m.group(3) is not None:
+				mark = "\u2611" if m.group(3) in "xX" else "\u2610"
+			elif m.group(2)[0].isdigit():
+				mark = "(" + m.group(2)[:-1] + ")"
+			else:
+				mark = "\u2022"
+			out.append(pad + mark + " " + _fb_inline(m.group(4)))
+			continue
+		if re.match(r"^\s*\|.*\|\s*$", line):
+			cells = [c.strip() for c in line.strip().strip("|").split("|")]
+			out.append("  ".join(_fb_inline(c) for c in cells if c))
+			continue
+		out.append(_fb_inline(re.sub(r"^\s{0,3}(?:&gt;\s?)+", "", line)))
+	return "<br>\n".join(out)
+
+
+def fallback_markdown_leaks(html: str):
+	"""Last resort: strip markdown syntax from still-leaking elements' text.
+
+	Returns ``(html, count)`` where count is the number of elements converted.
+	"""
+	count = 0
+	for _ in range(2):
+		root = _parse(html)
+		leaky = _leaky_nodes(root)
+		if not leaky:
+			break
+		edits = []
+		for node, _ in leaky:
+			block = node.tag not in _INLINE_PARENTS and node.tag != "p" and node is not root
+			for (a, b), (kind, piece) in zip(node.spans, [t for t in node.texts if t[0] == "t"]):
+				if not _scan(_html.unescape(piece)):
+					continue
+				conv = _fallback_text(piece)
+				if block:
+					conv = '<div class="md-fallback">' + conv + "</div>"
+				edits.append((a, b, conv))
+			count += 1
+		for a, b, r in sorted(edits, reverse=True):
+			html = html[:a] + r + html[b:]
+	return html, count
 
 
 def repair_markdown_leaks(html: str, max_passes: int = 4):

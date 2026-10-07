@@ -408,13 +408,13 @@ def sanitize_html(html_body: str) -> str:
 def render_document_html(markdown_source: str, title: str = "", language: str = "markdown") -> str:
 	"""Render a document (see ``render_document_html_with_report``) and return only the HTML."""
 	html_document, report = render_document_html_with_report(markdown_source, title, language)
-	if report["leaks_found"]:
+	if report["leaks_found"] or report["fallback_used"]:
 		try:
 			import frappe
 
 			frappe.logger("huf.document").warning(
-				"markdown leak guard: found=%s repaired=%s remaining=%s kinds=%s",
-				report["leaks_found"], report["repaired"], report["leaks_remaining"], ",".join(report["kinds"]),
+				"markdown leak guard: found=%s repaired=%s remaining=%s fallback=%s kinds=%s",
+				report["leaks_found"], report["repaired"], report["leaks_remaining"], report["fallback_used"], ",".join(report["kinds"]),
 			)
 		except Exception:
 			pass
@@ -440,19 +440,25 @@ def render_document_html_with_report(markdown_source: str, title: str = "", lang
 		enable_markdown_in_containers,
 		find_markdown_leaks,
 		repair_markdown_leaks,
+		fallback_markdown_leaks,
 	)
+	from huf.ai.artifacts.render.markdown_normalize import normalize_markdown_blocks
 
 	if language == "html":
 		# Containers holding markdown get markdown="1" and the source then
 		# takes a markdown pass; sources with no such container are untouched.
 		annotated = enable_markdown_in_containers(markdown_source)
-		html_body = _render_markdown(convert_task_markers(annotated)) if annotated != markdown_source else markdown_source
+		html_body = (
+			_render_markdown(convert_task_markers(normalize_markdown_blocks(annotated)))
+			if annotated != markdown_source
+			else markdown_source
+		)
 	else:
 		# Strip orphaned `{: .class-name}` markers that agents often separate
 		# from their content by a blank line (causing attr_list to fail).
 		# Then expand :::columns-N...::: regions (pre-rendered to raw HTML),
 		# then run through markdown. Markdown leaves embedded raw HTML alone.
-		cleaned_source = _strip_orphaned_class_markers(markdown_source)
+		cleaned_source = normalize_markdown_blocks(_strip_orphaned_class_markers(markdown_source))
 		preprocessed_source = _expand_columns_blocks(convert_task_markers(enable_markdown_in_containers(cleaned_source)))
 		html_body = _render_markdown(preprocessed_source)
 
@@ -466,7 +472,12 @@ def render_document_html_with_report(markdown_source: str, title: str = "", lang
 	if leaks:
 		sanitized_body, repaired = repair_markdown_leaks(sanitized_body)
 		remaining = len(find_markdown_leaks(sanitized_body))
+	fallback_used = 0
+	if remaining:
+		sanitized_body, fallback_used = fallback_markdown_leaks(sanitized_body)
+		remaining = len(find_markdown_leaks(sanitized_body))
 	report = {
+		"fallback_used": fallback_used,
 		"leaks_found": len(leaks),
 		"repaired": repaired,
 		"leaks_remaining": remaining,

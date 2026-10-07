@@ -171,14 +171,20 @@ opening tag:
   line after the opening tag and before the closing tag.
 - NEVER write raw markdown (`##`, `**bold**`, `- item`, `| table |`) inside a
   container that lacks `markdown="1"` - it can show up as literal symbols.
+- Put a BLANK LINE before and after every heading, list, table and code fence,
+  also inside HTML containers. Without it a table or list glued to the previous
+  line can fail to render and show as raw `|` / `-` symbols.
 - Want columns or sidebars with mostly prose? Prefer a markdown document
   (language markdown) and use `:::columns-2` ... `:::` instead of HTML.
 
-Wrong (shows literal `##` and `**`):
+Wrong (no blank lines; shows literal `##`, `**` or `|---|`):
 
     <div class="split-side">
     ### Priorities
+    Intro line
     - **Scale APAC**
+    | Region | Status |
+    |---|---|
     </div>
 
 Right:
@@ -187,7 +193,13 @@ Right:
 
     ### Priorities
 
+    Intro line
+
     - **Scale APAC**
+
+    | Region | Status |
+    |---|---|
+    | APAC | On track |
 
     </div>
 
