@@ -158,3 +158,27 @@ class TestHUFDocumentComment(IntegrationTestCase):
 		o = self.as_user(AUTHOR, api.add_document_comment, self.doc.name, "owner's")
 		item = [i for i in self.as_user(RO, api.list_document_comments, self.doc.name) if i["name"] == o["name"]][0]
 		self.assertFalse(item["can_edit"])
+
+	def test_hostile_bodies_are_neutralised(self):
+		import re
+
+		hostile = [
+			"<img src=x onerror=alert(1)>",
+			"<svg onload=alert(1)>",
+			'<a href="javascript:alert(1)">x</a>',
+			"<script>alert(1)</script>hi",
+			"<iframe src=https://evil.example/x></iframe>",
+			"<IMG SRC=x ONERROR=alert(1)>ok",
+		]
+		for payload in hostile:
+			c = self.as_user(RW, api.add_document_comment, self.doc.name, payload + " tail")
+			listed = {i["name"]: i for i in self.as_user(RW, api.list_document_comments, self.doc.name)}
+			for body in (c["body"], listed[c["name"]]["body"]):
+				self.assertIsNone(re.search(r"<\s*/?\s*[a-zA-Z]", body), (payload, body))
+				self.assertNotRegex(body.lower(), r"onerror|onload|alert\(1\)</|<script")
+		# entity form stays inert text (no real tag)
+		c = self.as_user(RW, api.add_document_comment, self.doc.name, "&lt;script&gt;")
+		self.assertNotIn("<", c["body"])
+		# harmless prose with angle brackets is preserved
+		c = self.as_user(RW, api.add_document_comment, self.doc.name, "a<b and c>d")
+		self.assertEqual(c["body"], "a<b and c>d")
