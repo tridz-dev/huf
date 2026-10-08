@@ -207,6 +207,8 @@ permission_query_conditions = {
     "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "HUF Document": "huf.huf.doctype.huf_document.huf_document.get_permission_query_conditions",
+    "HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.get_permission_query_conditions",
 }
 
 has_permission = {
@@ -222,6 +224,8 @@ has_permission = {
 	"Integration Settings": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Integration Service": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Integration Credential": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"HUF Document": "huf.huf.doctype.huf_document.huf_document.has_permission",
+	"HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.has_permission",
 }
 
 # DocType Class
