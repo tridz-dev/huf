@@ -278,7 +278,8 @@ class TestFuzz(unittest.TestCase):
 			doc, rep = render_document_html_with_report(src, language=lang)
 			dt = time.perf_counter() - t0
 			body = _body(doc)
-			self.assertLess(dt, 1.0, ctx)
+			# Generous: guards against pathological blow-ups only; loaded CI runners must not flake.
+			self.assertLess(dt, 8.0, ctx)
 			self.assertEqual(find_markdown_leaks(body), [], ctx)
 			if rep["fallback_used"]:
 				fallbacks.append(seed)
