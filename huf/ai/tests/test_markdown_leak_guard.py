@@ -16,6 +16,8 @@ from huf.ai.artifacts.render.html import (
 )
 from huf.ai.artifacts.render.markdown_guard import (
 	enable_markdown_in_containers,
+	_fallback_text,
+	fallback_markdown_leaks,
 	find_markdown_leaks,
 	repair_markdown_leaks,
 )
@@ -217,3 +219,65 @@ class TestPromptGuard(unittest.TestCase):
 		self.assertIn(":::columns-2", I)
 		self.assertIn("BLANK LINE before and after every heading, list, table and code fence", I)
 		self.assertIn("Wrong (no blank lines", I)
+
+
+def _plain(html):
+	return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html.replace("<br>", " "))).strip()
+
+
+class TestFallbackSpacing(unittest.TestCase):
+	REPRO = (
+		"<div><span>## Section Heading **bold bit** and more\n- first item\n- second item\n"
+		"| Name | Score |\n| --- | --- |\n| Ann | **9** |\n</span></div>"
+	)
+
+	def test_repro_keeps_spaces_and_blocks(self):
+		out, count = fallback_markdown_leaks(
+			"<div><span>## Section Heading <strong>bold bit</strong> and more\n- first item\n- second item\n"
+			"| Name | Score |\n| --- | --- |\n| Ann | 9 |\n</span></div>"
+		)
+		self.assertGreaterEqual(count, 1)
+		self.assertIn("<strong>Section Heading</strong>", out)
+		self.assertRegex(out, r"<strong>Section Heading</strong>\s*<br>")
+		plain = _plain(out)
+		self.assertIn("Section Heading bold bit and more", plain)
+		self.assertIn("\u2022 first item", plain)
+		self.assertIn("\u2022 second item", plain)
+		self.assertIn("Name Score", plain)
+		self.assertIn("Ann 9", plain)
+		for bad in ("##", "**", "---"):
+			self.assertNotIn(bad, out)
+
+	def test_full_pipeline_repro(self):
+		out = _body(render_document_html(self.REPRO, language="html"))
+		plain = _plain(out)
+		self.assertIn("Section Heading bold bit and more", plain)
+		for bad in ("##", "**", "---"):
+			self.assertNotIn(bad, plain)
+		self.assertEqual(find_markdown_leaks(out), [])
+
+	def test_inline_markers_keep_surrounding_spaces(self):
+		t = _fallback_text("a **b** c __d__ e [t](https://x.io) f")
+		self.assertEqual(t, "a b c d e t (https://x.io) f")
+
+	def test_no_content_loss_and_idempotent(self):
+		sources = [
+			"## Title one\n- **alpha** beta\n- gamma [delta](https://e.io)\n",
+			"1. first **x** thing\n2. second\n| A | B |\n|---|---|\n| one | **two** |\n",
+			"- [x] done task\n- [ ] open task\n",
+		]
+		for src in sources:
+			out = _fallback_text(src)
+			cleaned = re.sub(r"\*\*|__|#+|\||[-*+]\s|\d[.)]\s|\[[ xX]\]|\]\(|[\[\]()]|:?-{3,}:?", " ", src)
+			want = [w for w in cleaned.split() if re.search(r"\w", w)]
+			got = _plain(out)
+			pos = 0
+			for w in want:
+				i = got.find(w, pos)
+				self.assertGreaterEqual(i, 0, (w, got))
+				pos = i + len(w)
+			for bad in ("##", "**", "|"):
+				self.assertNotIn(bad, out)
+			# Re-running the fallback over its own output is a no-op.
+			wrapped = "<div>" + out + "</div>"
+			self.assertEqual(fallback_markdown_leaks(wrapped), (wrapped, 0))

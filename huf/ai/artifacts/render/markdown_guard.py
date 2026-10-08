@@ -335,15 +335,22 @@ def _fallback_text(text: str) -> str:
 	apart from the stripped markers.
 	"""
 	out = []
-	for raw in text.split("\n"):
+	# Whitespace at the edges of the piece separates it from neighbouring
+	# inline elements (``## Head <strong>x</strong>``); keep it.
+	trail = text[len(text.rstrip(" \t")) :]
+	lines = text.split("\n")
+	last_idx = max((i for i, ln in enumerate(lines) if ln.strip()), default=-1)
+	for idx, raw in enumerate(lines):
 		line = raw.rstrip()
+		gap = trail if idx == last_idx else ""
 		if not line.strip() or _FB_FENCE.match(line):
 			continue
 		if _RE_TABLE_SEP.match(line) and "|" in line:
 			continue
 		m = _FB_HEADING.match(line)
 		if m:
-			out.append("<strong>" + _fb_inline(m.group(1)) + "</strong>")
+			# Own block: <strong> on its own line, then a break.
+			out.append("<strong>" + _fb_inline(m.group(1)).strip() + "</strong>" + gap + "<br>")
 			continue
 		m = _FB_ITEM.match(line)
 		if m:
@@ -354,14 +361,20 @@ def _fallback_text(text: str) -> str:
 				mark = "(" + m.group(2)[:-1] + ")"
 			else:
 				mark = "\u2022"
-			out.append(pad + mark + " " + _fb_inline(m.group(4)))
+			out.append(pad + mark + " " + _fb_inline(m.group(4)) + gap)
 			continue
 		if re.match(r"^\s*\|.*\|\s*$", line):
 			cells = [c.strip() for c in line.strip().strip("|").split("|")]
-			out.append("  ".join(_fb_inline(c) for c in cells if c))
+			out.append(" ".join(_fb_inline(c) for c in cells if c) + gap)
 			continue
-		out.append(_fb_inline(re.sub(r"^\s{0,3}(?:&gt;\s?)+", "", line)))
-	return "<br>\n".join(out)
+		out.append(_fb_inline(re.sub(r"^\s{0,3}(?:&gt;\s?)+", "", line)) + gap)
+	# Headings already end in <br>; other lines are joined with <br>.
+	res = ""
+	for i, o in enumerate(out):
+		res += o
+		if i < len(out) - 1:
+			res += ("" if o.endswith("<br>") else "<br>") + "\n"
+	return res
 
 
 def fallback_markdown_leaks(html: str):
