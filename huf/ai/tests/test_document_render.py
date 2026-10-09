@@ -731,8 +731,21 @@ class TestCssEscapeBypass(unittest.TestCase):
 			"a{background:u\\72l(http://evil/x)}",
 			"@\\69mport 'http://evil/x.css';a{color:red}",
 			'a{background:image-set("http://evil/p.gif" 1x)}',
-			"a{content:'http://evil/x'}",
 		):
 			out = _sanitize_css(css)
 			self.assertNotIn("evil", out, css)
 		self.assertIn("color:red", _sanitize_css("a{color:red}"))
+
+
+	def test_decoded_escapes_cannot_break_out_of_style(self):
+		from huf.ai.artifacts.render.html import _sanitize_css
+
+		out = _sanitize_css('a{content:"\\3c /style\\3e \\3c script\\3e alert(1)\\3c /script\\3e"}u\\72l(http://evil/x)')
+		self.assertNotIn("<", out)
+		self.assertNotIn("evil", out)
+
+	def test_legit_css_is_kept_verbatim(self):
+		from huf.ai.artifacts.render.html import _sanitize_css
+
+		for css in ('a::before{content:"\\A"}', "a::after{content:'//'}", 'a{content:"\\22 y"}'):
+			self.assertEqual(_sanitize_css(css), css)

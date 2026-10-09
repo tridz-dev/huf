@@ -967,7 +967,6 @@ _CSS_DANGEROUS_RE = re.compile(
 
 _CSS_ESCAPE_RE = re.compile(r"\\([0-9a-fA-F]{1,6})\s?|\\(.)", re.DOTALL)
 _CSS_REMOTE_FUNC_RE = re.compile(r"(?:image-set|-webkit-image-set|cross-fade|element|src)\s*\([^)]*\)", re.IGNORECASE)
-_CSS_REMOTE_STRING_RE = re.compile(r"""(['"])\s*(?:[a-z][a-z0-9+.-]*:)?//[^'"]*\1|(['"])\s*(?:https?|ftp|data):[^'"]*\2""", re.IGNORECASE)
 
 
 def _decode_css_escapes(css: str) -> str:
@@ -983,12 +982,8 @@ def _decode_css_escapes(css: str) -> str:
 	return _CSS_ESCAPE_RE.sub(_sub, css)
 
 
-def _sanitize_css(css: str) -> str:
-	"""Strip remote/exfiltrating constructs from author CSS, keep local CSS."""
-	css = _CSS_COMMENT_RE.sub("", css)
-	css = _decode_css_escapes(css)  # `u\72l(` / `@\69mport` are valid CSS: match on the decoded form
+def _strip_remote_css(css: str) -> str:
 	css = _CSS_REMOTE_FUNC_RE.sub("none", css)
-	css = _CSS_REMOTE_STRING_RE.sub('""', css)
 	css = _CSS_IMPORT_RE.sub("", css)
 
 	def _url(match):
@@ -1001,6 +996,24 @@ def _sanitize_css(css: str) -> str:
 
 	css = _CSS_URL_RE.sub(_url, css)
 	return _CSS_DANGEROUS_RE.sub("", css)
+
+
+def _sanitize_css(css: str) -> str:
+	"""Strip remote/exfiltrating constructs from author CSS, keep local CSS.
+
+	CSS escapes (`u\\72l(`, `@\\69mport`) are decoded only to *detect* hidden constructs. When the decoded form
+	is clean the original text is kept verbatim (so `content:"\\A"` keeps working); when decoding revealed
+	something, the stripped decoded form is emitted instead, with `<`, `>` and `\\` re-escaped so decoded text can
+	never close the <style> element.
+	"""
+	css = _CSS_COMMENT_RE.sub("", css)
+	decoded = _decode_css_escapes(css)
+	stripped_decoded = _strip_remote_css(decoded)
+	if stripped_decoded == decoded:
+		out = _strip_remote_css(css)
+	else:
+		out = stripped_decoded.replace("\\", "\\5c ").replace("<", "\\3c ").replace(">", "\\3e ")
+	return out.replace("<", "\\3c ")
 
 
 def _sanitize_style_blocks(html_body: str) -> str:
