@@ -2588,14 +2588,14 @@ def _execute_agent_run(
 
         # Guarded on status='Started': a concurrent sweep_stale_runs / cancel must not be
         # overwritten by a late Success.
-        _guarded_finish_started_run(
+        _finalized_here = _guarded_finish_started_run(
             run_doc.name, "Success", **{k: v for k, v in run_update.items() if k != "status"}
         )
         from huf.ai.memory_tools import should_extract_memory
 
         # An extraction run must never queue another extraction: its own
         # success would re-trigger the job and loop indefinitely.
-        if should_extract_memory(agent_doc, run_doc.run_kind):
+        if _finalized_here and should_extract_memory(agent_doc, run_doc.run_kind):
             try:
                 frappe.enqueue(
                     "huf.ai.memory_tools.extract_memory_from_run",
@@ -4164,10 +4164,20 @@ async def _run_agent_stream_impl(
                     if r_snap_stream:
                         stream_run_update["reasoning_snapshot"] = r_snap_stream
 
-                    _guarded_finish_started_run(
+                    _finalized_here = _guarded_finish_started_run(
                         run_doc.name, "Success", **{k: v for k, v in stream_run_update.items() if k != "status"}
                     )
                     safe_commit()
+                    if not _finalized_here:
+                        # A sweep/cancel already finalized this run: no success `done`, no post-run side effects.
+                        yield {
+                            "type": "error",
+                            "error": "Run was already finalized before it completed",
+                            "success": False,
+                            "agent_run_id": run_doc.name,
+                            "conversation_id": conversation.name,
+                        }
+                        return
 
                     # Handle Sub-Agent Success Lifecycle Hook
                     if parent_conversation_id and invoked_by_agent:

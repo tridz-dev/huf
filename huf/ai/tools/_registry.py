@@ -15,7 +15,19 @@ Each entry is a dict with:
 OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions"})
 
 
-def array_items_schema(fieldname):
+def is_registry_function_path(function_path):
+	"""True when ``function_path`` is the handler of a built-in registry tool."""
+	if not function_path:
+		return False
+	return any(t.get("function_path") == function_path for t in ALL_INTEGRATION_TOOLS)
+
+
+def array_items_schema(fieldname, function_path=None):
+	"""Items schema for an array param. The object-array rule applies to built-in registry tools only:
+	pass ``function_path`` for rows that may be user-defined, and a path that is not a registry handler
+	always gets string items. With ``function_path=None`` the caller asserts a registry spec."""
+	if function_path is not None and not is_registry_function_path(function_path):
+		return {"type": "string"}
 	return {"type": "object"} if fieldname in OBJECT_ARRAY_PARAMS else {"type": "string"}
 
 
@@ -552,7 +564,7 @@ FRAPPE_GENERIC_TOOLS = [
         "category": "Frappe Generic Tools",
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
-            _p("filters", type="string", description="JSON filter dict or list of [fieldname, operator, value] conditions"),
+            _p("filters", type="string", description="Filters as a JSON object string, e.g. '{\"status\": \"Open\"}' (a JSON list of [fieldname, operator, value] conditions is also accepted)"),
             _p("fields", type="array", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
             _p("limit_start", type="integer", description="Offset for pagination (default 0)"),
             _p("limit_page_length", type="integer", description="Max rows to return (default 20)"),
@@ -598,7 +610,7 @@ FRAPPE_GENERIC_TOOLS = [
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
             _p("mode", required=True, description="One of 'list', 'form', 'report'"),
-            _p("filters", type="string", description="JSON filter dict/list (list and report modes)"),
+            _p("filters", type="string", description="Filters as a JSON object string (list and report modes); a JSON list of conditions is also accepted"),
             _p("fields", type="array", description="JSON list of fieldnames to include"),
             _p("name", description="Document name (form mode)"),
             _p("limit_start", type="integer", description="Offset for pagination (list/report modes)"),
