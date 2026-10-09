@@ -2870,7 +2870,12 @@ def _guarded_finish_started_run(run_name: str, status: str, **fields) -> bool:
     cols = ", ".join(f"`{k}`=%s" for k in fields)
     sql = f"update `tabAgent Run` set status=%s, {cols + ', ' if cols else ''}modified=%s where name=%s and status='Started'"
     frappe.db.sql(sql, (status, *fields.values(), ts, run_name))
-    if not frappe.db._cursor.rowcount:
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        changed = n > 0
+    else:  # driver did not report a usable rowcount: trust the row itself
+        changed = frappe.db.get_value("Agent Run", run_name, "status") == status
+    if not changed:
         frappe.logger("huf").debug(f"Agent Run {run_name} already finalized; skipped {status} write")
         return False
     # Safety net: a terminal run must not leave Queued/Started tool calls behind (shown as "Running").
@@ -3848,9 +3853,16 @@ async def _run_agent_stream_impl(
 
             # Polls the cancel marker before the first provider call, between chunks and (in 2s slices)
             # while the provider is silent; a stalled/thinking call is interrupted.
-            async for chunk in iter_with_cancel_poll(stream, run_doc.name):
+            poll = iter_with_cancel_poll(stream, run_doc.name)
+            async for chunk in poll:
                 if chunk is CANCELLED:
                     cancelled_by_user = True
+                    # Returning from the consumer does not run the poller's finally: close it so the pending
+                    # provider read is cancelled and the provider stream is aclose()d now, not by GC.
+                    try:
+                        await poll.aclose()
+                    except Exception:
+                        pass
                     yield {
                         "type": "error",
                         "error": "Run cancelled",
@@ -3865,6 +3877,10 @@ async def _run_agent_stream_impl(
                     budget = get_current_budget()
                     budget.check_deadline()
                 except RunBudgetExceeded:
+                    try:
+                        await poll.aclose()
+                    except Exception:
+                        pass
                     yield {
                         "type": "error",
                         "error": "Run budget deadline exceeded",
