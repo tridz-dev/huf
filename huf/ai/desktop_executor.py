@@ -2111,7 +2111,7 @@ def dispatch(
 
 	# Fail fast (no publish, no wait) when the executor is not live.
 	lease = _get_lease(executor_id)
-	if not lease:
+	if not lease or lease.get("user") != user:
 		# Grace: a desktop whose server just restarted re-registers on its next heartbeat retry
 		# (<=5s); give it a moment before telling the model the desktop is gone.
 		lease = _await_lease(executor_id, user)
