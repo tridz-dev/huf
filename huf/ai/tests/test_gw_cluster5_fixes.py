@@ -120,11 +120,15 @@ class TestCredentialSchemaConsistency(unittest.TestCase):
 		by_key = {c["key"]: c for c in creds}
 		self.assertTrue(by_key["webhook_secret"]["required"])
 
-	def test_google_chat_requires_verification_token(self):
-		"""GW-14: google_chat's verification_token was seeded required=False."""
+	def test_google_chat_requires_jwt_credentials(self):
+		"""GW-14: google_chat verifies inbound via Bearer JWT (the body-level
+		verification_token is retired), so audience and service_account_key
+		must be seeded required=True."""
 		creds = _adapter_required_credentials("google_chat")
 		by_key = {c["key"]: c for c in creds}
-		self.assertTrue(by_key["verification_token"]["required"])
+		self.assertNotIn("verification_token", by_key)
+		self.assertTrue(by_key["audience"]["required"])
+		self.assertTrue(by_key["service_account_key"]["required"])
 
 
 class TestRegisterIntegrationServicesDB(IntegrationTestCase):
@@ -153,7 +157,9 @@ class TestRegisterIntegrationServicesDB(IntegrationTestCase):
 
 		google_chat = frappe.get_doc("Integration Service", "google_chat")
 		gc_creds = {c["key"]: c["required"] for c in json.loads(google_chat.required_credentials)}
-		self.assertTrue(gc_creds.get("verification_token"))
+		self.assertNotIn("verification_token", gc_creds)
+		self.assertTrue(gc_creds.get("audience"))
+		self.assertTrue(gc_creds.get("service_account_key"))
 
 	def test_jira_not_seeded(self):
 		"""GW-35: jira must no longer be (re-)seeded as a built-in service.

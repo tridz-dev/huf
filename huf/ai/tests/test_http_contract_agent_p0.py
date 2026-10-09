@@ -139,7 +139,15 @@ class HttpContractAgentP0(unittest.TestCase):
         # Confirm the bench is actually reachable before running anything —
         # a connection failure here should fail loudly and immediately, not
         # be misread as an assertion failure inside an individual test.
-        ping = requests.get(_method_url("ping"), timeout=10)
+        try:
+            ping = requests.get(_method_url("ping"), timeout=10)
+        except requests.exceptions.ConnectionError as exc:
+            if os.environ.get("CI"):
+                raise  # a CI run without the server must fail, not report green skips
+            raise unittest.SkipTest(
+                f"HTTP contract tests need a running bench web server at {BASE_URL} "
+                f"(set HUF_HTTP_TEST_BASE_URL): {exc.__class__.__name__}"
+            )
         assert ping.status_code == 200 and ping.json().get("message") == "pong", (
             f"Bench at {BASE_URL} is not reachable/healthy: "
             f"{ping.status_code} {ping.text[:300]}"

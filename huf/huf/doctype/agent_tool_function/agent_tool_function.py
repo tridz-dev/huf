@@ -719,7 +719,9 @@ class AgentToolFunction(Document):
 				obj["additionalProperties"] = True
 
 			if param.type == "array":
-				obj["items"] = {"type": "string"}
+				from huf.ai.tools._registry import array_items_schema
+
+				obj["items"] = array_items_schema(param.fieldname)
 
 			if param.type == "string" and param.options:
 				obj["enum"] = param.options.split("\n")

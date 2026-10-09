@@ -10,6 +10,15 @@ Each entry is a dict with:
 """
 
 
+# Array parameters whose elements are objects (the doctype row has no item-type field, so the schema
+# builders look the fieldname up here instead of declaring every array as an array of strings).
+OBJECT_ARRAY_PARAMS = frozenset({"edits", "nodes", "edges", "data", "questions"})
+
+
+def array_items_schema(fieldname):
+	return {"type": "object"} if fieldname in OBJECT_ARRAY_PARAMS else {"type": "string"}
+
+
 def _p(name, type="string", required=False, description=""):
 	return {
 		"label": name.replace("_", " ").title(),
@@ -543,8 +552,8 @@ FRAPPE_GENERIC_TOOLS = [
         "category": "Frappe Generic Tools",
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
-            _p("filters", type="json", description="JSON filter dict or list of [fieldname, operator, value] conditions"),
-            _p("fields", type="json", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
+            _p("filters", type="string", description="JSON filter dict or list of [fieldname, operator, value] conditions"),
+            _p("fields", type="array", description="JSON list of fieldnames to return (default: all fields readable by your roles)"),
             _p("limit_start", type="integer", description="Offset for pagination (default 0)"),
             _p("limit_page_length", type="integer", description="Max rows to return (default 20)"),
             _p("order_by", description="SQL-style order-by clause, e.g. 'modified desc'"),
@@ -567,7 +576,7 @@ FRAPPE_GENERIC_TOOLS = [
         "category": "Frappe Generic Tools",
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
-            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs for the new record"),
+            _p("values", type="object", required=True, description="JSON object of fieldname/value pairs for the new record"),
         ],
     },
     {
@@ -578,7 +587,7 @@ FRAPPE_GENERIC_TOOLS = [
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
             _p("name", required=True, description="Document name/ID to update"),
-            _p("values", type="json", required=True, description="JSON object of fieldname/value pairs to change"),
+            _p("values", type="object", required=True, description="JSON object of fieldname/value pairs to change"),
         ],
     },
     {
@@ -589,8 +598,8 @@ FRAPPE_GENERIC_TOOLS = [
         "parameters": [
             _p("doctype", required=True, description="Target DocType name"),
             _p("mode", required=True, description="One of 'list', 'form', 'report'"),
-            _p("filters", type="json", description="JSON filter dict/list (list and report modes)"),
-            _p("fields", type="json", description="JSON list of fieldnames to include"),
+            _p("filters", type="string", description="JSON filter dict/list (list and report modes)"),
+            _p("fields", type="array", description="JSON list of fieldnames to include"),
             _p("name", description="Document name (form mode)"),
             _p("limit_start", type="integer", description="Offset for pagination (list/report modes)"),
             _p("limit_page_length", type="integer", description="Max rows (list/report modes)"),
@@ -2171,7 +2180,7 @@ DOCUMENT_ARTIFACT_TOOLS = [
 		"category": "Document Tools",
 		"parameters": [
 			_p("artifact_id", required=True, description="The id/name of the Artifact to redline"),
-			_p("edits", type="json", required=True, description="List of {find, replace} dicts describing the edits to mark as tracked changes"),
+			_p("edits", type="array", required=True, description="List of {find, replace} dicts describing the edits to mark as tracked changes"),
 			_p("author", description="Attribution for the tracked changes; defaults to the current user"),
 		],
 	},
@@ -2194,8 +2203,8 @@ RENDER_TOOLS = [
 		"category": "Render Tools",
 		"parameters": [
 			_p("diagram_type", required=True, description="One of: 'graph TD', 'graph LR', 'flowchart TD', 'flowchart LR'"),
-			_p("nodes", type="json", required=True, description="JSON list of nodes [{id, label}], e.g. [{\"id\": \"a\", \"label\": \"Start\"}]"),
-			_p("edges", type="json", description="JSON list of edges [{from, to, label}], e.g. [{\"from\": \"a\", \"to\": \"b\", \"label\": \"next\"}]. from/to must match declared node ids"),
+			_p("nodes", type="array", required=True, description="JSON list of nodes [{id, label}], e.g. [{\"id\": \"a\", \"label\": \"Start\"}]"),
+			_p("edges", type="array", description="JSON list of edges [{from, to, label}], e.g. [{\"from\": \"a\", \"to\": \"b\", \"label\": \"next\"}]. from/to must match declared node ids"),
 			_p("title", description="Artifact title (default 'Diagram')"),
 		],
 	},
@@ -2210,10 +2219,10 @@ RENDER_TOOLS = [
 		"category": "Render Tools",
 		"parameters": [
 			_p("chart_type", required=True, description="One of: 'bar', 'line', 'pie', 'area'"),
-			_p("data", type="json", required=True, description="JSON list of row objects, each containing at least the x_key field and every series_key field"),
-			_p("series_keys", type="json", description="JSON list of field names to plot as series/values (default ['value'])"),
+			_p("data", type="array", required=True, description="JSON list of row objects, each containing at least the x_key field and every series_key field"),
+			_p("series_keys", type="array", description="JSON list of field names to plot as series/values (default ['value'])"),
 			_p("x_key", description="Field used for the category/x axis, ignored for 'pie' (default 'label')"),
-			_p("colors", type="json", description="Optional JSON list of hex colors, mainly used for pie slices"),
+			_p("colors", type="array", description="Optional JSON list of hex colors, mainly used for pie slices"),
 			_p("title", description="Artifact title (default '<Chart Type> Chart')"),
 		],
 	},
@@ -2242,7 +2251,7 @@ RENDER_TOOLS = [
 		"category": "Render Tools",
 		"parameters": [
 			_p("component", required=True, description="Component name, must be one returned by list_app_components"),
-			_p("props", type="json", description="JSON object of prop name -> value, e.g. {\"variant\": \"secondary\"}"),
+			_p("props", type="object", description="JSON object of prop name -> value, e.g. {\"variant\": \"secondary\"}"),
 			_p("confirm", type="boolean", description="false = preview artifact only; true = return artifact to relay"),
 		],
 	},
@@ -2682,7 +2691,7 @@ LAZY_DISCOVERY_TOOLS = [
 		"function_path": "huf.ai.tools.lazy_discovery.handle_load_tools",
 		"category": "Tool Discovery",
 		"parameters": [
-			_p("tool_names", type="json", required=True, description="List of tool_name strings to load"),
+			_p("tool_names", type="array", required=True, description="List of tool_name strings to load"),
 		],
 	},
 ]

@@ -799,7 +799,9 @@ class TestGatewayEventFailureHandling(unittest.TestCase):
             sender_id="user1",
         )
         configured_gateway = gateway(name="Support Teams", provider="Microsoft Teams", execution_user="gateway-bot")
-        target_agent_doc = MagicMock(allow_guest=True)
+        # GW-08: the pre-gate authorizes as the Gateway's execution_user, so the
+        # agent must be accessible to it (here: owned by it), not just guest-open.
+        target_agent_doc = MagicMock(allow_guest=True, owner="gateway-bot")
         mock_frappe.get_doc.side_effect = [event, configured_gateway, target_agent_doc]
         mock_run = MagicMock(return_value={"agent_run_id": "AR-002", "response": "Hello back"})
 

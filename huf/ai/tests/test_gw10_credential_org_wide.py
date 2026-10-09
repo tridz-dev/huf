@@ -21,11 +21,12 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 		frappe.set_user("Administrator")
 
 		# Create a non-admin user for testing
-		self.test_user = "test_user_gw10"
+		# User names are the full email address, so use it for the exists check too.
+		self.test_user = "test_user_gw10@example.com"
 		if not frappe.db.exists("User", self.test_user):
 			frappe.get_doc({
 				"doctype": "User",
-				"email": f"{self.test_user}@example.com",
+				"email": self.test_user,
 				"first_name": "Test User",
 				"user_type": "Website User",
 			}).insert()
@@ -36,11 +37,23 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			frappe.delete_doc("AI Provider", self.provider_name)
 		frappe.get_doc({
 			"doctype": "AI Provider",
-			"name": self.provider_name,
-			"provider_name": "openai",
+			# AI Provider autonames from provider_name, so it must equal the
+			# name used for the exists/delete check and teardown.
+			"provider_name": self.provider_name,
 			"api_key": "test-key-123",
 			"disabled": 0,
 		}).insert()
+
+		# Integration Settings.service is a Link to Integration Service.
+		self._created_services = []
+		for svc in ("test_service", "test_service_error_logging", "test_service_inactive", "test_service_tiebreak"):
+			if not frappe.db.exists("Integration Service", svc):
+				frappe.get_doc({
+					"doctype": "Integration Service",
+					"service_name": svc,
+					"category": "Other",
+				}).insert()
+				self._created_services.append(svc)
 
 		# Create Integration Settings (org-wide credential)
 		self.integration_name = "test_integration_gw10"
@@ -71,6 +84,7 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			"agent_name": self.agent_name,
 			"owner": self.test_user,
 			"model": "gpt-4",
+			"instructions": "GW-10 test agent",
 			"disabled": 0,
 		})
 		self.agent_doc.insert()
@@ -83,9 +97,9 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			"doctype": "Agent Tool Function",
 			"name": self.tool_name,
 			"tool_name": self.tool_name,
-			"title": "Test Tool GW-10",
-			"function_type": "Custom Function",
-			"handler": "huf.ai.test_tools.echo",
+			"tool_type": "Miscellaneous",
+			"types": "Custom Function",
+			"function_path": "huf.ai.test_tools.echo",
 			"description": "Test tool for GW-10 credential resolution",
 			"owner": "Administrator",
 			"disabled": 0,
@@ -100,6 +114,7 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			("Agent Tool Function", self.tool_name),
 			("Agent", self.agent_name),
 			("Integration Settings", self.integration_name),
+			*[("Integration Service", svc) for svc in self._created_services],
 			("AI Provider", self.provider_name),
 			("User", self.test_user),
 		]:
@@ -183,6 +198,8 @@ class TestGW10OrgWideCredentialScope(IntegrationTestCase):
 			"service": error_test_service,
 			"is_active": 1,
 			"is_default": 1,
+			# Integration Settings.validate requires at least one credential.
+			"credentials": [{"key": "api_key", "value": "test-error-logging-value"}],
 		}).insert()
 
 		# Now switch to non-admin and update error

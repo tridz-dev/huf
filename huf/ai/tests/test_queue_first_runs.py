@@ -525,7 +525,24 @@ class TestQueueFirstRuns(unittest.TestCase):
             "agent_run_id": "AR-SCH-001",
         }
 
+        mock_frappe.db.sql.return_value = [[1]]  # this tick wins the claim
+
         agent_scheduler.run_scheduled_agents()
+
+        # The scheduler tick only enqueues the worker job; it does not run the agent itself.
+        mock_run.assert_not_called()
+        mock_frappe.enqueue.assert_called_once()
+        self.assertEqual(
+            mock_frappe.enqueue.call_args.args[0], "huf.ai.agent_scheduler.execute_scheduled_agent"
+        )
+
+        # The worker job then hands the run to the queue (no synchronous "now").
+        trigger_doc = MagicMock()
+        trigger_doc.execution_mode = "Sync"
+        mock_frappe.get_doc.side_effect = lambda doctype, name: (
+            agent_doc if doctype == "Agent" else trigger_doc
+        )
+        agent_scheduler.execute_scheduled_agent("SCH-001", "Scheduled Agent")
 
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)

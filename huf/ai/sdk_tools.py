@@ -376,7 +376,9 @@ def _spec_parameters_schema(spec) -> dict:
     for p in spec.get("parameters") or []:
         prop = {"type": p["type"], "description": p.get("description", "")}
         if p["type"] == "array":
-            prop["items"] = {"type": "string"}
+            from huf.ai.tools._registry import array_items_schema
+
+            prop["items"] = array_items_schema(p["fieldname"])
         props[p["fieldname"]] = prop
         if p.get("required"):
             required.append(p["fieldname"])
