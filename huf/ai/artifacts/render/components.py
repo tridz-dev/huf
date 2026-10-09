@@ -42,6 +42,9 @@ WeasyPrint 68 resolves ``var()`` correctly - verified by rendering
 ``--accent: #D32F2F`` and reading back ``srgb 0.827 0.184 0.184``.
 """
 
+from huf.ai.artifacts.render import design_tokens as tokens
+
+
 #: Default palette (restrained corporate, matches the PDF print context).
 #: Keys are CSS custom-property names WITHOUT the leading "--".
 #:
@@ -107,9 +110,10 @@ COMPONENTS = {
 	display: flex;
 	justify-content: space-between;
 	align-items: baseline;
-	padding-bottom: 8pt;
-	margin-bottom: 16pt;
-	border-bottom: 1.5pt solid var(--accent);
+	gap: 12pt;
+	padding-bottom: 6pt;
+	margin-bottom: 18pt;
+	border-bottom: 1pt solid var(--accent);
 }
 """,
 		"docx": {"type": "table", "cols": 2, "borders": False, "col_align": ["left", "right"]},
@@ -121,7 +125,8 @@ COMPONENTS = {
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--accent);
-	font-size: 13pt;
+	font-size: __CAPTION_PT__pt;
+	line-height: 1.3;
 }
 """,
 		"docx": {"type": "run", "bold": True, "color": "var(--accent)"},
@@ -129,21 +134,25 @@ COMPONENTS = {
 	"doc-meta": {
 		"css": """
 .doc-meta {
-	text-align: right;
-	font-size: 8pt;
+	text-align: end;
+	font-size: __CAPTION_PT__pt;
+	line-height: 1.4;
 	color: var(--muted);
+	white-space: nowrap;
 }
 """,
-		"docx": {"type": "paragraph", "align": "right", "size_pt": 8},
+		"docx": {"type": "paragraph", "align": "right", "size_pt": tokens.CAPTION_SIZE_PT},
 	},
 	"doc-title": {
 		"css": """
 .doc-title {
-	font-size: 26pt;
+	font-size: __TITLE_PT__pt;
 	font-weight: bold;
+	line-height: 1.2;
+	letter-spacing: -0.01em;
 	color: var(--ink);
-	margin-top: 0.4em;
-	margin-bottom: 0.1em;
+	margin-top: 0;
+	margin-bottom: 4pt;
 }
 """,
 		# Word's built-in Heading styles carry their OWN colour (a blue that
@@ -157,21 +166,32 @@ COMPONENTS = {
 	"doc-subtitle": {
 		"css": """
 .doc-subtitle {
-	font-size: 12pt;
+	font-size: __SUBTITLE_PT__pt;
+	line-height: 1.4;
 	color: var(--muted);
 	margin-top: 0;
-	margin-bottom: 1em;
+	margin-bottom: 16pt;
 }
 """,
-		"docx": {"type": "paragraph", "size_pt": 12, "color": "var(--muted)"},
+		"docx": {"type": "paragraph", "size_pt": tokens.SUBTITLE_SIZE_PT, "color": "var(--muted)"},
 	},
 	"callout": {
 		"css": """
 .callout {
-	border-left: 4pt solid var(--accent);
+	border-inline-start: 3pt solid var(--accent);
+	border-radius: 0 3pt 3pt 0;
 	background-color: var(--callout-bg);
-	padding: 10pt 14pt;
-	margin: 12pt 0;
+	padding: 8pt 12pt;
+	margin: 0 0 12pt;
+	break-inside: avoid;
+}
+
+.callout > :last-child {
+	margin-bottom: 0;
+}
+
+.callout h2, .callout h3, .callout h4 {
+	margin-top: 0;
 }
 """,
 		"docx": {"type": "table", "cols": 1, "shading": "var(--callout-bg)", "borders": True},
@@ -188,9 +208,18 @@ COMPONENTS = {
 		"css": """
 .metric-grid {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 10pt;
-	margin: 12pt 0;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 8pt;
+	margin: 0 0 14pt;
+}
+
+/* Opt-in denser rows for 3 or 4 short KPIs: class="metric-grid cols-4". */
+.metric-grid.cols-3 {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-grid.cols-4 {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 """,
 		"docx": {"type": "table_row_of_cells", "source": "children"},
@@ -204,17 +233,20 @@ COMPONENTS = {
 	background-color: var(--surface);
 	border: 0.75pt solid var(--rule);
 	border-radius: 3pt;
-	padding: 10pt 12pt;
-	font-size: 16pt;
+	padding: 8pt 10pt;
+	font-size: __METRIC_PT__pt;
+	line-height: 1.2;
 	font-weight: bold;
+	font-variant-numeric: tabular-nums;
 	color: var(--ink);
+	break-inside: avoid;
 }
 
 .metric::after {
 	content: attr(data-label);
 	display: block;
 	margin-top: 4pt;
-	font-size: 7pt;
+	font-size: __LABEL_PT__pt;
 	font-weight: normal;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
@@ -224,38 +256,51 @@ COMPONENTS = {
 		"docx": {
 			"type": "cell",
 			"shading": "var(--surface)",
-			"value_size_pt": 16,
+			"value_size_pt": tokens.METRIC_VALUE_SIZE_PT,
 			"value_color": "var(--ink)",
-			"label_size_pt": 7,
+			"label_size_pt": tokens.LABEL_SIZE_PT,
 			"label_color": "var(--muted)",
 			"label_from": "data-label",
 		},
 	},
 	"split": {
-		# GRID, not flex, and this is load-bearing rather than stylistic.
+		# Sidebar robustness. A model-written sidebar must never look broken:
+		# the old fixed `1fr 28%` grid gave the aside ~180px at A4 width, so
+		# bullets wrapped every one or two words under a big heading.
 		#
-		# WeasyPrint 68 will not START a flex container part-way down a page
-		# when its content is tall enough to need fragmenting - it pushes the
-		# whole box to the top of the next page and only fragments from
-		# there. Measured: with the full 25.7cm content area free, a tall
-		# flex .split still began on page 2, while an identical plain block
-		# filled the remaining space correctly. In a real document that
-		# showed up as ~40% of a page left blank ahead of every sidebar
-		# section.
+		# Screen (the in-app preview): flex-wrap with a 420px basis for the
+		# main column and a 240px floor for the aside. When both cannot fit
+		# side by side the aside wraps BELOW the main column at full width.
+		# An A4 preview column is ~643px, so in practice it stacks there and
+		# only sits beside the text in a genuinely wide view. A long aside
+		# (5+ list items, several paragraphs, a table) always stacks.
 		#
-		# Flex has a second defect here: given a tall main column and a short
-		# sidebar, it lays out every main-column fragment first and paints the
-		# sidebar only in the LAST fragment - stranding the sidebar pages away
-		# from the content it annotates.
+		# Print (WeasyPrint): always stacked as plain blocks. A4's content box
+		# cannot fit 240 + 420px anyway, and WeasyPrint 68 has two flex defects
+		# here - it will not START a tall flex container part-way down a page
+		# (leaving ~40% of a page blank), and it paints a short sidebar only in
+		# the LAST fragment of a tall main column. Plain blocks have neither.
 		#
-		# Grid has neither problem: it starts in the space available and
-		# fragments cell content cleanly across the break.
+		# Structural properties are !important: an author <style> block sits
+		# after this stylesheet and would otherwise win the cascade (that is
+		# how a model-written `grid-template-columns: 1fr 210px` got through).
 		"css": """
 .split {
-	display: grid;
-	grid-template-columns: 2fr 1fr;
-	gap: 16pt;
-	margin: 12pt 0;
+	display: flex !important;
+	flex-wrap: wrap !important;
+	align-items: flex-start;
+	gap: 12pt 16pt;
+	margin: 0 0 12pt;
+}
+
+@media print {
+	.split {
+		display: block !important;
+	}
+
+	.split > .split-side {
+		margin-top: 10pt;
+	}
 }
 """,
 		# LINEARISED in Word, deliberately, rather than mapped to a two-column
@@ -274,7 +319,9 @@ COMPONENTS = {
 	"split-main": {
 		"css": """
 .split-main {
-	min-width: 0;
+	flex: 999 1 __MAIN_MIN_PX__px !important;
+	min-width: 0 !important;
+	max-width: 100%;
 }
 """,
 		"docx": {"type": "passthrough"},
@@ -282,12 +329,63 @@ COMPONENTS = {
 	"split-side": {
 		"css": """
 .split-side {
-	min-width: 0;
-	align-self: start;
+	flex: 1 1 __SIDE_MIN_PX__px !important;
+	min-width: __SIDE_MIN_PX__px !important;
+	max-width: 100%;
+	box-sizing: border-box;
+	font-family: inherit !important;
 	background-color: var(--surface);
 	border: 0.75pt solid var(--rule);
 	border-radius: 3pt;
-	padding: 10pt 12pt;
+	padding: 8pt 10pt;
+	font-size: __SIDE_PT__pt !important;
+	line-height: 1.45;
+	color: var(--ink);
+	overflow-wrap: break-word;
+	word-break: normal;
+	hyphens: manual;
+}
+
+/* A long aside is content, not a margin note: give it the full width. */
+.split:has(> .split-side li:nth-of-type(5)) > *,
+.split:has(> .split-side > p ~ p ~ p) > *,
+.split:has(> .split-side table) > * {
+	flex-basis: 100% !important;
+}
+
+/* The sidebar is a margin note, not a second article: its headings are
+   small labels, never section-sized and never a display face. */
+.split-side h1, .split-side h2, .split-side h3, .split-side h4,
+.split-side h5, .split-side h6 {
+	font-family: inherit !important;
+	font-size: __LABEL_PT__pt !important;
+	font-weight: bold;
+	line-height: 1.3 !important;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--muted);
+	margin: 8pt 0 3pt !important;
+}
+
+.split-side p, .split-side li, .split-side td {
+	font-size: inherit !important;
+}
+
+.split-side > :first-child {
+	margin-top: 0;
+}
+
+.split-side > :last-child {
+	margin-bottom: 0;
+}
+
+.split-side p, .split-side ul, .split-side ol {
+	margin-bottom: 5pt;
+}
+
+.split-side ul, .split-side ol {
+	padding-inline-start: __SIDE_INDENT_PT__pt !important;
+	margin-inline-start: 0 !important;
 }
 """,
 		# Full-width shaded block once the split is linearised, so the sidebar
@@ -303,16 +401,17 @@ COMPONENTS = {
 }
 
 .data-table th {
-	background-color: var(--accent);
-	color: var(--accent-contrast);
+	background-color: var(--surface);
+	color: var(--muted);
 	font-weight: bold;
-	text-align: left;
-	padding: 6pt 8pt;
+	text-align: start;
+	padding: 5pt 8pt;
 	border: none;
+	border-bottom: 1pt solid var(--ink);
 }
 
 .data-table td {
-	padding: 6pt 8pt;
+	padding: 5pt 8pt;
 	border: none;
 	border-bottom: 0.75pt solid var(--rule);
 }
@@ -320,8 +419,8 @@ COMPONENTS = {
 		"docx": {
 			"type": "table",
 			"style": "Table Grid",
-			"header_shading": "var(--accent)",
-			"header_color": "var(--accent-contrast)",
+			"header_shading": "var(--surface)",
+			"header_color": "var(--muted)",
 		},
 	},
 	"status-badge": {
@@ -332,17 +431,20 @@ COMPONENTS = {
 		"css": """
 .status-badge {
 	display: inline-block;
-	padding: 1pt 5pt;
-	border-radius: 2pt;
+	padding: 0.5pt 5pt;
+	border-radius: 8pt;
 	background-color: var(--rule);
 	color: var(--ink);
-	font-size: 7.5pt;
+	font-size: __LABEL_PT__pt;
+	line-height: 1.5;
 	font-weight: bold;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
+	white-space: nowrap;
+	vertical-align: 0.5pt;
 }
 """,
-		"docx": {"type": "run", "bold": True, "size_pt": 7.5, "shading": "var(--rule)", "color": "var(--ink)"},
+		"docx": {"type": "run", "bold": True, "size_pt": tokens.LABEL_SIZE_PT, "shading": "var(--rule)", "color": "var(--ink)"},
 	},
 	"page-break": {
 		# Deliberately invisible. An agent-authored version of this carried
@@ -377,12 +479,27 @@ COMPONENTS = {
 		"css": """
 .doc-footer {
 	position: running(foot);
-	font-size: 7.5pt;
+	font-size: __CAPTION_PT__pt;
 	color: var(--muted);
 }
 """,
-		"docx": {"type": "footer", "size_pt": 7.5, "color": "var(--muted)"},
+		"docx": {"type": "footer", "size_pt": tokens.CAPTION_SIZE_PT, "color": "var(--muted)"},
 	},
+}
+
+
+#: Component CSS names its sizes by placeholder so every value comes from
+#: design_tokens - the same numbers the DOCX recipes above read directly.
+_SIZE_PLACEHOLDERS = {
+	"__TITLE_PT__": tokens.TITLE_SIZE_PT,
+	"__SUBTITLE_PT__": tokens.SUBTITLE_SIZE_PT,
+	"__METRIC_PT__": tokens.METRIC_VALUE_SIZE_PT,
+	"__CAPTION_PT__": tokens.CAPTION_SIZE_PT,
+	"__LABEL_PT__": tokens.LABEL_SIZE_PT,
+	"__SIDE_PT__": tokens.SIDE_SIZE_PT,
+	"__SIDE_INDENT_PT__": tokens.SIDE_LIST_INDENT_PT,
+	"__SIDE_MIN_PX__": tokens.SIDE_MIN_WIDTH_PX,
+	"__MAIN_MIN_PX__": tokens.MAIN_MIN_WIDTH_PX,
 }
 
 
@@ -405,4 +522,6 @@ def components_css() -> str:
 	between same-specificity rules non-deterministic.
 	"""
 	rules = "\n".join(component["css"] for component in COMPONENTS.values())
+	for placeholder, value in _SIZE_PLACEHOLDERS.items():
+		rules = rules.replace(placeholder, str(value))
 	return theme_css() + rules

@@ -1208,7 +1208,7 @@ def _paragraph_shading(p_pr, color: str) -> None:
 
 def _setup_document(doc, theme: dict, title: str) -> None:
 	"""Page geometry and styles matching PRINT_STYLESHEET: A4, 2cm margins,
-	11pt body, serif headings in the ink colour, no Word-blue anywhere."""
+	body size from design_tokens, one sans face for title and headings in the ink colour, no Word-blue anywhere."""
 	section = doc.sections[0]
 	section.page_width = Cm(21)
 	section.page_height = Cm(29.7)
@@ -1228,26 +1228,28 @@ def _setup_document(doc, theme: dict, title: str) -> None:
 
 	normal = styles["Normal"]
 	_set_rfonts(normal.element.get_or_add_rPr(), BODY_FONT)
-	normal.font.size = Pt(11)
+	normal.font.size = Pt(tokens.BODY_SIZE_PT)
 	normal.font.color.rgb = _rgb_color(theme["ink"])
-	normal.paragraph_format.space_after = Pt(6)
-	normal.paragraph_format.line_spacing = 1.2
+	normal.paragraph_format.space_after = Pt(tokens.PARA_SPACE_AFTER_PT)
+	normal.paragraph_format.line_spacing = tokens.DOCX_BODY_LINE_SPACING
 
 	for style_name, level in [("Title", 1)] + [(f"Heading {n}", n) for n in range(1, 7)]:
 		try:
 			style = styles[style_name]
 		except KeyError:
 			continue
-		_set_rfonts(style.element.get_or_add_rPr(), HEADING_FONT)
+		# One sans face at every level, as in PRINT_STYLESHEET.
+		level_font = HEADING_FONT
+		_set_rfonts(style.element.get_or_add_rPr(), level_font)
 		style.font.size = Pt(_HEADING_SIZES_PT[level])
 		style.font.bold = True
 		style.font.italic = False
 		style.font.color.rgb = _rgb_color(theme["ink"])
 		fmt = style.paragraph_format
 		fmt.space_before = Pt(_HEADING_SPACE_BEFORE_PT[level])
-		fmt.space_after = Pt(6)
+		fmt.space_after = Pt(tokens.HEADING_SPACE_AFTER_PT[level])
 		fmt.keep_with_next = True
-		fmt.line_spacing = 1.1
+		fmt.line_spacing = tokens.DOCX_HEADING_LINE_SPACING
 		# The linked character style ("Heading 1 Char") carries its own
 		# template font/size/colour, and docx-preview merges it into the
 		# paragraph - so it must match too.
@@ -1256,7 +1258,7 @@ def _setup_document(doc, theme: dict, title: str) -> None:
 		except KeyError:
 			char_style = None
 		if char_style is not None:
-			_set_rfonts(char_style.element.get_or_add_rPr(), HEADING_FONT)
+			_set_rfonts(char_style.element.get_or_add_rPr(), level_font)
 			char_style.font.size = Pt(_HEADING_SIZES_PT[level])
 			char_style.font.bold = True
 			char_style.font.italic = False
@@ -1399,7 +1401,7 @@ def _format_run(run, fmt: _InlineFormat, theme: dict) -> None:
 	if fmt.code:
 		r_pr = run._r.get_or_add_rPr()
 		_set_rfonts(r_pr, MONO_FONT)
-		run.font.size = Pt(9.5)
+		run.font.size = Pt(tokens.CODE_SIZE_PT)
 		_shade_run(run, theme["surface"])
 
 
@@ -1510,7 +1512,7 @@ def _add_code_block(container, node: _Node, theme: dict) -> None:
 		# Leading spaces must survive: python-docx writes xml:space="preserve".
 		run = paragraph.add_run(line.replace("\t", "    "))
 		_set_rfonts(run._r.get_or_add_rPr(), MONO_FONT)
-		run.font.size = Pt(9)
+		run.font.size = Pt(tokens.CODE_SIZE_PT)
 
 
 def _all_descendant_text_raw(node: _Node) -> str:
@@ -1655,7 +1657,7 @@ def _add_default_footer(doc, theme: dict) -> None:
 	paragraph.add_run(" of ")
 	_add_field_run(paragraph, "NUMPAGES")
 	for run in paragraph.runs:
-		run.font.size = Pt(8)
+		run.font.size = Pt(tokens.CAPTION_SIZE_PT)
 		run.font.color.rgb = _rgb_color(theme["muted"])
 
 

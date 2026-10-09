@@ -11,6 +11,7 @@ Run with:
 """
 
 import re
+import time
 import unittest
 import zipfile
 from io import BytesIO
@@ -23,7 +24,14 @@ from huf.ai.artifacts.render.components import (
 	theme_css,
 )
 from huf.ai.artifacts.render.docx import html_to_docx
-from huf.ai.artifacts.render.html import _hoist_running_footer, render_document_html
+from huf.ai.artifacts.render.html import (
+	_dedent_markdown_containers,
+	_hoist_running_footer,
+	_in_ranges,
+	_markdown_containers,
+	_propagate_markdown_attr,
+	render_document_html,
+)
 
 
 def _docx_part(docx_bytes: bytes, name_fragment: str) -> str:
@@ -336,3 +344,244 @@ class TestDocxExport(unittest.TestCase):
 		)
 		body = _docx_part(html_to_docx(html), "word/document.xml")
 		self.assertIn("In Progress", body)
+
+
+class TestMarkdownAttrPropagation(unittest.TestCase):
+	def test_tags_inside_fenced_code_are_ignored(self):
+		src = (
+			'<div class="a">\n<p>x</p>\n</div>\n\n```html\n<div markdown="1">demo</div>\n```\n'
+		)
+		self.assertEqual(_propagate_markdown_attr(src), src)
+
+	def test_tags_inside_inline_code_are_ignored(self):
+		src = '<div class="a">use `<b markdown="1">` here</div>'
+		self.assertEqual(_propagate_markdown_attr(src), src)
+
+	def test_existing_attr_not_duplicated(self):
+		src = '<div markdown="1"><section markdown="1">## T</section></div>'
+		out = _propagate_markdown_attr(src)
+		self.assertEqual(out.count("markdown="), 2)
+
+	def test_ancestor_gets_attr_once(self):
+		src = '<div class="split"><section markdown="1">## T</section></div>'
+		out = _propagate_markdown_attr(src)
+		self.assertEqual(out.count("markdown="), 2)
+		self.assertTrue(out.startswith('<div class="split" markdown="1">'))
+
+	def test_unclosed_implicit_tags_do_not_mark_unrelated_ancestors(self):
+		src = '<div class="outer"><p>open paragraph<ul><li>one<li>two</ul><div class="x" markdown="1">## T</div></div>'
+		out = _propagate_markdown_attr(src)
+		self.assertIn('<div class="outer" markdown="1">', out)
+		self.assertNotIn('<p markdown', out)
+		self.assertNotIn('<li markdown', out)
+		self.assertNotIn('<ul markdown', out)
+
+	def test_unclosed_paragraph_sibling_not_marked(self):
+		src = '<div class="o"><p>dangling<div markdown="1">## T</div></div>'
+		self.assertNotIn('<p markdown', _propagate_markdown_attr(src))
+
+	def test_pretty_printed_children_are_dedented_not_code(self):
+		src = (
+			'<div class="split">\n'
+			'    <section markdown="1">\n'
+			'        ## Heading\n\n'
+			'        | A | B |\n'
+			'        |---|---|\n'
+			'        | 1 | 2 |\n'
+			'    </section>\n'
+			'</div>\n'
+		)
+		html = render_document_html(src, language="html")
+		self.assertIn("<h2>Heading</h2>", html)
+		self.assertIn("<table>", html)
+		self.assertNotIn("<pre><code>", html)
+
+	def test_dedent_only_touches_markdown_containers(self):
+		src = '<div>\n    <p>raw</p>\n</div>'
+		self.assertEqual(_dedent_markdown_containers(src), src)
+
+
+class TestDedentMarkdownContainers(unittest.TestCase):
+	def test_nested_containers_dedent_outer_then_inner(self):
+		src = (
+			'<div markdown="1">\n'
+			'    outer\n'
+			'    <section markdown="1">\n'
+			'        inner\n'
+			'          deeper\n'
+			'    </section>\n'
+			'</div>\n'
+		)
+		self.assertEqual(
+			_dedent_markdown_containers(src),
+			'<div markdown="1">\n'
+			'outer\n'
+			'<section markdown="1">\n'
+			'inner\n'
+			'  deeper\n'
+			'</section>\n'
+			'</div>\n',
+		)
+
+	def test_pre_content_whitespace_preserved(self):
+		src = (
+			'<div markdown="1">\n'
+			'    ## Title\n'
+			'    <pre>\n'
+			'        keep   indent\n'
+			'    </pre>\n'
+			'    after\n'
+			'</div>'
+		)
+		out = _dedent_markdown_containers(src)
+		self.assertIn('\n        keep   indent\n    </pre>', out)
+		self.assertIn('\n## Title\n', out)
+		self.assertIn('\nafter\n', out)
+
+	def test_fenced_code_interior_preserved(self):
+		src = (
+			'<div markdown="1">\n'
+			'    text\n'
+			'    ```\n'
+			'        code\n'
+			'    ```\n'
+			'</div>'
+		)
+		out = _dedent_markdown_containers(src)
+		self.assertIn('\n        code\n', out)
+		self.assertIn('\ntext\n```\n', out)
+
+	def test_many_containers_are_fast(self):
+		block = '<section markdown="1">\n    ## H\n\n    | A | B |\n    |---|---|\n    | 1 | 2 |\n</section>\n'
+		src = "<div>\n" + block * 500 + "</div>\n"
+		started = time.perf_counter()
+		out = _dedent_markdown_containers(src)
+		self.assertLess(time.perf_counter() - started, 1.0)
+		self.assertIn("\n## H\n", out)
+
+	def test_containers_beyond_cap_left_as_is(self):
+		block = '<section markdown="1">\n    ## H\n</section>\n'
+		out = _dedent_markdown_containers(block * 201)
+		self.assertEqual(out.count("\n## H\n"), 200)
+		self.assertEqual(out.count("\n    ## H\n"), 1)
+
+
+class TestDedentLowFindings(unittest.TestCase):
+	def test_in_ranges_bisect_matches_linear(self):
+		ranges = [(5, 10), (20, 30), (40, 41)]
+		for i in range(50):
+			self.assertEqual(_in_ranges(i, ranges), any(lo < i < hi for lo, hi in ranges), i)
+
+	def test_text_after_open_tag_does_not_block_dedent(self):
+		src = '<div markdown="1">Intro\n    ## H\n    - a\n</div>'
+		out = _dedent_markdown_containers(src)
+		self.assertIn("Intro\n## H\n- a\n", out)
+
+	def test_markdown_tag_inside_pre_is_not_a_container(self):
+		src = '<pre>\n<div markdown="1">\n    x\n</div>\n</pre>\n'
+		self.assertEqual(_markdown_containers(src), [])
+		self.assertEqual(_dedent_markdown_containers(src), src)
+
+	def test_markdown_tag_inside_fence_is_not_a_container(self):
+		src = '```\n<div markdown="1">\n    x\n</div>\n```\n'
+		self.assertEqual(_markdown_containers(src), [])
+
+
+class TestRtlDocument(unittest.TestCase):
+	ARABIC = "# \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0627\u0633\u062a\u062f\u0627\u0645\u0629\n\n\u0646\u0635 \u0639\u0631\u0628\u064a.\n\n- \u0628\u0646\u062f \u0623\u0648\u0644\n\n> \u0627\u0642\u062a\u0628\u0627\u0633\n\n| \u0623 | \u0628 |\n|---|---|\n| 1 | 2 |\n"
+
+	def test_logical_css_and_dir_present(self):
+		html = render_document_html(self.ARABIC, title="t")
+		self.assertIn('<body dir="auto">', html)
+		for needle in ("padding-inline-start", "border-inline-start", "padding-inline-end", "text-align: start"):
+			self.assertIn(needle, html)
+		self.assertNotIn("padding: 4pt 8pt 4pt 0", html)
+		self.assertIn("letter-spacing: normal !important", html)
+
+	def test_arabic_renders_to_pdf_without_errors(self):
+		try:
+			from weasyprint import HTML
+		except Exception:
+			self.skipTest("WeasyPrint unavailable")
+		pdf = HTML(string=render_document_html(self.ARABIC, title="t")).write_pdf()
+		self.assertTrue(pdf.startswith(b"%PDF"))
+
+	def test_arabic_renders_to_docx(self):
+		data = html_to_docx(render_document_html(self.ARABIC, title="t"))
+		self.assertTrue(zipfile.is_zipfile(BytesIO(data)))
+
+
+class TestPreRegions(unittest.TestCase):
+	def _contained(self, src):
+		return _propagate_markdown_attr(src)
+
+	def test_unclosed_pre_in_backticks_does_not_swallow_later_containers(self):
+		src = 'Use `<pre>` for code.\n\n<div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		self.assertIn('<div class="o" markdown="1">', self._contained(src))
+		self.assertIn("\n## T\n", _dedent_markdown_containers(src))
+
+	def test_pre_inside_fenced_example_is_ignored(self):
+		src = (
+			'```html\n<pre>\n```\n\n'
+			'<div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		)
+		self.assertIn('<div class="o" markdown="1">', self._contained(src))
+		self.assertIn("\n## T\n", _dedent_markdown_containers(src))
+
+	def test_unclosed_bare_pre_is_literal(self):
+		src = '<pre>\n\n<div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		self.assertIn('<div class="o" markdown="1">', self._contained(src))
+
+	def test_real_pre_still_excluded(self):
+		src = '<div markdown="1">\n    a\n    <pre>\n      keep\n    </pre>\n    b\n</div>\n'
+		out = _dedent_markdown_containers(src)
+		self.assertIn("\n      keep\n    </pre>", out)
+		self.assertIn("\na\n", out)
+		# a tag inside a real pre is not structural
+		src2 = '<div class="o"><pre><section markdown="1">x</section></pre></div>'
+		self.assertEqual(self._contained(src2), src2)
+
+	def test_two_pre_blocks(self):
+		src = (
+			'<div markdown="1">\n    a\n    <pre>\n      one\n    </pre>\n'
+			'    mid\n    <pre>\n      two\n    </pre>\n</div>\n'
+		)
+		out = _dedent_markdown_containers(src)
+		self.assertIn("\n      one\n    </pre>", out)
+		self.assertIn("\nmid\n", out)
+		self.assertIn("\n      two\n    </pre>", out)
+
+
+class TestPreBoundaries(unittest.TestCase):
+	def test_custom_element_and_selfclosed_pre_are_not_regions(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		for src in ('<pre-foo>x</pre>', '<pre/>x</pre>', '<pre />x</pre>'):
+			self.assertEqual(_pre_regions(src), [], src)
+		self.assertEqual(_pre_regions('<pre-foo>a</pre-foo><pre>b</pre>'), [(20, 32)])
+
+	def test_uppercase_and_attr_pre_are_regions(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		self.assertEqual(_pre_regions('<PRE>a</PRE>'), [(0, 12)])
+		self.assertEqual(_pre_regions('<pre class="x">a</pre>'), [(0, 22)])
+
+	def test_closer_boundary(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		self.assertEqual(_pre_regions('<pre>a</pre-x></pre >'), [(0, 21)])
+
+	def test_container_after_closer_on_same_line_is_processed(self):
+		src = '<pre>\n  x\n</pre><div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		self.assertIn('<div class="o" markdown="1">', _propagate_markdown_attr(src))
+		self.assertIn("\n## T\n", _dedent_markdown_containers(src))
+		src2 = '<div markdown="1">\n    <pre>\n      k\n    </pre><section markdown="1">\n        ## T\n    </section>\n</div>\n'
+		out = _dedent_markdown_containers(src2)
+		self.assertIn("\n      k\n", out)
+		self.assertIn("\n## T\n", out)
+
+
+class TestPreRegionsLinear(unittest.TestCase):
+	def test_many_unterminated_pre_openers_are_fast(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		src = "<pre " * 5000
+		start = time.time()
+		_pre_regions(src)
+		self.assertLess(time.time() - start, 1.0)

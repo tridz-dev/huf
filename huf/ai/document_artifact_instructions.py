@@ -109,13 +109,16 @@ your own CSS, and they are the ONLY things guaranteed to survive into the
   the doc id/date in `<div class="doc-meta">`
 - `doc-title` / `doc-subtitle` - document title and its standfirst
 - `callout` - highlighted summary box (use for an executive summary)
-- `metric-grid` containing `metric` - KPI cards, laid out 2 per row. Write
-  the label as an ATTRIBUTE and the value as the element's own text - do
-  not wrap the value in an inner tag:
+- `metric-grid` containing `metric` - KPI cards, 2 per row by default; add
+  `cols-3` or `cols-4` (`class="metric-grid cols-4"`) for a single row of 3-4
+  SHORT values. Write the label as an ATTRIBUTE and the value as the
+  element's own text - do not wrap the value in an inner tag:
   `<div class="metric" data-label="GROSS REVENUE">$4.25M</div>`
-- `split` containing `split-main` + `split-side` - body with a sidebar
+- `split` containing `split-main` + `split-side` - body with a narrow margin
+  note (see "Sidebars" below before using it)
 - `data-table` - a table with a styled header row
-- `status-badge` - small inline pill, e.g. a status inside a table cell
+- `status-badge` - small inline pill, e.g. a status inside a table cell.
+  Keep it to one or two words ("On track", "At risk")
 - `page-break` - `<div class="page-break"></div>` starts a new page. Use
   this rather than styling your own divider; a bordered break element gets
   painted into the PDF as a stray line.
@@ -123,6 +126,32 @@ your own CSS, and they are the ONLY things guaranteed to survive into the
   of the flow and repeated at the bottom of EVERY page. Never write a page
   number yourself: "Page 3 of 7" is added automatically on the right. A
   hand-written count is wrong the moment the pagination shifts.
+
+### Sidebars: short notes only, never a second column of prose
+
+`split-side` is a short margin note in small type. On an A4 page it is
+stacked below the main text at full width (it only sits beside the text in
+a wide view), and a long sidebar is always stacked - so it buys no space.
+Do not style `.split` or `.split-side` yourself.
+
+- Put ONLY short, glanceable content in it: 2-5 bullets or a few key facts,
+  at most ~40 words, with at most one short label heading.
+- NEVER put a vision statement, a paragraph of analysis, or a table in
+  `split-side`. Use a full-width `callout` instead.
+- Keep `data-table`s and wide markdown tables OUTSIDE any `split`, at full
+  page width.
+- When in doubt, skip the sidebar: a full-width `callout` plus a
+  `metric-grid` reads better in the PDF, the preview and Word alike (the
+  .docx stacks the sidebar under the main text anyway).
+
+### Typography is already set - do not resize it
+
+The stylesheet carries a calibrated, all-sans type scale (title 19.5pt, h2
+13pt, h3 11pt, body 9.5pt, tables 9pt, captions 8.5pt) tuned for A4. Do not set `font-size`,
+`line-height`, `padding` or `margin` on headings, paragraphs, lists or
+tables; oversized headings and loose spacing are the most common way a
+generated document ends up looking amateur. Structure with `##` for
+sections and `###` for sub-sections; use one `doc-title` per document.
 
 Example - this is the whole vocabulary needed for a corporate report:
 
@@ -137,15 +166,18 @@ Example - this is the whole vocabulary needed for a corporate report:
       <div class="metric" data-label="REVENUE">$4.25M</div>
       <div class="metric" data-label="GROWTH">+18.4%</div>
     </div>
+    <h2>Highlights</h2>
+    <table class="data-table">
+      <tr><th>Unit</th><th>Target</th><th>Status</th></tr>
+      <tr><td>Cloud</td><td>1,800</td><td><span class="status-badge">On track</span></td></tr>
+    </table>
     <div class="split">
       <section class="split-main">
-        <h2>Highlights</h2>
-        <table class="data-table">
-          <tr><th>Unit</th><th>Target</th></tr>
-          <tr><td>Cloud</td><td>1,800</td></tr>
-        </table>
+        <h2>Outlook</h2>
+        <p>Demand in APAC is ahead of plan; hiring is the constraint.</p>
       </section>
-      <aside class="split-side"><h3>Priorities</h3><p>Scale APAC.</p></aside>
+      <aside class="split-side"><h4>Priorities</h4>
+        <ul><li>Scale APAC</li><li>Hire 12 engineers</li></ul></aside>
     </div>
     <p class="doc-footer">Confidential</p>
 
@@ -153,9 +185,9 @@ Example - this is the whole vocabulary needed for a corporate report:
 
 Add `markdown="1"` to any container and write markdown inside it - much
 shorter than hand-writing table markup. There must be a blank line after the
-opening tag:
+opening tag and before the closing tag:
 
-    <section class="split-main" markdown="1">
+    <section markdown="1">
 
     ## Highlights
 
@@ -193,10 +225,10 @@ only for something the components genuinely do not cover.
 
 ### Fonts
 
-Already loaded - just name them: Inter, Source Sans 3, Roboto (sans);
-Merriweather, Source Serif 4, Playfair Display (serif); JetBrains Mono,
-Source Code Pro (mono). You may `@import` another Google Font if you
-genuinely need one.
+The default is one clean sans family for everything (title, headings,
+body, KPIs) - keep it. Do not switch headings or the title to a serif or
+display face. If a brand needs a different sans, these are already loaded:
+Inter, Source Sans 3, Roboto; mono: JetBrains Mono, Source Code Pro.
 
 ### The PDF/DOCX trade-off
 
@@ -282,4 +314,16 @@ files locally needs the Office skills switched on in Huf Desktop (Settings, Loca
 Do not pretend a file was made and do not write a script that would silently fail. Offer the alternative that
 works now: a document artifact (its Export menu saves PDF or Word through the desktop app), or
 `export_document` if you have it, for a server-side download.
+"""
+
+DESKTOP_WORKSPACE_FILE_INSTRUCTIONS = """
+### Files vs inline artifacts in a Huf Desktop workspace
+
+The user picked a workspace folder on their computer. When they ask you to create, save, write or export a
+file, document, page or project (or they name a path or a file extension), write REAL files with
+`desktop_write_file`: use the path they give, otherwise `outputs/<name>` (create a missing folder first with
+`desktop_make_directory`), and tell them the path.
+Previews, answers, charts and throwaway drafts stay inline `<artifact>` blocks.
+To change an existing local file: read it (`desktop_read_file`), then use `desktop_edit_file` with the exact
+text; do not re-emit it as an artifact. Never both: no duplicate inline artifact for a file you wrote.
 """

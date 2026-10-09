@@ -64,7 +64,7 @@ class AgentStreamRenderer(BaseRenderer):
 	def _sse_error_response(self, error_message: str):
 		"""Return a single-event SSE error response (same chunk shape the stream uses for errors)."""
 		def error_generator() -> Generator[str, None, None]:
-			error_data = {"type": "error", "error": error_message}
+			error_data = {"type": "error", "error": error_message, "message_saved": False}
 			yield f"data: {json.dumps(error_data)}\n\n"
 
 		return Response(
@@ -120,7 +120,7 @@ class AgentStreamRenderer(BaseRenderer):
 
 		if not prompt:
 			def error_generator() -> Generator[str, None, None]:
-				error_data = {"type": "error", "error": "Prompt parameter required"}
+				error_data = {"type": "error", "error": "Prompt parameter required", "message_saved": False}
 				yield f"data: {json.dumps(error_data)}\n\n"
 
 			return Response(
@@ -188,6 +188,7 @@ class AgentStreamRenderer(BaseRenderer):
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
 			loop = None
 			created_loop = False
+			delivered = False  # True once a non-error chunk shows the run was persisted
 			try:
 				# Try to get existing event loop
 				try:
@@ -239,6 +240,8 @@ class AgentStreamRenderer(BaseRenderer):
 								break
 							yield ": keep-alive\n\n"
 						chunk = pending_chunk.result()
+						if chunk.get("type") != "error":
+							delivered = True
 						yield f"data: {json.dumps(chunk)}\n\n"
 						
 						# Check if stream is complete
@@ -248,12 +251,12 @@ class AgentStreamRenderer(BaseRenderer):
 						break
 					except Exception as e:
 						frappe.log_error(frappe.get_traceback(), "Agent Stream Chunk Error")
-						error_data = {"type": "error", "error": str(e)}
+						error_data = {"type": "error", "error": str(e), "message_saved": delivered}
 						yield f"data: {json.dumps(error_data)}\n\n"
 						break
 			except Exception as e:
 				frappe.log_error(frappe.get_traceback(), "Agent Stream Setup Error")
-				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
+				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}", "message_saved": delivered}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
 				# Close the loop if we created it AND unset it to prevent leaking closed loops!

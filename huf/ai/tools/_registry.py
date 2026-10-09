@@ -20,6 +20,12 @@ def _p(name, type="string", required=False, description=""):
 	}
 
 
+def _ask_user_description():
+	from huf.ai.tools.ask_user import ASK_USER_DESCRIPTION
+
+	return ASK_USER_DESCRIPTION
+
+
 def _action(choices):
 	return _p("action", required=True, description=f"Action to perform. One of: {choices}")
 
@@ -1511,27 +1517,14 @@ BUILDER_TOOLS = [
 	},
 	{
 		"tool_name": "ask_user",
-		"description": (
-			"Ask the user a structured question in the chat. Returns a fenced 'ask-user' "
-			"block — include the returned 'block' value VERBATIM in your reply, then STOP "
-			"and wait for the user's answer. kind is one of yes_no|single_choice|multi_choice|"
-			"input|textarea; the choice kinds require options as "
-			"[{id, label, icon?, description?}] (icon must be a supported lucide name; "
-			"unsupported icons are dropped with a warning). Use this ONLY when structured UI "
-			"is clearly better than a typed reply: confirming right before executing a "
-			"mutating plan, choosing from a defined set of options, or collecting a "
-			"required value. Do NOT use it for greetings, small talk, open-ended "
-			"questions, or normal conversation — answer those in plain prose."
-		),
+		# Full description + strict nested schema live next to the function
+		# (huf.ai.tools.ask_user.ASK_USER_DESCRIPTION / ask_user.tool_params_schema).
+		"description": _ask_user_description(),
 		"function_path": "huf.ai.tools.ask_user.ask_user",
 		"category": "Builder",
 		"parameters": [
-			_p("question", required=True, description="The question to show the user"),
-			_p("kind", required=True, description="One of: yes_no, single_choice, multi_choice, input, textarea"),
-			_p("options", description="JSON list of options [{id, label, icon?, description?}] — required for single_choice/multi_choice"),
-			_p("allow_free_text", type="boolean", description="Allow a free-text answer in addition to options (default true)"),
-			_p("suggested_answers", description="JSON list of suggested free-text answers"),
-			_p("note", description="Optional extra context shown with the question"),
+			_p("questions", type="array", required=True, description="Questions [{id, text, options?, allow_multiple?, allow_free_text?, placeholder?}] — at least one"),
+			_p("title", description="Optional heading for the question card"),
 		],
 	},
 	{

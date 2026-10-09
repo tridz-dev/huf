@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import copy
 import inspect
 import json
 import re
@@ -51,6 +52,22 @@ def resolve_function_descriptor(function_path):
 		frappe.throw(_("Could not find function at {0}: {1}").format(function_path, str(e)))
 
 	return func
+
+
+def declared_params_schema(function_path):
+	"""A hand-written JSON schema a tool function declares via ``tool_params_schema``.
+
+	Lets a tool whose arguments are nested (arrays of objects) publish a strict schema
+	the flat Agent Function Params table cannot express. None when absent/unresolvable.
+	"""
+	if not function_path:
+		return None
+	try:
+		func = frappe.get_attr(function_path)
+	except Exception:
+		return None
+	schema = getattr(func, "tool_params_schema", None)
+	return copy.deepcopy(schema) if isinstance(schema, dict) else None
 
 
 def inspect_function_parameters(func):
@@ -669,7 +686,7 @@ class AgentToolFunction(Document):
 			}
 
 		else:
-			params = self.build_params_json_from_table()
+			params = declared_params_schema(self.function_path) or self.build_params_json_from_table()
 
 		self.params = json.dumps(params, indent=4)
 

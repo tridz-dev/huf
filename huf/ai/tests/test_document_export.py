@@ -249,6 +249,21 @@ class TestDesktopDocumentGuidance(unittest.TestCase):
 		self.assertIn("Do not pretend", text)
 		self.assertNotIn("desktop_skill_run", text)
 
+	def test_workspace_file_rule_prefers_real_files_and_no_duplicates(self):
+		from huf.ai.document_artifact_instructions import DESKTOP_WORKSPACE_FILE_INSTRUCTIONS as text
+
+		for needle in ("desktop_write_file", "desktop_edit_file", "desktop_read_file", "outputs/<name>", "Never both"):
+			self.assertIn(needle, text)
+
+	def test_agent_integration_injects_workspace_rule_by_write_tool(self):
+		import inspect
+
+		from huf.ai import agent_integration
+
+		src = inspect.getsource(agent_integration)
+		self.assertIn('"desktop_write_file" in {tool.name for tool in self.tools}', src)
+		self.assertIn("DESKTOP_WORKSPACE_FILE_INSTRUCTIONS", src)
+
 	def test_agent_integration_injects_by_skill_tool_presence(self):
 		import inspect
 

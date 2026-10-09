@@ -109,3 +109,84 @@ class TestAgentStreamRendererErrorUniformity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStreamErrorMessageSavedContract(unittest.TestCase):
+    """Error chunks carry `message_saved` so clients know whether a retry would duplicate the user message."""
+
+    def _collect(self, impl):
+        import asyncio
+
+        from huf.ai import agent_integration
+
+        async def run():
+            with patch.object(agent_integration, "_run_agent_stream_impl", impl), \
+                    patch.object(agent_integration.frappe, "log_error"):
+                return [c async for c in agent_integration.run_agent_stream("a", "p")]
+
+        return asyncio.new_event_loop().run_until_complete(run())
+
+    def test_rejection_before_persist_is_not_saved(self):
+        async def impl(*a, _state=None, **k):
+            yield {"type": "error", "error": "Agent 'a' is disabled."}
+
+        chunks = self._collect(impl)
+        self.assertIs(chunks[0]["message_saved"], False)
+
+    def test_error_after_persist_is_saved(self):
+        async def impl(*a, _state=None, **k):
+            _state["message_saved"] = True
+            yield {"type": "error", "error": "provider failed"}
+
+        self.assertIs(self._collect(impl)[0]["message_saved"], True)
+
+    def test_exception_raised_after_persist_in_first_anext_is_saved(self):
+        async def impl(*a, _state=None, **k):
+            _state["message_saved"] = True
+            raise RuntimeError("boom")
+            yield  # pragma: no cover
+
+        chunks = self._collect(impl)
+        self.assertEqual(chunks[0]["type"], "error")
+        self.assertIs(chunks[0]["message_saved"], True)
+
+    def test_exception_before_persist_is_not_saved(self):
+        async def impl(*a, _state=None, **k):
+            raise RuntimeError("boom")
+            yield  # pragma: no cover
+
+        self.assertIs(self._collect(impl)[0]["message_saved"], False)
+
+    def test_raw_exception_text_is_not_sent_to_client(self):
+        async def impl(*a, _state=None, **k):
+            raise RuntimeError("Table `tabAgent Run` doesn't exist (1146) secret-sql")
+            yield  # pragma: no cover
+
+        chunks = self._collect(impl)
+        self.assertEqual(chunks[0]["error"], "The request could not be completed. Please try again.")
+        self.assertNotIn("secret-sql", json.dumps(chunks))
+
+    def test_validation_error_message_is_kept(self):
+        async def impl(*a, _state=None, **k):
+            raise frappe.ValidationError("Prompt is too long")
+            yield  # pragma: no cover
+
+        self.assertEqual(self._collect(impl)[0]["error"], "Prompt is too long")
+
+    def test_abandon_unsaved_run_marks_failed_and_frees_idempotency_key(self):
+        from huf.ai import agent_integration as ai
+
+        with patch.object(ai.frappe.db, "rollback") as rb, \
+                patch.object(ai.frappe.db, "set_value") as sv, \
+                patch.object(ai.frappe.db, "commit") as cm:
+            ai._abandon_unsaved_run("RUN-1", RuntimeError("add_message failed"))
+        rb.assert_called_once()
+        args = sv.call_args[0]
+        self.assertEqual(args[:2], ("Agent Run", "RUN-1"))
+        self.assertEqual(args[2]["status"], "Failed")
+        self.assertIsNone(args[2]["idempotency_key"])
+        cm.assert_called_once()
+
+    def test_renderer_rejection_chunk_is_not_saved(self):
+        renderer = _make_renderer("x")
+        self.assertIs(_collect_sse_body(renderer._sse_error_response("nope"))["message_saved"], False)

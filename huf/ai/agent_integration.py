@@ -607,6 +607,11 @@ class AgentManager:
                         instructions += DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_WITH_SKILLS
                     else:
                         instructions += DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_NO_SKILLS
+                    # Generic files (code, html, markdown...) go to the workspace, not inline artifacts.
+                    if "desktop_write_file" in {tool.name for tool in self.tools}:
+                        from huf.ai.document_artifact_instructions import DESKTOP_WORKSPACE_FILE_INSTRUCTIONS
+
+                        instructions += DESKTOP_WORKSPACE_FILE_INSTRUCTIONS
 
         # Inject Project-level instructions, if the conversation is scoped to a
         # HUF Project. This layer sits between the Agent's own instructions
@@ -3219,7 +3224,54 @@ def recover_stalled_agent_runs():
         frappe.log_error(f"Agent run recovery failed: {frappe.get_traceback()}", "Huf")
 
 
-async def run_agent_stream(
+_GENERIC_STREAM_ERROR = "The request could not be completed. Please try again."
+
+
+def _client_safe_error(e: Exception) -> str:
+    """Message safe to send to a stream client; full detail goes to frappe.log_error."""
+    # Subclasses such as DuplicateEntryError/LinkExistsError embed DB keys or document names: only the base
+    # user-facing types are passed through, everything else gets the generic text.
+    if type(e) in (frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError):
+        msg = str(e)
+        if msg:
+            return msg
+    return _GENERIC_STREAM_ERROR
+
+
+def _abandon_unsaved_run(run_name, err) -> None:
+    """Mark a run whose user message never committed as Failed and free its idempotency key."""
+    try:
+        frappe.db.rollback()
+        frappe.db.set_value(
+            "Agent Run", run_name,
+            {"status": "Failed", "error_message": _GENERIC_STREAM_ERROR, "idempotency_key": None},
+            update_modified=False,
+        )
+        frappe.db.commit()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "Agent Run abandon failed")
+
+
+async def run_agent_stream(*args, **kwargs):
+    """Streaming run. Error chunks carry ``message_saved``: True once the Agent Run and
+    user message were committed (a retry would duplicate it), False for rejections
+    raised before that point."""
+    state = {"message_saved": False}
+    agen = _run_agent_stream_impl(*args, _state=state, **kwargs)
+    try:
+        async for chunk in agen:
+            if isinstance(chunk, dict) and chunk.get("type") == "error":
+                chunk = {**chunk, "message_saved": state["message_saved"]}
+            yield chunk
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "Agent Stream Error")
+        yield {"type": "error", "error": _client_safe_error(e), "message_saved": state["message_saved"]}
+    finally:
+        # Propagate aclose()/cancellation so the impl's salvage `finally` still runs.
+        await agen.aclose()
+
+
+async def _run_agent_stream_impl(
     agent_name: str,
     prompt: str,
     provider: str = None,
@@ -3239,6 +3291,7 @@ async def run_agent_stream(
     client_idempotency_key: str = None,
     desktop_executor_id: str = None,
     desktop_lease_secret: str = None,
+    _state: dict = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -3438,19 +3491,47 @@ async def run_agent_stream(
                 k: v for k, v in desktop_error.items() if k in ("last_seen", "host_device_id", "host_label")
             }}
             return
+        stream_runtime_context = None
         if desktop_ctx:
-            run_doc_data["runtime_context"] = frappe.as_json(
-                {"desktop": _desktop_runtime_context(desktop_ctx, conversation.name)}
-            )
+            # Written unsigned, then signed bound to the inserted run (name/creation exist only
+            # after insert), exactly like the queued path: the tool handlers verify the pin FOR
+            # THIS RUN, so a run-less signature never verifies and every call would go remote.
+            stream_runtime_context = {
+                "desktop": _desktop_runtime_context(desktop_ctx, conversation.name, sign=False)
+            }
+            run_doc_data["runtime_context"] = frappe.as_json(stream_runtime_context)
 
         run_doc = frappe.get_doc(run_doc_data)
         run_doc.insert()
-        if not skip_user_message:
-            conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
-        else:
-            _link_preexisting_user_message(conversation.name, run_doc.name)
-        run_doc.db_set("start_time", now_datetime())
-        safe_commit()
+        # Retry-safety: claim_desktop_pin commits the Agent Run (the pin protocol needs the
+        # signed pin + consumed marker durable before any tool call). If anything fails after
+        # that commit but before the user message is committed, message_saved stays False
+        # (no message exists), so the desktop may retry: we therefore mark the orphan run
+        # Failed and release its idempotency key so the retry starts a clean second run
+        # instead of hitting the duplicate_request path on the failed one. Pin order/claim
+        # semantics are unchanged.
+        try:
+            if stream_runtime_context:
+                _sign_run_desktop_pin(run_doc, stream_runtime_context, conversation.name)
+                if desktop_ctx.get("origin") == "desktop":
+                    # This request executes the run itself: it is the one execution allowed to use
+                    # the pin's desktop origin (tool handlers check holds_pin_claim).
+                    from huf.ai.desktop_executor import claim_desktop_pin
+
+                    claim_desktop_pin(run_doc.name)
+            if not skip_user_message:
+                conv_manager.add_message(conversation, "user", prompt, resolved_provider, resolved_model, agent_name, run_doc.name)
+            else:
+                _link_preexisting_user_message(conversation.name, run_doc.name)
+            run_doc.db_set("start_time", now_datetime())
+            safe_commit()
+        except Exception as _persist_err:
+            _abandon_unsaved_run(run_doc.name, _persist_err)
+            raise
+        if _state is not None:
+            # The Agent Run and user message are now committed: any later error chunk
+            # means the message was delivered, so a client retry would duplicate it.
+            _state["message_saved"] = True
 
         if desktop_status is not None:
             yield {"type": "desktop_tools", **desktop_status}
