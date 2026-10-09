@@ -3227,19 +3227,85 @@ def recover_stalled_agent_runs():
 _GENERIC_STREAM_ERROR = "The request could not be completed. Please try again."
 
 
+_PUBLIC_MESSAGE_MAX_LEN = 300
+
+_DESKTOP_ERROR_MESSAGES = {
+    "permission_denied": "Only the owner of a desktop-hosted conversation can run it.",
+    "desktop_offline": "The desktop is offline. This conversation runs only on that desktop.",
+    "workspace_changed": "The desktop has a different workspace open. Rebind this conversation to continue.",
+    "remote_disabled": "Remote control is turned off for this desktop or agent.",
+}
+
+
+def _bounded_public_message(text) -> str:
+    """Single-line, control-char-free, length-capped form of an already-curated message."""
+    import re
+
+    if not isinstance(text, str):
+        return ""
+    cleaned = re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]", " ", text)).strip()
+    if len(cleaned) > _PUBLIC_MESSAGE_MAX_LEN:
+        cleaned = cleaned[: _PUBLIC_MESSAGE_MAX_LEN - 1].rstrip() + "\u2026"
+    return cleaned
+
+
+def _client_safe_desktop_error(desktop_error: dict) -> str:
+    """Client text for a desktop resolution error: curated per code, never interpolated text."""
+    err = desktop_error or {}
+    if err.get("code") == "remote_disabled":
+        # Which switch is off is curated (fixed strings in desktop_sessions), never interpolated user text.
+        from huf.ai.desktop_sessions import REMOTE_DISABLED_MESSAGE
+
+        disabled_by = err.get("disabled_by")
+        specific = REMOTE_DISABLED_MESSAGE.get(disabled_by) if isinstance(disabled_by, str) else None
+        if specific:
+            return specific
+    return _DESKTOP_ERROR_MESSAGES.get(err.get("code")) or _GENERIC_STREAM_ERROR
+
+
 def _client_safe_error(e: Exception) -> str:
     """Message safe to send to a stream client; full detail goes to frappe.log_error."""
     # Subclasses such as DuplicateEntryError/LinkExistsError embed DB keys or document names: only the base
     # user-facing types are passed through, everything else gets the generic text.
-    if type(e) in (frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError):
+    # Explicit allowlist of huf's own deliberately user-visible typed errors (exact types).
+    from huf.ai.run_budget import RunBudgetExceeded
+
+    if isinstance(e, ProviderUnavailableError):
+        # public_message must be curated text from the provider layer (log_message stays server-side);
+        # still defend in depth: drop control chars/newlines and cap the length.
+        return _bounded_public_message(getattr(e, "public_message", None)) or _GENERIC_STREAM_ERROR
+    if type(e) in (
+        frappe.ValidationError, frappe.PermissionError, frappe.DoesNotExistError, RunBudgetExceeded,
+    ):
         msg = str(e)
         if msg:
             return msg
     return _GENERIC_STREAM_ERROR
 
 
+def _sanitize_error_chunk(chunk: dict, raw_error: str) -> dict:
+    """Make a provider error chunk client-safe in place.
+
+    Producers set `public: True` only on text written deliberately for the user. Unmarked text that was
+    not already replaced by a curated message is raw provider text: log it server-side, send the generic one.
+    The marker itself never reaches the client.
+    """
+    is_public = bool(chunk.pop("public", False))
+    if chunk.get("error") == raw_error and not is_public:
+        frappe.log_error(f"Agent stream error chunk: {raw_error}", "Huf Streaming")
+        chunk["error"] = _GENERIC_STREAM_ERROR
+    return chunk
+
+
 def _abandon_unsaved_run(run_name, err) -> None:
     """Mark a run whose user message never committed as Failed and free its idempotency key."""
+    try:
+        frappe.log_error(
+            title="Agent Run abandoned (user message not persisted)",
+            message=f"Run {run_name}: {type(err).__name__}: {err}",
+        )
+    except Exception:
+        pass
     try:
         frappe.db.rollback()
         frappe.db.set_value(
@@ -3257,7 +3323,7 @@ async def run_agent_stream(*args, **kwargs):
     user message were committed (a retry would duplicate it), False for rejections
     raised before that point."""
     state = {"message_saved": False}
-    agen = _run_agent_stream_impl(*args, _state=state, **kwargs)
+    agen = _run_agent_stream_impl(*args, _huf_stream_state=state, **kwargs)
     try:
         async for chunk in agen:
             if isinstance(chunk, dict) and chunk.get("type") == "error":
@@ -3291,7 +3357,7 @@ async def _run_agent_stream_impl(
     client_idempotency_key: str = None,
     desktop_executor_id: str = None,
     desktop_lease_secret: str = None,
-    _state: dict = None,
+    _huf_stream_state: dict = None,
 ):
     """
     Streaming version of run_agent_sync.
@@ -3355,7 +3421,7 @@ async def _run_agent_stream_impl(
         except frappe.PermissionError as e:
             yield {
                 "type": "error",
-                "error": str(e) or "You are not authorized to use this agent."
+                "error": _client_safe_error(e) if str(e) else "You are not authorized to use this agent."
             }
             return
 
@@ -3487,7 +3553,7 @@ async def _run_agent_stream_impl(
             agent_doc, conversation, desktop_executor_id, desktop_lease_secret
         )
         if desktop_error:
-            yield {"type": "error", "error": desktop_error["message"], "code": desktop_error["code"], **{
+            yield {"type": "error", "error": _client_safe_desktop_error(desktop_error), "code": desktop_error["code"], **{
                 k: v for k, v in desktop_error.items() if k in ("last_seen", "host_device_id", "host_label")
             }}
             return
@@ -3528,10 +3594,10 @@ async def _run_agent_stream_impl(
         except Exception as _persist_err:
             _abandon_unsaved_run(run_doc.name, _persist_err)
             raise
-        if _state is not None:
+        if _huf_stream_state is not None:
             # The Agent Run and user message are now committed: any later error chunk
             # means the message was delivered, so a client retry would duplicate it.
-            _state["message_saved"] = True
+            _huf_stream_state["message_saved"] = True
 
         if desktop_status is not None:
             yield {"type": "desktop_tools", **desktop_status}
@@ -4088,6 +4154,7 @@ async def _run_agent_stream_impl(
 
                 elif chunk_type == "error":
                     error_msg = chunk.get("error", "Unknown error")
+                    _raw_chunk_error = error_msg
 
                     if "ContextWindowExceededError" in error_msg:
                         try:
@@ -4184,6 +4251,7 @@ async def _run_agent_stream_impl(
                             user=frappe.session.user
                         )
 
+                    _sanitize_error_chunk(chunk, _raw_chunk_error)
                     chunk["success"] = False
                     chunk["agent_run_id"] = run_doc.name
                     chunk["conversation_id"] = conversation.name
@@ -4192,6 +4260,7 @@ async def _run_agent_stream_impl(
 
         except Exception as e:
             error_msg = str(e)
+            _raw_exc_msg = error_msg
             if isinstance(e, ProviderUnavailableError):
                 # Expected operational failure (connection refused, model not
                 # pulled, bad model prefix) — message is self-explanatory, no
@@ -4296,18 +4365,17 @@ async def _run_agent_stream_impl(
 
             yield {
                 "type": "error",
-                "error": error_msg,
+                "error": error_msg if error_msg != _raw_exc_msg else _client_safe_error(e),
                 "success": False,
                 "agent_run_id": run_doc.name,
                 "conversation_id": conversation.name
             }
 
     except Exception as e:
-        error_msg = str(e)
         frappe.log_error(f"Agent Stream Setup Error: {frappe.get_traceback()}", "Huf Streaming")
         yield {
             "type": "error",
-            "error": error_msg
+            "error": _client_safe_error(e)
         }
     finally:
         if 'run_doc' in locals() and run_doc:

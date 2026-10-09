@@ -84,11 +84,18 @@ class SimpleResult:
 
 class ProviderUnavailableError(Exception):
     """Raised when the LLM provider cannot serve this request (conn refused, model missing,
-    bad model prefix, auth). Distinct from content-level errors."""
+    bad model prefix, auth). Distinct from content-level errors.
+
+    ``public_message`` is sent to clients: it must be curated text written in huf code, NEVER raw
+    exception or provider text (put that in ``log_message``). It is capped at 300 characters.
+    """
 
     def __init__(self, public_message: str, *, log_message: str | None = None):
+        public_message = public_message if isinstance(public_message, str) else str(public_message or "")
         super().__init__(public_message)
-        self.public_message = public_message
+        self.public_message = (
+            public_message if len(public_message) <= 300 else public_message[:299].rstrip() + "\u2026"
+        )
         self.log_message = log_message or public_message
 
 
@@ -2071,7 +2078,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
         api_key = _resolve_api_key(provider_doc)
 
         if not api_key:
-            yield {"type": "error", "error": "API key not configured in AI Provider."}
+            yield {"type": "error", "error": "API key not configured in AI Provider.", "public": True}
             return
 
         normalized_model = _normalize_model_name(model, provider, brand=provider_doc.get("provider_brand"))
@@ -2619,7 +2626,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                     message=f"Tool-call loop detected for model '{normalized_model}'",
                                     title="LiteLLM Tool Loop"
                                 )
-                                yield {"type": "error", "error": msg}
+                                yield {"type": "error", "error": msg, "public": True}
                                 return
 
                             for tool_call in tool_calls_list:
@@ -2853,19 +2860,19 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
 
             except InternalServerError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except RateLimitError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except ContextWindowExceededError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except APIError as e:
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             except Exception as e:
                 frappe.log_error(
@@ -2873,7 +2880,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     title="LiteLLM Streaming"
                 )
                 raw_msg = f"LiteLLM error for model '{normalized_model}': {str(e)}"
-                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model)}
+                yield {"type": "error", "error": _sanitize_provider_error_message(raw_msg, normalized_model), "public": True}
                 return
             finally:
                 # Restore the environment variable to its pre-request state, preventing
@@ -2908,7 +2915,7 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                     "the request is supported by this model."
                 )
             frappe.log_error(message=msg, title="LiteLLM Empty Response")
-            yield {"type": "error", "error": msg}
+            yield {"type": "error", "error": msg, "public": True}
             return
 
         yield {

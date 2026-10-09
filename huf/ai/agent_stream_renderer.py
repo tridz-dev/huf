@@ -13,7 +13,12 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import _has_queued_runs, _resolve_effective_model, run_agent_stream
+from huf.ai.agent_integration import (
+	_client_safe_error,
+	_has_queued_runs,
+	_resolve_effective_model,
+	run_agent_stream,
+)
 
 # Idle seconds after which the stream emits an SSE comment (keeps proxies from cutting it).
 SSE_KEEPALIVE_S = 15
@@ -251,12 +256,12 @@ class AgentStreamRenderer(BaseRenderer):
 						break
 					except Exception as e:
 						frappe.log_error(frappe.get_traceback(), "Agent Stream Chunk Error")
-						error_data = {"type": "error", "error": str(e), "message_saved": delivered}
+						error_data = {"type": "error", "error": _client_safe_error(e), "message_saved": delivered}
 						yield f"data: {json.dumps(error_data)}\n\n"
 						break
 			except Exception as e:
 				frappe.log_error(frappe.get_traceback(), "Agent Stream Setup Error")
-				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}", "message_saved": delivered}
+				error_data = {"type": "error", "error": _client_safe_error(e), "message_saved": delivered}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
 				# Close the loop if we created it AND unset it to prevent leaking closed loops!
