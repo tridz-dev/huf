@@ -1517,10 +1517,16 @@ def submit_desktop_tool_event(call_id=None, executor_id=None, kind=None, payload
 		try:
 			r = _raw_client()
 			rk = _k(_result_key(call_id))
-			r.rpush(rk, json.dumps(event, default=str))
-			r.expire(rk, ttl)
+			# One MULTI/EXEC so the push and the 'done' claim land together: a worker dying in between can
+			# no longer leave a pushed event with a claim that later expires (client retry would push twice).
+			pipe = r.pipeline(transaction=True)
+			pipe.rpush(rk, json.dumps(event, default=str))
+			pipe.expire(rk, ttl)
 			if kind in TERMINAL_KINDS:
-				r.zrem(_k(_pending_key(executor_id)), call_id)
+				pipe.zrem(_k(_pending_key(executor_id)), call_id)
+			if evt_claim:
+				pipe.set(evt_claim, "done", ex=ttl)
+			pipe.execute()
 		except Exception:
 			frappe.log_error(message=frappe.get_traceback(), title="desktop_executor: rpush failed")
 			_release_event_claim(evt_claim, call_id if done_set else None)
@@ -2105,7 +2111,7 @@ def dispatch(
 
 	# Fail fast (no publish, no wait) when the executor is not live.
 	lease = _get_lease(executor_id)
-	if not lease or lease.get("user") != user:
+	if not lease:
 		# Grace: a desktop whose server just restarted re-registers on its next heartbeat retry
 		# (<=5s); give it a moment before telling the model the desktop is gone.
 		lease = _await_lease(executor_id, user)

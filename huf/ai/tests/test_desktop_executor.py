@@ -134,6 +134,25 @@ class FakeCache:
 			self.hashes.pop(k, None)
 			self.flags.pop(k, None)
 
+	def pipeline(self, transaction=True):
+		fake = self
+
+		class _Pipe:
+			def __init__(self):
+				self.ops = []
+
+			def __getattr__(self, name):
+				def queue(*a, **kw):
+					self.ops.append((name, a, kw))
+					return self
+
+				return queue
+
+			def execute(self):
+				return [getattr(fake, n)(*a, **kw) for n, a, kw in self.ops]
+
+		return _Pipe()
+
 	def rpush(self, key, val):
 		self.raw.setdefault(self._l(key), []).append(val)
 

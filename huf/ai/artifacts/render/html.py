@@ -9,6 +9,7 @@ sanitization are critical for stability.
 """
 
 import bisect
+import html as _html
 import re
 
 import markdown
@@ -954,6 +955,61 @@ def _prepare_markdown_in_html(source: str) -> str:
 	return _separate_glued_lists(_dedent_markdown_containers(_propagate_markdown_attr(source)))
 
 
+_STYLE_BLOCK_RE = re.compile(r"(<style\b[^>]*>)(.*?)(</style\s*>)", re.IGNORECASE | re.DOTALL)
+_CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+_CSS_IMPORT_RE = re.compile(r"@import\b[^;{}]*(;|(?=[}\n]|$))", re.IGNORECASE)
+_CSS_URL_RE = re.compile(r"url\(\s*(['\"]?)\s*([^)]*?)\s*\1\s*\)", re.IGNORECASE)
+_CSS_DANGEROUS_RE = re.compile(
+	r"expression\s*\([^;}]*\)?|behaviou?r\s*:[^;}]*|-moz-binding\s*:[^;}]*|javascript\s*:",
+	re.IGNORECASE,
+)
+
+
+_CSS_ESCAPE_RE = re.compile(r"\\([0-9a-fA-F]{1,6})\s?|\\(.)", re.DOTALL)
+_CSS_REMOTE_FUNC_RE = re.compile(r"(?:image-set|-webkit-image-set|cross-fade|element|src)\s*\([^)]*\)", re.IGNORECASE)
+_CSS_REMOTE_STRING_RE = re.compile(r"""(['"])\s*(?:[a-z][a-z0-9+.-]*:)?//[^'"]*\1|(['"])\s*(?:https?|ftp|data):[^'"]*\2""", re.IGNORECASE)
+
+
+def _decode_css_escapes(css: str) -> str:
+	def _sub(m):
+		if m.group(1):
+			try:
+				cp = int(m.group(1), 16)
+				return chr(cp) if 0 < cp <= 0x10FFFF else ""
+			except ValueError:
+				return ""
+		return m.group(2) if m.group(2) != "\n" else ""
+
+	return _CSS_ESCAPE_RE.sub(_sub, css)
+
+
+def _sanitize_css(css: str) -> str:
+	"""Strip remote/exfiltrating constructs from author CSS, keep local CSS."""
+	css = _CSS_COMMENT_RE.sub("", css)
+	css = _decode_css_escapes(css)  # `u\72l(` / `@\69mport` are valid CSS: match on the decoded form
+	css = _CSS_REMOTE_FUNC_RE.sub("none", css)
+	css = _CSS_REMOTE_STRING_RE.sub('""', css)
+	css = _CSS_IMPORT_RE.sub("", css)
+
+	def _url(match):
+		target = match.group(2).strip().lower()
+		if target.startswith(("#", "/")) and not target.startswith("//"):
+			return match.group(0)
+		if re.match(r"^[a-z0-9_./~-][^:]*$", target) and not target.startswith("//"):
+			return match.group(0)
+		return "none"
+
+	css = _CSS_URL_RE.sub(_url, css)
+	return _CSS_DANGEROUS_RE.sub("", css)
+
+
+def _sanitize_style_blocks(html_body: str) -> str:
+	"""bleach keeps <style> text verbatim, so scrub its CSS here."""
+	return _STYLE_BLOCK_RE.sub(
+		lambda m: m.group(1) + _sanitize_css(m.group(2)) + m.group(3), html_body
+	)
+
+
 def render_document_html(markdown_source: str, title: str = "", language: str = "markdown") -> str:
 	"""Render a document source to a full, sanitized, print-ready HTML document.
 
@@ -1002,6 +1058,7 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 		css_sanitizer=css_sanitizer(),
 		strip=True
 	)
+	sanitized_body = _sanitize_style_blocks(sanitized_body)
 
 	# Hoisted AFTER sanitization so the slice being moved is already known to
 	# be well-formed, allowlisted markup rather than raw agent output.
@@ -1012,7 +1069,7 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 <html dir="auto">
 <head>
 <meta charset="utf-8">
-<title>{title}</title>
+<title>{_html.escape(str(title or ''), quote=True)}</title>
 <style>
 {PRINT_STYLESHEET}
 </style>

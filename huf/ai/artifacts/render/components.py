@@ -79,6 +79,10 @@ def theme_css() -> str:
 	return f":root {{\n{declarations}\n}}\n"
 
 
+#: Used when a var(--x) reference cannot be resolved at all.
+SAFE_DEFAULT_COLOR = "#000000"
+
+
 def resolve_theme_token(value: str, theme: dict | None = None) -> str:
 	"""Resolve a ``var(--token)`` recipe value to a ``#RRGGBB`` literal.
 
@@ -92,10 +96,23 @@ def resolve_theme_token(value: str, theme: dict | None = None) -> str:
 	if not isinstance(value, str) or not value.startswith("var("):
 		return value
 
-	token = value[len("var(") : -1].strip().lstrip("-")
+	inner = value[len("var(") :].rstrip()
+	if inner.endswith(")"):
+		inner = inner[:-1]
+	name, _, fallback = inner.partition(",")
+	token = name.strip().lstrip("-")
+	fallback = fallback.strip()
 	palette = theme or THEME
 
-	return palette.get(token) or THEME.get(token) or value
+	resolved = palette.get(token) or THEME.get(token)
+	if resolved:
+		return resolved
+	if fallback:
+		# A fallback may itself be a var(...) reference.
+		if fallback.startswith("var("):
+			return resolve_theme_token(fallback, theme)
+		return fallback
+	return SAFE_DEFAULT_COLOR
 
 
 #: Single source of truth for document components. Every entry MUST have

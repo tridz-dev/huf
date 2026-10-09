@@ -34,6 +34,45 @@ from huf.ai.artifacts.render.html import (
 )
 
 
+class TestRenderHardening(unittest.TestCase):
+	def test_title_is_escaped(self):
+		doc = render_document_html("<p>x</p>", title="</title><script>alert(1)</script>")
+		self.assertNotIn("<script>alert(1)", doc)
+		self.assertIn("&lt;/title&gt;", doc)
+
+	def test_style_strips_remote_and_dangerous_css(self):
+		src = (
+			"<style>@import url('https://evil.test/a.css');"
+			".a{background:url(https://evil.test/x.png)}"
+			".b{background:url(//evil.test/x)}"
+			".c{background:url(data:image/png;base64,AAAA)}"
+			".d{width:expression(alert(1));behavior:url(x.htc)}"
+			".ok{color:red;background:url(img/local.png)}</style><p>x</p>"
+		)
+		doc = render_document_html(src, title="t", language="html")
+		# The built-in stylesheet legitimately @imports Google Fonts; check the body only.
+		doc = doc.split("<body", 1)[1]
+		for bad in ("evil.test", "@import", "data:image", "expression(", "behavior"):
+			self.assertNotIn(bad, doc)
+		self.assertIn(".ok{color:red;background:url(img/local.png)}", doc)
+
+	def test_resolve_theme_token_fallbacks(self):
+		from huf.ai.artifacts.render.components import SAFE_DEFAULT_COLOR, resolve_theme_token
+
+		self.assertEqual(resolve_theme_token("var(--nope, #fff)"), "#fff")
+		self.assertEqual(resolve_theme_token("var(--nope)"), SAFE_DEFAULT_COLOR)
+		self.assertEqual(resolve_theme_token("var(--nope, var(--nope2))"), SAFE_DEFAULT_COLOR)
+		self.assertEqual(resolve_theme_token("var(--accent)"), THEME["accent"])
+
+	def test_docx_with_unknown_token_does_not_raise(self):
+		html = render_document_html(
+			'<p style="color: var(--missing)">hello</p><p style="color: var(--missing, #336699)">hi</p>',
+			title="t",
+			language="html",
+		)
+		self.assertTrue(html_to_docx(html))
+
+
 def _docx_part(docx_bytes: bytes, name_fragment: str) -> str:
 	"""Concatenate every part of the .docx zip whose name contains a fragment."""
 	with zipfile.ZipFile(BytesIO(docx_bytes)) as archive:
@@ -682,3 +721,18 @@ class TestInlinePhrasingTags(unittest.TestCase):
 		body = _docx_part(html_to_docx(html), "word/document.xml")
 		self.assertRegex(body, r"<w:b/>|<w:b w:val=\"1\"/>|<w:b w:val=\"true\"/>")
 		self.assertIn("Executive Summary", body)
+
+
+class TestCssEscapeBypass(unittest.TestCase):
+	def test_escaped_remote_constructs_removed(self):
+		from huf.ai.artifacts.render.html import _sanitize_css
+
+		for css in (
+			"a{background:u\\72l(http://evil/x)}",
+			"@\\69mport 'http://evil/x.css';a{color:red}",
+			'a{background:image-set("http://evil/p.gif" 1x)}',
+			"a{content:'http://evil/x'}",
+		):
+			out = _sanitize_css(css)
+			self.assertNotIn("evil", out, css)
+		self.assertIn("color:red", _sanitize_css("a{color:red}"))

@@ -891,6 +891,12 @@ class TestAskUser(IntegrationTestCase):
 		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
 			return ask_user_mod.ask_user(**kwargs)
 
+	def test_legacy_suggested_answers_are_capped(self):
+		result = self._run(question="Q?", kind="input", suggested_answers=["x" * 5000, "ok"])
+		answers = result["ask_user"]["suggested_answers"]
+		self.assertEqual(len(answers[0]), ask_user_mod.MAX_TEXT_LENGTH)
+		self.assertEqual(answers[1], "ok")
+
 	def test_bad_kind_rejected(self):
 		self.assertRaises(
 			frappe.ValidationError,

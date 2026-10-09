@@ -426,7 +426,7 @@ def _legacy_single(question, kind, options, allow_free_text, suggested_answers, 
 	}
 
 	answers = _parse_options(suggested_answers)
-	payload["suggested_answers"] = [str(answer) for answer in answers if answer]
+	payload["suggested_answers"] = [_cap_text(answer) for answer in answers if answer]
 
 	if note:
 		payload["note"] = _cap_text(note)

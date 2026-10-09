@@ -47,7 +47,7 @@ from docx.oxml.ns import qn
 from huf.ai.artifacts.render import design_tokens as tokens
 from docx.shared import Cm, Emu, Inches, Pt, RGBColor
 
-from huf.ai.artifacts.render.components import COMPONENTS, COMPONENT_CLASSES, THEME, resolve_theme_token
+from huf.ai.artifacts.render.components import COMPONENTS, COMPONENT_CLASSES, SAFE_DEFAULT_COLOR, THEME, resolve_theme_token
 
 
 #: Maps a block element's alignment class to a python-docx alignment constant.
@@ -1697,7 +1697,10 @@ def _docx_hex(value: str) -> str:
 
 
 def _rgb_color(hex_value: str) -> RGBColor:
-	return RGBColor.from_string(_docx_hex(hex_value))
+	try:
+		return RGBColor.from_string(_docx_hex(hex_value))
+	except (ValueError, TypeError, AttributeError):
+		return RGBColor.from_string(_docx_hex(SAFE_DEFAULT_COLOR))
 
 
 def _shade_cell(cell, hex_color: str) -> None:
