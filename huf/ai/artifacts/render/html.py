@@ -519,6 +519,8 @@ ALLOWED_TAGS = [
 	"span", "div",
 	"section", "aside", "header", "footer", "main",
 	"figure", "figcaption", "small", "style",
+	# Harmless inline presentational/phrasing tags (no extra attributes).
+	"b", "i", "u", "s", "mark", "sub", "sup", "kbd", "abbr", "cite", "q", "wbr",
 ]
 
 #: Per-tag attribute allowances beyond the global set below.
@@ -842,6 +844,116 @@ def _dedent_markdown_containers(source: str) -> str:
 	return source
 
 
+#: Block containers whose raw text is worth parsing as markdown when it clearly is markdown.
+_MARKDOWN_CONTAINER_TAGS = frozenset({"div", "section", "aside", "article", "main", "blockquote", "figure"})
+
+#: Raw markdown block syntax (heading, list item, table row, bold) sitting in container text.
+_LEAKY_MARKDOWN_RE = re.compile(
+	r"^[ \t]*(?:#{1,6}[ \t]+\S|[-*+][ \t]+\S|\d+[.)][ \t]+\S|\|.+\|[ \t]*$)|\*\*\S(?:[^*\n]*\S)?\*\*",
+	re.MULTILINE,
+)
+
+
+def _mark_unmarked_markdown_containers(source: str) -> str:
+	"""Add ``markdown="1"`` to block containers whose own text is raw markdown.
+
+	Authors (and models) routinely write ``<div class="x">## Title\n- item</div>``
+	without the attribute; md_in_html then leaves the text literal. Only the
+	direct text of a container counts (text inside <p>/<li>/<td> is left alone),
+	code regions are ignored, and containers already marked are skipped.
+	"""
+	spans = _merge_ranges(_code_spans(source) + _pre_regions(source))
+	stack: list[tuple[str, int, bool]] = []  # (tag, end of open tag, already marked)
+	marked_ends: set[int] = set()
+	previous_end = 0
+
+	def check_gap(start: int, end: int) -> None:
+		if not stack or end <= start:
+			return
+		tag, open_end, has_attr = stack[-1]
+		if has_attr or tag not in _MARKDOWN_CONTAINER_TAGS or open_end in marked_ends:
+			return
+		chars = list(source[start:end])
+		for lo, hi in spans:
+			for i in range(max(lo, start), min(hi, end)):
+				chars[i - start] = " "
+		if _LEAKY_MARKDOWN_RE.search("".join(chars)):
+			marked_ends.add(open_end)
+
+	for match, tag, kind in _iter_structural_tags(source):
+		check_gap(previous_end, match.start())
+		previous_end = match.end()
+		if kind == "close":
+			for index in range(len(stack) - 1, -1, -1):
+				if stack[index][0] == tag:
+					del stack[index:]
+					break
+			continue
+		if kind == "void":
+			continue
+		closes = _IMPLICIT_CLOSE.get(tag)
+		if closes:
+			while stack and stack[-1][0] in closes:
+				stack.pop()
+		stack.append((tag, match.end(), bool(_MARKDOWN_IN_HTML_RE.search(match.group(0)))))
+	if not marked_ends:
+		return source
+	parts = []
+	cursor = 0
+	for open_end in sorted(marked_ends):
+		parts.append(source[cursor : open_end - 1])
+		parts.append(' markdown="1"')
+		cursor = open_end - 1
+	parts.append(source[cursor:])
+	return "".join(parts)
+
+
+_LIST_ITEM_LINE_RE = re.compile(r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+\S")
+_FENCE_LINE_RE = re.compile(r"^[ \t]*(?:`{3,}|~{3,})")
+
+
+def _separate_glued_lists(source: str) -> str:
+	"""Insert a blank line between a paragraph line and a list that follows it directly.
+
+	Python-Markdown only starts a list after a blank line, so ``text\n* item``
+	rendered the bullet as literal text inside the paragraph.
+	"""
+	out: list[str] = []
+	in_fence = False
+	prev = ""
+	for line in source.split("\n"):
+		if _FENCE_LINE_RE.match(line):
+			in_fence = not in_fence
+		elif (
+			not in_fence
+			and _LIST_ITEM_LINE_RE.match(line)
+			and prev.strip()
+			and not _LIST_ITEM_LINE_RE.match(prev)
+			and not prev.startswith((" ", "\t"))
+			and not prev.lstrip().startswith(("<", "|", "#"))
+		):
+			out.append("")
+		out.append(line)
+		prev = line
+	return "\n".join(out)
+
+
+_TASK_ITEM_RE = re.compile(r"(<li>\s*)\[( |x|X)\](?=\s)")
+
+
+def _render_task_items(html_body: str) -> str:
+	"""GFM task-list markers have no markdown extension here; show them as checkbox glyphs."""
+	return _TASK_ITEM_RE.sub(lambda m: m.group(1) + ("\u2610" if m.group(2) == " " else "\u2611"), html_body)
+
+
+def _prepare_markdown_in_html(source: str) -> str:
+	"""Opt-in/implicit markdown-inside-HTML preprocessing shared by both languages."""
+	source = _mark_unmarked_markdown_containers(source)
+	if not _MARKDOWN_IN_HTML_RE.search(source):
+		return source
+	return _separate_glued_lists(_dedent_markdown_containers(_propagate_markdown_attr(source)))
+
+
 def render_document_html(markdown_source: str, title: str = "", language: str = "markdown") -> str:
 	"""Render a document source to a full, sanitized, print-ready HTML document.
 
@@ -862,12 +974,9 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 		# rendered as literal pipes and hashes ("## Target Tracker | Target
 		# Area | ..."), so run one only when an author opted in; md_in_html
 		# leaves every other block of raw HTML untouched.
-		if _MARKDOWN_IN_HTML_RE.search(markdown_source):
-			html_body = _render_markdown(
-				_strip_orphaned_class_markers(
-					_dedent_markdown_containers(_propagate_markdown_attr(markdown_source))
-				)
-			)
+		prepared = _prepare_markdown_in_html(markdown_source)
+		if _MARKDOWN_IN_HTML_RE.search(prepared):
+			html_body = _render_task_items(_render_markdown(_strip_orphaned_class_markers(prepared)))
 		else:
 			html_body = markdown_source
 	else:
@@ -875,9 +984,9 @@ def render_document_html(markdown_source: str, title: str = "", language: str = 
 		# from their content by a blank line (causing attr_list to fail).
 		# Then expand :::columns-N...::: regions (pre-rendered to raw HTML),
 		# then run through markdown. Markdown leaves embedded raw HTML alone.
-		cleaned_source = _strip_orphaned_class_markers(markdown_source)
+		cleaned_source = _strip_orphaned_class_markers(_prepare_markdown_in_html(markdown_source))
 		preprocessed_source = _expand_columns_blocks(cleaned_source)
-		html_body = _render_markdown(preprocessed_source)
+		html_body = _render_task_items(_render_markdown(preprocessed_source))
 
 	# Sanitize the HTML to remove any dangerous content.
 	#

@@ -327,9 +327,15 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+            # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
+            "huf.ai.run_control.sweep_stale_runs",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",
+        ],
+        "*/30 * * * *": [
+            # Fail runs left 'Queued' longer than huf_stale_queued_hours (24) with no live drain lock.
+            "huf.ai.run_control.sweep_dead_queued_runs",
         ]
     },
     "hourly": [

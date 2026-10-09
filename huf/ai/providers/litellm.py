@@ -92,10 +92,11 @@ class ProviderUnavailableError(Exception):
 
     def __init__(self, public_message: str, *, log_message: str | None = None):
         public_message = public_message if isinstance(public_message, str) else str(public_message or "")
-        super().__init__(public_message)
         self.public_message = (
             public_message if len(public_message) <= 300 else public_message[:299].rstrip() + "\u2026"
         )
+        # str(e)/args carry only the capped, curated text; full detail lives in log_message.
+        super().__init__(self.public_message)
         self.log_message = log_message or public_message
 
 
@@ -798,7 +799,150 @@ async def _execute_tool_call(tool, args_json, context=None, tool_call_id=None):
             tool_arguments=args_str,
         )
 
-    return await tool.on_invoke_tool(invoke_ctx, args_str)
+    run_id = context.get("agent_run_id") if isinstance(context, dict) else None
+    if not run_id:
+        return await tool.on_invoke_tool(invoke_ctx, args_str)
+    from huf.ai.run_control import keep_run_alive
+
+    # Long tools (desktop commands, approval waits) must not let the run's live marker expire.
+    async with keep_run_alive(run_id, interval=20):
+        return await tool.on_invoke_tool(invoke_ctx, args_str)
+
+
+
+def _tool_result_failed(result_content):
+    """True when a tool result is an error, so clients show a failed row, not a completed one.
+
+    Covers the desktop executor's ``{"ok": False, "error": {code, message}}`` shape, a bare
+    ``{"error": ...}`` dict and the "Error executing tool" string the loop synthesises.
+    """
+    if isinstance(result_content, str):
+        text = result_content.lstrip()
+        if text.startswith("{"):
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                parsed = None
+            return _tool_result_failed(parsed) if isinstance(parsed, dict) else False
+        return text.startswith("Error executing tool ")
+    if isinstance(result_content, dict):
+        if result_content.get("ok") is False or result_content.get("success") is False:
+            return True
+        if str(result_content.get("status") or "").lower() in ("error", "failed"):
+            return True
+        err = result_content.get("error")
+        if isinstance(err, (dict, list)):
+            return bool(err) and result_content.get("ok") is not True
+        if err and result_content.get("ok") is not True:
+            # A bare string "error" is failure only without any success marker (else a warning-like field).
+            return not (result_content.get("success") is True or str(result_content.get("status") or "").lower() in ("ok", "success", "completed"))
+        return False
+    return False
+
+
+def _tool_result_error_text(result_content):
+    if isinstance(result_content, str):
+        try:
+            parsed = json.loads(result_content)
+        except Exception:
+            return result_content[:500]
+        return _tool_result_error_text(parsed) if isinstance(parsed, dict) else result_content[:500]
+    if isinstance(result_content, dict):
+        err = result_content.get("error")
+        if isinstance(err, dict):
+            return str(err.get("message") or err.get("code") or "Tool call failed")[:500]
+        if err:
+            return str(err)[:500]
+    return "Tool call failed"
+
+
+def _publish_stream_tool_outcome(context, tool_call, tool_name, result_content, message_name, user=None, checkpoint=True):
+    """Publish ``tool_call_completed`` / ``tool_call_failed`` for one streamed tool call.
+
+    Keyed by the LLM-issued id, the same one ``tool_call_started`` used, and published even when the
+    Agent Tool Call audit row could not be found or saved (otherwise the row would stay "Running").
+    """
+    published = False
+    failed = _tool_result_failed(result_content)
+    tool_result_for_socket = (
+        result_content
+        if isinstance(result_content, (dict, list))
+        else {"output": str(result_content)[:140000]}
+    )
+    frappe.publish_realtime(
+        event=f'conversation:{context.get("conversation_id")}',
+        message={
+            "type": "tool_call_failed" if failed else "tool_call_completed",
+            "conversation_id": context.get("conversation_id"),
+            "agent_run_id": context.get("agent_run_id"),
+            "message_id": message_name,
+            "tool_call_id": tool_call["id"],
+            "call_id": tool_call["id"],
+            "tool_name": tool_name,
+            "tool_status": "Failed" if failed else "Completed",
+            "status": "Failed" if failed else "Completed",
+            "error": _tool_result_error_text(result_content) if failed else None,
+            "tool_result": None if failed else tool_result_for_socket,
+            "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
+        },
+        user=user or frappe.session.user,
+        after_commit=False,
+    )
+    published = True
+    try:
+        if getattr(frappe.local, "_realtime_log", None) is None:
+            frappe.local._realtime_log = []
+        if checkpoint:
+            transaction_checkpoint(reason="agent_streaming_progress")
+    except Exception:
+        # The outcome already went out: never let callers' error handlers publish a duplicate.
+        frappe.logger("huf").warning("tool outcome checkpoint failed after publish")
+
+TOOL_NOT_AVAILABLE_MESSAGE = "Tool not available in this session (desktop not connected)"
+
+
+def _tool_not_available_result(tool_name):
+    """Tool result handed back to the model when it calls a tool outside the offered set."""
+    desktop = str(tool_name or "").startswith("desktop_")
+    return {
+        "ok": False,
+        "error": {
+            "code": "tool_not_available",
+            "message": TOOL_NOT_AVAILABLE_MESSAGE
+            if desktop
+            else f"Tool '{tool_name}' is not available in this session",
+        },
+    }
+
+
+def _finalize_unavailable_tool_call(context, tool_call, tool_name):
+    """Fail the Queued Agent Tool Call row of an unknown tool immediately and tell the client.
+
+    Returns the tool result for the model. Never raises.
+    """
+    result = _tool_not_available_result(tool_name)
+    if not (isinstance(context, dict) and context.get("conversation_id")):
+        return result
+    call_id = tool_call.get("id")
+    message_name = None
+    try:
+        row = frappe.db.get_value(
+            "Agent Tool Call", {"conversation": context.get("conversation_id"), "call_id": call_id}, "name"
+        )
+        if row:
+            frappe.db.set_value(
+                "Agent Tool Call", row,
+                {"status": "Failed", "error_message": result["error"]["message"]},
+                update_modified=True,
+            )
+            message_name = frappe.db.get_value("Agent Message", {"tool_call": row}, "name")
+    except Exception:
+        frappe.logger("huf").warning(f"could not fail unavailable tool call {call_id}")
+    try:
+        _publish_stream_tool_outcome(context, tool_call, tool_name, result, message_name)
+    except Exception:
+        frappe.logger("huf").warning(f"could not publish unavailable tool outcome {call_id}")
+    return result
 
 
 def _find_tool(agent, tool_name):
@@ -1853,7 +1997,7 @@ async def run(agent, enhanced_prompt, provider, model, context=None):
                         )
                         result_content = f"Error executing tool {tool_name}: {str(e)}"
                 else:
-                    result_content = f"Tool '{tool_name}' not found."
+                    result_content = _tool_not_available_result(tool_name)
 
                 all_new_items.append(
                     SimpleNamespace(
@@ -2681,6 +2825,8 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                         conv_id = context.get("conversation_id")
                                         call_id = tool_call.get("id")
                                         agent_run_id = context.get("agent_run_id")
+                                        message_name = None
+                                        outcome_published = False
                                         try:
                                             tool_call_doc = frappe.db.get_value("Agent Tool Call", {
                                                 "conversation": conv_id,
@@ -2754,38 +2900,21 @@ async def run_stream(agent, enhanced_prompt, provider, model, context=None):
                                                         message=f"No Agent Message found for tool call call_id={call_id}, tool_call_doc={tool_call_doc}",
                                                     )
 
-                                                tool_result_for_socket = (
-                                                    result_content
-                                                    if isinstance(result_content, (dict, list))
-                                                    else {"output": str(result_content)[:140000]}
-                                                )
-                                                frappe.publish_realtime(
-                                                    event=f'conversation:{context.get("conversation_id")}',
-                                                    message={
-                                                        "type": "tool_call_completed",
-                                                        "conversation_id": context.get("conversation_id"),
-                                                        "agent_run_id": context.get("agent_run_id"),
-                                                        "message_id": message_name,
-                                                        "tool_call_id": tool_call["id"],
-                                                        "tool_name": tool_name,
-                                                        "tool_status": "Completed",
-                                                        "status": "Completed",
-                                                        "tool_result": tool_result_for_socket,
-                                                        "result": json.dumps(tool_result_for_socket) if isinstance(tool_result_for_socket, (dict, list)) else str(result_content)[:1000],
-                                                    },
-                                                    user=frappe.session.user,
-                                                    after_commit=False
-                                                )
-                                                if getattr(frappe.local, "_realtime_log", None) is None:
-                                                    frappe.local._realtime_log = []
-                                                transaction_checkpoint(reason="agent_streaming_progress")
+                                            _publish_stream_tool_outcome(context, tool_call, tool_name, result_content, message_name)
+                                            outcome_published = True
                                         except Exception as e:
                                             frappe.log_error(
                                                 message=f"Error updating tool call result for call_id={call_id}: {e}\n\n{frappe.get_traceback()}",
                                                 title="Tool Call Message Update"
                                             )
+                                            # The audit/message update failed: the client must still hear the call ended.
+                                            if not outcome_published:
+                                                try:
+                                                    _publish_stream_tool_outcome(context, tool_call, tool_name, result_content, None)
+                                                except Exception:
+                                                    pass
                                 else:
-                                    result_content = f"Tool '{tool_name}' not found."
+                                    result_content = _finalize_unavailable_tool_call(context, tool_call, tool_name)
 
                                 tool_results.append(
                                     {

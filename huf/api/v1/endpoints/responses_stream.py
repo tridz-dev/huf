@@ -275,6 +275,8 @@ def handle_stream_response(
 			while True:
 				try:
 					chunk = loop.run_until_complete(async_gen.__anext__())
+					if chunk.get("type") == "run_started":
+						continue  # internal handshake for the desktop client; not part of the public v1 events
 					public_type, payload = _map_chunk(chunk)
 					yield _sse_line(public_type, payload)
 

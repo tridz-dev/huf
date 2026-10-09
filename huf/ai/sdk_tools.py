@@ -108,6 +108,10 @@ def _pin_run_identity(args_dict: dict, ctx, nonce: str = None) -> dict:
     tool_call_id = getattr(ctx, "tool_call_id", None)
     if tool_call_id and args_dict.get("agent_run_id"):
         args_dict["call_id"] = derive_call_id(args_dict["agent_run_id"], tool_call_id, nonce)
+    # The exact LLM-issued id, sent on its own so the desktop can join its feed to the chat row.
+    args_dict.pop("tool_call_id", None)
+    if tool_call_id and isinstance(tool_call_id, str):
+        args_dict["tool_call_id"] = tool_call_id[:256]
     return args_dict
 
 
@@ -281,6 +285,10 @@ def _build_desktop_tools(function_docs, desktop_ctx, agent=None) -> list:
         "_dx_executor_id": live["executor_id"],
         "_dx_fingerprint": desktop_ctx.get("fingerprint") or live.get("fingerprint") or "",
         "_dx_user": live["user"],
+        # Pinned from the agent document (never model-controlled): the doc PK for policy matching
+        # and the display name the desktop approval window shows.
+        "_dx_agent": (getattr(agent, "name", None) or getattr(agent, "agent_name", None) or "") if agent is not None else "",
+        "_dx_agent_display": (getattr(agent, "agent_name", None) or "") if agent is not None else "",
     }
 
     # The agent's desktop access ceiling: a capability that is ``off`` removes its tools from the
@@ -398,7 +406,11 @@ def _build_local_mcp_tools(mcp_docs, desktop_ctx, executor_id, agent, extra_args
     caps = set(lease_capabilities(executor_id))
     attached = {d.tool_name: d for d in mcp_docs}
     agent_name = (getattr(agent, "name", None) or getattr(agent, "agent_name", None)) if agent is not None else None
-    base_extra = {**extra_args, "_dx_agent": agent_name or ""}
+    base_extra = {
+        **extra_args,
+        "_dx_agent": agent_name or "",
+        "_dx_agent_display": (getattr(agent, "agent_name", None) or "") if agent is not None else "",
+    }
     specs = {t["tool_name"]: t for t in DESKTOP_LOCAL_MCP_TOOLS}
     built = []
 

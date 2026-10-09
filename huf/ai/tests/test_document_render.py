@@ -585,3 +585,100 @@ class TestPreRegionsLinear(unittest.TestCase):
 		start = time.time()
 		_pre_regions(src)
 		self.assertLess(time.time() - start, 1.0)
+
+
+class TestLeakedMarkdownInHtmlLayouts(unittest.TestCase):
+	"""Real failing documents: markdown inside HTML layout blocks must not render literally."""
+
+	SPLIT = (
+		'<div class="split">\n'
+		'  <section class="split-main" markdown="1">\n\n'
+		"  ## Operational Highlights\n\n"
+		"  Our pivot.\n"
+		"  * **Goal:** Understand the team.\n\n"
+		"  </section>\n"
+		'  <aside class="split-side" markdown="1">\n\n'
+		"  #### Quick Checklist\n"
+		"  * [ ] Equipment shipped\n"
+		"  * [x] Invite sent\n\n"
+		"  </aside>\n"
+		"</div>\n"
+	)
+
+	@staticmethod
+	def _text(html):
+		body = html.split("<body", 1)[1]
+		body = re.sub(r"<style.*?</style>", "", body, flags=re.S)
+		return re.sub(r"<[^>]+>", "", body)
+
+	def _assert_clean(self, text):
+		self.assertNotRegex(text, r"(?m)^\s*#{1,6}\s")
+		self.assertNotIn("**", text)
+		self.assertNotRegex(text, r"(?m)^\s*\*\s")
+		self.assertNotIn("[ ]", text)
+
+	def test_markdown_attr_honoured_in_markdown_language(self):
+		for lang in ("markdown", "html"):
+			out = render_document_html(self.SPLIT, "t", lang)
+			self._assert_clean(self._text(out))
+			self.assertIn("<h2>Operational Highlights</h2>", out)
+			self.assertIn("☐ Equipment shipped", out)
+			self.assertIn("☑ Invite sent", out)
+
+	def test_list_glued_to_paragraph_becomes_list(self):
+		out = render_document_html(self.SPLIT, "t", "html")
+		self.assertIn("<li><strong>Goal:</strong> Understand the team.</li>", out)
+
+	def test_unmarked_container_with_markdown_text_is_parsed(self):
+		src = '<div class="callout">\n## Hi\n- **a:** b\n- c\n</div>\n<div class="metric">45 Days</div>'
+		for lang in ("markdown", "html"):
+			out = render_document_html(src, "t", lang)
+			self._assert_clean(self._text(out))
+			self.assertIn("<h2>Hi</h2>", out)
+			self.assertIn('<div class="metric">45 Days</div>', out)
+
+	def test_plain_html_container_untouched_and_code_ignored(self):
+		src = '<div class="callout">Plain text only</div>\n\n```\n<div>\n## not a heading\n</div>\n```\n'
+		out = render_document_html(src, "t", "markdown")
+		self.assertIn('<div class="callout">Plain text only</div>', out)
+		self.assertIn("## not a heading", out)
+
+
+class TestInlinePhrasingTags(unittest.TestCase):
+	"""b/i/u/s/mark/... survive sanitization; dangerous markup does not."""
+
+	def test_bold_preserved_in_callout(self):
+		out = render_document_html(
+			'<div class="callout"><b>Executive Summary:</b> up 18%.</div>', "t", "html"
+		)
+		self.assertIn("<b>Executive Summary:</b>", out)
+
+	def test_nested_b_i_and_other_inline_tags(self):
+		out = render_document_html(
+			"<p><b>x <i>y</i></b> <u>u</u> <mark>m</mark> H<sub>2</sub>O x<sup>2</sup> <kbd>k</kbd></p>",
+			"t",
+			"html",
+		)
+		for frag in ("<b>x <i>y</i></b>", "<u>u</u>", "<mark>m</mark>", "<sub>2</sub>", "<sup>2</sup>", "<kbd>k</kbd>"):
+			self.assertIn(frag, out)
+
+	def test_script_and_handlers_still_stripped(self):
+		out = render_document_html(
+			'<p><b onclick="x()">a</b><script>alert(1)</script><i onerror="y()">b</i>'
+			'<iframe src="http://e"></iframe><svg onload="z()"></svg></p>',
+			"t",
+			"html",
+		)
+		for bad in ("<script", "onclick", "onerror", "onload", "<iframe", "<svg"):
+			self.assertNotIn(bad, out)
+		self.assertIn("<b>a</b>", out)
+
+	def test_docx_has_bold_run_for_b(self):
+		html = render_document_html(
+			'<div class="callout"><b>Executive Summary:</b> ok <u>u</u> <mark>m</mark></div>',
+			"t",
+			"html",
+		)
+		body = _docx_part(html_to_docx(html), "word/document.xml")
+		self.assertRegex(body, r"<w:b/>|<w:b w:val=\"1\"/>|<w:b w:val=\"true\"/>")
+		self.assertIn("Executive Summary", body)

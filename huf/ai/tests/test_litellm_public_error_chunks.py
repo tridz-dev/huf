@@ -180,3 +180,25 @@ class TestPublicErrorChunks(unittest.TestCase):
     def test_sanitizer_returns_fixed_templates_only(self):
         for raw in (SECRET, f"LiteLLM error for model 'm': {SECRET}", "rate limit " + SECRET):
             self.assertNotIn("sk-secret", _sanitize_provider_error_message(raw, "m"))
+
+
+class TestProviderUnavailableErrorCap(unittest.TestCase):
+    def test_str_and_args_are_capped_log_message_keeps_full(self):
+        from huf.ai.providers.litellm import ProviderUnavailableError
+
+        long_text = "x" * 1000
+        e = ProviderUnavailableError(long_text, log_message="raw " + long_text)
+        self.assertLessEqual(len(str(e)), 300)
+        self.assertEqual(str(e), e.public_message)
+        self.assertEqual(e.args, (e.public_message,))
+        self.assertEqual(e.log_message, "raw " + long_text)
+
+    def test_defaults_and_short_message_unchanged(self):
+        from huf.ai.providers.litellm import ProviderUnavailableError
+
+        e = ProviderUnavailableError("Short safe text.")
+        self.assertEqual(str(e), "Short safe text.")
+        self.assertEqual(e.public_message, "Short safe text.")
+        self.assertEqual(e.log_message, "Short safe text.")
+        long_text = "y" * 500
+        self.assertEqual(ProviderUnavailableError(long_text).log_message, long_text)

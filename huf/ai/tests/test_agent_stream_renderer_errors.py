@@ -306,6 +306,17 @@ class TestPublicMessageGuards(unittest.TestCase):
             self.assertNotIn(ch, out)
         self.assertEqual(_client_safe_error(ProviderUnavailableError("")), "The request could not be completed. Please try again.")
 
+    def test_str_exception_is_capped_and_client_path_unchanged(self):
+        from huf.ai.agent_integration import _client_safe_error
+        from huf.ai.providers.litellm import ProviderUnavailableError
+
+        raw = "sk-secret " + "z" * 1000
+        e = ProviderUnavailableError("Curated " + "c" * 600, log_message=raw)
+        self.assertLessEqual(len(str(e)), 300)
+        self.assertNotIn("sk-secret", str(e))
+        self.assertEqual(e.log_message, raw)
+        self.assertEqual(_client_safe_error(e), e.public_message)
+
     def test_desktop_error_text_is_curated(self):
         from huf.ai.agent_integration import _GENERIC_STREAM_ERROR, _client_safe_desktop_error
 
@@ -341,3 +352,32 @@ class TestPublicMessageGuards(unittest.TestCase):
         e = ProviderUnavailableError(12345)
         self.assertEqual(e.public_message, "12345")
         self.assertEqual(ProviderUnavailableError(None).public_message, "")
+
+
+class TestHeartbeatOrdering(unittest.TestCase):
+    def test_no_heartbeat_chunk_before_run_started(self):
+        import asyncio
+
+        renderer = _make_renderer("x")
+
+        async def slow(*a, **k):
+            await asyncio.sleep(0.25)
+            yield {"type": "run_started", "agent_run_id": "R"}
+            await asyncio.sleep(0.25)
+            yield {"type": "complete"}
+
+        with patch("huf.ai.agent_stream_renderer.run_agent_stream", slow), \
+                patch("huf.ai.agent_stream_renderer.SSE_KEEPALIVE_S", 0.05), \
+                patch("huf.ai.agent_stream_renderer.frappe.form_dict", {"agent_name": "x", "prompt": "hi"}), \
+                patch("huf.ai.agent_stream_renderer.frappe.get_doc", return_value=MagicMock(run_immediately=1, enable_multi_run=0)), \
+                patch("huf.ai.agent_stream_renderer.frappe.has_permission", return_value=True), \
+                patch("huf.ai.agent_stream_renderer.frappe.log_error"), \
+                patch("huf.ai.agent_stream_renderer.frappe.request", new=MagicMock(method="GET")):
+            body = b"".join(
+                c if isinstance(c, bytes) else c.encode()
+                for c in renderer._render_agent_stream("x").response
+            ).decode()
+        first_data = body.index('"run_started"')
+        self.assertIn(": keep-alive", body[:first_data])
+        self.assertNotIn('"heartbeat"', body[:first_data])
+        self.assertIn('"heartbeat"', body[first_data:])

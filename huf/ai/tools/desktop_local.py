@@ -305,6 +305,7 @@ def _mcp_tool(build):
 
 	def prepare(**kwargs):
 		agent = kwargs.pop("_dx_agent", None)
+		display = kwargs.pop("_dx_agent_display", None)
 		pinned = {key: kwargs.pop(key, None) for key in ("_dx_mcp_server", "_dx_mcp_tool", "_dx_mcp_kind")}
 		refusals = []
 
@@ -318,6 +319,7 @@ def _mcp_tool(build):
 		# Pinned by sdk_tools from the agent document: dispatch checks it against the catalog's
 		# per-agent list, and the desktop receives it in the request.
 		prepared["agent_name"] = str(agent) if agent else None
+		prepared["agent_display_name"] = str(display) if display else None
 		if refusals:
 			prepared["_refuse"] = refusals[0]
 		return prepared
@@ -385,6 +387,7 @@ def _find_prepare(**kwargs):
 
 	ident = {key: kwargs.pop(key, None) for key in desktop_workspace._IDENTITY_KEYS}
 	agent = kwargs.pop("_dx_agent", None)
+	kwargs.pop("_dx_agent_display", None)
 	query = " ".join(str(kwargs.get("query") or "").split())[:MAX_QUERY_CHARS]
 	server = str(kwargs.get("server") or "").strip() or None
 	limit = max(1, min(desktop_mcp.MCP_FIND_MAX_RESULTS, _as_int(kwargs.get("limit") or 8, "limit")))

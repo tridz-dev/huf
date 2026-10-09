@@ -178,6 +178,8 @@ REQUEST_PARAMS_MAX_BYTES = 512 * 1024
 WRITE_CONTENT_MAX_BYTES = 256 * 1024
 RESULT_JSON_MAX_BYTES = 96 * 1024
 STASH_TTL_GRACE_S = 30
+# Short TTL for the in-flight event_id claim: a dead worker must not wedge client retries for the full TTL.
+EVENT_CLAIM_PENDING_TTL_S = 30
 FINAL_CACHE_TTL_S = 300
 MAX_MESSAGE_CHARS = 500
 # Max seconds per BLPOP slice; must stay below the redis-cache socket_timeout (5 s).
@@ -352,6 +354,11 @@ _ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 
 def _lease_key(executor_id):
 	return f"huf:dx:lease:{executor_id}"
+
+
+def _unreg_key(executor_id):
+	"""Tombstone: the desktop unregistered this executor on purpose (so no grace wait for it)."""
+	return f"huf:dx:unreg:{executor_id}"
 
 
 def _catalog_key(executor_id, catalog_hash):
@@ -589,6 +596,25 @@ def _get_lease(executor_id):
 		_log_failure("desktop_executor: lease read failed")
 		return None
 	return lease if isinstance(lease, dict) else None
+
+
+LEASE_GRACE_WAIT_S = 5
+
+
+def _await_lease(executor_id, user, wait_s=None, poll_s=0.5):
+	"""Poll for the lease to reappear (heartbeat / re-register) for up to ``wait_s`` seconds."""
+	try:
+		if _get(_unreg_key(executor_id)):
+			return None  # left on purpose (quit / workspace switch): nothing to wait for
+	except Exception:
+		pass
+	deadline = time.monotonic() + (LEASE_GRACE_WAIT_S if wait_s is None else wait_s)
+	while time.monotonic() < deadline:
+		time.sleep(poll_s)
+		lease = _get_lease(executor_id)
+		if lease and lease.get("user") == user:
+			return lease
+	return None
 
 
 def _put_lease(executor_id, lease):
@@ -935,6 +961,10 @@ def register_desktop_executor(
 	if (existing or {}).get("catalog_hash"):
 		lease["catalog_hash"] = existing["catalog_hash"]
 	_put_lease(executor_id, lease)
+	try:
+		_delete(_unreg_key(executor_id))  # registered again: a missing lease is a gap, not a departure
+	except Exception:
+		pass
 	_index_add(user, executor_id)
 	_device_touch(lease)
 	out = {
@@ -1271,6 +1301,7 @@ def unregister_desktop_executor(executor_id=None, lease_secret=None):
 				pass
 	try:
 		_delete(_lease_key(executor_id))
+		_setex(_unreg_key(executor_id), 1, 120)
 	except Exception:
 		frappe.log_error(message=frappe.get_traceback(), title="desktop_executor: unregister failed")
 	_index_remove(user, executor_id)
@@ -1394,7 +1425,7 @@ def is_lease_live(executor_id):
 
 
 @frappe.whitelist(methods=["POST"])
-def submit_desktop_tool_event(call_id=None, executor_id=None, kind=None, payload=None, lease_secret=None):
+def submit_desktop_tool_event(call_id=None, executor_id=None, kind=None, payload=None, lease_secret=None, event_id=None):
 	"""Receive ``ack | approval_pending | result | error`` for a call.
 
 	Authorization, all required: session user == the user bound to the call,
@@ -1438,33 +1469,109 @@ def submit_desktop_tool_event(call_id=None, executor_id=None, kind=None, payload
 		_claim_control(call_id, HARD_CAP_S + STASH_TTL_GRACE_S)
 
 	ttl = HARD_CAP_S + STASH_TTL_GRACE_S
-	if kind not in TERMINAL_KINDS:
+	# Idempotency: a client retry re-sends the SAME event_id; an already-claimed id is not re-applied.
+	# The in-flight claim is SHORT-lived so a worker that dies after claiming cannot wedge retries for the
+	# whole TTL; it is promoted to 'done' (full TTL) only once the event is pushed.
+	evt_claim = None
+	if event_id is not None:
+		if not isinstance(event_id, str) or not event_id or len(event_id) > 200:
+			raise frappe.ValidationError("Invalid event_id")
+		evt_claim = _k(f"huf:dx:evt:{call_id}:{event_id}")
 		try:
-			if len(json.dumps(payload, default=str).encode("utf-8")) > NONTERMINAL_PAYLOAD_MAX_BYTES:
+			if not _raw_client().set(evt_claim, "pending", nx=True, ex=EVENT_CLAIM_PENDING_TTL_S):
+				# A retry racing the first request: wait briefly for it to finish ('done') so a failed first
+				# push (claim released) is re-applied instead of the event being lost.
+				state = _wait_event_claim(evt_claim)
+				if state == "done":
+					return {"status": "recorded", "kind": kind, "ok": True, "duplicate": True}
+				if state == "pending":
+					# First request still running: do NOT claim it is delivered. A retryable 429 makes the
+					# client re-submit and then see 'done' (duplicate) or re-apply if the first failed.
+					raise frappe.TooManyRequestsError("Event is still being processed; retry.")
+				if not _raw_client().set(evt_claim, "pending", nx=True, ex=EVENT_CLAIM_PENDING_TTL_S):
+					return {"status": "recorded", "kind": kind, "ok": True, "duplicate": True}
+		except frappe.TooManyRequestsError:
+			raise
+		except Exception:
+			evt_claim = None
+	done_set = False
+	try:
+		if kind not in TERMINAL_KINDS:
+			try:
+				if len(json.dumps(payload, default=str).encode("utf-8")) > NONTERMINAL_PAYLOAD_MAX_BYTES:
+					payload = {}
+			except (TypeError, ValueError):
 				payload = {}
-		except (TypeError, ValueError):
-			payload = {}
-	if kind in TERMINAL_KINDS:
-		payload = _cap_terminal_payload(kind, payload)
+		if kind in TERMINAL_KINDS:
+			payload = _cap_terminal_payload(kind, payload)
+			try:
+				# Atomic first-terminal-wins.
+				if not _raw_client().set(_k(_done_key(call_id)), 1, nx=True, ex=ttl):
+					_finish_event_claim(evt_claim, ttl)
+					return {"status": "already_recorded"}
+				done_set = True
+			except Exception:
+				pass
+
+		event = {"kind": kind, "payload": payload, "at": _now_ms()}
 		try:
-			# Atomic first-terminal-wins.
-			if not _raw_client().set(_k(_done_key(call_id)), 1, nx=True, ex=ttl):
-				return {"status": "already_recorded"}
+			r = _raw_client()
+			rk = _k(_result_key(call_id))
+			r.rpush(rk, json.dumps(event, default=str))
+			r.expire(rk, ttl)
+			if kind in TERMINAL_KINDS:
+				r.zrem(_k(_pending_key(executor_id)), call_id)
+		except Exception:
+			frappe.log_error(message=frappe.get_traceback(), title="desktop_executor: rpush failed")
+			_release_event_claim(evt_claim, call_id if done_set else None)
+			evt_claim = None
+			return {"status": "error", "message": "Could not deliver the event (cache unavailable)."}
+	except BaseException:
+		# Any other exit between claim and push (validation error, interrupted request): free the claim
+		# (and our terminal marker) so the client's retry re-applies instead of being told 'duplicate'.
+		if evt_claim:
+			_release_event_claim(evt_claim, call_id if done_set else None)
+		raise
+	_finish_event_claim(evt_claim, ttl)
+	return {"status": "recorded", "kind": kind}
+
+
+def _finish_event_claim(evt_claim, ttl):
+	if evt_claim:
+		try:
+			_raw_client().set(evt_claim, "done", ex=ttl)
 		except Exception:
 			pass
 
-	event = {"kind": kind, "payload": payload, "at": _now_ms()}
-	try:
-		r = _raw_client()
-		rk = _k(_result_key(call_id))
-		r.rpush(rk, json.dumps(event, default=str))
-		r.expire(rk, ttl)
-		if kind in TERMINAL_KINDS:
-			r.zrem(_k(_pending_key(executor_id)), call_id)
-	except Exception:
-		frappe.log_error(message=frappe.get_traceback(), title="desktop_executor: rpush failed")
-		return {"status": "error", "message": "Could not deliver the event (cache unavailable)."}
-	return {"status": "recorded", "kind": kind}
+
+def _release_event_claim(evt_claim, done_call_id=None):
+	if evt_claim:
+		try:
+			_raw_client().delete(evt_claim)  # let the client's retry re-apply
+		except Exception:
+			pass
+	if done_call_id:
+		try:
+			_raw_client().delete(_k(_done_key(done_call_id)))  # else the retry hits already_recorded
+		except Exception:
+			pass
+
+
+def _wait_event_claim(evt_claim, timeout_s=2.0, step_s=0.1):
+	"""'free' when the claim was released/expired (caller should apply); 'done' when delivered;
+	'pending' when the first request is still running after the wait."""
+	deadline = time.monotonic() + timeout_s
+	while True:
+		val = _raw_client().get(evt_claim)
+		if val is None:
+			return "free"
+		if isinstance(val, bytes):
+			val = val.decode("utf-8", "ignore")
+		if val != "pending":
+			return "done"
+		if time.monotonic() >= deadline:
+			return "pending"
+		time.sleep(step_s)
 
 
 def _cap_terminal_payload(kind, payload):
@@ -1893,6 +2000,8 @@ def dispatch(
 	tool_name=None,
 	agent_name=None,
 	web_request=None,
+	agent_display_name=None,
+	tool_call_id=None,
 ):
 	"""Send one tool call to the pinned desktop executor and block for its result.
 
@@ -1996,6 +2105,10 @@ def dispatch(
 
 	# Fail fast (no publish, no wait) when the executor is not live.
 	lease = _get_lease(executor_id)
+	if not lease or lease.get("user") != user:
+		# Grace: a desktop whose server just restarted re-registers on its next heartbeat retry
+		# (<=5s); give it a moment before telling the model the desktop is gone.
+		lease = _await_lease(executor_id, user)
 	if not lease or lease.get("user") != user:
 		return _error(
 			op,
@@ -2131,6 +2244,7 @@ def dispatch(
 				"conversation_id": conversation_id or "",
 				"agent_run_id": agent_run_id or "",
 				"agent_name": agent_name or "",
+				"agent_display_name": agent_display_name or "",
 				"tool_name": tool_name or op,
 				"op": op,
 				"params": params,
@@ -2146,6 +2260,9 @@ def dispatch(
 			origin_ip = clean_ip(ctx.get("origin_ip")) if origin == "remote" else ""
 			if origin_ip:
 				request["origin_ip"] = origin_ip
+			# The exact LLM-issued tool call id (the chat row's id), beside the wire ``call_id``.
+			if isinstance(tool_call_id, str) and tool_call_id.strip():
+				request["tool_call_id"] = tool_call_id[:256]
 			if policy:
 				request["agent_policy"] = policy
 			if lease.get("device_id"):

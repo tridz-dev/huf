@@ -204,6 +204,7 @@ class DesktopExecutorTestCase(unittest.TestCase):
 			mock.patch.object(dx, "_monotonic", side_effect=lambda: self.cache.now),
 			mock.patch.object(dx.frappe, "session", self.session),
 			mock.patch.object(dx.frappe, "log_error"),
+			mock.patch.object(dx, "LEASE_GRACE_WAIT_S", 0),
 		]
 		for p in patches:
 			p.start()
@@ -228,10 +229,10 @@ class DesktopExecutorTestCase(unittest.TestCase):
 		# a call the server dispatches for a desktop-origin run; a ctx with no origin is REMOTE (fail closed)
 		return {"executor_id": EXEC_ID, "fingerprint": FP, "user": user, "label": "my-project", "origin": "desktop"}
 
-	def desktop_submit(self, call_id, kind, payload=None, user=USER, executor_id=EXEC_ID):
+	def desktop_submit(self, call_id, kind, payload=None, user=USER, executor_id=EXEC_ID, **extra):
 		self.session.user = user
 		return h.submit_desktop_tool_event(
-			call_id=call_id, executor_id=executor_id, kind=kind, payload=payload or {}
+			call_id=call_id, executor_id=executor_id, kind=kind, payload=payload or {}, **extra
 		)
 
 	def sent_calls(self):
@@ -383,6 +384,39 @@ class TestDispatch(DesktopExecutorTestCase):
 		self.publish.assert_not_called()
 		self.assertEqual(self.cache.blpop_timeouts, [])
 
+	def test_lease_reappearing_within_grace_is_used(self):
+		real = dx._get_lease
+		seen = {"n": 0}
+
+		def flaky(executor_id):
+			seen["n"] += 1
+			return None if seen["n"] == 1 else real(executor_id)
+
+		with mock.patch.object(dx, "LEASE_GRACE_WAIT_S", 2), \
+			mock.patch.object(dx, "_get_lease", side_effect=flaky), \
+			mock.patch.object(dx.time, "sleep"):
+			lease = dx._await_lease(EXEC_ID, USER)
+		self.assertEqual(lease.get("user"), USER)
+
+	def test_await_lease_gives_up(self):
+		self.cache.expire_lease(EXEC_ID)
+		with mock.patch.object(dx, "LEASE_GRACE_WAIT_S", 0.2), mock.patch.object(dx.time, "sleep"):
+			self.assertIsNone(dx._await_lease(EXEC_ID, USER, poll_s=0.05))
+
+	def test_await_lease_skips_grace_after_explicit_unregister(self):
+		# The desktop left on purpose (quit / workspace switch): no point waiting for it to come back.
+		self.cache.expire_lease(EXEC_ID)
+		dx._setex(dx._unreg_key(EXEC_ID), 1, 120)
+		with mock.patch.object(dx, "LEASE_GRACE_WAIT_S", 5), mock.patch.object(dx.time, "sleep") as slept:
+			self.assertIsNone(dx._await_lease(EXEC_ID, USER))
+		slept.assert_not_called()
+
+	def test_await_lease_still_waits_when_no_unregister_tombstone(self):
+		self.cache.expire_lease(EXEC_ID)
+		with mock.patch.object(dx, "LEASE_GRACE_WAIT_S", 0.2), mock.patch.object(dx.time, "sleep") as slept:
+			self.assertIsNone(dx._await_lease(EXEC_ID, USER, poll_s=0.05))
+		slept.assert_called()
+
 	def test_offline_when_lease_belongs_to_other_user(self):
 		res = dx.dispatch("fs.read", {"path": "a"}, self.ctx(user=OTHER), call_id="c-other")
 		self.assertEqual(res["error"]["code"], "desktop_offline")
@@ -401,6 +435,24 @@ class TestDispatch(DesktopExecutorTestCase):
 		self.assertEqual(cancels[0]["message"]["call_id"], "c-noack")
 		self.assertEqual(cancels[0]["message"]["executor_id"], EXEC_ID)
 
+	def test_publish_carries_the_llm_tool_call_id_beside_the_wire_call_id(self):
+		llm_id = "call_a1b2c3__thought__xyz"
+		dx.dispatch("fs.read", {"path": "a.txt"}, self.ctx(), call_id="h_abc.n1", tool_call_id=llm_id)
+		msg = self.sent_calls()[0]["message"]
+		self.assertEqual(msg["call_id"], "h_abc.n1")
+		self.assertEqual(msg["tool_call_id"], llm_id)
+
+	def test_publish_caps_tool_call_id_and_omits_it_when_absent(self):
+		dx.dispatch("fs.read", {"path": "a.txt"}, self.ctx(), call_id="c-cap", tool_call_id="x" * 400)
+		dx.dispatch("fs.read", {"path": "b.txt"}, self.ctx(), call_id="c-none")
+		first, second = (c["message"] for c in self.sent_calls())
+		self.assertEqual(len(first["tool_call_id"]), 256)
+		self.assertNotIn("tool_call_id", second)
+
+	def test_publish_payload_display_name_defaults_empty(self):
+		dx.dispatch("fs.read", {"path": "a.txt"}, self.ctx(), call_id="c-nodn")
+		self.assertEqual(self.sent_calls()[0]["message"]["agent_display_name"], "")
+
 	def test_publish_payload_scoped_to_lease_user_with_protocol_fields(self):
 		dx.dispatch(
 			"fs.write",
@@ -412,10 +464,13 @@ class TestDispatch(DesktopExecutorTestCase):
 			timeout_ms=30000,
 			tool_name="desktop_write_file",
 			agent_name="Bot",
+			agent_display_name="Bot Display",
 		)
 		kw = self.sent_calls()[0]
 		self.assertEqual(kw["user"], USER)
 		m = kw["message"]
+		self.assertEqual(m["agent_name"], "Bot")
+		self.assertEqual(m["agent_display_name"], "Bot Display")
 		for key in (
 			"v", "call_id", "executor_id", "fingerprint", "conversation_id", "agent_run_id",
 			"agent_name", "tool_name", "op", "params", "issued_at", "ack_deadline_at",
@@ -1226,6 +1281,119 @@ class TestSubmit(DesktopExecutorTestCase):
 		lst = self.cache.raw[dx._result_key("call-1")]
 		self.assertEqual(len(lst), 1)
 		self.assertEqual(json.loads(lst[0])["payload"]["data"], 1)
+
+	def test_same_event_id_is_deduped_and_not_reapplied(self):
+		a = self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertEqual(a["status"], "recorded")
+		b = self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertTrue(b.get("duplicate"))
+		self.assertEqual(len(self.cache.raw[dx._result_key("call-1")]), 1)
+		self.desktop_submit("call-1", "ack", event_id="e2")
+		self.assertEqual(len(self.cache.raw[dx._result_key("call-1")]), 2)
+
+	def test_terminal_with_a_new_event_id_is_ignored_after_the_first(self):
+		self.desktop_submit("call-1", "result", {"ok": True, "data": 1}, event_id="e1")
+		again = self.desktop_submit("call-1", "result", {"ok": True, "data": 1}, event_id="e1")
+		self.assertTrue(again.get("duplicate"))
+		other = self.desktop_submit("call-1", "error", {"code": "internal", "message": "x"}, event_id="e2")
+		self.assertEqual(other["status"], "already_recorded")
+		self.assertEqual(len(self.cache.raw[dx._result_key("call-1")]), 1)
+
+	def test_push_failure_releases_done_key_and_retry_delivers(self):
+		real_rpush = self.cache.rpush
+		self.cache.rpush = mock.MagicMock(side_effect=RuntimeError("redis down"))
+		with mock.patch.object(dx.frappe, "log_error"):
+			res = self.desktop_submit("call-1", "result", {"ok": True, "data": 1}, event_id="e1")
+		self.assertEqual(res["status"], "error")
+		self.assertNotIn(dx._done_key("call-1"), self.cache.flags)
+		self.assertNotIn(f"huf:dx:evt:call-1:e1", self.cache.flags)
+		self.cache.rpush = real_rpush
+		retry = self.desktop_submit("call-1", "result", {"ok": True, "data": 1}, event_id="e1")
+		self.assertEqual(retry, {"status": "recorded", "kind": "result"})
+		self.assertEqual(len(self.cache.raw[dx._result_key("call-1")]), 1)
+		self.assertEqual(self.cache.flags["huf:dx:evt:call-1:e1"], "done")
+
+	def test_pending_claim_that_turns_done_returns_duplicate(self):
+		self.cache.flags["huf:dx:evt:call-1:e1"] = "pending"
+
+		def finish(_s):
+			self.cache.flags["huf:dx:evt:call-1:e1"] = "done"
+
+		with mock.patch.object(dx.time, "sleep", side_effect=finish) as sl:
+			res = self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertTrue(res.get("duplicate"))
+		self.assertEqual(sl.call_count, 1)
+		self.assertNotIn(dx._result_key("call-1"), self.cache.raw)
+
+	def test_pending_claim_released_by_failed_first_is_applied_by_retry(self):
+		self.cache.flags["huf:dx:evt:call-1:e1"] = "pending"
+
+		def release(_s):
+			self.cache.flags.pop("huf:dx:evt:call-1:e1", None)
+
+		with mock.patch.object(dx.time, "sleep", side_effect=release):
+			res = self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertEqual(res["status"], "recorded")
+		self.assertFalse(res.get("duplicate"))
+		self.assertEqual(len(self.cache.raw[dx._result_key("call-1")]), 1)
+
+	def test_pending_claim_wait_is_bounded(self):
+		self.cache.flags["huf:dx:evt:call-1:e1"] = "pending"
+		with mock.patch.object(dx.time, "sleep") as sl, mock.patch.object(
+			dx.time, "monotonic", side_effect=[0, 0.5, 1.0, 2.5]
+		):
+			with self.assertRaises(frappe.TooManyRequestsError):
+				self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertLessEqual(sl.call_count, 3)
+
+	def test_pending_too_long_raises_retryable_error_not_duplicate(self):
+		self.cache.flags["huf:dx:evt:call-1:e1"] = "pending"
+		with mock.patch.object(dx.time, "sleep"), mock.patch.object(
+			dx.time, "monotonic", side_effect=[0, 0.5, 1.0, 2.5]
+		):
+			with self.assertRaises(frappe.TooManyRequestsError):
+				self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertEqual(frappe.TooManyRequestsError.http_status_code, 429)
+		self.assertNotIn(dx._result_key("call-1"), self.cache.raw)
+		self.assertEqual(self.cache.flags["huf:dx:evt:call-1:e1"], "pending")
+
+	def test_claim_uses_short_ttl_then_done_gets_full_ttl(self):
+		seen = {}
+		real_rpush = self.cache.rpush
+
+		def spy(*a, **k):
+			seen["ttl"] = self.cache.expiries.get("huf:dx:evt:call-1:e1")
+			return real_rpush(*a, **k)
+
+		self.cache.rpush = spy
+		self.desktop_submit("call-1", "ack", event_id="e1")
+		self.assertEqual(seen["ttl"], dx.EVENT_CLAIM_PENDING_TTL_S)
+		self.assertEqual(self.cache.expiries["huf:dx:evt:call-1:e1"], 270)
+		self.assertEqual(self.cache.flags["huf:dx:evt:call-1:e1"], "done")
+
+	def test_worker_death_pending_claim_expires_and_retry_applies(self):
+		# Worker died after claiming: only the short-TTL 'pending' claim is left; once it expires the retry applies.
+		self.cache.flags["huf:dx:evt:call-1:e1"] = "pending"
+		self.cache.flags.pop("huf:dx:evt:call-1:e1")  # TTL elapsed
+		res = self.desktop_submit("call-1", "result", {"ok": True}, event_id="e1")
+		self.assertEqual(res, {"status": "recorded", "kind": "result"})
+		self.assertEqual(len(self.cache.raw[dx._result_key("call-1")]), 1)
+
+	def test_exception_between_claim_and_push_clears_claim_and_done_key(self):
+		with mock.patch.object(dx, "_cap_terminal_payload", side_effect=frappe.ValidationError("boom")):
+			with self.assertRaises(frappe.ValidationError):
+				self.desktop_submit("call-1", "result", {"ok": True}, event_id="e1")
+		self.assertNotIn("huf:dx:evt:call-1:e1", self.cache.flags)
+		self.assertNotIn(dx._done_key("call-1"), self.cache.flags)
+		retry = self.desktop_submit("call-1", "result", {"ok": True}, event_id="e1")
+		self.assertEqual(retry["status"], "recorded")
+
+	def test_exception_after_terminal_marker_clears_done_key(self):
+		with mock.patch.object(dx, "_now_ms", side_effect=KeyboardInterrupt()):
+			with self.assertRaises(KeyboardInterrupt):
+				self.desktop_submit("call-1", "result", {"ok": True}, event_id="e1")
+		self.assertNotIn("huf:dx:evt:call-1:e1", self.cache.flags)
+		self.assertNotIn(dx._done_key("call-1"), self.cache.flags)
 
 	def test_raw_expire_is_set_on_the_result_list_and_pending_cleared_on_terminal(self):
 		self.desktop_submit("call-1", "ack")

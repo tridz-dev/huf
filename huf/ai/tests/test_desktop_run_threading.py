@@ -370,6 +370,7 @@ class TestStreamPathThreading(unittest.TestCase):
 		renderer.http_status_code = 200
 
 		async def slow_stream(**kwargs):
+			yield {"type": "run_started", "agent_run_id": "R"}
 			await asyncio.sleep(0.35)  # a tool call waiting for the user's approval on the desktop
 			yield {"type": "delta", "content": "hi"}
 			yield {"type": "complete"}
@@ -382,6 +383,7 @@ class TestStreamPathThreading(unittest.TestCase):
 				patch("huf.ai.agent_stream_renderer.run_agent_stream", slow_stream):
 			response = renderer._render_agent_stream("a")
 			body = "".join(c if isinstance(c, str) else c.decode() for c in response.response)
-		self.assertGreaterEqual(body.count(": keep-alive\n\n"), 2)
 		data_lines = [ln for ln in body.split("\n\n") if ln.startswith("data: ")]
-		self.assertEqual([json.loads(ln[6:])["type"] for ln in data_lines], ["delta", "complete"])
+		types = [json.loads(ln[6:])["type"] for ln in data_lines]
+		self.assertGreaterEqual(types.count("heartbeat"), 2)
+		self.assertEqual([t for t in types if t != "heartbeat"], ["run_started", "delta", "complete"])
