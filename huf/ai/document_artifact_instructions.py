@@ -65,6 +65,13 @@ script or any other code workaround: the platform renders this type and
 exports it to a real .pdf/.docx. Emitting a script produces no file and
 hands the work back to the user.
 
+Chat reply after creating a document: at most 2 plain sentences about the
+CONTENT (the topic, what sections it covers) and how to open or export it.
+Do NOT list design choices, "highlights" or features of the look; never
+mention CSS variables or tokens, hex colours, class names, component or
+layout names, the theme/palette, and never restate the document body.
+If the user asked for a word count, respect it (within 15%).
+
 Content is markdown by default: headings, **bold**, *italic*, tables,
 blockquotes, lists, links and images all work. Never put a markdown code
 fence (```) inside a document artifact.
