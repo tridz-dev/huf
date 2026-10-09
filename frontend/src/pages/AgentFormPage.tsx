@@ -31,6 +31,7 @@ import { AutomationsTab } from '../components/agent/AutomationsTab';
 import { ToolsTab } from '../components/agent/ToolsTab';
 import { AdvancedTab, type ExecutionProfileOption, type SSHConnectionOption, type MemoryPolicyOption } from '../components/agent/AdvancedTab';
 import { VoiceTab } from '../components/agent/VoiceTab';
+import { EmbedTab } from '../components/agent/EmbedTab';
 import type { AgentPromptOption } from '../components/agent/PromptTemplateSection';
 import { PermissionsTab } from '../components/agent/PermissionsTab';
 import { KnowledgeTab } from '../components/agent/KnowledgeTab';
@@ -175,6 +176,9 @@ function mapAgentDocToFormValues(agent: Partial<AgentDoc>): AgentFormValues {
     tts_model: agent.tts_model || undefined,
     tts_voice: agent.tts_voice || '',
     stt_model: agent.stt_model || undefined,
+    embed_enabled: agent.embed_enabled === 1,
+    publishable_key: agent.publishable_key || '',
+    allowed_origins: agent.allowed_origins || '',
     allow_file_upload: agent.allow_file_upload === 1,
     enable_ocr: agent.enable_ocr === 1,
     max_upload_size_mb:
@@ -230,6 +234,12 @@ export function AgentFormPage() {
     voice: {
       label: 'Voice',
       fields: ['voice_enabled', 'voice_engine', 'voice_config', 'voice_greeting', 'tts_model', 'tts_voice', 'stt_model'],
+      default: false,
+      disabled: false,
+    },
+    embed: {
+      label: 'Embed',
+      fields: ['embed_enabled', 'publishable_key', 'allowed_origins'],
       default: false,
       disabled: false,
     },
@@ -475,6 +485,9 @@ export function AgentFormPage() {
         tts_model: undefined,
         tts_voice: '',
         stt_model: undefined,
+        embed_enabled: false,
+        publishable_key: '',
+        allowed_origins: '',
         allow_file_upload: false,
         enable_ocr: false,
         max_upload_size_mb: 25,
@@ -1186,6 +1199,7 @@ export function AgentFormPage() {
             skills: data.modified,
             permissions: data.modified,
             voice: data.modified,
+            embed: data.modified,
             advanced: data.modified,
           });
         }
@@ -1265,6 +1279,9 @@ export function AgentFormPage() {
             tts_model: data.tts_model || undefined,
             tts_voice: data.tts_voice || '',
             stt_model: data.stt_model || undefined,
+            embed_enabled: data.embed_enabled === 1,
+            publishable_key: data.publishable_key || '',
+            allowed_origins: data.allowed_origins || '',
             allow_file_upload: data.allow_file_upload === 1,
             enable_ocr: data.enable_ocr === 1,
             max_upload_size_mb:
@@ -1615,6 +1632,9 @@ export function AgentFormPage() {
         tts_model: values.tts_model || undefined,
         tts_voice: values.tts_voice || undefined,
         stt_model: values.stt_model || undefined,
+        embed_enabled: values.embed_enabled ? 1 : 0,
+        publishable_key: values.publishable_key || undefined,
+        allowed_origins: values.allowed_origins || '',
         allow_file_upload: values.allow_file_upload ? 1 : 0,
         enable_ocr: values.enable_ocr ? 1 : 0,
         max_upload_size_mb: values.max_upload_size_mb !== undefined ? values.max_upload_size_mb : undefined,
@@ -1672,6 +1692,7 @@ export function AgentFormPage() {
           skills: ['agent_skill'],
           permissions: tabConfig.permissions.fields,
           voice: tabConfig.voice.fields,
+          embed: tabConfig.embed.fields,
           advanced: tabConfig.advanced.fields,
         };
         const sectionPayload = Object.fromEntries(
@@ -1840,6 +1861,9 @@ export function AgentFormPage() {
           tts_model: newAgent.tts_model || undefined,
           tts_voice: newAgent.tts_voice || '',
           stt_model: newAgent.stt_model || undefined,
+          embed_enabled: newAgent.embed_enabled === 1,
+          publishable_key: newAgent.publishable_key || '',
+          allowed_origins: newAgent.allowed_origins || '',
           allow_file_upload: newAgent.allow_file_upload === 1,
           enable_ocr: newAgent.enable_ocr === 1,
           max_upload_size_mb:
@@ -2479,6 +2503,10 @@ export function AgentFormPage() {
 
               <TabsContent value="voice" className="space-y-4">
                 <VoiceTab form={form} allModels={allModels} />
+              </TabsContent>
+
+              <TabsContent value="embed" className="space-y-4">
+                <EmbedTab form={form} />
               </TabsContent>
 
               <TabsContent value="triggers" className="space-y-4">

@@ -4,7 +4,12 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from huf.ai.agent_access import check_agent_access
-from huf.ai.agent_config_api import get_agent_section, update_agent_section
+from huf.ai.agent_config_api import (
+	READ_ONLY_FIELDS,
+	_get_section_fields,
+	get_agent_section,
+	update_agent_section,
+)
 
 
 class TestAgentConfigAPI(IntegrationTestCase):
@@ -74,6 +79,33 @@ class TestAgentConfigAPI(IntegrationTestCase):
 				{"instructions": "not a behavior field"},
 				before["modified"],
 			)
+
+	def test_permissions_section_exposes_allow_all_users(self):
+		result = get_agent_section(self.agent.name, "permissions")
+
+		self.assertIn("allow_all_users", result["values"])
+
+	def test_permissions_section_round_trips_allow_all_users(self):
+		for value in (1, 0):
+			before = get_agent_section(self.agent.name, "permissions")
+			result = update_agent_section(
+				self.agent.name,
+				"permissions",
+				{"allow_all_users": value},
+				before["modified"],
+			)
+
+			self.assertEqual(int(result["values"]["allow_all_users"]), value)
+			self.assertEqual(
+				int(frappe.db.get_value("Agent", self.agent.name, "allow_all_users")), value
+			)
+
+	def test_permissions_section_fields_exist_on_agent_meta(self):
+		meta = frappe.get_meta("Agent")
+		fields = set(_get_section_fields("permissions")) - READ_ONLY_FIELDS
+
+		for fieldname in fields:
+			self.assertTrue(meta.has_field(fieldname), f"{fieldname} is not an Agent field")
 
 	def test_general_section_can_rename_agent(self):
 		before = get_agent_section(self.agent.name, "general")

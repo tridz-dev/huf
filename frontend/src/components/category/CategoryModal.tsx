@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { createCategory, updateCategory, deleteCategory } from '@/services/categoryApi';
 import * as Icons from 'lucide-react';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Tag, Trash2 } from 'lucide-react';
 import { TABLE_ICONS, TABLE_ICON_MAP } from '@/data/tableIcons';
 
 interface Category {
@@ -40,6 +40,7 @@ interface CategoryModalProps {
   onDeleteCategory?: (categoryName: string) => void;
   editCategory?: Category | null;
   onEditComplete?: () => void;
+  categoryType?: 'prompt' | 'summary' | 'skill';
 }
 
 export function CategoryModal({
@@ -52,6 +53,7 @@ export function CategoryModal({
   onDeleteCategory,
   editCategory,
   onEditComplete,
+  categoryType = 'prompt',
 }: CategoryModalProps) {
   const [localCategories, setLocalCategories] = useState<Category[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -136,7 +138,7 @@ export function CategoryModal({
     // Fallback: handle delete directly
     try {
       setDeletingCategory(categoryName);
-      await deleteCategory(categoryName);
+      await deleteCategory(categoryName, categoryType);
       setLocalCategories((prev) => prev.filter((c) => c.name !== categoryName));
       setSelectedId((prev) => (prev === categoryName ? null : prev));
       await refreshCategories();
@@ -166,7 +168,7 @@ export function CategoryModal({
         icon: newCategoryData.icon,
         color: newCategoryData.color,
         parent_category: newCategoryData.parent_category || undefined,
-      });
+      }, categoryType);
 
       // update UI immediately (ensure category_name updates even if backend returns unchanged title)
       const finalName =
@@ -212,7 +214,7 @@ export function CategoryModal({
         icon: newCategoryData.icon,
         color: newCategoryData.color,
         parent_category: newCategoryData.parent_category || undefined,
-      });
+      }, categoryType);
 
       // update UI immediately
       setLocalCategories((prev) => [...prev, created]);
@@ -312,7 +314,7 @@ export function CategoryModal({
                                   {Icon ? (
                                     <Icon className="w-4 h-4" />
                                   ) : (
-                                    <div className="w-4 h-4 rounded bg-muted" />
+                                    <Tag className="w-4 h-4 text-muted-foreground" />
                                   )}
                                   {cat.color && (
                                     <span
@@ -364,9 +366,7 @@ export function CategoryModal({
                             {Icon ? (
                               <Icon className="w-5 h-5 text-muted-foreground" />
                             ) : (
-                              <div className="w-5 h-5 rounded bg-muted flex items-center justify-center">
-                                <span className="text-xs text-muted-foreground">?</span>
-                              </div>
+                              <Tag className="w-5 h-5 text-muted-foreground" />
                             )}
 
                             <div className="flex-1 min-w-0">

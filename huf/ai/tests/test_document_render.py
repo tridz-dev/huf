@@ -23,7 +23,7 @@ from huf.ai.artifacts.render.components import (
 	resolve_theme_token,
 	theme_css,
 )
-from huf.ai.artifacts.render.docx import html_to_docx
+from huf.ai.artifacts.render.docx import html_to_docx, _extract_theme
 from huf.ai.artifacts.render.html import (
 	_dedent_markdown_containers,
 	_hoist_running_footer,
@@ -31,7 +31,9 @@ from huf.ai.artifacts.render.html import (
 	_markdown_containers,
 	_propagate_markdown_attr,
 	render_document_html,
+	PRINT_STYLESHEET,
 )
+from huf.ai.artifacts.render.screen_style import SCREEN_STYLESHEET
 
 
 class TestRenderHardening(unittest.TestCase):
@@ -749,3 +751,102 @@ class TestCssEscapeBypass(unittest.TestCase):
 
 		for css in ('a::before{content:"\\A"}', "a::after{content:'//'}", 'a{content:"\\22 y"}'):
 			self.assertEqual(_sanitize_css(css), css)
+
+
+class TestScreenStylesheet(unittest.TestCase):
+	"""Screen stylesheet is scoped to @media screen, leaving PDF output untouched."""
+
+	def setUp(self):
+		self.document = render_document_html("<p>Sample content</p>", title="Test", language="html")
+
+	def test_screen_stylesheet_is_included(self):
+		"""The rendered HTML includes the screen stylesheet."""
+		self.assertIn(SCREEN_STYLESHEET, self.document)
+
+	def test_screen_stylesheet_is_in_media_block(self):
+		"""Screen stylesheet is wrapped in @media screen so print is untouched."""
+		self.assertIn("@media screen {", SCREEN_STYLESHEET)
+		screen_index = self.document.index("@media screen {", self.document.index(SCREEN_STYLESHEET))
+		self.assertIsNotNone(screen_index)
+
+	def test_screen_stylesheet_defines_max_width_720px(self):
+		"""The measure constraint for editorial reading: 720px max-width."""
+		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
+
+	def test_html_has_data_theme_dark_attribute(self):
+		"""The root element has no forced theme; hosts opt in via data-theme."""
+		self.assertIn("<html>", self.document)
+		self.assertNotIn('<html data-theme=', self.document)
+
+	def test_print_stylesheet_is_unchanged(self):
+		"""The print stylesheet (PRINT_STYLESHEET) must remain byte-identical.
+		This test ensures PDF/DOCX output is completely unaffected."""
+		# The renderer emits <style>, PRINT_STYLESHEET, then components/screen CSS.
+		print_idx = self.document.index(PRINT_STYLESHEET)
+		self.assertIn("<style>", self.document[:print_idx])
+		self.assertLess(print_idx, self.document.index(SCREEN_STYLESHEET), "screen CSS must come after print CSS")
+		# The screen stylesheet may only add rules inside @media screen.
+		self.assertTrue(SCREEN_STYLESHEET.lstrip().startswith("@media screen"))
+
+	def test_screen_stylesheet_contains_dark_mode_colors(self):
+		"""Dark mode colour tokens are defined in the screen stylesheet."""
+		self.assertIn("--ink: #ECECEE", SCREEN_STYLESHEET)
+		self.assertIn("--muted: #A0A3AB", SCREEN_STYLESHEET)
+		self.assertIn("--rule: #2E3036", SCREEN_STYLESHEET)
+		self.assertIn("--surface: #1B1C20", SCREEN_STYLESHEET)
+		self.assertIn("--callout-bg: #1F2A3D", SCREEN_STYLESHEET)
+		self.assertIn("--accent: #7FA6E8", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_contains_light_mode_colors(self):
+		"""Light mode colour tokens are defined in the screen stylesheet."""
+		self.assertIn("--ink: #16294D", SCREEN_STYLESHEET)
+		self.assertIn("--muted: #6B7891", SCREEN_STYLESHEET)
+		self.assertIn("--rule: #D9E0EC", SCREEN_STYLESHEET)
+		self.assertIn("--surface: #F7FAFD", SCREEN_STYLESHEET)
+		self.assertIn("--callout-bg: #EAF2FD", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_measure(self):
+		"""Body has proper measure: max-width 720px, centered, with padding."""
+		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
+		self.assertIn("margin: 0 auto", SCREEN_STYLESHEET)
+		self.assertIn("padding: 48px 24px 96px", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_body_font_size(self):
+		"""Body font size is 17px for editorial reading on screen."""
+		self.assertIn("font-size: 17px", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_line_height(self):
+		"""Body line-height is 1.65 for comfortable reading."""
+		self.assertIn("line-height: 1.65", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_defines_accent_contrast_in_dark_blocks(self):
+		"""Dark mode accent-contrast token is defined for readable headers/badges.
+		The token is needed in both :root[data-theme="dark"] and
+		@media (prefers-color-scheme: dark) blocks."""
+		# Check :root[data-theme="dark"] block
+		self.assertIn(':root[data-theme="dark"] {', SCREEN_STYLESHEET)
+		dark_explicit_idx = SCREEN_STYLESHEET.index(':root[data-theme="dark"] {')
+		dark_explicit_block = SCREEN_STYLESHEET[dark_explicit_idx : SCREEN_STYLESHEET.index("}", dark_explicit_idx) + 1]
+		self.assertIn("--accent-contrast: #0F1013", dark_explicit_block)
+
+		# Check @media (prefers-color-scheme: dark) block
+		self.assertIn("@media (prefers-color-scheme: dark)", SCREEN_STYLESHEET)
+		media_idx = SCREEN_STYLESHEET.index("@media (prefers-color-scheme: dark)")
+		media_block = SCREEN_STYLESHEET[media_idx : SCREEN_STYLESHEET.index("}", media_idx) + 1]
+		self.assertIn("--accent-contrast: #0F1013", media_block)
+
+		# Check light palette
+		self.assertIn("--accent-contrast: #FFFFFF", SCREEN_STYLESHEET)
+
+
+class TestThemeExtraction(unittest.TestCase):
+	"""The screen stylesheet must never shift the theme the DOCX export reads."""
+
+	def test_screen_stylesheet_light_root_matches_registry_theme(self):
+		"""docx's _extract_theme matches any bare ``:root {}`` block, including the
+		one nested in @media screen; its values must equal the registry defaults so
+		even if that CSS ever reaches the DOCX path the theme is unchanged."""
+		self.assertEqual(_extract_theme(SCREEN_STYLESHEET), THEME)
+
+	def test_extract_theme_without_style_returns_defaults(self):
+		self.assertEqual(_extract_theme(""), THEME)

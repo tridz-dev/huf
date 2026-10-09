@@ -18,6 +18,7 @@ interface CategoryTabProps {
   onAddCategory: () => void;
   onRemoveCategory: () => void;
   onEditCategory: (category: Category) => void;
+  itemLabel?: string;
 }
 
 export function CategoryTab({
@@ -25,6 +26,7 @@ export function CategoryTab({
   onAddCategory,
   onRemoveCategory,
   onEditCategory,
+  itemLabel = 'prompt',
 }: CategoryTabProps) {
   const getCategoryIcon = (iconName?: string) => {
     if (!iconName) return Tag;
@@ -46,11 +48,11 @@ export function CategoryTab({
               Category
             </CardTitle>
             <CardDescription>
-              Assign a category to your prompt
+              Assign a category to your {itemLabel}
             </CardDescription>
           </div>
 
-          {!selectedCategory && (
+          {selectedCategory && (
             <Button 
               type="button" 
               size="sm" 
@@ -61,7 +63,7 @@ export function CategoryTab({
               }}
             >
               <Plus className="w-4 h-4 mr-2" />
-              Add category
+              Change category
             </Button>
           )}
         </div>

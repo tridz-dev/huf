@@ -83,8 +83,9 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 	"knowledge": ("agent_knowledge",),
 	"skills": ("agent_skill",),
 	"permissions": (
-		"allow_guest", 
-		"allowed_users", 
+		"allow_all_users",
+		"allow_guest",
+		"allowed_users",
 		"allowed_roles",
 		"enable_conversation_data",
 		"conversation_data_api_permission",
@@ -110,6 +111,11 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"tts_model",
 		"tts_voice",
 		"stt_model",
+	),
+	"embed": (
+		"embed_enabled",
+		"publishable_key",
+		"allowed_origins",
 	),
 	"advanced": (
 		"context_strategy",
