@@ -162,6 +162,50 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 		self.assertFalse(r["cancel_requested"])
 
 
+class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
+	# Redis-down variants; inherited tests are overridden to the failing-cache expectations below.
+	"""Marker write failure is best-effort; Stop still ends old runs."""
+
+	def setUp(self):
+		super().setUp()
+		self.cache.set_value.side_effect = ConnectionError("redis down")
+		self.cache.exists.side_effect = ConnectionError("redis down")
+		self.cache.get_value.side_effect = ConnectionError("redis down")
+
+	test_not_live_started_run_is_finalized = test_live_run_only_sets_marker = None
+	test_young_not_live_run_only_sets_marker = test_old_not_live_run_is_finalized = None
+	test_lost_race_does_not_touch_tool_rows = test_guarded_fail_returns_false_when_not_started = None
+	test_finished_run_is_noop = test_owner_sets_marker_and_idempotent = test_other_user_denied = None
+	test_finished_run_not_marked = test_missing_run = test_loop_observes_cancel = None
+
+	def test_old_run_finalized_without_marker(self):
+		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run", return_value=True
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
+		mark.assert_called_once()
+		self.assertTrue(r["cancel_requested"])
+		self.assertEqual(r["status"], "Failed")
+
+	def test_young_run_not_finalized_and_not_requested(self):
+		with self._user("a@x.com"), self._db2(self._aged_row(3), "Started"), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+		self.assertEqual(r["status"], "Started")
+
+	def test_lost_finalize_race_not_requested(self):
+		with self._user("a@x.com"), self._db2(self._row("Started"), "Started"), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run", return_value=False
+		), patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		mark.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+
+
 class TestCancelRelabelsFreshDisconnect(TestRunControl):
 	"""Stop landing just after the stream finalizer wrote 'Client disconnected'."""
 

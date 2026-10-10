@@ -127,7 +127,14 @@ def cancel_agent_run(run_id: str):
 		return {"run_id": run_id, "status": "Failed", "cancel_requested": True}
 	if row.status in ("Success", "Failed"):
 		return {"run_id": run_id, "status": row.status, "cancel_requested": False}
-	_cache().set_value(_key(run_id), 1, expires_in_sec=_TTL_SECONDS)
+	marker_written = False
+	try:
+		_cache().set_value(_key(run_id), 1, expires_in_sec=_TTL_SECONDS)
+		marker_written = True
+	except Exception as exc:
+		# Best-effort: Redis down must not make Stop raise. Fall through to the guarded finalize below.
+		frappe.logger("huf").warning(f"cancel_agent_run: cancel marker write failed for {run_id}: {exc!r}")
+	finalized = False
 	if row.status == "Started" and not is_run_alive(run_id) and not _is_young_run(row):
 		# Nothing is polling the marker (e.g. Stop arrived after the client already tore down the
 		# stream, so the generator was closed before it ever saw the marker): finalize right now
@@ -138,11 +145,12 @@ def cancel_agent_run(run_id: str):
 			from huf.ai.agent_integration import _guarded_fail_started_run
 
 			if _guarded_fail_started_run(run_id, CANCELLED_BY_USER):
+				finalized = True
 				mark_cancelled_tool_calls(run_id, message=CANCELLED_BY_USER)
 			row.status = frappe.db.get_value("Agent Run", run_id, "status") or row.status
 		except Exception:
 			frappe.logger("huf").warning(f"cancel_agent_run: immediate finalize failed for {run_id}")
-	return {"run_id": run_id, "status": row.status, "cancel_requested": True}
+	return {"run_id": run_id, "status": row.status, "cancel_requested": bool(marker_written or finalized)}
 
 
 CANCELLED = object()
