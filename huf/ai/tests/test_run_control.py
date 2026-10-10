@@ -853,3 +853,127 @@ class TestDeadQueuedSweep(unittest.TestCase):
 		with patch.object(rc, "_cache", return_value=cache), patch.object(rc, "select_dead_queued_runs") as sel:
 			self.assertEqual(rc.sweep_dead_queued_runs(), [])
 		sel.assert_not_called()
+
+
+class TestCancelQueuedRun(TestRunControl):
+	"""Stop on a Queued run fails it immediately (never executed); a lost race falls back to the marker."""
+
+	def _db3(self, row, final_status="Started"):
+		db = MagicMock()
+
+		def gv(dt, name, field=None, *a, **k):
+			if dt == "Agent Run" and field == "status":
+				return final_status
+			return row if dt == "Agent Run" else "a@x.com"
+
+		db.get_value.side_effect = gv
+		return patch.object(rc.frappe, "db", db, create=True)
+
+	def test_queued_run_failed_immediately(self):
+		with self._user("a@x.com"), self._db3(self._row("Queued")), patch(
+			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=True
+		) as fq, patch("huf.ai.agent_integration._execute_agent_run") as execute:
+			r = rc.cancel_agent_run("R1")
+		fq.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
+		execute.assert_not_called()
+		self.assertEqual(r, {"run_id": "R1", "status": "Failed", "cancel_requested": True})
+
+	def test_queued_guarded_update_sql(self):
+		import huf.ai.agent_integration as ai
+
+		db = MagicMock()
+		db._cursor.rowcount = 1
+		db.get_value.return_value = None
+		with patch.object(ai.frappe, "db", db):
+			self.assertTrue(ai._guarded_fail_queued_run("R1", rc.CANCELLED_BY_USER))
+		sql = db.sql.call_args[0][0]
+		self.assertIn("status='Queued'", sql)
+		self.assertEqual(db.sql.call_args[0][1][0], "Cancelled by user")
+		db._cursor.rowcount = 0
+		with patch.object(ai.frappe, "db", db):
+			self.assertFalse(ai._guarded_fail_queued_run("R1", "x"))
+
+	def test_queued_cancel_also_writes_marker(self):
+		with self._user("a@x.com"), self._db3(self._row("Queued")), patch(
+			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=True
+		):
+			r = rc.cancel_agent_run("R1")
+		self.assertEqual(r["status"], "Failed")
+		self.assertTrue(rc.is_run_cancelled("R1"))
+
+	def test_queued_cancel_marker_failure_still_succeeds(self):
+		self.cache.set_value.side_effect = RuntimeError("redis down")
+		with self._user("a@x.com"), self._db3(self._row("Queued")), patch(
+			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=True
+		):
+			r = rc.cancel_agent_run("R1")
+		self.assertEqual(r, {"run_id": "R1", "status": "Failed", "cancel_requested": True})
+
+	def test_queued_lost_race_falls_back_to_marker(self):
+		# Drainer started the run between the read and the guarded UPDATE: marker path, status Started.
+		with self._user("a@x.com"), self._db3(self._row("Queued"), "Started"), patch(
+			"huf.ai.agent_integration._guarded_fail_queued_run", return_value=False
+		), patch("huf.ai.agent_integration._guarded_fail_started_run") as fs:
+			r = rc.cancel_agent_run("R1")
+		fs.assert_not_called()  # young/live stream logic untouched for non-Started rows
+		self.assertTrue(rc.is_run_cancelled("R1"))
+		self.assertEqual(r["status"], "Queued")
+		self.assertTrue(r["cancel_requested"])
+
+	def test_started_run_does_not_use_queued_path(self):
+		with self._user("a@x.com"), self._db3(self._row("Started")), patch(
+			"huf.ai.agent_integration._guarded_fail_queued_run"
+		) as fq, patch("huf.ai.agent_integration._guarded_fail_started_run", return_value=True), patch.object(
+			rc, "mark_cancelled_tool_calls"
+		):
+			r = rc.cancel_agent_run("R1")
+		fq.assert_not_called()
+		self.assertTrue(r["cancel_requested"])
+		self.assertTrue(rc.is_run_cancelled("R1"))
+
+
+class TestDrainSkipsCancelledRun(unittest.TestCase):
+	def test_cancelled_marker_at_pickup_fails_not_executes(self):
+		import huf.ai.agent_integration as ai
+
+		run = SimpleNamespace(name="R1", conversation="C1", runtime_context="{}")
+		with patch.object(rc, "is_run_cancelled", return_value=True), patch.object(
+			ai, "_guarded_fail_queued_run", return_value=True
+		) as fq, patch.object(ai, "_execute_agent_run") as execute, patch.object(
+			ai, "_RunHeartbeat"
+		) as hb:
+			ai._drain_run(run, "lock")
+		fq.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
+		execute.assert_not_called()
+		hb.assert_not_called()
+
+	def test_not_cancelled_still_executes(self):
+		import huf.ai.agent_integration as ai
+
+		run = SimpleNamespace(name="R1", conversation="C1", runtime_context="{}")
+		with patch.object(rc, "is_run_cancelled", return_value=False), patch.object(
+			ai, "_guarded_fail_queued_run"
+		) as fq, patch.object(ai, "_execute_agent_run", return_value={"ok": 1}) as execute, patch.object(
+			ai, "_RunHeartbeat"
+		), patch.object(ai, "_build_execution_kwargs", return_value={"prompt": "[SILENT_TRIGGER]x"}), patch.object(
+			ai, "_link_preexisting_user_message"
+		), patch.object(ai, "safe_commit"), patch.object(ai.frappe, "parse_json", return_value={}):
+			ai._drain_run(run, "lock")
+		fq.assert_not_called()
+		execute.assert_called_once()
+
+
+class TestPartialReplySaveIsolated(unittest.TestCase):
+	def test_add_message_raising_does_not_propagate(self):
+		import huf.ai.agent_integration as ai
+
+		cm = MagicMock()
+		cm.add_message.side_effect = RuntimeError("db gone")
+		self.assertFalse(ai._save_partial_reply(cm, MagicMock(), "hi", "p", "m", "agent", "R1"))
+		cm.add_message.assert_called_once()
+
+	def test_add_message_ok(self):
+		import huf.ai.agent_integration as ai
+
+		cm = MagicMock()
+		self.assertTrue(ai._save_partial_reply(cm, MagicMock(), "hi", "p", "m", "agent", "R1"))

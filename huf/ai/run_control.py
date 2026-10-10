@@ -127,6 +127,23 @@ def cancel_agent_run(run_id: str):
 		return {"run_id": run_id, "status": "Failed", "cancel_requested": True}
 	if row.status in ("Success", "Failed"):
 		return {"run_id": run_id, "status": row.status, "cancel_requested": False}
+	if row.status == "Queued":
+		# Not started yet: nothing polls the marker, so fail it now (guarded: only if still Queued).
+		# If the drainer just started it the guarded UPDATE changes nothing; fall to the marker path.
+		try:
+			from huf.ai.agent_integration import _guarded_fail_queued_run
+
+			if _guarded_fail_queued_run(run_id, CANCELLED_BY_USER):
+				# Also leave the marker so a pickup that already passed its pre-check still sees Stop.
+				try:
+					_cache().set_value(_key(run_id), 1, expires_in_sec=_TTL_SECONDS)
+				except Exception as exc:
+					frappe.logger("huf").warning(f"cancel_agent_run: cancel marker write failed for {run_id}: {exc!r}")
+				return {"run_id": run_id, "status": "Failed", "cancel_requested": True}
+			# Lost the race: the drainer just started it. Marker only (it may not be polling yet), so the
+			# stale-Started finalize below is skipped by reporting the status as read, not re-read.
+		except Exception as exc:
+			frappe.logger("huf").warning(f"cancel_agent_run queued finalize failed for {run_id}: {exc!r}")
 	marker_written = False
 	try:
 		_cache().set_value(_key(run_id), 1, expires_in_sec=_TTL_SECONDS)

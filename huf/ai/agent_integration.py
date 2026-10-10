@@ -684,7 +684,7 @@ def _canonical_run_status(status):
     return status
 
 
-def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
+def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None, user=None):
     """Emit a realtime lifecycle event for an Agent Run (Queued/Started/Success/Failed)."""
     try:
         message = {
@@ -700,7 +700,7 @@ def _emit_run_lifecycle_event(run_doc, conversation, status, extra=None):
         frappe.publish_realtime(
             event=f"conversation:{conversation.name}",
             message=message,
-            user=frappe.session.user,
+            user=user or frappe.session.user,
         )
     except (RuntimeError, TypeError, ValueError, KeyError, AttributeError,
             frappe.DoesNotExistError, frappe.ValidationError, frappe.PermissionError) as exc:
@@ -1989,6 +1989,22 @@ def _execute_agent_run(
     frappe.flags.huf_current_agent_run_id = run_doc.name
 
     try:
+        if run_doc.status in ("Queued", "Failed"):
+            # Queued pickup: transition atomically. A Stop that failed the run after the drainer's
+            # pre-check (status now Failed, or the guarded UPDATE matches no row) must win.
+            if run_doc.status == "Failed" or not _guarded_start_queued_run(run_doc.name):
+                frappe.logger("huf").info(
+                    f"Run {run_doc.name} left Queued before pickup (cancelled?); not executing"
+                )
+                return {"success": False, "cancelled": True, "agent_run_id": run_doc.name}
+            run_doc.status = "Started"
+        from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled
+
+        if is_run_cancelled(run_doc.name):
+            _guarded_fail_started_run(run_doc.name, CANCELLED_BY_USER)
+            frappe.db.commit()
+            return {"success": False, "cancelled": True, "agent_run_id": run_doc.name}
+
         run_doc.db_set("start_time", now_datetime())
 
         # Optimized history fetching with dynamic limit + buffer.
@@ -2866,6 +2882,78 @@ def _guarded_fail_started_run(run_name: str, message: str) -> bool:
     return frappe.db.get_value("Agent Run", run_name, "status") == "Failed"
 
 
+def _save_partial_reply(conv_manager, conversation, text, provider, model, agent_name, run_name) -> bool:
+    """Best-effort save of a partial reply; never raises so the guarded fail that follows always runs."""
+    try:
+        conv_manager.add_message(conversation, "agent", text, provider, model, agent_name, run_name)
+        return True
+    except Exception as exc:
+        frappe.logger("huf").warning(f"Partial reply save failed for {run_name}: {exc!r}")
+        return False
+
+
+def _guarded_start_queued_run(run_name: str) -> bool:
+    """Move a run Queued -> Started only if it is still 'Queued' (atomic vs. a concurrent Stop).
+
+    Returns True only when the UPDATE changed a row; commits so a concurrent cancel sees it.
+    """
+    ts = now_datetime()
+    frappe.db.sql(
+        """update `tabAgent Run` set status='Started', modified=%s
+        where name=%s and status='Queued'""",
+        (ts, run_name),
+    )
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        changed = n > 0
+    else:
+        changed = frappe.db.get_value("Agent Run", run_name, "status") == "Started"
+    if changed:
+        frappe.db.commit()
+    return changed
+
+
+def _guarded_fail_queued_run(run_name: str, message: str) -> bool:
+    """Fail a run only if still 'Queued' (atomic vs. the drainer starting it).
+
+    Commits so a concurrent drainer sees the result, then emits the realtime 'failed' event.
+    Returns True only when the UPDATE changed a row.
+    """
+    ts = now_datetime()
+    frappe.db.sql(
+        """update `tabAgent Run` set status='Failed', error_message=%s, end_time=%s, modified=%s
+        where name=%s and status='Queued'""",
+        (message, ts, ts, run_name),
+    )
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        changed = n > 0
+    else:
+        changed = frappe.db.get_value("Agent Run", run_name, "status") == "Failed"
+    if not changed:
+        return False
+    try:
+        frappe.db.commit()
+    except Exception as exc:  # commit is best-effort here; request teardown commits too
+        frappe.logger("huf").warning(f"Commit after failing queued run {run_name} failed: {exc!r}")
+    try:
+        row = frappe.db.get_value(
+            "Agent Run", run_name, ["agent", "conversation", "sequence", "owner"], as_dict=True
+        )
+        if row:
+            # Deliver to the run's owner (the initiating user), not whoever pressed Stop.
+            _emit_run_lifecycle_event(
+                SimpleNamespace(name=run_name, agent=row.get("agent"), sequence=row.get("sequence")),
+                SimpleNamespace(name=row.get("conversation")),
+                "failed",
+                {"error": message},
+                user=row.get("owner") or None,
+            )
+    except Exception as exc:
+        frappe.logger("huf").debug(f"Failed-run lifecycle event emission failed for {run_name}: {exc!r}")
+    return True
+
+
 def _guarded_finish_started_run(run_name: str, status: str, **fields) -> bool:
     """Finalize a run (Success/Failed) only if still 'Started'; all fields land in one UPDATE.
 
@@ -3091,6 +3179,13 @@ def _run_queued_agent(lock_attempt=0, **kwargs):
 
 def _drain_run(run_doc, lock_key: str):
     """Execute a single queued run while keeping the conversation lock alive."""
+    from huf.ai.run_control import CANCELLED_BY_USER, is_run_cancelled
+
+    if is_run_cancelled(run_doc.name):
+        # The user pressed Stop while this run was still queued: never execute it.
+        if not _guarded_fail_queued_run(run_doc.name, CANCELLED_BY_USER):
+            _fail_queued_run(run_doc.name, CANCELLED_BY_USER)
+        return None
     heartbeat = _RunHeartbeat(lock_key)
     heartbeat.start()
     try:
@@ -4505,14 +4600,14 @@ async def _run_agent_stream_impl(
                     if locals().get("cancelled_by_user") or _is_cancelled(run_doc.name):
                         # User pressed Stop: keep the partial reply visible, mark the run cancelled.
                         if response_text and str(response_text).strip() and 'conv_manager' in locals() and 'conversation' in locals():
-                            conv_manager.add_message(
+                            _save_partial_reply(
+                                conv_manager,
                                 conversation,
-                                "agent",
                                 response_text,
                                 locals().get("resolved_provider"),
                                 locals().get("resolved_model"),
                                 agent_name,
-                                run_doc.name
+                                run_doc.name,
                             )
                         from huf.ai.run_control import CANCELLED_BY_USER, mark_cancelled_tool_calls
                         _guarded_fail_started_run(run_doc.name, CANCELLED_BY_USER)
@@ -4523,14 +4618,14 @@ async def _run_agent_stream_impl(
                     elif locals().get("client_disconnected"):
                         # SSE client went away mid-run: keep the partial reply, fail the run, close tool rows.
                         if response_text and str(response_text).strip() and 'conv_manager' in locals() and 'conversation' in locals():
-                            conv_manager.add_message(
+                            _save_partial_reply(
+                                conv_manager,
                                 conversation,
-                                "agent",
                                 response_text,
                                 locals().get("resolved_provider"),
                                 locals().get("resolved_model"),
                                 agent_name,
-                                run_doc.name
+                                run_doc.name,
                             )
                         from huf.ai.run_control import CLIENT_DISCONNECTED, mark_cancelled_tool_calls
                         _guarded_fail_started_run(run_doc.name, CLIENT_DISCONNECTED)
