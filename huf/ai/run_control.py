@@ -148,8 +148,8 @@ def cancel_agent_run(run_id: str):
 				finalized = True
 				mark_cancelled_tool_calls(run_id, message=CANCELLED_BY_USER)
 			row.status = frappe.db.get_value("Agent Run", run_id, "status") or row.status
-		except Exception:
-			frappe.logger("huf").warning(f"cancel_agent_run: immediate finalize failed for {run_id}")
+		except Exception as exc:
+			frappe.logger("huf").warning(f"cancel_agent_run finalize failed for {run_id}: {exc!r}")
 	return {"run_id": run_id, "status": row.status, "cancel_requested": bool(marker_written or finalized)}
 
 

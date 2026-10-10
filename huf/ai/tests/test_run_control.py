@@ -96,6 +96,16 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 		self.assertEqual(r["status"], "Failed")
 		self.assertTrue(rc.is_run_cancelled("R1"))
 
+	def test_immediate_finalize_error_is_logged_not_raised(self):
+		logger = MagicMock()
+		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run", side_effect=RuntimeError("boom")
+		), patch.object(rc, "mark_cancelled_tool_calls"), patch.object(rc.frappe, "logger", return_value=logger):
+			r = rc.cancel_agent_run("R1")
+		self.assertEqual(r["run_id"], "R1")
+		messages = [c.args[0] for c in logger.warning.call_args_list]
+		self.assertIn("cancel_agent_run finalize failed for R1: RuntimeError('boom')", messages)
+
 	def test_live_run_only_sets_marker(self):
 		rc.touch_run_alive("R1")
 		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
