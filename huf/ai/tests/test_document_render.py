@@ -850,3 +850,55 @@ class TestThemeExtraction(unittest.TestCase):
 
 	def test_extract_theme_without_style_returns_defaults(self):
 		self.assertEqual(_extract_theme(""), THEME)
+
+
+class TestSafeUrlFetcher(unittest.TestCase):
+	"""safety.py must import under every supported WeasyPrint (the
+	``default_url_fetcher`` function was replaced by ``URLFetcher`` in 70)."""
+
+	def test_fetcher_resolved_and_callable(self):
+		from huf.ai.artifacts.render import safety
+
+		self.assertTrue(callable(safety.safe_url_fetcher))
+
+	def test_blocks_private_and_remote_hosts(self):
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		for url in (
+			"http://169.254.169.254/latest/meta-data/",
+			"http://127.0.0.1:8000/api",
+			"https://example.com/x.png",
+			"file:///etc/passwd",
+		):
+			with self.assertRaises(ValueError, msg=url):
+				safe_url_fetcher(url)
+
+	def test_redirects_disabled_on_weasyprint_70(self):
+		import weasyprint
+
+		from huf.ai.artifacts.render import safety
+
+		if int(weasyprint.__version__.split(".")[0]) < 70:
+			self.skipTest("URLFetcher class only exists in WeasyPrint >= 70")
+		fetcher = safety.safe_url_fetcher
+		self.assertEqual(fetcher._allowed_protocols, ("data", "https"))
+		self.assertFalse(
+			any(type(h).__name__ == "HTTPRedirectHandler" for h in fetcher.handlers),
+			"redirects must be disabled",
+		)
+		with self.assertRaises(ValueError):
+			fetcher.fetch("http://127.0.0.1:8000/api")
+
+	def test_allows_data_urls(self):
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		resp = safe_url_fetcher("data:text/plain;base64,aGk=")
+		self.assertIsNotNone(resp)
+
+	def test_pdf_render_with_blocked_resource(self):
+		from weasyprint import HTML
+
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		html = '<html><body><p>x</p><img src="http://127.0.0.1:1/a.png"></body></html>'
+		self.assertTrue(HTML(string=html, url_fetcher=safe_url_fetcher).write_pdf().startswith(b"%PDF"))
