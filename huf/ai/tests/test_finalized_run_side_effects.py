@@ -27,6 +27,16 @@ class TestFinalizedRunSideEffects(unittest.TestCase):
 		self.assertIn("if _finalized_here and should_extract_memory(", src)
 
 
+class TestStreamRunMarkedAliveAtCreation(unittest.TestCase):
+	def test_touch_run_alive_right_after_run_commit(self):
+		src = inspect.getsource(ai)
+		i = src.index('"execution_mode": "stream",\n            "conversation"')
+		j = src.index("touch_run_alive(run_doc.name)", i)
+		k = src.index('"type": "run_started"', i)
+		self.assertLess(j, k)
+		self.assertLess(src.index("safe_commit()", i), j)
+
+
 class TestArrayItemsSchemaBuiltinOnly(unittest.TestCase):
 	def test_user_tool_params_stay_strings(self):
 		from huf.ai.tools._registry import array_items_schema

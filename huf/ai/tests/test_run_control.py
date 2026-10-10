@@ -108,12 +108,112 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 		self.assertEqual(r["status"], "Started")
 		self.assertTrue(rc.is_run_cancelled("R1"))
 
+	def _aged_row(self, age_s):
+		from frappe.utils import add_to_date, now_datetime
+
+		row = self._row("Started")
+		row.creation = add_to_date(now_datetime(), seconds=-age_s)
+		return row
+
+	def test_young_not_live_run_only_sets_marker(self):
+		with self._user("a@x.com"), self._db2(self._aged_row(3), "Started"), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_not_called()
+		mark.assert_not_called()
+		self.assertEqual(r["status"], "Started")
+		self.assertTrue(rc.is_run_cancelled("R1"))
+
+	def test_old_not_live_run_is_finalized(self):
+		with self._user("a@x.com"), self._db2(self._aged_row(120)), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run", return_value=True
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
+		mark.assert_called_once()
+		self.assertEqual(r["status"], "Failed")
+
+	def test_lost_race_does_not_touch_tool_rows(self):
+		with self._user("a@x.com"), self._db2(self._row("Started"), "Success"), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run", return_value=False
+		), patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		mark.assert_not_called()
+		self.assertEqual(r["status"], "Success")
+
+	def test_guarded_fail_returns_false_when_not_started(self):
+		from huf.ai import agent_integration as ai
+
+		db = MagicMock()
+		db._cursor.rowcount = 0
+		with patch.object(ai.frappe, "db", db, create=True), patch.object(ai, "now_datetime", return_value=0):
+			self.assertFalse(ai._guarded_fail_started_run("R1", "x"))
+		db._cursor.rowcount = 1
+		with patch.object(ai.frappe, "db", db, create=True), patch.object(ai, "now_datetime", return_value=0):
+			self.assertTrue(ai._guarded_fail_started_run("R1", "x"))
+
 	def test_finished_run_is_noop(self):
 		with self._user("a@x.com"), self._db2(self._row("Failed")), patch(
 			"huf.ai.agent_integration._guarded_fail_started_run"
 		) as fail:
 			r = rc.cancel_agent_run("R1")
 		fail.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+
+
+class TestCancelRelabelsFreshDisconnect(TestRunControl):
+	"""Stop landing just after the stream finalizer wrote 'Client disconnected'."""
+
+	def _db3(self, status, message, age_s):
+		from frappe.utils import add_to_date, now_datetime
+
+		extra = SimpleNamespace(
+			error_message=message, modified=add_to_date(now_datetime(), seconds=-age_s)
+		)
+		db = MagicMock()
+
+		def gv(dt, name, field=None, *a, **k):
+			if dt == "Agent Run":
+				return extra if isinstance(field, list) and "error_message" in field else self._row(status)
+			return "a@x.com"
+
+		db.get_value.side_effect = gv
+		self.db = db
+		return patch.object(rc.frappe, "db", db, create=True)
+
+	def test_fresh_disconnect_is_relabelled(self):
+		with self._user("a@x.com"), self._db3("Failed", rc.CLIENT_DISCONNECTED, 2):
+			r = rc.cancel_agent_run("R1")
+		self.db.sql.assert_called_once()
+		self.assertEqual(
+			self.db.sql.call_args[0][1], (rc.CANCELLED_BY_USER, "R1", rc.CLIENT_DISCONNECTED)
+		)
+		self.assertEqual(r, {"run_id": "R1", "status": "Failed", "cancel_requested": True})
+
+	def test_old_disconnect_unchanged(self):
+		with self._user("a@x.com"), self._db3("Failed", rc.CLIENT_DISCONNECTED, 120):
+			r = rc.cancel_agent_run("R1")
+		self.db.sql.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+
+	def test_disconnect_window_is_15s(self):
+		self.assertEqual(rc._DISCONNECT_RELABEL_WINDOW_S, 15)
+		with self._user("a@x.com"), self._db3("Failed", rc.CLIENT_DISCONNECTED, 30):
+			r = rc.cancel_agent_run("R1")
+		self.db.sql.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+
+	def test_other_failed_message_unchanged(self):
+		with self._user("a@x.com"), self._db3("Failed", "Some other error", 2):
+			r = rc.cancel_agent_run("R1")
+		self.db.sql.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+
+	def test_success_run_unchanged(self):
+		with self._user("a@x.com"), self._db3("Success", rc.CLIENT_DISCONNECTED, 2):
+			r = rc.cancel_agent_run("R1")
+		self.db.sql.assert_not_called()
 		self.assertFalse(r["cancel_requested"])
 
 

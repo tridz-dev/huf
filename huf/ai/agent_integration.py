@@ -2850,13 +2850,20 @@ _DIRECT_LOCK_ATTEMPTS = 3
 _DIRECT_LOCK_RETRY_DELAY = 1
 
 
-def _guarded_fail_started_run(run_name: str, message: str) -> None:
-    """Fail a run only if still 'Started' (atomic vs. sweep_stale_runs / other finalizers)."""
+def _guarded_fail_started_run(run_name: str, message: str) -> bool:
+    """Fail a run only if still 'Started' (atomic vs. sweep_stale_runs / other finalizers).
+
+    Returns True only when the UPDATE changed a row.
+    """
     frappe.db.sql(
         """update `tabAgent Run` set status='Failed', error_message=%s, end_time=%s, modified=%s
         where name=%s and status='Started'""",
         (message, now_datetime(), now_datetime(), run_name),
     )
+    n = getattr(getattr(frappe.db, "_cursor", None), "rowcount", None)
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        return n > 0
+    return frappe.db.get_value("Agent Run", run_name, "status") == "Failed"
 
 
 def _guarded_finish_started_run(run_name: str, status: str, **fields) -> bool:
@@ -3653,6 +3660,9 @@ async def _run_agent_stream_impl(
         except Exception as _persist_err:
             _abandon_unsaved_run(run_doc.name, _persist_err)
             raise
+        # Mark the committed run live right away so a Stop during startup (pin claim, history load,
+        # tool prep) takes the cooperative path instead of being finalized as not-live.
+        touch_run_alive(run_doc.name)
         if _huf_stream_state is not None:
             # The Agent Run and user message are now committed: any later error chunk
             # means the message was delivered, so a client retry would duplicate it.

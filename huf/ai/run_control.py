@@ -63,7 +63,7 @@ def is_run_cancelled(run_id) -> bool:
 
 
 def _assert_can_cancel(run_id: str):
-	row = frappe.db.get_value("Agent Run", run_id, ["owner", "conversation", "status"], as_dict=True)
+	row = frappe.db.get_value("Agent Run", run_id, ["owner", "conversation", "status", "creation"], as_dict=True)
 	if not row:
 		# Same error as "not yours" so callers cannot probe which run ids exist.
 		raise frappe.PermissionError(_("You do not have permission to cancel this run."))
@@ -76,22 +76,69 @@ def _assert_can_cancel(run_id: str):
 	return row
 
 
+_DISCONNECT_RELABEL_WINDOW_S = 15
+_NEW_RUN_GRACE_S = 15
+
+
+def _relabel_fresh_disconnect(run_id) -> bool:
+	"""Stop raced the stream teardown: the finalizer already wrote 'Client disconnected'.
+
+	Relabel only a Failed run with exactly that message modified within the last 15 seconds. Guarded UPDATE.
+	"""
+	try:
+		extra = frappe.db.get_value("Agent Run", run_id, ["error_message", "modified"], as_dict=True)
+		if not extra or getattr(extra, "error_message", None) != CLIENT_DISCONNECTED:
+			return False
+		modified = getattr(extra, "modified", None)
+		if not modified:
+			return False
+		from frappe.utils import get_datetime, now_datetime
+
+		if (now_datetime() - get_datetime(modified)).total_seconds() > _DISCONNECT_RELABEL_WINDOW_S:
+			return False
+		frappe.db.sql(
+			"update `tabAgent Run` set error_message=%s where name=%s and status='Failed' and error_message=%s",
+			(CANCELLED_BY_USER, run_id, CLIENT_DISCONNECTED),
+		)
+		return True
+	except Exception:
+		frappe.logger("huf").warning(f"cancel_agent_run: disconnect relabel failed for {run_id}")
+		return False
+
+
+def _is_young_run(row) -> bool:
+	"""True when the run was created less than _NEW_RUN_GRACE_S seconds ago (missing creation = old)."""
+	created = getattr(row, "creation", None)
+	if not created:
+		return False
+	try:
+		from frappe.utils import get_datetime, now_datetime, time_diff_in_seconds
+
+		return time_diff_in_seconds(now_datetime(), get_datetime(created)) < _NEW_RUN_GRACE_S
+	except Exception:
+		return False
+
+
 @frappe.whitelist(methods=["POST"])
 def cancel_agent_run(run_id: str):
 	"""Request cooperative cancellation of a run. Idempotent; returns its status."""
 	row = _assert_can_cancel(run_id)
+	if row.status == "Failed" and _relabel_fresh_disconnect(run_id):
+		return {"run_id": run_id, "status": "Failed", "cancel_requested": True}
 	if row.status in ("Success", "Failed"):
 		return {"run_id": run_id, "status": row.status, "cancel_requested": False}
 	_cache().set_value(_key(run_id), 1, expires_in_sec=_TTL_SECONDS)
-	if row.status == "Started" and not is_run_alive(run_id):
+	if row.status == "Started" and not is_run_alive(run_id) and not _is_young_run(row):
 		# Nothing is polling the marker (e.g. Stop arrived after the client already tore down the
 		# stream, so the generator was closed before it ever saw the marker): finalize right now
 		# instead of leaving the run Started until sweep_stale_runs. Guarded: only if still Started.
+		# A run created moments ago may simply not have started polling yet: marker only, the
+		# stream (or the sweeps) finalize it.
 		try:
 			from huf.ai.agent_integration import _guarded_fail_started_run
 
-			_guarded_fail_started_run(run_id, CANCELLED_BY_USER)
-			mark_cancelled_tool_calls(run_id, message=CANCELLED_BY_USER)
+			if _guarded_fail_started_run(run_id, CANCELLED_BY_USER):
+				mark_cancelled_tool_calls(run_id, message=CANCELLED_BY_USER)
 			row.status = frappe.db.get_value("Agent Run", run_id, "status") or row.status
 		except Exception:
 			frappe.logger("huf").warning(f"cancel_agent_run: immediate finalize failed for {run_id}")
