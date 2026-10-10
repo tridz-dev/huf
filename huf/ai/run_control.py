@@ -63,7 +63,7 @@ def is_run_cancelled(run_id) -> bool:
 
 
 def _assert_can_cancel(run_id: str):
-	row = frappe.db.get_value("Agent Run", run_id, ["owner", "conversation", "status", "creation"], as_dict=True)
+	row = frappe.db.get_value("Agent Run", run_id, ["owner", "conversation", "status", "creation", "execution_mode"], as_dict=True)
 	if not row:
 		# Same error as "not yours" so callers cannot probe which run ids exist.
 		raise frappe.PermissionError(_("You do not have permission to cancel this run."))
@@ -135,7 +135,14 @@ def cancel_agent_run(run_id: str):
 		# Best-effort: Redis down must not make Stop raise. Fall through to the guarded finalize below.
 		frappe.logger("huf").warning(f"cancel_agent_run: cancel marker write failed for {run_id}: {exc!r}")
 	finalized = False
-	if row.status == "Started" and not is_run_alive(run_id) and not _is_young_run(row):
+	# Only stream runs are marked live at creation and refreshed by the stream loop; sync/background runs
+	# look not-live during one long provider call, so they stay cooperative (marker only).
+	if (
+		row.status == "Started"
+		and getattr(row, "execution_mode", None) == "stream"
+		and not is_run_alive(run_id)
+		and not _is_young_run(row)
+	):
 		# Nothing is polling the marker (e.g. Stop arrived after the client already tore down the
 		# stream, so the generator was closed before it ever saw the marker): finalize right now
 		# instead of leaving the run Started until sweep_stale_runs. Guarded: only if still Started.

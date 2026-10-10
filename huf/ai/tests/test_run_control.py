@@ -23,8 +23,10 @@ class TestRunControl(unittest.TestCase):
 			p.start()
 		self.addCleanup(lambda: [p.stop() for p in self.patches])
 
-	def _row(self, status="Started", owner="a@x.com"):
-		return SimpleNamespace(owner=owner, conversation="C1", status=status)
+	def _row(self, status="Started", owner="a@x.com", execution_mode="stream"):
+		return SimpleNamespace(
+			owner=owner, conversation="C1", status=status, execution_mode=execution_mode
+		)
 
 	def _user(self, user):
 		return patch.object(rc.frappe, "session", SimpleNamespace(user=user), create=True)
@@ -144,6 +146,19 @@ class TestCancelFinalizesNotLiveRun(TestRunControl):
 		mark.assert_called_once()
 		self.assertEqual(r["status"], "Failed")
 
+	def test_old_not_live_non_stream_run_only_sets_marker(self):
+		row = self._aged_row(120)
+		row.execution_mode = "sync"
+		with self._user("a@x.com"), self._db2(row, "Started"), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_not_called()
+		mark.assert_not_called()
+		self.assertTrue(r["cancel_requested"])
+		self.assertEqual(r["status"], "Started")
+		self.assertTrue(rc.is_run_cancelled("R1"))
+
 	def test_lost_race_does_not_touch_tool_rows(self):
 		with self._user("a@x.com"), self._db2(self._row("Started"), "Success"), patch(
 			"huf.ai.agent_integration._guarded_fail_started_run", return_value=False
@@ -187,6 +202,7 @@ class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
 	test_lost_race_does_not_touch_tool_rows = test_guarded_fail_returns_false_when_not_started = None
 	test_finished_run_is_noop = test_owner_sets_marker_and_idempotent = test_other_user_denied = None
 	test_finished_run_not_marked = test_missing_run = test_loop_observes_cancel = None
+	test_old_not_live_non_stream_run_only_sets_marker = None
 
 	def test_old_run_finalized_without_marker(self):
 		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
@@ -197,6 +213,17 @@ class TestCancelRedisDown(TestCancelFinalizesNotLiveRun):
 		mark.assert_called_once()
 		self.assertTrue(r["cancel_requested"])
 		self.assertEqual(r["status"], "Failed")
+
+	def test_old_non_stream_run_not_finalized_when_redis_down(self):
+		row = self._row("Started", execution_mode="sync")
+		with self._user("a@x.com"), self._db2(row, "Started"), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_not_called()
+		mark.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+		self.assertEqual(r["status"], "Started")
 
 	def test_young_run_not_finalized_and_not_requested(self):
 		with self._user("a@x.com"), self._db2(self._aged_row(3), "Started"), patch(
