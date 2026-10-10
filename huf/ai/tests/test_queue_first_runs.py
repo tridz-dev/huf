@@ -58,6 +58,15 @@ def _make_agent_doc(**overrides):
 
 class TestQueueFirstRuns(unittest.TestCase):
     def setUp(self):
+        # _execute_agent_run caches a RunBudget in a process-wide ContextVar. Built here
+        # from a MagicMock run doc, that budget (deadline_at=MagicMock) would otherwise
+        # leak into every later test in the shared ``bench run-tests`` process.
+        from huf.ai.run_budget import get_current_budget, set_current_budget
+
+        get_current_budget()  # make sure the ContextVar exists
+        _budget_var = get_current_budget._context_var
+        _budget_token = _budget_var.set(_budget_var.get())
+        self.addCleanup(_budget_var.reset, _budget_token)
         self.agent_doc = _make_agent_doc()
 
         self.conversation = MagicMock()

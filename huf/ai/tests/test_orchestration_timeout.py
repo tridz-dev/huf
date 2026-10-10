@@ -25,28 +25,33 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
+# Everything below is a bare-environment (no frappe) shim. With a real frappe
+# (bench run-tests runs the whole app in one process) none of it may run: a stub
+# injected here would replace the real huf.ai.* modules for every later test.
+_REAL_FRAPPE = True
 try:
     import frappe  # noqa: F401
 except ImportError:
+	_REAL_FRAPPE = False
 	frappe_mock = MagicMock()
 	frappe_mock._ = lambda x: x
 	sys.modules["frappe"] = frappe_mock
-if "frappe.utils" not in sys.modules:
+if not _REAL_FRAPPE and "frappe.utils" not in sys.modules:
 	utils_mock = MagicMock()
 	sys.modules["frappe.utils"] = utils_mock
 	sys.modules["frappe"].utils = utils_mock
 
 # huf.ai.agent_integration is imported by orchestrator.py; stub run_agent_sync
 # so importing the module under test doesn't pull in the whole agent stack.
-if "huf.ai.agent_integration" not in sys.modules:
+if not _REAL_FRAPPE and "huf.ai.agent_integration" not in sys.modules:
 	agent_integration_mock = MagicMock()
 	sys.modules["huf.ai.agent_integration"] = agent_integration_mock
 
-if "huf.ai.orchestration.planning" not in sys.modules:
+if not _REAL_FRAPPE and "huf.ai.orchestration.planning" not in sys.modules:
 	planning_mock = MagicMock()
 	sys.modules["huf.ai.orchestration.planning"] = planning_mock
 
-if "huf.ai.transaction" not in sys.modules:
+if not _REAL_FRAPPE and "huf.ai.transaction" not in sys.modules:
 	transaction_mock = MagicMock()
 	transaction_mock.commit_if_background = MagicMock()
 	sys.modules["huf.ai.transaction"] = transaction_mock

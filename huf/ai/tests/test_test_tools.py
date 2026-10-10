@@ -53,7 +53,11 @@ import frappe  # noqa: E402
 # FunctionTool's public shape (name/description/params_json_schema/
 # on_invoke_tool/strict_json_schema), so this file stays runnable without a
 # bench/venv where that dependency is installed.
-if "agents" not in sys.modules:
+import importlib.util as _ilu  # noqa: E402
+
+# Only stub the OpenAI Agents SDK when it is not installed; under a real bench
+# it is, and a MagicMock in sys.modules would replace it process-wide.
+if "agents" not in sys.modules and _ilu.find_spec("agents") is None:
     class _FakeFunctionTool:
         def __init__(self, name, description, params_json_schema, on_invoke_tool, strict_json_schema=False):
             self.name = name
@@ -78,8 +82,30 @@ def _spec_to_namespace(spec: dict) -> SimpleNamespace:
     return SimpleNamespace(**spec)
 
 
+def _isolate_frappe_state(testcase):
+    """Undo, after the test, anything it does to ``frappe.conf.developer_mode`` or
+    ``frappe.has_permission``. Under ``bench run-tests`` the whole app shares one
+    process and ``frappe`` is the real module, so these must not leak."""
+    from unittest.mock import patch
+
+    missing = object()
+    original = frappe.conf.get("developer_mode", missing)
+
+    def _restore():
+        if original is missing:
+            frappe.conf.pop("developer_mode", None)
+        else:
+            frappe.conf.developer_mode = original
+
+    testcase.addCleanup(_restore)
+    patcher = patch.object(frappe, "has_permission", frappe.has_permission, create=True)
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
+
+
 class TestEchoHandler(unittest.TestCase):
     def setUp(self):
+        _isolate_frappe_state(self)
         frappe.conf.developer_mode = 1
 
     def test_returns_input_unchanged(self):
@@ -153,6 +179,7 @@ class TestDeterministicFailHandler(unittest.TestCase):
 
 class TestSlowOrTimeoutHandler(unittest.TestCase):
     def setUp(self):
+        _isolate_frappe_state(self)
         frappe.conf.developer_mode = 1
 
     def test_sleeps_requested_duration(self):
@@ -185,6 +212,9 @@ class TestSlowOrTimeoutHandler(unittest.TestCase):
 
 
 class TestPermissionProtectedMutationHandler(unittest.TestCase):
+    def setUp(self):
+        _isolate_frappe_state(self)
+
     def test_denied_when_no_write_permission(self):
         frappe.has_permission = MagicMock(return_value=False)
         result = test_tools.permission_protected_mutation(record_id="X", value="v")
@@ -231,6 +261,9 @@ class TestPermissionGateRealPath(unittest.TestCase):
     (tool_registry.py:70-106) against the permission_protected_mutation
     fixture, standalone.
     """
+
+    def setUp(self):
+        _isolate_frappe_state(self)
 
     def test_gate_blocks_guest_mutation(self):
         spec = factories.build_permission_protected_mutation_tool_spec()
