@@ -71,6 +71,52 @@ class TestRunControl(unittest.TestCase):
 		self.assertEqual(seen, [])
 
 
+class TestCancelFinalizesNotLiveRun(TestRunControl):
+	"""Stop after the client tore down the stream: nothing polls the marker, so cancel finalizes."""
+
+	def _db2(self, row, final_status="Failed"):
+		db = MagicMock()
+
+		def gv(dt, name, field=None, *a, **k):
+			if dt == "Agent Run" and field == "status":
+				return final_status
+			return row if dt == "Agent Run" else "a@x.com"
+
+		db.get_value.side_effect = gv
+		return patch.object(rc.frappe, "db", db, create=True)
+
+	def test_not_live_started_run_is_finalized(self):
+		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_called_once_with("R1", rc.CANCELLED_BY_USER)
+		mark.assert_called_once()
+		self.assertTrue(r["cancel_requested"])
+		self.assertEqual(r["status"], "Failed")
+		self.assertTrue(rc.is_run_cancelled("R1"))
+
+	def test_live_run_only_sets_marker(self):
+		rc.touch_run_alive("R1")
+		with self._user("a@x.com"), self._db2(self._row("Started")), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail, patch.object(rc, "mark_cancelled_tool_calls") as mark:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_not_called()
+		mark.assert_not_called()
+		self.assertTrue(r["cancel_requested"])
+		self.assertEqual(r["status"], "Started")
+		self.assertTrue(rc.is_run_cancelled("R1"))
+
+	def test_finished_run_is_noop(self):
+		with self._user("a@x.com"), self._db2(self._row("Failed")), patch(
+			"huf.ai.agent_integration._guarded_fail_started_run"
+		) as fail:
+			r = rc.cancel_agent_run("R1")
+		fail.assert_not_called()
+		self.assertFalse(r["cancel_requested"])
+
+
 class TestIterWithCancelPoll(unittest.TestCase):
 	def _run(self, coro):
 		import asyncio

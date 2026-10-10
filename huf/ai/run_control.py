@@ -83,6 +83,18 @@ def cancel_agent_run(run_id: str):
 	if row.status in ("Success", "Failed"):
 		return {"run_id": run_id, "status": row.status, "cancel_requested": False}
 	_cache().set_value(_key(run_id), 1, expires_in_sec=_TTL_SECONDS)
+	if row.status == "Started" and not is_run_alive(run_id):
+		# Nothing is polling the marker (e.g. Stop arrived after the client already tore down the
+		# stream, so the generator was closed before it ever saw the marker): finalize right now
+		# instead of leaving the run Started until sweep_stale_runs. Guarded: only if still Started.
+		try:
+			from huf.ai.agent_integration import _guarded_fail_started_run
+
+			_guarded_fail_started_run(run_id, CANCELLED_BY_USER)
+			mark_cancelled_tool_calls(run_id, message=CANCELLED_BY_USER)
+			row.status = frappe.db.get_value("Agent Run", run_id, "status") or row.status
+		except Exception:
+			frappe.logger("huf").warning(f"cancel_agent_run: immediate finalize failed for {run_id}")
 	return {"run_id": run_id, "status": row.status, "cancel_requested": True}
 
 
