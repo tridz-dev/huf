@@ -339,6 +339,10 @@
                 "timeout_ms": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "recovery": {
+                  "type": "string",
+                  "enum": ["retry", "resume", "abort", "compensate"]
                 }
               }
             }
