@@ -36,8 +36,15 @@ from huf.ai.tests import _stub_env
 _stub_env.install()
 
 
-def _make_module(name):
-    if name in sys.modules:
+def _make_module(name, reuse=False):
+    """Create a stub module in sys.modules.
+
+    Always builds a fresh module (never mutates a real one that happens to be
+    loaded already -- under ``bench run-tests`` the whole app shares one
+    process). Callers must run inside ``patch.dict(sys.modules)`` (see
+    ``setUpModule``) so every stub is dropped again afterwards.
+    """
+    if reuse and name in sys.modules:
         return sys.modules[name]
     module = types.ModuleType(name)
     sys.modules[name] = module
@@ -52,10 +59,10 @@ def _stub_agent_module_dependencies():
     frappe = sys.modules.get("frappe")
     is_real_frappe = frappe is not None and not isinstance(frappe, MagicMock)
     if frappe is not None and not is_real_frappe:
-        frappe_model = _make_module("frappe.model")
+        frappe_model = _make_module("frappe.model", reuse=True)
         frappe_model.__path__ = ["frappe/model"]
 
-        frappe_model_document = _make_module("frappe.model.document")
+        frappe_model_document = _make_module("frappe.model.document", reuse=True)
 
         class Document:
             pass
@@ -111,7 +118,7 @@ def _stub_agent_module_dependencies():
     orchestrator.parse_plan_steps = MagicMock(name="parse_plan_steps")
     orchestrator.create_orchestration = MagicMock(name="create_orchestration")
 
-    huf_permissions = _make_module("huf.permissions")
+    huf_permissions = _make_module("huf.permissions", reuse=True)
     if not hasattr(huf_permissions, "has_capability"):
         huf_permissions.has_capability = MagicMock(name="has_capability", return_value=False)
 
@@ -138,13 +145,43 @@ def _load_agent_module():
             "agent.py",
         )
 
-    spec = importlib.util.spec_from_file_location("agent_under_test", file_path)
+    # Use the module's real dotted name (it is never registered in sys.modules):
+    # under a real frappe, whitelisted functions resolve their app from
+    # ``fn.__module__.split(".")[0]``, so a made-up top-level name such as
+    # "agent_under_test" makes frappe try to import it as an app.
+    spec = importlib.util.spec_from_file_location("huf.huf.doctype.agent.agent", file_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-agent_module = _load_agent_module()
+agent_module = None
+_sys_modules_patcher = None
+
+
+def setUpModule():
+    """Load the module under test with its heavy siblings stubbed, scoped to
+    this module's tests only. Stubs live in a ``patch.dict(sys.modules)`` that
+    ``tearDownModule`` unwinds, so they cannot leak into other test modules
+    when the whole app runs in one process (``bench run-tests --app huf``).
+    """
+    global agent_module, _sys_modules_patcher
+    _sys_modules_patcher = patch.dict(sys.modules)
+    _sys_modules_patcher.start()
+    try:
+        agent_module = _load_agent_module()
+    except BaseException:
+        _sys_modules_patcher.stop()
+        _sys_modules_patcher = None
+        raise
+
+
+def tearDownModule():
+    global agent_module, _sys_modules_patcher
+    if _sys_modules_patcher is not None:
+        _sys_modules_patcher.stop()
+        _sys_modules_patcher = None
+    agent_module = None
 
 
 class TestArchiveAgent(unittest.TestCase):

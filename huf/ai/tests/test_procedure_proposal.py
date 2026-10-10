@@ -31,7 +31,7 @@ import json
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 
 def _install_standalone_frappe_stub():
@@ -674,15 +674,7 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 
 	def setUp(self):
 		frappe_stub = sys.modules["frappe"]
-		# Snapshot-and-restore, not hasattr()-gated delete: frappe_stub is a MagicMock,
-		# and MagicMock.__getattr__ auto-vivifies any attribute access (including inside
-		# hasattr()), so `hasattr(frappe_stub, "model")` is always True regardless of
-		# whether "model" was ever really set -- a prior version of this fixture used
-		# that check to decide whether to `del frappe_stub.model` in tearDown, which
-		# therefore never fired and leaked `.model`/`.db` into every test that ran after
-		# this class in the same process (caught by an adversarial review of this fix).
-		# Snapshotting __dict__ instead restores exactly what was there, unconditionally.
-		self._frappe_dict_snapshot = dict(frappe_stub.__dict__)
+		self._real_frappe = not isinstance(frappe_stub, MagicMock)
 
 		class _Document:
 			pass
@@ -691,6 +683,33 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 		fake_document_module.Document = _Document
 		fake_model_module = types.ModuleType("frappe.model")
 		fake_model_module.document = fake_document_module
+
+		if self._real_frappe:
+			# Under ``bench run-tests`` the whole app shares one process and ``frappe`` is the
+			# genuine package: never clear its __dict__ or pop its real ``frappe.model`` from
+			# sys.modules (that left a fresh, empty ``frappe.model`` behind for every later
+			# test). patch.dict(sys.modules) also drops the controller module imported below
+			# against the fake Document when the test ends.
+			fake_db = MagicMock()
+			fake_db.sql = lambda query, params: [[0]]  # no existing versions -> next version 1
+			self._patchers = [
+				patch.dict(sys.modules, {"frappe.model": fake_model_module, "frappe.model.document": fake_document_module}),
+				patch.object(frappe_stub, "model", fake_model_module),
+				patch.object(frappe_stub, "db", fake_db),
+			]
+			for patcher in self._patchers:
+				patcher.start()
+			return
+
+		# Standalone (frappe is a MagicMock). Snapshot-and-restore, not hasattr()-gated delete:
+		# MagicMock.__getattr__ auto-vivifies any attribute access (including inside
+		# hasattr()), so `hasattr(frappe_stub, "model")` is always True regardless of
+		# whether "model" was ever really set -- a prior version of this fixture used
+		# that check to decide whether to `del frappe_stub.model` in tearDown, which
+		# therefore never fired and leaked `.model`/`.db` into every test that ran after
+		# this class in the same process (caught by an adversarial review of this fix).
+		# Snapshotting __dict__ instead restores exactly what was there, unconditionally.
+		self._frappe_dict_snapshot = dict(frappe_stub.__dict__)
 		frappe_stub.model = fake_model_module
 		sys.modules["frappe.model"] = fake_model_module
 		sys.modules["frappe.model.document"] = fake_document_module
@@ -699,6 +718,10 @@ class TestWriteNodeGetsRecoveryAndIdempotencyKey(unittest.TestCase):
 		frappe_stub.db.sql = lambda query, params: [[0]]  # no existing versions -> next version 1
 
 	def tearDown(self):
+		if self._real_frappe:
+			for patcher in reversed(self._patchers):
+				patcher.stop()
+			return
 		frappe_stub = sys.modules["frappe"]
 		frappe_stub.__dict__.clear()
 		frappe_stub.__dict__.update(self._frappe_dict_snapshot)

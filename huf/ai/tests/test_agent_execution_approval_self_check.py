@@ -69,8 +69,12 @@ class TestSelfApprovalGuard(unittest.TestCase):
     def setUp(self):
         # Reset frappe stub attributes touched by _can_decide / its helpers
         # between tests so mock call history doesn't leak across cases.
-        frappe.get_roles = MagicMock(return_value=[])
-        frappe.db = MagicMock()
+        # patch.object + cleanup: under ``bench run-tests`` ``frappe`` is the real
+        # module and a bare assignment would replace frappe.db for later tests.
+        for name, value in (("get_roles", MagicMock(return_value=[])), ("db", MagicMock())):
+            patcher = patch.object(frappe, name, value, create=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         frappe.db.get_single_value = MagicMock(return_value=0)
 
     def test_self_approval_denied_by_default(self):

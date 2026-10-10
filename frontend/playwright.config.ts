@@ -7,7 +7,13 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   testMatch: /\.spec\.ts$/,
-  testIgnore: /deployed/,
+  // Visual baselines are committed per-platform (-darwin only). On other
+  // platforms (CI linux) skip them unless explicitly opted in, otherwise every
+  // toHaveScreenshot() fails writing a missing baseline.
+  // Run with UPDATE_SNAPSHOTS=1 (and --update-snapshots) to (re)generate.
+  testIgnore: process.env.UPDATE_SNAPSHOTS || process.platform === 'darwin'
+    ? /deployed/
+    : [/deployed/, /visual-regression/],
   fullyParallel: true,
   retries: 1,
   timeout: 15000,
