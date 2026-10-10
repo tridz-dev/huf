@@ -3,7 +3,7 @@ import type { UseFormReturn } from 'react-hook-form';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 
-import type { AgentFormValues } from './types';
+import { DESKTOP_ACCESS_FIELDS, type AgentFormValues, type DesktopAccessLevel } from './types';
 import type { ExecutionProfileOption, SSHConnectionOption } from './AdvancedTab';
 import { parseOptionalNumber } from './AdvancedTab';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,7 +31,15 @@ interface PermissionsTabProps {
   loadingExecutionProfiles?: boolean;
   sshConnectionOptions?: SSHConnectionOption[];
   loadingSSHConnections?: boolean;
+  /** Desktop access is loaded separately from the rest of the tab; the controls stay disabled until it is ready. */
+  desktopAccessStatus?: 'loading' | 'ready' | 'error';
 }
+
+const DESKTOP_ACCESS_OPTION_LABELS: Record<DesktopAccessLevel, string> = {
+  off: 'Off',
+  ask: 'Ask',
+  allowed: 'Allowed',
+};
 
 function mergeByName(base: NamedOption[], extra: NamedOption[]): NamedOption[] {
   const merged = [...base];
@@ -72,6 +80,7 @@ export function PermissionsTab({
   loadingExecutionProfiles = false,
   sshConnectionOptions = [],
   loadingSSHConnections = false,
+  desktopAccessStatus = 'ready',
 }: PermissionsTabProps) {
   const [userQuery, setUserQuery] = useState('');
   const [userOptionsData, setUserOptionsData] = useState<NamedOption[]>([]);
@@ -157,16 +166,11 @@ export function PermissionsTab({
         <CardHeader>
           <CardTitle>Access Control</CardTitle>
           <CardDescription>
-            Configure who can run this agent. If both lists are empty, any authenticated user can access it.
-            Otherwise access is limited to the owner, selected users, or users with selected roles.
+            Control who can run this agent. The owner always has access. Signed-in users are governed by
+            the switch and lists below; public access is governed only by the public access switch.
             <br />
-            Agents reached via external channels (Slack, Discord, Teams, Telegram, voice) are only
-            reachable if Allow Public / Unauthenticated Access is enabled below -- Allowed Users and
-            Allowed Roles cannot be evaluated for those channels since external callers are not mapped
-            to a HUF user.
-            <br />
-            This tab controls who can run this agent; it is separate from data-table agent access,
-            which controls what an agent can do to a table.
+            Agents reached through external channels (Slack, Discord, Teams, Telegram, voice) can only be
+            run when public access is enabled, because those callers are not matched to a Huf user.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -178,8 +182,8 @@ export function PermissionsTab({
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Allow all authenticated users</FormLabel>
                   <FormDescription>
-                    Allow all authenticated users. When unchecked, only the listed users and roles may use
-                    this agent.
+                    Applies only when Allowed users and Allowed roles are both empty. On: every signed-in
+                    user can run this agent. Off: only the owner can.
                   </FormDescription>
                 </div>
                 <FormControl>
@@ -230,9 +234,8 @@ export function PermissionsTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Add specific users to limit who can run this agent. If both Allowed Users and Allowed
-                  Roles are left empty, every logged-in HUF user can run this agent -- leaving both empty
-                  does not restrict access, it removes all restrictions.
+                  Limit access to these users. When users or roles are listed, only they (and the owner)
+                  can run this agent, and the switch above no longer applies.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -256,9 +259,8 @@ export function PermissionsTab({
                   />
                 </FormControl>
                 <FormDescription>
-                  Use roles for scalable access control across teams without listing every user
-                  individually -- e.g. restrict an HR agent to the HR Manager role. If both Allowed Users
-                  and Allowed Roles are empty, every logged-in user can run this agent.
+                  Limit access to people holding these roles, for example a single team. Works together
+                  with Allowed users; the switch above applies only when both are empty.
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -525,6 +527,83 @@ export function PermissionsTab({
               </div>
             </>
           )}
+        </CardContent>
+      </Card>
+
+      <Card data-testid="desktop-access-card">
+        <CardHeader>
+          <CardTitle>Desktop access</CardTitle>
+          <CardDescription>
+            What this agent may do on a computer running Huf Desktop. Each setting is a ceiling: the person using
+            the desktop can restrict it further, and the stricter one applies. The agent still needs the matching
+            tools attached.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-6 sm:grid-cols-2">
+          {desktopAccessStatus === 'error' && (
+            <p role="alert" className="text-sm text-destructive sm:col-span-2">
+              Desktop access settings could not be loaded. Reload the page to edit them.
+            </p>
+          )}
+          {desktopAccessStatus === 'loading' && (
+            <p className="text-sm text-muted-foreground sm:col-span-2">Loading desktop access...</p>
+          )}
+          {DESKTOP_ACCESS_FIELDS.map(({ name, label }) => (
+            <FormField
+              key={name}
+              control={form.control}
+              name={name}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{label}</FormLabel>
+                  <Select
+                    value={field.value ?? 'allowed'}
+                    onValueChange={field.onChange}
+                    disabled={desktopAccessStatus !== 'ready'}
+                  >
+                    <FormControl>
+                      <SelectTrigger aria-label={label}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {(Object.keys(DESKTOP_ACCESS_OPTION_LABELS) as DesktopAccessLevel[]).map((level) => (
+                        <SelectItem key={level} value={level}>
+                          {DESKTOP_ACCESS_OPTION_LABELS[level]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ))}
+
+          <FormField
+            control={form.control}
+            name="allow_remote_desktop"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 sm:col-span-2">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Allow remote desktop control</FormLabel>
+                  <FormDescription>
+                    Let runs started from the web or mobile app, by the same user, use this agent&apos;s tools on a
+                    desktop that has remote control turned on. Both switches must be on. When they are, remote runs
+                    use the workspace&apos;s permission mode with no extra limit or prompting.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                    disabled={desktopAccessStatus !== 'ready'}
+                    aria-label="Allow remote desktop control"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </CardContent>
       </Card>
     </div>

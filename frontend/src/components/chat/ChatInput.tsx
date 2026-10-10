@@ -20,6 +20,9 @@ import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
 import { VoiceCallOverlay } from './VoiceCallOverlay';
+import { DesktopRunBanner } from './desktop/DesktopRunBanner';
+import { DesktopRunError, parseDesktopRunFailure, rebindDesktopConversation } from '@/services/desktopHostApi';
+import { refreshDesktopHosts } from '@/hooks/useDesktopHosts';
 
 export type LoadingType = 'default' | 'transcribing';
 
@@ -63,6 +66,10 @@ interface ChatInputProps {
      * disclaimer). Sending still works via Return; the attach/mic/send
      * controls are simply out of view until the pane is closed again. */
     artifactPaneOpen?: boolean;
+    /** Device id when the open conversation is hosted on a desktop. Such turns always use the
+     * request/response path (never SSE), because the server pins them to that computer and may
+     * answer with a structured "offline / rebind / remote off" result instead of a run. */
+    hostedDeviceId?: string | null;
 }
 
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function ChatInput({
@@ -81,8 +88,14 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     maxUploadSizeMb,
     runImmediately = false,
     artifactPaneOpen = false,
+    hostedDeviceId = null,
 }: ChatInputProps, ref) {
     const [message, setMessage] = useState('');
+    // A hosted-conversation turn the server declined (desktop offline, workspace changed, remote
+    // control off). `text` is the message to send again on Retry.
+    const [desktopFailure, setDesktopFailure] = useState<{ error: DesktopRunError; text: string } | null>(null);
+    const [desktopBannerBusy, setDesktopBannerBusy] = useState(false);
+    const [desktopBannerNote, setDesktopBannerNote] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     // True only while the current turn is actually going over SSE — the only
     // path with a real in-flight request a "Stop" button can cancel. The
@@ -229,7 +242,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             // explicit direct-execution mode, used only for agents with the
             // advanced `run_immediately` policy when the stream endpoint is
             // reachable.
-            const useStreaming = streamingAvailable && runImmediately;
+            const useStreaming = streamingAvailable && runImmediately && !hostedDeviceId;
             armRunTimeout(params.assistantMessageId);
             const trackActivity = (content: string) => {
                 lastRunActivityRef.current = Date.now();
@@ -277,6 +290,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     (runAck?.client_side_tool_calls as ClientToolCallPayload[] | undefined);
                 executeClientToolCallsFromResponse(clientSideToolCalls);
                 const runSuccess = (msg?.success as boolean | undefined) ?? (runAck?.success as boolean | undefined);
+                // A hosted conversation the server could not pin to its desktop answers with a
+                // structured failure and creates nothing: surface it as a banner, not a failed run.
+                const desktopFailureResult = parseDesktopRunFailure(msg) ?? parseDesktopRunFailure(runAck);
+                if (desktopFailureResult) throw desktopFailureResult;
                 if (runSuccess === false) {
                     const errorText =
                         (msg?.error as string) ||
@@ -314,7 +331,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                 clearRunTimeout();
             }
         },
-        [agentName, project, runImmediately, armRunTimeout, clearRunTimeout]
+        [agentName, project, runImmediately, hostedDeviceId, armRunTimeout, clearRunTimeout]
     );
 
     const syncAssistantMessageId = useCallback(
@@ -367,8 +384,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         onStatusChange('submitted');
         const controller = new AbortController();
         abortControllerRef.current = controller;
-        const willStream = streamingAvailable && runImmediately;
+        const willStream = streamingAvailable && runImmediately && !hostedDeviceId;
         setIsStreamingResponse(willStream);
+        setDesktopFailure(null);
+        setDesktopBannerNote(null);
 
         const userMessageKey = `user-${Date.now()}`;
         const userMessage: MessageType = {
@@ -455,6 +474,18 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             }
             setTimeout(() => textareaRef.current?.focus(), chatId ? 100 : 200);
         } catch (error) {
+            if (error instanceof DesktopRunError) {
+                // Nothing was created: take the optimistic bubbles back, put the text back in the
+                // composer, and explain what to do. Streaming stays available.
+                isCreatingConversationRef.current = false;
+                onStatusChange('ready');
+                setMessages((prev) =>
+                    prev.filter((msg) => msg.key !== userMessageKey && msg.key !== assistantKey && msg.key !== assistantMessageId)
+                );
+                setMessage((current) => current || text);
+                setDesktopFailure({ error, text });
+                return;
+            }
             if (streamingAvailable) setStreamingAvailable(false);
             isCreatingConversationRef.current = false;
             onStatusChange('error');
@@ -472,7 +503,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
             setIsStreamingResponse(false);
             abortControllerRef.current = null;
         }
-    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError, runImmediately]);
+    }, [agentName, chatId, onConversationCreated, onStatusChange, isCreatingConversationRef, newlyCreatedConversationIdRef, setMessages, scrollToBottomAfterPaint, runAgentAndUpdateAssistant, syncAssistantMessageId, linkUserMessageToRun, markAssistantError, runImmediately, hostedDeviceId]);
 
     useImperativeHandle(ref, () => ({
         send: sendTextMessage,
@@ -481,6 +512,54 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     const handleStop = useCallback(() => {
         abortControllerRef.current?.abort();
     }, []);
+
+    const handleDesktopRetry = useCallback(async () => {
+        if (!desktopFailure || isSubmitting) return;
+        setDesktopBannerBusy(true);
+        try {
+            await sendTextMessage(desktopFailure.text);
+        } finally {
+            setDesktopBannerBusy(false);
+        }
+    }, [desktopFailure, isSubmitting, sendTextMessage]);
+
+    const handleDesktopRebind = useCallback(async () => {
+        if (!chatId || !desktopFailure || isSubmitting) return;
+        const failed = desktopFailure;
+        setDesktopBannerBusy(true);
+        setDesktopBannerNote(null);
+        try {
+            const result = await rebindDesktopConversation(chatId);
+            if (result.ok) {
+                window.dispatchEvent(
+                    new CustomEvent('huf:conversation-host-changed', { detail: { conversationId: chatId } })
+                );
+                void refreshDesktopHosts();
+                toast.success('Conversation moved to the open workspace');
+                setDesktopFailure(null);
+                await sendTextMessage(failed.text);
+                return;
+            }
+            const err = result.error;
+            if (err?.code === 'desktop_offline') {
+                setDesktopFailure({
+                    error: new DesktopRunError('desktop_offline', err.message, {
+                        lastSeen: err.lastSeen ?? null,
+                        hostLabel: failed.error.hostLabel,
+                    }),
+                    text: failed.text,
+                });
+            } else if (err?.code === 'run_in_progress') {
+                setDesktopBannerNote('A turn is still running. Wait for it to finish, then rebind.');
+            } else {
+                setDesktopBannerNote(err?.message ?? 'The conversation could not be rebound.');
+            }
+        } catch (error) {
+            setDesktopBannerNote(error instanceof Error ? error.message : 'The conversation could not be rebound.');
+        } finally {
+            setDesktopBannerBusy(false);
+        }
+    }, [chatId, desktopFailure, isSubmitting, sendTextMessage]);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -640,7 +719,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                     isCreatingConversationRef.current = false;
                     return;
                 }
-                if (streamingAvailable) setStreamingAvailable(false);
+                if (streamingAvailable && !(error instanceof DesktopRunError)) setStreamingAvailable(false);
                 isCreatingConversationRef.current = false;
                 onStatusChange('error');
                 const errorText = error instanceof Error ? error.message : 'Failed to send file';
@@ -1048,6 +1127,20 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
 
     return (
         <div className="flex-none px-[26px] pb-4 animate-drop motion-reduce:animate-none">
+            {desktopFailure && (
+                <DesktopRunBanner
+                    error={desktopFailure.error}
+                    agentName={agentName}
+                    busy={desktopBannerBusy || isSubmitting}
+                    note={desktopBannerNote}
+                    onRetry={() => void handleDesktopRetry()}
+                    onRebind={() => void handleDesktopRebind()}
+                    onDismiss={() => {
+                        setDesktopFailure(null);
+                        setDesktopBannerNote(null);
+                    }}
+                />
+            )}
             <form onSubmit={handleSubmit}>
                 <div className={cn(
                     "rounded-chat-bubble border border-input bg-panel",

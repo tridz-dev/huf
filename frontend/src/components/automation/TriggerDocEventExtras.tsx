@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Combobox } from '@/components/ui/combobox';
 import { getDocTypeMeta } from '@/services/agentApi';
 import type { AutomationTriggerAttachment } from '@/types/automation.types';
 
@@ -85,8 +86,13 @@ export function TriggerDocEventExtras({
   }, [referenceDoctype]);
 
   const promptOptions = useMemo(
-    () => promptFieldOptions.map((fieldname) => ({ value: fieldname, label: fieldname })),
-    [promptFieldOptions]
+    () => {
+      const options = promptFieldOptions.map((fieldname) => ({ value: fieldname, label: fieldname }));
+      return promptField && !promptFieldOptions.includes(promptField)
+        ? [{ value: promptField, label: promptField }, ...options]
+        : options;
+    },
+    [promptField, promptFieldOptions]
   );
 
   const updateAttachmentRow = (index: number, patch: Partial<AutomationTriggerAttachment>) => {
@@ -109,22 +115,16 @@ export function TriggerDocEventExtras({
     <div className="space-y-4">
       <div className="space-y-1.5">
         <Label>Prompt field</Label>
-        <Select
-          onValueChange={onPromptFieldChange}
+        <Combobox
+          options={promptOptions}
           value={promptField || ''}
+          onValueChange={onPromptFieldChange}
+          placeholder={referenceDoctype ? 'Select field' : 'Select DocType first'}
+          searchPlaceholder="Search fields..."
+          emptyText="No field found."
+          shouldFilter
           disabled={!referenceDoctype || disabled}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={referenceDoctype ? 'Select field' : 'Select DocType first'} />
-          </SelectTrigger>
-          <SelectContent>
-            {promptOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
         <p className="text-xs text-steel-soft">
           The field on the Reference DocType that carries the user&apos;s instructions.
         </p>

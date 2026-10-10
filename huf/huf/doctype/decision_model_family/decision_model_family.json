@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:family_key",
+ "creation": "2026-09-23 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "family_key",
+  "family_name",
+  "model_class",
+  "developer",
+  "description",
+  "enabled",
+  "default_capabilities_json",
+  "documentation_url",
+  "metadata_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "family_key",
+   "fieldtype": "Data",
+   "label": "Family Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "family_name",
+   "fieldtype": "Data",
+   "label": "Family Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "model_class",
+   "fieldtype": "Link",
+   "label": "Model Class",
+   "options": "Decision Model Class",
+   "reqd": 1
+  },
+  {
+   "fieldname": "developer",
+   "fieldtype": "Data",
+   "label": "Developer"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "default_capabilities_json",
+   "fieldtype": "Code",
+   "label": "Default Capabilities",
+   "options": "JSON"
+  },
+  {
+   "fieldname": "documentation_url",
+   "fieldtype": "Data",
+   "label": "Documentation URL"
+  },
+  {
+   "fieldname": "metadata_json",
+   "fieldtype": "Code",
+   "label": "Metadata",
+   "options": "JSON"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-09-23 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Huf",
+ "name": "Decision Model Family",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "Huf User",
+   "read": 1,
+   "select": 1,
+   "print": 1,
+   "export": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

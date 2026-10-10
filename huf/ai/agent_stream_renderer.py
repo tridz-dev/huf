@@ -13,7 +13,19 @@ import frappe
 from frappe.website.page_renderers.base_renderer import BaseRenderer
 from werkzeug.wrappers import Response
 
-from huf.ai.agent_integration import _has_queued_runs, _resolve_effective_model, run_agent_stream
+from huf.ai.agent_integration import (
+	_client_safe_error,
+	_has_queued_runs,
+	_resolve_effective_model,
+	run_agent_stream,
+)
+
+# Idle seconds after which the stream emits an SSE comment (keeps proxies from cutting it).
+SSE_KEEPALIVE_S = 15
+# Data heartbeat (not an SSE comment) so clients that only count `data:` chunks as activity stay alive.
+HEARTBEAT_SSE = 'data: {"type": "heartbeat"}\n\n'
+# Before run_started has been yielded, use a plain SSE comment so clients never see an early unknown type.
+PRESTART_KEEPALIVE_SSE = ': keep-alive\n\n'
 
 
 class AgentStreamRenderer(BaseRenderer):
@@ -61,7 +73,7 @@ class AgentStreamRenderer(BaseRenderer):
 	def _sse_error_response(self, error_message: str):
 		"""Return a single-event SSE error response (same chunk shape the stream uses for errors)."""
 		def error_generator() -> Generator[str, None, None]:
-			error_data = {"type": "error", "error": error_message}
+			error_data = {"type": "error", "error": error_message, "message_saved": False}
 			yield f"data: {json.dumps(error_data)}\n\n"
 
 		return Response(
@@ -117,7 +129,7 @@ class AgentStreamRenderer(BaseRenderer):
 
 		if not prompt:
 			def error_generator() -> Generator[str, None, None]:
-				error_data = {"type": "error", "error": "Prompt parameter required"}
+				error_data = {"type": "error", "error": "Prompt parameter required", "message_saved": False}
 				yield f"data: {json.dumps(error_data)}\n\n"
 
 			return Response(
@@ -162,6 +174,8 @@ class AgentStreamRenderer(BaseRenderer):
 		create_new = bool(_get_param("create_new", False))
 		skip_user_message = bool(_get_param("skip_user_message", False))
 		project = _get_param("project")
+		desktop_executor_id = _get_param("desktop_executor_id")
+		desktop_lease_secret = _get_param("desktop_lease_secret")
 		files = body.get("files")
 
 		create_new = bool(create_new)
@@ -183,6 +197,9 @@ class AgentStreamRenderer(BaseRenderer):
 			"""Wrapper to convert async generator to sync generator for Werkzeug Response."""
 			loop = None
 			created_loop = False
+			async_gen = None
+			pending_chunk = None
+			delivered = False  # True once a non-error chunk shows the run was persisted
 			try:
 				# Try to get existing event loop
 				try:
@@ -213,12 +230,33 @@ class AgentStreamRenderer(BaseRenderer):
 					skip_user_message=skip_user_message,
 					files=files,
 					project=project,
+					desktop_executor_id=desktop_executor_id,
+					desktop_lease_secret=desktop_lease_secret,
 				)
 				
-				# Convert async generator to sync
+				# Convert async generator to sync. While a chunk is pending (e.g. a Huf Desktop
+				# tool call waiting for approval, or a long model "thinking" gap) emit a real data
+				# heartbeat every SSE_KEEPALIVE_S so a proxy read timeout does not cut the stream and
+				# clients' idle watchdogs see activity. Clients skip unknown chunk types.
+				async def _next_chunk():
+					return await async_gen.__anext__()
+
+				run_started_sent = False
 				while True:
 					try:
-						chunk = loop.run_until_complete(async_gen.__anext__())
+						pending_chunk = loop.create_task(_next_chunk())
+						while True:
+							done, _pending = loop.run_until_complete(
+								asyncio.wait({pending_chunk}, timeout=SSE_KEEPALIVE_S)
+							)
+							if done:
+								break
+							yield HEARTBEAT_SSE if run_started_sent else PRESTART_KEEPALIVE_SSE
+						chunk = pending_chunk.result()
+						if chunk.get("type") == "run_started":
+							run_started_sent = True
+						if chunk.get("type") != "error":
+							delivered = True
 						yield f"data: {json.dumps(chunk)}\n\n"
 						
 						# Check if stream is complete
@@ -228,14 +266,24 @@ class AgentStreamRenderer(BaseRenderer):
 						break
 					except Exception as e:
 						frappe.log_error(frappe.get_traceback(), "Agent Stream Chunk Error")
-						error_data = {"type": "error", "error": str(e)}
+						error_data = {"type": "error", "error": _client_safe_error(e), "message_saved": delivered}
 						yield f"data: {json.dumps(error_data)}\n\n"
 						break
 			except Exception as e:
 				frappe.log_error(frappe.get_traceback(), "Agent Stream Setup Error")
-				error_data = {"type": "error", "error": f"Stream setup error: {str(e)}"}
+				error_data = {"type": "error", "error": _client_safe_error(e), "message_saved": delivered}
 				yield f"data: {json.dumps(error_data)}\n\n"
 			finally:
+				# Always finalize the async generator (client disconnect = GeneratorExit here, or a break after
+				# a terminal chunk): without aclose() its finalizer (run status, tool rows) never runs.
+				if loop is not None and async_gen is not None and not loop.is_running():
+					try:
+						if pending_chunk is not None and not pending_chunk.done():
+							pending_chunk.cancel()
+							loop.run_until_complete(asyncio.wait({pending_chunk}, timeout=10))
+						loop.run_until_complete(asyncio.wait_for(async_gen.aclose(), timeout=30))
+					except BaseException as close_err:  # noqa: BLE001
+						frappe.logger("huf").warning(f"stream finalize failed: {close_err!r}")
 				# Close the loop if we created it AND unset it to prevent leaking closed loops!
 				if created_loop and loop:
 					try:

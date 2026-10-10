@@ -24,7 +24,6 @@ import {
   type SSHConnectionDoc,
   type SSHTestResult,
 } from '@/services/sshConnectionApi';
-import { InlineEditName } from '@/components/common/InlineEditName';
 
 const sshConnectionSchema = z.object({
   display_name: z.string().min(1, 'Display name is required'),
@@ -263,12 +262,9 @@ export function SSHConnectionFormPage() {
         <div className="flex items-start gap-3">
           <Terminal className="h-8 w-8 text-steel-soft shrink-0 mt-1" strokeWidth={1.6} />
           <div>
-            <InlineEditName
-              value={form.watch('display_name') || (isNew ? 'New SSH Connection' : id!)}
-              onChange={(name: string) => form.setValue('display_name', name, { shouldDirty: true })}
-              placeholder="e.g. Production Web Server"
-              className="[&_h1]:font-display [&_h1]:text-[34px] [&_h1]:leading-tight"
-            />
+            <h1 className="font-display text-[34px] leading-tight text-ink">
+              {form.watch('display_name') || (isNew ? 'New SSH Connection' : id!)}
+            </h1>
             <p className="font-mono text-[12px] text-steel mt-1">
               {isNew ? 'Create a new remote SSH target connection' : `ID ${id}`}
             </p>

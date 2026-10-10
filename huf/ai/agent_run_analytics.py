@@ -126,6 +126,7 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
         filters=filters,
         fields=[
             "status",
+            "error_message",
             "input_tokens",
             "billed_input_tokens",
             "output_tokens",
@@ -149,7 +150,7 @@ def _recompute_rollup(granularity: str, bucket_start, dimension_key: str):
     composition_totals: dict = {}
     for row in rows:
         metrics["success_count"] += int(row.status == "Success")
-        metrics["failed_count"] += int(row.status == "Failed")
+        metrics["failed_count"] += int(row.status == "Failed" and row.error_message != "Cancelled by user")
         # billed_input_tokens is the new canonical, path-independent column, but it is
         # NULL on every historical row (never captured before this branch). Falling
         # back to input_tokens keeps existing dashboards correct across the cutover

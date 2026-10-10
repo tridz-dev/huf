@@ -891,6 +891,12 @@ class TestAskUser(IntegrationTestCase):
 		with patch("frappe.get_roles", return_value=BUILDER_ROLES):
 			return ask_user_mod.ask_user(**kwargs)
 
+	def test_legacy_suggested_answers_are_capped(self):
+		result = self._run(question="Q?", kind="input", suggested_answers=["x" * 5000, "ok"])
+		answers = result["ask_user"]["suggested_answers"]
+		self.assertEqual(len(answers[0]), ask_user_mod.MAX_TEXT_LENGTH)
+		self.assertEqual(answers[1], "ok")
+
 	def test_bad_kind_rejected(self):
 		self.assertRaises(
 			frappe.ValidationError,
@@ -965,14 +971,184 @@ class TestAskUser(IntegrationTestCase):
 		result = self._run(question="Name?", kind="input", allow_free_text="false")
 		self.assertFalse(result["ask_user"]["allow_free_text"])
 
-	def test_denied_without_builder_role(self):
+	def test_allowed_without_builder_role(self):
+		# ask_user only validates questions for the caller's own chat card, so it has no builder-role gate.
 		with patch("frappe.get_roles", return_value=DENIED_ROLES):
-			self.assertRaises(
-				frappe.PermissionError,
-				ask_user_mod.ask_user,
-				question="Hi?",
-				kind="input",
+			result = ask_user_mod.ask_user(question="Hi?", kind="input")
+		self.assertIn("ask_user", result)
+
+	def test_empty_call_returns_actionable_error(self):
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			self._run()
+		message = str(ctx.exception)
+		self.assertIn("questions", message)
+		self.assertIn("Example", message)
+
+	def test_empty_questions_list_rejected(self):
+		self.assertRaises(frappe.ValidationError, self._run, questions=[])
+
+	def test_question_without_text_rejected(self):
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			self._run(questions=[{"id": "a"}])
+		self.assertIn("questions[0].text", str(ctx.exception))
+
+	def test_questions_array_normalized(self):
+		result = self._run(
+			title="Setup",
+			questions=[
+				{"id": "type", "text": "Project type?", "options": ["Web app", "Mobile app"]},
+				{"text": "Features?", "options": [{"label": "Auth"}, {"label": "Payments"}], "allow_multiple": True},
+				{"id": "deadline", "text": "Deadline?"},
+				{"text": "Proceed?", "kind": "yes_no"},
+			],
+		)
+		qs = result["ask_user"]["questions"]
+		self.assertEqual(result["ask_user"]["title"], "Setup")
+		self.assertEqual([q["id"] for q in qs], ["type", "q2", "deadline", "q4"])
+		self.assertEqual(qs[0]["kind"], "single_choice")
+		self.assertEqual(qs[0]["options"][0], {"id": "web_app", "label": "Web app"})
+		self.assertEqual(qs[1]["kind"], "multi_choice")
+		self.assertTrue(qs[1]["allow_multiple"])
+		self.assertEqual(qs[2]["kind"], "input")
+		self.assertTrue(qs[2]["allow_free_text"])
+		self.assertEqual([o["id"] for o in qs[3]["options"]], ["yes", "no"])
+		self.assertEqual(result["block"].count("```ask-user"), 4)
+
+	def test_questions_accept_json_string(self):
+		result = self._run(questions='[{"id": "x", "text": "Name?"}]')
+		self.assertEqual(result["ask_user"]["questions"][0]["id"], "x")
+
+	def test_params_schema_requires_questions(self):
+		schema = ask_user_mod.ask_user.tool_params_schema
+		self.assertEqual(schema["required"], ["questions"])
+		item = schema["properties"]["questions"]["items"]
+		self.assertEqual(item["required"], ["id", "text"])
+		self.assertIn("NEVER build", ask_user_mod.ASK_USER_DESCRIPTION)
+
+	def test_long_question_text_truncated_with_ellipsis(self):
+		long_text = "q" * 800
+		result = self._run(questions=[{"id": "a", "text": long_text}])
+		text = result["ask_user"]["questions"][0]["text"]
+		self.assertEqual(len(text), ask_user_mod.MAX_TEXT_LENGTH)
+		self.assertTrue(text.endswith("…"))
+
+	def test_long_option_label_and_description_truncated(self):
+		limit = ask_user_mod.MAX_TEXT_LENGTH
+		result = self._run(
+			questions=[
+				{
+					"id": "a",
+					"text": "Pick",
+					"options": [{"id": "x", "label": "L" * 600, "description": "D" * 600}],
+				}
+			],
+		)
+		option = result["ask_user"]["questions"][0]["options"][0]
+		self.assertEqual(len(option["label"]), limit)
+		self.assertTrue(option["label"].endswith("…"))
+		self.assertEqual(len(option["description"]), limit)
+
+	def test_short_text_is_not_truncated(self):
+		result = self._run(questions=[{"id": "a", "text": "Short?", "options": ["Yes"]}])
+		self.assertEqual(result["ask_user"]["questions"][0]["text"], "Short?")
+		self.assertEqual(result["ask_user"]["questions"][0]["options"][0]["label"], "Yes")
+
+	def test_title_note_and_placeholder_capped(self):
+		limit = ask_user_mod.MAX_TEXT_LENGTH
+		result = self._run(
+			title="T" * 700,
+			note="N" * 700,
+			questions=[{"id": "a", "text": "Name?", "placeholder": "P" * 700}],
+		)
+		self.assertEqual(len(result["ask_user"]["title"]), limit)
+		self.assertEqual(len(result["ask_user"]["note"]), limit)
+		self.assertEqual(len(result["ask_user"]["questions"][0]["placeholder"]), limit)
+
+	def test_legacy_question_and_note_capped(self):
+		result = self._run(question="Q" * 700, kind="input", note="N" * 700)
+		self.assertEqual(len(result["ask_user"]["question"]), ask_user_mod.MAX_TEXT_LENGTH)
+		self.assertEqual(len(result["ask_user"]["note"]), ask_user_mod.MAX_TEXT_LENGTH)
+
+	def test_too_many_options_rejected_with_usage_error(self):
+		options = [f"Option {i}" for i in range(ask_user_mod.MAX_OPTIONS + 1)]
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			self._run(questions=[{"id": "a", "text": "Pick", "options": options}])
+		self.assertIn("options", str(ctx.exception))
+		self.assertIn("Example", str(ctx.exception))
+
+	def test_too_many_options_rejected_in_legacy_form(self):
+		options = [{"id": f"o{i}", "label": f"Option {i}"} for i in range(ask_user_mod.MAX_OPTIONS + 1)]
+		self.assertRaises(
+			frappe.ValidationError,
+			self._run,
+			question="Pick one?",
+			kind="single_choice",
+			options=options,
+		)
+
+	def test_too_many_questions_rejected(self):
+		questions = [{"id": f"q{i}", "text": f"Q{i}?"} for i in range(ask_user_mod.MAX_QUESTIONS + 1)]
+		self.assertRaises(frappe.ValidationError, self._run, questions=questions)
+
+	def test_unknown_arguments_reported_and_logged_by_name(self):
+		with patch.object(frappe.logger("huf"), "warning") as warn:
+			result = self._run(
+				questions=[{"id": "a", "text": "Name?"}],
+				quesitons="typo value must not be logged",
+				zzz=1,
 			)
+		self.assertEqual(result["ignored_arguments"], ["quesitons", "zzz"])
+		warn.assert_called_once()
+		logged = warn.call_args[0][0]
+		self.assertIn("quesitons", logged)
+		self.assertIn("zzz", logged)
+		self.assertNotIn("typo value", logged)
+
+	def test_ignored_argument_names_capped_and_sanitized(self):
+		extras = {f"k{i}\nINJECT": 1 for i in range(25)}
+		extras["x" * 200] = 1
+		with patch.object(frappe.logger("huf"), "warning") as warn:
+			result = self._run(questions=[{"id": "a", "text": "Name?"}], **extras)
+		names = result["ignored_arguments"]
+		self.assertLessEqual(len(names), 11)
+		for name in names[:10]:
+			self.assertLessEqual(len(name), 40)
+			self.assertRegex(name, r"^[A-Za-z0-9_.-]+$")
+		self.assertNotIn("\n", warn.call_args[0][0])
+
+	def test_question_and_option_ids_capped_and_sanitized(self):
+		result = self._run(
+			questions=[{"id": "q" * 300 + "\n```x", "text": "Pick", "options": [{"id": "o id<>" + "z" * 300, "label": "A"}]}]
+		)
+		question = result["ask_user"]["questions"][0]
+		self.assertLessEqual(len(question["id"]), 64)
+		self.assertLessEqual(len(question["options"][0]["id"]), 64)
+		self.assertRegex(question["id"], r"^[A-Za-z0-9_.-]+$")
+		self.assertRegex(question["options"][0]["id"], r"^[A-Za-z0-9_.-]+$")
+
+	def test_options_count_checked_before_iterating(self):
+		# A non-dict entry beyond the limit must yield the count error, not the per-item error.
+		options = ["ok"] * ask_user_mod.MAX_OPTIONS + [42]
+		with self.assertRaises(frappe.ValidationError) as ctx:
+			self._run(questions=[{"id": "a", "text": "Pick", "options": options}])
+		self.assertIn("more than", str(ctx.exception))
+
+	def test_single_choice_with_allow_multiple_becomes_multi_choice(self):
+		result = self._run(
+			questions=[{"id": "a", "text": "Pick", "kind": "single_choice", "allow_multiple": True, "options": ["A", "B"]}]
+		)
+		self.assertEqual(result["ask_user"]["questions"][0]["kind"], "multi_choice")
+		self.assertIn('"kind": "multi_choice"', result["block"])
+
+	def test_unknown_arguments_reported_in_legacy_form(self):
+		result = self._run(question="Name?", kind="input", bogus="x")
+		self.assertEqual(result["ignored_arguments"], ["bogus"])
+
+	def test_no_ignored_arguments_key_when_none_passed(self):
+		with patch.object(frappe.logger("huf"), "warning") as warn:
+			result = self._run(questions=[{"id": "a", "text": "Name?"}])
+		self.assertNotIn("ignored_arguments", result)
+		warn.assert_not_called()
 
 
 sdk_tools = _LazyModule("huf.ai.sdk_tools")

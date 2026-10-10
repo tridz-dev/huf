@@ -17,6 +17,14 @@ export interface AgentConversationDoc {
   modified?: string;
   /** HUF Project this conversation belongs to, if any. */
   project?: string;
+  /** `desktop` when Huf Desktop created the conversation and runs it on that computer. */
+  execution_host?: 'server' | 'desktop' | string | null;
+  /** Public id of the desktop device that hosts the conversation. */
+  host_device_id?: string | null;
+  /** Workspace fingerprint the conversation is bound to on that device. */
+  host_workspace_fingerprint?: string | null;
+  /** Display label, "<device> - <workspace>" (or just one of the two). */
+  host_label?: string | null;
 }
 
 /**
@@ -37,6 +45,22 @@ export interface ChatListItem {
   timestampLabel?: string;
   /** HUF Project this conversation belongs to, if any. */
   project?: string;
+  /** Set only for conversations hosted on a desktop; `undefined` for server conversations. */
+  host?: DesktopHostRef;
+}
+
+/** Where a desktop-hosted conversation runs. */
+export interface DesktopHostRef {
+  deviceId: string;
+  label: string;
+}
+
+/** The host of a conversation row, or `undefined` for an ordinary server conversation. */
+export function hostFromConversation(
+  doc: Pick<AgentConversationDoc, 'execution_host' | 'host_device_id' | 'host_label'>,
+): DesktopHostRef | undefined {
+  if (doc.execution_host !== 'desktop' || !doc.host_device_id) return undefined;
+  return { deviceId: doc.host_device_id, label: doc.host_label || '' };
 }
 
 type ConversationFilter = [keyof AgentConversationDoc | string, string, unknown];
@@ -91,6 +115,18 @@ export interface PendingConversationRun {
   conversation?: string | null;
 }
 
+const CONVERSATION_LIST_FIELDS = [
+  'name',
+  'title',
+  'agent',
+  'last_activity',
+  'modified',
+  'project',
+  'execution_host',
+  'host_device_id',
+  'host_label',
+];
+
 /**
  * Map Agent Conversation document to chat list item
  */
@@ -101,6 +137,7 @@ function mapChatListItem(doc: AgentConversationDoc): ChatListItem {
     agent: doc.agent || '',
     timestamp: doc.last_activity || doc.modified || undefined,
     project: doc.project || undefined,
+    host: hostFromConversation(doc),
   };
 }
 
@@ -153,7 +190,7 @@ export async function getConversations(
       (search ? [['title', 'like', `%${search}%`]] : undefined);
 
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
+      fields: CONVERSATION_LIST_FIELDS,
       orderBy: { field: 'modified', order: 'desc' },
       limit,
       limit_start: start,
@@ -259,7 +296,7 @@ export async function getConversationsByAgent(
 
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
+      fields: CONVERSATION_LIST_FIELDS,
       filters: [
         ['agent', '=', agentName],
         ['channel', '=', 'Chat'],
@@ -292,7 +329,7 @@ export async function getAllConversationsForRecents(
 ): Promise<ChatListItem[]> {
   try {
     const conversations = await db.getDocList(doctype['Agent Conversation'], {
-      fields: ['name', 'title', 'agent', 'last_activity', 'modified', 'project'],
+      fields: CONVERSATION_LIST_FIELDS,
       filters: [['channel', '=', 'Chat']],
       orderBy: { field: 'modified', order: 'desc' },
       limit,

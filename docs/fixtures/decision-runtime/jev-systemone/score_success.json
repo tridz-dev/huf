@@ -1,0 +1,43 @@
+{
+  "name": "score_success",
+  "http_status": 200,
+  "request": {
+    "model": "jev-1.13-free",
+    "state": "A customer writes calmly that the order is late but they can wait until tomorrow.",
+    "questions": {
+      "frustration": {
+        "type": "score",
+        "instructions": "How frustrated is the customer?",
+        "criteria": [
+          "Calm",
+          "Frustrated",
+          "Very angry"
+        ]
+      }
+    }
+  },
+  "response": {
+    "model": "jev-1.13-free",
+    "answers": {
+      "frustration": {
+        "type": "score",
+        "score": 0,
+        "confidence": 1,
+        "legend": {
+          "0": "Calm",
+          "1": "Frustrated",
+          "2": "Very angry"
+        },
+        "probabilities": {
+          "0": 1,
+          "1": 0,
+          "2": 0
+        }
+      }
+    },
+    "usage": {
+      "input_tokens": 316,
+      "output_tokens": 19
+    }
+  }
+}

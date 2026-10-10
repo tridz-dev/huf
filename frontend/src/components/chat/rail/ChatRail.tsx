@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import type { ChatListItem } from '@/services/chatApi';
-import { getConversation } from '@/services/chatApi';
+import { getConversation, hostFromConversation, type ChatListItem } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
 import { getProject, getPinnedConversations } from '@/services/projectApi';
 import { ChatRailToolbar } from './ChatRailToolbar';
@@ -30,11 +29,13 @@ const PROJECT_ROUTE_PATTERN = /^\/chat\/projects\/([^/]+)$/;
 export function ChatRail({ onToggleRail, className }: ChatRailProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const selectedChatId = routeChatId && routeChatId !== 'new' ? routeChatId : null;
 
   const [animatingConversationId, setAnimatingConversationId] = useState<string | null>(null);
   const [selectedConversationTitle, setSelectedConversationTitle] = useState<string | null>(null);
+  const [selectedConversationAgent, setSelectedConversationAgent] = useState<string | null>(null);
   const [selectedConversationProject, setSelectedConversationProject] = useState<string | null>(null);
   const [selectedAutonamingEnabled, setSelectedAutonamingEnabled] = useState(false);
 
@@ -82,6 +83,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
   useEffect(() => {
     if (!selectedChatId) {
       setSelectedConversationTitle(null);
+      setSelectedConversationAgent(null);
       setSelectedConversationProject(null);
       setSelectedAutonamingEnabled(false);
       return;
@@ -96,6 +98,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
         if (cancelled || !conversationDoc) return;
 
         setSelectedConversationTitle(conversationDoc.title ?? null);
+        setSelectedConversationAgent(conversationDoc.agent ?? null);
         setSelectedConversationProject(conversationDoc.project ?? null);
 
         if (conversationDoc.agent) {
@@ -156,6 +159,9 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
   }, [effectiveProjectId]);
 
   const scopeProjectId = scope.kind === 'project' ? scope.projectId : undefined;
+  const activeAgent = selectedChatId
+    ? selectedConversationAgent ?? undefined
+    : searchParams.get('agent') ?? undefined;
 
   // Pinned conversations for the current scope - unfiltered globally, or
   // scoped to the active project's pins when the rail is project-scoped.
@@ -224,6 +230,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
         title,
         agent: conversationDoc.agent || '',
         timestamp: conversationDoc.last_activity || conversationDoc.modified,
+        host: hostFromConversation(conversationDoc),
       };
 
       addItemRef.current?.(conversationItem);
@@ -261,6 +268,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
           title: conversationDoc.title || 'Untitled Chat',
           agent: conversationDoc.agent || agentName || '',
           timestamp: conversationDoc.last_activity || conversationDoc.modified,
+          host: hostFromConversation(conversationDoc),
         };
 
         addItemRef.current?.(conversationItem);
@@ -306,6 +314,7 @@ export function ChatRail({ onToggleRail, className }: ChatRailProps) {
           selectedChatId={selectedChatId}
           pinnedChats={pinnedChats}
           project={scopeProjectId}
+          agent={activeAgent}
           onRename={handleRename}
           onFork={handleFork}
           titleRefs={titleRefs}

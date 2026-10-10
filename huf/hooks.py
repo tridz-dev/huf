@@ -9,6 +9,13 @@ app_license = "agpl"
 source_link = "https://github.com/tridz-dev/huf.git"
 app_logo_url="/assets/huf/Images/huf.png"
 app_url="/huf"
+
+# Decision Runtime backend adapters are declared by installed apps. Runtime
+# configuration stores only these stable adapter IDs, never import paths.
+huf_decision_backends = {
+    "fake": "huf.ai.decision.backends.fake.FakeDecisionBackend",
+}
+
 # Apps
 # ------------------
 
@@ -187,7 +194,6 @@ permission_query_conditions = {
     "Agent Tool Call": "huf.ai.agent_integration.get_tool_call_permission_conditions",
     "Agent Run Prompt Snapshot": "huf.ai.agent_integration.get_prompt_snapshot_permission_conditions",
     "Huf API Key": "huf.huf.doctype.huf_api_key.huf_api_key.get_api_key_permission_conditions",
-    "Agent Procedure Run": "huf.ai.agent_integration.get_procedure_run_permission_conditions",
     "Flow Definition": "huf.huf.doctype.flow_definition.flow_definition.get_permission_query_conditions",
     "Agent Procedure": "huf.huf.doctype.agent_procedure.agent_procedure.get_permission_query_conditions",
     "Agent Procedure Binding": "huf.huf.doctype.agent_procedure_binding.agent_procedure_binding.get_permission_query_conditions",
@@ -200,6 +206,8 @@ permission_query_conditions = {
     "Integration Settings": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Service": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
     "Integration Credential": "huf.ai.gateway_webhook.get_permission_query_conditions_gateway_family",
+    "HUF Document": "huf.huf.doctype.huf_document.huf_document.get_permission_query_conditions",
+    "HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.get_permission_query_conditions",
 }
 
 has_permission = {
@@ -215,6 +223,8 @@ has_permission = {
 	"Integration Settings": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Integration Service": "huf.ai.gateway_webhook.has_permission_gateway_family",
 	"Integration Credential": "huf.ai.gateway_webhook.has_permission_gateway_family",
+	"HUF Document": "huf.huf.doctype.huf_document.huf_document.has_permission",
+	"HUF Document Comment": "huf.huf.doctype.huf_document_comment.huf_document_comment.has_permission",
 }
 
 # DocType Class
@@ -320,9 +330,15 @@ scheduler_events = {
         ],
         "*/5 * * * *": [
             "huf.ai.agent_run_analytics.refresh_rollups",
+            # Safety net: fail runs orphaned in 'Started' (stale > huf_stale_run_minutes (15) / huf_stale_run_minutes_background (60, non-stream)).
+            "huf.ai.run_control.sweep_stale_runs",
         ],
         "*/15 * * * *": [
             "huf.ai.batch_poll.poll_pending_batch_jobs",
+        ],
+        "*/30 * * * *": [
+            # Fail runs left 'Queued' longer than huf_stale_queued_hours (24) with no live drain lock.
+            "huf.ai.run_control.sweep_dead_queued_runs",
         ]
     },
     "hourly": [
@@ -449,3 +465,12 @@ huf_knowledge_backends = {
 # in a later phase, so this starts empty.
 
 huf_voice_engines = {}
+
+# PR3 Jev semantic adapter; provider transport is injected by deployment resolution.
+huf_decision_backends.update({
+    "jev_system_one": "huf.ai.decision.backends.jev.JevSystemOneBackend",
+    "structured_llm": "huf.ai.decision.backends.structured.StructuredLLMBackend",
+    "local_rules": "huf.ai.decision.backends.local.LocalRulesBackend",
+    "classifier": "huf.ai.decision.backends.classifier.ClassifierBackend",
+    "similarity": "huf.ai.decision.backends.similarity.SimilarityBackend",
+})

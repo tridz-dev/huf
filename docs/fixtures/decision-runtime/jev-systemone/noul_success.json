@@ -1,0 +1,27 @@
+{
+  "name": "noul_success",
+  "http_status": 200,
+  "request": {
+    "model": "jev-1.13-free",
+    "state": "A customer says their payment failed three times and checkout is blocked.",
+    "questions": {
+      "is_urgent": {
+        "type": "noul",
+        "instructions": "Does this require urgent attention?"
+      }
+    }
+  },
+  "response": {
+    "model": "jev-1.13-free",
+    "answers": {
+      "is_urgent": {
+        "type": "noul",
+        "noul": 0.89
+      }
+    },
+    "usage": {
+      "input_tokens": 285,
+      "output_tokens": 23
+    }
+  }
+}

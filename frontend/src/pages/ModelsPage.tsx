@@ -52,6 +52,7 @@ import { MultiSelectCombobox } from '../components/ui/multi-select-combobox';
 import { linkRoutes } from '../lib/link-routes';
 import { useSaveShortcut } from '@/hooks/useSaveShortcut';
 import { getFrappeErrorMessage } from '@/lib/frappe-error';
+import { ModelsHeaderActions } from '@/components/ModelsHeaderActions';
 
 interface ModelsPageProps {
   addModelKey?: number;
@@ -156,7 +157,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
       };
     },
     initialParams: {},
-    pageSize: 10,
+    pageSize: 9,
     debounceMs: 300,
     autoLoad: true,
   });
@@ -361,6 +362,7 @@ export function ModelsPage({ addModelKey }: ModelsPageProps) {
   return (
     <PageFrame
       title="Models"
+      actions={<ModelsHeaderActions />}
       filters={
         <FilterBar
           searchPlaceholder="Search models..."

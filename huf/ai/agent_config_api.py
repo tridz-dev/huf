@@ -83,8 +83,9 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 	"knowledge": ("agent_knowledge",),
 	"skills": ("agent_skill",),
 	"permissions": (
-		"allow_guest", 
-		"allowed_users", 
+		"allow_all_users",
+		"allow_guest",
+		"allowed_users",
 		"allowed_roles",
 		"enable_conversation_data",
 		"conversation_data_api_permission",
@@ -93,6 +94,14 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"execution_shared_dir_limit_mb",
 		"allow_ssh",
 		"ssh_connections",
+		"desktop_access_cli",
+		"desktop_access_files",
+		"desktop_access_skills",
+		"desktop_access_local_mcp",
+		"desktop_access_browser",
+		"desktop_access_installs",
+		"desktop_access_processes",
+		"allow_remote_desktop",
 	),
 	"voice": (
 		"voice_enabled",
@@ -102,6 +111,11 @@ AGENT_SECTIONS: dict[str, tuple[str, ...]] = {
 		"tts_model",
 		"tts_voice",
 		"stt_model",
+	),
+	"embed": (
+		"embed_enabled",
+		"publishable_key",
+		"allowed_origins",
 	),
 	"advanced": (
 		"context_strategy",

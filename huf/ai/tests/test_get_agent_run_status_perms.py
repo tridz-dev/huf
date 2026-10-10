@@ -10,8 +10,11 @@ from frappe.tests import IntegrationTestCase
 
 class TestGetAgentRunStatusPerms(IntegrationTestCase):
 	def setUp(self):
-		if not frappe.db.exists("Agent", "Test Agent"):
+		if frappe.db.exists("Agent", "Test Agent"):
+			frappe.db.set_value("Agent", "Test Agent", "allow_all_users", 1)
+		else:
 			frappe.get_doc({
+				"allow_all_users": 1,
 				"doctype": "Agent",
 				"agent_name": "Test Agent",
 				"agent_modality": "Both",

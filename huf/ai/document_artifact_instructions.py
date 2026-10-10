@@ -32,7 +32,7 @@ import frappe
 
 # Tool names that mark an agent as document-capable. Matches the exact
 # tool_name values registered in huf.ai.tools._registry.DOCUMENT_ARTIFACT_TOOLS.
-DOCUMENT_TOOL_NAME = re.compile(r"export_artifact|redline_artifact|list_document_artifacts|show_artifact", re.IGNORECASE)
+DOCUMENT_TOOL_NAME = re.compile(r"export_artifact|export_document|redline_artifact|list_document_artifacts|show_artifact", re.IGNORECASE)
 
 
 def agent_has_document_tools(agent_doc) -> bool:
@@ -64,6 +64,13 @@ it a docx" - use `<artifact type="document">`. Never write a python-docx
 script or any other code workaround: the platform renders this type and
 exports it to a real .pdf/.docx. Emitting a script produces no file and
 hands the work back to the user.
+
+Chat reply after creating a document: at most 2 plain sentences about the
+CONTENT (the topic, what sections it covers) and how to open or export it.
+Do NOT list design choices, "highlights" or features of the look; never
+mention CSS variables or tokens, hex colours, class names, component or
+layout names, the theme/palette, and never restate the document body.
+If the user asked for a word count, respect it (within 15%).
 
 Content is markdown by default: headings, **bold**, *italic*, tables,
 blockquotes, lists, links and images all work. Never put a markdown code
@@ -109,13 +116,16 @@ your own CSS, and they are the ONLY things guaranteed to survive into the
   the doc id/date in `<div class="doc-meta">`
 - `doc-title` / `doc-subtitle` - document title and its standfirst
 - `callout` - highlighted summary box (use for an executive summary)
-- `metric-grid` containing `metric` - KPI cards, laid out 2 per row. Write
-  the label as an ATTRIBUTE and the value as the element's own text - do
-  not wrap the value in an inner tag:
+- `metric-grid` containing `metric` - KPI cards, 2 per row by default; add
+  `cols-3` or `cols-4` (`class="metric-grid cols-4"`) for a single row of 3-4
+  SHORT values. Write the label as an ATTRIBUTE and the value as the
+  element's own text - do not wrap the value in an inner tag:
   `<div class="metric" data-label="GROSS REVENUE">$4.25M</div>`
-- `split` containing `split-main` + `split-side` - body with a sidebar
+- `split` containing `split-main` + `split-side` - body with a narrow margin
+  note (see "Sidebars" below before using it)
 - `data-table` - a table with a styled header row
-- `status-badge` - small inline pill, e.g. a status inside a table cell
+- `status-badge` - small inline pill, e.g. a status inside a table cell.
+  Keep it to one or two words ("On track", "At risk")
 - `page-break` - `<div class="page-break"></div>` starts a new page. Use
   this rather than styling your own divider; a bordered break element gets
   painted into the PDF as a stray line.
@@ -123,6 +133,32 @@ your own CSS, and they are the ONLY things guaranteed to survive into the
   of the flow and repeated at the bottom of EVERY page. Never write a page
   number yourself: "Page 3 of 7" is added automatically on the right. A
   hand-written count is wrong the moment the pagination shifts.
+
+### Sidebars: short notes only, never a second column of prose
+
+`split-side` is a short margin note in small type. On an A4 page it is
+stacked below the main text at full width (it only sits beside the text in
+a wide view), and a long sidebar is always stacked - so it buys no space.
+Do not style `.split` or `.split-side` yourself.
+
+- Put ONLY short, glanceable content in it: 2-5 bullets or a few key facts,
+  at most ~40 words, with at most one short label heading.
+- NEVER put a vision statement, a paragraph of analysis, or a table in
+  `split-side`. Use a full-width `callout` instead.
+- Keep `data-table`s and wide markdown tables OUTSIDE any `split`, at full
+  page width.
+- When in doubt, skip the sidebar: a full-width `callout` plus a
+  `metric-grid` reads better in the PDF, the preview and Word alike (the
+  .docx stacks the sidebar under the main text anyway).
+
+### Typography is already set - do not resize it
+
+The stylesheet carries a calibrated, all-sans type scale (title 19.5pt, h2
+13pt, h3 11pt, body 9.5pt, tables 9pt, captions 8.5pt) tuned for A4. Do not set `font-size`,
+`line-height`, `padding` or `margin` on headings, paragraphs, lists or
+tables; oversized headings and loose spacing are the most common way a
+generated document ends up looking amateur. Structure with `##` for
+sections and `###` for sub-sections; use one `doc-title` per document.
 
 Example - this is the whole vocabulary needed for a corporate report:
 
@@ -137,15 +173,18 @@ Example - this is the whole vocabulary needed for a corporate report:
       <div class="metric" data-label="REVENUE">$4.25M</div>
       <div class="metric" data-label="GROWTH">+18.4%</div>
     </div>
+    <h2>Highlights</h2>
+    <table class="data-table">
+      <tr><th>Unit</th><th>Target</th><th>Status</th></tr>
+      <tr><td>Cloud</td><td>1,800</td><td><span class="status-badge">On track</span></td></tr>
+    </table>
     <div class="split">
       <section class="split-main">
-        <h2>Highlights</h2>
-        <table class="data-table">
-          <tr><th>Unit</th><th>Target</th></tr>
-          <tr><td>Cloud</td><td>1,800</td></tr>
-        </table>
+        <h2>Outlook</h2>
+        <p>Demand in APAC is ahead of plan; hiring is the constraint.</p>
       </section>
-      <aside class="split-side"><h3>Priorities</h3><p>Scale APAC.</p></aside>
+      <aside class="split-side"><h4>Priorities</h4>
+        <ul><li>Scale APAC</li><li>Hire 12 engineers</li></ul></aside>
     </div>
     <p class="doc-footer">Confidential</p>
 
@@ -153,9 +192,9 @@ Example - this is the whole vocabulary needed for a corporate report:
 
 Add `markdown="1"` to any container and write markdown inside it - much
 shorter than hand-writing table markup. There must be a blank line after the
-opening tag:
+opening tag and before the closing tag:
 
-    <section class="split-main" markdown="1">
+    <section markdown="1">
 
     ## Highlights
 
@@ -164,6 +203,44 @@ opening tag:
     | Cloud | 1,800 |
 
     </section>
+
+**Markdown inside HTML containers - hard rules:**
+- Inside an HTML component (`<div>`, `<section>`, `<aside>`, ...) either write
+  plain HTML tags, or put `markdown="1"` on that container and leave a blank
+  line after the opening tag and before the closing tag.
+- NEVER write raw markdown (`##`, `**bold**`, `- item`, `| table |`) inside a
+  container that lacks `markdown="1"` - it can show up as literal symbols.
+- Put a BLANK LINE before and after every heading, list, table and code fence,
+  also inside HTML containers. Without it a table or list glued to the previous
+  line can fail to render and show as raw `|` / `-` symbols.
+- Want columns or sidebars with mostly prose? Prefer a markdown document
+  (language markdown) and use `:::columns-2` ... `:::` instead of HTML.
+
+Wrong (no blank lines; shows literal `##`, `**` or `|---|`):
+
+    <div class="split-side">
+    ### Priorities
+    Intro line
+    - **Scale APAC**
+    | Region | Status |
+    |---|---|
+    </div>
+
+Right:
+
+    <div class="split-side" markdown="1">
+
+    ### Priorities
+
+    Intro line
+
+    - **Scale APAC**
+
+    | Region | Status |
+    |---|---|
+    | APAC | On track |
+
+    </div>
 
 ### Colours: set the theme, do NOT restyle the components
 
@@ -193,10 +270,10 @@ only for something the components genuinely do not cover.
 
 ### Fonts
 
-Already loaded - just name them: Inter, Source Sans 3, Roboto (sans);
-Merriweather, Source Serif 4, Playfair Display (serif); JetBrains Mono,
-Source Code Pro (mono). You may `@import` another Google Font if you
-genuinely need one.
+The default is one clean sans family for everything (title, headings,
+body, KPIs) - keep it. Do not switch headings or the title to a serif or
+display face. If a brand needs a different sans, these are already loaded:
+Inter, Source Sans 3, Roboto; mono: JetBrains Mono, Source Code Pro.
 
 ### The PDF/DOCX trade-off
 
@@ -207,12 +284,25 @@ in either format - prefer them whenever the user may want the Word file.
 
 ### Downloading
 
-If the user just asks to download the document as PDF or DOCX, the download
-buttons on the artifact already do this - a working file is produced from
+If the user just asks to download the document as PDF or DOCX, the Export
+menu on the artifact already does this - a working file is produced from
 the artifact once it is saved.
 """
 
 DOCUMENT_EXPORT_TOOL_INSTRUCTIONS = """
+### Producing a PDF or Word file when asked - use `export_document`
+
+If the user asks for a PDF, a Word/DOCX file, or "a report as a document"
+("make this a PDF", "create a docx report"), call
+`export_document(format, content=...)` (or `artifact_id_or_title=...` for a
+document already in the conversation). It renders through the platform
+pipeline and returns a `markdown_link`; put that link in your reply so the
+user gets a download. Do NOT paste the document as plain text, and do NOT
+write a script that builds the file - neither produces a download. `format`
+is one of `pdf`, `docx`, `html`, `md`. Only when the tool is not available to
+you, emit `<artifact type="document">` instead; its Export menu offers PDF
+and DOCX.
+
 ### Exporting and redlining via tools - id sequencing matters
 
 You also have `list_document_artifacts`, `export_artifact`, `redline_artifact`,
@@ -233,10 +323,52 @@ To export or redline a document created earlier in the conversation (by you
 or by a previous turn):
 1. Call `list_document_artifacts(conversation_id)` first to find its id.
 2. Call `export_artifact(artifact_id, format)` with `format` one of `"pdf"`,
-   `"docx"`, `"html"` - returns a downloadable file URL.
+   `"docx"`, `"html"`, `"md"` - returns a downloadable file URL.
 3. To suggest edits as Word tracked changes, call
    `redline_artifact(artifact_id, edits, author)` with `edits` as a list of
    `{"find": "...", "replace": "..."}` objects. This produces a NEW derived
    DOCX with insertions/deletions marked - it does not modify the
    artifact's own content, so the original stays intact.
+"""
+
+
+DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_WITH_SKILLS = """
+### PDF and Word files in a Huf Desktop workspace
+
+This conversation is running on the user's own computer with a workspace. When the user asks for a PDF, a
+Word/DOCX file or another office file, make a real file in THEIR workspace with the local office skills, not
+a server download and not pasted text:
+
+1. Read the `huf-office` skill (`desktop_skill_read`) and the skill for the format: `typst-doc` for a
+   print-quality PDF, `docx` for a Word file (it can also do a PDF preview when LibreOffice is present).
+2. Write a small spec and run the skill's script with `desktop_skill_run`. Output goes ONLY to
+   `outputs/<name>` in the workspace; never pass an absolute path.
+3. Report the path (`outputs/<name>`) and the script's `rung`/`approximate` result honestly. The user finds
+   the file in the Activity tab, where Reveal and Open are offered. The file is not uploaded anywhere.
+
+Use `export_document` (a server-side download) only if the user asks for a downloadable/shared file rather
+than a file on their computer.
+"""
+
+DESKTOP_DOCUMENT_FILE_INSTRUCTIONS_NO_SKILLS = """
+### PDF and Word files in a Huf Desktop workspace
+
+This conversation is running on the user's own computer, but the local office skills are not enabled, so you
+cannot write a PDF or Word file into their workspace. If they ask for one, say so plainly: creating PDF/DOCX
+files locally needs the Office skills switched on in Huf Desktop (Settings, Local capabilities, Skills).
+Do not pretend a file was made and do not write a script that would silently fail. Offer the alternative that
+works now: a document artifact (its Export menu saves PDF or Word through the desktop app), or
+`export_document` if you have it, for a server-side download.
+"""
+
+DESKTOP_WORKSPACE_FILE_INSTRUCTIONS = """
+### Files vs inline artifacts in a Huf Desktop workspace
+
+The user picked a workspace folder on their computer. When they ask you to create, save, write or export a
+file, document, page or project (or they name a path or a file extension), write REAL files with
+`desktop_write_file`: use the path they give, otherwise `outputs/<name>` (create a missing folder first with
+`desktop_make_directory`), and tell them the path.
+Previews, answers, charts and throwaway drafts stay inline `<artifact>` blocks.
+To change an existing local file: read it (`desktop_read_file`), then use `desktop_edit_file` with the exact
+text; do not re-emit it as an artifact. Never both: no duplicate inline artifact for a file you wrote.
 """

@@ -14,6 +14,20 @@ class TestGatewayPairingTools(IntegrationTestCase):
 
     def setUp(self):
         frappe.set_user("Administrator")
+        # Gateway.validate requires execution_user (defaults to the session
+        # user) to hold the "Huf Gateway User" role.
+        if not frappe.db.exists("Role", "Huf Gateway User"):
+            frappe.get_doc({"doctype": "Role", "role_name": "Huf Gateway User"}).insert(
+                ignore_permissions=True
+            )
+        admin = frappe.get_doc("User", "Administrator")
+        self._added_role = "Huf Gateway User" not in {r.role for r in admin.roles}
+        if self._added_role:
+            admin.add_roles("Huf Gateway User")
+
+    def tearDown(self):
+        if self._added_role:
+            frappe.db.delete("Has Role", {"parent": "Administrator", "role": "Huf Gateway User"})
 
     def test_setup_gateway_validation_failure(self):
         res = setup_gateway("Telegram", "Invalid Bot", {})
@@ -25,7 +39,7 @@ class TestGatewayPairingTools(IntegrationTestCase):
         res = setup_gateway(
             provider="Telegram",
             gateway_name=test_gw,
-            credentials={"token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"},
+            credentials={"token": "123456789:ABCdefGHIjklMNOpqrsTUVwxyz", "webhook_secret": "test-webhook-secret"},
             direct_policy="Pairing",
         )
         self.assertTrue(res["success"])
@@ -43,7 +57,7 @@ class TestGatewayPairingTools(IntegrationTestCase):
         setup_gateway(
             provider="Telegram",
             gateway_name=gw_name,
-            credentials={"token": "987654321:ABCdefGHIjklMNOpqrsTUVwxyz"},
+            credentials={"token": "987654321:ABCdefGHIjklMNOpqrsTUVwxyz", "webhook_secret": "test-webhook-secret"},
             direct_policy="Pairing",
         )
 
@@ -72,7 +86,7 @@ class TestGatewayPairingTools(IntegrationTestCase):
         setup_gateway(
             provider="Telegram",
             gateway_name=gw_name,
-            credentials={"token": "111222333:ABCdefGHIjklMNOpqrsTUVwxyz"},
+            credentials={"token": "111222333:ABCdefGHIjklMNOpqrsTUVwxyz", "webhook_secret": "test-webhook-secret"},
         )
 
         health = test_gateway_health(gw_name)

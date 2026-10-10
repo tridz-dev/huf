@@ -22,6 +22,7 @@ interface SkillsTabProps {
 
 export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
   const [selectedSkill, setSelectedSkill] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const comboboxRef = useRef<HTMLDivElement>(null);
 
   const handleAdd = () => {
@@ -72,6 +73,8 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
               placeholder="Select a skill..."
               searchPlaceholder="Search skills..."
               emptyText="No skills found"
+              open={pickerOpen}
+              onOpenChange={setPickerOpen}
             />
           </div>
           <Button type="button" size="sm" variant="outline" onClick={handleAdd} disabled={!selectedSkill}>
@@ -88,7 +91,10 @@ export function SkillsTab({ skills, skillOptions, onChange }: SkillsTabProps) {
             </p>
             <div className="flex items-center justify-center gap-2 flex-wrap">
               <Button
-                onClick={() => comboboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+                onClick={() => {
+                  comboboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  setPickerOpen(true);
+                }}
                 variant="outline"
                 type="button"
               >

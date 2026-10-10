@@ -57,9 +57,10 @@ class TestTelegramGatewayAdapter(unittest.TestCase):
 		self.assertFalse(self.adapter.verify_inbound(self.request(self.message_payload(), secret="wrong")))
 		self.assertFalse(self.adapter.verify_inbound(self.request(self.message_payload(), secret=None)))
 
-	def test_verification_accepts_when_no_secret_configured(self):
-		open_adapter = TelegramGatewayAdapter({"token": "123:ABC"}, http_post=self._post)
-		self.assertTrue(open_adapter.verify_inbound(self.request(self.message_payload(), secret=None)))
+	def test_missing_webhook_secret_raises(self):
+		# webhook_secret is mandatory (fail closed): no "open" adapter can be built.
+		with self.assertRaisesRegex(ValueError, "webhook_secret"):
+			TelegramGatewayAdapter({"token": "123:ABC"}, http_post=self._post)
 
 	def test_missing_required_token_raises(self):
 		with self.assertRaisesRegex(ValueError, "token"):

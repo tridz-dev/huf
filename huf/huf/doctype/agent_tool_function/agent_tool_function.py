@@ -1,6 +1,7 @@
 # Copyright (c) 2025, Tridz Technologies Pvt Ltd and contributors
 # For license information, please see license.txt
 
+import copy
 import inspect
 import json
 import re
@@ -10,6 +11,23 @@ import frappe
 from frappe import _, is_whitelisted
 from frappe.model.document import Document
 from huf.ai.tool_registry import get_hook_declared_function_paths
+
+
+# Identifier parameters the built-in document operations use (see tool_functions.py and
+# prepare_function_params). They are arguments to the operation, not fields of the
+# reference DocType, so they must not be checked against the DocType meta.
+RESERVED_IDENTIFIER_PARAMS = {
+	"Get Document": {"document_id"},
+	"Get Multiple Documents": {"document_ids"},
+	"Update Document": {"document_id"},
+	"Update Multiple Documents": {"document_id"},
+	"Delete Document": {"document_id"},
+	"Delete Multiple Documents": {"document_ids"},
+	"Submit Document": {"document_id"},
+	"Cancel Document": {"document_id"},
+	"Get Amended Document": {"document_id"},
+	"Attach File to Document": {"document_id"},
+}
 
 
 def _json_schema_type(param_type):
@@ -51,6 +69,22 @@ def resolve_function_descriptor(function_path):
 		frappe.throw(_("Could not find function at {0}: {1}").format(function_path, str(e)))
 
 	return func
+
+
+def declared_params_schema(function_path):
+	"""A hand-written JSON schema a tool function declares via ``tool_params_schema``.
+
+	Lets a tool whose arguments are nested (arrays of objects) publish a strict schema
+	the flat Agent Function Params table cannot express. None when absent/unresolvable.
+	"""
+	if not function_path:
+		return None
+	try:
+		func = frappe.get_attr(function_path)
+	except Exception:
+		return None
+	schema = getattr(func, "tool_params_schema", None)
+	return copy.deepcopy(schema) if isinstance(schema, dict) else None
 
 
 def inspect_function_parameters(func):
@@ -233,6 +267,8 @@ class AgentToolFunction(Document):
 				if not docfield:
 					frappe.throw(_("Field {0} not found in {1}").format(param.fieldname, child_table.options))
 			else:
+				if param.fieldname in RESERVED_IDENTIFIER_PARAMS.get(self.types, ()):
+					continue
 
 				field = doctype.get_field(param.fieldname)
 
@@ -669,7 +705,7 @@ class AgentToolFunction(Document):
 			}
 
 		else:
-			params = self.build_params_json_from_table()
+			params = declared_params_schema(self.function_path) or self.build_params_json_from_table()
 
 		self.params = json.dumps(params, indent=4)
 
@@ -692,6 +728,14 @@ class AgentToolFunction(Document):
 			required.append("document_id")
 
 		for param in self.parameters:
+			if (
+				not param.child_table_name
+				and param.fieldname in RESERVED_IDENTIFIER_PARAMS.get(self.types, ())
+				and param.fieldname in properties
+			):
+				# Already added above; avoid duplicating it in properties/required.
+				continue
+
 			obj = {
 				"type": _json_schema_type(param.type),
 				"description": param.description or param.label,
@@ -702,7 +746,9 @@ class AgentToolFunction(Document):
 				obj["additionalProperties"] = True
 
 			if param.type == "array":
-				obj["items"] = {"type": "string"}
+				from huf.ai.tools._registry import array_items_schema
+
+				obj["items"] = array_items_schema(param.fieldname, self.function_path or '')
 
 			if param.type == "string" and param.options:
 				obj["enum"] = param.options.split("\n")

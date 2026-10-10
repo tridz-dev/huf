@@ -278,6 +278,68 @@ class TestQueueFirstRuns(unittest.TestCase):
         self.conv_manager.add_message.assert_not_called()
         mock_execute.assert_called_once()
 
+    @patch("huf.ai.run_control.is_run_cancelled", return_value=False)
+    @patch("huf.ai.agent_integration.AgentManager")
+    @patch("huf.ai.agent_integration.ConversationManager")
+    @patch("huf.ai.agent_integration.frappe")
+    def test_pickup_guarded_start_changing_no_row_does_not_execute(
+        self, mock_frappe, mock_cm_cls, mock_manager_cls, _mock_cancelled
+    ):
+        mock_frappe.session.user = "worker@example.com"
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+        mock_frappe.db._cursor.rowcount = 0  # a concurrent Stop already failed the Queued run
+        mock_cm_cls.return_value = self.conv_manager
+
+        result = _execute_agent_run(
+            agent_name="Test Agent",
+            run_id="AR-TEST-0001",
+            conversation_id="CONV-TEST-0001",
+            prompt="hello",
+        )
+
+        self.assertFalse(result["success"])
+        self.assertTrue(result["cancelled"])
+        mock_manager_cls.assert_not_called()
+        self.assertNotIn("Started", self._published_statuses(mock_frappe))
+        sql = mock_frappe.db.sql.call_args[0][0]
+        self.assertIn("status='Queued'", sql)
+
+    @patch("huf.ai.run_control.is_run_cancelled", return_value=True)
+    @patch("huf.ai.agent_integration._guarded_fail_started_run", return_value=True)
+    @patch("huf.ai.agent_integration.AgentManager")
+    @patch("huf.ai.agent_integration.ConversationManager")
+    @patch("huf.ai.agent_integration.frappe")
+    def test_cancel_marker_before_execution_fails_run(
+        self, mock_frappe, mock_cm_cls, mock_manager_cls, mock_fail_started, _mock_cancelled
+    ):
+        mock_frappe.session.user = "worker@example.com"
+        mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
+        mock_frappe.db._cursor.rowcount = 1
+        mock_cm_cls.return_value = self.conv_manager
+
+        result = _execute_agent_run(
+            agent_name="Test Agent",
+            run_id="AR-TEST-0001",
+            conversation_id="CONV-TEST-0001",
+            prompt="hello",
+        )
+
+        self.assertTrue(result["cancelled"])
+        mock_fail_started.assert_called_once_with("AR-TEST-0001", "Cancelled by user")
+        mock_manager_cls.assert_not_called()
+
+    @patch("huf.ai.agent_integration.frappe")
+    def test_guarded_fail_queued_run_emits_to_run_owner(self, mock_frappe):
+        from huf.ai.agent_integration import _guarded_fail_queued_run
+
+        mock_frappe.session.user = "admin@example.com"
+        mock_frappe.db._cursor.rowcount = 1
+        mock_frappe.db.get_value.return_value = {
+            "agent": "Test Agent", "conversation": "CONV-TEST-0001", "sequence": 1, "owner": "owner@example.com",
+        }
+        self.assertTrue(_guarded_fail_queued_run("AR-TEST-0001", "Cancelled by user"))
+        self.assertEqual(mock_frappe.publish_realtime.call_args.kwargs["user"], "owner@example.com")
+
     @patch("huf.ai.agent_integration._next_queued_run")
     @patch("huf.ai.agent_integration._execute_agent_run")
     @patch("huf.ai.agent_integration.ConversationManager")
@@ -338,6 +400,7 @@ class TestQueueFirstRuns(unittest.TestCase):
         mock_frappe.get_doc.side_effect = self._get_doc_side_effect()
         mock_frappe.db.get_value.return_value = None
         mock_frappe.db.count.return_value = 1
+        mock_frappe.db._cursor.rowcount = 1  # guarded Queued->Started changed a row
         mock_cm_cls.return_value = self.conv_manager
 
         result_obj = MagicMock()
@@ -525,7 +588,24 @@ class TestQueueFirstRuns(unittest.TestCase):
             "agent_run_id": "AR-SCH-001",
         }
 
+        mock_frappe.db.sql.return_value = [[1]]  # this tick wins the claim
+
         agent_scheduler.run_scheduled_agents()
+
+        # The scheduler tick only enqueues the worker job; it does not run the agent itself.
+        mock_run.assert_not_called()
+        mock_frappe.enqueue.assert_called_once()
+        self.assertEqual(
+            mock_frappe.enqueue.call_args.args[0], "huf.ai.agent_scheduler.execute_scheduled_agent"
+        )
+
+        # The worker job then hands the run to the queue (no synchronous "now").
+        trigger_doc = MagicMock()
+        trigger_doc.execution_mode = "Sync"
+        mock_frappe.get_doc.side_effect = lambda doctype, name: (
+            agent_doc if doctype == "Agent" else trigger_doc
+        )
+        agent_scheduler.execute_scheduled_agent("SCH-001", "Scheduled Agent")
 
         mock_run.assert_called_once()
         self.assertNotIn("now", mock_run.call_args.kwargs)

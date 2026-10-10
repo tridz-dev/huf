@@ -341,8 +341,12 @@ class ConversationManager:
         else:
             self.session_id = f"{channel}:{frappe.session.user}"
 
-    def create_new_conversation(self, title=None, project=None):
-        """Always create a fresh conversation"""
+    def create_new_conversation(self, title=None, project=None, host=None):
+        """Always create a fresh conversation.
+
+        ``host`` (server-side callers only, see ``huf.ai.desktop_sessions``) is
+        ``{device_id, workspace_fingerprint, label}``: it makes the conversation desktop-hosted.
+        """
         title = title or f"Conversation with {self.agent_name}"
         conv = frappe.get_doc({
             "doctype": "Agent Conversation",
@@ -357,6 +361,14 @@ class ConversationManager:
             "model": frappe.db.get_value("Agent", self.agent_name, "model"),
             "project": project
         })
+        if host:
+            conv.update({
+                "execution_host": "desktop",
+                "host_device_id": host.get("device_id"),
+                "host_workspace_fingerprint": host.get("workspace_fingerprint"),
+                "host_label": host.get("label"),
+            })
+            conv.flags.huf_desktop_host_write = True
         if not frappe.has_permission("Agent Conversation", "create"):
             frappe.throw(
                 _("Not permitted to create Agent Conversation"),
@@ -400,7 +412,9 @@ class ConversationManager:
             filters={
                 "agent": self.agent_name,
                 "session_id": self.session_id,
-                "is_active": 1
+                "is_active": 1,
+                # A desktop-hosted conversation is only ever reached by its explicit id.
+                "execution_host": ["!=", "desktop"],
             },
             order_by="creation desc",
             limit=1

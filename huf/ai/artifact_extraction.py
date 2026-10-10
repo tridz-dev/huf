@@ -256,6 +256,44 @@ def _insert_artifact(index: int, block: dict, message_doc) -> None:
 		}
 	)
 	artifact_doc.insert(ignore_permissions=True)
+	_announce_new_artifact(artifact_doc)
+
+
+#: Types the desktop/web pane can open from the server by id (rendered server-side to HTML).
+#: Other types (code, chart, jsx, ...) are parsed client-side from the streamed message.
+AUTO_OPEN_ARTIFACT_TYPES = {"document", "markdown"}
+
+
+def _announce_new_artifact(artifact_doc) -> None:
+	"""Tell the conversation owner's open client that a document artifact now exists.
+
+	Published on the same ``conversation:<id>`` channel and with the same
+	``open_artifact_pane`` shape ``show_artifact`` uses, so a client that already
+	opens the pane for that tool opens it for every newly created document too.
+	``user=`` scopes delivery to the owner (the channel name is guessable) and
+	``after_commit`` makes sure the row is readable when the client fetches it.
+	Never raises: a realtime hiccup must not block the message from saving.
+	"""
+	try:
+		if artifact_doc.artifact_type not in AUTO_OPEN_ARTIFACT_TYPES or not artifact_doc.conversation:
+			return
+		owner = frappe.db.get_value("Agent Conversation", artifact_doc.conversation, "owner")
+		if not owner:
+			return
+		frappe.publish_realtime(
+			event=f"conversation:{artifact_doc.conversation}",
+			message={
+				"type": "open_artifact_pane",
+				"artifact_id": artifact_doc.name,
+				"conversation_id": artifact_doc.conversation,
+				"artifact_type": artifact_doc.artifact_type,
+				"title": artifact_doc.title or "",
+			},
+			user=owner,
+			after_commit=True,
+		)
+	except Exception:
+		frappe.log_error(title="Artifact open event failed", message=frappe.get_traceback())
 
 
 def on_agent_message_change(doc, method=None):

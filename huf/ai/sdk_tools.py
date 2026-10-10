@@ -87,6 +87,34 @@ def _merge_run_context(args_dict: dict, ctx) -> dict:
     return args_dict
 
 
+def _pin_run_identity(args_dict: dict, ctx, nonce: str = None) -> dict:
+    """Overwrite (never default) the run identity args from the server-side run context.
+
+    Used by tools that must not trust the model for who/what run they act on
+    (Desktop Workspace tools): ``agent_run_id`` and ``conversation_id`` come only from
+    the run context, and ``call_id`` is derived deterministically from the run and the
+    SDK ``tool_call_id`` so a redelivered or retried call dedupes. Anything the model
+    sent for these keys is discarded.
+    """
+    from huf.ai.desktop_executor import derive_call_id
+
+    huf_ctx = _frappe_run_context_dict(ctx)
+    for key in ("agent_run_id", "conversation_id"):
+        args_dict.pop(key, None)
+        if huf_ctx.get(key):
+            args_dict[key] = huf_ctx[key]
+    args_dict.pop("call_id", None)
+    args_dict.pop("_dx_pin", None)  # minted below by the caller, never taken from the model
+    tool_call_id = getattr(ctx, "tool_call_id", None)
+    if tool_call_id and args_dict.get("agent_run_id"):
+        args_dict["call_id"] = derive_call_id(args_dict["agent_run_id"], tool_call_id, nonce)
+    # The exact LLM-issued id, sent on its own so the desktop can join its feed to the chat row.
+    args_dict.pop("tool_call_id", None)
+    if tool_call_id and isinstance(tool_call_id, str):
+        args_dict["tool_call_id"] = tool_call_id[:256]
+    return args_dict
+
+
 # _check_tool_permission moved to huf.ai.tool_invocation.check_tool_permission
 # (T-10) so the deterministic tool path shares the same guest/mutating-type
 # gate; imported above as _check_tool_permission to keep this call site
@@ -129,7 +157,358 @@ def _get_lazy_discovered_tool_names(kwargs: dict) -> set:
     return set()
 
 
-def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[FunctionTool]:
+def _is_desktop_workspace_tool_doc(function_doc) -> bool:
+    """True for an Agent Tool Function row that is one of the Desktop Workspace tools."""
+    from huf.ai.tools._registry import DESKTOP_WORKSPACE_TOOL_NAMES
+
+    return (function_doc.tool_name or "") in DESKTOP_WORKSPACE_TOOL_NAMES or (
+        function_doc.function_path or ""
+    ).startswith("huf.ai.tools.desktop_workspace.")
+
+
+def _desktop_tool_group(function_doc):
+    """Which desktop tool group an Agent Tool Function row belongs to, or None.
+
+    ``"workspace"``, ``"skills"``, ``"processes"`` and ``"mcp"`` (local MCP and browser grants)
+    are built; ``"unknown"`` is a row whose handler lives in a ``desktop_*`` module this server
+    does not know how to expose (never built: fail closed).
+    """
+    from huf.ai.tools._registry import (
+        DESKTOP_LOCAL_MCP_TOOL_NAMES,
+        DESKTOP_LOCAL_SKILL_TOOL_NAMES,
+        DESKTOP_PROCESS_TOOL_NAMES,
+    )
+
+    name = function_doc.tool_name or ""
+    path = function_doc.function_path or ""
+    if _is_desktop_workspace_tool_doc(function_doc):
+        return "workspace"
+    if name in DESKTOP_LOCAL_SKILL_TOOL_NAMES:
+        return "skills"
+    if name in DESKTOP_PROCESS_TOOL_NAMES:
+        return "processes"
+    if name in DESKTOP_LOCAL_MCP_TOOL_NAMES:
+        return "mcp"
+    if path.startswith("huf.ai.tools.desktop_"):
+        return "unknown"
+    return None
+
+
+def _is_desktop_tool_doc(function_doc) -> bool:
+    """True for any row that may only be exposed to a run pinned to a live desktop."""
+    return _desktop_tool_group(function_doc) is not None
+
+
+# The desktop_skill_read description carries the catalog: at most this many entries and this
+# many characters (about 3k tokens), whichever comes first (PLAN 4.4).
+SKILL_CATALOG_MAX_ENTRIES = 40
+SKILL_CATALOG_MAX_CHARS = 12_000
+
+
+def _attached_server_skill_names(agent) -> set:
+    """Normalised names of the ACTIVE server skills attached to ``agent`` (server skills win)."""
+    from huf.ai.desktop_executor import normalize_catalog_name
+
+    names = set()
+    try:
+        for row in agent.get("agent_skill", []) or []:
+            skill_name, status = frappe.db.get_value("Skill", row.skill, ["skill_name", "status"]) or (None, None)
+            if skill_name and (status or "Active") == "Active":
+                names.add(normalize_catalog_name(skill_name))
+    except Exception as e:
+        frappe.logger("huf").debug(f"Could not read attached server skills: {e!s}")
+    names.discard("")
+    return names
+
+
+def _skill_read_description(base: str, visible: list) -> str:
+    """The base description plus the (capped, re-sanitised) local skill catalog."""
+    from huf.ai.desktop_executor import SKILL_DESCRIPTION_MAX_CHARS, sanitize_text
+
+    lines, used = [], 0
+    for entry in visible:
+        if len(lines) >= SKILL_CATALOG_MAX_ENTRIES:
+            break
+        line = f"- {entry['id']}: {sanitize_text(entry.get('description'), SKILL_DESCRIPTION_MAX_CHARS)}"
+        if entry.get("has_scripts"):
+            line += " [has scripts]"
+        if used + len(line) > SKILL_CATALOG_MAX_CHARS:
+            break
+        lines.append(line)
+        used += len(line) + 1
+    out = [base, "", f"Skills the user enabled on their computer ({len(lines)} of {len(visible)} shown):"]
+    out.extend(lines)
+    if len(lines) < len(visible):
+        out.append(
+            f"{len(visible) - len(lines)} more skills are enabled: use desktop_skill_list to search them."
+        )
+    return "\n".join(out)
+
+
+def _build_desktop_tools(function_docs, desktop_ctx, agent=None) -> list:
+    """Build the attached desktop tool groups for a run pinned to a live executor.
+
+    Returns [] unless desktop_ctx carries an executor_id whose lease is live and
+    owned by the ctx user (huf.ai.desktop_executor.resolve_desktop_ctx). The
+    pinned _dx_* values come from the server-side lease, and overwrite anything
+    the LLM passes (extra_args are applied after the LLM's args).
+
+    Groups (PLAN 4.3): ``workspace`` needs only the live lease. ``skills`` (local skills)
+    additionally needs, per tool, the lease capability (``skills.read`` / ``skills.exec``) and a
+    catalog PINNED to the run (``desktop_ctx['catalog_hash']``, never the lease's current one)
+    that names at least one enabled skill (one with scripts for ``desktop_skill_run``).
+    ``processes`` needs the ``proc`` capability. ``mcp`` (local MCP servers, ``desktop_local_mcp``,
+    ``desktop_mcp_find``/``desktop_mcp_call``, and the ``desktop_browser`` grant) is expanded from
+    the pinned catalog by :func:`_build_local_mcp_tools`.
+    """
+    if not desktop_ctx or not isinstance(desktop_ctx, dict):
+        return []
+    executor_id = desktop_ctx.get("executor_id")
+    if not executor_id:
+        return []
+
+    try:
+        from huf.ai.desktop_executor import is_lease_live, resolve_desktop_ctx
+
+        if not is_lease_live(executor_id):
+            return []
+        live = resolve_desktop_ctx(executor_id, user=desktop_ctx.get("user") or None)
+    except Exception as e:
+        frappe.logger("huf").debug(f"Desktop lease check failed: {e!s}")
+        return []
+    if not live or not live.get("executor_id") or not live.get("user"):
+        return []
+
+    # The fingerprint is the one pinned on the run at send time, NOT the live lease's:
+    # a queued run sent under workspace A must not silently operate on workspace B.
+    extra_args = {
+        "_dx_executor_id": live["executor_id"],
+        "_dx_fingerprint": desktop_ctx.get("fingerprint") or live.get("fingerprint") or "",
+        "_dx_user": live["user"],
+        # Pinned from the agent document (never model-controlled): the doc PK for policy matching
+        # and the display name the desktop approval window shows.
+        "_dx_agent": (getattr(agent, "name", None) or getattr(agent, "agent_name", None) or "") if agent is not None else "",
+        "_dx_agent_display": (getattr(agent, "agent_name", None) or "") if agent is not None else "",
+    }
+
+    # The agent's desktop access ceiling: a capability that is ``off`` removes its tools from the
+    # model's list. The pinned (signed) policy wins; an unpinned ctx reads it from the agent.
+    from huf.ai import desktop_policy
+
+    policy = desktop_policy.sanitize_policy(desktop_ctx.get("agent_policy"))
+    if policy is None:
+        policy = desktop_policy.policy_from_agent(agent)
+
+    skills_state = None  # (capabilities, visible skills, hidden ids), computed on first use
+    lease_caps = None
+    built = []
+    seen = set()
+    mcp_docs = []
+    for function_doc in function_docs:
+        if function_doc.tool_name in seen:
+            continue
+        if not desktop_policy.tool_allowed(policy, function_doc.tool_name):
+            continue
+        group = _desktop_tool_group(function_doc)
+        if group == "mcp":
+            mcp_docs.append(function_doc)
+            continue
+        if group not in ("workspace", "skills", "processes"):
+            continue
+        description = function_doc.description
+        tool_extra = dict(extra_args)
+        if group == "processes":
+            from huf.ai.desktop_executor import lease_capabilities
+            from huf.ai.tools._registry import DESKTOP_PROCESS_CAPABILITY
+
+            if lease_caps is None:
+                lease_caps = lease_capabilities(executor_id)
+            if DESKTOP_PROCESS_CAPABILITY not in lease_caps:
+                continue
+        if group == "skills":
+            if skills_state is None:
+                skills_state = _local_skills_state(desktop_ctx, executor_id, agent)
+            caps, visible, hidden = skills_state
+            from huf.ai.tools._registry import DESKTOP_LOCAL_SKILL_CAPABILITY
+
+            needed = DESKTOP_LOCAL_SKILL_CAPABILITY.get(function_doc.tool_name)
+            if not needed or needed not in caps or not visible:
+                continue
+            if function_doc.tool_name == "desktop_skill_run" and not any(
+                e.get("has_scripts") for e in visible
+            ):
+                continue
+            if function_doc.tool_name == "desktop_skill_read":
+                description = _skill_read_description(function_doc.description or "", visible)
+            tool_extra["_dx_hidden_skills"] = list(hidden)
+        try:
+            params = json.loads(function_doc.params) if function_doc.params else {}
+            params.pop("additionalProperties", None)
+            tool = create_function_tool(
+                function_doc.tool_name,
+                description,
+                function_doc.function_path,
+                params,
+                extra_args=tool_extra,
+                tool_type=function_doc.types,
+                blocking=True,
+                pin_run_context=True,
+            )
+            if tool:
+                built.append(tool)
+                seen.add(function_doc.tool_name)
+        except Exception as e:
+            frappe.logger("huf").debug(f"Error wiring desktop tool {function_doc.tool_name}: {e!s}")
+    if mcp_docs:
+        built.extend(
+            _build_local_mcp_tools(mcp_docs, desktop_ctx, executor_id, agent, extra_args, seen, policy=policy)
+        )
+    return built
+
+
+_MCP_TOOL_HANDLER = "huf.ai.tools.desktop_local.handle_mcp_tool_call"
+
+
+def _spec_parameters_schema(spec) -> dict:
+    """JSON schema for a registry spec's ``parameters`` list (used for the find/call tools that a
+    grant expands to, which are not necessarily attached as rows)."""
+    props, required = {}, []
+    for p in spec.get("parameters") or []:
+        prop = {"type": p["type"], "description": p.get("description", "")}
+        if p["type"] == "array":
+            from huf.ai.tools._registry import array_items_schema
+
+            prop["items"] = array_items_schema(p["fieldname"])
+        props[p["fieldname"]] = prop
+        if p.get("required"):
+            required.append(p["fieldname"])
+    schema = {"type": "object", "properties": props}
+    if required:
+        schema["required"] = required
+    return schema
+
+
+def _build_local_mcp_tools(mcp_docs, desktop_ctx, executor_id, agent, extra_args, seen, policy=None) -> list:
+    """The local MCP and browser groups (PLAN 4.3, 4.4, 4.8).
+
+    ``desktop_local_mcp`` expands to ``lmcp__<server>__<tool>`` tools within the eager budget and,
+    when tools remain, to ``desktop_mcp_find`` + ``desktop_mcp_call``; those two are also built
+    when their own rows are attached. ``desktop_browser`` expands to the curated browser subset.
+    Everything is built from the catalog PINNED to the run and needs the lease capabilities in
+    ``DESKTOP_LOCAL_MCP_CAPABILITY``. The agent name, server and tool of every tool are pinned
+    here (``_dx_*`` overwrite whatever the model sends).
+    """
+    from huf.ai import desktop_mcp
+    from huf.ai.desktop_executor import get_catalog, lease_capabilities, sanitize_text
+    from huf.ai.tools._registry import DESKTOP_LOCAL_MCP_CAPABILITY, DESKTOP_LOCAL_MCP_TOOLS
+
+    catalog = get_catalog(executor_id, desktop_ctx.get("catalog_hash"))
+    if not catalog:
+        return []
+    caps = set(lease_capabilities(executor_id))
+    attached = {d.tool_name: d for d in mcp_docs}
+    agent_name = (getattr(agent, "name", None) or getattr(agent, "agent_name", None)) if agent is not None else None
+    base_extra = {
+        **extra_args,
+        "_dx_agent": agent_name or "",
+        "_dx_agent_display": (getattr(agent, "agent_name", None) or "") if agent is not None else "",
+    }
+    specs = {t["tool_name"]: t for t in DESKTOP_LOCAL_MCP_TOOLS}
+    built = []
+
+    def allowed(name):
+        from huf.ai import desktop_policy
+
+        return set(DESKTOP_LOCAL_MCP_CAPABILITY[name]) <= caps and desktop_policy.tool_allowed(policy, name)
+
+    def add(tool):
+        if tool and tool.name not in seen:
+            built.append(tool)
+            seen.add(tool.name)
+
+    def dynamic(spec, kind):
+        try:
+            return create_function_tool(
+                spec["name"],
+                spec["description"],
+                _MCP_TOOL_HANDLER,
+                spec["schema"],
+                extra_args={
+                    **base_extra,
+                    "_dx_mcp_server": spec["server"],
+                    "_dx_mcp_tool": spec["tool"],
+                    "_dx_mcp_kind": kind,
+                },
+                blocking=True,
+                pin_run_context=True,
+            )
+        except Exception as e:
+            frappe.logger("huf").debug(f"Error wiring local MCP tool {spec.get('name')}: {e!s}")
+            return None
+
+    def fixed(name):
+        spec = specs[name]
+        try:
+            return create_function_tool(
+                name,
+                spec["description"],
+                spec["function_path"],
+                _spec_parameters_schema(spec),
+                extra_args=base_extra,
+                blocking=True,
+                pin_run_context=True,
+            )
+        except Exception as e:
+            frappe.logger("huf").debug(f"Error wiring desktop tool {name}: {e!s}")
+            return None
+
+    plan = None
+    if ("desktop_local_mcp" in attached and allowed("desktop_local_mcp")) or any(
+        n in attached and allowed(n) for n in ("desktop_mcp_find", "desktop_mcp_call")
+    ):
+        plan = desktop_mcp.plan_mcp_group(catalog, agent_name, sanitize_text)
+    if plan is not None:
+        grant = "desktop_local_mcp" in attached and allowed("desktop_local_mcp")
+        if grant:
+            for spec in plan["eager"]:
+                add(dynamic(spec, "mcp"))
+        has_tools = bool(plan["eager"] or plan["overflow"])
+        for name in ("desktop_mcp_find", "desktop_mcp_call"):
+            if not has_tools:
+                continue
+            if (grant and plan["overflow"]) or (name in attached and allowed(name)):
+                add(fixed(name))
+
+    if "desktop_browser" in attached and allowed("desktop_browser"):
+        for spec in desktop_mcp.plan_browser_group(catalog, agent_name, sanitize_text):
+            add(dynamic(spec, "browser"))
+    return built
+
+
+def _local_skills_state(desktop_ctx, executor_id, agent):
+    """``(lease capabilities, visible catalog skills, shadowed skill ids)`` for the skills group.
+
+    Empty visible list when no catalog is pinned, the pinned catalog expired, or every local
+    skill is shadowed by an attached server skill of the same name.
+    """
+    from huf.ai.desktop_executor import get_catalog, lease_capabilities
+
+    caps = lease_capabilities(executor_id)
+    catalog = get_catalog(executor_id, desktop_ctx.get("catalog_hash"))
+    if not catalog:
+        return caps, [], []
+    server_names = _attached_server_skill_names(agent) if agent is not None else set()
+    visible, hidden = [], []
+    for entry in catalog.get("skills") or []:
+        (hidden if entry.get("name") in server_names else visible).append(entry)
+    return caps, visible, [e["id"] for e in hidden]
+
+
+# Backwards-compatible name: the workspace group is the first group of ``_build_desktop_tools``.
+_build_desktop_workspace_tools = _build_desktop_tools
+
+
+def create_agent_tools(agent, model_name: str = None, desktop_ctx: dict | None = None, **kwargs) -> list[FunctionTool]:
     """
     Create function tools for Huf Agent
 
@@ -147,6 +526,12 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
     instead of being built, to save tokens on the tool schema payload sent to
     the model. This is gated on kwargs["conversation_id"]; callers that don't
     pass one get the fail-safe (nothing discovered yet) rather than an error.
+
+    desktop_ctx is the run's pinned Huf Desktop executor
+    ({executor_id, fingerprint, user, label}) or None. Desktop Workspace tools
+    (huf.ai.tools._registry.DESKTOP_WORKSPACE_TOOLS) are exposed only when the
+    agent has them attached (ordinary Agent Tool rows) AND desktop_ctx names an
+    executor whose lease is live; otherwise they are absent from the schema.
     """
     tools = []
     lazy_enabled = bool(getattr(agent, "enable_lazy_tools", False))
@@ -168,8 +553,15 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
         agent, frappe.session.user, model_name=model_name
     )
 
+    desktop_attached_docs = []
     for function_doc in allowed_tool_docs:
         try:
+            if _is_desktop_tool_doc(function_doc):
+                # Never built by the generic path: exposure is decided once,
+                # below, against the run's live desktop_ctx.
+                desktop_attached_docs.append(function_doc)
+                continue
+
             if lazy_enabled:
                 tool_name = function_doc.tool_name or ""
                 is_always_eager = (
@@ -259,6 +651,9 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
                 f"Error processing function {function_doc.name}: {e!s}"
             )
 
+    if desktop_attached_docs:
+        tools.extend(_build_desktop_tools(desktop_attached_docs, desktop_ctx, agent=agent))
+
     if lazy_enabled:
         # The discovery tools themselves are not something an agent author is
         # expected to attach via agent_tool - without them the model could
@@ -296,7 +691,13 @@ def create_agent_tools(agent, model_name: str = None, **kwargs) -> list[Function
         from huf.ai.skills.loader import load_all_skill_tools
         skill_tools = load_all_skill_tools(agent, frappe.session.user)
         if skill_tools:
-            tools.extend(skill_tools)
+            # Skill-attached tools must not bypass the desktop ctx gate.
+            from huf.ai.tools._registry import DESKTOP_DYNAMIC_TOOL_PREFIXES, DESKTOP_TOOL_NAMES
+            tools.extend(
+                t for t in skill_tools
+                if getattr(t, "name", "") not in DESKTOP_TOOL_NAMES
+                and not str(getattr(t, "name", "")).startswith(DESKTOP_DYNAMIC_TOOL_PREFIXES)
+            )
     except Exception as e:
         frappe.log_error(
             title="Skill Tool Loading Error",
@@ -461,6 +862,7 @@ def create_function_tool(
     tool_type: str = None,
     allowed_for_guest: bool = False,
     blocking: bool = False,
+    pin_run_context: bool = False,
 ) -> FunctionTool:
     """
     Create a FunctionTool for Huf Tool functions
@@ -476,7 +878,14 @@ def create_function_tool(
             functions that perform a bounded blocking wait (e.g. the
             client-side tool round trip) would otherwise stall the event
             loop for the whole run; running them on a worker thread lets
-            other concurrent work keep going while this call waits.
+            other concurrent work keep going while this call waits. If the
+            function exposes ``prepare`` / ``execute`` attributes (Desktop
+            Workspace handlers), ``prepare`` runs on the loop thread (it may read
+            the database) and only ``execute`` runs in the worker thread, so the
+            shared DB connection is never used from two threads.
+        pin_run_context: When True, ``agent_run_id`` / ``conversation_id`` /
+            ``call_id`` are taken from the server-side run context and the SDK
+            tool_call_id and OVERWRITE anything the model passed.
 
     Returns:
         FunctionTool: Function tool
@@ -507,9 +916,26 @@ def create_function_tool(
                 args_dict = json.loads(args_json or "{}")
 
                 _merge_run_context(args_dict, ctx)
+                if pin_run_context:
+                    # N7: one nonce per SDK invocation, so a provider reusing a tool_call_id
+                    # in a later invocation never reads this one's cached result.
+                    from huf.ai.desktop_executor import mint_invocation_nonce
+
+                    _pin_run_identity(args_dict, ctx, mint_invocation_nonce())
 
                 if _extra_args:
                     args_dict.update(_extra_args)
+
+                if pin_run_context:
+                    # N8: only this path can mint the token the Desktop handlers require, so
+                    # flows / procedures / direct API calls cannot reach them.
+                    from huf.ai.tools.desktop_workspace import issue_pin_token
+
+                    args_dict["_dx_pin"] = issue_pin_token(
+                        args_dict.get("agent_run_id"),
+                        args_dict.get("_dx_executor_id"),
+                        args_dict.get("_dx_user"),
+                    )
 
                 if "ignore_permissions" in args_dict:
                     del args_dict["ignore_permissions"]
@@ -563,7 +989,15 @@ def create_function_tool(
                     # seconds) would otherwise stall this whole run. Mirrors the
                     # asyncio.to_thread precedent in huf.ai.handlers.media (TTS
                     # via litellm.speech).
-                    result = await asyncio.to_thread(_function, **call_kwargs)
+                    prepare = getattr(_function, "prepare", None)
+                    execute = getattr(_function, "execute", None)
+                    if callable(prepare) and callable(execute):
+                        # DB work (validation, run lookup) here on the loop thread;
+                        # only the Redis wait goes to a worker thread.
+                        prepared = prepare(**call_kwargs)
+                        result = await asyncio.to_thread(execute, prepared)
+                    else:
+                        result = await asyncio.to_thread(_function, **call_kwargs)
                 else:
                     result = _function(**call_kwargs)
 

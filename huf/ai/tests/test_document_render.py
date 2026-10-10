@@ -11,6 +11,7 @@ Run with:
 """
 
 import re
+import time
 import unittest
 import zipfile
 from io import BytesIO
@@ -22,8 +23,56 @@ from huf.ai.artifacts.render.components import (
 	resolve_theme_token,
 	theme_css,
 )
-from huf.ai.artifacts.render.docx import html_to_docx
-from huf.ai.artifacts.render.html import _hoist_running_footer, render_document_html
+from huf.ai.artifacts.render.docx import html_to_docx, _extract_theme
+from huf.ai.artifacts.render.html import (
+	_dedent_markdown_containers,
+	_hoist_running_footer,
+	_in_ranges,
+	_markdown_containers,
+	_propagate_markdown_attr,
+	render_document_html,
+	PRINT_STYLESHEET,
+)
+from huf.ai.artifacts.render.screen_style import SCREEN_STYLESHEET
+
+
+class TestRenderHardening(unittest.TestCase):
+	def test_title_is_escaped(self):
+		doc = render_document_html("<p>x</p>", title="</title><script>alert(1)</script>")
+		self.assertNotIn("<script>alert(1)", doc)
+		self.assertIn("&lt;/title&gt;", doc)
+
+	def test_style_strips_remote_and_dangerous_css(self):
+		src = (
+			"<style>@import url('https://evil.test/a.css');"
+			".a{background:url(https://evil.test/x.png)}"
+			".b{background:url(//evil.test/x)}"
+			".c{background:url(data:image/png;base64,AAAA)}"
+			".d{width:expression(alert(1));behavior:url(x.htc)}"
+			".ok{color:red;background:url(img/local.png)}</style><p>x</p>"
+		)
+		doc = render_document_html(src, title="t", language="html")
+		# The built-in stylesheet legitimately @imports Google Fonts; check the body only.
+		doc = doc.split("<body", 1)[1]
+		for bad in ("evil.test", "@import", "data:image", "expression(", "behavior"):
+			self.assertNotIn(bad, doc)
+		self.assertIn(".ok{color:red;background:url(img/local.png)}", doc)
+
+	def test_resolve_theme_token_fallbacks(self):
+		from huf.ai.artifacts.render.components import SAFE_DEFAULT_COLOR, resolve_theme_token
+
+		self.assertEqual(resolve_theme_token("var(--nope, #fff)"), "#fff")
+		self.assertEqual(resolve_theme_token("var(--nope)"), SAFE_DEFAULT_COLOR)
+		self.assertEqual(resolve_theme_token("var(--nope, var(--nope2))"), SAFE_DEFAULT_COLOR)
+		self.assertEqual(resolve_theme_token("var(--accent)"), THEME["accent"])
+
+	def test_docx_with_unknown_token_does_not_raise(self):
+		html = render_document_html(
+			'<p style="color: var(--missing)">hello</p><p style="color: var(--missing, #336699)">hi</p>',
+			title="t",
+			language="html",
+		)
+		self.assertTrue(html_to_docx(html))
 
 
 def _docx_part(docx_bytes: bytes, name_fragment: str) -> str:
@@ -336,3 +385,520 @@ class TestDocxExport(unittest.TestCase):
 		)
 		body = _docx_part(html_to_docx(html), "word/document.xml")
 		self.assertIn("In Progress", body)
+
+
+class TestMarkdownAttrPropagation(unittest.TestCase):
+	def test_tags_inside_fenced_code_are_ignored(self):
+		src = (
+			'<div class="a">\n<p>x</p>\n</div>\n\n```html\n<div markdown="1">demo</div>\n```\n'
+		)
+		self.assertEqual(_propagate_markdown_attr(src), src)
+
+	def test_tags_inside_inline_code_are_ignored(self):
+		src = '<div class="a">use `<b markdown="1">` here</div>'
+		self.assertEqual(_propagate_markdown_attr(src), src)
+
+	def test_existing_attr_not_duplicated(self):
+		src = '<div markdown="1"><section markdown="1">## T</section></div>'
+		out = _propagate_markdown_attr(src)
+		self.assertEqual(out.count("markdown="), 2)
+
+	def test_ancestor_gets_attr_once(self):
+		src = '<div class="split"><section markdown="1">## T</section></div>'
+		out = _propagate_markdown_attr(src)
+		self.assertEqual(out.count("markdown="), 2)
+		self.assertTrue(out.startswith('<div class="split" markdown="1">'))
+
+	def test_unclosed_implicit_tags_do_not_mark_unrelated_ancestors(self):
+		src = '<div class="outer"><p>open paragraph<ul><li>one<li>two</ul><div class="x" markdown="1">## T</div></div>'
+		out = _propagate_markdown_attr(src)
+		self.assertIn('<div class="outer" markdown="1">', out)
+		self.assertNotIn('<p markdown', out)
+		self.assertNotIn('<li markdown', out)
+		self.assertNotIn('<ul markdown', out)
+
+	def test_unclosed_paragraph_sibling_not_marked(self):
+		src = '<div class="o"><p>dangling<div markdown="1">## T</div></div>'
+		self.assertNotIn('<p markdown', _propagate_markdown_attr(src))
+
+	def test_pretty_printed_children_are_dedented_not_code(self):
+		src = (
+			'<div class="split">\n'
+			'    <section markdown="1">\n'
+			'        ## Heading\n\n'
+			'        | A | B |\n'
+			'        |---|---|\n'
+			'        | 1 | 2 |\n'
+			'    </section>\n'
+			'</div>\n'
+		)
+		html = render_document_html(src, language="html")
+		self.assertIn("<h2>Heading</h2>", html)
+		self.assertIn("<table>", html)
+		self.assertNotIn("<pre><code>", html)
+
+	def test_dedent_only_touches_markdown_containers(self):
+		src = '<div>\n    <p>raw</p>\n</div>'
+		self.assertEqual(_dedent_markdown_containers(src), src)
+
+
+class TestDedentMarkdownContainers(unittest.TestCase):
+	def test_nested_containers_dedent_outer_then_inner(self):
+		src = (
+			'<div markdown="1">\n'
+			'    outer\n'
+			'    <section markdown="1">\n'
+			'        inner\n'
+			'          deeper\n'
+			'    </section>\n'
+			'</div>\n'
+		)
+		self.assertEqual(
+			_dedent_markdown_containers(src),
+			'<div markdown="1">\n'
+			'outer\n'
+			'<section markdown="1">\n'
+			'inner\n'
+			'  deeper\n'
+			'</section>\n'
+			'</div>\n',
+		)
+
+	def test_pre_content_whitespace_preserved(self):
+		src = (
+			'<div markdown="1">\n'
+			'    ## Title\n'
+			'    <pre>\n'
+			'        keep   indent\n'
+			'    </pre>\n'
+			'    after\n'
+			'</div>'
+		)
+		out = _dedent_markdown_containers(src)
+		self.assertIn('\n        keep   indent\n    </pre>', out)
+		self.assertIn('\n## Title\n', out)
+		self.assertIn('\nafter\n', out)
+
+	def test_fenced_code_interior_preserved(self):
+		src = (
+			'<div markdown="1">\n'
+			'    text\n'
+			'    ```\n'
+			'        code\n'
+			'    ```\n'
+			'</div>'
+		)
+		out = _dedent_markdown_containers(src)
+		self.assertIn('\n        code\n', out)
+		self.assertIn('\ntext\n```\n', out)
+
+	def test_many_containers_are_fast(self):
+		block = '<section markdown="1">\n    ## H\n\n    | A | B |\n    |---|---|\n    | 1 | 2 |\n</section>\n'
+		src = "<div>\n" + block * 500 + "</div>\n"
+		started = time.perf_counter()
+		out = _dedent_markdown_containers(src)
+		self.assertLess(time.perf_counter() - started, 1.0)
+		self.assertIn("\n## H\n", out)
+
+	def test_containers_beyond_cap_left_as_is(self):
+		block = '<section markdown="1">\n    ## H\n</section>\n'
+		out = _dedent_markdown_containers(block * 201)
+		self.assertEqual(out.count("\n## H\n"), 200)
+		self.assertEqual(out.count("\n    ## H\n"), 1)
+
+
+class TestDedentLowFindings(unittest.TestCase):
+	def test_in_ranges_bisect_matches_linear(self):
+		ranges = [(5, 10), (20, 30), (40, 41)]
+		for i in range(50):
+			self.assertEqual(_in_ranges(i, ranges), any(lo < i < hi for lo, hi in ranges), i)
+
+	def test_text_after_open_tag_does_not_block_dedent(self):
+		src = '<div markdown="1">Intro\n    ## H\n    - a\n</div>'
+		out = _dedent_markdown_containers(src)
+		self.assertIn("Intro\n## H\n- a\n", out)
+
+	def test_markdown_tag_inside_pre_is_not_a_container(self):
+		src = '<pre>\n<div markdown="1">\n    x\n</div>\n</pre>\n'
+		self.assertEqual(_markdown_containers(src), [])
+		self.assertEqual(_dedent_markdown_containers(src), src)
+
+	def test_markdown_tag_inside_fence_is_not_a_container(self):
+		src = '```\n<div markdown="1">\n    x\n</div>\n```\n'
+		self.assertEqual(_markdown_containers(src), [])
+
+
+class TestRtlDocument(unittest.TestCase):
+	ARABIC = "# \u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0627\u0633\u062a\u062f\u0627\u0645\u0629\n\n\u0646\u0635 \u0639\u0631\u0628\u064a.\n\n- \u0628\u0646\u062f \u0623\u0648\u0644\n\n> \u0627\u0642\u062a\u0628\u0627\u0633\n\n| \u0623 | \u0628 |\n|---|---|\n| 1 | 2 |\n"
+
+	def test_logical_css_and_dir_present(self):
+		html = render_document_html(self.ARABIC, title="t")
+		self.assertIn('<body dir="auto">', html)
+		for needle in ("padding-inline-start", "border-inline-start", "padding-inline-end", "text-align: start"):
+			self.assertIn(needle, html)
+		self.assertNotIn("padding: 4pt 8pt 4pt 0", html)
+		self.assertIn("letter-spacing: normal !important", html)
+
+	def test_arabic_renders_to_pdf_without_errors(self):
+		try:
+			from weasyprint import HTML
+		except Exception:
+			self.skipTest("WeasyPrint unavailable")
+		pdf = HTML(string=render_document_html(self.ARABIC, title="t")).write_pdf()
+		self.assertTrue(pdf.startswith(b"%PDF"))
+
+	def test_arabic_renders_to_docx(self):
+		data = html_to_docx(render_document_html(self.ARABIC, title="t"))
+		self.assertTrue(zipfile.is_zipfile(BytesIO(data)))
+
+
+class TestPreRegions(unittest.TestCase):
+	def _contained(self, src):
+		return _propagate_markdown_attr(src)
+
+	def test_unclosed_pre_in_backticks_does_not_swallow_later_containers(self):
+		src = 'Use `<pre>` for code.\n\n<div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		self.assertIn('<div class="o" markdown="1">', self._contained(src))
+		self.assertIn("\n## T\n", _dedent_markdown_containers(src))
+
+	def test_pre_inside_fenced_example_is_ignored(self):
+		src = (
+			'```html\n<pre>\n```\n\n'
+			'<div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		)
+		self.assertIn('<div class="o" markdown="1">', self._contained(src))
+		self.assertIn("\n## T\n", _dedent_markdown_containers(src))
+
+	def test_unclosed_bare_pre_is_literal(self):
+		src = '<pre>\n\n<div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		self.assertIn('<div class="o" markdown="1">', self._contained(src))
+
+	def test_real_pre_still_excluded(self):
+		src = '<div markdown="1">\n    a\n    <pre>\n      keep\n    </pre>\n    b\n</div>\n'
+		out = _dedent_markdown_containers(src)
+		self.assertIn("\n      keep\n    </pre>", out)
+		self.assertIn("\na\n", out)
+		# a tag inside a real pre is not structural
+		src2 = '<div class="o"><pre><section markdown="1">x</section></pre></div>'
+		self.assertEqual(self._contained(src2), src2)
+
+	def test_two_pre_blocks(self):
+		src = (
+			'<div markdown="1">\n    a\n    <pre>\n      one\n    </pre>\n'
+			'    mid\n    <pre>\n      two\n    </pre>\n</div>\n'
+		)
+		out = _dedent_markdown_containers(src)
+		self.assertIn("\n      one\n    </pre>", out)
+		self.assertIn("\nmid\n", out)
+		self.assertIn("\n      two\n    </pre>", out)
+
+
+class TestPreBoundaries(unittest.TestCase):
+	def test_custom_element_and_selfclosed_pre_are_not_regions(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		for src in ('<pre-foo>x</pre>', '<pre/>x</pre>', '<pre />x</pre>'):
+			self.assertEqual(_pre_regions(src), [], src)
+		self.assertEqual(_pre_regions('<pre-foo>a</pre-foo><pre>b</pre>'), [(20, 32)])
+
+	def test_uppercase_and_attr_pre_are_regions(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		self.assertEqual(_pre_regions('<PRE>a</PRE>'), [(0, 12)])
+		self.assertEqual(_pre_regions('<pre class="x">a</pre>'), [(0, 22)])
+
+	def test_closer_boundary(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		self.assertEqual(_pre_regions('<pre>a</pre-x></pre >'), [(0, 21)])
+
+	def test_container_after_closer_on_same_line_is_processed(self):
+		src = '<pre>\n  x\n</pre><div class="o"><section markdown="1">\n    ## T\n</section></div>\n'
+		self.assertIn('<div class="o" markdown="1">', _propagate_markdown_attr(src))
+		self.assertIn("\n## T\n", _dedent_markdown_containers(src))
+		src2 = '<div markdown="1">\n    <pre>\n      k\n    </pre><section markdown="1">\n        ## T\n    </section>\n</div>\n'
+		out = _dedent_markdown_containers(src2)
+		self.assertIn("\n      k\n", out)
+		self.assertIn("\n## T\n", out)
+
+
+class TestPreRegionsLinear(unittest.TestCase):
+	def test_many_unterminated_pre_openers_are_fast(self):
+		from huf.ai.artifacts.render.html import _pre_regions
+		src = "<pre " * 5000
+		start = time.time()
+		_pre_regions(src)
+		self.assertLess(time.time() - start, 1.0)
+
+
+class TestLeakedMarkdownInHtmlLayouts(unittest.TestCase):
+	"""Real failing documents: markdown inside HTML layout blocks must not render literally."""
+
+	SPLIT = (
+		'<div class="split">\n'
+		'  <section class="split-main" markdown="1">\n\n'
+		"  ## Operational Highlights\n\n"
+		"  Our pivot.\n"
+		"  * **Goal:** Understand the team.\n\n"
+		"  </section>\n"
+		'  <aside class="split-side" markdown="1">\n\n'
+		"  #### Quick Checklist\n"
+		"  * [ ] Equipment shipped\n"
+		"  * [x] Invite sent\n\n"
+		"  </aside>\n"
+		"</div>\n"
+	)
+
+	@staticmethod
+	def _text(html):
+		body = html.split("<body", 1)[1]
+		body = re.sub(r"<style.*?</style>", "", body, flags=re.S)
+		return re.sub(r"<[^>]+>", "", body)
+
+	def _assert_clean(self, text):
+		self.assertNotRegex(text, r"(?m)^\s*#{1,6}\s")
+		self.assertNotIn("**", text)
+		self.assertNotRegex(text, r"(?m)^\s*\*\s")
+		self.assertNotIn("[ ]", text)
+
+	def test_markdown_attr_honoured_in_markdown_language(self):
+		for lang in ("markdown", "html"):
+			out = render_document_html(self.SPLIT, "t", lang)
+			self._assert_clean(self._text(out))
+			self.assertIn("<h2>Operational Highlights</h2>", out)
+			self.assertIn("☐ Equipment shipped", out)
+			self.assertIn("☑ Invite sent", out)
+
+	def test_list_glued_to_paragraph_becomes_list(self):
+		out = render_document_html(self.SPLIT, "t", "html")
+		self.assertIn("<li><strong>Goal:</strong> Understand the team.</li>", out)
+
+	def test_unmarked_container_with_markdown_text_is_parsed(self):
+		src = '<div class="callout">\n## Hi\n- **a:** b\n- c\n</div>\n<div class="metric">45 Days</div>'
+		for lang in ("markdown", "html"):
+			out = render_document_html(src, "t", lang)
+			self._assert_clean(self._text(out))
+			self.assertIn("<h2>Hi</h2>", out)
+			self.assertIn('<div class="metric">45 Days</div>', out)
+
+	def test_plain_html_container_untouched_and_code_ignored(self):
+		src = '<div class="callout">Plain text only</div>\n\n```\n<div>\n## not a heading\n</div>\n```\n'
+		out = render_document_html(src, "t", "markdown")
+		self.assertIn('<div class="callout">Plain text only</div>', out)
+		self.assertIn("## not a heading", out)
+
+
+class TestInlinePhrasingTags(unittest.TestCase):
+	"""b/i/u/s/mark/... survive sanitization; dangerous markup does not."""
+
+	def test_bold_preserved_in_callout(self):
+		out = render_document_html(
+			'<div class="callout"><b>Executive Summary:</b> up 18%.</div>', "t", "html"
+		)
+		self.assertIn("<b>Executive Summary:</b>", out)
+
+	def test_nested_b_i_and_other_inline_tags(self):
+		out = render_document_html(
+			"<p><b>x <i>y</i></b> <u>u</u> <mark>m</mark> H<sub>2</sub>O x<sup>2</sup> <kbd>k</kbd></p>",
+			"t",
+			"html",
+		)
+		for frag in ("<b>x <i>y</i></b>", "<u>u</u>", "<mark>m</mark>", "<sub>2</sub>", "<sup>2</sup>", "<kbd>k</kbd>"):
+			self.assertIn(frag, out)
+
+	def test_script_and_handlers_still_stripped(self):
+		out = render_document_html(
+			'<p><b onclick="x()">a</b><script>alert(1)</script><i onerror="y()">b</i>'
+			'<iframe src="http://e"></iframe><svg onload="z()"></svg></p>',
+			"t",
+			"html",
+		)
+		for bad in ("<script", "onclick", "onerror", "onload", "<iframe", "<svg"):
+			self.assertNotIn(bad, out)
+		self.assertIn("<b>a</b>", out)
+
+	def test_docx_has_bold_run_for_b(self):
+		html = render_document_html(
+			'<div class="callout"><b>Executive Summary:</b> ok <u>u</u> <mark>m</mark></div>',
+			"t",
+			"html",
+		)
+		body = _docx_part(html_to_docx(html), "word/document.xml")
+		self.assertRegex(body, r"<w:b/>|<w:b w:val=\"1\"/>|<w:b w:val=\"true\"/>")
+		self.assertIn("Executive Summary", body)
+
+
+class TestCssEscapeBypass(unittest.TestCase):
+	def test_escaped_remote_constructs_removed(self):
+		from huf.ai.artifacts.render.html import _sanitize_css
+
+		for css in (
+			"a{background:u\\72l(http://evil/x)}",
+			"@\\69mport 'http://evil/x.css';a{color:red}",
+			'a{background:image-set("http://evil/p.gif" 1x)}',
+		):
+			out = _sanitize_css(css)
+			self.assertNotIn("evil", out, css)
+		self.assertIn("color:red", _sanitize_css("a{color:red}"))
+
+
+	def test_decoded_escapes_cannot_break_out_of_style(self):
+		from huf.ai.artifacts.render.html import _sanitize_css
+
+		out = _sanitize_css('a{content:"\\3c /style\\3e \\3c script\\3e alert(1)\\3c /script\\3e"}u\\72l(http://evil/x)')
+		self.assertNotIn("<", out)
+		self.assertNotIn("evil", out)
+
+	def test_legit_css_is_kept_verbatim(self):
+		from huf.ai.artifacts.render.html import _sanitize_css
+
+		for css in ('a::before{content:"\\A"}', "a::after{content:'//'}", 'a{content:"\\22 y"}'):
+			self.assertEqual(_sanitize_css(css), css)
+
+
+class TestScreenStylesheet(unittest.TestCase):
+	"""Screen stylesheet is scoped to @media screen, leaving PDF output untouched."""
+
+	def setUp(self):
+		self.document = render_document_html("<p>Sample content</p>", title="Test", language="html")
+
+	def test_screen_stylesheet_is_included(self):
+		"""The rendered HTML includes the screen stylesheet."""
+		self.assertIn(SCREEN_STYLESHEET, self.document)
+
+	def test_screen_stylesheet_is_in_media_block(self):
+		"""Screen stylesheet is wrapped in @media screen so print is untouched."""
+		self.assertIn("@media screen {", SCREEN_STYLESHEET)
+		screen_index = self.document.index("@media screen {", self.document.index(SCREEN_STYLESHEET))
+		self.assertIsNotNone(screen_index)
+
+	def test_screen_stylesheet_defines_max_width_720px(self):
+		"""The measure constraint for editorial reading: 720px max-width."""
+		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
+
+	def test_html_has_data_theme_dark_attribute(self):
+		"""The root element has no forced theme; hosts opt in via data-theme."""
+		self.assertIn("<html>", self.document)
+		self.assertNotIn('<html data-theme=', self.document)
+
+	def test_print_stylesheet_is_unchanged(self):
+		"""The print stylesheet (PRINT_STYLESHEET) must remain byte-identical.
+		This test ensures PDF/DOCX output is completely unaffected."""
+		# The renderer emits <style>, PRINT_STYLESHEET, then components/screen CSS.
+		print_idx = self.document.index(PRINT_STYLESHEET)
+		self.assertIn("<style>", self.document[:print_idx])
+		self.assertLess(print_idx, self.document.index(SCREEN_STYLESHEET), "screen CSS must come after print CSS")
+		# The screen stylesheet may only add rules inside @media screen.
+		self.assertTrue(SCREEN_STYLESHEET.lstrip().startswith("@media screen"))
+
+	def test_screen_stylesheet_contains_dark_mode_colors(self):
+		"""Dark mode colour tokens are defined in the screen stylesheet."""
+		self.assertIn("--ink: #ECECEE", SCREEN_STYLESHEET)
+		self.assertIn("--muted: #A0A3AB", SCREEN_STYLESHEET)
+		self.assertIn("--rule: #2E3036", SCREEN_STYLESHEET)
+		self.assertIn("--surface: #1B1C20", SCREEN_STYLESHEET)
+		self.assertIn("--callout-bg: #1F2A3D", SCREEN_STYLESHEET)
+		self.assertIn("--accent: #7FA6E8", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_contains_light_mode_colors(self):
+		"""Light mode colour tokens are defined in the screen stylesheet."""
+		self.assertIn("--ink: #16294D", SCREEN_STYLESHEET)
+		self.assertIn("--muted: #6B7891", SCREEN_STYLESHEET)
+		self.assertIn("--rule: #D9E0EC", SCREEN_STYLESHEET)
+		self.assertIn("--surface: #F7FAFD", SCREEN_STYLESHEET)
+		self.assertIn("--callout-bg: #EAF2FD", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_measure(self):
+		"""Body has proper measure: max-width 720px, centered, with padding."""
+		self.assertIn("max-width: 720px", SCREEN_STYLESHEET)
+		self.assertIn("margin: 0 auto", SCREEN_STYLESHEET)
+		self.assertIn("padding: 48px 24px 96px", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_body_font_size(self):
+		"""Body font size is 17px for editorial reading on screen."""
+		self.assertIn("font-size: 17px", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_has_proper_line_height(self):
+		"""Body line-height is 1.65 for comfortable reading."""
+		self.assertIn("line-height: 1.65", SCREEN_STYLESHEET)
+
+	def test_screen_stylesheet_defines_accent_contrast_in_dark_blocks(self):
+		"""Dark mode accent-contrast token is defined for readable headers/badges.
+		The token is needed in both :root[data-theme="dark"] and
+		@media (prefers-color-scheme: dark) blocks."""
+		# Check :root[data-theme="dark"] block
+		self.assertIn(':root[data-theme="dark"] {', SCREEN_STYLESHEET)
+		dark_explicit_idx = SCREEN_STYLESHEET.index(':root[data-theme="dark"] {')
+		dark_explicit_block = SCREEN_STYLESHEET[dark_explicit_idx : SCREEN_STYLESHEET.index("}", dark_explicit_idx) + 1]
+		self.assertIn("--accent-contrast: #0F1013", dark_explicit_block)
+
+		# Check @media (prefers-color-scheme: dark) block
+		self.assertIn("@media (prefers-color-scheme: dark)", SCREEN_STYLESHEET)
+		media_idx = SCREEN_STYLESHEET.index("@media (prefers-color-scheme: dark)")
+		media_block = SCREEN_STYLESHEET[media_idx : SCREEN_STYLESHEET.index("}", media_idx) + 1]
+		self.assertIn("--accent-contrast: #0F1013", media_block)
+
+		# Check light palette
+		self.assertIn("--accent-contrast: #FFFFFF", SCREEN_STYLESHEET)
+
+
+class TestThemeExtraction(unittest.TestCase):
+	"""The screen stylesheet must never shift the theme the DOCX export reads."""
+
+	def test_screen_stylesheet_light_root_matches_registry_theme(self):
+		"""docx's _extract_theme matches any bare ``:root {}`` block, including the
+		one nested in @media screen; its values must equal the registry defaults so
+		even if that CSS ever reaches the DOCX path the theme is unchanged."""
+		self.assertEqual(_extract_theme(SCREEN_STYLESHEET), THEME)
+
+	def test_extract_theme_without_style_returns_defaults(self):
+		self.assertEqual(_extract_theme(""), THEME)
+
+
+class TestSafeUrlFetcher(unittest.TestCase):
+	"""safety.py must import under every supported WeasyPrint (the
+	``default_url_fetcher`` function was replaced by ``URLFetcher`` in 70)."""
+
+	def test_fetcher_resolved_and_callable(self):
+		from huf.ai.artifacts.render import safety
+
+		self.assertTrue(callable(safety.safe_url_fetcher))
+
+	def test_blocks_private_and_remote_hosts(self):
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		for url in (
+			"http://169.254.169.254/latest/meta-data/",
+			"http://127.0.0.1:8000/api",
+			"https://example.com/x.png",
+			"file:///etc/passwd",
+		):
+			with self.assertRaises(ValueError, msg=url):
+				safe_url_fetcher(url)
+
+	def test_redirects_disabled_on_weasyprint_70(self):
+		import weasyprint
+
+		from huf.ai.artifacts.render import safety
+
+		if int(weasyprint.__version__.split(".")[0]) < 70:
+			self.skipTest("URLFetcher class only exists in WeasyPrint >= 70")
+		fetcher = safety.safe_url_fetcher
+		self.assertEqual(fetcher._allowed_protocols, ("data", "https"))
+		self.assertFalse(
+			any(type(h).__name__ == "HTTPRedirectHandler" for h in fetcher.handlers),
+			"redirects must be disabled",
+		)
+		with self.assertRaises(ValueError):
+			fetcher.fetch("http://127.0.0.1:8000/api")
+
+	def test_allows_data_urls(self):
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		resp = safe_url_fetcher("data:text/plain;base64,aGk=")
+		self.assertIsNotNone(resp)
+
+	def test_pdf_render_with_blocked_resource(self):
+		from weasyprint import HTML
+
+		from huf.ai.artifacts.render.safety import safe_url_fetcher
+
+		html = '<html><body><p>x</p><img src="http://127.0.0.1:1/a.png"></body></html>'
+		self.assertTrue(HTML(string=html, url_fetcher=safe_url_fetcher).write_pdf().startswith(b"%PDF"))

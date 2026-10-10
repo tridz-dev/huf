@@ -146,6 +146,16 @@
   "access_control_section",
   "allow_all_users",
   "allowed_models",
+  "desktop_access_section",
+  "desktop_access_cli",
+  "desktop_access_files",
+  "column_break_desktop_access",
+  "desktop_access_skills",
+  "desktop_access_local_mcp",
+  "desktop_access_browser",
+  "desktop_access_installs",
+  "desktop_access_processes",
+  "allow_remote_desktop",
   "metadata_tab",
   "last_run",
   "total_run",
@@ -1139,12 +1149,78 @@
    "default": "0",
    "label": "Auto-Archive After (days)",
    "description": "0 = disabled."
+  },
+  {
+   "fieldname": "desktop_access_section",
+   "fieldtype": "Section Break",
+   "label": "Desktop Access",
+   "description": "What a run pinned to a Huf Desktop may do on that computer. This is a ceiling: the desktop user's own policy is applied on top and the stricter wins. Attaching a desktop tool is still what exposes it to the model."
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_cli",
+   "fieldtype": "Select",
+   "label": "CLI (run commands)",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_files",
+   "fieldtype": "Select",
+   "label": "Files",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "fieldname": "column_break_desktop_access",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_skills",
+   "fieldtype": "Select",
+   "label": "Local skills",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_local_mcp",
+   "fieldtype": "Select",
+   "label": "Local MCP servers",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_browser",
+   "fieldtype": "Select",
+   "label": "Browser",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_installs",
+   "fieldtype": "Select",
+   "label": "Installs",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "default": "allowed",
+   "fieldname": "desktop_access_processes",
+   "fieldtype": "Select",
+   "label": "Background processes",
+   "options": "off\nask\nallowed"
+  },
+  {
+   "default": "0",
+   "description": "Allow runs started from a web or mobile client (same user) to use this agent's tools on a desktop that has remote control enabled.",
+   "fieldname": "allow_remote_desktop",
+   "fieldtype": "Check",
+   "label": "Allow Remote Desktop Control"
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-09 03:51:03.550222",
+ "modified": "2026-09-30 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Huf",
  "name": "Agent",

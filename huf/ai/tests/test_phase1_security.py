@@ -147,7 +147,8 @@ class TestSetUserRestoreGuards(IntegrationTestCase):
         frappe.session.user = original_user
         try:
             with patch("frappe.set_user", side_effect=self._tracking_set_user) as mock_set_user:
-                with patch("huf.ai.agent_hooks.run_agent_sync"):
+                # The initiating user must exist for identity resolution to switch to it.
+                with patch("frappe.db.exists", return_value=True), patch("huf.ai.agent_hooks.run_agent_sync"):
                     run_agent_for_doc(
                         doc={"doctype": "Note", "name": "TEST-001"},
                         agent_name="test-agent",
@@ -239,6 +240,10 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
 
         mock_request = frappe._dict(args={"doc": "BOT-001"}, headers={}, get_data=lambda **kw: b"{}")
         frappe.request = mock_request
+        # @rate_limit needs a client identity; outside a real HTTP request there is none.
+        had_ip = hasattr(frappe.local, "request_ip")
+        original_ip = getattr(frappe.local, "request_ip", None)
+        frappe.local.request_ip = "127.0.0.1"
         try:
             with patch("frappe.db.exists", return_value=True):
                 with patch("frappe.get_doc", return_value=settings):
@@ -248,6 +253,10 @@ class TestWebhookEndpointSecurity(IntegrationTestCase):
             self.assertIn("secret", result.get("error", "").lower())
         finally:
             frappe.request = None
+            if had_ip:
+                frappe.local.request_ip = original_ip
+            else:
+                frappe.local.request_ip = None
 
     @unittest.skip("quarantined pending RegressionCI triage - see Tracks/RegressionCI/CONTEXT.md Quarantine backlog")
     def test_elevenlabs_webhook_rejects_invalid_signature(self):

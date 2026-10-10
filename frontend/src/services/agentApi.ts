@@ -15,6 +15,7 @@ export type AgentConfigSection =
   | 'skills'
   | 'permissions'
   | 'voice'
+  | 'embed'
   | 'advanced';
 
 export interface AgentSectionResponse {
@@ -55,6 +56,49 @@ export async function updateAgentSection(
     return result.message as AgentSectionResponse;
   } catch (error) {
     handleFrappeError(error, `Error updating ${section} settings for agent ${name}`);
+  }
+}
+
+/**
+ * Desktop access fields. The section endpoint (`update_agent_section`) does not list them, so they
+ * are read and written with ordinary document calls, next to a section save from the Permissions tab.
+ */
+export const DESKTOP_ACCESS_DOC_FIELDS = [
+  'desktop_access_cli',
+  'desktop_access_files',
+  'desktop_access_skills',
+  'desktop_access_local_mcp',
+  'desktop_access_browser',
+  'desktop_access_installs',
+  'desktop_access_processes',
+  'allow_remote_desktop',
+] as const;
+
+export type DesktopAccessDocValues = Pick<AgentDoc, (typeof DESKTOP_ACCESS_DOC_FIELDS)[number]>;
+
+export async function getAgentDesktopAccess(name: string): Promise<Partial<DesktopAccessDocValues>> {
+  try {
+    const rows = await db.getDocList(doctype.Agent, {
+      fields: [...DESKTOP_ACCESS_DOC_FIELDS],
+      filters: [['name', '=', name]],
+      limit: 1,
+    });
+    return ((rows as Partial<DesktopAccessDocValues>[])[0] ?? {}) as Partial<DesktopAccessDocValues>;
+  } catch (error) {
+    handleFrappeError(error, `Error loading desktop access for agent ${name}`);
+  }
+}
+
+/** Writes the desktop access fields and returns the agent's new `modified` (its revision). */
+export async function updateAgentDesktopAccess(
+  name: string,
+  values: Partial<DesktopAccessDocValues>,
+): Promise<string | undefined> {
+  try {
+    const doc = (await db.updateDoc(doctype.Agent, name, values)) as { modified?: string };
+    return doc?.modified;
+  } catch (error) {
+    handleFrappeError(error, `Error saving desktop access for agent ${name}`);
   }
 }
 

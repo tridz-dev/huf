@@ -25,13 +25,15 @@ import {
 } from "../ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { getInitials } from "@/utils/getInitials";
-import { getConversation } from "@/services/chatApi";
+import { getConversation, hostFromConversation, type DesktopHostRef } from "@/services/chatApi";
 import { getAgent, getChatAgents, type ChatAgentItem } from "@/services/agentApi";
 import type { AgentDoc } from "@/types/agent.types";
 import { DEFAULT_AGENT_COLOR } from "@/data/color";
 import { ConversationDataPanel } from "@/components/conversation/ConversationDataPanel";
 import { DEFAULT_COLD_START_AGENT } from "./useChatAgentIdentity";
 import { draftAutomationFromConversation } from "@/services/automationApi";
+import { DesktopHostBadge } from "./desktop/DesktopHostBadge";
+import { DesktopPermissionModeControl } from "./desktop/DesktopPermissionModeControl";
 
 interface ChatWindowHeaderProps {
     chatId?: string | null;
@@ -81,6 +83,10 @@ export function ChatWindowHeader({
     // model/title state above so `AgentSwitcher` can read it regardless of
     // whether `agent` has resolved yet.
     const [conversationProject, setConversationProject] = useState<string | null>(null);
+    // Where the open conversation runs when Huf Desktop hosts it; null for server conversations.
+    const [conversationHost, setConversationHost] = useState<DesktopHostRef | null>(null);
+    // Bumped when a rebind moves the conversation to another workspace, so the label re-reads.
+    const [hostRefreshKey, setHostRefreshKey] = useState(0);
     const [switcherOpen, setSwitcherOpen] = useState(false);
     const [dataPanelOpen, setDataPanelOpen] = useState(false);
     const [creatingAutomation, setCreatingAutomation] = useState(false);
@@ -117,12 +123,24 @@ export function ChatWindowHeader({
     }
 
     useEffect(() => {
+        const onHostChanged = (event: Event) => {
+            const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
+            if (!detail?.conversationId || detail.conversationId === chatId) {
+                setHostRefreshKey((n) => n + 1);
+            }
+        };
+        window.addEventListener('huf:conversation-host-changed', onHostChanged);
+        return () => window.removeEventListener('huf:conversation-host-changed', onHostChanged);
+    }, [chatId]);
+
+    useEffect(() => {
         let cancelled = false;
 
         if (!chatId) {
             setConversationModel(null);
             setConversationTitle(null);
             setConversationProject(null);
+            setConversationHost(null);
         }
 
         async function fetchAgentData() {
@@ -147,6 +165,7 @@ export function ChatWindowHeader({
                             setConversationModel(model);
                             setConversationTitle(title);
                             setConversationProject(conversation?.project ?? null);
+                            setConversationHost(conversation ? (hostFromConversation(conversation) ?? null) : null);
                         }
                     } catch (error) {
                         console.error('Error fetching conversation:', error);
@@ -200,7 +219,7 @@ export function ChatWindowHeader({
         return () => {
             cancelled = true;
         };
-    }, [chatId, searchParams]);
+    }, [chatId, searchParams, hostRefreshKey]);
 
     const showOpenSidebarBtn = !!onToggleSidebar;
 
@@ -265,6 +284,7 @@ export function ChatWindowHeader({
                 <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
                     {conversationTitle || agent.agent_name}
                 </span>
+                {conversationHost && <DesktopHostBadge host={conversationHost} compact />}
                 <span className="flex-1" />
                 <AnalyticsPaneToggle open={analyticsPaneOpen} onToggle={onToggleAnalyticsPane} />
                 <ArtifactPaneToggle open={artifactPaneOpen} onToggle={onToggleArtifactPane} />
@@ -309,7 +329,13 @@ export function ChatWindowHeader({
 
             {model && <span className="font-mono text-[11px] text-steel-soft">{model}</span>}
 
+            {conversationHost && (
+                <DesktopHostBadge host={conversationHost} className="max-w-[260px]" />
+            )}
+
             <span className="flex-1" />
+
+            {conversationHost && <DesktopPermissionModeControl deviceId={conversationHost.deviceId} />}
 
             <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>

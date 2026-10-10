@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractJsxAndBindings, splitPreambleAndJsx } from './jsxPreambleParser';
+import { extractJsxAndBindings, splitPreambleAndJsx, stripJsxComments } from './jsxPreambleParser';
 
 const EXPENSE_PREAMBLE = `const data = [
   { employee: "HR-EMP-00050", amount: 560, status: "Draft" },
@@ -74,5 +74,64 @@ const draftColor = colors.Draft;
 
 		expect(result.bindings.draftColor).toBe('#FF9900');
 		expect(result.jsx).toMatch(/^<div/);
+	});
+});
+
+describe('stripJsxComments', () => {
+	it('removes block-comment-only groups', () => {
+		expect(stripJsxComments('<div>{/* note */}<b /></div>')).toBe('<div><b /></div>');
+	});
+
+	it('removes line-comment-only groups', () => {
+		expect(stripJsxComments('<div>{ // note \n }<b /></div>')).toBe('<div><b /></div>');
+	});
+
+	it('removes groups with mixed comments', () => {
+		expect(stripJsxComments('<div>{ /* a */ // b\n /* c */ }<b /></div>')).toBe('<div><b /></div>');
+	});
+
+	it('keeps empty braces', () => {
+		expect(stripJsxComments('<div style={{}} />')).toBe('<div style={{}} />');
+		expect(stripJsxComments('<div>{}</div>')).toBe('<div>{}</div>');
+	});
+
+	it('keeps code groups', () => {
+		expect(stripJsxComments('<div>{a}</div>')).toBe('<div>{a}</div>');
+		expect(stripJsxComments('<div>{/* c */ a}</div>')).toBe('<div>{/* c */ a}</div>');
+	});
+
+	it('keeps unterminated comments', () => {
+		expect(stripJsxComments('<div>{/* x')).toBe('<div>{/* x');
+		expect(stripJsxComments('<div>{// x')).toBe('<div>{// x');
+	});
+
+	it('handles pathological input in linear time', () => {
+		const input = '{ /* '.repeat(50_000);
+		const start = performance.now();
+		const out = stripJsxComments(input);
+		expect(performance.now() - start).toBeLessThan(200);
+		expect(out).toBe(input);
+	});
+
+	it('is linear for repeated block-comment openers with a late close', () => {
+		const input = '{/*'.repeat(20_000) + '*/x';
+		const start = performance.now();
+		const out = stripJsxComments(input);
+		expect(performance.now() - start).toBeLessThan(300);
+		expect(out).toBe(input);
+	});
+
+	it('is linear for repeated line-comment openers', () => {
+		const input = '{//'.repeat(20_000);
+		const start = performance.now();
+		const out = stripJsxComments(input);
+		expect(performance.now() - start).toBeLessThan(300);
+		expect(out).toBe(input);
+	});
+
+	it('treats unicode whitespace like \\s', () => {
+		for (const ws of ['\u00a0', '\u2028', '\u2029', '\ufeff']) {
+			expect(stripJsxComments(`<div>{${ws}/* c */${ws}}<b /></div>`)).toBe('<div><b /></div>');
+		}
 	});
 });
