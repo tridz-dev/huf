@@ -383,7 +383,7 @@ CANDIDATES: dict[str, list[str]] = {
         "mistral/magistral-small-latest",
         "mistral/ministral-14b-latest",
         "mistral/codestral-mamba-latest",
-        "mistral/zai-glm-5-2",
+        "mistral/zai-glm-5-3",
     ],
     "xAI": [
         "xai/grok-4.6",

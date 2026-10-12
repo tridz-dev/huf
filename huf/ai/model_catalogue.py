@@ -125,7 +125,7 @@ MODELS = [
     {"model_name": 'mistral-medium-latest', "provider": 'Mistral', "modalities": 'Text,Vision', "context_window": 262144, "max_output_tokens": 262144, "supports_reasoning": True},
     {"model_name": 'mistral-small-latest', "provider": 'Mistral', "modalities": 'Text,Vision', "context_window": 262144, "max_output_tokens": 262144, "supports_reasoning": True},
     {"model_name": 'pixtral-large-latest', "provider": 'Mistral', "modalities": 'Text,Vision', "context_window": 128000, "max_output_tokens": 128000},
-    {"model_name": 'zai-glm-5-2', "provider": 'Mistral', "modalities": 'Text', "context_window": 1048576, "max_output_tokens": 131072, "supports_reasoning": True},
+    {"model_name": 'zai-glm-5-3', "provider": 'Mistral', "modalities": 'Text', "context_window": 1048576, "max_output_tokens": 131072, "supports_reasoning": True},
     {"model_name": 'kimi-k2.5', "provider": 'Moonshot', "modalities": 'Text,Vision', "context_window": 262144, "max_output_tokens": 262144, "supports_reasoning": True},
     {"model_name": 'kimi-k2.6', "provider": 'Moonshot', "modalities": 'Text,Vision', "context_window": 262144, "max_output_tokens": 262144, "supports_reasoning": True},
     {"model_name": 'kimi-k3', "provider": 'Moonshot', "modalities": 'Text,Vision', "context_window": 1048576, "max_output_tokens": 1048576, "supports_reasoning": True},
