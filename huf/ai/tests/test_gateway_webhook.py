@@ -88,6 +88,29 @@ class TestGatewayWebhook(unittest.TestCase):
         assert gateway_webhook.handle_gateway_webhook() is None
         mock_text_response.assert_called_once_with("decrypted-echo")
 
+    @patch("huf.ai.gateway_webhook._ingest_rate_gate")
+    @patch("huf.ai.gateway_webhook.get_gateway_adapter")
+    @patch("huf.ai.gateway_webhook._inbound_request")
+    @patch("huf.ai.gateway_webhook._text_response")
+    @patch("huf.ai.gateway_webhook.frappe")
+    def test_get_verify_is_rate_gated_before_verify_url_and_keyed_by_query_name(
+        self, mock_frappe, mock_text_response, mock_request, mock_adapter, mock_gate
+    ):
+        order = []
+        mock_frappe.get_doc.return_value = SimpleNamespace(name="G1", provider="WhatsApp", is_enabled=1)
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "G1"})
+        mock_frappe.form_dict = {}
+        mock_request.return_value = SimpleNamespace(method="GET")
+        adapter = MagicMock()
+        adapter.verify_url.side_effect = lambda r: order.append("verify") or "ch"
+        mock_adapter.return_value = adapter
+        mock_gate.side_effect = lambda: order.append("gate")
+
+        gateway_webhook.handle_gateway_webhook()
+
+        assert order == ["gate", "verify"]
+        assert mock_frappe.form_dict["gateway_name"] == "G1"
+
     @patch("huf.ai.gateway_webhook.frappe")
     def test_missing_gateway_name_is_rejected(self, mock_frappe):
         """Every provider here posts application/json, and
@@ -102,3 +125,48 @@ class TestGatewayWebhook(unittest.TestCase):
             "error": "Missing gateway_name",
         }
         mock_frappe.get_doc.assert_not_called()
+
+
+class TestGatewayWebhookRateGateAndReply(unittest.TestCase):
+    @patch("huf.ai.gateway_webhook._ingest_rate_gate")
+    @patch("huf.ai.gateway_webhook.get_gateway_adapter")
+    @patch("huf.ai.gateway_webhook._inbound_request")
+    @patch("huf.ai.gateway_webhook.frappe")
+    def test_single_event_provider_path_is_unchanged_and_rate_limited_once(
+        self, mock_frappe, mock_request, mock_adapter, mock_gate
+    ):
+        mock_frappe.get_doc.return_value = SimpleNamespace(name="Support VK", provider="VK", is_enabled=1)
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "Support VK"})
+        mock_request.return_value = SimpleNamespace(method="POST")
+        normalized = SimpleNamespace(
+            provider_event_id="e1", sender_id="1", conversation_id="2", thread_id="3",
+            message_text="hi", is_room=False, mentioned=False, raw_payload={},
+        )
+        adapter = MagicMock()  # a MagicMock must NOT be mistaken for a parse_payload provider
+        adapter.verify_inbound.return_value = True
+        adapter.normalize_inbound.return_value = normalized
+        mock_adapter.return_value = adapter
+
+        with patch("huf.ai.gateway_service.ingest_gateway_event", return_value={"event_name": "GE-1"}):
+            result = gateway_webhook.handle_gateway_webhook()
+
+        assert result == {"success": True, "event_name": "GE-1"}
+        mock_gate.assert_called_once()
+        adapter.parse_payload.assert_not_called()
+
+    @patch("huf.ai.gateway_webhook.get_gateway_adapter")
+    def test_send_gateway_reply_whatsapp_quotes_inbound_wamid_without_thread(self, mock_adapter):
+        event = SimpleNamespace(conversation_id="1234567890", thread_id="", provider_event_id="wamid.in")
+        gateway_webhook.send_gateway_reply(SimpleNamespace(provider="WhatsApp"), event, "hello")
+        reply = mock_adapter.return_value.send_reply.call_args.args[0]
+        assert reply.conversation_id == "1234567890"
+        assert reply.thread_id is None
+        assert reply.reply_to_provider_message_id == "wamid.in"
+
+    @patch("huf.ai.gateway_webhook.get_gateway_adapter")
+    def test_send_gateway_reply_other_providers_keep_thread_semantics(self, mock_adapter):
+        event = SimpleNamespace(conversation_id="c", thread_id="t-9", provider_event_id="evt-1")
+        gateway_webhook.send_gateway_reply(SimpleNamespace(provider="Telegram"), event, "hello")
+        reply = mock_adapter.return_value.send_reply.call_args.args[0]
+        assert reply.thread_id == "t-9"
+        assert reply.reply_to_provider_message_id == "t-9"

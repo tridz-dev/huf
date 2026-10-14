@@ -1,0 +1,20 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "event": "PARTNER_ADDED",
+            "waba_info": {
+              "waba_id": "102290129340398",
+              "owner_business_id": "104532096489123"
+            }
+          },
+          "field": "account_update"
+        }
+      ]
+    }
+  ]
+}

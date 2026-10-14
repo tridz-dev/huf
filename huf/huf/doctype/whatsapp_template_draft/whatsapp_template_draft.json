@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "autoname": "format:WATD-{#####}",
+ "creation": "2026-10-14 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": ["template_name", "language_code", "category", "whatsapp_account", "status", "section_payload", "payload", "section_request", "requested_by", "requested_via", "agent_run", "section_review", "reviewed_by", "reviewed_at", "review_note", "section_result", "submitted_template", "submit_error"],
+ "fields": [
+  {"fieldname":"template_name","fieldtype":"Data","in_list_view":1,"label":"Template name","length":140,"reqd":1},
+  {"fieldname":"language_code","fieldtype":"Data","in_list_view":1,"label":"Language code","length":20,"reqd":1},
+  {"fieldname":"category","fieldtype":"Data","in_list_view":1,"label":"Category","length":40},
+  {"fieldname":"whatsapp_account","fieldtype":"Data","label":"WhatsApp Account","length":140,"search_index":1},
+  {"default":"Pending Review","fieldname":"status","fieldtype":"Select","in_list_view":1,"in_standard_filter":1,"label":"Status","options":"Draft\nPending Review\nApproved & Submitted\nRejected\nFailed"},
+  {"fieldname":"section_payload","fieldtype":"Section Break","label":"Template"},
+  {"fieldname":"payload","fieldtype":"JSON","label":"Create payload"},
+  {"fieldname":"section_request","fieldtype":"Section Break","label":"Requested by"},
+  {"fieldname":"requested_by","fieldtype":"Data","label":"Requested by","length":140},
+  {"fieldname":"requested_via","fieldtype":"Select","label":"Requested via","options":"User\nAgent run"},
+  {"fieldname":"agent_run","fieldtype":"Data","label":"Agent run","length":140},
+  {"fieldname":"section_review","fieldtype":"Section Break","label":"Review"},
+  {"fieldname":"reviewed_by","fieldtype":"Data","label":"Reviewed by","length":140,"read_only":1},
+  {"fieldname":"reviewed_at","fieldtype":"Datetime","label":"Reviewed at","read_only":1},
+  {"fieldname":"review_note","fieldtype":"Small Text","label":"Review note"},
+  {"fieldname":"section_result","fieldtype":"Section Break","label":"Result"},
+  {"fieldname":"submitted_template","fieldtype":"Data","label":"Submitted template","length":140,"read_only":1},
+  {"fieldname":"submit_error","fieldtype":"Small Text","label":"Submit error","read_only":1}
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "module": "Huf",
+ "name": "WhatsApp Template Draft",
+ "owner": "Administrator",
+ "permissions": [
+  {"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1},
+  {"create":1,"delete":1,"read":1,"report":1,"role":"Huf Admin","write":1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

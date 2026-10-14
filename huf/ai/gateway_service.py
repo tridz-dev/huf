@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import secrets
 import threading
@@ -111,6 +112,18 @@ def _redact_error_text(text: str) -> str:
 _JSON_NATIVE_TYPES = (str, int, float, bool, type(None))
 
 
+def _record_reply_sent(event, provider_message_id) -> None:
+    """Remember the outbound wamid so delivery statuses can be joined back. Never raises."""
+    try:
+        if provider_message_id:
+            event.db_set(
+                {"reply_message_id": str(provider_message_id)[:255], "reply_status": "sent"},
+                update_modified=False,
+            )
+    except Exception:
+        pass
+
+
 def _redact_payload(value: Any) -> Any:
     """Retain support evidence without persisting provider credentials.
 
@@ -177,6 +190,98 @@ def _throttle_outbound_send(gateway_name: str, max_per_second: float | None) -> 
     _sleep(wait)
 
 
+def _whatsapp_send_errors(provider: str | None) -> tuple[type[BaseException], ...]:
+    """Delivery errors that mean "not sendable right now" for WhatsApp (A7).
+
+    Imported lazily, and only for WhatsApp gateways, so other deployments never
+    import the whatsapp modules. Returns ``()`` (matches nothing in ``except``)
+    for every other provider.
+    """
+    if provider != "WhatsApp":
+        return ()
+    from huf.ai.gateway_adapters.whatsapp import WhatsAppWindowClosed
+    from huf.ai.gateway_adapters.whatsapp_bridge import BridgeError
+
+    return (WhatsAppWindowClosed, BridgeError)
+
+
+WHATSAPP_FALLBACK_NOTE = "Fallback template sent; agent reply suppressed (24h window closed)"
+
+
+def _whatsapp_error_text(exc: BaseException) -> str:
+    """Operator-readable text for a WhatsAppWindowClosed / BridgeError."""
+    payload = getattr(exc, "payload", None)
+    if isinstance(payload, dict):
+        detail = payload.get("message") or payload.get("error") or "bridge_error"
+        return f"WhatsApp delivery failed: {detail}"
+    return _redact_error_text(str(exc)) or "WhatsApp delivery failed"
+
+
+def _normalize_sender_for_provider(provider: str | None, entry_type: str, external_id: Any) -> str:
+    """Canonicalise WhatsApp sender ids (digits only) so allowlist keys never drift (A10).
+
+    Meta's ``wa_id`` is canonical (e.g. Brazil/Mexico numbers may differ from the
+    number a human types); inbound sender ids already are wa_ids, so only the
+    punctuation/prefix form is normalised -- never digits added or removed.
+    """
+    if provider == "WhatsApp" and entry_type == "Sender":
+        from huf.ai.gateway_adapters.whatsapp_bridge import normalize_phone
+
+        return normalize_phone(external_id) or str(external_id)
+    return str(external_id)
+
+
+_MEDIA_SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def _save_whatsapp_media(event, gateway) -> list[str]:
+    """Best-effort download of inbound WhatsApp media into private Files (A9).
+
+    Never raises: any failure is logged and the text flow continues.
+    """
+    saved: list[str] = []
+    try:
+        raw = event.raw_payload
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        message = raw.get("message") if isinstance(raw, dict) else None
+        if not isinstance(message, dict):
+            return saved
+        msg_type = message.get("type")
+        media = message.get(msg_type) if msg_type in ("image", "document", "audio", "video", "sticker") else None
+        media_id = str((media or {}).get("id") or "")
+        if not media_id:
+            return saved
+
+        from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+        account = (getattr(gateway, "whatsapp_account", "") or "").strip() or None
+        direct = None
+        if not account:
+            # Direct mode (no WhatsApp Account): use the gateway's own Meta credentials.
+            from huf.ai.gateway_webhook import _gateway_credentials
+
+            creds = _gateway_credentials(gateway)
+            direct = {"token": creds.get("access_token"), "url": bridge.graph_base_url(creds.get("graph_api_url"))}
+        downloaded = bridge.download_media(account, media_id, credentials=direct, kind=msg_type)
+        name = os.path.basename(str(downloaded.get("filename") or media_id))
+        name = _MEDIA_SAFE_NAME.sub("_", name).lstrip(".")[:100] or "media"
+        file_doc = frappe.get_doc(
+            {
+                "doctype": "File",
+                "file_name": name,
+                "content": downloaded["content"],
+                "attached_to_doctype": "Gateway Event",
+                "attached_to_name": event.name,
+                "is_private": 1,
+            }
+        ).insert(ignore_permissions=True)
+        saved.append(file_doc.file_url)
+    except Exception as exc:
+        frappe.logger("huf").warning(f"WhatsApp media download skipped: {_redact_error_text(str(exc))}")
+    return saved
+
+
 def _describe_attachments(raw_payload: Any) -> str:
     """Best-effort, provider-agnostic sniff of stored raw payload for attachments.
 
@@ -201,6 +306,12 @@ def _describe_attachments(raw_payload: Any) -> str:
         for key in ("photo", "document", "voice", "video", "audio", "video_note", "sticker"):
             if message.get(key):
                 kinds.append(key)
+
+    # WhatsApp Gateway Event shape ({"message": <Meta message>}), see WhatsAppGatewayAdapter.
+    if isinstance(message, dict) and message.get("type") in (
+        "image", "document", "audio", "video", "sticker",
+    ):
+        kinds.append(message["type"])
 
     # WhatsApp Business/Cloud API webhook shape.
     try:
@@ -260,7 +371,8 @@ def _has_access_entry(gateway, entry_type: str, external_id: str) -> bool:
         "Gateway Access Entry",
         filters={
             "gateway": gateway.name, "entry_type": entry_type, "provider": gateway.provider,
-            "external_id": str(external_id), "state": "Approved",
+            "external_id": _normalize_sender_for_provider(gateway.provider, entry_type, external_id),
+            "state": "Approved",
         },
         or_filters=[["expires_at", "is", "not set"], ["expires_at", ">=", now_datetime()]],
         pluck="name",
@@ -275,6 +387,7 @@ def _create_pairing_request(
     """Create a live pairing request with a short pairing code (PAIR-XXXX)."""
     if not sender_id:
         return ""
+    sender_id = _normalize_sender_for_provider(gateway.provider, "Sender", sender_id)
     existing = frappe.get_all(
         "Gateway Access Entry",
         filters={
@@ -313,16 +426,24 @@ def _create_pairing_request(
     if getattr(gateway, "pairing_reply_enabled", 1):
         try:
             if gateway.integration_settings:
-                int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
-                creds = {}
-                for row in getattr(int_doc, "credentials", []):
-                    creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
-
-                from huf.ai.gateway_webhook import _adapter_class_for_provider
                 from huf.ai.gateway_adapters.types import GatewayReply
 
-                adapter_cls = _adapter_class_for_provider(gateway.provider)
-                adapter = adapter_cls(creds)
+                if gateway.provider == "WhatsApp":
+                    # Needs gateway_context so the adapter can apply the 24h
+                    # window check and the fallback template (A7).
+                    from huf.ai.gateway_webhook import get_gateway_adapter
+
+                    adapter = get_gateway_adapter(gateway)
+                else:
+                    int_doc = frappe.get_doc("Integration Settings", gateway.integration_settings)
+                    creds = {}
+                    for row in getattr(int_doc, "credentials", []):
+                        creds[row.key] = row.get_password("value") if hasattr(row, "get_password") else row.value
+
+                    from huf.ai.gateway_webhook import _adapter_class_for_provider
+
+                    adapter_cls = _adapter_class_for_provider(gateway.provider)
+                    adapter = adapter_cls(creds)
                 target_conv = conversation_id or sender_id
                 reply_msg = (
                     f"🔒 Access approval required.\n\n"
@@ -330,6 +451,10 @@ def _create_pairing_request(
                     f"Please share this code with the bot administrator to get approved."
                 )
                 adapter.send_reply(GatewayReply(conversation_id=target_conv, text=reply_msg))
+        except _whatsapp_send_errors(gateway.provider) as exc:
+            frappe.logger("huf").warning(
+                f"Pairing code message not delivered (window closed or bridge error): {_whatsapp_error_text(exc)}"
+            )
         except Exception as exc:
             frappe.logger("huf").warning(f"Failed to send pairing code message: {_redact_error_text(str(exc))}")
 
@@ -466,6 +591,10 @@ def approve_gateway_pairing(code_or_entry_name: str, notes: str | None = None) -
                 reply_to_provider_message_id=target_thread or None,
             ))
             notification_status = "Welcome message sent to sender"
+    except _whatsapp_send_errors(entry.provider) as exc:
+        # A7: never roll back the approval because the welcome could not be delivered.
+        notification_status = f"Approval saved, welcome message not sent: {_whatsapp_error_text(exc)}"
+        frappe.logger("huf").warning(notification_status)
     except Exception as exc:
         safe_exc = _redact_error_text(str(exc))
         notification_status = f"Approval saved, welcome message notice: {safe_exc}"
@@ -694,8 +823,16 @@ def process_gateway_event(event_name: str) -> dict:
             from huf.ai.gateway_webhook import send_gateway_reply
 
             attachment_note = _describe_attachments(event.raw_payload)
+            if gateway.provider == "WhatsApp":
+                saved_files = _save_whatsapp_media(event, gateway)
+                if saved_files:
+                    attachment_note = "\n".join(
+                        [attachment_note] * bool(attachment_note)
+                        + [f"[Attachment saved: {file_url}]" for file_url in saved_files]
+                    )
             prompt = f"{attachment_note}\n{event.message_text}" if attachment_note else event.message_text
 
+            fallback_note = ""
             result = run_agent_sync(
                 agent_name=event.target_agent,
                 prompt=prompt,
@@ -710,13 +847,37 @@ def process_gateway_event(event_name: str) -> dict:
                 _throttle_outbound_send(gateway.name, _outbound_rate_cap(gateway.provider))
                 delivery = send_gateway_reply(gateway, event, str(response))
                 provider_message_id = delivery.provider_message_id
+                _record_reply_sent(event, provider_message_id)
+                if (getattr(delivery, "provider_response", None) or {}).get("fallback_template_sent"):
+                    fallback_note = WHATSAPP_FALLBACK_NOTE
+            except _whatsapp_send_errors(gateway.provider) as exc:
+                # A7: a closed 24h window / bridge failure is an operator-fixable
+                # condition, not a transient one -- fail the event cleanly, no retry loop.
+                error_text = _whatsapp_error_text(exc)
+                event.db_set(
+                    {
+                        "agent_run": result.get("agent_run_id"),
+                        "status": "Failed",
+                        "error_message": error_text[-500:],
+                    }
+                )
+                frappe.log_error(error_text, "Gateway WhatsApp delivery failed")
+                return {
+                    "event_name": event.name,
+                    "status": "Failed",
+                    "error": error_text,
+                    "agent_run_id": result.get("agent_run_id"),
+                }
             except frappe.ValidationError as exc:
                 if "No installed Gateway Adapter supports this channel" in str(exc):
                     provider_message_id = "agent_tool_delivery"
                 else:
                     raise
 
-            event.db_set({"agent_run": result.get("agent_run_id"), "status": "Succeeded"})
+            succeeded = {"agent_run": result.get("agent_run_id"), "status": "Succeeded"}
+            if fallback_note:
+                succeeded["error_message"] = fallback_note
+            event.db_set(succeeded)
             return {
                 "event_name": event.name,
                 "status": "Succeeded",
@@ -777,10 +938,11 @@ def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 	if not gateway_name or not test_recipient_id:
 		frappe.throw(_("Gateway name and test recipient ID are required."))
 
+	gateway = None
 	try:
 		gateway = frappe.get_doc("Gateway", gateway_name)
 
-		if not gateway.enabled:
+		if not gateway.is_enabled:
 			return {
 				"success": False,
 				"message": "Gateway is disabled. Enable it to test.",
@@ -815,8 +977,15 @@ def test_gateway_send(gateway_name: str, test_recipient_id: str) -> dict:
 			"provider_response": json.dumps({"delivery_id": delivery.delivery_id}) if delivery else None,
 		}
 
+	except _whatsapp_send_errors(gateway.provider if gateway is not None else None) as exc:
+		error_msg = _redact_error_text(_whatsapp_error_text(exc))
+		return {
+			"success": False,
+			"message": f"Failed to send test message: {error_msg}",
+			"provider_response": error_msg,
+		}
 	except Exception as exc:
-		error_msg = str(exc)
+		error_msg = _redact_error_text(str(exc))
 		return {
 			"success": False,
 			"message": f"Failed to send test message: {error_msg}",

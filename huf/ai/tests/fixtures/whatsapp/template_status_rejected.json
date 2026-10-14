@@ -1,0 +1,20 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "event": "REJECTED",
+            "message_template_id": 1234567890123457,
+            "message_template_name": "payslip_ready",
+            "message_template_language": "en_US",
+            "reason": "INVALID_FORMAT"
+          },
+          "field": "message_template_status_update"
+        }
+      ]
+    }
+  ]
+}

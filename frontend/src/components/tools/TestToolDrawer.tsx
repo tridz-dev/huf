@@ -18,6 +18,7 @@ import { db } from '@/lib/frappe-sdk';
 import {
   WhatsAppTemplateComposer,
   DEFAULT_WHATSAPP_TEMPLATE_VALUE,
+  buildTemplateArgs,
   type WhatsAppTemplateValue,
 } from './WhatsAppTemplateComposer';
 
@@ -104,9 +105,7 @@ export function TestToolDrawer({
       if (!templateValue.template_name.trim()) {
         return { args, error: 'Missing required argument: template_name' };
       }
-      args.template_name = templateValue.template_name.trim();
-      args.language_code = templateValue.language_code.trim() || 'en_US';
-      args.parameters = templateValue.parameters;
+      Object.assign(args, buildTemplateArgs(templateValue));
     }
 
     for (const spec of genericArgSpecs) {

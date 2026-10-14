@@ -107,6 +107,7 @@ def after_install():
     create_design_system_skill()
     create_meeting_summary_agent()
     create_meeting_recorder_app()
+    create_whatsapp_app()
     create_image_generation_tool()
     create_transcribe_audio_tool()
     create_generate_audio_tool()
@@ -234,6 +235,13 @@ def after_migrate():
 		create_meeting_recorder_app()
 	except Exception as e:
 		logger.warning(f"Failed to seed Meeting Recorder HUF App after migrate: {e!s}")
+
+	try:
+		create_whatsapp_app()
+	except Exception as e:
+		logger.warning(f"Failed to seed WhatsApp HUF App after migrate: {e!s}")
+
+	ensure_whatsapp_message_indexes()
 
 	try:
 		from huf.ai.app_seeding.apps_loader import sync_huf_apps
@@ -725,6 +733,75 @@ def create_meeting_recorder_app():
 		doc.insert(ignore_permissions=True)
 	except Exception as e:
 		logger.warning(f"Failed to seed Meeting Recorder HUF App: {e!s}")
+
+
+WHATSAPP_APP_ID = "whatsapp"
+
+
+def create_whatsapp_app():
+	"""
+	Idempotent: seed the first-party "WhatsApp" HUF App tile.
+
+	Mirrors create_meeting_recorder_app: inserted once, then only the managed
+	fields are refreshed so an admin's hand-edit of ``enabled`` survives migrate.
+	Visibility is decided at request time by ``can_launch_whatsapp_app``.
+	"""
+	fields = {
+		"title": "WhatsApp",
+		"description": "Manage WhatsApp templates and see messages handled by your agents.",
+		"route": "/huf/whatsapp",
+		"icon": "message-circle",
+		"category": "Communicate",
+		"sort_order": 110,
+		"launch_mode": "Route",
+		"enabled": 1,
+		"sync_status": "Active",
+		"source_app": "huf",
+		"permission_method": "huf.ai.whatsapp_management.can_launch_whatsapp_app",
+	}
+
+	existing_name = frappe.db.get_value("HUF App", {"app_id": WHATSAPP_APP_ID}, "name")
+	if existing_name:
+		update_fields = {k: v for k, v in fields.items() if k != "enabled"}
+		frappe.db.set_value("HUF App", existing_name, update_fields)
+		return
+
+	doc = frappe.get_doc({"doctype": "HUF App", "app_id": WHATSAPP_APP_ID, **fields})
+	try:
+		doc.insert(ignore_permissions=True)
+	except Exception as e:
+		logger.warning(f"Failed to seed WhatsApp HUF App: {e!s}")
+
+
+WHATSAPP_MESSAGE_INDEXES = (
+	("idx_huf_wa_msg_account_creation", ["whatsapp_account", "creation"]),
+	("idx_huf_wa_msg_message_id", ["message_id"]),
+)
+
+
+def ensure_whatsapp_message_indexes():
+	"""Idempotent Huf-owned indexes for the message log on frappe_whatsapp's ``WhatsApp Message``.
+
+	No-op when the DocType is absent (direct mode). Never raises.
+	"""
+	import time
+
+	try:
+		if not frappe.db.exists("DocType", "WhatsApp Message"):
+			return
+		table = "tabWhatsApp Message"
+		for name, columns in WHATSAPP_MESSAGE_INDEXES:
+			started = time.monotonic()
+			try:
+				if frappe.db.has_index(table, name):
+					continue
+				frappe.db.add_index("WhatsApp Message", columns, name)
+				logger.info(f"Added index {name} on {table} in {time.monotonic() - started:.2f}s")
+			except Exception as e:
+				if "Duplicate key name" not in str(e):
+					logger.warning(f"Could not add index {name} on {table}: {e!s}")
+	except Exception as e:
+		logger.warning(f"WhatsApp Message index setup skipped: {e!s}")
 
 
 def create_image_generation_tool():

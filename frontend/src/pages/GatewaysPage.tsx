@@ -8,6 +8,7 @@ import {
   Copy,
   KeyRound,
   Link2,
+  MessageSquare,
   Network,
   Plus,
   Settings,
@@ -670,6 +671,15 @@ export default function GatewaysPage() {
                 { label: 'Route target', value: target || 'Unassigned' },
               ]}
               actions={[
+                ...(gateway.provider === 'WhatsApp'
+                  ? [
+                      {
+                        icon: MessageSquare,
+                        label: 'Manage WhatsApp',
+                        onClick: () => navigate(`/whatsapp?gateway=${encodeURIComponent(gateway.name)}`),
+                      },
+                    ]
+                  : []),
                 {
                   icon: Settings,
                   label: 'Configure gateway',

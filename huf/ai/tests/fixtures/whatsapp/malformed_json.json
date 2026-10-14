@@ -1,0 +1,4 @@
+{
+  "description": "Raw request body is not valid JSON; the test decodes raw_body as bytes.",
+  "raw_body": "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"102290129340398\",\"changes\":[{\"value\":{\"messages\":[{\"from\":\"919876543210\",\"id\":\"wamid.broken\",\"text\":{\"body\":\"truncated"
+}

@@ -1,0 +1,20 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "102290129340398",
+      "changes": [
+        {
+          "value": {
+            "message_template_id": 1234567890123456,
+            "message_template_name": "leave_approved",
+            "message_template_language": "en_US",
+            "previous_category": "UTILITY",
+            "new_category": "MARKETING"
+          },
+          "field": "template_category_update"
+        }
+      ]
+    }
+  ]
+}

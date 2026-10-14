@@ -182,7 +182,19 @@ def _gateway_credentials(gateway) -> dict[str, str]:
 
 def get_gateway_adapter(gateway):
 	"""Instantiate the configured adapter without exposing stored credentials."""
-	return _adapter_class_for_provider(gateway.provider)(_gateway_credentials(gateway))
+	adapter_class = _adapter_class_for_provider(gateway.provider)
+	credentials = _gateway_credentials(gateway)
+	if gateway.provider == "WhatsApp":
+		return adapter_class(
+			credentials,
+			gateway_context={
+				"gateway_name": gateway.name,
+				"whatsapp_account": (gateway.get("whatsapp_account") or "").strip(),
+				"fallback_template": (gateway.get("fallback_template") or "").strip(),
+				"fallback_template_language": (gateway.get("fallback_template_language") or "").strip(),
+			},
+		)
+	return adapter_class(credentials)
 
 
 def _inbound_request():
@@ -218,8 +230,324 @@ def _text_response(value: str) -> None:
 	)
 
 
+def _ingest_rate_gate() -> None:
+	"""Count one request against the per-gateway ingest rate limit (100/60s).
+
+	This used to be a decorator on ``handle_gateway_webhook``, which counted
+	every POST. Providers that batch and interleave delivery receipts
+	(WhatsApp) must not have status-only traffic consume the ingest budget, so
+	the same ``rate_limit`` is now applied explicitly: up front for
+	single-event providers (unchanged), and only for forged requests or
+	payloads that actually carry messages for ``parse_payload`` providers.
+	"""
+
+
+_ingest_rate_gate = rate_limit(key="gateway_name", limit=100, seconds=60)(_ingest_rate_gate)
+
+
+def _transient_error_types() -> tuple[type, ...]:
+	types: list[type] = [frappe.QueryDeadlockError, frappe.QueryTimeoutError, ConnectionError, TimeoutError]
+	try:
+		import pymysql
+
+		types.append(pymysql.OperationalError)
+	except Exception:
+		pass
+	return tuple(types)
+
+
+# Errors worth a provider retry (Meta redelivers on non-2xx; ingest is deduped).
+# Everything else is deterministic: retrying the same payload cannot succeed.
+_TRANSIENT_ERRORS = _transient_error_types()
+_TEMPLATE_BAD_STATES = frozenset({"REJECTED", "PAUSED", "DISABLED"})
+_GATEWAY_ERROR_MAX = 500
+
+
+def _set_gateway_error(gateway_name: str, text: str, *, touch_event: bool = False) -> None:
+	"""Best-effort, redacted operator-visible note on the Gateway. Never raises."""
+	try:
+		from huf.ai.gateway_service import _redact_error_text
+
+		values: dict[str, Any] = {"last_error": _redact_error_text(str(text))[:_GATEWAY_ERROR_MAX]}
+		if touch_event:
+			values["last_event_at"] = frappe.utils.now_datetime()
+		frappe.db.set_value("Gateway", gateway_name, values, update_modified=False)
+	except Exception:
+		pass
+
+
+def _record_failed_status(gateway_name: str, status: dict) -> None:
+	"""A failed outbound delivery must be visible even when nothing is forwarded (direct mode)."""
+	try:
+		errors = status.get("errors") if isinstance(status.get("errors"), list) else []
+		first = errors[0] if errors and isinstance(errors[0], dict) else {}
+		code = first.get("code") or "unknown"
+		title = first.get("title") or first.get("message") or "no detail"
+		recipient = str(status.get("recipient_id") or "")
+		masked = f"...{recipient[-4:]}" if len(recipient) > 4 else "recipient"
+		text = f"WhatsApp delivery failed to {masked}: error {code} ({title})"
+		_set_gateway_error(gateway_name, text, touch_event=True)
+		frappe.log_error(title="WhatsApp delivery failed", message=text)
+	except Exception:
+		pass
+
+
+_REPLY_STATUSES = frozenset({"sent", "delivered", "read", "failed"})
+_REPLY_STATUS_RANK = {"sent": 1, "delivered": 2, "read": 3}
+
+
+def _update_reply_status(gateway_name: str, status: dict) -> None:
+	"""Mirror a Meta delivery status onto the Gateway Event that sent the reply. Never raises."""
+	try:
+		state = str(status.get("status") or "").lower()
+		message_id = str(status.get("id") or "")
+		if state not in _REPLY_STATUSES or not message_id:
+			return
+		row = frappe.db.get_value(
+			"Gateway Event",
+			{"gateway": gateway_name, "reply_message_id": message_id},
+			["name", "reply_status"],
+			as_dict=True,
+		)
+		if not isinstance(row, dict):
+			return
+		current = row.get("reply_status") or ""
+		if state != "failed" and _REPLY_STATUS_RANK.get(state, 0) < _REPLY_STATUS_RANK.get(current, 0):
+			return  # out-of-order webhook: never regress delivered/read back to sent
+		values: dict[str, Any] = {"reply_status": state}
+		if state == "failed":
+			from huf.ai.gateway_service import _redact_error_text
+
+			errors = status.get("errors") if isinstance(status.get("errors"), list) else []
+			first = errors[0] if errors and isinstance(errors[0], dict) else {}
+			code = first.get("code") or "unknown"
+			title = first.get("title") or first.get("message") or "no detail"
+			values["delivery_error"] = _redact_error_text(f"error {code}: {title}")[:_GATEWAY_ERROR_MAX]
+		frappe.db.set_value("Gateway Event", row["name"], values, update_modified=False)
+	except Exception:
+		pass
+
+
+def _record_unknown_phone_ids(gateway_name: str, phone_ids) -> None:
+	for phone_id in phone_ids:
+		text = (
+			f"payload for phone number id {phone_id} ignored; "
+			"one Gateway per Meta app/number (create a separate Gateway for each number)"
+		)
+		try:
+			frappe.logger("huf").warning(f"WhatsApp gateway {gateway_name}: {text}")
+		except Exception:
+			pass
+		_set_gateway_error(gateway_name, text, touch_event=True)
+
+
+_TEMPLATE_BAD_QUALITY = frozenset({"LOW", "RED"})
+_TEMPLATE_KIND_FIELDS = {
+	"quality": "message_template_quality_update",
+	"category": "template_category_update",
+}
+
+
+def _template_update_text(update: dict, name: str) -> str | None:
+	"""Operator-facing note for an update that needs attention, else None."""
+	kind = update.get("kind") or ("quality" if "new_quality_score" in update else "category" if "new_category" in update else "status")
+	if kind == "quality":
+		score = str(update.get("new_quality_score") or "").upper()
+		if score not in _TEMPLATE_BAD_QUALITY:
+			return None
+		previous = str(update.get("previous_quality_score") or "").upper()
+		return f"Fallback template {name} quality dropped to {score}" + (f" (was {previous})" if previous else "")
+	if kind == "category":
+		new = str(update.get("new_category") or "").upper()
+		if not new:
+			return None
+		previous = str(update.get("previous_category") or "").upper()
+		return f"Fallback template {name} category changed to {new}" + (f" (was {previous})" if previous else "")
+	state = str(update.get("event") or update.get("status") or "").upper()
+	if state not in _TEMPLATE_BAD_STATES:
+		return None
+	reason = str(update.get("reason") or "").strip()
+	return f"Fallback template {name} is {state}" + (f" ({reason})" if reason and reason != "NONE" else "")
+
+
+def _warn(text: str) -> None:
+	try:
+		frappe.logger("huf").warning(text)
+	except Exception:
+		pass
+
+
+def _route_template_update(gateway_name: str, update: dict) -> tuple[list[str], bool]:
+	"""Accounts a template update belongs to, by WABA id (``entry[].id`` == ``WhatsApp Account.business_id``).
+
+	Template webhooks always arrive on the Meta app's default callback, i.e. at whichever Gateway
+	owns that URL, so the receiving Gateway says nothing about which account the template is on.
+	Returns ``(accounts, handled)``: with the bridge present an unmatched WABA is ignored (logged,
+	``handled`` False) instead of being guessed onto the receiving gateway's account. Without the
+	bridge there are no accounts; the update is recorded unscoped (``[""]``).
+	"""
+	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+	if not bridge.is_available():
+		return [""], True
+	waba_id = str(update.get("waba_id") or "").strip()
+	accounts = bridge.accounts_for_waba(waba_id)
+	if not accounts:
+		_warn(
+			f"WhatsApp gateway {gateway_name}: template update for WABA '{waba_id or '(none)'}' ignored; "
+			"no WhatsApp Account has that business_id"
+		)
+		return [], False
+	return accounts, True
+
+
+def _record_template_update(update: dict, gateway_name: str = "") -> bool:
+	"""Store the template's review/quality state per account, then flag fallback templates needing attention.
+
+	The update is routed to the account(s) of its WABA, never to "whichever Gateway received it".
+	Only gateways linked to those accounts (or, in direct mode with no account, the receiving
+	gateway itself) whose fallback template is this one get the operator note.
+	"""
+	accounts: list[str] = []
+	try:
+		from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+		accounts, handled = _route_template_update(gateway_name, update)
+		if not handled:
+			return False
+		for account in accounts:
+			bridge.record_template_webhook(update, account or None)  # best effort, never raises
+	except Exception:
+		pass
+	try:
+		name = str(update.get("message_template_name") or update.get("name") or "").strip()
+		if not name:
+			return True
+		text = _template_update_text(update, name)
+		if not text:
+			return True
+		linked = {a for a in accounts if a}
+		for row in frappe.get_all(
+			"Gateway",
+			filters={"provider": "WhatsApp", "fallback_template": name},
+			fields=["name", "whatsapp_account"],
+		):
+			row_name = row["name"] if isinstance(row, dict) else row.name
+			row_account = (row.get("whatsapp_account") if isinstance(row, dict) else getattr(row, "whatsapp_account", "")) or ""
+			if (row_account and row_account in linked) or (not row_account and row_name == gateway_name):
+				_set_gateway_error(row_name, text)
+	except Exception:
+		pass
+	return True
+
+
+def _supports_batch_parse(adapter) -> bool:
+	# Class-level lookup so duck-typed/mock adapters do not accidentally qualify.
+	return callable(getattr(type(adapter), "parse_payload", None))
+
+
+def _handle_batched_payload(gateway, adapter, request) -> dict:
+	"""Fan out one verified, possibly batched, provider delivery (WhatsApp)."""
+	from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+	from huf.ai.gateway_service import ingest_gateway_event
+
+	try:
+		parsed = adapter.parse_payload(request)
+	except ValueError:
+		frappe.local.response.http_status_code = 400
+		return {"success": False, "error": "Invalid payload"}
+
+	if parsed.messages:
+		_ingest_rate_gate()
+
+	ingested = duplicates = 0
+	results: list[dict] = []
+	first_transient = None
+	failed = 0
+	account_name = None
+	for event in parsed.messages:
+		try:
+			result = ingest_gateway_event(
+				gateway.name,
+				event.provider_event_id,
+				_event_context(event),
+				verified_sender=True,
+				raw_payload=dict(event.raw_payload),
+			)
+		except Exception as exc:
+			frappe.log_error(frappe.get_traceback(), "WhatsApp gateway ingest failed")
+			if isinstance(exc, _TRANSIENT_ERRORS):
+				first_transient = first_transient or exc  # re-raised below so Meta retries (deduped)
+			else:
+				failed += 1  # deterministic: a retry cannot succeed, so still ack 200
+			continue
+		results.append(result)
+		if result.get("duplicate"):
+			duplicates += 1
+			continue
+		ingested += 1
+		if result.get("status") == "Rejected":
+			continue
+		try:  # best-effort mirror into frappe_whatsapp (A4)
+			if account_name is None:
+				# the Gateway's own account only: never a default or first-Active guess
+				account_name = (getattr(gateway, "whatsapp_account", "") or "").strip()
+				if not account_name and bridge.is_available():
+					_warn(
+						f"WhatsApp gateway {gateway.name}: no WhatsApp Account linked; "
+						"inbound messages are not mirrored into frappe_whatsapp"
+					)
+			message = (event.raw_payload or {}).get("message")
+			payload_phone_id = str(((event.raw_payload or {}).get("metadata") or {}).get("phone_number_id") or "")
+			if (
+				account_name
+				and isinstance(message, dict)
+				and bridge.account_matches_phone_id(account_name, payload_phone_id)
+			):
+				bridge.record_incoming(account_name, message, getattr(event, "display_name", "") or None)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "WhatsApp record_incoming failed")
+
+	_record_unknown_phone_ids(gateway.name, getattr(parsed, "unknown_phone_ids", ()) or ())
+	for status in parsed.statuses:
+		_update_reply_status(gateway.name, status)
+		if str(status.get("status") or "").lower() == "failed":
+			_record_failed_status(gateway.name, status)
+	routed_updates = [update for update in parsed.template_updates if _record_template_update(update, gateway.name)]
+
+	forwarded = 0
+	changes = [{"field": "messages", "value": {"statuses": [status]}} for status in parsed.statuses]
+	changes += [
+		{
+			"field": _TEMPLATE_KIND_FIELDS.get(update.get("kind"), "message_template_status_update"),
+			"value": {k: v for k, v in update.items() if k not in ("kind", "waba_id")},
+		}
+		for update in routed_updates
+	]
+	for change in changes:
+		try:
+			if bridge.forward_status(change):
+				forwarded += 1
+		except Exception:
+			pass  # best effort, never fail the ack
+
+	if first_transient is not None:
+		raise first_transient
+	return {
+		"success": True,
+		"messages": len(parsed.messages),
+		"ingested": ingested,
+		"duplicates": duplicates,
+		"statuses": len(parsed.statuses),
+		"template_updates": len(parsed.template_updates),
+		"forwarded": forwarded,
+		"ignored": parsed.ignored,
+		"failed": failed,
+		"results": results,
+	}
+
+
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
-@rate_limit(key="gateway_name", limit=100, seconds=60)
 def handle_gateway_webhook() -> dict | None:
 	"""Verify a native provider callback, then hand only normalized data to Gateway.
 
@@ -239,6 +567,9 @@ def handle_gateway_webhook() -> dict | None:
 	if not gateway_name:
 		frappe.local.response.http_status_code = 400
 		return {"success": False, "error": "Missing gateway_name"}
+	# JSON bodies replace form_dict wholesale, so the rate limiter's
+	# form_dict key would be empty; key the buckets on the query-string name.
+	frappe.form_dict["gateway_name"] = gateway_name
 
 	try:
 		gateway = frappe.get_doc("Gateway", gateway_name)
@@ -252,11 +583,24 @@ def handle_gateway_webhook() -> dict | None:
 	adapter = get_gateway_adapter(gateway)
 	request = _inbound_request()
 	if request.method == "GET" and hasattr(adapter, "verify_url"):
-		_text_response(adapter.verify_url(request) or "")
+		_ingest_rate_gate()
+		try:
+			challenge = adapter.verify_url(request) or ""
+		except frappe.PermissionError:
+			frappe.local.response.http_status_code = 403
+			return {"success": False, "error": "Webhook verification failed"}
+		_text_response(challenge)
 		return None
+	batched = _supports_batch_parse(adapter)
+	if not batched:
+		_ingest_rate_gate()
 	if not adapter.verify_inbound(request):
+		if batched:
+			_ingest_rate_gate()  # forged/unsigned traffic still consumes the budget
 		frappe.local.response.http_status_code = 401
 		return {"success": False, "error": "Provider verification failed"}
+	if batched:
+		return _handle_batched_payload(gateway, adapter, request)
 
 	event = adapter.normalize_inbound(request)
 	result = ingest_gateway_event(
@@ -274,6 +618,17 @@ def send_gateway_reply(gateway, event, text: str):
 	from huf.ai.gateway_adapters.types import GatewayReply
 
 	adapter = get_gateway_adapter(gateway)
+	if gateway.provider == "WhatsApp":
+		# A2: WhatsApp never fragments conversations by thread; the reply quotes
+		# the inbound wamid, which is the event's provider_event_id.
+		return adapter.send_reply(
+			GatewayReply(
+				conversation_id=event.conversation_id,
+				text=text,
+				thread_id=None,
+				reply_to_provider_message_id=event.provider_event_id or None,
+			)
+		)
 	return adapter.send_reply(
 		GatewayReply(
 			conversation_id=event.conversation_id,

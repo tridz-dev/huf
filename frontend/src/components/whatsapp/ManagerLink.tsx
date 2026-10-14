@@ -1,0 +1,37 @@
+import { useState } from 'react';
+import { Check, Copy, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+/** Opens WhatsApp Manager's template page; the account ID is shown because the link cannot jump to it directly. */
+export function ManagerLink({ url, businessId, showId = true }: { url?: string; businessId?: string; showId?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  if (!url) return null;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(businessId ?? '');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button variant="outline" size="sm" asChild>
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          <ExternalLink className="mr-1.5 h-4 w-4" /> Open in WhatsApp Manager
+        </a>
+      </Button>
+      {showId && businessId && (
+        <span className="flex items-center gap-1 text-[11px] text-steel">
+          Account ID <span className="font-mono text-ink">{businessId}</span>
+          <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Copy account ID" onClick={copy}>
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          </Button>
+        </span>
+      )}
+    </div>
+  );
+}

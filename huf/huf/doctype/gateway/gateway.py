@@ -41,6 +41,9 @@ class Gateway(Document):
                     _("The connected integration must use the {0} service.").format(expected_service)
                 )
 
+        # WhatsApp: derive the indexed phone_number_id and enforce number uniqueness / account linking
+        self._validate_whatsapp()
+
         # ST-04.4: Validate required credentials are set
         if self.is_enabled and self.provider:
             self._validate_required_credentials()
@@ -52,6 +55,59 @@ class Gateway(Document):
         # ST-04.4: Verify execution_user has access to default_agent if set
         if self.is_enabled and self.execution_user and self.default_agent:
             self._validate_agent_access()
+
+    def _validate_whatsapp(self):
+        """Derive ``phone_number_id`` and enforce the one-enabled-gateway-per-number rule.
+
+        The number is stored (read-only, indexed) from the connected Integration Settings
+        credential row. Two ENABLED WhatsApp gateways may not share one; a disabled gateway
+        may keep a duplicate. When frappe_whatsapp is installed and a WhatsApp Account is
+        linked, the account must exist and carry the same phone id.
+        """
+        if self.provider != "WhatsApp":
+            self.phone_number_id = ""
+            return
+        credentials = self._load_integration_credentials()
+        self.phone_number_id = str(credentials.get("phone_number_id") or "").strip()
+        if not self.is_enabled:
+            return
+
+        if self.phone_number_id:
+            other = frappe.db.get_value(
+                "Gateway",
+                {
+                    "provider": "WhatsApp",
+                    "is_enabled": 1,
+                    "phone_number_id": self.phone_number_id,
+                    "name": ["!=", self.name or ""],
+                },
+                "name",
+            )
+            if other:
+                frappe.throw(
+                    _(
+                        "WhatsApp phone number ID {0} is already used by the enabled gateway {1}. "
+                        "Each enabled WhatsApp gateway needs its own phone number; disable {1} first or use a different number."
+                    ).format(self.phone_number_id, other)
+                )
+
+        account = (self.get("whatsapp_account") or "").strip()
+        if not account:
+            return
+        from huf.ai.gateway_adapters import whatsapp_bridge as bridge
+
+        if not bridge.is_available():
+            return  # frappe_whatsapp absent: the link is inert, nothing to validate against
+        if not frappe.db.exists("WhatsApp Account", account):
+            frappe.throw(_("WhatsApp Account {0} does not exist.").format(account))
+        account_phone = str(frappe.db.get_value("WhatsApp Account", account, "phone_id") or "").strip()
+        if self.phone_number_id and account_phone != self.phone_number_id:
+            frappe.throw(
+                _(
+                    "WhatsApp Account {0} uses phone number ID {1}, but this gateway's integration uses {2}. "
+                    "Link the account that belongs to this number."
+                ).format(account, account_phone or _("(none)"), self.phone_number_id)
+            )
 
     def _validate_required_credentials(self):
         """Verify that required credentials per the adapter schema are configured.
