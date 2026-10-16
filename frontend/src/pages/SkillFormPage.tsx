@@ -28,6 +28,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Combobox } from '@/components/ui/combobox';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import { Plus, Trash2, Server, BookOpen, ScrollText, Plug, Save, Sparkles, Download } from 'lucide-react';
 import { getSkill, createSkill, updateSkill, exportSkillAsHuf } from '@/services/skillApi';
 import { getToolFunctions } from '@/services/toolApi';
@@ -366,10 +367,21 @@ export function SkillFormPage() {
     }
   };
 
-  const addTool = (toolName: string) => {
-    if (!toolName || tools.some((t) => t.tool === toolName)) return;
-    const tool = toolOptions.find((t) => t.name === toolName);
-    setTools([...tools, { tool: toolName, tool_name: tool?.tool_name, description: tool?.description }]);
+  const addTool = (toolNames: string | string[]) => {
+    const selectedToolNames = Array.isArray(toolNames) ? toolNames : [toolNames];
+    const addedToolNames = new Set(tools.map((tool) => tool.tool));
+    const newTools = selectedToolNames.flatMap((toolName) => {
+      const tool = toolOptions.find((option) => option.name === toolName);
+      if (!tool || addedToolNames.has(toolName)) return [];
+      addedToolNames.add(toolName);
+      return [{ tool: toolName, tool_name: tool.tool_name, description: tool.description }];
+    });
+    if (newTools.length > 0) {
+      setTools((currentTools) => [
+        ...currentTools,
+        ...newTools.filter((tool) => !currentTools.some((current) => current.tool === tool.tool)),
+      ]);
+    }
   };
 
   const removeTool = (index: number) => setTools(tools.filter((_, i) => i !== index));
@@ -698,6 +710,8 @@ export function SkillFormPage() {
                   addLabel="Add Tool"
                   options={toolOptions.map((t) => ({ value: t.name, label: t.tool_name || t.name, subtitle: t.description }))}
                   onAdd={addTool}
+                  onAddMultiple={addTool}
+                  multiple
                 >
                   {tools.map((tool, index) => (
                     <div
@@ -881,11 +895,25 @@ interface ChildTableCardProps {
   addLabel: string;
   options: { value: string; label: string; subtitle?: string }[];
   onAdd: (value: string) => void;
+  onAddMultiple?: (values: string[]) => void;
+  multiple?: boolean;
   children: React.ReactNode;
 }
 
-function ChildTableCard({ title, description, icon: Icon, emptyText, addLabel, options, onAdd, children }: ChildTableCardProps) {
+function ChildTableCard({
+  title,
+  description,
+  icon: Icon,
+  emptyText,
+  addLabel,
+  options,
+  onAdd,
+  onAddMultiple,
+  multiple = false,
+  children,
+}: ChildTableCardProps) {
   const [value, setValue] = useState('');
+  const [values, setValues] = useState<string[]>([]);
   return (
     <Card>
       <CardHeader>
@@ -902,26 +930,44 @@ function ChildTableCard({ title, description, icon: Icon, emptyText, addLabel, o
       <CardContent className="space-y-4">
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <Combobox
-              options={options}
-              value={value}
-              onValueChange={setValue}
-              placeholder={addLabel}
-              searchPlaceholder={`Search ${title.toLowerCase()}...`}
-              emptyText={`No ${title.toLowerCase()} found`}
-            />
+            {multiple ? (
+              <MultiSelectCombobox
+                options={options.map(({ value: optionValue, label, subtitle }) => ({
+                  value: optionValue,
+                  label,
+                  description: subtitle,
+                }))}
+                values={values}
+                onValuesChange={setValues}
+                placeholder={addLabel}
+                searchPlaceholder={`Search ${title.toLowerCase()}...`}
+                emptyText={`No ${title.toLowerCase()} found`}
+              />
+            ) : (
+              <Combobox
+                options={options}
+                value={value}
+                onValueChange={setValue}
+                placeholder={addLabel}
+                searchPlaceholder={`Search ${title.toLowerCase()}...`}
+                emptyText={`No ${title.toLowerCase()} found`}
+              />
+            )}
           </div>
           <Button
             type="button"
             size="sm"
             variant="outline"
             onClick={() => {
-              if (value) {
+              if (multiple && values.length > 0 && onAddMultiple) {
+                onAddMultiple(values);
+                setValues([]);
+              } else if (!multiple && value) {
                 onAdd(value);
                 setValue('');
               }
             }}
-            disabled={!value}
+            disabled={multiple ? values.length === 0 : !value}
           >
             <Plus className="w-4 h-4 mr-2" />
             {addLabel}
