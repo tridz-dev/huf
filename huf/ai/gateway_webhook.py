@@ -255,7 +255,12 @@ def handle_gateway_webhook() -> dict | None:
 	adapter = get_gateway_adapter(gateway)
 	request = _inbound_request()
 	if request.method == "GET" and hasattr(adapter, "verify_url"):
-		_text_response(adapter.verify_url(request) or "")
+		try:
+			challenge = adapter.verify_url(request) or ""
+		except ValueError:
+			frappe.local.response.http_status_code = 403
+			return {"success": False, "error": "Provider verification failed"}
+		_text_response(challenge)
 		return None
 	if not adapter.verify_inbound(request):
 		frappe.local.response.http_status_code = 401

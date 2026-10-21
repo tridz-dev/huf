@@ -133,5 +133,24 @@ class TestGatewayWebhookStatusCodes(unittest.TestCase):
         assert mock_frappe.local.response.http_status_code == 200
 
 
+class TestGatewayWebhookVerifyUrlMismatch(unittest.TestCase):
+    @patch("huf.ai.gateway_webhook.get_gateway_adapter")
+    @patch("huf.ai.gateway_webhook._inbound_request")
+    @patch("huf.ai.gateway_webhook.frappe")
+    def test_bad_hub_verify_token_is_403_not_500(self, mock_frappe, mock_request, mock_adapter):
+        mock_frappe.request = SimpleNamespace(args={"gateway_name": "WA"}, method="GET")
+        mock_frappe.local = SimpleNamespace(response=FakeResponse())
+        mock_frappe.get_doc.return_value = SimpleNamespace(name="WA", provider="WhatsApp", is_enabled=0)
+        mock_request.return_value = SimpleNamespace(method="GET")
+        adapter = MagicMock()
+        adapter.verify_url.side_effect = ValueError("token mismatch")
+        mock_adapter.return_value = adapter
+
+        result = gateway_webhook.handle_gateway_webhook()
+
+        assert result == {"success": False, "error": "Provider verification failed"}
+        assert mock_frappe.local.response.http_status_code == 403
+
+
 if __name__ == "__main__":
     unittest.main()
