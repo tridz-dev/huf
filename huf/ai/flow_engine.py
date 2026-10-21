@@ -273,7 +273,10 @@ def _acquire_run_lock(flow_run_name: str) -> bool:
 
 def _release_run_lock(flow_run_name: str) -> None:
 	try:
-		frappe.cache().delete_value(_run_lock_key(flow_run_name))
+		# ``delete`` (raw key), not ``delete_value``: the lock is taken with a raw
+		# ``SET NX``, while ``delete_value`` removes the site-prefixed key, so the lock
+		# would otherwise survive until its TTL and silently block approve/resume.
+		frappe.cache().delete(_run_lock_key(flow_run_name))
 	except Exception:
 		pass
 
