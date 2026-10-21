@@ -18,7 +18,7 @@ def has_permission_agent_run(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False to deny; True when this hook has no objection (role permissions decide)
 	"""
 	from huf.ai.record_access import user_can_read_run
 
@@ -35,7 +35,10 @@ def has_permission_agent_run(doc, ptype=None, user=None):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 		return doc.owner == user
-	return None  # Let framework decide for other ptypes
+	# Frappe v15+/v16 treat a falsy hook result as a denial (controllers can only deny),
+	# so None here would block e.g. create for every non-System-Manager user. True means
+	# "no objection": the role permissions still decide.
+	return True
 
 
 def has_permission_agent_message(doc, ptype=None, user=None):
@@ -47,7 +50,7 @@ def has_permission_agent_message(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False to deny; True when this hook has no objection (role permissions decide)
 	"""
 	from huf.ai.record_access import user_can_read_message
 
@@ -66,7 +69,10 @@ def has_permission_agent_message(doc, ptype=None, user=None):
 			return True
 		conv_owner = frappe.db.get_value("Agent Conversation", doc.conversation, "owner")
 		return conv_owner == user
-	return None  # Let framework decide for other ptypes
+	# Frappe v15+/v16 treat a falsy hook result as a denial (controllers can only deny),
+	# so None here would block e.g. create for every non-System-Manager user. True means
+	# "no objection": the role permissions still decide.
+	return True
 
 
 def has_permission_agent_conversation(doc, ptype=None, user=None):
@@ -78,7 +84,7 @@ def has_permission_agent_conversation(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False to deny; True when this hook has no objection (role permissions decide)
 	"""
 	from huf.ai.record_access import user_can_read_conversation
 
@@ -95,7 +101,10 @@ def has_permission_agent_conversation(doc, ptype=None, user=None):
 		if "System Manager" in frappe.get_roles(user):
 			return True
 		return doc.owner == user
-	return None  # Let framework decide for other ptypes
+	# Frappe v15+/v16 treat a falsy hook result as a denial (controllers can only deny),
+	# so None here would block e.g. create for every non-System-Manager user. True means
+	# "no objection": the role permissions still decide.
+	return True
 
 
 def has_permission_agent_tool_call(doc, ptype=None, user=None):
@@ -107,7 +116,7 @@ def has_permission_agent_tool_call(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False to deny; True when this hook has no objection (role permissions decide)
 	"""
 	from huf.ai.record_access import user_can_read_tool_call
 
@@ -126,7 +135,10 @@ def has_permission_agent_tool_call(doc, ptype=None, user=None):
 			return True
 		run_owner = frappe.db.get_value("Agent Run", doc.agent_run, "owner")
 		return run_owner == user
-	return None  # Let framework decide for other ptypes
+	# Frappe v15+/v16 treat a falsy hook result as a denial (controllers can only deny),
+	# so None here would block e.g. create for every non-System-Manager user. True means
+	# "no objection": the role permissions still decide.
+	return True
 
 
 def has_permission_agent_context_artifact(doc, ptype=None, user=None):
@@ -138,7 +150,7 @@ def has_permission_agent_context_artifact(doc, ptype=None, user=None):
 		user: User to check (default: frappe.session.user)
 
 	Returns:
-		bool or None: True to allow, False to deny, None to let Frappe decide
+		bool: False to deny; True when this hook has no objection (role permissions decide)
 	"""
 	from huf.ai.record_access import user_can_read_context_artifact
 
@@ -157,4 +169,7 @@ def has_permission_agent_context_artifact(doc, ptype=None, user=None):
 			return True
 		conv_owner = frappe.db.get_value("Agent Conversation", doc.conversation, "owner")
 		return conv_owner == user
-	return None  # Let framework decide for other ptypes
+	# Frappe v15+/v16 treat a falsy hook result as a denial (controllers can only deny),
+	# so None here would block e.g. create for every non-System-Manager user. True means
+	# "no objection": the role permissions still decide.
+	return True
