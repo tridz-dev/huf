@@ -1058,7 +1058,7 @@ def create_huf_roles():
 	from huf.permissions import DEFAULT_ROLE_CAPABILITIES, HUF_ROLE_FRAPPE_ROLE_MAP
 
 	# 1. Ensure Frappe Role records exist for Huf-managed roles.
-	for frappe_role_name in ["Huf Manager", "Huf User", "Huf Viewer"]:
+	for frappe_role_name in ["Huf Manager", "Huf User", "Huf Viewer", "Huf Gateway User"]:
 		if not frappe.db.exists("Role", frappe_role_name):
 			frappe.get_doc({
 				"doctype": "Role",
