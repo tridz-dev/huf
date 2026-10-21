@@ -87,5 +87,14 @@ class TestWhatsAppSendTemplate(unittest.TestCase):
 		self.assertEqual(ga.call_args.args[0], "Gateway")
 
 
+	def test_graph_error_text_is_surfaced(self):
+		body = {"error": {"message": "Session has expired", "code": 190}}
+		with patch.object(whatsapp.requests, "post", return_value=FakeResponse(status_code=401, body=body)):
+			result = json.loads(whatsapp.handle_action("send_template", **self._kwargs()))
+		self.assertFalse(result["success"])
+		self.assertIn("Session has expired", result["error"])
+		self.assertIn("190", result["error"])
+
+
 if __name__ == "__main__":
 	unittest.main()

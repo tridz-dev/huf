@@ -52,6 +52,17 @@ class WhatsAppSender:
 			"Content-Type": "application/json",
 		}
 		response = self._http_post(url, json=data, headers=headers, timeout=15)
+		status_code = getattr(response, "status_code", None)
+		if isinstance(status_code, int) and status_code >= 400:
+			# Surface Meta's own error text (e.g. expired token, code 190) rather
+			# than a bare "401 Client Error".
+			detail = ""
+			try:
+				err = (response.json() or {}).get("error") or {}
+				detail = f"{err.get('message', '')} (code {err.get('code')})" if err else ""
+			except Exception:
+				pass
+			raise ValueError(f"WhatsApp API HTTP {status_code}: {detail or 'request rejected'}")
 		if hasattr(response, "raise_for_status"):
 			response.raise_for_status()
 		body = response.json() if hasattr(response, "json") else response
