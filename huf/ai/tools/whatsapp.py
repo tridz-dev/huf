@@ -13,7 +13,7 @@ from typing import Optional, Any
 import frappe
 import requests
 
-META_GRAPH_URL = "https://graph.facebook.com/v18.0"
+from huf.ai.gateway_adapters.whatsapp import META_GRAPH_URL, WhatsAppSender
 
 
 def _error(msg: str) -> str:
@@ -25,30 +25,37 @@ def _success(data: Any) -> str:
 
 
 def _get_whatsapp_credentials(kwargs: dict) -> tuple[str, str]:
-	"""Get phone_number_id and access_token from arguments or Integration Settings."""
+	"""Resolve (phone_number_id, access_token).
+
+	Explicit arguments win. Otherwise use the credentials of the enabled
+	WhatsApp Gateway's connected Integration Settings (the same source the
+	gateway adapter uses), then fall back to a frappe_whatsapp WhatsApp Account.
+	"""
 	phone_number_id = (kwargs.get("phone_number_id") or "").strip()
 	access_token = (kwargs.get("access_token") or "").strip()
-
 	if phone_number_id and access_token:
 		return phone_number_id, access_token
 
-	# Fallback to Integration Settings or WhatsApp Account DocType
-	if frappe.db.exists("DocType", "WhatsApp Account"):
+	try:
+		from huf.ai.gateway_webhook import _gateway_credentials
+
+		filters = {"provider": "WhatsApp", "is_enabled": 1}
+		if kwargs.get("gateway"):
+			filters["name"] = kwargs["gateway"]
+		names = frappe.get_all("Gateway", filters=filters, pluck="name", limit=1)
+		if names:
+			creds = _gateway_credentials(frappe.get_doc("Gateway", names[0]))
+			phone_number_id = phone_number_id or (creds.get("phone_number_id") or "").strip()
+			access_token = access_token or (creds.get("access_token") or "").strip()
+	except Exception:
+		frappe.log_error(title="WhatsApp tool: gateway credential lookup failed")
+
+	if (not phone_number_id or not access_token) and frappe.db.exists("DocType", "WhatsApp Account"):
 		accounts = frappe.get_all("WhatsApp Account", fields=["name", "phone_number_id"], limit=1)
 		if accounts:
 			doc = frappe.get_doc("WhatsApp Account", accounts[0].name)
 			phone_number_id = phone_number_id or doc.phone_number_id or ""
 			access_token = access_token or doc.get_password("token") or ""
-
-	if not phone_number_id or not access_token:
-		# Check Integration Settings
-		settings_list = frappe.get_all("Integration Settings", filters={"service": "whatsapp", "is_active": 1}, limit=1)
-		if settings_list:
-			doc = frappe.get_doc("Integration Settings", settings_list[0].name)
-			phone_number_id = phone_number_id or doc.get("phone_number_id") or ""
-			for row in doc.credentials or []:
-				if row.key == "access_token":
-					access_token = access_token or row.get_password("value") or ""
 
 	return phone_number_id, access_token
 
@@ -81,43 +88,11 @@ def _send_message(kwargs: dict) -> str:
 	if not phone_number_id or not access_token:
 		return _error("WhatsApp credentials (phone_number_id and access_token) not found")
 
-	url = f"{META_GRAPH_URL}/{phone_number_id}/messages"
-	headers = {
-		"Authorization": f"Bearer {access_token}",
-		"Content-Type": "application/json",
-	}
-	payload = {
-		"messaging_product": "whatsapp",
-		"recipient_type": "individual",
-		"to": recipient,
-		"type": "text",
-		"text": {"preview_url": False, "body": message},
-	}
-
 	try:
-		res = requests.post(url, json=payload, headers=headers, timeout=15)
-		data = res.json()
-		if res.status_code != 200 or "error" in data:
-			return _error(f"WhatsApp API Error: {data.get('error', {}).get('message', res.text)}")
-
-		msg_id = data.get("messages", [{}])[0].get("id")
-
-		# Log in frappe_whatsapp if installed
-		if frappe.db.exists("DocType", "WhatsApp Message"):
-			try:
-				frappe.get_doc({
-					"doctype": "WhatsApp Message",
-					"type": "Outgoing",
-					"from": phone_number_id,
-					"to": recipient,
-					"message": message,
-					"message_id": msg_id,
-					"status": "Sent",
-				}).insert(ignore_permissions=True)
-			except Exception:
-				pass
-
-		return _success({"message_id": msg_id, "recipient": recipient, "status": "sent"})
+		delivery = WhatsAppSender(phone_number_id, access_token).send_text(recipient, message)
+		return _success(
+			{"message_id": delivery.provider_message_id, "recipient": recipient, "status": "sent"}
+		)
 	except Exception as e:
 		return _error(f"Failed to send WhatsApp message: {str(e)}")
 
@@ -144,37 +119,11 @@ def _send_template(kwargs: dict) -> str:
 	if not isinstance(parameters, list):
 		return _error("'parameters' must be a list of strings")
 
-	url = f"{META_GRAPH_URL}/{phone_number_id}/messages"
-	headers = {
-		"Authorization": f"Bearer {access_token}",
-		"Content-Type": "application/json",
-	}
-	template: dict[str, Any] = {
-		"name": template_name,
-		"language": {"code": language_code},
-	}
-	if parameters:
-		template["components"] = [
-			{
-				"type": "body",
-				"parameters": [{"type": "text", "text": str(value)} for value in parameters],
-			}
-		]
-	payload = {
-		"messaging_product": "whatsapp",
-		"recipient_type": "individual",
-		"to": recipient,
-		"type": "template",
-		"template": template,
-	}
-
 	try:
-		res = requests.post(url, json=payload, headers=headers, timeout=15)
-		data = res.json()
-		if res.status_code != 200 or "error" in data:
-			return _error(f"WhatsApp API Error: {data.get('error', {}).get('message', res.text)}")
-
-		return _success(data)
+		delivery = WhatsAppSender(phone_number_id, access_token).send_template(
+			recipient, template_name, language_code, parameters
+		)
+		return _success(delivery.provider_response)
 	except Exception as e:
 		return _error(f"Failed to send WhatsApp template: {str(e)}")
 

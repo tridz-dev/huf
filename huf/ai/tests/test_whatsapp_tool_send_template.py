@@ -77,6 +77,15 @@ class TestWhatsAppSendTemplate(unittest.TestCase):
 		result = json.loads(whatsapp.handle_action("send_template", phone_number_id="PN1", access_token="t"))
 		self.assertFalse(result["success"])
 
+	def test_credentials_resolve_from_gateway_not_integration_settings(self):
+		gw = MagicMock()
+		with patch.object(whatsapp.frappe, "get_all", return_value=["WA"], create=True) as ga, \
+			patch.object(whatsapp.frappe, "get_doc", return_value=gw, create=True), \
+			patch("huf.ai.gateway_webhook._gateway_credentials",
+				return_value={"phone_number_id": "PN9", "access_token": "tok9"}):
+			self.assertEqual(whatsapp._get_whatsapp_credentials({}), ("PN9", "tok9"))
+		self.assertEqual(ga.call_args.args[0], "Gateway")
+
 
 if __name__ == "__main__":
 	unittest.main()

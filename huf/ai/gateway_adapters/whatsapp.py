@@ -27,13 +27,86 @@ from huf.ai.gateway_adapters.types import (
 	OutboundDelivery,
 )
 
-META_GRAPH_URL = "https://graph.facebook.com/v18.0"
+GRAPH_API_VERSION = "v25.0"
+META_GRAPH_URL = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
 
 def _requests_post(url: str, *, json: dict, headers: dict, timeout: int) -> Any:
 	import requests
 
 	return requests.post(url, json=json, headers=headers, timeout=timeout)
+
+
+class WhatsAppSender:
+	"""Single Graph API sender for WhatsApp messages (replies and agent tools)."""
+
+	def __init__(self, phone_number_id: str, access_token: str, *, http_post: Callable[..., Any] = _requests_post):
+		self.phone_number_id = str(phone_number_id).strip()
+		self._access_token = str(access_token).strip()
+		self._http_post = http_post
+
+	def _post_message(self, data: dict[str, Any]) -> tuple[str, dict]:
+		url = f"{META_GRAPH_URL}/{self.phone_number_id}/messages"
+		headers = {
+			"Authorization": f"Bearer {self._access_token}",
+			"Content-Type": "application/json",
+		}
+		response = self._http_post(url, json=data, headers=headers, timeout=15)
+		if hasattr(response, "raise_for_status"):
+			response.raise_for_status()
+		body = response.json() if hasattr(response, "json") else response
+		if not isinstance(body, Mapping) or "messages" not in body:
+			raise ValueError(f"WhatsApp API rejected outbound message: {body}")
+		return str(body["messages"][0]["id"]), dict(body)
+
+	def _record(self, to: str, message: str, msg_id: str) -> None:
+		# Best-effort sync with frappe_whatsapp DocType if installed
+		try:
+			if frappe.db.exists("DocType", "WhatsApp Message"):
+				frappe.get_doc({
+					"doctype": "WhatsApp Message",
+					"type": "Outgoing",
+					"from": self.phone_number_id,
+					"to": to,
+					"message": message,
+					"message_id": msg_id,
+					"status": "Sent",
+				}).insert(ignore_permissions=True)
+		except Exception:
+			pass
+
+	def send_text(self, to: str, text: str, reply_to_message_id: str | None = None) -> OutboundDelivery:
+		data: dict[str, Any] = {
+			"messaging_product": "whatsapp",
+			"recipient_type": "individual",
+			"to": to,
+			"type": "text",
+			"text": {"preview_url": False, "body": text},
+		}
+		if reply_to_message_id:
+			data["context"] = {"message_id": reply_to_message_id}
+		msg_id, body = self._post_message(data)
+		self._record(to, text, msg_id)
+		return OutboundDelivery(provider_message_id=msg_id, provider_response=body)
+
+	def send_template(
+		self, to: str, template_name: str, language_code: str = "en", parameters: list | None = None
+	) -> OutboundDelivery:
+		template: dict[str, Any] = {"name": template_name, "language": {"code": language_code}}
+		if parameters:
+			template["components"] = [
+				{"type": "body", "parameters": [{"type": "text", "text": str(v)} for v in parameters]}
+			]
+		data = {
+			"messaging_product": "whatsapp",
+			"recipient_type": "individual",
+			"to": to,
+			"type": "template",
+			"template": template,
+		}
+		msg_id, body = self._post_message(data)
+		self._record(to, f"[template:{template_name}]", msg_id)
+		return OutboundDelivery(provider_message_id=msg_id, provider_response=body)
 
 
 class WhatsAppGatewayAdapter(GatewayAdapter):
@@ -70,6 +143,7 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		self._verify_token = str(credentials["webhook_verify_token"]).strip()
 		self._app_secret = str(credentials.get("app_secret") or "").strip()
 		self._http_post = http_post
+		self.sender = WhatsAppSender(self._phone_number_id, self._access_token, http_post=http_post)
 
 	def verify_url(self, request: GatewayInboundRequest) -> str:
 		"""Return Meta hub.challenge if verify token matches GET request."""
@@ -108,8 +182,12 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		expected = hmac.new(self._app_secret.encode("utf-8"), request.body, "sha256").hexdigest()
 		return hmac.compare_digest(signature[7:], expected)
 
-	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent:
-		"""Extract normalized event from Meta WhatsApp payload."""
+	def normalize_inbound(self, request: GatewayInboundRequest) -> NormalizedGatewayEvent | None:
+		"""Extract normalized event from Meta WhatsApp payload.
+
+		Returns None for verified payloads carrying no inbound message (e.g.
+		delivery/read ``statuses`` updates) so the handler can ack with 200.
+		"""
 		payload = self._payload(request)
 		if not payload:
 			raise ValueError("Invalid JSON payload in WhatsApp request")
@@ -126,6 +204,8 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		value = changes[0].get("value") or {}
 		messages = value.get("messages") or []
 		if not messages:
+			if value.get("statuses"):
+				return None
 			raise ValueError("WhatsApp change payload contains no message events")
 
 		msg = messages[0]
@@ -177,48 +257,9 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		)
 
 	def send_reply(self, reply: GatewayReply) -> OutboundDelivery:
-		"""Send outbound text message via Meta WhatsApp Cloud API and record in frappe_whatsapp."""
-		url = f"{META_GRAPH_URL}/{self._phone_number_id}/messages"
-		headers = {
-			"Authorization": f"Bearer {self._access_token}",
-			"Content-Type": "application/json",
-		}
-		data: dict[str, Any] = {
-			"messaging_product": "whatsapp",
-			"recipient_type": "individual",
-			"to": reply.conversation_id,
-			"type": "text",
-			"text": {"preview_url": False, "body": reply.text},
-		}
-		if reply.reply_to_provider_message_id:
-			data["context"] = {"message_id": reply.reply_to_provider_message_id}
-
-		response = self._http_post(url, json=data, headers=headers, timeout=15)
-		if hasattr(response, "raise_for_status"):
-			response.raise_for_status()
-		body = response.json() if hasattr(response, "json") else response
-
-		if not isinstance(body, Mapping) or "messages" not in body:
-			raise ValueError(f"WhatsApp API rejected outbound reply: {body}")
-
-		msg_id = body["messages"][0]["id"]
-
-		# Best-effort sync with frappe_whatsapp DocType if installed
-		try:
-			if frappe.db.exists("DocType", "WhatsApp Message"):
-				frappe.get_doc({
-					"doctype": "WhatsApp Message",
-					"type": "Outgoing",
-					"from": self._phone_number_id,
-					"to": reply.conversation_id,
-					"message": reply.text,
-					"message_id": msg_id,
-					"status": "Sent",
-				}).insert(ignore_permissions=True)
-		except Exception:
-			pass
-
-		return OutboundDelivery(provider_message_id=str(msg_id), provider_response=dict(body))
+		"""Send outbound text message via the shared WhatsApp sender."""
+		self.sender._http_post = self._http_post
+		return self.sender.send_text(reply.conversation_id, reply.text, reply.reply_to_provider_message_id)
 
 	@staticmethod
 	def _payload(request: GatewayInboundRequest) -> dict[str, Any] | None:

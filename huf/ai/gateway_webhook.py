@@ -245,7 +245,10 @@ def handle_gateway_webhook() -> dict | None:
 	except frappe.DoesNotExistError:
 		frappe.local.response.http_status_code = 404
 		return {"success": False, "error": "Unknown gateway"}
-	if not gateway.is_enabled:
+	is_verification = getattr(frappe.request, "method", None) == "GET"
+	# Meta's hub verification handshake runs before the operator can finish
+	# enabling the gateway, so only the GET handshake bypasses the disabled gate.
+	if not gateway.is_enabled and not is_verification:
 		frappe.local.response.http_status_code = 403
 		return {"success": False, "error": "Gateway is disabled"}
 
@@ -259,6 +262,10 @@ def handle_gateway_webhook() -> dict | None:
 		return {"success": False, "error": "Provider verification failed"}
 
 	event = adapter.normalize_inbound(request)
+	if event is None:
+		# Verified but nothing to route (e.g. delivery status): ack so the
+		# provider does not retry.
+		return {"success": True, "ignored": True}
 	result = ingest_gateway_event(
 		gateway.name,
 		event.provider_event_id,
