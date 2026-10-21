@@ -1019,6 +1019,17 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 				loop.close()
 			if not isinstance(result, dict):
 				result = {"success": True, "result": result}
+			elif "success" not in result and ("content" in result or "isError" in result):
+				# A raw MCP tools/call payload has no ``success`` key; without this a
+				# call that ran is recorded as Failed (and an on_error route would
+				# then retry a side-effecting tool).
+				is_error = bool(result.get("isError"))
+				texts = [c.get("text", "") for c in (result.get("content") or []) if isinstance(c, dict)]
+				result = {
+					"success": not is_error,
+					"result": result,
+					"error": " ".join(t for t in texts if t) or "MCP tool reported an error" if is_error else "",
+				}
 		else:
 			with tool_run_context(invocation_ctx):
 				result = execute_tool(tool_name, args)
