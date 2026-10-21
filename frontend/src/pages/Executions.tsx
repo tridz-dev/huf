@@ -93,6 +93,7 @@ function ExecutionsRunsTab() {
       search?: string;
       status?: string;
       agents?: string;
+      automation_id?: string;
       range?: string;
     },
     AgentRunDoc
@@ -105,6 +106,9 @@ function ExecutionsRunsTab() {
       const rangeKey = params.range ?? DEFAULT_RANGE;
       const rangeMs = TIME_RANGE_MS[rangeKey] ?? TIME_RANGE_MS[DEFAULT_RANGE];
       const runFilters: Array<[string, string, unknown]> = [['is_child', '=', '0']];
+      if (params.automation_id) {
+        runFilters.push(['automation', '=', params.automation_id]);
+      }
       if (rangeMs) {
         runFilters.push(['start_time', '>=', new Date(Date.now() - rangeMs).toISOString()]);
       }
@@ -133,7 +137,7 @@ function ExecutionsRunsTab() {
         total: response.total,
       };
     },
-    initialParams: {},
+    initialParams: { automation_id: searchParams.get('automation_id') || undefined },
     pageSize: 20,
     debounceMs: 300,
     autoLoad: true,

@@ -690,7 +690,11 @@ export function AutomationFormPage() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => navigate(`/executions?agents=${encodeURIComponent(automation.agent)}`)}
+              onClick={() =>
+                navigate(
+                  `/executions?agents=${encodeURIComponent(automation.agent)}&automation_id=${encodeURIComponent(automation.name)}`
+                )
+              }
             >
               View this agent&apos;s runs
             </Button>
