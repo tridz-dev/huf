@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 
 import { getConversation } from '@/services/chatApi';
 import { getAgent } from '@/services/agentApi';
-import type { AgentStarterPromptRow } from '@/types/agent.types';
+import type { AgentDoc, AgentStarterPromptRow } from '@/types/agent.types';
 
 export const DEFAULT_COLD_START_AGENT = 'Hub Orchestrator';
 
@@ -40,6 +40,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
       : (searchParams.get('agent') ?? DEFAULT_COLD_START_AGENT)
   );
   const [agentDisplayName, setAgentDisplayName] = useState<string>('');
+  const [agentModality, setAgentModality] = useState<AgentDoc['agent_modality']>('Both');
   const [agentModel, setAgentModel] = useState<string | null>(null);
   const [agentColor, setAgentColor] = useState<string | null>(null);
   const [agentDescription, setAgentDescription] = useState<string>('');
@@ -75,6 +76,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
           const agentData = await getAgent(conversation.agent);
           if (!cancelled) {
             setAgentDisplayName(agentData.agent_name || conversation.agent);
+            setAgentModality(agentData.agent_modality || 'Both');
             setAgentModel(agentData.model || null);
             setAgentColor(agentData.agent_color || null);
             setAgentDescription(agentData.description || '');
@@ -89,6 +91,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
           console.error('Failed to load agent color', error);
           if (!cancelled) {
             setAgentDisplayName('');
+            setAgentModality('Both');
             setAgentModel(null);
             setAgentColor(null);
             setAgentDescription('');
@@ -113,6 +116,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         const agentData = await getAgent(agentFromQuery);
         if (!cancelled) {
           setAgentDisplayName(agentData.agent_name || agentFromQuery);
+          setAgentModality(agentData.agent_modality || 'Both');
           setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
           setAgentDescription(agentData.description || '');
@@ -127,6 +131,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         console.error('Failed to load agent color', error);
         if (!cancelled) {
           setAgentDisplayName('');
+          setAgentModality('Both');
           setAgentModel(null);
           setAgentColor(null);
           setAgentDescription('');
@@ -181,6 +186,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
         .then((agentData) => {
           if (cancelled) return;
           setAgentDisplayName(agentData.agent_name || currentAgent);
+          setAgentModality(agentData.agent_modality || 'Both');
           setAgentModel(agentData.model || null);
           setAgentColor(agentData.agent_color || null);
           setAgentDescription(agentData.description || '');
@@ -206,6 +212,7 @@ export function useChatAgentIdentity(chatId: string | null, searchParams: URLSea
   return {
     agentName,
     agentDisplayName,
+    agentModality,
     agentModel,
     agentColor,
     agentDescription,

@@ -331,7 +331,9 @@ export function ChatWindowHeader({
                 </button>
             </AgentSwitcher>
 
-            {model && <span className="font-mono text-[11px] text-steel-soft">{model}</span>}
+            {agent?.agent_modality !== 'Voice' && model && (
+                <span className="font-mono text-[11px] text-steel-soft">{model}</span>
+            )}
 
             {conversationHost && (
                 <DesktopHostBadge host={conversationHost} className="max-w-[260px]" />

@@ -82,6 +82,7 @@ export function ChatMessageList({
     const {
         agentName,
         agentDisplayName,
+        agentModality,
         agentModel,
         agentDescription,
         agentColor,
@@ -419,6 +420,11 @@ export function ChatMessageList({
                                 <p className="text-xs text-muted-foreground">{messagesError.message || 'An error occurred while fetching messages.'}</p>
                             </div>
                         </div>
+                    ) : agentModality === 'Voice' ? (
+                        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 text-center">
+                            <p className="text-base font-semibold text-ink">{agentDisplayName}</p>
+                            <p className="text-sm text-steel-soft">Start a voice call to talk with this agent.</p>
+                        </div>
                     ) : isColdStart ? (
                         <div className="w-full max-w-chat-measure flex flex-col gap-[14px]">
                             <ColdStartHero
@@ -486,6 +492,7 @@ export function ChatMessageList({
                 chatId={chatId}
                 agentName={agentName}
                 agentModel={agentModel}
+                agentModality={agentModality}
                 project={newConversationProject ?? undefined}
                 onConversationCreated={onConversationCreated}
                 onStatusChange={setStatus}

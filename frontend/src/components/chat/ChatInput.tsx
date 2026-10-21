@@ -16,6 +16,7 @@ import { getFileTypeInfo } from "@/utils/fileTypeUtils";
 import { getFrappeErrorMessage } from "@/lib/frappe-error";
 import { cn } from "@/lib/utils";
 import type { MessageType } from './types';
+import type { AgentDoc } from '@/types/agent.types';
 import { cacheReasoning } from './chatMessageList.mappers';
 import { cacheAgentNameForChat } from './useChatAgentIdentity';
 import { useVoiceCall } from '@/hooks/useVoiceCall';
@@ -42,6 +43,7 @@ interface ChatInputProps {
     agentName: string;
     /** Current agent/conversation model, shown as an inline chip next to the keyboard hint. */
     agentModel?: string | null;
+    agentModality?: AgentDoc['agent_modality'];
     /** HUF Project a brand-new conversation (no `chatId` yet) should be
      * created into. Ignored once a conversation already exists - its own
      * `project` is authoritative from then on. */
@@ -76,6 +78,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
     chatId,
     agentName,
     agentModel,
+    agentModality = 'Both',
     project,
     onConversationCreated,
     onStatusChange,
@@ -122,12 +125,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         error?: string;
     } | null>(null);
 
-    // "Talk to this agent" voice call. The Agent object available here is
-    // just `agentName` (no `voice_enabled`/`voice_engine` — plumbing that in
-    // would require changes to how agent data flows into ChatInput), so the
-    // call button is always shown and relies on `start_session` throwing a
-    // clear backend error for agents without a voice engine configured,
-    // surfaced below via the same toast convention as the rest of this file.
+    // Voice calls reuse this hook; modality controls whether the call is
+    // offered alongside text chat or as the only interaction.
     const voiceCall = useVoiceCall(agentName, chatId ?? undefined);
     const voiceCallErrorRef = useRef<string | null>(null);
     useEffect(() => {
@@ -1125,6 +1124,23 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
         );
     }
 
+    if (agentModality === 'Voice') {
+        return (
+            <div className="flex-none px-[26px] pb-4">
+                <Button
+                    type="button"
+                    onClick={handleStartVoiceCall}
+                    disabled={isSubmitting}
+                    className="mx-auto flex items-center gap-2 rounded-full"
+                    aria-label="Start voice call"
+                >
+                    <Phone className="size-4" />
+                    Start voice call
+                </Button>
+            </div>
+        );
+    }
+
     return (
         <div className="flex-none px-[26px] pb-4 animate-drop motion-reduce:animate-none">
             {desktopFailure && (
@@ -1207,7 +1223,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                             {agentModel && (
                                 <span className="text-[12px] text-steel">{agentModel}</span>
                             )}
-                            {!message.trim() && !pendingFile && (
+                            {agentModality !== 'Text' && !message.trim() && !pendingFile && (
                                 <SpeechInput
                                     onTranscriptionChange={handleTranscriptionChange}
                                     onAudioRecorded={handleAudioRecorded}
@@ -1220,7 +1236,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(function Ch
                                     className="shrink-0"
                                 />
                             )}
-                            {!message.trim() && !pendingFile && voiceCall.status === 'idle' && (
+                            {agentModality !== 'Text' && !message.trim() && !pendingFile && voiceCall.status === 'idle' && (
                                 <Button
                                     type="button"
                                     variant="ghost"
