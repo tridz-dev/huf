@@ -248,7 +248,7 @@ class _FakeSession:
     async def call_tool(self, name, arguments):
         self.calls.append((name, arguments))
         payload = self.payload
-        return SimpleNamespace(model_dump=lambda: payload, isError=payload.get("isError", False))
+        return SimpleNamespace(model_dump=lambda **_kw: payload, isError=payload.get("isError", False))
 
 
 class TestRemoteMcpResultsAreUntrusted(unittest.TestCase):
@@ -537,6 +537,35 @@ class TestConnectionUsesInitialize(unittest.TestCase):
         ):
             self.assertTrue(mcp_client.test_mcp_connection("S")["success"])
         self.assertEqual(opened, [False])
+
+
+class TestSyncReadsMcpV2Shapes(unittest.TestCase):
+    """mcp>=2 names Tool.input_schema and snake_case annotation fields; the camelCase
+    aliases are what the sync code (and the hint columns) rely on."""
+
+    def test_sync_reads_input_schema_and_aliased_annotation_hints(self):
+        class _Annotations:
+            def model_dump(self, by_alias=False):
+                return {"readOnlyHint": True} if by_alias else {"read_only_hint": True}
+
+        tool = SimpleNamespace(
+            name="get_info",
+            description="d",
+            input_schema={"type": "object", "properties": {"a": {}}},
+            annotations=_Annotations(),
+        )
+
+        async def fake_execute(mcp_server, operation, idempotent=True):
+            return SimpleNamespace(tools=[tool])
+
+        class _Session:
+            async def list_tools(self):
+                return SimpleNamespace(tools=[tool])
+
+        with patch.object(mcp_client, "execute_with_mcp_session", fake_execute):
+            out = mcp_client._sync_tools_via_mcp_sdk(SimpleNamespace(name="S"))
+        self.assertEqual(out[0]["function"]["parameters"]["properties"], {"a": {}})
+        self.assertIs(out[0]["annotations"]["readOnlyHint"], True)
 
 
 if __name__ == "__main__":
