@@ -25,28 +25,28 @@ def _success(data: Any) -> str:
 
 
 def _get_whatsapp_credentials(kwargs: dict) -> tuple[str, str]:
-	"""Resolve (phone_number_id, access_token).
+	"""Resolve (phone_number_id, access_token) from site configuration only.
 
-	Explicit arguments win. Otherwise use the credentials of the enabled
-	WhatsApp Gateway's connected Integration Settings (the same source the
-	gateway adapter uses), then fall back to a frappe_whatsapp WhatsApp Account.
+	Model-supplied ``gateway``, ``phone_number_id`` and ``access_token`` arguments are
+	ignored: the model must not pick which account (or whose credentials) it sends
+	from. The credentials come from the single enabled WhatsApp Gateway's connected
+	Integration Settings (the same source the gateway adapter uses); with several
+	enabled gateways the choice is ambiguous and nothing is resolved. A
+	frappe_whatsapp WhatsApp Account is the fallback when no gateway is enabled.
 	"""
-	phone_number_id = (kwargs.get("phone_number_id") or "").strip()
-	access_token = (kwargs.get("access_token") or "").strip()
-	if phone_number_id and access_token:
-		return phone_number_id, access_token
+	phone_number_id = ""
+	access_token = ""
 
 	try:
 		from huf.ai.gateway_webhook import _gateway_credentials
 
-		filters = {"provider": "WhatsApp", "is_enabled": 1}
-		if kwargs.get("gateway"):
-			filters["name"] = kwargs["gateway"]
-		names = frappe.get_all("Gateway", filters=filters, pluck="name", limit=1)
+		names = frappe.get_all("Gateway", filters={"provider": "WhatsApp", "is_enabled": 1}, pluck="name", limit=2)
+		if len(names) > 1:
+			return "", ""
 		if names:
 			creds = _gateway_credentials(frappe.get_doc("Gateway", names[0]))
-			phone_number_id = phone_number_id or (creds.get("phone_number_id") or "").strip()
-			access_token = access_token or (creds.get("access_token") or "").strip()
+			phone_number_id = (creds.get("phone_number_id") or "").strip()
+			access_token = (creds.get("access_token") or "").strip()
 	except Exception:
 		frappe.log_error(title="WhatsApp tool: gateway credential lookup failed")
 

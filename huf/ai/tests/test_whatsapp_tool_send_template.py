@@ -14,6 +14,9 @@ from unittest.mock import MagicMock, patch
 from huf.ai.tools import whatsapp
 
 
+_REAL_CREDENTIALS = whatsapp._get_whatsapp_credentials
+
+
 class FakeResponse:
 	def __init__(self, status_code=200, body=None):
 		self.status_code = status_code
@@ -25,6 +28,11 @@ class FakeResponse:
 
 
 class TestWhatsAppSendTemplate(unittest.TestCase):
+	def setUp(self):
+		patcher = patch.object(whatsapp, "_get_whatsapp_credentials", return_value=("PN1", "token"))
+		patcher.start()
+		self.addCleanup(patcher.stop)
+
 	def _kwargs(self, **overrides):
 		kwargs = {
 			"phone_number_id": "PN1",
@@ -83,9 +91,22 @@ class TestWhatsAppSendTemplate(unittest.TestCase):
 			patch.object(whatsapp.frappe, "get_doc", return_value=gw, create=True), \
 			patch("huf.ai.gateway_webhook._gateway_credentials",
 				return_value={"phone_number_id": "PN9", "access_token": "tok9"}):
-			self.assertEqual(whatsapp._get_whatsapp_credentials({}), ("PN9", "tok9"))
+			self.assertEqual(_REAL_CREDENTIALS({}), ("PN9", "tok9"))
 		self.assertEqual(ga.call_args.args[0], "Gateway")
 
+
+	def test_model_supplied_credentials_and_gateway_are_ignored(self):
+		with patch.object(whatsapp.frappe, "get_all", return_value=["WA"], create=True) as ga, \
+			patch.object(whatsapp.frappe, "get_doc", return_value=MagicMock(), create=True), \
+			patch("huf.ai.gateway_webhook._gateway_credentials",
+				return_value={"phone_number_id": "PN9", "access_token": "tok9"}):
+			out = _REAL_CREDENTIALS({"gateway": "Evil", "phone_number_id": "X", "access_token": "Y"})
+		self.assertEqual(out, ("PN9", "tok9"))
+		self.assertNotIn("name", ga.call_args.kwargs["filters"])
+
+	def test_ambiguous_enabled_gateways_resolve_nothing(self):
+		with patch.object(whatsapp.frappe, "get_all", return_value=["A", "B"], create=True):
+			self.assertEqual(_REAL_CREDENTIALS({"gateway": "A"}), ("", ""))
 
 	def test_graph_error_text_is_surfaced(self):
 		body = {"error": {"message": "Session has expired", "code": 190}}

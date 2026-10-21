@@ -161,7 +161,8 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		query = request.query or {}
 		token = query.get("hub.verify_token") or query.get("hub_verify_token")
 		challenge = query.get("hub.challenge") or query.get("hub_challenge") or ""
-		if token == self._verify_token:
+		expected = self._verify_token
+		if token and expected and hmac.compare_digest(str(token).encode(), str(expected).encode()):
 			return challenge
 		raise ValueError("WhatsApp webhook verification token mismatch")
 
@@ -178,7 +179,8 @@ class WhatsAppGatewayAdapter(GatewayAdapter):
 		if request.method == "GET":
 			query = request.query or {}
 			token = query.get("hub.verify_token") or query.get("hub_verify_token")
-			return bool(token and token == self._verify_token)
+			expected = self._verify_token
+			return bool(token and expected and hmac.compare_digest(str(token).encode(), str(expected).encode()))
 
 		# POST request: mandatory HMAC-SHA256 signature verification
 		# app_secret is required (schema marks it required=True)

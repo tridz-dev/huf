@@ -79,6 +79,22 @@ class TestWhatsAppAdapter(unittest.TestCase):
 		req = GatewayInboundRequest(b"", query={"hub.verify_token": "verify-value", "hub.challenge": "abc"}, method="GET")
 		self.assertEqual(self.adapter.verify_url(req), "abc")
 
+	def test_verify_url_rejects_empty_and_wrong_token(self):
+		for token in ("", None, "wrong"):
+			query = {"hub.challenge": "abc"}
+			if token is not None:
+				query["hub.verify_token"] = token
+			with self.assertRaises(ValueError):
+				self.adapter.verify_url(GatewayInboundRequest(b"", query=query, method="GET"))
+
+	def test_verify_url_rejects_when_no_token_configured(self):
+		adapter = WhatsAppGatewayAdapter(CREDS)
+		adapter._verify_token = ""
+		req = GatewayInboundRequest(b"", query={"hub.verify_token": "", "hub.challenge": "abc"}, method="GET")
+		with self.assertRaises(ValueError):
+			adapter.verify_url(req)
+		self.assertFalse(adapter.verify_inbound(req))
+
 	def test_post_requires_valid_signature(self):
 		self.assertTrue(self.adapter.verify_inbound(_signed(_message_payload())))
 		self.assertFalse(self.adapter.verify_inbound(GatewayInboundRequest(b"{}", method="POST")))
