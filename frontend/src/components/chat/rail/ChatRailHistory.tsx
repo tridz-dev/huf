@@ -71,7 +71,7 @@ function ConversationRow({
       onPinChange={onPinChange}
     >
       <Link
-        to={`/chat/${chat.id}`}
+        to={isPinned ? `/chat/${chat.id}?pinned=1` : `/chat/${chat.id}`}
         onClick={(e) => {
           // Only prevent navigation if the click is directly on a menu item
           // Check if the event originated from within the context menu portal

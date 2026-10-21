@@ -224,6 +224,10 @@ export function ChatWindowHeader({
     const showOpenSidebarBtn = !!onToggleSidebar;
 
     const model = conversationModel || agent?.model;
+    // Pinned-chat links keep the conversation open but identify its agent in the header.
+    const heading = searchParams.get('pinned') === '1'
+        ? agent?.agent_name ?? ''
+        : conversationTitle || agent?.agent_name || '';
     // For an existing conversation, use its own project. For a not-yet-
     // created chat, fall back to `?project=` so a Project's "+ New chat"
     // entry point (which lands here with that param already set) still
@@ -282,7 +286,7 @@ export function ChatWindowHeader({
         return (
             <header className={headerClassName}>
                 <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
-                    {conversationTitle || agent.agent_name}
+                    {heading}
                 </span>
                 {conversationHost && <DesktopHostBadge host={conversationHost} compact />}
                 <span className="flex-1" />
@@ -321,7 +325,7 @@ export function ChatWindowHeader({
                     className="-mx-1 flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 hover:bg-paper-deep"
                 >
                     <span className="truncate text-[14px] font-[590] tracking-[-0.01em] text-ink">
-                        {conversationTitle || agent.agent_name}
+                        {heading}
                     </span>
                     <ChevronDown className="size-[14px] shrink-0 text-steel-soft" />
                 </button>
