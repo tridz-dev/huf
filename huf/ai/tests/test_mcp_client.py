@@ -264,6 +264,7 @@ class TestRemoteMcpResultsAreUntrusted(unittest.TestCase):
         frappe = MagicMock()
         frappe.get_doc.return_value = self.server
         frappe.has_permission.return_value = True
+        frappe.db.get_value.return_value = 0  # ungated, not read-only
         for patcher in (
             patch.object(mcp_client, "frappe", frappe),
             patch.object(mcp_client, "_build_mcp_headers", return_value={}),
@@ -383,15 +384,58 @@ class TestApprovalGateAndHeaders(unittest.TestCase):
         server = _make_mcp_server()
         server.name = "MCP-G"
         tool = mcp_client._create_mcp_function_tool(
-            server,
-            {"name": "send_message", "description": "d", "parameters": {}, "requires_approval": True},
+            server, {"name": "send_message", "description": "d", "parameters": {}}
         )
-        with patch.object(mcp_client, "execute_mcp_tool", new=AsyncMock()) as execute:
+        with patch.object(mcp_client.frappe.db, "get_value", return_value=1), \
+                patch.object(mcp_client.frappe, "has_permission", return_value=True), \
+                patch.object(mcp_client.frappe, "get_doc", return_value=server), \
+                patch.object(mcp_client, "execute_with_mcp_session", new=AsyncMock()) as session:
             out = json.loads(asyncio.run(tool.on_invoke_tool(None, "{}")))
-        execute.assert_not_awaited()
+        session.assert_not_awaited()
         self.assertTrue(out["approval_required"])
         self.assertIn("human.approval", out["error"])
         self.assertIn("Requires Approval", out["error"])
+
+    def test_direct_execute_enforces_gate_and_approved_flag_bypasses(self):
+        server = _make_mcp_server(name="MCP-G")
+        with patch.object(mcp_client.frappe.db, "get_value", return_value=1), \
+                patch.object(mcp_client.frappe, "has_permission", return_value=True), \
+                patch.object(mcp_client.frappe, "get_doc", return_value=server), \
+                patch.object(mcp_client, "execute_with_mcp_session",
+                             new=AsyncMock(return_value=SimpleNamespace(isError=False))) as session:
+            blocked = asyncio.run(mcp_client.execute_mcp_tool("MCP-G", "send", {}))
+            self.assertTrue(blocked["approval_required"])
+            session.assert_not_awaited()
+            asyncio.run(mcp_client.execute_mcp_tool("MCP-G", "send", {}, approved=True))
+            session.assert_awaited_once()
+
+    def test_unknown_lookup_failure_fails_closed(self):
+        with patch.object(mcp_client.frappe.db, "get_value", side_effect=RuntimeError("db")):
+            self.assertTrue(mcp_client._tool_requires_approval("S", "t"))
+
+    def test_http_module_follows_installed_mcp_major(self):
+        import importlib.metadata as md
+        with patch.object(md, "version", return_value="1.9.0"):
+            self.assertEqual(mcp_client._mcp_http_module().__name__, "httpx")
+        with patch.object(md, "version", side_effect=md.PackageNotFoundError("mcp")):
+            self.assertEqual(mcp_client._mcp_http_module().__name__, "httpx")
+
+    def test_unauthorized_probe_runs_once_per_failure(self):
+        server = _make_mcp_server(auth_type="oauth")
+        calls = []
+
+        async def fake_unauth(exc, srv, headers):
+            calls.append(1)
+            return True
+
+        with patch.object(mcp_client, "_is_unauthorized_error", new=fake_unauth), \
+                patch.object(mcp_client, "_build_mcp_headers", return_value={"Authorization": "Bearer x"}), \
+                patch.object(mcp_client, "_do_execute_mcp_session", new=AsyncMock(side_effect=[Exception("401"), "ok"])), \
+                patch.object(mcp_client, "_evict_pooled_session"), \
+                patch("huf.ai.mcp_oauth.refresh_oauth_token", create=True):
+            out = asyncio.run(mcp_client.execute_with_mcp_session(server, AsyncMock()))
+        self.assertEqual(out, "ok")
+        self.assertEqual(len(calls), 1)
 
     def test_ungated_tool_executes(self):
         server = _make_mcp_server()

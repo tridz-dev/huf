@@ -106,12 +106,29 @@ class TestRefreshLock(unittest.TestCase):
     def setUp(self):
         self.frappe = MagicMock()
         self.frappe.local.site = "site1"
+        self.held = {}
+
+        def _get(key):  # the lock still holds whatever value this caller stored
+            return self.held.get(key)
+
+        self.frappe.cache().get.side_effect = _get
         patcher = patch.object(mcp_oauth, "frappe", self.frappe)
         self.addCleanup(patcher.stop)
         patcher.start()
 
+    def _record_set(self, results):
+        results = iter(results)
+
+        def _set(key, value, **kwargs):
+            ok = next(results)
+            if ok:
+                self.held[key] = value
+            return ok
+
+        self.frappe.cache().set.side_effect = _set
+
     def test_lock_taken_around_refresh_and_released(self):
-        self.frappe.cache().set.return_value = True
+        self._record_set([True])
         with patch.object(mcp_oauth, "_read_access_token", return_value="old"), patch.object(
             mcp_oauth, "_refresh_oauth_token_unlocked", return_value="new"
         ) as inner:
@@ -123,7 +140,7 @@ class TestRefreshLock(unittest.TestCase):
         self.frappe.cache().delete.assert_called_once_with(key)
 
     def test_waiter_reuses_token_refreshed_by_other_worker(self):
-        self.frappe.cache().set.side_effect = [False, True]
+        self._record_set([False, True])
         with patch.object(mcp_oauth, "_read_access_token", side_effect=["old", "fresh"]), patch.object(
             mcp_oauth, "_refresh_oauth_token_unlocked"
         ) as inner, patch.object(mcp_oauth.time, "sleep"):
@@ -132,7 +149,7 @@ class TestRefreshLock(unittest.TestCase):
         self.frappe.cache().delete.assert_called_once()
 
     def test_lock_released_when_refresh_fails(self):
-        self.frappe.cache().set.return_value = True
+        self._record_set([True])
         with patch.object(mcp_oauth, "_read_access_token", return_value="old"), patch.object(
             mcp_oauth, "_refresh_oauth_token_unlocked", side_effect=ValueError("boom")
         ):

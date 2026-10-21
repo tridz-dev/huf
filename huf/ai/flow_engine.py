@@ -1000,7 +1000,14 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 			# from sync flow-engine code.
 			import asyncio
 
-			coro = execute_mcp_tool(server_name=mcp_server, tool_name=tool_name, arguments=args)
+			# A Requires Approval tool only runs when the node is explicitly marked
+			# ``approved`` (the flow author places it behind a human.approval step).
+			coro = execute_mcp_tool(
+				server_name=mcp_server,
+				tool_name=tool_name,
+				arguments=args,
+				approved=config.get("approved") is True,
+			)
 			loop = asyncio.new_event_loop()
 			asyncio.set_event_loop(loop)
 			try:

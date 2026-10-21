@@ -511,9 +511,9 @@ def _start_tool_call_telemetry(tool_name: str, args: dict, ctx: RunContext):
 	"""
 	is_mcp_tool = 0
 	mcp_server = None
-	mcp_tool_entry = frappe.db.get_value(
-		"MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent"
-	)
+	from huf.ai.mcp_client import find_unique_mcp_server_for_tool
+
+	mcp_tool_entry = find_unique_mcp_server_for_tool(tool_name)
 	if mcp_tool_entry:
 		is_mcp_tool = 1
 		mcp_server = mcp_tool_entry

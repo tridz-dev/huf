@@ -18,7 +18,6 @@ Uses LiteLLM's experimental MCP client for underlying MCP protocol handling.
 """
 
 import asyncio
-import inspect
 import contextlib
 import contextvars
 import json
@@ -209,9 +208,9 @@ def mark_mcp_result_untrusted(result: Any) -> Any:
 
 
 MCP_APPROVAL_REQUIRED_MESSAGE = (
-    "Tool '{tool}' on MCP server '{server}' is marked 'Requires Approval' and cannot be called "
-    "directly by an agent. Either turn off 'Requires Approval' for this tool on the MCP Server, "
-    "or run it from a flow that has a human.approval step before the tool call."
+    "Tool '{tool}' on MCP server '{server}' is marked 'Requires Approval' and was not run. "
+    "Either turn off 'Requires Approval' for this tool on the MCP Server, or call it from a "
+    "flow tool.call node with 'approved' set, placed after a human.approval step."
 )
 
 
@@ -296,8 +295,7 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
         tool_name = func_def.get("name", "")
         description = func_def.get("description", "")
         parameters = func_def.get("parameters", {})
-        requires_approval = bool(tool_def.get("requires_approval") or func_def.get("requires_approval"))
-        
+
         if not tool_name:
             return None
         
@@ -317,17 +315,6 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
                     args_json = ctx
                     ctx = None
                 
-                # Fail closed: Huf has no interactive approval step for agent tool calls,
-                # so a gated tool is never executed from here.
-                if requires_approval:
-                    return json.dumps({
-                        "error": MCP_APPROVAL_REQUIRED_MESSAGE.format(
-                            tool=original_tool_name, server=server_name
-                        ),
-                        "success": False,
-                        "approval_required": True,
-                    })
-
                 args_dict = json.loads(args_json or "{}")
                 
                 # Execute the tool on the MCP server
@@ -371,7 +358,8 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
 async def execute_mcp_tool(
     server_name: str,
     tool_name: str,
-    arguments: dict
+    arguments: dict,
+    approved: bool = False,
 ) -> Any:
     """
     Execute a tool call on an MCP server and return the result.
@@ -382,6 +370,9 @@ async def execute_mcp_tool(
         server_name: Name of the MCP Server document
         tool_name: Name of the tool to execute
         arguments: Arguments to pass to the tool
+        approved: Set only by a caller that already holds a human approval (a flow
+            tool node marked ``approved``). Tools marked Requires Approval are
+            refused unless this is true.
     
     Returns:
         The result from the MCP tool execution
@@ -393,7 +384,7 @@ async def execute_mcp_tool(
         mcp_server = frappe.get_doc("MCP Server", server_name)
         
         return await _execute_mcp_tool_via_sdk(
-            mcp_server, tool_name, arguments
+            mcp_server, tool_name, arguments, approved=approved
         )
             
     except Exception as e:
@@ -545,16 +536,15 @@ async def execute_with_mcp_session(
         try:
             return await _do_execute_mcp_session(mcp_server, headers, operation)
         except Exception as e:
-            if (
-                mcp_server.auth_type == "oauth"
-                and "Authorization" not in headers
-                and await _is_unauthorized_error(e, mcp_server, headers)
-            ):
+            unauthorized = mcp_server.auth_type == "oauth" and await _is_unauthorized_error(
+                e, mcp_server, headers
+            )
+            if unauthorized and "Authorization" not in headers:
                 # Never signed in: nothing to refresh. Say so plainly.
                 raise Exception(_NEEDS_OAUTH_MESSAGE)
 
             # If it's a 401 and we use OAuth, refresh the token and retry once.
-            if mcp_server.auth_type == "oauth" and await _is_unauthorized_error(e, mcp_server, headers):
+            if unauthorized:
                 from huf.ai.mcp_oauth import refresh_oauth_token
                 try:
                     refresh_oauth_token(mcp_server.name)
@@ -598,6 +588,23 @@ def _evict_pooled_session(server_name: str) -> None:
         sessions.pop(server_name, None)
 
 
+def _mcp_http_module():
+    """The HTTP client module the installed MCP SDK expects: httpx2 for mcp>=2, else httpx."""
+    from importlib import metadata
+
+    try:
+        major = int(metadata.version("mcp").split(".")[0])
+    except (metadata.PackageNotFoundError, ValueError):
+        major = 0
+    if major >= 2:
+        import httpx2
+
+        return httpx2
+    import httpx
+
+    return httpx
+
+
 async def _open_mcp_session(mcp_server, headers, stack: AsyncExitStack):
     """Open a transport + ClientSession, registering both with `stack` for cleanup."""
     import httpx
@@ -617,9 +624,7 @@ async def _open_mcp_session(mcp_server, headers, stack: AsyncExitStack):
         # mcp>=2 builds on httpx2 and yields a 2-tuple of streams; mcp<2 uses
         # httpx and yields (read, write, get_session_id). openai-agents pulls
         # mcp in unpinned, so a fresh install may get either.
-        _httpx_impl = httpx
-        if "httpx2" in str(inspect.signature(streamable_http_client)):
-            import httpx2 as _httpx_impl
+        _httpx_impl = _mcp_http_module()
         client = _httpx_impl.AsyncClient(
             headers=headers,
             timeout=_httpx_impl.Timeout(timeout_sec, read=timeout_sec)
@@ -665,10 +670,36 @@ def _is_tool_read_only(server_name: str, tool_name: str) -> bool:
         return False
 
 
-async def _execute_mcp_tool_via_sdk(mcp_server, tool_name: str, arguments: dict) -> Any:
+def _tool_requires_approval(server_name: str, tool_name: str) -> bool:
+    """True when the synced tool row is gated. Fails closed if the lookup errors."""
+    try:
+        return bool(
+            frappe.db.get_value(
+                "MCP Server Tool",
+                {"parent": server_name, "parenttype": "MCP Server", "tool_name": tool_name},
+                "requires_approval",
+            )
+        )
+    except Exception:
+        return True
+
+
+async def _execute_mcp_tool_via_sdk(
+    mcp_server, tool_name: str, arguments: dict, approved: bool = False
+) -> Any:
     """
     Executes an MCP tool call using the official MCP Python SDK.
+
+    Every caller (agent tool wrapper, flow engine) passes through here, so the
+    Requires Approval gate is enforced once, at the lowest level.
     """
+    if not approved and _tool_requires_approval(mcp_server.name, tool_name):
+        return {
+            "error": MCP_APPROVAL_REQUIRED_MESSAGE.format(tool=tool_name, server=mcp_server.name),
+            "success": False,
+            "approval_required": True,
+        }
+
     async def operation(session):
         return await session.call_tool(tool_name, arguments)
     

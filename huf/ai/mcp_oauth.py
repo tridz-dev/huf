@@ -17,6 +17,7 @@ import os
 import secrets
 import time
 import urllib.parse
+import uuid
 from datetime import timedelta
 from typing import Optional
 
@@ -281,10 +282,12 @@ def refresh_oauth_token(server_name: str) -> str:
     refreshing again.
     """
     lock_key = _refresh_lock_key(server_name)
+    lock_value = uuid.uuid4().hex
+    # The token the caller saw fail; a waiter that finds it replaced reuses the new one.
     token_before = _read_access_token(server_name)
 
     deadline = time.monotonic() + _REFRESH_LOCK_WAIT_SECONDS
-    while not frappe.cache().set(lock_key, 1, ex=_REFRESH_LOCK_TTL_SECONDS, nx=True):
+    while not frappe.cache().set(lock_key, lock_value, ex=_REFRESH_LOCK_TTL_SECONDS, nx=True):
         if time.monotonic() >= deadline:
             raise ValueError(f"Timed out waiting for another token refresh of MCP Server '{server_name}'.")
         time.sleep(_REFRESH_LOCK_POLL_SECONDS)
@@ -295,7 +298,9 @@ def refresh_oauth_token(server_name: str) -> str:
             return token_now
         return _refresh_oauth_token_unlocked(server_name)
     finally:
-        frappe.cache().delete(lock_key)
+        # Only release a lock we still own: after TTL expiry another caller may hold it.
+        if frappe.cache().get(lock_key) in (lock_value, lock_value.encode()):
+            frappe.cache().delete(lock_key)
 
 
 def _read_access_token(server_name: str):

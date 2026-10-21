@@ -339,6 +339,9 @@
                 "timeout_ms": {
                   "type": "integer",
                   "minimum": 1
+                },
+                "approved": {
+                  "type": "boolean"
                 }
               }
             }
