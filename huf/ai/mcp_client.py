@@ -709,7 +709,7 @@ async def _execute_mcp_tool_via_sdk(
         )
         # Return standard MCP content payload
         if hasattr(result, "model_dump"):
-            return result.model_dump()
+            return result.model_dump(by_alias=True)
         return {"content": [{"type": "text", "text": str(result)}], "isError": getattr(result, "isError", False)}
     except Exception as e:
         frappe.log_error(
@@ -879,7 +879,8 @@ def _sync_tools_via_mcp_sdk(mcp_server) -> list:
             for tool in result.tools:
                 annotations = getattr(tool, "annotations", None)
                 if annotations is not None and hasattr(annotations, "model_dump"):
-                    annotations = annotations.model_dump()
+                    # by_alias keeps camelCase (readOnlyHint...) under mcp>=2, whose field names are snake_case.
+                    annotations = annotations.model_dump(by_alias=True)
                 openai_tools.append({
                     "type": "function",
                     "function": {
