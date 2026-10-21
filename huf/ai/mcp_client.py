@@ -18,6 +18,7 @@ Uses LiteLLM's experimental MCP client for underlying MCP protocol handling.
 """
 
 import asyncio
+import inspect
 import contextlib
 import contextvars
 import json
@@ -554,20 +555,27 @@ async def _open_mcp_session(mcp_server, headers, stack: AsyncExitStack):
 
     if transport_type == "sse":
         from mcp.client.sse import sse_client
-        read_stream, write_stream = await stack.enter_async_context(
+        streams = await stack.enter_async_context(
             sse_client(url, headers=headers, timeout=timeout_sec)
         )
     else:
         from mcp.client.streamable_http import streamable_http_client
-        client = httpx.AsyncClient(
+        # mcp>=2 builds on httpx2 and yields a 2-tuple of streams; mcp<2 uses
+        # httpx and yields (read, write, get_session_id). openai-agents pulls
+        # mcp in unpinned, so a fresh install may get either.
+        _httpx_impl = httpx
+        if "httpx2" in str(inspect.signature(streamable_http_client)):
+            import httpx2 as _httpx_impl
+        client = _httpx_impl.AsyncClient(
             headers=headers,
-            timeout=httpx.Timeout(timeout_sec, read=timeout_sec)
+            timeout=_httpx_impl.Timeout(timeout_sec, read=timeout_sec)
         )
         await stack.enter_async_context(client)
-        read_stream, write_stream, _get_session_id = await stack.enter_async_context(
+        streams = await stack.enter_async_context(
             streamable_http_client(url, http_client=client)
         )
 
+    read_stream, write_stream = streams[0], streams[1]
     session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
     await session.initialize()
     return session
