@@ -885,7 +885,8 @@ def _sync_tools_via_mcp_sdk(mcp_server) -> list:
                     "function": {
                         "name": tool.name,
                         "description": tool.description or "",
-                        "parameters": tool.inputSchema or {}
+                        # mcp>=2 renamed inputSchema to input_schema.
+                        "parameters": (getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None) or {}),
                     },
                     "annotations": annotations if isinstance(annotations, dict) else {},
                 })
