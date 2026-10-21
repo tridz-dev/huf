@@ -43,13 +43,16 @@ class MCPDiscoveryError(Exception):
 # --------------------------------------------------------------------------- #
 
 @frappe.whitelist()
-def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
+def resolve_mcp_connection(server_url: str, callback_url: str, client_id: str | None = None) -> dict:
     """
     Resolve MCP connection metadata from a server URL.
 
     Args:
         server_url: MCP server endpoint (e.g. https://mcp.higgsfield.ai/mcp).
         callback_url: OAuth redirect URI for this HUF installation.
+        client_id: Optional pre-registered OAuth client id. When given, Dynamic
+            Client Registration is skipped and a registration_endpoint is not
+            required (e.g. Meta's WhatsApp Business MCP server).
 
     Returns:
         dict with keys:
@@ -120,11 +123,12 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
             return _error_result(capabilities["error"])
 
         # 6. Determine client registration method and obtain client_id
-        client_id = None
-        registration_method = "manual"
+        client_id = (client_id or "").strip() or None
+        registration = None
+        registration_method = "pre_registered" if client_id else "manual"
         registration_endpoint = auth_server_metadata.get("registration_endpoint")
 
-        if registration_endpoint:
+        if not client_id and registration_endpoint:
             registration = _register_client(
                 registration_endpoint, callback_url, auth_server_metadata
             )
@@ -135,7 +139,8 @@ def resolve_mcp_connection(server_url: str, callback_url: str) -> dict:
         if not client_id:
             return _error_result(
                 "Dynamic Client Registration is not available for this server. "
-                "Please provide Client ID, Authorization Endpoint, and Token Endpoint manually."
+                "Enter the Client ID of an OAuth app registered with the provider (and its secret, "
+                "if it has one), then connect again."
             )
 
         return {
@@ -180,7 +185,9 @@ def discover_mcp_server(server_name: str) -> dict:
             return {"error": "Server URL is not set."}
 
         callback_url = _get_redirect_uri(server)
-        result = resolve_mcp_connection(server.server_url, callback_url)
+        result = resolve_mcp_connection(
+            server.server_url, callback_url, client_id=getattr(server, "oauth_client_id", None)
+        )
 
         if result.get("discovery_status") != "Ready":
             server.oauth_discovery_status = result.get("discovery_status", "Failed")

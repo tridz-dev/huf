@@ -958,13 +958,14 @@ def _exec_tool_call(flow_run, node: dict, config: dict, settings: dict) -> dict:
 		agent_name=config.get("agent_name") or config.get("agent"),
 	)
 
-	# Check MCP tool info: prefer the explicit config, fall back to lookup
-	# by tool name for backward compatibility with existing flow definitions.
+	# Check MCP tool info: prefer the explicit config, else a unique raw-name lookup.
 	mcp_server = config.get("mcp_server")
 	if not mcp_server:
-		mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": tool_name, "enabled": 1}, "parent")
-		if mcp_tool_entry:
-			mcp_server = mcp_tool_entry
+		from huf.ai.mcp_client import find_unique_mcp_server_for_tool
+
+		# Raw tool name only counts when a single server owns it; an ambiguous name is
+		# never attributed to an arbitrary server (set ``mcp_server`` on the node).
+		mcp_server = find_unique_mcp_server_for_tool(tool_name)
 
 	invocation_ctx = RunContext(
 		conversation_id=_conversation_of(flow_run, run_ctx),

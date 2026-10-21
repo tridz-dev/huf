@@ -8,6 +8,9 @@
  "field_order": [
   "tool_name",
   "enabled",
+  "requires_approval",
+  "read_only_hint",
+  "destructive_hint",
   "description",
   "parameters"
  ],
@@ -40,6 +43,29 @@
    "label": "Parameters",
    "options": "JSON",
    "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "Set from the server's tool annotations on sync. Tools not marked read-only are treated as having side effects.",
+   "fieldname": "read_only_hint",
+   "fieldtype": "Check",
+   "label": "Read Only",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "destructive_hint",
+   "fieldtype": "Check",
+   "label": "Destructive",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "description": "When on, the agent cannot call this tool directly; use a flow with a human approval step, or turn this off to allow direct calls.",
+   "fieldname": "requires_approval",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Requires Approval"
   }
  ],
  "istable": 1,

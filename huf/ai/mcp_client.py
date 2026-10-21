@@ -123,7 +123,8 @@ def create_mcp_tools(agent_doc, mcp_server_names: list[str] = None) -> list[Func
                 tool_def = {
                     "name": tool_row.tool_name,
                     "description": tool_row.description,
-                    "parameters": parameters
+                    "parameters": parameters,
+                    "requires_approval": bool(getattr(tool_row, "requires_approval", 0)),
                 }
                 
                 tool = _create_mcp_function_tool(mcp_server, tool_def, seen_tool_names)
@@ -206,6 +207,67 @@ def mark_mcp_result_untrusted(result: Any) -> Any:
     return marked
 
 
+MCP_APPROVAL_REQUIRED_MESSAGE = (
+    "Tool '{tool}' on MCP server '{server}' is marked 'Requires Approval' and cannot be called "
+    "directly by an agent. Either turn off 'Requires Approval' for this tool on the MCP Server, "
+    "or run it from a flow that has a human.approval step before the tool call."
+)
+
+
+def _safe_tool_name(mcp_server, tool_name: str) -> str:
+    """The model-facing FunctionTool name (namespaced, sanitized, <= 64 chars)."""
+    import re
+
+    display_name = tool_name
+    namespace = getattr(mcp_server, "tool_namespace", None)
+    if namespace:
+        display_name = f"{namespace}.{tool_name}"
+    return re.sub(r"[^a-zA-Z0-9_-]", "_", display_name)[:64]
+
+
+def resolve_mcp_tool_server(tool_name: str, server_names: list[str]) -> str | None:
+    """Return which of `server_names` exposes `tool_name` (an enabled MCP Server Tool row).
+
+    `tool_name` is the model-facing name (namespaced/sanitized) or the raw MCP tool name.
+    The match is scoped to the given servers, so a same-named tool on an unrelated
+    server is never attributed.
+    """
+    if not tool_name or not server_names:
+        return None
+    rows = frappe.get_all(
+        "MCP Server Tool",
+        filters={"parent": ["in", list(server_names)], "parenttype": "MCP Server", "enabled": 1},
+        fields=["parent", "tool_name"],
+    )
+    by_server: dict[str, list[str]] = {}
+    for row in rows:
+        by_server.setdefault(row.parent, []).append(row.tool_name)
+    for server in server_names:
+        names = by_server.get(server)
+        if not names:
+            continue
+        namespace = frappe.db.get_value("MCP Server", server, "tool_namespace")
+        holder = type("_NS", (), {"tool_namespace": namespace})()
+        if any(n == tool_name or _safe_tool_name(holder, n) == tool_name for n in names):
+            return server
+    return None
+
+
+def find_unique_mcp_server_for_tool(tool_name: str) -> str | None:
+    """Server owning the raw `tool_name`, only when exactly one enabled server has it."""
+    if not tool_name:
+        return None
+    parents = {
+        row.parent
+        for row in frappe.get_all(
+            "MCP Server Tool",
+            filters={"tool_name": tool_name, "parenttype": "MCP Server", "enabled": 1},
+            fields=["parent"],
+        )
+    }
+    return next(iter(parents)) if len(parents) == 1 else None
+
+
 def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] | None = None) -> FunctionTool:
     """
     Create a FunctionTool wrapper for an MCP tool.
@@ -233,6 +295,7 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
         tool_name = func_def.get("name", "")
         description = func_def.get("description", "")
         parameters = func_def.get("parameters", {})
+        requires_approval = bool(tool_def.get("requires_approval") or func_def.get("requires_approval"))
         
         if not tool_name:
             return None
@@ -253,6 +316,17 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
                     args_json = ctx
                     ctx = None
                 
+                # Fail closed: Huf has no interactive approval step for agent tool calls,
+                # so a gated tool is never executed from here.
+                if requires_approval:
+                    return json.dumps({
+                        "error": MCP_APPROVAL_REQUIRED_MESSAGE.format(
+                            tool=original_tool_name, server=server_name
+                        ),
+                        "success": False,
+                        "approval_required": True,
+                    })
+
                 args_dict = json.loads(args_json or "{}")
                 
                 # Execute the tool on the MCP server
@@ -272,10 +346,7 @@ def _create_mcp_function_tool(mcp_server, tool_def: dict, seen_names: set[str] |
                 return json.dumps({"error": str(e)})
         
         # Sanitize tool name for OpenAI compatibility
-        import re
-        safe_name = re.sub(r'[^a-zA-Z0-9_-]', '_', display_name)
-        if len(safe_name) > 64:
-            safe_name = safe_name[:64]
+        safe_name = _safe_tool_name(mcp_server, tool_name)
         safe_name = _dedupe_tool_name(safe_name, seen_names)
 
         tool = FunctionTool(
@@ -363,6 +434,15 @@ _MCP_RETRY_BASE_DELAY_SECONDS = 1
 _MCP_RETRY_MAX_DELAY_SECONDS = 60
 
 
+def _is_timeout_error(exc) -> bool:
+    """True if `exc` (or a sub-exception) is a timeout; the server may have acted on the request."""
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return True
+    if type(exc).__name__ in ("ReadTimeout", "TimeoutException", "WriteTimeout", "PoolTimeout", "ConnectTimeout"):
+        return True
+    return any(_is_timeout_error(e) for e in getattr(exc, "exceptions", ()) or ())
+
+
 def _is_retryable_status(exc) -> bool:
     """True if `exc` (or any of its sub-exceptions, e.g. an ExceptionGroup)
     carries an HTTP 429 or 5xx status code."""
@@ -397,13 +477,19 @@ def _extract_retry_after_seconds(exc) -> float | None:
     return None
 
 
-async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
+async def execute_with_mcp_session(
+    mcp_server, operation: Callable[[Any], Any], idempotent: bool = True
+):
     """
     Executes an async operation with an initialized MCP ClientSession.
     Automatically handles transport selection (SSE vs HTTP), OAuth 401
     retries, and bounded exponential backoff for 429/5xx errors (honoring
     a `Retry-After` header when present, capped at `_MCP_RETRY_MAX_ATTEMPTS`
-    attempts).
+    attempts). The delay is always capped at `_MCP_RETRY_MAX_DELAY_SECONDS`.
+
+    With `idempotent=False` (a tool that may have side effects) only 429 is
+    retried: the server rejected the request outright. 5xx and timeouts are
+    not retried because the call may already have taken effect.
     """
     headers = _build_mcp_headers(mcp_server)
     delay_seconds = _MCP_RETRY_BASE_DELAY_SECONDS
@@ -431,10 +517,14 @@ async def execute_with_mcp_session(mcp_server, operation: Callable[[Any], Any]):
 
             # Rate-limited (429) or upstream server error (5xx): back off and retry,
             # up to _MCP_RETRY_MAX_ATTEMPTS total attempts.
-            if _is_retryable_status(e) and attempt < _MCP_RETRY_MAX_ATTEMPTS:
+            retryable = _is_retryable_status(e)
+            if not idempotent:
+                retryable = _has_status_code(e, "429") and not _is_timeout_error(e)
+            if retryable and attempt < _MCP_RETRY_MAX_ATTEMPTS:
                 wait_seconds = _extract_retry_after_seconds(e)
                 if wait_seconds is None:
                     wait_seconds = delay_seconds
+                wait_seconds = min(wait_seconds, _MCP_RETRY_MAX_DELAY_SECONDS)
                 delay_seconds = min(delay_seconds * 2, _MCP_RETRY_MAX_DELAY_SECONDS)
                 _evict_pooled_session(mcp_server.name)
                 await asyncio.sleep(wait_seconds)
@@ -498,6 +588,21 @@ async def _do_execute_mcp_session(mcp_server, headers, operation):
         session = await _open_mcp_session(mcp_server, headers, stack)
         return await operation(session)
 
+def _is_tool_read_only(server_name: str, tool_name: str) -> bool:
+    """True only when the synced MCP annotations mark the tool readOnly.
+
+    Unknown tools and tools without annotations are treated as non-idempotent.
+    """
+    try:
+        return bool(
+            frappe.db.get_value(
+                "MCP Server Tool", {"parent": server_name, "tool_name": tool_name}, "read_only_hint"
+            )
+        )
+    except Exception:
+        return False
+
+
 async def _execute_mcp_tool_via_sdk(mcp_server, tool_name: str, arguments: dict) -> Any:
     """
     Executes an MCP tool call using the official MCP Python SDK.
@@ -506,7 +611,9 @@ async def _execute_mcp_tool_via_sdk(mcp_server, tool_name: str, arguments: dict)
         return await session.call_tool(tool_name, arguments)
     
     try:
-        result = await execute_with_mcp_session(mcp_server, operation)
+        result = await execute_with_mcp_session(
+            mcp_server, operation, idempotent=_is_tool_read_only(mcp_server.name, tool_name)
+        )
         # Return standard MCP content payload
         if hasattr(result, "model_dump"):
             return result.model_dump()
@@ -531,7 +638,7 @@ def _build_mcp_headers(mcp_server) -> dict:
     """
     headers = {
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json, text/event-stream"
     }
     
     # Add authentication header
@@ -608,19 +715,27 @@ def sync_mcp_server_tools(server_name: str) -> dict:
             synced_tool_names.add(tool_name)
             description = func_def.get("description", "")
             parameters = json.dumps(func_def.get("parameters", {}), indent=2)
+            annotations = tool_def.get("annotations") or func_def.get("annotations") or {}
+            read_only = 1 if annotations.get("readOnlyHint") is True else 0
+            destructive = 1 if annotations.get("destructiveHint") is True else 0
             
             if tool_name in current_tools:
-                # Update existing tool
+                # Update existing tool; keep the admin's approval choice
                 row = current_tools[tool_name]
                 row.description = description
                 row.parameters = parameters
+                row.read_only_hint = read_only
+                row.destructive_hint = destructive
             else:
-                # Add new tool
+                # Add new tool; anything not read-only requires approval by default
                 mcp_server.append("tools", {
                     "tool_name": tool_name,
                     "description": description,
                     "parameters": parameters,
-                    "enabled": 1
+                    "enabled": 1,
+                    "read_only_hint": read_only,
+                    "destructive_hint": destructive,
+                    "requires_approval": 0 if read_only else 1,
                 })
 
         # Remove tools that no longer exist on the remote MCP server so stale/deleted
@@ -669,13 +784,17 @@ def _sync_tools_via_mcp_sdk(mcp_server) -> list:
         openai_tools = []
         if hasattr(result, "tools"):
             for tool in result.tools:
+                annotations = getattr(tool, "annotations", None)
+                if annotations is not None and hasattr(annotations, "model_dump"):
+                    annotations = annotations.model_dump()
                 openai_tools.append({
                     "type": "function",
                     "function": {
                         "name": tool.name,
                         "description": tool.description or "",
                         "parameters": tool.inputSchema or {}
-                    }
+                    },
+                    "annotations": annotations if isinstance(annotations, dict) else {},
                 })
         return openai_tools
     finally:
@@ -693,8 +812,6 @@ def test_mcp_connection(server_name: str) -> dict:
     Returns:
         dict: Result with success status
     """
-    import requests
-
     try:
         mcp_server = frappe.get_doc("MCP Server", server_name)
         if not mcp_server.server_url:
@@ -704,34 +821,26 @@ def test_mcp_connection(server_name: str) -> dict:
             if not mcp_server.auth_header_name or not mcp_server.auth_header_value:
                 return {"success": False, "error": "Auth header name and value are required for this auth type"}
 
-        headers = _build_mcp_headers(mcp_server)
+        # A real MCP handshake (initialize + initialized): opening the session performs it.
+        timeout_sec = min(mcp_server.timeout_seconds or 30, 10)  # Max 10s for test
 
-        # Try a simple ping/list request
-        payload = {
-            "jsonrpc": "2.0",
-            "method": "tools/list",
-            "params": {},
-            "id": 1
-        }
-        response = requests.post(
-            mcp_server.server_url,
-            json=payload,
-            headers=headers,
-            timeout=min(mcp_server.timeout_seconds or 30, 10)  # Max 10s for test
-        )
-        
-        if response.status_code == 200:
-            return {"success": True, "message": "Connection successful"}
-        else:
-            return {
-                "success": False,
-                "error": f"Server returned status {response.status_code}"
-            }
-            
-    except requests.exceptions.Timeout:
+        async def operation(session):
+            return True
+
+        async def run():
+            return await asyncio.wait_for(
+                execute_with_mcp_session(mcp_server, operation, idempotent=False), timeout=timeout_sec
+            )
+
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(run())
+        finally:
+            loop.close()
+        return {"success": True, "message": "Connection successful"}
+
+    except (asyncio.TimeoutError, TimeoutError):
         return {"success": False, "error": "Connection timed out"}
-    except requests.exceptions.ConnectionError as e:
-        return {"success": False, "error": f"Connection failed: {str(e)}"}
     except Exception as e:
         frappe.log_error(
             message=f"MCP connection test failed: {str(e)}\n\n{frappe.get_traceback()}",

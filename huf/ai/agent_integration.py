@@ -802,6 +802,35 @@ def _normalize_tool_args_json(args):
     return json.dumps(args)
 
 
+def _resolve_mcp_server_for_run(agent_run, tool_name):
+    """MCP server that supplied `tool_name` to this run's agent (agent + skill servers only)."""
+    try:
+        agent = frappe.db.get_value("Agent Run", agent_run, "agent") if agent_run else None
+        if not agent:
+            return None
+        servers = frappe.get_all(
+            "Agent MCP Server",
+            filters={"parent": agent, "parenttype": "Agent", "enabled": 1},
+            pluck="mcp_server",
+            order_by="idx asc",
+        )
+        try:
+            from huf.ai.skills.loader import get_agent_skill_mcp_servers
+
+            servers += get_agent_skill_mcp_servers(agent)
+        except Exception as exc:  # skills are optional for attribution
+            logger.debug(f"Skill MCP server lookup skipped: {exc!s}")
+        seen = set()
+        servers = [s for s in servers if s and not (s in seen or seen.add(s))]
+
+        from huf.ai.mcp_client import resolve_mcp_tool_server
+
+        return resolve_mcp_tool_server(tool_name, servers)
+    except Exception as exc:
+        logger.debug(f"MCP server attribution failed for {tool_name}: {exc!s}")
+        return None
+
+
 def process_tool_call(agent_run, conversation, name=None, args=None, result=None, error=None, is_output=False, tool_call_id=None):
     """Process tool call - handle requests (insert) and outputs (update) separately"""
     try:
@@ -859,7 +888,7 @@ def process_tool_call(agent_run, conversation, name=None, args=None, result=None
             mcp_server = None
 
             if name:
-                mcp_tool_entry = frappe.db.get_value("MCP Server Tool", {"tool_name": name, "enabled": 1}, "parent")
+                mcp_tool_entry = _resolve_mcp_server_for_run(agent_run, name)
                 if mcp_tool_entry:
                     is_mcp_tool = 1
                     mcp_server = mcp_tool_entry

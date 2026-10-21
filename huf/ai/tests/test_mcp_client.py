@@ -27,6 +27,11 @@ import _stub_env  # noqa: E402
 
 _stub_env.install()
 
+import frappe as _frappe  # noqa: E402
+
+if isinstance(_frappe, MagicMock):  # stubbed env: make @frappe.whitelist() a passthrough
+    _frappe.whitelist = lambda *a, **k: a[0] if a and callable(a[0]) else (lambda f: f)
+
 from huf.ai import mcp_client  # noqa: E402
 
 
@@ -303,6 +308,179 @@ class TestRemoteMcpResultsAreUntrusted(unittest.TestCase):
         original = {"content": []}
         mcp_client.mark_mcp_result_untrusted(original)
         self.assertEqual(original, {"content": []})
+
+
+class TestNonIdempotentRetryAndRetryAfterCap(unittest.TestCase):
+    def setUp(self):
+        for patcher in (
+            patch.object(mcp_client, "_build_mcp_headers", return_value={}),
+            patch.object(mcp_client, "_evict_pooled_session"),
+            patch.object(mcp_client, "frappe", MagicMock()),
+        ):
+            self.addCleanup(patcher.stop)
+            patcher.start()
+        sleep_patcher = patch.object(mcp_client.asyncio, "sleep", new=AsyncMock())
+        self.addCleanup(sleep_patcher.stop)
+        self.mock_sleep = sleep_patcher.start()
+
+    def _run(self, side_effect, idempotent):
+        do_execute = AsyncMock(side_effect=side_effect)
+        with patch.object(mcp_client, "_do_execute_mcp_session", do_execute):
+            try:
+                result = asyncio.run(
+                    mcp_client.execute_with_mcp_session(
+                        _make_mcp_server(), MagicMock(), idempotent=idempotent
+                    )
+                )
+            except Exception:
+                result = "raised"
+        return result, do_execute.call_count
+
+    def test_5xx_is_not_retried_for_non_idempotent_tool(self):
+        result, calls = self._run([_RetryableError(503), "ok"], idempotent=False)
+        self.assertEqual((result, calls), ("raised", 1))
+        self.mock_sleep.assert_not_awaited()
+
+    def test_timeout_is_not_retried_for_non_idempotent_tool(self):
+        result, calls = self._run([asyncio.TimeoutError(), "ok"], idempotent=False)
+        self.assertEqual((result, calls), ("raised", 1))
+
+    def test_429_is_still_retried_for_non_idempotent_tool(self):
+        result, calls = self._run([_RetryableError(429), "ok"], idempotent=False)
+        self.assertEqual((result, calls), ("ok", 2))
+
+    def test_5xx_is_retried_for_idempotent_tool(self):
+        result, calls = self._run([_RetryableError(502), "ok"], idempotent=True)
+        self.assertEqual((result, calls), ("ok", 2))
+
+    def test_retry_after_is_capped_at_max_delay(self):
+        self._run([_RetryableError(429, retry_after=3600), "ok"], idempotent=True)
+        self.mock_sleep.assert_awaited_once_with(float(mcp_client._MCP_RETRY_MAX_DELAY_SECONDS))
+
+
+class TestApprovalGateAndHeaders(unittest.TestCase):
+    def test_accept_header_allows_sse(self):
+        self.assertEqual(
+            mcp_client._build_mcp_headers(
+                SimpleNamespace(auth_type="none", custom_headers=[])
+            ).get("Accept"),
+            "application/json, text/event-stream",
+        )
+
+    def test_gated_tool_fails_closed_without_calling_server(self):
+        server = _make_mcp_server()
+        server.name = "MCP-G"
+        tool = mcp_client._create_mcp_function_tool(
+            server,
+            {"name": "send_message", "description": "d", "parameters": {}, "requires_approval": True},
+        )
+        with patch.object(mcp_client, "execute_mcp_tool", new=AsyncMock()) as execute:
+            out = json.loads(asyncio.run(tool.on_invoke_tool(None, "{}")))
+        execute.assert_not_awaited()
+        self.assertTrue(out["approval_required"])
+        self.assertIn("human.approval", out["error"])
+        self.assertIn("Requires Approval", out["error"])
+
+    def test_ungated_tool_executes(self):
+        server = _make_mcp_server()
+        tool = mcp_client._create_mcp_function_tool(
+            server, {"name": "list_things", "description": "d", "parameters": {}}
+        )
+        with patch.object(mcp_client, "execute_mcp_tool", new=AsyncMock(return_value={"ok": 1})) as execute:
+            out = json.loads(asyncio.run(tool.on_invoke_tool(None, "{}")))
+        execute.assert_awaited_once()
+        self.assertEqual(out["ok"], 1)
+
+
+class TestSyncAnnotationsAndLookup(unittest.TestCase):
+    def _sync(self, tools, existing=()):
+        server = SimpleNamespace(name="MCP-S", tools=list(existing), available_tools=None, last_sync=None)
+        appended = []
+
+        def append(field, row):
+            r = SimpleNamespace(**row)
+            server.tools.append(r)
+            appended.append(r)
+
+        server.append = append
+        server.save = MagicMock()
+        frappe = MagicMock()
+        frappe.get_doc.return_value = server
+        frappe.has_permission.return_value = True
+        with patch.object(mcp_client, "frappe", frappe), patch.object(
+            mcp_client, "_sync_tools_via_mcp_sdk", return_value=tools
+        ), patch.object(mcp_client, "commit_if_background"):
+            mcp_client.sync_mcp_server_tools("MCP-S")
+        return {r.tool_name: r for r in server.tools}
+
+    @staticmethod
+    def _tool(name, annotations):
+        return {
+            "type": "function",
+            "function": {"name": name, "description": "", "parameters": {}},
+            "annotations": annotations,
+        }
+
+    def test_new_rows_default_approval_on_unless_read_only(self):
+        rows = self._sync(
+            [
+                self._tool("read", {"readOnlyHint": True}),
+                self._tool("write", {"destructiveHint": True}),
+                self._tool("bare", {}),
+            ]
+        )
+        self.assertEqual((rows["read"].read_only_hint, rows["read"].requires_approval), (1, 0))
+        self.assertEqual((rows["write"].read_only_hint, rows["write"].requires_approval), (0, 1))
+        self.assertEqual(rows["write"].destructive_hint, 1)
+        self.assertEqual(rows["bare"].requires_approval, 1)
+
+    def test_resync_updates_hints_but_keeps_admin_approval_choice(self):
+        existing = SimpleNamespace(
+            tool_name="write", description="", parameters="{}", read_only_hint=0,
+            destructive_hint=0, requires_approval=0,
+        )
+        rows = self._sync([self._tool("write", {"destructiveHint": True})], existing=[existing])
+        self.assertEqual(rows["write"].destructive_hint, 1)
+        self.assertEqual(rows["write"].requires_approval, 0)
+
+    def test_resolve_server_is_scoped_to_given_servers(self):
+        frappe = MagicMock()
+        frappe.get_all.return_value = [
+            SimpleNamespace(parent="A", tool_name="send"),
+            SimpleNamespace(parent="B", tool_name="send"),
+        ]
+        frappe.db.get_value.side_effect = lambda dt, name, field: {"A": None, "B": "wa"}[name]
+        with patch.object(mcp_client, "frappe", frappe):
+            self.assertEqual(mcp_client.resolve_mcp_tool_server("wa_send", ["B"]), "B")
+            self.assertEqual(mcp_client.resolve_mcp_tool_server("send", ["A", "B"]), "A")
+            self.assertIsNone(mcp_client.resolve_mcp_tool_server("other", ["A", "B"]))
+            self.assertIsNone(mcp_client.resolve_mcp_tool_server("send", []))
+
+    def test_unique_lookup_rejects_ambiguous_raw_name(self):
+        frappe = MagicMock()
+        with patch.object(mcp_client, "frappe", frappe):
+            frappe.get_all.return_value = [SimpleNamespace(parent="A")]
+            self.assertEqual(mcp_client.find_unique_mcp_server_for_tool("send"), "A")
+            frappe.get_all.return_value = [SimpleNamespace(parent="A"), SimpleNamespace(parent="B")]
+            self.assertIsNone(mcp_client.find_unique_mcp_server_for_tool("send"))
+
+
+class TestConnectionUsesInitialize(unittest.TestCase):
+    def test_connection_test_opens_session_via_initialize_path(self):
+        server = SimpleNamespace(server_url="https://x/mcp", auth_type="none", timeout_seconds=30)
+        frappe = MagicMock()
+        frappe.get_doc.return_value = server
+        opened = []
+
+        async def fake_execute(mcp_server, operation, idempotent=True):
+            opened.append(idempotent)
+            return await operation(object())
+
+        with patch.object(mcp_client, "frappe", frappe), patch.object(
+            mcp_client, "execute_with_mcp_session", fake_execute
+        ):
+            self.assertTrue(mcp_client.test_mcp_connection("S")["success"])
+        self.assertEqual(opened, [False])
 
 
 if __name__ == "__main__":
