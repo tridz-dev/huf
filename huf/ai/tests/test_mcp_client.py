@@ -205,6 +205,18 @@ class TestExecuteWithMcpSessionBackoff(unittest.TestCase):
         self.assertEqual(do_execute.call_count, 1)
         self.mock_sleep.assert_not_awaited()
 
+    def test_oauth_never_signed_in_gives_clear_message(self):
+        """No token yet + generic mcp>=2 error that the probe confirms is a 401."""
+        mcp_server = _make_mcp_server(auth_type="oauth")
+        do_execute = AsyncMock(side_effect=Exception("Server returned an error response"))
+        with patch.object(mcp_client, "_do_execute_mcp_session", do_execute), patch.object(
+            mcp_client, "_probe_unauthorized", return_value=True
+        ):
+            with self.assertRaises(Exception) as ctx:
+                self._run(mcp_client.execute_with_mcp_session(mcp_server, MagicMock()))
+        self.assertIn("OAuth sign-in required", str(ctx.exception))
+        self.assertEqual(do_execute.call_count, 1)
+
     def test_oauth_401_retry_still_works(self):
         mcp_server = _make_mcp_server(auth_type="oauth")
         operation = MagicMock()
@@ -213,9 +225,9 @@ class TestExecuteWithMcpSessionBackoff(unittest.TestCase):
         mcp_oauth_module = MagicMock()
         mcp_oauth_module.refresh_oauth_token = MagicMock()
 
-        with patch.object(mcp_client, "_do_execute_mcp_session", do_execute), patch.dict(
-            sys.modules, {"huf.ai.mcp_oauth": mcp_oauth_module}
-        ):
+        with patch.object(mcp_client, "_build_mcp_headers", return_value={"Authorization": "Bearer stale"}), patch.object(
+            mcp_client, "_do_execute_mcp_session", do_execute
+        ), patch.dict(sys.modules, {"huf.ai.mcp_oauth": mcp_oauth_module}):
             result = self._run(mcp_client.execute_with_mcp_session(mcp_server, operation))
 
         self.assertEqual(result, "ok")

@@ -478,6 +478,52 @@ def _extract_retry_after_seconds(exc) -> float | None:
     return None
 
 
+_NEEDS_OAUTH_MESSAGE = (
+    "OAuth sign-in required: this MCP server needs you to sign in. "
+    "Open the MCP Server form and click 'Connect' to authorize it."
+)
+
+
+def _is_generic_mcp_error(exc) -> bool:
+    """mcp>=2 reports HTTP failures (e.g. 401) as a status-less MCPError."""
+    if "Server returned an error response" in str(exc):
+        return True
+    return any(_is_generic_mcp_error(e) for e in getattr(exc, "exceptions", ()) or ())
+
+
+def _probe_unauthorized(mcp_server, headers) -> bool:
+    """POST a bare initialize to the endpoint and report whether it answers 401."""
+    import requests
+
+    try:
+        response = requests.post(
+            mcp_server.server_url,
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "huf-probe", "version": "1"},
+                },
+            },
+            timeout=10,
+        )
+        return response.status_code == 401
+    except Exception:
+        return False
+
+
+async def _is_unauthorized_error(exc, mcp_server, headers) -> bool:
+    if _has_status_code(exc, "401"):
+        return True
+    if mcp_server.auth_type == "oauth" and _is_generic_mcp_error(exc):
+        return await asyncio.to_thread(_probe_unauthorized, mcp_server, headers)
+    return False
+
+
 async def execute_with_mcp_session(
     mcp_server, operation: Callable[[Any], Any], idempotent: bool = True
 ):
@@ -499,8 +545,16 @@ async def execute_with_mcp_session(
         try:
             return await _do_execute_mcp_session(mcp_server, headers, operation)
         except Exception as e:
+            if (
+                mcp_server.auth_type == "oauth"
+                and "Authorization" not in headers
+                and await _is_unauthorized_error(e, mcp_server, headers)
+            ):
+                # Never signed in: nothing to refresh. Say so plainly.
+                raise Exception(_NEEDS_OAUTH_MESSAGE)
+
             # If it's a 401 and we use OAuth, refresh the token and retry once.
-            if mcp_server.auth_type == "oauth" and _has_status_code(e, "401"):
+            if mcp_server.auth_type == "oauth" and await _is_unauthorized_error(e, mcp_server, headers):
                 from huf.ai.mcp_oauth import refresh_oauth_token
                 try:
                     refresh_oauth_token(mcp_server.name)
