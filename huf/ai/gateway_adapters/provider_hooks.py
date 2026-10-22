@@ -34,6 +34,8 @@ Hook signatures (``gateway`` / ``event`` are Gateway / Gateway Event documents):
 - ``guest_reply(event, gateway, response) -> dict | None``: provider-specific reply path; non-None short-circuits.
 - ``agent_runner(event, gateway) -> callable | None``: replacement for run_agent_sync (e.g. streaming) (WP-6).
 - ``agent_instructions() -> str``: short channel note prepended to the agent prompt for this provider (WP-5).
+- ``agent_event_context(event, gateway) -> str``: one-line note about the inbound message (ids the agent needs for
+  reply/react/edit tools), appended to the channel note. Default none; failures yield no note.
 - ``attempt_reply_parts(event, gateway, parts, attempt) -> dict``: provider-owned send/retry of reply parts (WP-1b).
 - ``ingest_update(adapter, request, gateway) -> response | None``: handle a verified webhook update before
   ``normalize_inbound``; a non-None return is the HTTP response (non-message updates, drops) (WP-1c).

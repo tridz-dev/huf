@@ -617,7 +617,7 @@ class TestPromptAssembly(unittest.TestCase):
 	def test_channel_note_prepended_and_text_kept(self):
 		_, run, _, _ = self._run(load_fixture("message_text"))
 		prompt = run.call_args.kwargs["prompt"]
-		self.assertTrue(prompt.startswith("[Channel note: Telegram: keep replies short.]\n"))
+		self.assertTrue(prompt.startswith("[Channel note: Telegram: keep replies short."))
 		self.assertTrue(prompt.endswith(load_fixture("message_text")["message"]["text"]))
 
 	def test_conversation_ref_per_chat_and_per_topic(self):

@@ -513,3 +513,41 @@ class TestIdempotencyScopedFirst(Base):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestListMessagesInGatewayRun(Base):
+	def _in_run(self, chat="9"):
+		patch.object(tool.scope, "run_gateway", return_value="gw").start()
+		patch.object(tool.scope, "current_chat", return_value=chat).start()
+		patch.object(tool.scope, "check_recipient", return_value=None).start()
+
+	def test_scoped_to_current_chat_ignoring_permission(self):
+		self._in_run()
+		row = {"provider_event_id": "5", "sender_id": "42", "message_text": f"hi {TOKEN}", "status": "Replied",
+			"received_at": "2026-01-01"}
+		with patch.object(tool.frappe, "has_permission", return_value=False), \
+				patch.object(tool.frappe, "get_all", return_value=[row]) as get_all:
+			r = self.run_action(action="list_messages", limit=500)
+		self.assertTrue(r["success"], r)
+		kw = get_all.call_args.kwargs
+		self.assertTrue(kw["ignore_permissions"])
+		self.assertEqual(kw["limit_page_length"], 50)
+		self.assertEqual(kw["filters"]["gateway"], "gw")
+		self.assertEqual(kw["filters"]["conversation_id"], ["like", "9%"])
+		item = r["results"]["items"][0]
+		self.assertEqual(set(item), {"id", "time", "sender", "kind", "text", "status"})
+		self.assertNotIn(TOKEN, item["text"])
+
+	def test_other_chat_refused(self):
+		self._in_run()
+		with patch.object(tool.frappe, "get_all") as get_all:
+			r = self.run_action(action="list_messages", chat_id="77")
+		self.assertFalse(r.get("success"), r)
+		get_all.assert_not_called()
+
+	def test_non_gateway_run_unchanged(self):
+		with patch.object(tool.frappe, "has_permission", return_value=False), \
+				patch.object(tool.frappe, "get_all") as get_all:
+			r = self.run_action(action="list_messages", chat_id="9", gateway="gw")
+		self.assertEqual(r["error"], "permission_denied")
+		get_all.assert_not_called()

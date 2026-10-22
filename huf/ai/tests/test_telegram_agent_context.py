@@ -52,7 +52,7 @@ class TestBuildInstructions(unittest.TestCase):
 		self.assertIn("```telegram-buttons", text)
 		self.assertIn("```telegram-media", text)
 		self.assertIn("list_templates", text)
-		self.assertIn("Reactions and typing", text)
+		self.assertIn("inbound reactions are recorded", text)
 
 	def test_optional_sections_follow_flags(self):
 		off = tac.build_instructions(gw())
@@ -126,3 +126,17 @@ class TestHookRegistration(unittest.TestCase):
 
 if __name__ == "__main__":
 	unittest.main()
+
+
+class TestInstructionsWording(unittest.TestCase):
+	def test_reaction_wording_and_tools(self):
+		text = tac.build_instructions(gw())
+		self.assertNotIn("Reactions and typing indicators are automatic", text)
+		for word in ("set_reaction", "edit_message_text", "reply_to_message", "Current message"):
+			self.assertIn(word, text)
+
+	def test_cap_and_flags(self):
+		text = tac.build_instructions(gw(**ALL_ON))
+		self.assertLessEqual(len(text), tac.MAX_CHARS)
+		self.assertIn("telegram_admin", text)
+		self.assertNotIn("telegram_admin", tac.build_instructions(gw()))

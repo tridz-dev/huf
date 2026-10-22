@@ -2433,6 +2433,15 @@ def _process_gateway_event(event_name: str) -> dict:
             instructions_hook = provider_hooks.get(gateway.provider, "agent_instructions")
             if instructions_hook is not None:
                 channel_note = _call_instructions_hook(instructions_hook, gateway)
+                context_hook = provider_hooks.get(gateway.provider, "agent_event_context")
+                if context_hook is not None:
+                    try:
+                        event_note = context_hook(event, gateway)
+                    except Exception as exc:
+                        event_note = None
+                        frappe.logger("huf").warning(f"Agent event context hook failed: {type(exc).__name__}")
+                    if event_note:
+                        channel_note = f"{channel_note} {event_note}" if channel_note else event_note
                 if channel_note:
                     prompt = f"[Channel note: {channel_note}]\n{prompt}"
 
