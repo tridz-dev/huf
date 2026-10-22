@@ -8,7 +8,7 @@ Covers
    as a user holding only ``Huf Gateway User``. Only the LLM provider boundary
    (the HUF Test Provider) and the outbound channel send are faked.
 
-Run with: bench --site <site> run-tests --module huf.ai.tests.test_gateway_runas_user
+Run with: bench --site <site> run-tests --module huf.ai.gateway_adapters.tests.test_gateway_runas_user
 """
 
 import unittest

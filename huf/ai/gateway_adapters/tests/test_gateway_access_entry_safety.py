@@ -9,7 +9,7 @@ from frappe.tests import IntegrationTestCase
 from frappe.utils import add_to_date, now_datetime
 
 from huf.ai import gateway_service as gsvc
-from huf.ai.tests.test_gateway_pairing_hardening import _GatewayFixture
+from huf.ai.gateway_adapters.tests.test_gateway_pairing_hardening import _GatewayFixture
 
 MASKED = re.compile(r"^\*+[A-Z0-9]{2}$")
 

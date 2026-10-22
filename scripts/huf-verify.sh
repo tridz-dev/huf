@@ -350,6 +350,13 @@ map_backend_module() {
       if [ -f "$ROOT/huf/ai/automation/tests/test_automation_${base}.py" ]; then
         candidate="huf/ai/automation/tests/test_automation_${base}.py"
       fi ;;
+    huf/ai/gateway_adapters/tests/test_*.py)
+      # a changed gateway adapter test module maps to itself
+      candidate="$f" ;;
+    huf/ai/gateway_adapters/*.py)
+      if [ -f "$ROOT/huf/ai/gateway_adapters/tests/test_gateway_${base}.py" ]; then
+        candidate="huf/ai/gateway_adapters/tests/test_gateway_${base}.py"
+      fi ;;
   esac
   if [ -f "$ROOT/$candidate" ]; then
     echo "${candidate%.py}" | tr '/' '.'
